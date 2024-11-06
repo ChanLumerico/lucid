@@ -1,17 +1,27 @@
-from typing import Optional
+from typing import Any, Optional
 import numpy as np
 
-_ArrayLike = list | np.ndarray
+
+_NumPyArray = np.ndarray
+_ArrayOrScalar = int | float | list | _NumPyArray
 
 
 class Tensor:
-    def __init__(self, data: _ArrayLike, requires_grad: bool = False) -> None:
-        if isinstance(data, list):
-            self.data = np.array(data, dtype=np.float32)
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        dtype: Any = np.float32,
+    ) -> None:
+        if not isinstance(data, _NumPyArray):
+            self.data = np.array(data, dtype=dtype)
         else:
-            self.data = data.astype(np.float32)
+            self.data = data
+
         self.requires_grad = requires_grad
-        self.grad: Optional[np.ndarray] = None
+        self.dtype = self.data.dtype
+
+        self.grad: Optional[_NumPyArray] = None
 
         self._backward_op: callable = lambda: None
         self._prev: list[Tensor] = []
@@ -39,7 +49,9 @@ class Tensor:
 
         for tensor in topo_order:
             tensor._backward_op()
+
             if not tensor.is_leaf:
+                # remove grads for intermediate tensors
                 tensor.grad = None
 
     def __repr__(self) -> str:

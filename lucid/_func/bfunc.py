@@ -1,12 +1,10 @@
-import numpy as np
+import functools
+from typing import Any
 
-from lucid.tensor import Tensor
-
-
-__all__ = ("add", "sub", "mul", "truediv")
+from lucid.tensor import Tensor, _NumPyArray, _ArrayOrScalar
 
 
-def _set_tensor_grad(tensor: Tensor, grad: np.ndarray) -> None:
+def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:
     if tensor.requires_grad:
         if tensor.grad is None:
             tensor.grad = grad
@@ -14,69 +12,87 @@ def _set_tensor_grad(tensor: Tensor, grad: np.ndarray) -> None:
             tensor.grad += grad
 
 
-def add(self: Tensor, other: Tensor) -> Tensor:
-    other = other if isinstance(other, Tensor) else Tensor(other)
+def _check_is_tensor(any: Any) -> Tensor:
+    if not isinstance(any, Tensor):
+        return Tensor(any)
+    return any
 
+
+def _create_bfunc_op(func: callable) -> callable:
+    @functools.wraps(func)
+    def wrapper(self: Any, other: Any, *args, **kwargs) -> Tensor:
+        self = _check_is_tensor(self)
+        other = _check_is_tensor(other)
+
+        result, compute_grad = func(self, other, *args, **kwargs)
+
+        def _backward_op() -> None:
+            self_grad, other_grad = compute_grad()
+            # chain rule
+            _set_tensor_grad(self, self_grad * result.grad)
+            _set_tensor_grad(other, other_grad * result.grad)
+
+        result._backward_op = _backward_op
+        result._prev = [self, other]
+
+        return result
+
+    return wrapper
+
+
+@_create_bfunc_op
+def add(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(
         self.data + other.data,
         requires_grad=self.requires_grad or other.requires_grad,
     )
 
-    def _backward() -> None:
-        _set_tensor_grad(self, result.grad)
-        _set_tensor_grad(other, result.grad)
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return 1, 1
 
-    result._backward_op = _backward
-    result._prev = [self, other]
-    return result
+    return result, compute_grad
 
 
-def sub(self: Tensor, other: Tensor) -> Tensor:
-    other = other if isinstance(other, Tensor) else Tensor(other)
-
+@_create_bfunc_op
+def sub(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(
         self.data - other.data,
         requires_grad=self.requires_grad or other.requires_grad,
     )
 
-    def _backward() -> None:
-        _set_tensor_grad(self, result.grad)
-        _set_tensor_grad(other, -result.grad)
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return 1, -1
 
-    result._backward_op = _backward
-    result._prev = [self, other]
-    return result
+    return result, compute_grad
 
 
-def mul(self: Tensor, other: Tensor) -> Tensor:
-    other = other if isinstance(other, Tensor) else Tensor(other)
-
+@_create_bfunc_op
+def mul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(
         self.data * other.data,
         requires_grad=self.requires_grad or other.requires_grad,
     )
 
-    def _backward() -> None:
-        _set_tensor_grad(self, other.data * result.grad)
-        _set_tensor_grad(other, self.data * result.grad)
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return other.data, self.data
 
-    result._backward_op = _backward
-    result._prev = [self, other]
-    return result
+    return result, compute_grad
 
 
-def truediv(self: Tensor, other: Tensor) -> Tensor:
-    other = other if isinstance(other, Tensor) else Tensor(other)
-
+@_create_bfunc_op
+def truediv(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(
         self.data / other.data,
         requires_grad=self.requires_grad or other.requires_grad,
     )
 
-    def _backward() -> None:
-        _set_tensor_grad(self, (1 / other.data) * result.grad)
-        _set_tensor_grad(other, -self.data / (other.data**2) * result.grad)
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return 1 / other.data, -self.data / (other.data**2)
 
-    result._backward_op = _backward
-    result._prev = [self, other]
-    return result
+    return result, compute_grad
+
+
+radd: callable = lambda self, other: add(self, other)
+rsub: callable = lambda self, other: sub(other, self)
+rmul: callable = lambda self, other: mul(self, other)
+rtruediv: callable = lambda self, other: truediv(other, self)

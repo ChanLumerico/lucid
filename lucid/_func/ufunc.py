@@ -1,12 +1,10 @@
-import numpy as np
+import functools
+from typing import Any
 
-from lucid.tensor import Tensor
-
-
-__all__ = ("pow",)
+from lucid.tensor import Tensor, _NumPyArray, _ArrayOrScalar
 
 
-def _set_tensor_grad(tensor: Tensor, grad: np.ndarray) -> None:
+def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:
     if tensor.requires_grad:
         if tensor.grad is None:
             tensor.grad = grad
@@ -14,12 +12,37 @@ def _set_tensor_grad(tensor: Tensor, grad: np.ndarray) -> None:
             tensor.grad += grad
 
 
+def _check_is_tensor(any: Any) -> Tensor:
+    if not isinstance(any, Tensor):
+        return Tensor(any)
+    return any
+
+
+def _create_ufunc_op(func: callable) -> callable:
+    @functools.wraps(func)
+    def wrapper(self: Any, *args, **kwargs) -> Tensor:
+        self = _check_is_tensor(self)
+
+        result, compute_grad = func(self, *args, **kwargs)
+
+        def _backward_op() -> None:
+            self_grad = compute_grad()
+            # chain rule
+            _set_tensor_grad(self, self_grad * result.grad)
+
+        result._backward_op = _backward_op
+        result._prev = [self]
+
+        return result
+
+    return wrapper
+
+
+@_create_ufunc_op
 def pow(self: Tensor, exp: float) -> Tensor:
     result = Tensor(self.data**exp, requires_grad=self.requires_grad)
 
-    def _backward() -> None:
-        _set_tensor_grad(self, (exp * self.data ** (exp - 1)) * result.grad)
+    def compute_grad() -> _ArrayOrScalar:
+        return exp * self.data ** (exp - 1)
 
-    result._backward_op = _backward
-    result._prev = [self]
-    return result
+    return result, compute_grad
