@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, Self
 import numpy as np
 
 
@@ -51,8 +51,25 @@ class Tensor:
             tensor._backward_op()
 
             if not tensor.is_leaf:
-                # remove grads for intermediate tensors
                 tensor.grad = None
+
+    def __add__(self, _: Self) -> Self: ...
+
+    def __radd__(self, _: Self) -> Self: ...
+
+    def __sub__(self, _: Self) -> Self: ...
+
+    def __rsub__(self, _: Self) -> Self: ...
+
+    def __mul__(self, _: Self) -> Self: ...
+
+    def __rmul__(self, _: Self) -> Self: ...
+
+    def __truediv__(self, _: Self) -> Self: ...
+
+    def __rtrudiv__(self, _: Self) -> Self: ...
+
+    def __pow__(self, _: int | float) -> Self: ...
 
     def __repr__(self) -> str:
         return f"Tensor(data={self.data}, grad={self.grad})"

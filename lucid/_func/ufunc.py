@@ -19,6 +19,7 @@ def _check_is_tensor(any: Any) -> Tensor:
 
 
 def _create_ufunc_op(func: callable) -> callable:
+
     @functools.wraps(func)
     def wrapper(self: Any, *args, **kwargs) -> Tensor:
         self = _check_is_tensor(self)
@@ -27,8 +28,12 @@ def _create_ufunc_op(func: callable) -> callable:
 
         def _backward_op() -> None:
             self_grad = compute_grad()
-            # chain rule
-            _set_tensor_grad(self, self_grad * result.grad)
+
+            self_grad_chain = self_grad
+            if result.grad is not None:
+                self_grad_chain = self_grad * result.grad
+
+            _set_tensor_grad(self, self_grad_chain)
 
         result._backward_op = _backward_op
         result._prev = [self]
@@ -39,7 +44,7 @@ def _create_ufunc_op(func: callable) -> callable:
 
 
 @_create_ufunc_op
-def pow(self: Tensor, exp: float) -> Tensor:
+def pow(self: Tensor, exp: int | float) -> Tensor:
     result = Tensor(self.data**exp, requires_grad=self.requires_grad)
 
     def compute_grad() -> _ArrayOrScalar:
