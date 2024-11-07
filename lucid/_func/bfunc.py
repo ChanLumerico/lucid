@@ -1,7 +1,6 @@
 import functools
-from typing import Any
-
 import numpy as np
+from typing import Any
 
 from lucid.tensor import Tensor, _NumPyArray, _ArrayOrScalar
 
