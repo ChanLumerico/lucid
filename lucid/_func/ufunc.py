@@ -129,14 +129,3 @@ def tan(self: Tensor) -> Tensor:
         return 1 / (np.cos(self.data) ** 2)
 
     return result, compute_grad
-
-
-@_create_ufunc_op
-def sigmoid(self: Tensor) -> Tensor:
-    """Sigmoid activation function"""
-    result = Tensor(1 / (1 + np.exp(-self.data)), requires_grad=self.requires_grad)
-
-    def compute_grad() -> _ArrayOrScalar:
-        return result.data * (1 - result.data)
-
-    return result, compute_grad
