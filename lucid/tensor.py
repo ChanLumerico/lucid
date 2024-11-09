@@ -2,8 +2,9 @@ from typing import Any, Optional, Self
 import numpy as np
 
 
+_Scalar = int | float
 _NumPyArray = np.ndarray
-_ArrayOrScalar = int | float | list | _NumPyArray
+_ArrayOrScalar = _Scalar | list | _NumPyArray
 
 
 class Tensor:
@@ -22,7 +23,6 @@ class Tensor:
         self.dtype = self.data.dtype
 
         self.grad: Optional[_NumPyArray] = None
-
         self._backward_op: callable = lambda: None
         self._prev: list[Tensor] = []
 
@@ -59,6 +59,9 @@ class Tensor:
     def __str__(self) -> str:
         return self.data.__str__()
 
+    def __hash__(self) -> int:
+        return hash(id(self))
+
     def __add__(self, _: Self) -> Self: ...
 
     def __radd__(self, _: Self) -> Self: ...
@@ -81,6 +84,6 @@ class Tensor:
 
     def __lt__(self, _: Self) -> Self: ...
 
-    def __pow__(self, _: int | float) -> Self: ...
+    def __pow__(self, _: _Scalar) -> Self: ...
 
     def __neg__(self) -> Self: ...

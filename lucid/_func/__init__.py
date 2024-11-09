@@ -1,27 +1,8 @@
 from lucid._func import bfunc, ufunc
-from lucid.tensor import Tensor
+from lucid.tensor import Tensor, _Scalar
 
 
-def add(a: Tensor, b: Tensor) -> Tensor:
-    """Element-wise addition."""
-    return bfunc.add(a, b)
-
-
-def sub(a: Tensor, b: Tensor) -> Tensor:
-    """Element-wise subtraction."""
-    return bfunc.sub(a, b)
-
-
-def mul(a: Tensor, b: Tensor) -> Tensor:
-    """Element-wise multiplication."""
-    return bfunc.mul(a, b)
-
-
-def div(a: Tensor, b: Tensor) -> Tensor:
-    """Element-wise division."""
-    return bfunc.truediv(a, b)
-
-
+# Binary functions
 def minimum(a: Tensor, b: Tensor) -> Tensor:
     """Element-wise minimum operation"""
     return bfunc.minimum(a, b)
@@ -37,11 +18,12 @@ def power(a: Tensor, b: Tensor) -> Tensor:
     return bfunc.power(a, b)
 
 
-def pow(a: Tensor, exp: int | float) -> Tensor:
-    """Element-wise power operation."""
-    return ufunc.pow(a, exp)
+def dot(a: Tensor, b: Tensor) -> Tensor:
+    """Dot product of two tensors."""
+    return bfunc.dot(a, b)
 
 
+# Unary functions
 def exp(a: Tensor) -> Tensor:
     """Exponential function"""
     return ufunc.exp(a)
@@ -52,7 +34,7 @@ def log(a: Tensor) -> Tensor:
     return ufunc.log(a)
 
 
-def sqrr(a: Tensor) -> Tensor:
+def sqrt(a: Tensor) -> Tensor:
     """Square root"""
     return ufunc.sqrt(a)
 
@@ -72,22 +54,50 @@ def tan(a: Tensor) -> Tensor:
     return ufunc.tan(a)
 
 
-def clip(a: Tensor, min_value: float, max_value: float) -> Tensor:
+def clip(a: Tensor, min_value: _Scalar, max_value: _Scalar) -> Tensor:
     """Clips the values of the tensor to a specified range element-wise."""
     return ufunc.clip(a, min_value, max_value)
 
 
-Tensor.__add__ = bfunc.add
-Tensor.__radd__ = bfunc.radd
-Tensor.__sub__ = bfunc.sub
-Tensor.__rsub__ = bfunc.rsub
-Tensor.__mul__ = bfunc.mul
-Tensor.__rmul__ = bfunc.rmul
-Tensor.__truediv__ = bfunc.truediv
-Tensor.__rtrudiv__ = bfunc.rtruediv
-Tensor.__eq__ = bfunc.equal
-Tensor.__gt__ = bfunc.greater
-Tensor.__lt__ = bfunc.less
+def abs(a: Tensor) -> Tensor:
+    """Element-wise absolute value."""
+    return ufunc.abs(a)
 
-Tensor.__pow__ = ufunc.pow
-Tensor.__neg__ = ufunc.neg
+
+def sign(a: Tensor) -> Tensor:
+    """Element-wise sign function."""
+    return ufunc.sign(a)
+
+
+def reciprocal(a: Tensor) -> Tensor:
+    """Element-wise reciprocal."""
+    return ufunc.reciprocal(a)
+
+
+def square(a: Tensor) -> Tensor:
+    """Element-wise square."""
+    return ufunc.square(a)
+
+
+def cube(a: Tensor) -> Tensor:
+    """Element-wise cube."""
+    return ufunc.cube(a)
+
+
+Tensor.__add__ = bfunc._add
+Tensor.__radd__ = bfunc._radd
+Tensor.__sub__ = bfunc._sub
+Tensor.__rsub__ = bfunc._rsub
+Tensor.__mul__ = bfunc._mul
+Tensor.__rmul__ = bfunc._rmul
+Tensor.__truediv__ = bfunc._truediv
+Tensor.__rtruediv__ = bfunc._rtruediv
+Tensor.__eq__ = bfunc._equal
+Tensor.__ne__ = bfunc._not_equal
+Tensor.__gt__ = bfunc._greater
+Tensor.__ge__ = bfunc._greater_or_equal
+Tensor.__lt__ = bfunc._less
+Tensor.__le__ = bfunc._less_or_equal
+
+Tensor.__pow__ = ufunc._pow
+Tensor.__neg__ = ufunc._neg

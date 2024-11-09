@@ -4,12 +4,9 @@ from lucid.tensor import Tensor, _ArrayOrScalar
 from lucid._func._common import create_bfunc_op
 
 
-@create_bfunc_op
-def add(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        self.data + other.data,
-        requires_grad=self.requires_grad or other.requires_grad,
-    )
+@create_bfunc_op()
+def _add(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(self.data + other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return 1, 1
@@ -17,12 +14,9 @@ def add(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
-def sub(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        self.data - other.data,
-        requires_grad=self.requires_grad or other.requires_grad,
-    )
+@create_bfunc_op()
+def _sub(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(self.data - other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return 1, -1
@@ -30,12 +24,9 @@ def sub(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
-def mul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        self.data * other.data,
-        requires_grad=self.requires_grad or other.requires_grad,
-    )
+@create_bfunc_op()
+def _mul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(self.data * other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return other.data, self.data
@@ -43,12 +34,9 @@ def mul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
-def truediv(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        self.data / other.data,
-        requires_grad=self.requires_grad or other.requires_grad,
-    )
+@create_bfunc_op()
+def _truediv(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(self.data / other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return 1 / other.data, -self.data / (other.data**2)
@@ -56,12 +44,9 @@ def truediv(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
-def equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        (self.data == other.data).astype(self.dtype),
-        requires_grad=False,
-    )
+@create_bfunc_op(has_gradient=False)
+def _equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor((self.data == other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return 0, 0
@@ -69,12 +54,9 @@ def equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
-def greater(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        (self.data > other.data).astype(self.dtype),
-        requires_grad=False,
-    )
+@create_bfunc_op(has_gradient=False)
+def _not_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor((self.data != other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return 0, 0
@@ -82,12 +64,9 @@ def greater(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
-def less(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        (self.data < other.data).astype(self.dtype),
-        requires_grad=False,
-    )
+@create_bfunc_op(has_gradient=False)
+def _greater(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor((self.data > other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return 0, 0
@@ -95,12 +74,39 @@ def less(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
+@create_bfunc_op(has_gradient=False)
+def _greater_or_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor((self.data >= other.data).astype(self.dtype))
+
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return 0, 0
+
+    return result, compute_grad
+
+
+@create_bfunc_op(has_gradient=False)
+def _less(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor((self.data < other.data).astype(self.dtype))
+
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return 0, 0
+
+    return result, compute_grad
+
+
+@create_bfunc_op(has_gradient=False)
+def _less_or_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor((self.data <= other.data).astype(self.dtype))
+
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return 0, 0
+
+    return result, compute_grad
+
+
+@create_bfunc_op()
 def minimum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        np.minimum(self.data, other.data),
-        requires_grad=self.requires_grad or other.requires_grad,
-    )
+    result = Tensor(np.minimum(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         self_grad = (self.data <= other.data).astype(self.dtype)
@@ -110,12 +116,9 @@ def minimum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
+@create_bfunc_op()
 def maximum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        np.maximum(self.data, other.data),
-        requires_grad=self.requires_grad or other.requires_grad,
-    )
+    result = Tensor(np.maximum(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         self_grad = (self.data >= other.data).astype(self.dtype)
@@ -125,12 +128,9 @@ def maximum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-@create_bfunc_op
+@create_bfunc_op()
 def power(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        np.power(self.data, other.data),
-        requires_grad=self.requires_grad or other.requires_grad,
-    )
+    result = Tensor(np.power(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         self_grad = other.data * np.power(self.data, other.data - 1)
@@ -140,7 +140,17 @@ def power(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     return result, compute_grad
 
 
-radd: callable = lambda self, other: add(self, other)
-rsub: callable = lambda self, other: sub(other, self)
-rmul: callable = lambda self, other: mul(self, other)
-rtruediv: callable = lambda self, other: truediv(other, self)
+@create_bfunc_op()
+def dot(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(np.dot(self.data, other.data))
+
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return other.data, self.data
+
+    return result, compute_grad
+
+
+_radd: callable = lambda self, other: _add(self, other)
+_rsub: callable = lambda self, other: _sub(other, self)
+_rmul: callable = lambda self, other: _mul(self, other)
+_rtruediv: callable = lambda self, other: _truediv(other, self)

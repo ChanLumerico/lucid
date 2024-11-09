@@ -18,56 +18,70 @@ def _check_is_tensor(any: Any) -> Tensor:
     return any
 
 
-def create_bfunc_op(func: callable) -> callable:
+def create_bfunc_op(has_gradient: bool = True) -> callable:
 
-    @functools.wraps(func)
-    def wrapper(self: Any, other: Any, *args, **kwargs) -> Tensor:
-        self = _check_is_tensor(self)
-        other = _check_is_tensor(other)
+    def decorator(func: callable) -> callable:
+        @functools.wraps(func)
+        def wrapper(self: Any, other: Any, *args, **kwargs) -> Tensor:
+            self = _check_is_tensor(self)
+            other = _check_is_tensor(other)
 
-        result, compute_grad = func(self, other, *args, **kwargs)
+            result, compute_grad = func(self, other, *args, **kwargs)
+            result.requires_grad = self.requires_grad or other.requires_grad
 
-        def _backward_op() -> None:
-            self_grad, other_grad = compute_grad()
+            if not has_gradient:
+                result.requires_grad = False
 
-            self_grad_chain = self_grad
-            other_grad_chain = other_grad
+            def _backward_op() -> None:
+                self_grad, other_grad = compute_grad()
 
-            if result.grad is not None:
-                self_grad_chain = self_grad * result.grad
-                other_grad_chain = other_grad * result.grad
+                self_grad_chain = self_grad
+                other_grad_chain = other_grad
 
-            _set_tensor_grad(self, self_grad_chain)
-            _set_tensor_grad(other, other_grad_chain)
+                if result.grad is not None:
+                    self_grad_chain = self_grad * result.grad
+                    other_grad_chain = other_grad * result.grad
 
-        result._backward_op = _backward_op
-        result._prev = [self, other]
+                _set_tensor_grad(self, self_grad_chain)
+                _set_tensor_grad(other, other_grad_chain)
 
-        return result
+            result._backward_op = _backward_op
+            result._prev = [self, other]
 
-    return wrapper
+            return result
+
+        return wrapper
+
+    return decorator
 
 
-def create_ufunc_op(func: callable) -> callable:
+def create_ufunc_op(has_gradient: bool = True) -> callable:
 
-    @functools.wraps(func)
-    def wrapper(self: Any, *args, **kwargs) -> Tensor:
-        self = _check_is_tensor(self)
+    def decorator(func: callable) -> callable:
+        @functools.wraps(func)
+        def wrapper(self: Any, *args, **kwargs) -> Tensor:
+            self = _check_is_tensor(self)
 
-        result, compute_grad = func(self, *args, **kwargs)
+            result, compute_grad = func(self, *args, **kwargs)
+            result.requires_grad = self.requires_grad
 
-        def _backward_op() -> None:
-            self_grad = compute_grad()
+            if not has_gradient:
+                result.requires_grad = False
 
-            self_grad_chain = self_grad
-            if result.grad is not None:
-                self_grad_chain = self_grad * result.grad
+            def _backward_op() -> None:
+                self_grad = compute_grad()
 
-            _set_tensor_grad(self, self_grad_chain)
+                self_grad_chain = self_grad
+                if result.grad is not None:
+                    self_grad_chain = self_grad * result.grad
 
-        result._backward_op = _backward_op
-        result._prev = [self]
+                _set_tensor_grad(self, self_grad_chain)
 
-        return result
+            result._backward_op = _backward_op
+            result._prev = [self]
 
-    return wrapper
+            return result
+
+        return wrapper
+
+    return decorator
