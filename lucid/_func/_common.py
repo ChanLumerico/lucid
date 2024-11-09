@@ -1,7 +1,8 @@
 import functools
 from typing import Any
 
-from lucid.tensor import Tensor, _NumPyArray
+from lucid._tensor import Tensor
+from lucid.types import _NumPyArray
 
 
 def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:

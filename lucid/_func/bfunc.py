@@ -1,7 +1,8 @@
 import numpy as np
 
-from lucid.tensor import Tensor, _ArrayOrScalar
+from lucid._tensor import Tensor
 from lucid._func._common import create_bfunc_op
+from lucid.types import _ArrayOrScalar
 
 
 @create_bfunc_op()
@@ -146,6 +147,40 @@ def dot(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return other.data, self.data
+
+    return result, compute_grad
+
+
+@create_bfunc_op()
+def inner(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(np.inner(self.data, other.data))
+
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        return other.data, self.data
+
+    return result, compute_grad
+
+
+@create_bfunc_op()
+def outer(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(np.outer(self.data, other.data))
+
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        self_grad = np.reshape(other.data, (1, other.data.size))
+        other_grad = np.reshape(self.data, (self.data.size, 1))
+        return self_grad, other_grad
+
+    return result, compute_grad
+
+
+@create_bfunc_op()
+def matmul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(np.matmul(self.data, other.data))
+
+    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
+        grad_x = np.matmul(other.data.T, result.grad)
+        grad_y = np.matmul(self.data.T, result.grad)
+        return grad_x, grad_y
 
     return result, compute_grad
 

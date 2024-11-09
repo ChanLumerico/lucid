@@ -1,13 +1,11 @@
-from typing import Any, Optional, Self
+from typing import Any, Optional
 import numpy as np
 
-
-_Scalar = int | float
-_NumPyArray = np.ndarray
-_ArrayOrScalar = _Scalar | list | _NumPyArray
+from lucid._tensor.tensor_ops import _TensorOps
+from lucid.types import _ArrayOrScalar, _NumPyArray
 
 
-class Tensor:
+class Tensor(_TensorOps):
     def __init__(
         self,
         data: _ArrayOrScalar,
@@ -61,29 +59,3 @@ class Tensor:
 
     def __hash__(self) -> int:
         return hash(id(self))
-
-    def __add__(self, _: Self) -> Self: ...
-
-    def __radd__(self, _: Self) -> Self: ...
-
-    def __sub__(self, _: Self) -> Self: ...
-
-    def __rsub__(self, _: Self) -> Self: ...
-
-    def __mul__(self, _: Self) -> Self: ...
-
-    def __rmul__(self, _: Self) -> Self: ...
-
-    def __truediv__(self, _: Self) -> Self: ...
-
-    def __rtrudiv__(self, _: Self) -> Self: ...
-
-    def __eq__(self, _: Self) -> Self: ...
-
-    def __gt__(self, _: Self) -> Self: ...
-
-    def __lt__(self, _: Self) -> Self: ...
-
-    def __pow__(self, _: _Scalar) -> Self: ...
-
-    def __neg__(self) -> Self: ...

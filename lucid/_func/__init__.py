@@ -1,5 +1,6 @@
 from lucid._func import bfunc, ufunc
-from lucid.tensor import Tensor, _Scalar
+from lucid._tensor import Tensor
+from lucid.types import _Scalar
 
 
 # Binary functions
@@ -21,6 +22,16 @@ def power(a: Tensor, b: Tensor) -> Tensor:
 def dot(a: Tensor, b: Tensor) -> Tensor:
     """Dot product of two tensors."""
     return bfunc.dot(a, b)
+
+
+def inner(a: Tensor, b: Tensor) -> Tensor:
+    """Inner product of two tensors."""
+    return bfunc.inner(a, b)
+
+
+def outer(a: Tensor, b: Tensor) -> Tensor:
+    """Outer product of two tensors."""
+    return bfunc.outer(a, b)
 
 
 # Unary functions
@@ -52,6 +63,21 @@ def cos(a: Tensor) -> Tensor:
 def tan(a: Tensor) -> Tensor:
     """Tangent function"""
     return ufunc.tan(a)
+
+
+def arcsin(a: Tensor) -> Tensor:
+    """Arcsin function"""
+    return ufunc.arcsin(a)
+
+
+def arccos(a: Tensor) -> Tensor:
+    """Arccos function"""
+    return ufunc.arccos(a)
+
+
+def arctan(a: Tensor) -> Tensor:
+    """Arctan function"""
+    return ufunc.arctan(a)
 
 
 def clip(a: Tensor, min_value: _Scalar, max_value: _Scalar) -> Tensor:
@@ -92,6 +118,8 @@ Tensor.__mul__ = bfunc._mul
 Tensor.__rmul__ = bfunc._rmul
 Tensor.__truediv__ = bfunc._truediv
 Tensor.__rtruediv__ = bfunc._rtruediv
+Tensor.__matmul__ = bfunc.matmul
+
 Tensor.__eq__ = bfunc._equal
 Tensor.__ne__ = bfunc._not_equal
 Tensor.__gt__ = bfunc._greater
@@ -101,3 +129,5 @@ Tensor.__le__ = bfunc._less_or_equal
 
 Tensor.__pow__ = ufunc._pow
 Tensor.__neg__ = ufunc._neg
+
+Tensor.T = ufunc._T

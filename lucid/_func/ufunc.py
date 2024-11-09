@@ -1,7 +1,8 @@
 import numpy as np
 
-from lucid.tensor import Tensor, _ArrayOrScalar
+from lucid._tensor import Tensor
 from lucid._func._common import create_ufunc_op
+from lucid.types import _ArrayOrScalar
 
 
 @create_ufunc_op()
@@ -85,6 +86,45 @@ def tan(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
+def arcsin(self: Tensor) -> Tensor:
+    result = Tensor(
+        np.arcsin(self.data),
+        requires_grad=self.requires_grad,
+    )
+
+    def compute_grad() -> _ArrayOrScalar:
+        return 1 / np.sqrt(1 - self.data**2)
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def arccos(self: Tensor) -> Tensor:
+    result = Tensor(
+        np.arccos(self.data),
+        requires_grad=self.requires_grad,
+    )
+
+    def compute_grad() -> _ArrayOrScalar:
+        return -1 / np.sqrt(1 - self.data**2)
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def arctan(self: Tensor) -> Tensor:
+    result = Tensor(
+        np.arctan(self.data),
+        requires_grad=self.requires_grad,
+    )
+
+    def compute_grad() -> _ArrayOrScalar:
+        return 1 / (1 + self.data**2)
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
 def clip(self: Tensor, min_value: float, max_value: float) -> tuple[Tensor, callable]:
     result = Tensor(np.clip(self.data, min_value, max_value))
 
@@ -143,5 +183,16 @@ def cube(self: Tensor) -> Tensor:
 
     def compute_grad() -> _ArrayOrScalar:
         return 3 * self.data**2
+
+    return result, compute_grad
+
+
+@property
+@create_ufunc_op()
+def _T(self: Tensor) -> Tensor:
+    result = Tensor(self.data.T)
+
+    def compute_grad() -> _ArrayOrScalar:
+        return np.ones(self.data.shape)
 
     return result, compute_grad

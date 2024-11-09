@@ -7,8 +7,10 @@ Lumeruco's Comprehensive Interface for Deep Learning
 from typing import Any
 import numpy as np
 
-from lucid.tensor import Tensor, _ArrayOrScalar
+from lucid._tensor import Tensor
 from lucid._func import *
+
+from lucid.types import _ArrayOrScalar
 
 
 def tensor(
