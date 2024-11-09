@@ -53,6 +53,12 @@ class Tensor:
             if not tensor.is_leaf:
                 tensor.grad = None
 
+    def __repr__(self) -> str:
+        return f"Tensor(data={self.data}, grad={self.grad})"
+
+    def __str__(self) -> str:
+        return self.data.__str__()
+
     def __add__(self, _: Self) -> Self: ...
 
     def __radd__(self, _: Self) -> Self: ...
@@ -69,10 +75,12 @@ class Tensor:
 
     def __rtrudiv__(self, _: Self) -> Self: ...
 
+    def __eq__(self, _: Self) -> Self: ...
+
+    def __gt__(self, _: Self) -> Self: ...
+
+    def __lt__(self, _: Self) -> Self: ...
+
     def __pow__(self, _: int | float) -> Self: ...
 
-    def __repr__(self) -> str:
-        return f"Tensor(data={self.data}, grad={self.grad})"
-
-    def __str__(self) -> str:
-        return self.data.__str__()
+    def __neg__(self) -> Self: ...
