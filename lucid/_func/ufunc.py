@@ -212,3 +212,21 @@ def transpose(
         return grad
 
     return result, compute_grad
+
+
+@create_ufunc_op()
+def sum(
+    self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
+) -> tuple[Tensor, callable]:
+    result = Tensor(np.sum(self.data, axis=axis, keepdims=keepdims))
+
+    def compute_grad() -> _ArrayOrScalar:
+        grad = np.ones_like(result.data, dtype=self.data.dtype)
+        if axis is not None and not keepdims:
+            expanded_grad = np.expand_dims(grad, axis=axis)
+        else:
+            expanded_grad = grad
+
+        return np.broadcast_to(expanded_grad, self.data.shape)
+
+    return result, compute_grad

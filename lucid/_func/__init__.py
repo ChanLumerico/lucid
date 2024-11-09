@@ -1,9 +1,12 @@
-from lucid._func import bfunc, ufunc
+from typing import Any
+import numpy as np
+
+from lucid._func import bfunc, ufunc, gfunc
 from lucid._tensor import Tensor
-from lucid.types import _Scalar
+from lucid.types import _Scalar, _ShapeLike, _ArrayLike
 
 
-# Binary functions
+# binary functions
 def minimum(a: Tensor, b: Tensor) -> Tensor:
     """Element-wise minimum operation"""
     return bfunc.minimum(a, b)
@@ -34,7 +37,7 @@ def outer(a: Tensor, b: Tensor) -> Tensor:
     return bfunc.outer(a, b)
 
 
-# Unary functions
+# unary functions
 def exp(a: Tensor) -> Tensor:
     """Exponential function"""
     return ufunc.exp(a)
@@ -115,8 +118,61 @@ def transpose(a: Tensor, axes: list[int] | None = None) -> Tensor:
     return ufunc.transpose(a, axes)
 
 
-# Tensor-generating functions
-from lucid._func.gen import *
+def sum(
+    a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
+) -> Tensor:
+    """Sum along the specified axis."""
+    return ufunc.sum(a, axis, keepdims)
+
+
+# tensor-generating functions
+def zeros(
+    shape: _ShapeLike, dtype: Any = np.float32, requires_grad: bool = False
+) -> Tensor:
+    """Create a zero-tensor with the specified shape."""
+    return gfunc.zeros(shape, dtype, requires_grad)
+
+
+def zeros_like(
+    a: Tensor | _ArrayLike, dtype: Any = None, requires_grad: bool = False
+) -> Tensor:
+    """Create a zero-tensor of shape same with the given tensor."""
+    return zeros_like(a, dtype, requires_grad)
+
+
+def ones(
+    shape: _ShapeLike, dtype: Any = np.float32, requires_grad: bool = False
+) -> Tensor:
+    """Create an one-tensor with the specified shape."""
+    return gfunc.ones(shape, dtype, requires_grad)
+
+
+def ones_like(
+    a: Tensor | _ArrayLike, dtype: Any = None, requires_grad: bool = False
+) -> Tensor:
+    """Create an one-tensor of shape same with the given tensor."""
+    return ones_like(a, dtype, requires_grad)
+
+
+def eye(
+    N: int,
+    M: int | None = None,
+    k: int = 0,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+) -> Tensor:
+    """Create an identical matrix of shape `(N, M)`."""
+    return gfunc.eye(N, M, k, dtype, requires_grad)
+
+
+def diag(
+    v: Tensor | _ArrayLike,
+    k: int = 0,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+) -> Tensor:
+    """Create a diagonal matrix from the given vector."""
+    return gfunc.diag(v, k, dtype, requires_grad)
 
 
 Tensor.__add__ = bfunc._add
