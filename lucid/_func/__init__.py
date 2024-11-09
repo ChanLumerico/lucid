@@ -110,6 +110,15 @@ def cube(a: Tensor) -> Tensor:
     return ufunc.cube(a)
 
 
+def transpose(a: Tensor, axes: list[int] | None = None) -> Tensor:
+    """Transpose over axes."""
+    return ufunc.transpose(a, axes)
+
+
+# Tensor-generating functions
+from lucid._func.gen import *
+
+
 Tensor.__add__ = bfunc._add
 Tensor.__radd__ = bfunc._radd
 Tensor.__sub__ = bfunc._sub
@@ -131,3 +140,7 @@ Tensor.__pow__ = ufunc._pow
 Tensor.__neg__ = ufunc._neg
 
 Tensor.T = ufunc._T
+Tensor.dot = bfunc.dot
+Tensor.inner = bfunc.inner
+Tensor.outer = bfunc.outer
+Tensor.matmul = bfunc.matmul

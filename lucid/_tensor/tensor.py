@@ -51,11 +51,23 @@ class Tensor(_TensorOps):
             if not tensor.is_leaf:
                 tensor.grad = None
 
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self.data.shape
+
+    @property
+    def ndim(self) -> int:
+        return self.data.ndim
+
+    @property
+    def size(self) -> int:
+        return self.data.size
+
     def __repr__(self) -> str:
         return f"Tensor(data={self.data}, grad={self.grad})"
 
     def __str__(self) -> str:
-        return self.data.__str__()
+        return str(self.data)
 
     def __hash__(self) -> int:
         return hash(id(self))

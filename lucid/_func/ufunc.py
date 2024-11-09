@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -194,5 +195,20 @@ def _T(self: Tensor) -> Tensor:
 
     def compute_grad() -> _ArrayOrScalar:
         return np.ones(self.data.shape)
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def transpose(
+    self: Tensor, axes: Optional[list[int]] = None
+) -> tuple[Tensor, callable]:
+    if axes is None:
+        axes = list(reversed(range(self.ndim)))
+    result = Tensor(np.transpose(self.data, axes))
+
+    def compute_grad() -> _ArrayOrScalar:
+        grad = np.transpose(result.grad, axes)
+        return grad
 
     return result, compute_grad
