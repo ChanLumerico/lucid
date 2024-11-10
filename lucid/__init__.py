@@ -13,6 +13,7 @@ from lucid._func import *
 from lucid.types import _ArrayOrScalar
 
 import lucid.linalg as linalg
+import lucid.random as random
 
 
 def tensor(

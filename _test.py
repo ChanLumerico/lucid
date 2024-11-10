@@ -1,11 +1,13 @@
 import lucid
+import numpy as np
+
+lucid.random.seed(42)
 
 
-x = lucid.tensor([1, 2], requires_grad=True)
-y = lucid.tensor([3, 4], requires_grad=True)
+x = lucid.random.randn((2, 2), requires_grad=True)
+y = lucid.random.randn((2, 2), requires_grad=True)
 
-z = x.dot(y)
-
+z = x @ y
 z.backward(keep_grad=True)
 
 print(z)

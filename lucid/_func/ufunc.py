@@ -117,6 +117,36 @@ def arctan(self: Tensor) -> Tensor:
 
 
 @create_ufunc_op()
+def sinh(self: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(np.sinh(self.data))
+
+    def compute_grad() -> _ArrayOrScalar:
+        return np.cosh(self.data) * result.grad
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def cosh(self: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(np.cosh(self.data))
+
+    def compute_grad() -> _ArrayOrScalar:
+        return np.sinh(self.data) * result.grad
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def tanh(self: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(np.tanh(self.data))
+
+    def compute_grad() -> _ArrayOrScalar:
+        return (1 - np.tanh(self.data) ** 2) * result.grad
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
 def clip(self: Tensor, min_value: float, max_value: float) -> tuple[Tensor, callable]:
     result = Tensor(np.clip(self.data, min_value, max_value))
 

@@ -76,6 +76,21 @@ def arctan(a: Tensor) -> Tensor:
     return ufunc.arctan(a)
 
 
+def sinh(a: Tensor) -> Tensor:
+    """Hyperbolic sine function"""
+    return ufunc.sinh(a)
+
+
+def cosh(a: Tensor) -> Tensor:
+    """Hyperbolic cosine function"""
+    return ufunc.cosh(a)
+
+
+def tanh(a: Tensor) -> Tensor:
+    """Hyperbolic tangent function"""
+    return ufunc.tanh(a)
+
+
 def clip(a: Tensor, min_value: _Scalar, max_value: _Scalar) -> Tensor:
     """Clips the values of the tensor to a specified range element-wise."""
     return ufunc.clip(a, min_value, max_value)
