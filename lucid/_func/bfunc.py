@@ -149,7 +149,10 @@ def dot(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.dot(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return result.grad.dot(other.data.T), self.data.T.dot(result.grad)
+        return (
+            result.grad.dot(np.swapaxes(other.data, -1, -2)),
+            np.swapaxes(self.data, -1, -2).dot(result.grad),
+        )
 
     return result, compute_grad
 
@@ -160,8 +163,8 @@ def inner(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return (
-            np.inner(result.grad, other.data.T),
-            np.inner(self.data.T, result.grad),
+            np.tensordot(result.grad, other.data, axes=(-1, -1)),
+            np.tensordot(self.data, result.grad, axes=(-1, -1)),
         )
 
     return result, compute_grad
@@ -173,8 +176,8 @@ def matmul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         return (
-            np.matmul(result.grad, other.data.transpose(-1, -2)),
-            np.matmul(self.data.transpose(-1, -2), result.grad),
+            np.matmul(result.grad, np.swapaxes(other.data, -1, -2)),
+            np.matmul(np.swapaxes(self.data, -1, -2), result.grad),
         )
 
     return result, compute_grad

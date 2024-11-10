@@ -25,7 +25,7 @@ class Module:
 
         super().__setattr__(name, value)
 
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
+    def forward(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
         raise NotImplementedError(
             "The forward method must be implemented by the subclass."
         )
@@ -48,5 +48,5 @@ class Module:
         for name, param in state_dict.items():
             setattr(self, name, param)
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
         return self.forward(*args, **kwargs)
