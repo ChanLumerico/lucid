@@ -118,6 +118,11 @@ def sum(
     return ufunc.sum(a, axis, keepdims)
 
 
+def trace(a: Tensor) -> Tensor:
+    """Trace operation."""
+    return ufunc.trace(a)
+
+
 def zeros(
     shape: _ShapeLike, dtype: Any = np.float32, requires_grad: bool = False
 ) -> Tensor:

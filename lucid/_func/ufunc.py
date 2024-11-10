@@ -224,3 +224,15 @@ def sum(
         return grad
 
     return result, compute_grad
+
+
+@create_ufunc_op()
+def trace(self: Tensor) -> tuple[Tensor, callable]:
+    result = Tensor(np.trace(self.data))
+
+    def compute_grad() -> _ArrayOrScalar:
+        grad = np.zeros_like(self.data)
+        np.fill_diagonal(grad, 1)
+        return grad * result.grad
+
+    return result, compute_grad
