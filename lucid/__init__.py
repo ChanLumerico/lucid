@@ -14,6 +14,7 @@ from lucid.types import _ArrayOrScalar
 
 import lucid.linalg as linalg
 import lucid.random as random
+import lucid.nn as nn
 
 
 def tensor(
