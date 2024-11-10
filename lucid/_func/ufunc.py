@@ -189,17 +189,17 @@ def cube(self: Tensor) -> Tensor:
 
 
 @property
-@create_ufunc_op()
+@create_ufunc_op(do_chain_rule=False)
 def _T(self: Tensor) -> Tensor:
     result = Tensor(self.data.T)
 
     def compute_grad() -> _ArrayOrScalar:
-        return np.ones(self.data.shape)
+        return result.grad.T
 
     return result, compute_grad
 
 
-@create_ufunc_op()
+@create_ufunc_op(do_chain_rule=False)
 def transpose(
     self: Tensor, axes: Optional[list[int]] = None
 ) -> tuple[Tensor, callable]:
@@ -208,8 +208,7 @@ def transpose(
     result = Tensor(np.transpose(self.data, axes))
 
     def compute_grad() -> _ArrayOrScalar:
-        grad = np.transpose(result.grad, axes)
-        return grad
+        return np.transpose(result.grad, axes)
 
     return result, compute_grad
 

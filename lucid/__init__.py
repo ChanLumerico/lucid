@@ -12,6 +12,8 @@ from lucid._func import *
 
 from lucid.types import _ArrayOrScalar
 
+import lucid.linalg as linalg
+
 
 def tensor(
     data: _ArrayOrScalar, requires_grad: bool = False, dtype: Any = np.float32

@@ -28,7 +28,7 @@ class Tensor(_TensorOps):
     def is_leaf(self) -> bool:
         return self.requires_grad and len(self._prev) == 0
 
-    def backward(self) -> None:
+    def backward(self, keep_grad: bool = False) -> None:
         if self.grad is None:
             self.grad = np.ones_like(self.data)
 
@@ -48,7 +48,7 @@ class Tensor(_TensorOps):
         for tensor in topo_order:
             tensor._backward_op()
 
-            if not tensor.is_leaf:
+            if not tensor.is_leaf and not keep_grad:
                 tensor.grad = None
 
     @property

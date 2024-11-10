@@ -19,7 +19,7 @@ def _check_is_tensor(any: Any) -> Tensor:
     return any
 
 
-def create_bfunc_op(has_gradient: bool = True) -> callable:
+def create_bfunc_op(do_chain_rule: bool = True, has_gradient: bool = True) -> callable:
 
     def decorator(func: callable) -> callable:
         @functools.wraps(func)
@@ -39,7 +39,7 @@ def create_bfunc_op(has_gradient: bool = True) -> callable:
                 self_grad_chain = self_grad
                 other_grad_chain = other_grad
 
-                if result.grad is not None:
+                if result.grad is not None and do_chain_rule:
                     self_grad_chain = self_grad * result.grad
                     other_grad_chain = other_grad * result.grad
 
@@ -56,7 +56,7 @@ def create_bfunc_op(has_gradient: bool = True) -> callable:
     return decorator
 
 
-def create_ufunc_op(has_gradient: bool = True) -> callable:
+def create_ufunc_op(do_chain_rule: bool = True, has_gradient: bool = True) -> callable:
 
     def decorator(func: callable) -> callable:
         @functools.wraps(func)
@@ -73,7 +73,7 @@ def create_ufunc_op(has_gradient: bool = True) -> callable:
                 self_grad = compute_grad()
 
                 self_grad_chain = self_grad
-                if result.grad is not None:
+                if result.grad is not None and do_chain_rule:
                     self_grad_chain = self_grad * result.grad
 
                 _set_tensor_grad(self, self_grad_chain)

@@ -1,12 +1,11 @@
 from typing import Any
 import numpy as np
 
-from lucid._func import bfunc, ufunc, gfunc
+from lucid._func import bfunc, gfunc, ufunc
 from lucid._tensor import Tensor
 from lucid.types import _Scalar, _ShapeLike, _ArrayLike
 
 
-# binary functions
 def minimum(a: Tensor, b: Tensor) -> Tensor:
     """Element-wise minimum operation"""
     return bfunc.minimum(a, b)
@@ -32,12 +31,6 @@ def inner(a: Tensor, b: Tensor) -> Tensor:
     return bfunc.inner(a, b)
 
 
-def outer(a: Tensor, b: Tensor) -> Tensor:
-    """Outer product of two tensors."""
-    return bfunc.outer(a, b)
-
-
-# unary functions
 def exp(a: Tensor) -> Tensor:
     """Exponential function"""
     return ufunc.exp(a)
@@ -125,7 +118,6 @@ def sum(
     return ufunc.sum(a, axis, keepdims)
 
 
-# tensor-generating functions
 def zeros(
     shape: _ShapeLike, dtype: Any = np.float32, requires_grad: bool = False
 ) -> Tensor:
@@ -151,7 +143,7 @@ def ones_like(
     a: Tensor | _ArrayLike, dtype: Any = None, requires_grad: bool = False
 ) -> Tensor:
     """Create an one-tensor of shape same with the given tensor."""
-    return ones_like(a, dtype, requires_grad)
+    return gfunc.ones_like(a, dtype, requires_grad)
 
 
 def eye(
@@ -198,5 +190,4 @@ Tensor.__neg__ = ufunc._neg
 Tensor.T = ufunc._T
 Tensor.dot = bfunc.dot
 Tensor.inner = bfunc.inner
-Tensor.outer = bfunc.outer
 Tensor.matmul = bfunc.matmul

@@ -162,30 +162,11 @@ def inner(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def outer(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
-    result = Tensor(
-        np.outer(self.data.flatten(), other.data.flatten()).reshape(
-            *self.shape, *other.shape
-        )
-    )
-
-    def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        self_grad = np.sum(result.data, axis=tuple(range(self.ndim, result.ndim)))
-        other_grad = np.sum(result.data, axis=tuple(range(self.ndim)))
-
-        return self_grad, other_grad
-
-    return result, compute_grad
-
-
-@create_bfunc_op()
 def matmul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.matmul(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        grad_x = np.matmul(other.data.T, result.grad)
-        grad_y = np.matmul(self.data.T, result.grad)
-        return grad_x, grad_y
+        return other.data.T, self.data.T
 
     return result, compute_grad
 
