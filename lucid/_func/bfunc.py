@@ -149,7 +149,7 @@ def dot(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.dot(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return result.grad.dot(other.data), result.grad.dot(self.data)
+        return result.grad.dot(other.data.T), self.data.T.dot(result.grad)
 
     return result, compute_grad
 

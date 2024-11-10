@@ -6,35 +6,47 @@ from lucid.types import _ShapeLike, _ArrayLike
 
 
 def zeros(
-    shape: _ShapeLike, dtype: Any = np.float32, requires_grad: bool = False
+    shape: _ShapeLike,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
-    return Tensor(np.zeros(shape, dtype=dtype), requires_grad=requires_grad)
+    return Tensor(np.zeros(shape, dtype=dtype), requires_grad, keep_grad)
 
 
 def zeros_like(
-    a: Tensor | _ArrayLike, dtype: Any = None, requires_grad: bool = False
+    a: Tensor | _ArrayLike,
+    dtype: Any = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     if dtype is None and hasattr(a, "dtype"):
         dtype = a.dtype
     if isinstance(a, Tensor):
         a = a.data
-    return Tensor(np.zeros_like(a, dtype=dtype), requires_grad=requires_grad)
+    return Tensor(np.zeros_like(a, dtype=dtype), requires_grad, keep_grad)
 
 
 def ones(
-    shape: _ShapeLike, dtype: Any = np.float32, requires_grad: bool = False
+    shape: _ShapeLike,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
-    return Tensor(np.ones(shape, dtype=dtype), requires_grad=requires_grad)
+    return Tensor(np.ones(shape, dtype=dtype), requires_grad, keep_grad)
 
 
 def ones_like(
-    a: Tensor | _ArrayLike, dtype: Any = None, requires_grad: bool = False
+    a: Tensor | _ArrayLike,
+    dtype: Any = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     if dtype is None and hasattr(a, "dtype"):
         dtype = a.dtype
     if isinstance(a, Tensor):
         a = a.data
-    return Tensor(np.ones_like(a, dtype=dtype), requires_grad=requires_grad)
+    return Tensor(np.ones_like(a, dtype=dtype), requires_grad, keep_grad)
 
 
 def eye(
@@ -43,8 +55,9 @@ def eye(
     k: int = 0,
     dtype: Any = np.float32,
     requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
-    return Tensor(np.eye(N, M, k, dtype=dtype), requires_grad=requires_grad)
+    return Tensor(np.eye(N, M, k, dtype=dtype), requires_grad, keep_grad)
 
 
 def diag(
@@ -52,7 +65,8 @@ def diag(
     k: int = 0,
     dtype: Any = np.float32,
     requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     if not isinstance(v, Tensor):
-        v = Tensor(v, dtype=dtype, requires_grad=requires_grad)
-    return Tensor(np.diag(v.data, k), requires_grad=v.requires_grad)
+        v = Tensor(v, requires_grad, keep_grad, dtype)
+    return Tensor(np.diag(v.data, k), v.requires_grad, v.keep_grad)

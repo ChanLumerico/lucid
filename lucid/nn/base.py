@@ -6,8 +6,10 @@ from lucid.types import _ArrayOrScalar
 
 
 class Parameter(Tensor):
-    def __init__(self, data: _ArrayOrScalar, dtype=np.float32):
-        super().__init__(data, requires_grad=False, dtype=dtype)
+    def __init__(self, data: Tensor | _ArrayOrScalar, dtype=np.float32):
+        if isinstance(data, Tensor):
+            data = data.data
+        super().__init__(data, requires_grad=True, keep_grad=True, dtype=dtype)
 
 
 class Module:
@@ -45,3 +47,6 @@ class Module:
     def load_state_dict(self, state_dict: dict) -> None:
         for name, param in state_dict.items():
             setattr(self, name, param)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.forward(*args, **kwargs)

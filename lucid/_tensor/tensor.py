@@ -10,6 +10,7 @@ class Tensor(_TensorOps):
         self,
         data: _ArrayOrScalar,
         requires_grad: bool = False,
+        keep_grad: bool = False,
         dtype: Any = np.float32,
     ) -> None:
         if not isinstance(data, _NumPyArray):
@@ -18,6 +19,7 @@ class Tensor(_TensorOps):
             self.data = data
 
         self.requires_grad = requires_grad
+        self.keep_grad = keep_grad
         self.dtype = self.data.dtype
 
         self.grad: Optional[_NumPyArray] = None
@@ -49,7 +51,7 @@ class Tensor(_TensorOps):
             tensor._backward_op()
 
             if not tensor.is_leaf and not keep_grad:
-                tensor.grad = None
+                self.zero_grad()
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -62,6 +64,10 @@ class Tensor(_TensorOps):
     @property
     def size(self) -> int:
         return self.data.size
+
+    def zero_grad(self) -> None:
+        if not self.keep_grad:
+            self.grad = None
 
     def __repr__(self) -> str:
         return f"Tensor(data={self.data}, grad={self.grad})"

@@ -139,31 +139,43 @@ def trace(a: Tensor) -> Tensor:
 
 
 def zeros(
-    shape: _ShapeLike, dtype: Any = np.float32, requires_grad: bool = False
+    shape: _ShapeLike,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     """Create a zero-tensor with the specified shape."""
-    return gfunc.zeros(shape, dtype, requires_grad)
+    return gfunc.zeros(shape, dtype, requires_grad, keep_grad)
 
 
 def zeros_like(
-    a: Tensor | _ArrayLike, dtype: Any = None, requires_grad: bool = False
+    a: Tensor | _ArrayLike,
+    dtype: Any = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     """Create a zero-tensor of shape same with the given tensor."""
-    return zeros_like(a, dtype, requires_grad)
+    return zeros_like(a, dtype, requires_grad, keep_grad)
 
 
 def ones(
-    shape: _ShapeLike, dtype: Any = np.float32, requires_grad: bool = False
+    shape: _ShapeLike,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     """Create an one-tensor with the specified shape."""
-    return gfunc.ones(shape, dtype, requires_grad)
+    return gfunc.ones(shape, dtype, requires_grad, keep_grad)
 
 
 def ones_like(
-    a: Tensor | _ArrayLike, dtype: Any = None, requires_grad: bool = False
+    a: Tensor | _ArrayLike,
+    dtype: Any = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     """Create an one-tensor of shape same with the given tensor."""
-    return gfunc.ones_like(a, dtype, requires_grad)
+    return gfunc.ones_like(a, dtype, requires_grad, keep_grad)
 
 
 def eye(
@@ -172,9 +184,10 @@ def eye(
     k: int = 0,
     dtype: Any = np.float32,
     requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     """Create an identical matrix of shape `(N, M)`."""
-    return gfunc.eye(N, M, k, dtype, requires_grad)
+    return gfunc.eye(N, M, k, dtype, requires_grad, keep_grad)
 
 
 def diag(
@@ -182,9 +195,10 @@ def diag(
     k: int = 0,
     dtype: Any = np.float32,
     requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     """Create a diagonal matrix from the given vector."""
-    return gfunc.diag(v, k, dtype, requires_grad)
+    return gfunc.diag(v, k, dtype, requires_grad, keep_grad)
 
 
 Tensor.__add__ = bfunc._add

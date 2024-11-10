@@ -18,6 +18,8 @@ import lucid.nn as nn
 
 
 def tensor(
-    data: _ArrayOrScalar, requires_grad: bool = False, dtype: Any = np.float32
+    data: Tensor | _ArrayOrScalar, requires_grad: bool = False, dtype: Any = np.float32
 ) -> Tensor:
+    if isinstance(data, Tensor):
+        data = data.data
     return Tensor(data, requires_grad, dtype)

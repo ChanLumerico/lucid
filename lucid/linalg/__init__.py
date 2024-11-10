@@ -26,3 +26,8 @@ def solve(a: Tensor, b: Tensor) -> Tensor:
 def cholesky(a: Tensor) -> Tensor:
     """Performs Cholesky decomposition."""
     return _func.cholesky(a)
+
+
+def norm(a: Tensor, ord: int = 2) -> Tensor:
+    """Compute the p-norm of a matrix."""
+    return _func.norm(a, ord)
