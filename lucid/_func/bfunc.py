@@ -40,9 +40,10 @@ def _truediv(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(self.data / other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return (1 / other.data) * result.grad, (
-            -self.data / (other.data**2)
-        ) * result.grad
+        return (
+            (1 / other.data) * result.grad,
+            (-self.data / (other.data**2)) * result.grad,
+        )
 
     return result, compute_grad
 
