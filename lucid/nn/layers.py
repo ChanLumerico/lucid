@@ -1,19 +1,17 @@
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
+
+from lucid._tensor import Tensor
 
 
 class Linear(nn.Module):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         super().__init__()
-        self.weights_ = nn.Parameter(lucid.random.randn((in_features, out_features)))
-        self.bias = bias
-
-        if self.bias:
-            self.bias_ = nn.Parameter(lucid.random.randn((1, out_features)))
-
-    def forward(self, x):
-        return (
-            lucid.dot(x, self.weights_) + self.bias_
-            if self.bias
-            else lucid.dot(x, self.weights_)
+        self.weight_ = nn.Parameter(
+            lucid.random.randn((out_features, in_features)) * 0.01
         )
+        self.bias_ = nn.Parameter(lucid.zeros((1, out_features))) if bias else None
+
+    def forward(self, input: Tensor) -> Tensor:
+        return F.linear(input, self.weight_, self.bias_)
