@@ -2,9 +2,14 @@ import lucid
 import numpy as np
 
 
-x = lucid.tensor(2.0, requires_grad=True)
+x = lucid.tensor([1, 2], requires_grad=True)
+y = lucid.tensor([3, 4], requires_grad=True)
 
-y = x**2 + 3 * x + 2
-y.backward()
+z = x.dot(y)
 
+z.backward(keep_grad=True)
+
+print(z)
+
+print(y.grad)
 print(x.grad)

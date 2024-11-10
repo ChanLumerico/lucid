@@ -10,7 +10,7 @@ def _add(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(self.data + other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return 1, 1
+        return result.grad, result.grad
 
     return result, compute_grad
 
@@ -20,7 +20,7 @@ def _sub(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(self.data - other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return 1, -1
+        return result.grad, -result.grad
 
     return result, compute_grad
 
@@ -30,7 +30,7 @@ def _mul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(self.data * other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return other.data, self.data
+        return other.data * result.grad, self.data * result.grad
 
     return result, compute_grad
 
@@ -40,7 +40,9 @@ def _truediv(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(self.data / other.data)
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return 1 / other.data, -self.data / (other.data**2)
+        return (1 / other.data) * result.grad, (
+            -self.data / (other.data**2)
+        ) * result.grad
 
     return result, compute_grad
 
@@ -112,7 +114,7 @@ def minimum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         self_grad = (self.data <= other.data).astype(self.dtype)
         other_grad = (self.data > other.data).astype(other.dtype)
-        return self_grad, other_grad
+        return self_grad * result.grad, other_grad * result.grad
 
     return result, compute_grad
 
@@ -124,7 +126,7 @@ def maximum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         self_grad = (self.data >= other.data).astype(self.dtype)
         other_grad = (other.data > self.data).astype(other.dtype)
-        return self_grad, other_grad
+        return self_grad * result.grad, other_grad * result.grad
 
     return result, compute_grad
 
@@ -136,7 +138,7 @@ def power(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
         self_grad = other.data * np.power(self.data, other.data - 1)
         other_grad = np.power(self.data, other.data) * np.log(self.data)
-        return self_grad, other_grad
+        return self_grad * result.grad, other_grad * result.grad
 
     return result, compute_grad
 
@@ -146,7 +148,7 @@ def dot(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.dot(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return other.data, self.data
+        return result.grad.dot(other.data), result.grad.dot(self.data)
 
     return result, compute_grad
 
@@ -156,7 +158,10 @@ def inner(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.inner(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return other.data, self.data
+        return (
+            np.inner(result.grad, other.data.T),
+            np.inner(self.data.T, result.grad),
+        )
 
     return result, compute_grad
 
@@ -166,7 +171,10 @@ def matmul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.matmul(self.data, other.data))
 
     def compute_grad() -> tuple[_ArrayOrScalar, _ArrayOrScalar]:
-        return other.data.T, self.data.T
+        return (
+            np.matmul(result.grad, other.data.transpose(-1, -2)),
+            np.matmul(self.data.transpose(-1, -2), result.grad),
+        )
 
     return result, compute_grad
 

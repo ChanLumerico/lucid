@@ -11,7 +11,7 @@ def _pow(self: Tensor, exp: int | float) -> tuple[Tensor, callable]:
     result = Tensor(self.data**exp)
 
     def compute_grad() -> _ArrayOrScalar:
-        return exp * self.data ** (exp - 1)
+        return (exp * self.data ** (exp - 1)) * result.grad
 
     return result, compute_grad
 
@@ -21,7 +21,7 @@ def _neg(self: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(-self.data)
 
     def compute_grad() -> _ArrayOrScalar:
-        return -1
+        return -result.grad
 
     return result, compute_grad
 
@@ -31,7 +31,7 @@ def exp(self: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.exp(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return result.data
+        return result.data * result.grad
 
     return result, compute_grad
 
@@ -41,7 +41,7 @@ def log(self: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.log(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return 1 / self.data
+        return (1 / self.data) * result.grad
 
     return result, compute_grad
 
@@ -51,7 +51,7 @@ def sqrt(self: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.sqrt(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return 0.5 / result.data
+        return (0.5 / result.data) * result.grad
 
     return result, compute_grad
 
@@ -61,7 +61,7 @@ def sin(self: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.sin(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return np.cos(self.data)
+        return np.cos(self.data) * result.grad
 
     return result, compute_grad
 
@@ -71,7 +71,7 @@ def cos(self: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.cos(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return -np.sin(self.data)
+        return -np.sin(self.data) * result.grad
 
     return result, compute_grad
 
@@ -81,46 +81,37 @@ def tan(self: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.tan(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return 1 / (np.cos(self.data) ** 2)
+        return (1 / (np.cos(self.data) ** 2)) * result.grad
 
     return result, compute_grad
 
 
 @create_ufunc_op()
 def arcsin(self: Tensor) -> Tensor:
-    result = Tensor(
-        np.arcsin(self.data),
-        requires_grad=self.requires_grad,
-    )
+    result = Tensor(np.arcsin(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return 1 / np.sqrt(1 - self.data**2)
+        return (1 / np.sqrt(1 - self.data**2)) * result.grad
 
     return result, compute_grad
 
 
 @create_ufunc_op()
 def arccos(self: Tensor) -> Tensor:
-    result = Tensor(
-        np.arccos(self.data),
-        requires_grad=self.requires_grad,
-    )
+    result = Tensor(np.arccos(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return -1 / np.sqrt(1 - self.data**2)
+        return (-1 / np.sqrt(1 - self.data**2)) * result.grad
 
     return result, compute_grad
 
 
 @create_ufunc_op()
 def arctan(self: Tensor) -> Tensor:
-    result = Tensor(
-        np.arctan(self.data),
-        requires_grad=self.requires_grad,
-    )
+    result = Tensor(np.arctan(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return 1 / (1 + self.data**2)
+        return (1 / (1 + self.data**2)) * result.grad
 
     return result, compute_grad
 
@@ -133,7 +124,7 @@ def clip(self: Tensor, min_value: float, max_value: float) -> tuple[Tensor, call
         grad = np.ones_like(self.data)
         grad[self.data < min_value] = 0
         grad[self.data > max_value] = 0
-        return grad
+        return grad * result.grad
 
     return result, compute_grad
 
@@ -143,7 +134,7 @@ def abs(self: Tensor) -> Tensor:
     result = Tensor(np.abs(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return np.where(self.data >= 0, 1, -1)
+        return np.where(self.data >= 0, 1, -1) * result.grad
 
     return result, compute_grad
 
@@ -163,7 +154,7 @@ def reciprocal(self: Tensor) -> Tensor:
     result = Tensor(1 / self.data)
 
     def compute_grad() -> _ArrayOrScalar:
-        return -1 / (self.data**2)
+        return (-1 / (self.data**2)) * result.grad
 
     return result, compute_grad
 
@@ -173,7 +164,7 @@ def square(self: Tensor) -> Tensor:
     result = Tensor(np.square(self.data))
 
     def compute_grad() -> _ArrayOrScalar:
-        return 2 * self.data
+        return 2 * self.data * result.grad
 
     return result, compute_grad
 
@@ -183,7 +174,7 @@ def cube(self: Tensor) -> Tensor:
     result = Tensor(self.data**3)
 
     def compute_grad() -> _ArrayOrScalar:
-        return 3 * self.data**2
+        return 3 * self.data**2 * result.grad
 
     return result, compute_grad
 
@@ -208,7 +199,7 @@ def transpose(
     result = Tensor(np.transpose(self.data, axes))
 
     def compute_grad() -> _ArrayOrScalar:
-        return np.transpose(result.grad, axes)
+        return np.transpose(result.grad, np.argsort(axes))
 
     return result, compute_grad
 
@@ -226,6 +217,6 @@ def sum(
         else:
             expanded_grad = grad
 
-        return np.broadcast_to(expanded_grad, self.data.shape)
+        return np.broadcast_to(expanded_grad, self.data.shape) * result.grad
 
     return result, compute_grad
