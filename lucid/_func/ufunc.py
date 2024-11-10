@@ -180,7 +180,7 @@ def cube(self: Tensor) -> Tensor:
 
 
 @property
-@create_ufunc_op(do_chain_rule=False)
+@create_ufunc_op()
 def _T(self: Tensor) -> Tensor:
     result = Tensor(self.data.T)
 
@@ -190,7 +190,7 @@ def _T(self: Tensor) -> Tensor:
     return result, compute_grad
 
 
-@create_ufunc_op(do_chain_rule=False)
+@create_ufunc_op()
 def transpose(
     self: Tensor, axes: Optional[list[int]] = None
 ) -> tuple[Tensor, callable]:
@@ -211,12 +211,16 @@ def sum(
     result = Tensor(np.sum(self.data, axis=axis, keepdims=keepdims))
 
     def compute_grad() -> _ArrayOrScalar:
-        grad = np.ones_like(result.data, dtype=self.data.dtype)
+        grad_shape = list(result.grad.shape)
         if axis is not None and not keepdims:
-            expanded_grad = np.expand_dims(grad, axis=axis)
-        else:
-            expanded_grad = grad
+            axis_tuple = axis if isinstance(axis, tuple) else (axis,)
+            for ax in axis_tuple:
+                grad_shape.insert(ax, 1)
 
-        return np.broadcast_to(expanded_grad, self.data.shape) * result.grad
+        grad = np.reshape(result.grad, grad_shape)
+        if grad.shape != self.data.shape:
+            grad = np.broadcast_to(grad, self.data.shape)
+
+        return grad
 
     return result, compute_grad
