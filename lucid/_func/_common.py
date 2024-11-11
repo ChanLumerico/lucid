@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid.types import _NumPyArray
+from lucid.types import _NumPyArray, _ArrayOrScalar
 
 
 def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:
@@ -15,7 +15,7 @@ def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:
             tensor.grad += grad
 
 
-def _check_is_tensor(any: Any) -> Tensor:
+def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
     if not isinstance(any, Tensor):
         return Tensor(any)
     return any
@@ -37,11 +37,6 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     else:
         reshaped_grad = np.broadcast_to(grad, data.shape)
 
-    if data.shape != reshaped_grad.shape:
-        raise RuntimeError(
-            f"Cannot broadcast the grad shape {grad.shape}"
-            + f" to the data shape {data.shape}."
-        )
     return reshaped_grad
 
 

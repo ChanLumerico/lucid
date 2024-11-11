@@ -1,13 +1,14 @@
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
 
-x = lucid.random.randn((3, 4), requires_grad=True)
-y = lucid.random.randn((3, 4), requires_grad=True)
+lucid.random.seed(42)
 
-z = lucid.trace(x @ y.T)
+x = lucid.random.randn((3, 3), requires_grad=True)
+y = lucid.ones((3,), requires_grad=True)
+
+z = F.sigmoid(x + y)
 z.backward()
-
-print(z)
 
 print(x.grad)
 print(y.grad)

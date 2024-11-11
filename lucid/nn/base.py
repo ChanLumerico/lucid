@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Self
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -25,7 +25,7 @@ class Module:
 
         super().__setattr__(name, value)
 
-    def forward(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
+    def forward(self) -> Tensor | tuple[Tensor, ...]:
         raise NotImplementedError(
             "The forward method must be implemented by the subclass."
         )
@@ -36,15 +36,16 @@ class Module:
     def modules(self):
         return [module for _, module in self._modules]
 
-    def state_dict(self) -> None:
+    def state_dict(self) -> dict[str, Parameter | Self]:
         state_dict = {}
         for name, param in self._parameters:
             state_dict[name] = param
         for name, module in self._modules:
             state_dict[name] = module.state_dict()
+
         return state_dict
 
-    def load_state_dict(self, state_dict: dict) -> None:
+    def load_state_dict(self, state_dict: dict[str, Parameter | Self]) -> None:
         for name, param in state_dict.items():
             setattr(self, name, param)
 

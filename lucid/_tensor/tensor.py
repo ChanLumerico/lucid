@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Iterator, Optional, Self, SupportsIndex
 import numpy as np
 
 from lucid._tensor.tensor_ops import _TensorOps
@@ -68,6 +68,25 @@ class Tensor(_TensorOps):
     def zero_grad(self) -> None:
         if not self.keep_grad:
             self.grad = None
+
+    def __getitem__(self, idx: SupportsIndex) -> Self:
+        sliced_data = self.data[idx]
+        new_tensor = Tensor(sliced_data, requires_grad=self.requires_grad)
+
+        def _backward_op() -> None:
+            if self.requires_grad:
+                if self.grad is None:
+                    self.grad = np.zeros_like(self.data)
+                np.add.at(self.grad, idx, new_tensor.grad)
+
+        new_tensor._backward_op = _backward_op
+        new_tensor._prev = [self]
+
+        return new_tensor
+
+    def __iter__(self) -> Iterator[Self]:
+        for i in range(self.shape[0]):
+            yield self[i]
 
     def __repr__(self) -> str:
         return f"Tensor(data={self.data}, grad={self.grad})"
