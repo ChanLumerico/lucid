@@ -1,6 +1,6 @@
 import numpy as np
 
-from lucid._func._common import create_bfunc_op, create_ufunc_op
+from lucid._func._backend import create_bfunc_op, create_ufunc_op
 from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar
 

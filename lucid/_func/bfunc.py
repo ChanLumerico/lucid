@@ -1,7 +1,7 @@
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid._func._common import create_bfunc_op
+from lucid._func._backend import create_bfunc_op
 from lucid.types import _NumPyArray
 
 

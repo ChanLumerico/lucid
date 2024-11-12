@@ -2,7 +2,7 @@ from typing import Optional
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid._func._common import create_ufunc_op
+from lucid._func._backend import create_ufunc_op
 from lucid.types import _NumPyArray
 
 

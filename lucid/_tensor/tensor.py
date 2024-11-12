@@ -1,6 +1,7 @@
 from typing import Any, Iterator, Optional, Self, SupportsIndex
 import numpy as np
 
+import lucid
 from lucid._tensor.tensor_ops import _TensorOps
 from lucid.types import _ArrayOrScalar, _NumPyArray
 
@@ -18,7 +19,7 @@ class Tensor(_TensorOps):
         else:
             self.data = data
 
-        self.requires_grad = requires_grad
+        self.requires_grad = requires_grad and lucid.grad_enabled()
         self.keep_grad = keep_grad
         self.dtype = self.data.dtype
 

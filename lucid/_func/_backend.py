@@ -3,6 +3,7 @@ from typing import Any
 
 import numpy as np
 
+import lucid
 from lucid._tensor import Tensor
 from lucid.types import _NumPyArray, _ArrayOrScalar
 
@@ -54,6 +55,9 @@ def create_bfunc_op(has_gradient: bool = True) -> callable:
             if not has_gradient:
                 result.requires_grad = False
 
+            if not lucid.grad_enabled():
+                return result
+
             def _backward_op() -> None:
                 self_grad, other_grad = compute_grad()
                 self_grad = _match_grad_shape(self.data, self_grad)
@@ -84,6 +88,9 @@ def create_ufunc_op(has_gradient: bool = True) -> callable:
 
             if not has_gradient:
                 result.requires_grad = False
+
+            if not lucid.grad_enabled():
+                return result
 
             def _backward_op() -> None:
                 self_grad = compute_grad()
