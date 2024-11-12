@@ -138,6 +138,22 @@ def trace(a: Tensor) -> Tensor:
     return ufunc.trace(a)
 
 
+def mean(
+    a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
+) -> Tensor:
+    """Mean along the specified axis; if `axis=None`,
+    mean of the entire tensor is returned."""
+    return ufunc.mean(a, axis, keepdims)
+
+
+def var(
+    a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
+) -> Tensor:
+    """Compute the variance along the specified axis; if `axis=None`,
+    variance of the entire tensor is returned."""
+    return ufunc.var(a, axis, keepdims)
+
+
 def zeros(
     shape: _ShapeLike,
     dtype: Any = np.float32,
@@ -224,3 +240,5 @@ Tensor.__neg__ = ufunc._neg
 Tensor.T = ufunc._T
 Tensor.dot = bfunc.dot
 Tensor.sum = ufunc.sum
+Tensor.mean = ufunc.mean
+Tensor.var = ufunc.var

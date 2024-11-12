@@ -40,3 +40,11 @@ class _TensorOps:
     def sum(
         self, axis: int | tuple[int] | None = None, keepdims: bool = False
     ) -> Self: ...
+
+    def mean(
+        self, axis: int | tuple[int] | None = None, keepdims: bool = False
+    ) -> Self: ...
+
+    def var(
+        self, axis: int | tuple[int] | None = None, keepdims: bool = False
+    ) -> Self: ...

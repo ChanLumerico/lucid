@@ -13,7 +13,7 @@ def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:
         if tensor.grad is None:
             tensor.grad = grad
         else:
-            tensor.grad += grad
+            tensor.grad = tensor.grad + grad
 
 
 def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
@@ -30,11 +30,14 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
         reshaped_grad = grad
     elif data.size < grad.size:
         axis = []
-        for ax in range(data.ndim):
-            if data.shape[ax] != grad.shape[ax]:
-                axis.append(ax)
+        if data.ndim == 0:
+            axis.extend(range(grad.ndim))
+        else:
+            for ax in range(data.ndim):
+                if data.shape[ax] != grad.shape[ax] and data.shape[ax] == 1:
+                    axis.append(ax)
 
-        reshaped_grad = np.sum(grad, axis=tuple(axis), keepdims=True)
+        reshaped_grad = np.sum(grad, axis=tuple(axis)).reshape(data.shape)
     else:
         reshaped_grad = np.broadcast_to(grad, data.shape)
 

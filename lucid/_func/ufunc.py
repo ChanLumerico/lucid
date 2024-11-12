@@ -266,4 +266,51 @@ def trace(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def mean(self: Tensor) -> Tensor: ...
+def mean(
+    self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
+) -> tuple[Tensor, callable]:
+    result = Tensor(np.mean(self.data, axis=axis, keepdims=keepdims))
+
+    def compute_grad() -> _NumPyArray:
+        if axis is None:
+            count = self.data.size
+        else:
+            axis_tuple = axis if isinstance(axis, tuple) else (axis,)
+            count = np.prod([self.shape[ax] for ax in axis_tuple])
+
+        grad_shape = list(result.grad.shape)
+        if axis is not None and not keepdims:
+            for ax in axis_tuple:
+                grad_shape.insert(ax, 1)
+
+        grad = np.reshape(result.grad, grad_shape)
+        return grad / count
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def var(
+    self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
+) -> tuple[Tensor, callable]:
+    result = Tensor(np.var(self.data, axis=axis, keepdims=keepdims))
+
+    def compute_grad() -> _NumPyArray:
+        if axis is None:
+            count = self.data.size
+        else:
+            axis_tuple = axis if isinstance(axis, tuple) else (axis,)
+            count = np.prod([self.data.shape[ax] for ax in axis_tuple])
+
+        mean_val = np.mean(self.data, axis=axis, keepdims=True)
+        grad = (2 / count) * (self.data - mean_val) * result.grad
+
+        if axis is not None and not keepdims:
+            grad_shape = list(result.grad.shape)
+            for ax in sorted(axis_tuple):
+                grad_shape.insert(ax, 1)
+            grad = np.reshape(grad, grad_shape)
+
+        return grad
+
+    return result, compute_grad
