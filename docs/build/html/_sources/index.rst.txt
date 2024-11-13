@@ -8,7 +8,7 @@ Lucid documentation
 
 .. toctree::
    :maxdepth: 2
-   :caption: Tensor
+   :caption: Lucid Tensor
 
    _tensor/Tensor.rst
    _func/bfunc/minimum.rst

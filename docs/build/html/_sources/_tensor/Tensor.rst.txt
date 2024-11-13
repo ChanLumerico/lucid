@@ -1,5 +1,5 @@
-lucid.Tensor
-============
+Tensor
+======
 
 Class Definition
 ----------------

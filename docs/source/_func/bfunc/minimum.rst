@@ -1,7 +1,7 @@
-lucid.minimum
+minimum
 =============
 
-Class Definition
-----------------
+Function Definition
+-------------------
 
-.. autofunction:: lucid._func.bfunc.minimum
+.. autofunction:: lucid._func.minimum

@@ -14,8 +14,9 @@ def minimum(a: Tensor, b: Tensor) -> Tensor:
     containing the minimum value at each position.
 
     **Forward Calculation**:
+
     .. math::
-        \text{output}_{i,j} = \min(a_{i,j}, b_{i,j})
+       \text{output}_{i,j} = \min(a_{i,j}, b_{i,j})
 
     **Backward Calculation**:
     Gradient flows only through the minimum value at each position.
