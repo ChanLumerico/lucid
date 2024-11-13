@@ -1,14 +1,13 @@
 Tensor
 ======
 
-The `Tensor` class is a custom implementation resembling PyTorch's `Tensor`, designed to support automatic differentiation with a similar interface, using NumPy as a backend. This class provides functionality for tensor operations, tracking gradients, and constructing a computational graph.
-
 Class Definition
 ----------------
 
 .. autoclass:: lucid._tensor.Tensor
     :members:
     :undoc-members:
+    :no-inherited-members:
 
 Usage
 -----
