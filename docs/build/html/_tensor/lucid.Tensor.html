@@ -113,7 +113,14 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="lucid.Tensor.backward">
 <span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keep_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lucid.Tensor.backward" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>Computes gradients for all tensors involved in producing this tensor.
+Builds the computational graph in topological order and calls <cite>_backward_op</cite> for each node.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><strong>keep_grad</strong> (<cite>bool</cite>, optional): If <cite>False</cite>, clears the gradient after the backward pass, unless <cite>keep_grad</cite> is <cite>True</cite> for this tensor. Defaults to <cite>False</cite>.</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="lucid.Tensor.dot">
@@ -254,7 +261,6 @@
 <p class="admonition-title">Note</p>
 <p>If <cite>requires_grad</cite> is set to <cite>False</cite>, the tensor will not track gradients or participate in the computational graph. Leaf tensors in the graph are nodes that are not derived from other tensors, and gradients can only be directly assigned to these leaf nodes.</p>
 </div>
-<p>“””</p>
 </section>
 </section>
 

@@ -32,6 +32,13 @@ class Tensor(_TensorOps):
         return self.requires_grad and len(self._prev) == 0
 
     def backward(self, keep_grad: bool = False) -> None:
+        """
+        Computes gradients for all tensors involved in producing this tensor.
+        Builds the computational graph in topological order and calls `_backward_op` for each node.
+
+          - **keep_grad** (`bool`, optional): If `False`, clears the gradient after the backward pass, unless `keep_grad` is `True` for this tensor. Defaults to `False`.
+
+        """
         if self.grad is None:
             self.grad = np.ones_like(self.data)
 
