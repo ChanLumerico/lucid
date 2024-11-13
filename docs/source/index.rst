@@ -11,4 +11,5 @@ Lucid documentation
    :caption: Tensor
 
    _tensor/Tensor.rst
+   _func/bfunc/minimum.rst
 

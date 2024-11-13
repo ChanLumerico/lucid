@@ -7,22 +7,117 @@ from lucid.types import _Scalar, _ShapeLike, _ArrayLike
 
 
 def minimum(a: Tensor, b: Tensor) -> Tensor:
-    """Element-wise minimum operation"""
+    """
+    Computes the element-wise minimum of two tensors.
+
+    Given two tensors :math:`a` and :math:`b`, this function returns a tensor
+    containing the minimum value at each position.
+
+    **Forward Calculation**:
+    .. math::
+        \text{output}_{i,j} = \min(a_{i,j}, b_{i,j})
+
+    **Backward Calculation**:
+    Gradient flows only through the minimum value at each position.
+
+    Parameters
+    ----------
+    a : Tensor
+        The first input tensor.
+    b : Tensor
+        The second input tensor.
+
+    Returns
+    -------
+    Tensor
+        A tensor with the element-wise minimum values of `a` and `b`.
+    """
     return bfunc.minimum(a, b)
 
 
 def maximum(a: Tensor, b: Tensor) -> Tensor:
-    """Element-wise maximum operation."""
+    """
+    Computes the element-wise maximum of two tensors.
+
+    **Forward Calculation**:
+    .. math::
+        \text{output}_{i,j} = \max(a_{i,j}, b_{i,j})
+
+    **Backward Calculation**:
+    Gradient flows only through the maximum value at each position.
+
+    Parameters
+    ----------
+    a : Tensor
+        The first input tensor.
+    b : Tensor
+        The second input tensor.
+
+    Returns
+    -------
+    Tensor
+        A tensor with the element-wise maximum values of `a` and `b`.
+    """
     return bfunc.maximum(a, b)
 
 
 def power(a: Tensor, b: Tensor) -> Tensor:
-    """Element-wise power operation, raises self to the power of other."""
+    """
+    Computes the element-wise power of one tensor raised to the other.
+
+    **Forward Calculation**:
+    .. math::
+        \text{output}_{i,j} = a_{i,j}^{b_{i,j}}
+
+    **Backward Calculation**:
+    The gradient of the power operation is calculated using:
+    .. math::
+        \frac{\partial \text{output}_{i,j}}{\partial a_{i,j}} = b_{i,j} \cdot a_{i,j}^{(b_{i,j}-1)}
+        \quad \text{and} \quad
+        \frac{\partial \text{output}_{i,j}}{\partial b_{i,j}} = a_{i,j}^{b_{i,j}} \cdot \ln(a_{i,j})
+
+    Parameters
+    ----------
+    a : Tensor
+        The base tensor.
+    b : Tensor
+        The exponent tensor.
+
+    Returns
+    -------
+    Tensor
+        A tensor where each element is `a` raised to the power of `b`.
+    """
     return bfunc.power(a, b)
 
 
 def dot(a: Tensor, b: Tensor) -> Tensor:
-    """Dot product of two tensors."""
+    """
+    Computes the dot product of two tensors.
+
+    **Forward Calculation**:
+    .. math::
+        \text{output} = \sum_{k} a_{i,k} \cdot b_{k,j}
+
+    **Backward Calculation**:
+    Gradients for `a` and `b` are computed as:
+    .. math::
+        \frac{\partial \text{output}}{\partial a_{i,k}} = b_{k,j}
+        \quad \text{and} \quad
+        \frac{\partial \text{output}}{\partial b_{k,j}} = a_{i,k}
+
+    Parameters
+    ----------
+    a : Tensor
+        The first tensor (left operand).
+    b : Tensor
+        The second tensor (right operand).
+
+    Returns
+    -------
+    Tensor
+        The result of the dot product of `a` and `b`.
+    """
     return bfunc.dot(a, b)
 
 
@@ -32,7 +127,27 @@ def inner(a: Tensor, b: Tensor) -> Tensor:
 
 
 def exp(a: Tensor) -> Tensor:
-    """Exponential function"""
+    """
+    Computes the element-wise exponential of the tensor.
+
+    **Forward Calculation**:
+    .. math::
+        \text{output}_{i,j} = e^{a_{i,j}}
+
+    **Backward Calculation**:
+    .. math::
+        \frac{\partial \text{output}_{i,j}}{\partial a_{i,j}} = e^{a_{i,j}}
+
+    Parameters
+    ----------
+    a : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A tensor where each element is the exponential of the corresponding element in `a`.
+    """
     return ufunc.exp(a)
 
 
@@ -141,8 +256,34 @@ def trace(a: Tensor) -> Tensor:
 def mean(
     a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> Tensor:
-    """Mean along the specified axis; if `axis=None`,
-    mean of the entire tensor is returned."""
+    """
+    Computes the mean of the tensor along the specified axis.
+
+    **Forward Calculation**:
+    .. math::
+        \text{output} = \frac{1}{N} \sum_{i=1}^{N} a_i
+
+    where :math:`N` is the number of elements along the specified axis.
+
+    **Backward Calculation**:
+    The gradient is distributed evenly to each element:
+    .. math::
+        \frac{\partial \text{output}}{\partial a_i} = \frac{1}{N}
+
+    Parameters
+    ----------
+    a : Tensor
+        The input tensor.
+    axis : int or tuple of int, optional
+        The axis or axes along which to compute the mean.
+    keepdims : bool, optional
+        Whether to retain the reduced dimensions in the output tensor.
+
+    Returns
+    -------
+    Tensor
+        The mean of `a` along the specified axis.
+    """
     return ufunc.mean(a, axis, keepdims)
 
 
