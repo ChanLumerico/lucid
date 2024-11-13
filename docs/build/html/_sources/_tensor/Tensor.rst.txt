@@ -6,8 +6,6 @@ Class Definition
 
 .. autoclass:: lucid._tensor.Tensor
     :members:
-    :undoc-members:
-    :no-inherited-members:
 
 Usage
 -----
@@ -21,12 +19,11 @@ Creating a tensor, setting gradients, and computing a backward pass:
 
 .. code-block:: python
 
-    import numpy as np
     from lucid import Tensor
 
     # Initialize tensor with data and gradient tracking
-    a = Tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
-    b = Tensor(np.array([4.0, 5.0, 6.0]), requires_grad=True)
+    a = Tensor([1.0, 2.0, 3.0], requires_grad=True)
+    b = Tensor([4.0, 5.0, 6.0], requires_grad=True)
     
     # Perform an operation
     c = a + b

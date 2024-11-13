@@ -7,8 +7,9 @@ from lucid.types import _ArrayOrScalar, _NumPyArray
 
 class Tensor(_TensorOps):
     """
-    The `Tensor` class is a custom implementation resembling PyTorch's `Tensor`,
-    with support for automatic differentiation using NumPy as a backend.
+    The `Tensor` class is a custom implementation resembling PyTorch's
+    `Tensor`, with support for automatic differentiation using NumPy
+    as a backend.
 
     Parameters
     ----------
