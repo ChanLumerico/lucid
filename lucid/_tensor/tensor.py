@@ -1,12 +1,42 @@
 from typing import Any, Iterator, Optional, Self, SupportsIndex
 import numpy as np
-
 import lucid
 from lucid._tensor.tensor_ops import _TensorOps
 from lucid.types import _ArrayOrScalar, _NumPyArray
 
 
 class Tensor(_TensorOps):
+    """
+    The `Tensor` class is a custom implementation resembling PyTorch's `Tensor`,
+    with support for automatic differentiation using NumPy as a backend.
+
+    Parameters
+    ----------
+    data : _ArrayOrScalar
+        Initial data for the tensor, which is converted to a NumPy array
+        if not already.
+    requires_grad : bool, optional
+        If True, tracks gradients for this tensor. Defaults to `False`.
+    keep_grad : bool, optional
+        If True, retains gradient information after the backward pass.
+        Defaults to `False`.
+    dtype : Any, optional
+        Data type of the tensor. Defaults to `np.float32`.
+
+    Attributes
+    ----------
+    data : _NumPyArray
+        Underlying data of the tensor, stored as a NumPy array.
+    requires_grad : bool
+        Indicates if this tensor requires gradients.
+    keep_grad : bool
+        Determines whether gradients are retained after backward pass.
+    dtype : Any
+        Data type of the tensor.
+    grad : Optional[_NumPyArray]
+        Holds the gradient of the tensor, if applicable.
+    """
+
     def __init__(
         self,
         data: _ArrayOrScalar,
@@ -29,15 +59,26 @@ class Tensor(_TensorOps):
 
     @property
     def is_leaf(self) -> bool:
+        """
+        Indicates if the tensor is a leaf node, meaning it was not
+        derived from other tensors.
+
+        Returns
+        -------
+        bool
+            `True` if the tensor is a leaf in the computational graph.
+        """
         return self.requires_grad and len(self._prev) == 0
 
     def backward(self, keep_grad: bool = False) -> None:
         """
         Computes gradients for all tensors involved in producing this tensor.
-        Builds the computational graph in topological order and calls `_backward_op` for each node.
 
-          - **keep_grad** (`bool`, optional): If `False`, clears the gradient after the backward pass, unless `keep_grad` is `True` for this tensor. Defaults to `False`.
-
+        Parameters
+        ----------
+        keep_grad : bool, optional
+            If False, clears the gradient after the backward pass unless
+            keep_grad is `True` for this tensor. Defaults to `False`.
         """
         if self.grad is None:
             self.grad = np.ones_like(self.data)
@@ -63,17 +104,44 @@ class Tensor(_TensorOps):
 
     @property
     def shape(self) -> tuple[int, ...]:
+        """
+        Returns the shape of the tensor.
+
+        Returns
+        -------
+        tuple[int, ...]
+            Shape of the tensor data.
+        """
         return self.data.shape
 
     @property
     def ndim(self) -> int:
+        """
+        Returns the number of dimensions of the tensor.
+
+        Returns
+        -------
+        int
+            Number of dimensions.
+        """
         return self.data.ndim
 
     @property
     def size(self) -> int:
+        """
+        Returns the total number of elements in the tensor.
+
+        Returns
+        -------
+        int
+            Total number of elements in the tensor.
+        """
         return self.data.size
 
     def zero_grad(self) -> None:
+        """
+        Clears the gradient for this tensor.
+        """
         if not self.keep_grad:
             self.grad = None
 

@@ -10,5 +10,5 @@ Lucid documentation
    :maxdepth: 2
    :caption: Tensor
 
-   _tensor/lucid.Tensor.rst
+   _tensor/Tensor.rst
 
