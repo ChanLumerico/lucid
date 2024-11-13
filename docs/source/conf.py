@@ -6,6 +6,11 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath("../../"))
+
 project = "Lucid"
 copyright = "2024, ChanLumerico"
 author = "ChanLumerico"
@@ -16,6 +21,7 @@ release = "1.0.0"
 
 html_baseurl = "https://chanlumerico.github.io/lucid/"
 extensions = [
+    "sphinx.ext.autodoc",
     "sphinx.ext.githubpages",
 ]
 
