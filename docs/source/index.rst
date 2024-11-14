@@ -10,5 +10,14 @@ Lucid documentation
    :maxdepth: 2
    :caption: Tensor
 
-   _tensor/Tensor.rst
+   tensor/Tensor
+   tensor/tensor
 
+   Tensor Operations <tensor/operations/index>
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Linear Algebra
+
+   linalg/inv

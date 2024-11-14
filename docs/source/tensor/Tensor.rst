@@ -10,7 +10,9 @@ Class Definition
 Usage
 -----
 
-This `Tensor` class is initialized with data, and optionally allows setting flags for gradient requirements and data type. It includes gradient tracking and a `backward` method to compute gradients for operations that use the tensor.
+This `Tensor` class is initialized with data, and optionally allows setting 
+flags for gradient requirements and data type. It includes gradient tracking 
+and a `backward` method to compute gradients for operations that use the tensor.
 
 Examples
 --------
@@ -37,4 +39,7 @@ Creating a tensor, setting gradients, and computing a backward pass:
 
 .. note::
 
-    If `requires_grad` is set to `False`, the tensor will not track gradients or participate in the computational graph. Leaf tensors in the graph are nodes that are not derived from other tensors, and gradients can only be directly assigned to these leaf nodes.
+    If `requires_grad` is set to `False`, the tensor will not track gradients or 
+    participate in the computational graph. Leaf tensors in the graph are nodes 
+    that are not derived from other tensors, and gradients can only be directly 
+    assigned to these leaf nodes.

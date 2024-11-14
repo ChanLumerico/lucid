@@ -69,6 +69,7 @@ class Tensor(_TensorOps):
         bool
             `True` if the tensor is a leaf in the computational graph.
         """
+
         return self.requires_grad and len(self._prev) == 0
 
     def backward(self, keep_grad: bool = False) -> None:
@@ -81,6 +82,7 @@ class Tensor(_TensorOps):
             If False, clears the gradient after the backward pass unless
             keep_grad is `True` for this tensor. Defaults to `False`.
         """
+
         if self.grad is None:
             self.grad = np.ones_like(self.data)
 
@@ -113,6 +115,7 @@ class Tensor(_TensorOps):
         tuple[int, ...]
             Shape of the tensor data.
         """
+
         return self.data.shape
 
     @property
@@ -125,6 +128,7 @@ class Tensor(_TensorOps):
         int
             Number of dimensions.
         """
+
         return self.data.ndim
 
     @property
@@ -137,12 +141,14 @@ class Tensor(_TensorOps):
         int
             Total number of elements in the tensor.
         """
+
         return self.data.size
 
     def zero_grad(self) -> None:
         """
         Clears the gradient for this tensor.
         """
+
         if not self.keep_grad:
             self.grad = None
 
