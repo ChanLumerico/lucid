@@ -11,6 +11,7 @@ Lucid documentation
    :caption: Tensor
 
    tensor/Tensor
+   
    tensor/tensor
 
    Tensor Operations <tensor/operations/index>

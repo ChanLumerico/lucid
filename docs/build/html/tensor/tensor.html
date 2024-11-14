@@ -46,8 +46,19 @@
               <p class="caption" role="heading"><span class="caption-text">Tensor</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="Tensor.html">lucid.Tensor</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">lucid.tensor</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">lucid.tensor</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#lucid.tensor"><code class="docutils literal notranslate"><span class="pre">tensor()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="operations/index.html">Tensor Operations</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Linear Algebra</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../linalg/inv.html">lucid.linalg.inv</a></li>
 </ul>
 
         </div>
@@ -76,6 +87,56 @@
              
   <section id="lucid-tensor">
 <h1>lucid.tensor<a class="headerlink" href="#lucid-tensor" title="Link to this heading"></a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="lucid.tensor">
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data:</span> <span class="pre">~lucid._tensor.tensor.Tensor</span> <span class="pre">|</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">float</span> <span class="pre">|</span> <span class="pre">list[int</span> <span class="pre">|</span> <span class="pre">float]</span> <span class="pre">|</span> <span class="pre">~numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">requires_grad:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype:</span> <span class="pre">~typing.Any</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'numpy.float32'&gt;</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="Tensor.html#lucid._tensor.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.tensor" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<p>Creates a new <cite>Tensor</cite> object with specified data, <cite>requires_grad</cite> setting, and data type. This function is similar to PyTorch’s <cite>torch.tensor</cite>, allowing you to initialize a <cite>Tensor</cite> either from another <cite>Tensor</cite> or directly from array-like data.</p>
+<section id="function-signature">
+<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">tensor</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="n">_ArrayOrScalar</span><span class="p">,</span>
+    <span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+</pre></div>
+</div>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>data</strong> (<em>Tensor | _ArrayOrScalar</em>):
+The input data to be wrapped in a <cite>Tensor</cite>. If a <cite>Tensor</cite> is provided, its underlying data is used.</p></li>
+<li><p><strong>requires_grad</strong> (<em>bool</em>, optional):
+If True, the resulting <cite>Tensor</cite> will track gradients for backpropagation. Defaults to False.</p></li>
+<li><p><strong>dtype</strong> (<em>Any</em>, optional):
+The desired data type for the new <cite>Tensor</cite>. Defaults to <cite>np.float32</cite>.</p></li>
+</ul>
+</section>
+<section id="returns">
+<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Tensor</strong>:
+A new <cite>Tensor</cite> instance wrapping the input data, with the specified <cite>requires_grad</cite> setting and data type.</p></li>
+</ul>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h2>
+<p>Create a <cite>Tensor</cite> from a list:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="go">Tensor([1, 2, 3], requires_grad=True)</span>
+</pre></div>
+</div>
+<p>Use another <cite>Tensor</cite> as input:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">t1</span> <span class="o">=</span> <span class="n">tensor</span><span class="p">([</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t2</span> <span class="o">=</span> <span class="n">tensor</span><span class="p">(</span><span class="n">t1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="go">Tensor([4.0, 5.0, 6.0], dtype=float64)</span>
+</pre></div>
+</div>
+</section>
 </section>
 
 
