@@ -139,9 +139,21 @@ Accepts data types that can be converted to a NumPy array.</p>
 <section id="attributes">
 <h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p><strong>data</strong> (<em>np.ndarray</em>): The actual data stored in the tensor.</p></li>
-<li><p><strong>requires_grad</strong> (<em>bool</em>): Indicates whether this tensor requires gradient calculation.</p></li>
-<li><p><strong>keep_grad</strong> (<em>bool</em>): If set, gradients are retained after each backpropagation pass.</p></li>
+<li><dl class="simple">
+<dt><strong>data</strong> (<em>np.ndarray</em>):</dt><dd><p>The actual data stored in the tensor.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>requires_grad</strong> (<em>bool</em>):</dt><dd><p>Indicates whether this tensor requires gradient calculation.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>keep_grad</strong> (<em>bool</em>):</dt><dd><p>If set, gradients are retained after each backpropagation pass.</p>
+</dd>
+</dl>
+</li>
 <li><dl class="simple">
 <dt><strong>grad</strong> (<em>Optional[np.ndarray]</em>):</dt><dd><p>Gradient of the tensor, computed during backpropagation if <cite>requires_grad</cite> is True.</p>
 </dd>
@@ -164,7 +176,11 @@ preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p>
 </dd>
 </dl>
 </li>
-<li><p><strong>zero_grad() -&gt; None</strong>: Resets the gradient to None if <cite>keep_grad</cite> is False.</p></li>
+<li><dl class="simple">
+<dt><strong>zero_grad() -&gt; None</strong>:</dt><dd><p>Resets the gradient to None if <cite>keep_grad</cite> is False.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </section>
 <section id="properties">

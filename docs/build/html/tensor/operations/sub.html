@@ -21,7 +21,7 @@
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="lucid.linalg.inv" href="../../linalg/inv.html" />
+    <link rel="next" title="lucid.mul" href="mul.html" />
     <link rel="prev" title="lucid.add" href="add.html" /> 
 </head>
 
@@ -60,6 +60,8 @@
 <li class="toctree-l3"><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="mul.html">lucid.mul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="div.html">lucid.div</a></li>
 </ul>
 </li>
 </ul>
@@ -143,11 +145,6 @@ the gradient with respect to the output (<cite>out</cite>) is computed as follow
 <div class="math notranslate nohighlight">
 \[\frac{\partial \text{out}}{\partial a} = 1,
 \quad \frac{\partial \text{out}}{\partial b} = -1\]</div>
-<p>Thus, if <cite>out</cite> requires gradients, the gradients of <cite>a</cite> and <cite>b</cite> are computed as:</p>
-<ul class="simple">
-<li><p><strong>Gradient of</strong> <span class="math notranslate nohighlight">\(a\)</span>: <span class="math notranslate nohighlight">\(\text{a.grad} += \text{out.grad}\)</span></p></li>
-<li><p><strong>Gradient of</strong> <span class="math notranslate nohighlight">\(b\)</span>: <span class="math notranslate nohighlight">\(\text{b.grad} -= \text{out.grad}\)</span></p></li>
-</ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h2>
@@ -176,7 +173,7 @@ based on the backpropagation rules:</p>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="add.html" class="btn btn-neutral float-left" title="lucid.add" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="../../linalg/inv.html" class="btn btn-neutral float-right" title="lucid.linalg.inv" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="mul.html" class="btn btn-neutral float-right" title="lucid.mul" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

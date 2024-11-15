@@ -7,3 +7,4 @@ Tensor Operations
    add.rst
    sub.rst
    mul.rst
+   div.rst

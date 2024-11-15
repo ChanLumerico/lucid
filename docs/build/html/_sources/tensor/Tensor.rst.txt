@@ -40,11 +40,14 @@ Parameters
 Attributes
 ----------
 
-- **data** (*np.ndarray*): The actual data stored in the tensor.
+- **data** (*np.ndarray*): 
+    The actual data stored in the tensor.
 
-- **requires_grad** (*bool*): Indicates whether this tensor requires gradient calculation.
+- **requires_grad** (*bool*): 
+    Indicates whether this tensor requires gradient calculation.
 
-- **keep_grad** (*bool*): If set, gradients are retained after each backpropagation pass.
+- **keep_grad** (*bool*): 
+    If set, gradients are retained after each backpropagation pass.
 
 - **grad** (*Optional[np.ndarray]*): 
     Gradient of the tensor, computed during backpropagation if `requires_grad` is True.
@@ -60,7 +63,8 @@ Methods
     Performs backpropagation from this tensor, computing gradients for each 
     preceding tensor. Clears gradients unless `keep_grad` is True.
 
-- **zero_grad() -> None**: Resets the gradient to None if `keep_grad` is False.
+- **zero_grad() -> None**: 
+    Resets the gradient to None if `keep_grad` is False.
 
 Properties
 ----------
