@@ -2,9 +2,6 @@ lucid.Tensor
 ============
 
 .. autoclass:: lucid.Tensor
-   :members:
-   :special-members: __getitem__, __iter__, __repr__, __str__, __hash__
-   :undoc-members:
 
 The `Tensor` class is a core component in the `lucid` library, providing support for data storage, gradient tracking, and automatic differentiation. The class encapsulates data in an `ndarray` and supports backpropagation, making it a foundation for neural network operations.
 

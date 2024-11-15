@@ -46,25 +46,7 @@
               <p class="caption" role="heading"><span class="caption-text">Tensor</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">lucid.Tensor</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#lucid.Tensor"><code class="docutils literal notranslate"><span class="pre">Tensor</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.T"><code class="docutils literal notranslate"><span class="pre">Tensor.T</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.__getitem__"><code class="docutils literal notranslate"><span class="pre">Tensor.__getitem__()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.__hash__"><code class="docutils literal notranslate"><span class="pre">Tensor.__hash__()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.__iter__"><code class="docutils literal notranslate"><span class="pre">Tensor.__iter__()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.__repr__"><code class="docutils literal notranslate"><span class="pre">Tensor.__repr__()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.__str__"><code class="docutils literal notranslate"><span class="pre">Tensor.__str__()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.backward"><code class="docutils literal notranslate"><span class="pre">Tensor.backward()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.dot"><code class="docutils literal notranslate"><span class="pre">Tensor.dot()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.is_leaf"><code class="docutils literal notranslate"><span class="pre">Tensor.is_leaf</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.mean"><code class="docutils literal notranslate"><span class="pre">Tensor.mean()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.ndim"><code class="docutils literal notranslate"><span class="pre">Tensor.ndim</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.shape"><code class="docutils literal notranslate"><span class="pre">Tensor.shape</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.size"><code class="docutils literal notranslate"><span class="pre">Tensor.size</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.sum"><code class="docutils literal notranslate"><span class="pre">Tensor.sum()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.var"><code class="docutils literal notranslate"><span class="pre">Tensor.var()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#lucid.Tensor.zero_grad"><code class="docutils literal notranslate"><span class="pre">Tensor.zero_grad()</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="#lucid.Tensor"><code class="docutils literal notranslate"><span class="pre">Tensor</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#parameters">Parameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#attributes">Attributes</a></li>
@@ -110,90 +92,7 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="lucid.Tensor">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">Tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">float</span> <span class="pre">|</span> <span class="pre">list[int</span> <span class="pre">|</span> <span class="pre">float]</span> <span class="pre">|</span> <span class="pre">~numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">requires_grad:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keep_grad:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype:</span> <span class="pre">~typing.Any</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'numpy.float32'&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.Tensor" title="Link to this definition"></a></dt>
-<dd><dl class="py property">
-<dt class="sig sig-object py" id="lucid.Tensor.T">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">T</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></em><a class="headerlink" href="#lucid.Tensor.T" title="Link to this definition"></a></dt>
 <dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.__getitem__">
-<span class="sig-name descname"><span class="pre">__getitem__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SupportsIndex</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Self</span></span></span><a class="headerlink" href="#lucid.Tensor.__getitem__" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.__hash__">
-<span class="sig-name descname"><span class="pre">__hash__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="headerlink" href="#lucid.Tensor.__hash__" title="Link to this definition"></a></dt>
-<dd><p>Return hash(self).</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.__iter__">
-<span class="sig-name descname"><span class="pre">__iter__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Self</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.Tensor.__iter__" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.__repr__">
-<span class="sig-name descname"><span class="pre">__repr__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#lucid.Tensor.__repr__" title="Link to this definition"></a></dt>
-<dd><p>Return repr(self).</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.__str__">
-<span class="sig-name descname"><span class="pre">__str__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#lucid.Tensor.__str__" title="Link to this definition"></a></dt>
-<dd><p>Return str(self).</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.backward">
-<span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keep_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lucid.Tensor.backward" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.dot">
-<span class="sig-name descname"><span class="pre">dot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">callable</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.Tensor.dot" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="lucid.Tensor.is_leaf">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_leaf</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#lucid.Tensor.is_leaf" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.mean">
-<span class="sig-name descname"><span class="pre">mean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keepdims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">callable</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.Tensor.mean" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="lucid.Tensor.ndim">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndim</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#lucid.Tensor.ndim" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="lucid.Tensor.shape">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">shape</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#lucid.Tensor.shape" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="lucid.Tensor.size">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#lucid.Tensor.size" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.sum">
-<span class="sig-name descname"><span class="pre">sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keepdims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">callable</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.Tensor.sum" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.var">
-<span class="sig-name descname"><span class="pre">var</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keepdims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">callable</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.Tensor.var" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.Tensor.zero_grad">
-<span class="sig-name descname"><span class="pre">zero_grad</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lucid.Tensor.zero_grad" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-</dd></dl>
 
 <p>The <cite>Tensor</cite> class is a core component in the <cite>lucid</cite> library, providing support for data storage, gradient tracking, and automatic differentiation. The class encapsulates data in an <cite>ndarray</cite> and supports backpropagation, making it a foundation for neural network operations.</p>
 <section id="class-signature">
