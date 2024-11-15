@@ -65,7 +65,7 @@ Using `minimum` to compute the element-wise minimum:
 
 .. code-block:: python
 
-    >>> improt lucid
+    >>> import lucid
     >>> a = Tensor([3.0, 5.0, 2.0], requires_grad=True)
     >>> b = Tensor([4.0, 2.0, 3.0], requires_grad=True)
     >>> out = lucid.minimum(a, b)

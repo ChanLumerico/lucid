@@ -47,7 +47,8 @@ Create a `Tensor` from a list:
 
 .. code-block:: python
 
-    >>> t = tensor([1, 2, 3], requires_grad=True)
+    >>> import lucid
+    >>> t = lucid.tensor([1, 2, 3], requires_grad=True)
     >>> print(t)
     Tensor([1, 2, 3], requires_grad=True)
 
@@ -55,7 +56,8 @@ Use another `Tensor` as input:
 
 .. code-block:: python
 
-    >>> t1 = tensor([4.0, 5.0, 6.0])
-    >>> t2 = tensor(t1, dtype=np.float64)
+    >>> import lucid
+    >>> t1 = lucid.tensor([4.0, 5.0, 6.0])
+    >>> t2 = lucid.tensor(t1, dtype=np.float64)
     >>> print(t2)
     Tensor([4.0, 5.0, 6.0], dtype=float64)
