@@ -55,9 +55,10 @@ Using `mul` to multiply two tensors:
 
 .. code-block:: python
 
+    >>> import lucid
     >>> a = Tensor([1.0, 2.0, 3.0], requires_grad=True)
     >>> b = Tensor([4.0, 5.0, 6.0], requires_grad=True)
-    >>> out = mul(a, b)
+    >>> out = lucid.mul(a, b)
     >>> print(out)
     Tensor([4.0, 10.0, 18.0], grad=None)
 

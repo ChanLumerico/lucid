@@ -57,9 +57,10 @@ Using `div` to divide two tensors:
 
 .. code-block:: python
 
+    >>> import lucid
     >>> a = Tensor([6.0, 8.0, 10.0], requires_grad=True)
     >>> b = Tensor([2.0, 4.0, 5.0], requires_grad=True)
-    >>> out = div(a, b)
+    >>> out = lucid.div(a, b)
     >>> print(out)
     Tensor([3.0, 2.0, 2.0], grad=None)
 

@@ -58,9 +58,10 @@ Using `sub` to subtract one tensor from another:
 
 .. code-block:: python
 
+    >>> import lucid
     >>> a = Tensor([5.0, 7.0, 9.0], requires_grad=True)
     >>> b = Tensor([4.0, 5.0, 6.0], requires_grad=True)
-    >>> out = sub(a, b)
+    >>> out = lucid.sub(a, b)
     >>> print(out)
     Tensor([1.0, 2.0, 3.0], grad=None)
 
