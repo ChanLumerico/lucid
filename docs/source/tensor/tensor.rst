@@ -3,9 +3,10 @@ lucid.tensor
 
 .. autofunction:: lucid.tensor
 
-Creates a new `Tensor` object with specified data, `requires_grad` setting, and data type. 
-This function is similar to PyTorch's `torch.tensor`, allowing you to initialize a `Tensor` 
-either from another `Tensor` or directly from array-like data.
+Creates a new `Tensor` object with specified data, `requires_grad` setting, 
+and data type. This function is similar to PyTorch's `torch.tensor`, 
+allowing you to initialize a `Tensor` either from another `Tensor` or directly 
+from array-like data.
 
 Function Signature
 ------------------

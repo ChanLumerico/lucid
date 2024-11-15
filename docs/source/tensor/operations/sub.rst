@@ -51,11 +51,6 @@ the gradient with respect to the output (`out`) is computed as follows:
     \frac{\partial \text{out}}{\partial a} = 1, 
     \quad \frac{\partial \text{out}}{\partial b} = -1
 
-Thus, if `out` requires gradients, the gradients of `a` and `b` are computed as:
-
-- **Gradient of** :math:`a`: :math:`\text{a.grad} += \text{out.grad}`
-- **Gradient of** :math:`b`: :math:`\text{b.grad} -= \text{out.grad}`
-
 Examples
 --------
 

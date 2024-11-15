@@ -18,7 +18,6 @@ Parameters
 ----------
 
 - **a** (*Tensor*): The first tensor in the addition operation.
-
 - **b** (*Tensor*): The second tensor in the addition operation.
 
 Returns
@@ -50,13 +49,6 @@ to the output (`out`) is computed as:
 .. math::
 
     \frac{\partial \text{out}}{\partial a} = 1, \quad \frac{\partial \text{out}}{\partial b} = 1
-
-Thus, if `out` requires gradients, the gradients of `a` and `b` are simply the 
-propagated gradient from `out` multiplied by 1:
-
-- **Gradient of** :math:`a`: :math:`\text{a.grad} += \text{out.grad}`
-
-- **Gradient of** :math:`b`: :math:`\text{b.grad} += \text{out.grad}`
 
 Examples
 --------

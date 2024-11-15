@@ -89,7 +89,7 @@ class Tensor(_TensorOps):
             yield self[i]
 
     def __repr__(self) -> str:
-        return f"Tensor(data={self.data}, grad={self.grad})"
+        return f"Tensor({self.data}, grad={self.grad})"
 
     def __str__(self) -> str:
         return str(self.data)
