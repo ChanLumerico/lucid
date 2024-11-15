@@ -114,22 +114,23 @@ making it a foundation for neural network operations.</p>
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>data</strong> (<em>_ArrayOrScalar</em>): Input data to be encapsulated as a Tensor.</dt><dd><p>Accepts data types that can be converted to a NumPy array.</p>
+<dt><strong>data</strong> (<em>_ArrayOrScalar</em>):</dt><dd><p>Input data to be encapsulated as a Tensor.
+Accepts data types that can be converted to a NumPy array.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>requires_grad</strong> (<em>bool</em>, optional): Enables gradient tracking if set to True.</dt><dd><p>Defaults to False.</p>
+<dt><strong>requires_grad</strong> (<em>bool</em>, optional):</dt><dd><p>Enables gradient tracking if set to True. Defaults to False.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>keep_grad</strong> (<em>bool</em>, optional): If True, retains gradient after each backward pass.</dt><dd><p>Defaults to False.</p>
+<dt><strong>keep_grad</strong> (<em>bool</em>, optional):</dt><dd><p>If True, retains gradient after each backward pass. Defaults to False.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>dtype</strong> (<em>Any</em>, optional): Data type of the tensor elements.</dt><dd><p>Defaults to <cite>np.float32</cite>.</p>
+<dt><strong>dtype</strong> (<em>Any</em>, optional):</dt><dd><p>Data type of the tensor elements. Defaults to <cite>np.float32</cite>.</p>
 </dd>
 </dl>
 </li>
@@ -142,12 +143,13 @@ making it a foundation for neural network operations.</p>
 <li><p><strong>requires_grad</strong> (<em>bool</em>): Indicates whether this tensor requires gradient calculation.</p></li>
 <li><p><strong>keep_grad</strong> (<em>bool</em>): If set, gradients are retained after each backpropagation pass.</p></li>
 <li><dl class="simple">
-<dt><strong>grad</strong> (<em>Optional[np.ndarray]</em>): Gradient of the tensor, computed during backpropagation</dt><dd><p>if <cite>requires_grad</cite> is True.</p>
+<dt><strong>grad</strong> (<em>Optional[np.ndarray]</em>):</dt><dd><p>Gradient of the tensor, computed during backpropagation if <cite>requires_grad</cite> is True.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>is_leaf</strong> (<em>bool</em>): True if the tensor is a leaf node in the computation graph,</dt><dd><p>with no other tensors feeding into it.</p>
+<dt><strong>is_leaf</strong> (<em>bool</em>):</dt><dd><p>True if the tensor is a leaf node in the computation graph,
+with no other tensors feeding into it.</p>
 </dd>
 </dl>
 </li>
@@ -157,7 +159,8 @@ making it a foundation for neural network operations.</p>
 <h2>Methods<a class="headerlink" href="#methods" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>backward(keep_grad: bool = False) -&gt; None</strong>: Performs backpropagation from this tensor,</dt><dd><p>computing gradients for each preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p>
+<dt><strong>backward(keep_grad: bool = False) -&gt; None</strong>:</dt><dd><p>Performs backpropagation from this tensor, computing gradients for each
+preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p>
 </dd>
 </dl>
 </li>

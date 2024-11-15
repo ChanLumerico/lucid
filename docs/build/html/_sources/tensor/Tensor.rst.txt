@@ -24,17 +24,18 @@ Class Signature
 Parameters
 ----------
 
-- **data** (*_ArrayOrScalar*): Input data to be encapsulated as a Tensor. 
+- **data** (*_ArrayOrScalar*): 
+    Input data to be encapsulated as a Tensor. 
     Accepts data types that can be converted to a NumPy array.
 
-- **requires_grad** (*bool*, optional): Enables gradient tracking if set to True. 
-    Defaults to False.
+- **requires_grad** (*bool*, optional): 
+    Enables gradient tracking if set to True. Defaults to False.
 
-- **keep_grad** (*bool*, optional): If True, retains gradient after each backward pass. 
-    Defaults to False.
+- **keep_grad** (*bool*, optional): 
+    If True, retains gradient after each backward pass. Defaults to False.
 
-- **dtype** (*Any*, optional): Data type of the tensor elements. 
-    Defaults to `np.float32`.
+- **dtype** (*Any*, optional): 
+    Data type of the tensor elements. Defaults to `np.float32`.
 
 Attributes
 ----------
@@ -45,17 +46,19 @@ Attributes
 
 - **keep_grad** (*bool*): If set, gradients are retained after each backpropagation pass.
 
-- **grad** (*Optional[np.ndarray]*): Gradient of the tensor, computed during backpropagation 
-    if `requires_grad` is True.
+- **grad** (*Optional[np.ndarray]*): 
+    Gradient of the tensor, computed during backpropagation if `requires_grad` is True.
 
-- **is_leaf** (*bool*): True if the tensor is a leaf node in the computation graph, 
+- **is_leaf** (*bool*): 
+    True if the tensor is a leaf node in the computation graph, 
     with no other tensors feeding into it.
 
 Methods
 -------
 
-- **backward(keep_grad: bool = False) -> None**: Performs backpropagation from this tensor, 
-    computing gradients for each preceding tensor. Clears gradients unless `keep_grad` is True.
+- **backward(keep_grad: bool = False) -> None**: 
+    Performs backpropagation from this tensor, computing gradients for each 
+    preceding tensor. Clears gradients unless `keep_grad` is True.
 
 - **zero_grad() -> None**: Resets the gradient to None if `keep_grad` is False.
 

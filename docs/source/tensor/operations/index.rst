@@ -4,4 +4,5 @@ Tensor Operations
 .. toctree::
    :maxdepth: 1
 
-   add
+   add.rst
+   sub.rst

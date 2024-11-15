@@ -24,7 +24,8 @@ Parameters
 Returns
 -------
 
-- **Tensor**: A new `Tensor` representing the element-wise sum of `a` and `b`. 
+- **Tensor**: 
+    A new `Tensor` representing the element-wise sum of `a` and `b`. 
     If either `a` or `b` requires gradients, the resulting tensor will also require 
     gradients.
 
@@ -53,9 +54,9 @@ to the output (`out`) is computed as:
 Thus, if `out` requires gradients, the gradients of `a` and `b` are simply the 
 propagated gradient from `out` multiplied by 1:
 
-- **Gradient of `a`**: :math:`\text{a.grad} += \text{out.grad}`
+- **Gradient of** :math:`a`: :math:`\text{a.grad} += \text{out.grad}`
 
-- **Gradient of `b`**: :math:`\text{b.grad} += \text{out.grad}`
+- **Gradient of** :math:`b`: :math:`\text{b.grad} += \text{out.grad}`
 
 Examples
 --------
