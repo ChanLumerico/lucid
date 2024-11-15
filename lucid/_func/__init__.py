@@ -6,6 +6,22 @@ from lucid._tensor import Tensor
 from lucid.types import _Scalar, _ShapeLike, _ArrayLike
 
 
+def add(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._add(a, b)
+
+
+def sub(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._sub(a, b)
+
+
+def mul(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._mul(a, b)
+
+
+def div(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._truediv(a, b)
+
+
 def minimum(a: Tensor, b: Tensor) -> Tensor:
     return bfunc.minimum(a, b)
 

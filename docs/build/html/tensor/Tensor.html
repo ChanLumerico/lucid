@@ -94,7 +94,10 @@
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">Tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">float</span> <span class="pre">|</span> <span class="pre">list[int</span> <span class="pre">|</span> <span class="pre">float]</span> <span class="pre">|</span> <span class="pre">~numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">requires_grad:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keep_grad:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype:</span> <span class="pre">~typing.Any</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'numpy.float32'&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.Tensor" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
-<p>The <cite>Tensor</cite> class is a core component in the <cite>lucid</cite> library, providing support for data storage, gradient tracking, and automatic differentiation. The class encapsulates data in an <cite>ndarray</cite> and supports backpropagation, making it a foundation for neural network operations.</p>
+<p>The <cite>Tensor</cite> class is a core component in the <cite>lucid</cite> library,
+providing support for data storage, gradient tracking, and automatic differentiation.
+The class encapsulates data in an <cite>ndarray</cite> and supports backpropagation,
+making it a foundation for neural network operations.</p>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading"></a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Tensor</span><span class="p">(</span><span class="n">_TensorOps</span><span class="p">):</span>
@@ -110,10 +113,26 @@
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p><strong>data</strong> (<em>_ArrayOrScalar</em>): Input data to be encapsulated as a Tensor. Accepts data types that can be converted to a NumPy array.</p></li>
-<li><p><strong>requires_grad</strong> (<em>bool</em>, optional): Enables gradient tracking if set to True. Defaults to False.</p></li>
-<li><p><strong>keep_grad</strong> (<em>bool</em>, optional): If True, retains gradient after each backward pass. Defaults to False.</p></li>
-<li><p><strong>dtype</strong> (<em>Any</em>, optional): Data type of the tensor elements. Defaults to <cite>np.float32</cite>.</p></li>
+<li><dl class="simple">
+<dt><strong>data</strong> (<em>_ArrayOrScalar</em>): Input data to be encapsulated as a Tensor.</dt><dd><p>Accepts data types that can be converted to a NumPy array.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>requires_grad</strong> (<em>bool</em>, optional): Enables gradient tracking if set to True.</dt><dd><p>Defaults to False.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>keep_grad</strong> (<em>bool</em>, optional): If True, retains gradient after each backward pass.</dt><dd><p>Defaults to False.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>dtype</strong> (<em>Any</em>, optional): Data type of the tensor elements.</dt><dd><p>Defaults to <cite>np.float32</cite>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </section>
 <section id="attributes">
@@ -122,17 +141,27 @@
 <li><p><strong>data</strong> (<em>np.ndarray</em>): The actual data stored in the tensor.</p></li>
 <li><p><strong>requires_grad</strong> (<em>bool</em>): Indicates whether this tensor requires gradient calculation.</p></li>
 <li><p><strong>keep_grad</strong> (<em>bool</em>): If set, gradients are retained after each backpropagation pass.</p></li>
-<li><p><strong>grad</strong> (<em>Optional[np.ndarray]</em>): Gradient of the tensor, computed during backpropagation if <cite>requires_grad</cite> is True.</p></li>
-<li><p><strong>is_leaf</strong> (<em>bool</em>): True if the tensor is a leaf node in the computation graph, with no other tensors feeding into it.</p></li>
+<li><dl class="simple">
+<dt><strong>grad</strong> (<em>Optional[np.ndarray]</em>): Gradient of the tensor, computed during backpropagation</dt><dd><p>if <cite>requires_grad</cite> is True.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>is_leaf</strong> (<em>bool</em>): True if the tensor is a leaf node in the computation graph,</dt><dd><p>with no other tensors feeding into it.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </section>
 <section id="methods">
 <h2>Methods<a class="headerlink" href="#methods" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p><strong>backward(keep_grad: bool = False) -&gt; None</strong>: Performs backpropagation from this tensor, computing gradients for each preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p></li>
+<li><dl class="simple">
+<dt><strong>backward(keep_grad: bool = False) -&gt; None</strong>: Performs backpropagation from this tensor,</dt><dd><p>computing gradients for each preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p>
+</dd>
+</dl>
+</li>
 <li><p><strong>zero_grad() -&gt; None</strong>: Resets the gradient to None if <cite>keep_grad</cite> is False.</p></li>
-<li><p><strong>__getitem__(idx: SupportsIndex) -&gt; Self</strong>: Slices the tensor and returns a new <cite>Tensor</cite> for the specified indices. Supports gradient propagation for sliced tensors.</p></li>
-<li><p><strong>__iter__() -&gt; Iterator[Self]</strong>: Allows iteration over the tensor, yielding one element at a time.</p></li>
 </ul>
 </section>
 <section id="properties">

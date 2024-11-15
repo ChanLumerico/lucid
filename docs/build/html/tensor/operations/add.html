@@ -17,6 +17,7 @@
       <script src="../../_static/documentation_options.js?v=8d563738"></script>
       <script src="../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
@@ -48,7 +49,16 @@
 <li class="toctree-l1"><a class="reference internal" href="../Tensor.html">lucid.Tensor</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tensor.html">lucid.tensor</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">Tensor Operations</a><ul class="current">
-<li class="toctree-l2 current"><a class="current reference internal" href="#">lucid.add</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">lucid.add</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lucid.add"><code class="docutils literal notranslate"><span class="pre">add()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#function-signature">Function Signature</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#returns">Returns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -84,6 +94,79 @@
              
   <section id="lucid-add">
 <h1>lucid.add<a class="headerlink" href="#lucid-add" title="Link to this heading"></a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="lucid.add">
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.add" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<p>The <cite>add</cite> function performs element-wise addition between two <cite>Tensor</cite> objects.
+It returns a new <cite>Tensor</cite> as the sum of the inputs, with support for gradient
+calculation during backpropagation.</p>
+<section id="function-signature">
+<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+</pre></div>
+</div>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>a</strong> (<em>Tensor</em>): The first tensor in the addition operation.</p></li>
+<li><p><strong>b</strong> (<em>Tensor</em>): The second tensor in the addition operation.</p></li>
+</ul>
+</section>
+<section id="returns">
+<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><dl class="simple">
+<dt><strong>Tensor</strong>: A new <cite>Tensor</cite> representing the element-wise sum of <cite>a</cite> and <cite>b</cite>.</dt><dd><p>If either <cite>a</cite> or <cite>b</cite> requires gradients, the resulting tensor will also require
+gradients.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="forward-calculation">
+<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading"></a></h2>
+<p>The forward calculation for the addition operation is straightforward:</p>
+<div class="math notranslate nohighlight">
+\[\text{out} = a + b\]</div>
+<p>where <span class="math notranslate nohighlight">\(a\)</span> and <span class="math notranslate nohighlight">\(b\)</span> are the data contained in the tensors <cite>a</cite> and <cite>b</cite>,
+respectively.</p>
+</section>
+<section id="backward-gradient-calculation">
+<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading"></a></h2>
+<p>For each tensor <cite>a</cite> and <cite>b</cite> involved in the addition, the gradient with respect
+to the output (<cite>out</cite>) is computed as:</p>
+<div class="math notranslate nohighlight">
+\[\frac{\partial \text{out}}{\partial a} = 1, \quad \frac{\partial \text{out}}{\partial b} = 1\]</div>
+<p>Thus, if <cite>out</cite> requires gradients, the gradients of <cite>a</cite> and <cite>b</cite> are simply the
+propagated gradient from <cite>out</cite> multiplied by 1:</p>
+<ul class="simple">
+<li><p><strong>Gradient of `a`</strong>: <span class="math notranslate nohighlight">\(\text{a.grad} += \text{out.grad}\)</span></p></li>
+<li><p><strong>Gradient of `b`</strong>: <span class="math notranslate nohighlight">\(\text{b.grad} += \text{out.grad}\)</span></p></li>
+</ul>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h2>
+<p>Using <cite>add</cite> to sum two tensors:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="go">Tensor([5.0, 7.0, 9.0], grad=None)</span>
+</pre></div>
+</div>
+<p>After calling <cite>backward()</cite> on <cite>out</cite>, gradients for <cite>a</cite> and <cite>b</cite> will be
+accumulated based on the backpropagation rules:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">[1.0, 1.0, 1.0]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">[1.0, 1.0, 1.0]</span>
+</pre></div>
+</div>
+</section>
 </section>
 
 

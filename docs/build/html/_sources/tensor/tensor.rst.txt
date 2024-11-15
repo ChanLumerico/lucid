@@ -3,7 +3,9 @@ lucid.tensor
 
 .. autofunction:: lucid.tensor
 
-Creates a new `Tensor` object with specified data, `requires_grad` setting, and data type. This function is similar to PyTorch's `torch.tensor`, allowing you to initialize a `Tensor` either from another `Tensor` or directly from array-like data.
+Creates a new `Tensor` object with specified data, `requires_grad` setting, and data type. 
+This function is similar to PyTorch's `torch.tensor`, allowing you to initialize a `Tensor` 
+either from another `Tensor` or directly from array-like data.
 
 Function Signature
 ------------------
@@ -20,10 +22,12 @@ Parameters
 ----------
 
 - **data** (*Tensor | _ArrayOrScalar*):
-  The input data to be wrapped in a `Tensor`. If a `Tensor` is provided, its underlying data is used.
+  The input data to be wrapped in a `Tensor`. 
+  If a `Tensor` is provided, its underlying data is used.
   
 - **requires_grad** (*bool*, optional):
-  If True, the resulting `Tensor` will track gradients for backpropagation. Defaults to False.
+  If True, the resulting `Tensor` will track gradients for backpropagation. 
+  Defaults to False.
   
 - **dtype** (*Any*, optional):
   The desired data type for the new `Tensor`. Defaults to `np.float32`.
@@ -32,7 +36,8 @@ Returns
 -------
 
 - **Tensor**:
-  A new `Tensor` instance wrapping the input data, with the specified `requires_grad` setting and data type.
+  A new `Tensor` instance wrapping the input data, with the specified 
+  `requires_grad` setting and data type.
 
 Examples
 --------

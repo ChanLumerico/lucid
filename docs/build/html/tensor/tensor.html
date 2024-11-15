@@ -92,7 +92,9 @@
 <span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data:</span> <span class="pre">~lucid._tensor.tensor.Tensor</span> <span class="pre">|</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">float</span> <span class="pre">|</span> <span class="pre">list[int</span> <span class="pre">|</span> <span class="pre">float]</span> <span class="pre">|</span> <span class="pre">~numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">requires_grad:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype:</span> <span class="pre">~typing.Any</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'numpy.float32'&gt;</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.tensor" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
-<p>Creates a new <cite>Tensor</cite> object with specified data, <cite>requires_grad</cite> setting, and data type. This function is similar to PyTorch’s <cite>torch.tensor</cite>, allowing you to initialize a <cite>Tensor</cite> either from another <cite>Tensor</cite> or directly from array-like data.</p>
+<p>Creates a new <cite>Tensor</cite> object with specified data, <cite>requires_grad</cite> setting, and data type.
+This function is similar to PyTorch’s <cite>torch.tensor</cite>, allowing you to initialize a <cite>Tensor</cite>
+either from another <cite>Tensor</cite> or directly from array-like data.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading"></a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">tensor</span><span class="p">(</span>
@@ -107,9 +109,11 @@
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p><strong>data</strong> (<em>Tensor | _ArrayOrScalar</em>):
-The input data to be wrapped in a <cite>Tensor</cite>. If a <cite>Tensor</cite> is provided, its underlying data is used.</p></li>
+The input data to be wrapped in a <cite>Tensor</cite>.
+If a <cite>Tensor</cite> is provided, its underlying data is used.</p></li>
 <li><p><strong>requires_grad</strong> (<em>bool</em>, optional):
-If True, the resulting <cite>Tensor</cite> will track gradients for backpropagation. Defaults to False.</p></li>
+If True, the resulting <cite>Tensor</cite> will track gradients for backpropagation.
+Defaults to False.</p></li>
 <li><p><strong>dtype</strong> (<em>Any</em>, optional):
 The desired data type for the new <cite>Tensor</cite>. Defaults to <cite>np.float32</cite>.</p></li>
 </ul>
@@ -118,7 +122,8 @@ The desired data type for the new <cite>Tensor</cite>. Defaults to <cite>np.floa
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p><strong>Tensor</strong>:
-A new <cite>Tensor</cite> instance wrapping the input data, with the specified <cite>requires_grad</cite> setting and data type.</p></li>
+A new <cite>Tensor</cite> instance wrapping the input data, with the specified
+<cite>requires_grad</cite> setting and data type.</p></li>
 </ul>
 </section>
 <section id="examples">
