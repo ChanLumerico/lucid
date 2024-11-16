@@ -40,8 +40,8 @@ html_theme_options = {
         "color-brand-content": "#536dfe",
     },
     "dark_css_variables": {
-        "color-brand-primary": "#8c9eff",
-        "color-brand-content": "#8c9eff",
+        "color-brand-primary": "#536dfe",
+        "color-brand-content": "#536dfe",
     },
 }
 
