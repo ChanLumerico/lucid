@@ -6,6 +6,8 @@
 Lucid documentation
 ===================
 
+Lumeruco's Comprehensive Interface for Deep Learning
+
 .. toctree::
    :maxdepth: 2
    :caption: Tensor

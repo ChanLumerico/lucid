@@ -102,7 +102,7 @@ Examples
         >>> t[0]
         Tensor(1, grad=None)
 
-    Iterating through a tensor:
+.. admonition:: Iterating through a tensor
 
     .. code-block:: python
 
