@@ -18,3 +18,4 @@ Tensor Operations
    maximum.rst
    power.rst
    dot.rst
+   inner.rst

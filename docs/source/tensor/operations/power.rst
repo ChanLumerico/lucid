@@ -46,13 +46,13 @@ Backward Gradient Calculation
 For tensors `a` and `b` involved in the `power` operation, the gradients 
 with respect to the output (`out`) are computed as follows:
 
-**Gradient with respect to `a`:**
+**Gradient with respect to** :math:`a`:
 
 .. math::
 
     \frac{\partial \text{out}_i}{\partial a_i} = b_i \cdot a_i^{b_i - 1}
 
-**Gradient with respect to `b`:**
+**Gradient with respect to** :math:`b`:
 
 .. math::
 
@@ -61,8 +61,8 @@ with respect to the output (`out`) are computed as follows:
 .. note::
 
     - The gradient with respect to `b` is undefined for :math:`a_i \leq 0`, 
-        as the natural logarithm function :math:`\ln(a_i)` is not defined for 
-        non-positive numbers.
+    as the natural logarithm function :math:`\ln(a_i)` is not defined for 
+    non-positive numbers.
 
     - Ensure that all elements of `a` are positive when `b` requires gradients.
 

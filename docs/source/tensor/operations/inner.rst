@@ -1,18 +1,20 @@
-lucid.dot
-=========
+lucid.inner
+===========
 
-.. autofunction:: lucid.dot
+.. autofunction:: lucid.inner
 
-The `dot` function computes the dot product of two tensors. 
-It is used for vector inner products, matrix-vector products, 
-or matrix-matrix multiplications, depending on the shapes of the input tensors.
+The `inner` function computes the inner product of two tensors along the 
+last dimension of the first tensor and the second-to-last dimension of 
+the second tensor. 
+
+This function generalizes the dot product for tensors of higher dimensions.
 
 Function Signature
 ------------------
 
 .. code-block:: python
 
-    def dot(a: Tensor, b: Tensor) -> Tensor
+    def inner(a: Tensor, b: Tensor) -> Tensor
 
 Parameters
 ----------
@@ -24,18 +26,17 @@ Returns
 -------
 
 - **Tensor**: 
-    A new `Tensor` containing the dot product result. 
-    If either `a` or `b` requires gradients, the resulting tensor 
-    will also require gradients.
+    A new `Tensor` containing the inner product result. 
+    If either `a` or `b` requires gradients, the resulting tensor will also require gradients.
 
 Forward Calculation
 -------------------
 
-The forward calculation for the `dot` operation is:
+The forward calculation for the `inner` operation is:
 
 .. math::
 
-    \mathbf{out} = \mathbf{a} \cdot \mathbf{b}
+    \mathbf{out} = \text{sum}(\mathbf{a} \cdot \mathbf{b}, \text{axis}=-1)
 
 For vectors:
 
@@ -47,12 +48,12 @@ For matrices:
 
 .. math::
 
-    \mathbf{out}_{ij} = \sum_{k} \mathbf{a}_{ik} \mathbf{b}_{kj}
+    \mathbf{out}_{ij} = \sum_{k} \mathbf{a}_{ik} \mathbf{b}_{jk}
 
 Backward Gradient Calculation
 -----------------------------
 
-For tensors **a** and **b** involved in the `dot` operation, 
+For tensors **a** and **b** involved in the `inner` operation, 
 the gradients with respect to the output (**out**) are computed as follows:
 
 **Gradient with respect to** :math:`\mathbf{a}`:
@@ -67,31 +68,24 @@ the gradients with respect to the output (**out**) are computed as follows:
 
     \frac{\partial \mathbf{out}}{\partial \mathbf{b}} = \mathbf{a}
 
-For matrix multiplication:
+For higher-dimensional tensors:
 
-- **Gradient with respect to** :math:`\mathbf{a}`:
-
-  .. math::
-
-      \frac{\partial \mathbf{out}_{ij}}{\partial \mathbf{a}_{ik}} = \mathbf{b}_{kj}
-
-- **Gradient with respect to** :math:`\mathbf{b}`:
-
-  .. math::
-
-      \frac{\partial \mathbf{out}_{ij}}{\partial \mathbf{b}_{kj}} = \mathbf{a}_{ik}
+- **Gradient with respect to** :math:`\mathbf{a}`: 
+    propagates back along the aligned dimensions of :math:`\mathbf{a}`.
+- **Gradient with respect to** :math:`\mathbf{b}`: 
+    propagates back along the aligned dimensions of :math:`\mathbf{b}`.
 
 Examples
 --------
 
-Using `dot` for a simple dot product:
+Using `inner` for a simple inner product:
 
 .. code-block:: python
 
     >>> import lucid
     >>> a = Tensor([1.0, 2.0, 3.0], requires_grad=True)
     >>> b = Tensor([4.0, 5.0, 6.0], requires_grad=True)
-    >>> out = lucid.dot(a, b)  # or a.dot(b)
+    >>> out = lucid.inner(a, b)
     >>> print(out)
     Tensor(32.0, grad=None)
 
@@ -105,23 +99,23 @@ Backpropagation computes gradients for both `a` and `b`:
     >>> print(b.grad)
     [1.0, 2.0, 3.0]  # Corresponding to a
 
-Using `dot` for matrix multiplication:
+Using `inner` for higher-dimensional tensors:
 
 .. code-block:: python
 
     >>> import lucid
     >>> a = Tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
     >>> b = Tensor([[5.0, 6.0], [7.0, 8.0]], requires_grad=True)
-    >>> out = lucid.dot(a, b)  # or a.dot(b)
+    >>> out = lucid.inner(a, b)
     >>> print(out)
-    Tensor([[19.0, 22.0], [43.0, 50.0]], grad=None)
+    Tensor([17.0, 53.0], grad=None)
 
-Backpropagation propagates gradients through the matrices:
+Backpropagation propagates gradients through the tensors:
 
 .. code-block:: python
 
     >>> out.backward()
     >>> print(a.grad)
-    [[5.0, 7.0], [5.0, 7.0]]
+    [[5.0, 6.0], [7.0, 8.0]]
     >>> print(b.grad)
-    [[1.0, 3.0], [2.0, 4.0]]
+    [[1.0, 2.0], [3.0, 4.0]]
