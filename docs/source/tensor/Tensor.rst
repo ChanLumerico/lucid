@@ -78,37 +78,37 @@ Properties
 Examples
 --------
 
-Creating a tensor with gradient tracking:
+.. admonition:: Creating a tensor with gradient tracking
 
-.. code-block:: python
+    .. code-block:: python
 
-    >>> import lucid
-    >>> t = lucid.Tensor([1, 2, 3], requires_grad=True)
-    >>> print(t)
-    [1. 2. 3.]
+        >>> import lucid
+        >>> t = lucid.Tensor([1, 2, 3], requires_grad=True)
+        >>> print(t)
+        [1. 2. 3.]
 
-Performing backpropagation:
+.. admonition:: Performing backpropagation
 
-.. code-block:: python
+    .. code-block:: python
 
-    >>> t.backward()
-    >>> print(t.grad)
-    [1. 1. 1.]
+        >>> t.backward()
+        >>> print(t.grad)
+        [1. 1. 1.]
 
-Indexing and slicing:
+.. admonition:: Indexing and slicing
 
-.. code-block:: python
+    .. code-block:: python
 
-    >>> t[0]
-    Tensor(1, grad=None)
+        >>> t[0]
+        Tensor(1, grad=None)
 
-Iterating through a tensor:
+    Iterating through a tensor:
 
-.. code-block:: python
+    .. code-block:: python
 
-    >>> for sub_tensor in t:
-    >>>     print(sub_tensor)
-    Tensor(1, grad=None)
-    Tensor(2, grad=None)
-    Tensor(3, grad=None)
+        >>> for sub_tensor in t:
+        >>>     print(sub_tensor)
+        Tensor(1, grad=None)
+        Tensor(2, grad=None)
+        Tensor(3, grad=None)
 

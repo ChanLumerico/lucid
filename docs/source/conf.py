@@ -36,10 +36,10 @@ html_static_path = ["_static"]
 
 html_theme_options = {
     "light_css_variables": {
-        "color-brand-primary": "#6495ED",
-        "color-brand-content": "#6495ED",
+        "color-brand-primary": "#536dfe",
+        "color-brand-content": "#536dfe",
     },
 }
 
-pygments_style = "sphinx"
+pygments_style = "xcode"
 pygments_dark_style = "github-dark"
