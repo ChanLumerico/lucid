@@ -10,12 +10,13 @@ Tensor Operations
    :maxdepth: 1
    :caption: Binary Functions
 
-   add.rst
-   sub.rst
-   mul.rst
-   div.rst
-   minimum.rst
-   maximum.rst
-   power.rst
-   dot.rst
-   inner.rst
+   bfunc/add.rst
+   bfunc/sub.rst
+   bfunc/mul.rst
+   bfunc/div.rst
+   bfunc/minimum.rst
+   bfunc/maximum.rst
+   bfunc/power.rst
+   bfunc/dot.rst
+   bfunc/inner.rst
+   bfunc/exp.rst

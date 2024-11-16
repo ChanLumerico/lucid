@@ -60,11 +60,11 @@ with respect to the output (`out`) are computed as follows:
 
 .. note::
 
-    - The gradient with respect to `b` is undefined for :math:`a_i \leq 0`, 
+    The gradient with respect to `b` is undefined for :math:`a_i \leq 0`, 
     as the natural logarithm function :math:`\ln(a_i)` is not defined for 
     non-positive numbers.
 
-    - Ensure that all elements of `a` are positive when `b` requires gradients.
+    Ensure that all elements of `a` are positive when `b` requires gradients.
 
 Examples
 --------

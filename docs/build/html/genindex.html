@@ -208,14 +208,16 @@
 <li class="toctree-l1"><a class="reference internal" href="tensor/Tensor.html">lucid.Tensor</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor/tensor.html">lucid.tensor</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="tensor/operations/index.html">Tensor Operations</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Tensor Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="tensor/operations/add.html">lucid.add</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tensor/operations/sub.html">lucid.sub</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tensor/operations/mul.html">lucid.mul</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tensor/operations/div.html">lucid.div</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tensor/operations/minimum.html">lucid.minimum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tensor/operations/maximum.html">lucid.maximum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tensor/operations/power.html">lucid.power</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tensor/operations/dot.html">lucid.dot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/add.html">lucid.add</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/sub.html">lucid.sub</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/mul.html">lucid.mul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/div.html">lucid.div</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/minimum.html">lucid.minimum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/maximum.html">lucid.maximum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/power.html">lucid.power</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/dot.html">lucid.dot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/inner.html">lucid.inner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/exp.html">lucid.exp</a></li>
 </ul>
 </li>
 </ul>
@@ -259,13 +261,13 @@
           
 <section class="genindex-section">
   <h1 id="index">Index</h1>
-  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a></div>
+  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#E"><strong>E</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a></div>
 </section>
 <section id="A" class="genindex-section">
   <h2>A</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="tensor/operations/add.html#lucid.add">add() (in module lucid)</a>
+        <li><a href="tensor/operations/bfunc/add.html#lucid.add">add() (in module lucid)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -275,11 +277,31 @@
   <h2>D</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="tensor/operations/div.html#lucid.div">div() (in module lucid)</a>
+        <li><a href="tensor/operations/bfunc/div.html#lucid.div">div() (in module lucid)</a>
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="tensor/operations/dot.html#lucid.dot">dot() (in module lucid)</a>
+        <li><a href="tensor/operations/bfunc/dot.html#lucid.dot">dot() (in module lucid)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="E" class="genindex-section">
+  <h2>E</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="tensor/operations/bfunc/exp.html#lucid.exp">exp() (in module lucid)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="I" class="genindex-section">
+  <h2>I</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="tensor/operations/bfunc/inner.html#lucid.inner">inner() (in module lucid)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -289,13 +311,13 @@
   <h2>M</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="tensor/operations/maximum.html#lucid.maximum">maximum() (in module lucid)</a>
+        <li><a href="tensor/operations/bfunc/maximum.html#lucid.maximum">maximum() (in module lucid)</a>
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="tensor/operations/minimum.html#lucid.minimum">minimum() (in module lucid)</a>
+        <li><a href="tensor/operations/bfunc/minimum.html#lucid.minimum">minimum() (in module lucid)</a>
 </li>
-        <li><a href="tensor/operations/mul.html#lucid.mul">mul() (in module lucid)</a>
+        <li><a href="tensor/operations/bfunc/mul.html#lucid.mul">mul() (in module lucid)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -305,7 +327,7 @@
   <h2>P</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="tensor/operations/power.html#lucid.power">power() (in module lucid)</a>
+        <li><a href="tensor/operations/bfunc/power.html#lucid.power">power() (in module lucid)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -315,7 +337,7 @@
   <h2>S</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="tensor/operations/sub.html#lucid.sub">sub() (in module lucid)</a>
+        <li><a href="tensor/operations/bfunc/sub.html#lucid.sub">sub() (in module lucid)</a>
 </li>
     </ul></td>
   </tr></table>

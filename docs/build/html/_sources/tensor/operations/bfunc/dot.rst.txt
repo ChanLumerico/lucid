@@ -55,13 +55,13 @@ Backward Gradient Calculation
 For tensors **a** and **b** involved in the `dot` operation, 
 the gradients with respect to the output (**out**) are computed as follows:
 
-**Gradient with respect to \(\mathbf{a}\):**
+**Gradient with respect to** :math:`\mathbf{a}`:
 
 .. math::
 
     \frac{\partial \mathbf{out}}{\partial \mathbf{a}} = \mathbf{b}
 
-**Gradient with respect to \(\mathbf{b}\):**
+**Gradient with respect to** :math:`\mathbf{b}`:
 
 .. math::
 
@@ -69,13 +69,13 @@ the gradients with respect to the output (**out**) are computed as follows:
 
 For matrix multiplication:
 
-- **Gradient with respect to \(\mathbf{a}\)** is computed as:
+- **Gradient with respect to** :math:`\mathbf{a}`:
 
   .. math::
 
       \frac{\partial \mathbf{out}_{ij}}{\partial \mathbf{a}_{ik}} = \mathbf{b}_{kj}
 
-- **Gradient with respect to \(\mathbf{b}\)** is computed as:
+- **Gradient with respect to** :math:`\mathbf{b}`:
 
   .. math::
 
