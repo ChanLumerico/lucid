@@ -5,6 +5,9 @@ Tensor Operations
    :maxdepth: 1
    :caption: Unary Functions
 
+   ufunc/exp.rst
+   ufunc/log.rst
+
 
 .. toctree::
    :maxdepth: 1
@@ -20,4 +23,3 @@ Tensor Operations
    bfunc/dot.rst
    bfunc/inner.rst
    bfunc/matmul.rst
-   bfunc/exp.rst
