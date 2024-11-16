@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath("../../"))
 project = "Lucid"
 copyright = "2024, ChanLumerico"
 author = "ChanLumerico"
-release = "1.0.0"
+release = "0.10"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -33,3 +33,13 @@ exclude_patterns = []
 
 html_theme = "furo"
 html_static_path = ["_static"]
+
+html_theme_options = {
+    "light_css_variables": {
+        "color-brand-primary": "#6495ED",
+        "color-brand-content": "#6495ED",
+    },
+}
+
+pygments_style = "sphinx"
+pygments_dark_style = "github-dark"
