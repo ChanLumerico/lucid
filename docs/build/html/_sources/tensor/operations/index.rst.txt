@@ -7,6 +7,7 @@ Tensor Operations
 
    ufunc/exp.rst
    ufunc/log.rst
+   ufunc/sqrt.rst
 
 
 .. toctree::

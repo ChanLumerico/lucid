@@ -17,24 +17,18 @@
   body {
     --color-code-background: #ffffff;
   --color-code-foreground: black;
-  --color-brand-primary: #536dfe;
-  --color-brand-content: #536dfe;
   
   }
   @media not print {
     body[data-theme="dark"] {
       --color-code-background: #0d1117;
   --color-code-foreground: #e6edf3;
-  --color-brand-primary: #536dfe;
-  --color-brand-content: #536dfe;
   
     }
     @media (prefers-color-scheme: dark) {
       body:not([data-theme="light"]) {
         --color-code-background: #0d1117;
   --color-code-foreground: #e6edf3;
-  --color-brand-primary: #536dfe;
-  --color-brand-content: #536dfe;
   
       }
     }
@@ -210,6 +204,7 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="tensor/operations/index.html">Tensor Operations</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Tensor Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="tensor/operations/ufunc/exp.html">lucid.exp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tensor/operations/ufunc/log.html">lucid.log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tensor/operations/ufunc/sqrt.html">lucid.sqrt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/add.html">lucid.add</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/sub.html">lucid.sub</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tensor/operations/bfunc/mul.html">lucid.mul</a></li>
@@ -350,6 +345,10 @@
 <section id="S" class="genindex-section">
   <h2>S</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="tensor/operations/ufunc/sqrt.html#lucid.sqrt">sqrt() (in module lucid)</a>
+</li>
+    </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="tensor/operations/bfunc/sub.html#lucid.sub">sub() (in module lucid)</a>
 </li>
