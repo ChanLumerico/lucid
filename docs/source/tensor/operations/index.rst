@@ -19,4 +19,5 @@ Tensor Operations
    bfunc/power.rst
    bfunc/dot.rst
    bfunc/inner.rst
+   bfunc/matmul.rst
    bfunc/exp.rst

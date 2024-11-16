@@ -42,6 +42,10 @@ def inner(a: Tensor, b: Tensor) -> Tensor:
     return bfunc.inner(a, b)
 
 
+def matmul(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc.matmul(a, b)
+
+
 def exp(a: Tensor) -> Tensor:
     return ufunc.exp(a)
 
