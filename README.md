@@ -62,7 +62,7 @@ print(b.grad)  # Gradients with respect to 'b'
 
 ## Why Lucid?
 
-Lucid is not just a library; it's an exploration of how deep learning works at its core. While frameworks like TensorFlow and PyTorch abstract much of the complexity, Lucid reveals the fundamental building blocks of deep learning. Hereâs why youâll love it:
+Lucid is not just a library; it's an exploration of how deep learning works at its core. While frameworks like TensorFlow and PyTorch abstract much of the complexity, Lucid reveals the fundamental building blocks of deep learning.
 
 - **Educational**: Learn how gradients are computed, how tensors interact, and how models are built.
 - **Lightweight**: Avoid the overhead of larger frameworks.
