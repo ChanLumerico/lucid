@@ -34,7 +34,7 @@ Matrix Multiplication Rules
 - If either input is higher-dimensional, the function performs batched matrix multiplication.
 
 - For 1D arrays, the behavior is as follows:
-  - **If a is 1D and b is 2D**: The result is a 1D vector computed as \( \mathbf{out} = \mathbf{a} \cdot \mathbf{b} \).
+  - **If a is 1D and b is 2D**: The result is a 1D vector computed as :math:`\mathbf{out} = \mathbf{a} \cdot \mathbf{b}`.
   - **If b is 1D and a is 2D**: The result is also a 1D vector, computed along the last axis of **a**.
 
 .. note::
@@ -42,7 +42,7 @@ Matrix Multiplication Rules
    The `@` operator can be used as an alternative to `matmul` for matrix multiplication. 
    This makes the syntax cleaner and aligns with NumPy conventions. 
    
-   See the **`@` Operator** section below for more details.
+   See the `@` **Operator** section below for more details.
 
 Forward Calculation
 -------------------
