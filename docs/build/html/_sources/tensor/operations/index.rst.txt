@@ -15,3 +15,6 @@ Tensor Operations
    mul.rst
    div.rst
    minimum.rst
+   maximum.rst
+   power.rst
+   dot.rst
