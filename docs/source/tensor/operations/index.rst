@@ -8,7 +8,15 @@ Tensor Operations
    ufunc/exp.rst
    ufunc/log.rst
    ufunc/sqrt.rst
-
+   ufunc/sin.rst
+   ufunc/cos.rst
+   ufunc/tan.rst
+   ufunc/arcsin.rst
+   ufunc/arccos.rst
+   ufunc/arctan.rst
+   ufunc/sinh.rst
+   ufunc/cosh.rst
+   ufunc/tanh.rst
 
 .. toctree::
    :maxdepth: 1

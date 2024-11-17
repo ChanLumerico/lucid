@@ -207,6 +207,15 @@
 <li class="toctree-l2"><a class="reference internal" href="../ufunc/exp.html">lucid.exp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../ufunc/log.html">lucid.log</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../ufunc/sqrt.html">lucid.sqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/sin.html">lucid.sin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/cos.html">lucid.cos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/tan.html">lucid.tan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/arcsin.html">lucid.arcsin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/arccos.html">lucid.arccos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/arctan.html">lucid.arctan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/sinh.html">lucid.sinh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/cosh.html">lucid.cosh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/tanh.html">lucid.tanh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="add.html">lucid.add</a></li>
 <li class="toctree-l2"><a class="reference internal" href="sub.html">lucid.sub</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mul.html">lucid.mul</a></li>
@@ -301,9 +310,14 @@ If either <strong>a</strong> or <strong>b</strong> requires gradients, the resul
 <ul class="simple">
 <li><p>If both inputs are 2D matrices, standard matrix multiplication is performed.</p></li>
 <li><p>If either input is higher-dimensional, the function performs batched matrix multiplication.</p></li>
-<li><p>For 1D arrays, the behavior is as follows:
-- <strong>If a is 1D and b is 2D</strong>: The result is a 1D vector computed as <span class="math notranslate nohighlight">\(\mathbf{out} = \mathbf{a} \cdot \mathbf{b}\)</span>.
-- <strong>If b is 1D and a is 2D</strong>: The result is also a 1D vector, computed along the last axis of <strong>a</strong>.</p></li>
+<li><dl class="simple">
+<dt>For 1D arrays, the behavior is as follows:</dt><dd><ul>
+<li><p><strong>If a is 1D and b is 2D</strong>: The result is a 1D vector computed as <span class="math notranslate nohighlight">\(\mathbf{out} = \mathbf{a} \cdot \mathbf{b}\)</span>.</p></li>
+<li><p><strong>If b is 1D and a is 2D</strong>: The result is also a 1D vector, computed along the last axis of <strong>a</strong>.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Note</p>

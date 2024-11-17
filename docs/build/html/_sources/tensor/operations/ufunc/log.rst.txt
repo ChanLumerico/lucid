@@ -34,8 +34,8 @@ The forward calculation for `log` is:
 
     \mathbf{out}_i = \log(\mathbf{a}_i)
 
-where \( \mathbf{a}_i \) is the element of the input tensor **a**, 
-and \( \mathbf{out}_i \) is the corresponding element of the output tensor.
+where :math:`\mathbf{a}_i` is the element of the input tensor **a**, 
+and :math:`\mathbf{out}_i` is the corresponding element of the output tensor.
 
 Backward Gradient Calculation
 -----------------------------

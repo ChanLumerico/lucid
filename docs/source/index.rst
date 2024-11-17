@@ -19,7 +19,6 @@ Lumeruco's Comprehensive Interface for Deep Learning
 
    Tensor Operations <tensor/operations/index.rst>
 
-
 .. toctree::
    :maxdepth: 2
    :caption: Linear Algebra

@@ -55,52 +55,42 @@ def log(a: Tensor) -> Tensor:
 
 
 def sqrt(a: Tensor) -> Tensor:
-    """Square root"""
     return ufunc.sqrt(a)
 
 
 def sin(a: Tensor) -> Tensor:
-    """Sine function"""
     return ufunc.sin(a)
 
 
 def cos(a: Tensor) -> Tensor:
-    """Cosine function"""
     return ufunc.cos(a)
 
 
 def tan(a: Tensor) -> Tensor:
-    """Tangent function"""
     return ufunc.tan(a)
 
 
 def arcsin(a: Tensor) -> Tensor:
-    """Arcsin function"""
     return ufunc.arcsin(a)
 
 
 def arccos(a: Tensor) -> Tensor:
-    """Arccos function"""
     return ufunc.arccos(a)
 
 
 def arctan(a: Tensor) -> Tensor:
-    """Arctan function"""
     return ufunc.arctan(a)
 
 
 def sinh(a: Tensor) -> Tensor:
-    """Hyperbolic sine function"""
     return ufunc.sinh(a)
 
 
 def cosh(a: Tensor) -> Tensor:
-    """Hyperbolic cosine function"""
     return ufunc.cosh(a)
 
 
 def tanh(a: Tensor) -> Tensor:
-    """Hyperbolic tangent function"""
     return ufunc.tanh(a)
 
 

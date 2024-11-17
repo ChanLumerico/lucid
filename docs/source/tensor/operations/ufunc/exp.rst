@@ -34,7 +34,7 @@ The forward calculation for the `exp` operation is:
 
     \mathbf{out}_i = e^{\mathbf{a}_i}
 
-where \(\mathbf{a}_i\) are the elements of the input tensor **a**.
+where :math:`\mathbf{a}_i` are the elements of the input tensor **a**.
 
 Backward Gradient Calculation
 -----------------------------

@@ -34,8 +34,8 @@ Matrix Multiplication Rules
 - If either input is higher-dimensional, the function performs batched matrix multiplication.
 
 - For 1D arrays, the behavior is as follows:
-  - **If a is 1D and b is 2D**: The result is a 1D vector computed as :math:`\mathbf{out} = \mathbf{a} \cdot \mathbf{b}`.
-  - **If b is 1D and a is 2D**: The result is also a 1D vector, computed along the last axis of **a**.
+    - **If a is 1D and b is 2D**: The result is a 1D vector computed as :math:`\mathbf{out} = \mathbf{a} \cdot \mathbf{b}`.
+    - **If b is 1D and a is 2D**: The result is also a 1D vector, computed along the last axis of **a**.
 
 .. note::
 
