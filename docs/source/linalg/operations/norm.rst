@@ -11,9 +11,7 @@ Function Signature
 
 .. code-block:: python
 
-    def norm(a: Tensor, ord: int = 2) -> Tensor:
-        """Compute the p-norm of a matrix."""
-        return _func.norm(a, ord)
+    def norm(a: Tensor, ord: int = 2) -> Tensor
 
 Parameters
 ----------
@@ -66,7 +64,7 @@ This calculation depends on the value of `ord`.
 Raises
 ------
 
-.. attention:: Exceptions
+.. attention::
 
     - **ValueError**: If the value of `ord` is not supported.
     - **LinAlgError**: If the input tensor does not support norm computation for the specified `ord`.

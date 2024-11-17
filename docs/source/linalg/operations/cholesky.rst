@@ -10,9 +10,7 @@ Function Signature
 
 .. code-block:: python
 
-    def cholesky(a: Tensor) -> Tensor:
-        """Performs Cholesky decomposition."""
-        return _func.cholesky(a)
+    def cholesky(a: Tensor) -> Tensor
 
 Parameters
 ----------
@@ -56,7 +54,7 @@ is computed using matrix calculus techniques.
 Raises
 ------
 
-.. attention:: Exceptions
+.. attention::
 
     - **ValueError**: If the input tensor :math:`\mathbf{A}` is not square.
 

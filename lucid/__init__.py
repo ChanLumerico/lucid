@@ -10,6 +10,7 @@ import numpy as np
 
 from lucid._tensor import Tensor
 from lucid._func import *
+from lucid._util import *
 
 from lucid.types import _ArrayOrScalar
 
@@ -18,6 +19,8 @@ import lucid.random as random
 import lucid.nn as nn
 
 _grad_enabled: bool = True
+
+newaxis = np.newaxis
 
 
 def tensor(

@@ -171,7 +171,7 @@ def inner(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def matmul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _matmul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
     result = Tensor(np.matmul(self.data, other.data))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:

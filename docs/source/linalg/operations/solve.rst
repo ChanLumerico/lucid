@@ -11,9 +11,7 @@ Function Signature
 
 .. code-block:: python
 
-    def solve(a: Tensor, b: Tensor) -> Tensor:
-        """Solve a linear system `Ax=b`."""
-        return _func.solve(a, b)
+    def solve(a: Tensor, b: Tensor) -> Tensor
 
 Parameters
 ----------
@@ -64,7 +62,7 @@ This leverages matrix differentiation and propagates gradients efficiently.
 Raises
 ------
 
-.. attention:: Exceptions
+.. attention::
 
     - **ValueError**: If the matrix :math:`\mathbf{A}` 
       is not square or if the dimensions of :math:`\mathbf{b}` do not align with :math:`\mathbf{A}`.

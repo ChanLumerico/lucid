@@ -10,9 +10,7 @@ Function Signature
 
 .. code-block:: python
 
-    def det(a: Tensor) -> Tensor:
-        """Compute the determinant of a matrix."""
-        return _func.det(a)
+    def det(a: Tensor) -> Tensor
 
 Parameters
 ----------
@@ -54,7 +52,7 @@ and the gradients are propagated accordingly during backpropagation.
 Raises
 ------
 
-.. attention:: Exceptions
+.. attention::
 
     - **ValueError**: If the input tensor is not a square matrix.
     

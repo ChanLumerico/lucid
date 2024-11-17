@@ -1,6 +1,6 @@
 from typing import Self
 
-from lucid.types import _Scalar, _ArrayOrScalar
+from lucid.types import _Scalar, _ArrayOrScalar, _ShapeLike
 
 
 class _TensorOps:
@@ -37,6 +37,8 @@ class _TensorOps:
 
     def dot(self, other: Self | _ArrayOrScalar) -> Self: ...
 
+    def matmul(self, other: Self) -> Self: ...
+
     def sum(
         self, axis: int | tuple[int] | None = None, keepdims: bool = False
     ) -> Self: ...
@@ -48,3 +50,11 @@ class _TensorOps:
     def var(
         self, axis: int | tuple[int] | None = None, keepdims: bool = False
     ) -> Self: ...
+
+    def reshape(self, *shape: int) -> Self: ...
+
+    def squeeze(self, axis: _ShapeLike | None = None) -> Self: ...
+
+    def unsqueeze(self, axis: _ShapeLike) -> Self: ...
+
+    def ravel(self) -> Self: ...

@@ -209,7 +209,7 @@ Tensor.__mul__ = bfunc._mul
 Tensor.__rmul__ = bfunc._rmul
 Tensor.__truediv__ = bfunc._truediv
 Tensor.__rtruediv__ = bfunc._rtruediv
-Tensor.__matmul__ = bfunc.matmul
+Tensor.__matmul__ = bfunc._matmul
 
 Tensor.__eq__ = bfunc._equal
 Tensor.__ne__ = bfunc._not_equal
@@ -223,6 +223,7 @@ Tensor.__neg__ = ufunc._neg
 
 Tensor.T = ufunc._T
 Tensor.dot = bfunc.dot
+Tensor.matmul = bfunc._matmul
 Tensor.sum = ufunc.sum
 Tensor.mean = ufunc.mean
 Tensor.var = ufunc.var

@@ -245,6 +245,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/gfunc/diag.html">lucid.diag</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../../tensor/utilities/index.html">Tensor Utilites</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Linear Algebra</span></p>
 <ul class="current">
@@ -258,9 +259,9 @@
 </ul>
 </li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Types</span></p>
+<p class="caption" role="heading"><span class="caption-text">Others</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../types/types.html">lucid.types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../others/types.html">lucid.types</a></li>
 </ul>
 
 </div>
@@ -312,9 +313,7 @@
 <span class="math notranslate nohighlight">\(\mathbf{A} \mathbf{x} = \mathbf{b}\)</span>.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">solve</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Solve a linear system `Ax=b`.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_func</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">solve</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
@@ -374,7 +373,6 @@ to the equation <span class="math notranslate nohighlight">\(\mathbf{A} \mathbf{
 <h2>Raises<a class="headerlink" href="#raises" title="Link to this heading">¶</a></h2>
 <div class="admonition attention">
 <p class="admonition-title">Attention</p>
-<p>Exceptions</p>
 <ul class="simple">
 <li><p><strong>ValueError</strong>: If the matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>
 is not square or if the dimensions of <span class="math notranslate nohighlight">\(\mathbf{b}\)</span> do not align with <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>.</p></li>

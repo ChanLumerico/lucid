@@ -1,9 +1,3 @@
-"""
-`lucid.linalg`
---------------
-Lucid's linear algebra package.
-"""
-
 from lucid._tensor import Tensor
 from lucid.linalg import _func
 

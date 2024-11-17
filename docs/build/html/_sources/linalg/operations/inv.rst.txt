@@ -10,9 +10,7 @@ Function Signature
 
 .. code-block:: python
 
-    def inv(a: Tensor) -> Tensor:
-        """Compute the inverse of a matrix."""
-        return _func.inv(a)
+    def inv(a: Tensor) -> Tensor
 
 Parameters
 ----------
@@ -54,7 +52,7 @@ to propagate gradients during backpropagation.
 Raises
 ------
 
-.. attention:: Exceptions
+.. attention::
 
     - **ValueError**: If the input tensor is not a square matrix.
     - **LinAlgError**: If the matrix is singular and cannot be inverted.

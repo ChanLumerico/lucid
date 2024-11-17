@@ -1,9 +1,3 @@
-"""
-`lucid.random`
---------------
-Lucid's random number generation package.
-"""
-
 from lucid.random import _func
 
 from lucid._tensor import Tensor
@@ -11,15 +5,11 @@ from lucid.types import _ShapeLike
 
 
 def seed(seed: int) -> None:
-    """Set a global random seed."""
     return _func.seed(seed)
 
 
-def rand(
-    shape: _ShapeLike, requires_grad: bool = False, keep_grad: bool = False
-) -> Tensor:
-    """Create a tensor of the given shape from an uniform distribution `[0, 1)`."""
-    return _func.rand(shape, requires_grad, keep_grad)
+def rand(*shape: int, requires_grad: bool = False, keep_grad: bool = False) -> Tensor:
+    return _func.rand(*shape, requires_grad=requires_grad, keep_grad=keep_grad)
 
 
 def randint(
@@ -29,12 +19,8 @@ def randint(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    """Create a tensor of the given size from bounded integer range."""
     return _func.randint(low, high, size, requires_grad, keep_grad)
 
 
-def randn(
-    shape: _ShapeLike, requires_grad: bool = False, keep_grad: bool = False
-) -> Tensor:
-    """Create a tensor of the given shape from 'standard normal' distribution."""
-    return _func.randn(shape, requires_grad, keep_grad)
+def randn(*shape: int, requires_grad: bool = False, keep_grad: bool = False) -> Tensor:
+    return _func.randn(*shape, requires_grad=requires_grad, keep_grad=keep_grad)
