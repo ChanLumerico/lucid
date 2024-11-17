@@ -17,18 +17,16 @@ Lumeruco's Comprehensive Interface for Deep Learning
    
    tensor/tensor.rst
 
-   Tensor Operations <tensor/operations/index.rst>
+   Operations <tensor/operations/index.rst>
 
 .. toctree::
    :maxdepth: 2
    :caption: Linear Algebra
    :hidden:
 
-   linalg/inv.rst
-   linalg/det.rst
-   linalg/solve.rst
-   linalg/cholesky.rst
-   linalg/norm.rst
+   linalg/linalg.rst
+
+   Operations <linalg/operations/index.rst>
 
 .. toctree::
    :maxdepth: 1
