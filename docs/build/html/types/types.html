@@ -287,49 +287,23 @@
 <p>This module defines commonly used type aliases in the <cite>lucid</cite> library.
 These aliases improve code readability and help ensure type consistency across the library.</p>
 <p>The type aliases are designed to work seamlessly with Python type hints, providing clarity when working with tensors, arrays, and shapes.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>These types are used throughout the <cite>lucid</cite> library for defining tensor-related computations
-and interacting with NumPy arrays.</p>
-</div>
-<section id="available-type-aliases">
-<h2>Available Type Aliases<a class="headerlink" href="#available-type-aliases" title="Link to this heading">¶</a></h2>
-<p>The following type aliases are defined in this module:</p>
-<ul class="simple">
-<li><p><strong>_Scalar</strong>: Represents a single scalar value (integer or float).</p></li>
-<li><p><strong>_NumPyArray</strong>: Alias for <cite>numpy.ndarray</cite>, representing an array of numerical data.</p></li>
-<li><p><strong>_ArrayOrScalar</strong>: Represents either a scalar, a list of scalars, or a NumPy array.</p></li>
-<li><p><strong>_ShapeLike</strong>: Represents a shape, defined as a list or tuple of integers.</p></li>
-<li><p><strong>_ArrayLike</strong>: Represents data that can be interpreted as an array (e.g., list or NumPy array).</p></li>
-</ul>
-</section>
-<section id="explanation-of-types">
-<h2>Explanation of Types<a class="headerlink" href="#explanation-of-types" title="Link to this heading">¶</a></h2>
+<section id="type-definitions">
+<span id="module-lucid.types"></span><h2>Type Definitions<a class="headerlink" href="#type-definitions" title="Link to this heading">¶</a></h2>
 <p class="rubric"><cite>_Scalar</cite></p>
 <p><strong>Definition</strong>:
 Represents a single scalar value, which can be either an integer or a float.
 This is commonly used for operations that involve scalar constants or parameters.</p>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p>Scalars are critical for defining single-value operations like scaling factors, thresholds, or biases in machine learning.</p>
-</div>
 <p>Example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">scalar</span><span class="p">:</span> <span class="n">_Scalar</span> <span class="o">=</span> <span class="mf">3.14</span>
 </pre></div>
 </div>
-<p>—</p>
 <p class="rubric"><cite>_NumPyArray</cite></p>
 <p><strong>Definition</strong>:
 Represents a NumPy array (<cite>np.ndarray</cite>), which is a primary data structure in numerical computing.</p>
-<div class="admonition tip">
-<p class="admonition-title">Tip</p>
-<p>Use <cite>_NumPyArray</cite> wherever the function accepts or returns NumPy arrays for clarity and consistency.</p>
-</div>
 <p>Example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">arr</span><span class="p">:</span> <span class="n">_NumPyArray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
 </pre></div>
 </div>
-<p>—</p>
 <p class="rubric"><cite>_ArrayOrScalar</cite></p>
 <p><strong>Definition</strong>:
 Represents a flexible type that can be one of the following:</p>
@@ -338,10 +312,6 @@ Represents a flexible type that can be one of the following:</p>
 <li><p>A list of scalars (<cite>list[_Scalar]</cite>).</p></li>
 <li><p>A NumPy array (<cite>_NumPyArray</cite>).</p></li>
 </ul>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>This type is useful for functions that can accept either a single value or a collection of values for element-wise operations.</p>
-</div>
 <p>Example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">_ArrayOrScalar</span><span class="p">):</span>
     <span class="k">pass</span>
@@ -351,28 +321,18 @@ Represents a flexible type that can be one of the following:</p>
 <span class="n">process</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">9</span><span class="p">]))</span>         <span class="c1"># NumPy array</span>
 </pre></div>
 </div>
-<p>—</p>
 <p class="rubric"><cite>_ShapeLike</cite></p>
 <p><strong>Definition</strong>:
 Represents a shape, which can be a list or tuple of integers.
 This is typically used for specifying the dimensions of tensors or arrays.</p>
-<div class="admonition caution">
-<p class="admonition-title">Caution</p>
-<p>Shapes should always consist of non-negative integers.</p>
-</div>
 <p>Example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">shape</span><span class="p">:</span> <span class="n">_ShapeLike</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>—</p>
 <p class="rubric"><cite>_ArrayLike</cite></p>
 <p><strong>Definition</strong>:
 Represents data that can be interpreted as an array.
 This includes Python lists and NumPy arrays.</p>
-<div class="admonition hint">
-<p class="admonition-title">Hint</p>
-<p>This type is ideal for functions that can accept data in flexible formats but convert it internally to NumPy arrays.</p>
-</div>
 <p>Example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="p">:</span> <span class="n">_ArrayLike</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
 <span class="n">array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
@@ -460,8 +420,7 @@ This includes Python lists and NumPy arrays.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">lucid.types</a><ul>
-<li><a class="reference internal" href="#available-type-aliases">Available Type Aliases</a></li>
-<li><a class="reference internal" href="#explanation-of-types">Explanation of Types</a></li>
+<li><a class="reference internal" href="#type-definitions">Type Definitions</a></li>
 <li><a class="reference internal" href="#admonitions-and-usage-guidelines">Admonitions and Usage Guidelines</a></li>
 <li><a class="reference internal" href="#example-use-cases">Example Use Cases</a></li>
 </ul>
