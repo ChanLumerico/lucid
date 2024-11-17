@@ -49,3 +49,8 @@ Tensor Operations
    :caption: Tensor Generating Functions
 
    gfunc/zeros.rst
+   gfunc/zeros_like.rst
+   gfunc/ones.rst
+   gfunc/ones_like.rst
+   gfunc/eye.rst
+   gfunc/diag.rst
