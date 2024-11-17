@@ -6,14 +6,8 @@ These aliases improve code readability and help ensure type consistency across t
 
 The type aliases are designed to work seamlessly with Python type hints, providing clarity when working with tensors, arrays, and shapes.
 
-.. automodule:: lucid.types
-   :members:
-   :undoc-members:
-
 Type Definitions
 -----------------
-
-.. currentmodule:: lucid.types
 
 .. rubric:: `_Scalar`
 
