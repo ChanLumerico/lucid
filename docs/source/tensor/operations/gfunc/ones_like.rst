@@ -1,5 +1,5 @@
-ones_like
-=========
+lucid.ones_like
+===============
 
 .. autofunction:: lucid.ones_like
 

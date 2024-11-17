@@ -25,6 +25,10 @@ Lumeruco's Comprehensive Interface for Deep Learning
    :hidden:
 
    linalg/inv.rst
+   linalg/det.rst
+   linalg/solve.rst
+   linalg/cholesky.rst
+   linalg/norm.rst
 
 .. toctree::
    :maxdepth: 1

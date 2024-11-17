@@ -40,7 +40,7 @@ where :math:`\mathbf{A}` is the input matrix, and :math:`\mathbf{I}` is the iden
 Backward Gradient Calculation
 -----------------------------
 
-For a tensor \mathbf{A} involved in the `inv` operation, 
+For a tensor :math:`\mathbf{A}` involved in the `inv` operation, 
 the gradient of the inverse with respect to the input is computed as:
 
 .. math::
@@ -54,7 +54,7 @@ to propagate gradients during backpropagation.
 Raises
 ------
 
-.. warning::
+.. attention:: Exceptions
 
     - **ValueError**: If the input tensor is not a square matrix.
     - **LinAlgError**: If the matrix is singular and cannot be inverted.
@@ -78,11 +78,7 @@ Example
     - This function uses efficient numerical methods to compute the 
       inverse but may raise an error if the matrix is poorly conditioned or singular.
 
-Admonition
-----------
-
-.. admonition:: Use with Caution
-   :class: warning
+.. caution::
 
    Computing the inverse of a matrix can be numerically unstable for matrices 
    that are close to singular. 

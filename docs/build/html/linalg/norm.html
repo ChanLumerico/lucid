@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.linalg.det" href="det.html" /><link rel="prev" title="lucid.diag" href="../tensor/operations/gfunc/diag.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/inv.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.types" href="../types/types.html" /><link rel="prev" title="lucid.linalg.cholesky" href="cholesky.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/norm.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.linalg.inv - Lucid 0.10 documentation</title>
+        <title>lucid.linalg.norm - Lucid 0.10 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -248,11 +248,11 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Linear Algebra</span></p>
 <ul class="current">
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">lucid.linalg.inv</a></li>
+<li class="toctree-l1"><a class="reference internal" href="inv.html">lucid.linalg.inv</a></li>
 <li class="toctree-l1"><a class="reference internal" href="det.html">lucid.linalg.det</a></li>
 <li class="toctree-l1"><a class="reference internal" href="solve.html">lucid.linalg.solve</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cholesky.html">lucid.linalg.cholesky</a></li>
-<li class="toctree-l1"><a class="reference internal" href="norm.html">lucid.linalg.norm</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">lucid.linalg.norm</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Types</span></p>
 <ul>
@@ -277,7 +277,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../_sources/linalg/inv.rst.txt" title="View this page">
+  <a class="muted-link" href="../_sources/linalg/norm.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -297,27 +297,36 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-linalg-inv">
-<h1>lucid.linalg.inv<a class="headerlink" href="#lucid-linalg-inv" title="Link to this heading">¶</a></h1>
+          <section id="lucid-linalg-norm">
+<h1>lucid.linalg.norm<a class="headerlink" href="#lucid-linalg-norm" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.linalg.inv">
-<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">inv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../tensor/Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../tensor/Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.linalg.inv" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.linalg.norm">
+<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../tensor/Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">ord</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../tensor/Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.linalg.norm" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>inv</cite> function computes the inverse of a square matrix.</p>
+<p>The <cite>norm</cite> function computes the <span class="math notranslate nohighlight">\(p\)</span>-norm of a tensor,
+where <span class="math notranslate nohighlight">\(p\)</span> is specified by the <cite>ord</cite> parameter.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">inv</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the inverse of a matrix.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_func</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">norm</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="nb">ord</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the p-norm of a matrix.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_func</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="nb">ord</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
-<ul class="simple">
+<ul>
 <li><dl class="simple">
-<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor, which must be a square matrix (same number of rows and columns).</p>
+<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor for which the norm is computed.</p>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><strong>ord</strong> (<em>int, optional</em>):</dt><dd><p>The order of the norm. Defaults to <span class="math notranslate nohighlight">\(2\)</span> (Euclidean norm).</p>
+<p>Supported values include:
+- <span class="math notranslate nohighlight">\(1\)</span>: Manhattan norm (sum of absolute values).
+- <span class="math notranslate nohighlight">\(2\)</span>: Euclidean norm.</p>
 </dd>
 </dl>
 </li>
@@ -327,7 +336,7 @@
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A tensor representing the inverse of the input matrix.</p>
+<dt><strong>Tensor</strong>:</dt><dd><p>A scalar tensor representing the computed <span class="math notranslate nohighlight">\(p\)</span>-norm of the input tensor.</p>
 </dd>
 </dl>
 </li>
@@ -335,24 +344,28 @@
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward calculation for <cite>inv</cite> is based on the mathematical inverse of a matrix:</p>
+<p>The <span class="math notranslate nohighlight">\(p\)</span>-norm is calculated as:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{A}^{-1} \cdot \mathbf{A} = \mathbf{I}\]</div>
+\[\| \mathbf{a} \|_p = \left( \sum_i |\mathbf{a}_i|^p \right)^{1/p}\]</div>
 </div>
-<p>where <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> is the input matrix, and <span class="math notranslate nohighlight">\(\mathbf{I}\)</span> is the identity matrix.</p>
+<p>For <span class="math notranslate nohighlight">\(p = 1\)</span>, this becomes the sum of absolute values.
+For <span class="math notranslate nohighlight">\(p = 2\)</span>, it is the Euclidean norm.
+For <span class="math notranslate nohighlight">\(p = \infty\)</span>, it is the maximum absolute value.</p>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For a tensor <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> involved in the <cite>inv</cite> operation,
-the gradient of the inverse with respect to the input is computed as:</p>
+<p>The gradient of the <span class="math notranslate nohighlight">\(p\)</span>-norm with respect to the tensor <span class="math notranslate nohighlight">\(\mathbf{a}\)</span> is computed as:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{A}^{-1}}{\partial \mathbf{A}} =
--\mathbf{A}^{-1} \cdot \frac{\partial \mathbf{A}}{\partial \mathbf{A}} \cdot \mathbf{A}^{-1}\]</div>
+\[\begin{split}\frac{\partial \| \mathbf{a} \|_p}{\partial \mathbf{a}_i} =
+\begin{cases}
+\text{sgn}(\mathbf{a}_i) \cdot |\mathbf{a}_i|^{p-1} \cdot \| \mathbf{a} \|_p^{1-p}, &amp; \text{if } p &gt; 1 \\
+\text{sgn}(\mathbf{a}_i), &amp; \text{if } p = 1 \\
+0, &amp; \text{if } \mathbf{a}_i \neq \max(|\mathbf{a}|) \text{ for } p = \infty
+\end{cases}\end{split}\]</div>
 </div>
-<p>This result uses the property of the matrix inverse and chain rule
-to propagate gradients during backpropagation.</p>
+<p>This calculation depends on the value of <cite>ord</cite>.</p>
 </section>
 <section id="raises">
 <h2>Raises<a class="headerlink" href="#raises" title="Link to this heading">¶</a></h2>
@@ -360,35 +373,23 @@ to propagate gradients during backpropagation.</p>
 <p class="admonition-title">Attention</p>
 <p>Exceptions</p>
 <ul class="simple">
-<li><p><strong>ValueError</strong>: If the input tensor is not a square matrix.</p></li>
-<li><p><strong>LinAlgError</strong>: If the matrix is singular and cannot be inverted.</p></li>
+<li><p><strong>ValueError</strong>: If the value of <cite>ord</cite> is not supported.</p></li>
+<li><p><strong>LinAlgError</strong>: If the input tensor does not support norm computation for the specified <cite>ord</cite>.</p></li>
 </ul>
 </div>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">inv_a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">inv_a</span><span class="p">)</span>
-<span class="go">Tensor([[-2.  1. ]</span>
-<span class="go">        [ 1.5 -0.5]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">n</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="nb">ord</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<span class="go">Tensor(5.0)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">n1</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="nb">ord</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">n1</span><span class="p">)</span>
+<span class="go">Tensor(7.0)</span>
 </pre></div>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<ul class="simple">
-<li><p>The input tensor must have two dimensions and be square, i.e., <cite>a.shape[0] == a.shape[1]</cite>.</p></li>
-<li><p>This function uses efficient numerical methods to compute the
-inverse but may raise an error if the matrix is poorly conditioned or singular.</p></li>
-</ul>
-</div>
-<div class="admonition caution">
-<p class="admonition-title">Caution</p>
-<p>Computing the inverse of a matrix can be numerically unstable for matrices
-that are close to singular.</p>
-<p>Consider using other techniques such as LU decomposition or
-pseudo-inverses for better stability.</p>
 </div>
 </section>
 </section>
@@ -398,23 +399,23 @@ pseudo-inverses for better stability.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="det.html">
+          <a class="next-page" href="../types/types.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.linalg.det</div>
+                <div class="title">lucid.types</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../tensor/operations/gfunc/diag.html">
+          <a class="prev-page" href="cholesky.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.diag</div>
+                <div class="title">lucid.linalg.cholesky</div>
                 
               </div>
             </a>
@@ -448,8 +449,8 @@ pseudo-inverses for better stability.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.linalg.inv</a><ul>
-<li><a class="reference internal" href="#lucid.linalg.inv"><code class="docutils literal notranslate"><span class="pre">inv()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.linalg.norm</a><ul>
+<li><a class="reference internal" href="#lucid.linalg.norm"><code class="docutils literal notranslate"><span class="pre">norm()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
