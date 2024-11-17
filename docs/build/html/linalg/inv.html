@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.types" href="../types/types.html" /><link rel="prev" title="lucid.matmul" href="../tensor/operations/bfunc/matmul.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.types" href="../types/types.html" /><link rel="prev" title="lucid.diag" href="../tensor/operations/gfunc/diag.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/inv.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
@@ -179,7 +179,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -237,6 +237,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../tensor/operations/bfunc/dot.html">lucid.dot</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../tensor/operations/bfunc/inner.html">lucid.inner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../tensor/operations/bfunc/matmul.html">lucid.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tensor/operations/gfunc/zeros.html">lucid.zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tensor/operations/gfunc/zeros_like.html">lucid.zeros_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tensor/operations/gfunc/ones.html">lucid.ones</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tensor/operations/gfunc/ones_like.html">ones_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tensor/operations/gfunc/eye.html">lucid.eye</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tensor/operations/gfunc/diag.html">lucid.diag</a></li>
 </ul>
 </li>
 </ul>
@@ -281,7 +287,7 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
@@ -289,6 +295,100 @@
         <article role="main" id="furo-main-content">
           <section id="lucid-linalg-inv">
 <h1>lucid.linalg.inv<a class="headerlink" href="#lucid-linalg-inv" title="Link to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="lucid.linalg.inv">
+<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">inv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../tensor/Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../tensor/Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.linalg.inv" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The <cite>inv</cite> function computes the inverse of a square matrix.</p>
+<section id="function-signature">
+<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">inv</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the inverse of a matrix.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_func</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><dl class="simple">
+<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor, which must be a square matrix (same number of rows and columns).</p>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="returns">
+<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><dl class="simple">
+<dt><strong>Tensor</strong>:</dt><dd><p>A tensor representing the inverse of the input matrix.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="forward-calculation">
+<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
+<p>The forward calculation for <cite>inv</cite> is based on the mathematical inverse of a matrix:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathbf{A}^{-1} \cdot \mathbf{A} = \mathbf{I}\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> is the input matrix, and <span class="math notranslate nohighlight">\(\mathbf{I}\)</span> is the identity matrix.</p>
+</section>
+<section id="backward-gradient-calculation">
+<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
+<p>For a tensor mathbf{A} involved in the <cite>inv</cite> operation,
+the gradient of the inverse with respect to the input is computed as:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\frac{\partial \mathbf{A}^{-1}}{\partial \mathbf{A}} =
+-\mathbf{A}^{-1} \cdot \frac{\partial \mathbf{A}}{\partial \mathbf{A}} \cdot \mathbf{A}^{-1}\]</div>
+</div>
+<p>This result uses the property of the matrix inverse and chain rule
+to propagate gradients during backpropagation.</p>
+</section>
+<section id="raises">
+<h2>Raises<a class="headerlink" href="#raises" title="Link to this heading">¶</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<ul class="simple">
+<li><p><strong>ValueError</strong>: If the input tensor is not a square matrix.</p></li>
+<li><p><strong>LinAlgError</strong>: If the matrix is singular and cannot be inverted.</p></li>
+</ul>
+</div>
+</section>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">inv_a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">inv_a</span><span class="p">)</span>
+<span class="go">Tensor([[-2.  1. ]</span>
+<span class="go">        [ 1.5 -0.5]])</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>The input tensor must have two dimensions and be square, i.e., <cite>a.shape[0] == a.shape[1]</cite>.</p></li>
+<li><p>This function uses efficient numerical methods to compute the
+inverse but may raise an error if the matrix is poorly conditioned or singular.</p></li>
+</ul>
+</div>
+</section>
+<section id="admonition">
+<h2>Admonition<a class="headerlink" href="#admonition" title="Link to this heading">¶</a></h2>
+<div class="warning admonition">
+<p class="admonition-title">Use with Caution</p>
+<p>Computing the inverse of a matrix can be numerically unstable for matrices
+that are close to singular.</p>
+<p>Consider using other techniques such as LU decomposition or
+pseudo-inverses for better stability.</p>
+</div>
+</section>
 </section>
 
         </article>
@@ -305,14 +405,14 @@
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../tensor/operations/bfunc/matmul.html">
+          <a class="prev-page" href="../tensor/operations/gfunc/diag.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.matmul</div>
+                <div class="title">lucid.diag</div>
                 
               </div>
             </a>
@@ -334,8 +434,35 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">lucid.linalg.inv</a><ul>
+<li><a class="reference internal" href="#lucid.linalg.inv"><code class="docutils literal notranslate"><span class="pre">inv()</span></code></a></li>
+<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#returns">Returns</a></li>
+<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
+<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li><a class="reference internal" href="#raises">Raises</a></li>
+<li><a class="reference internal" href="#example">Example</a></li>
+<li><a class="reference internal" href="#admonition">Admonition</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
@@ -344,5 +471,6 @@
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>

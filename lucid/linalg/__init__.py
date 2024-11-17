@@ -9,7 +9,6 @@ from lucid.linalg import _func
 
 
 def inv(a: Tensor) -> Tensor:
-    """Compute the inverse of a matrix."""
     return _func.inv(a)
 
 
