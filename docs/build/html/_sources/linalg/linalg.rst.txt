@@ -1,5 +1,5 @@
-Linear Algebra Package
-=======================
+lucid.linalg
+============
 
 The `lucid.linalg` package provides a collection of essential linear algebra utilities, 
 designed to seamlessly integrate with the `lucid` library's `Tensor` objects. 
