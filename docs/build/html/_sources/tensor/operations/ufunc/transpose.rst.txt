@@ -1,6 +1,8 @@
 lucid.transpose
 ===============
 
+.. autofunction:: lucid.transpose
+
 The `transpose` function performs a permutation of the dimensions of the input tensor.
 If the axes are not specified, it reverses the dimensions.
 
@@ -46,7 +48,8 @@ the transpose of the gradient with respect to the output tensor **out**:
 
 .. math::
 
-    \frac{\partial \mathbf{a}_i}{\partial \mathbf{out}_j} = \frac{\partial \mathbf{out}_i}{\partial \mathbf{a}_j}
+    \frac{\partial \mathbf{a}_i}{\partial \mathbf{out}_j} = 
+    \frac{\partial \mathbf{out}_i}{\partial \mathbf{a}_j}
 
 This means that the gradient with respect to the input tensor is 
 the transposed gradient of the output tensor.
