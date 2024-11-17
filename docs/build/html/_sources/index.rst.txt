@@ -17,7 +17,7 @@ Lumeruco's Comprehensive Interface for Deep Learning
    
    tensor/tensor.rst
 
-   Operations <tensor/operations/index.rst>
+   Tensor Operations <tensor/operations/index.rst>
 
 .. toctree::
    :maxdepth: 2
@@ -26,7 +26,7 @@ Lumeruco's Comprehensive Interface for Deep Learning
 
    linalg/linalg.rst
 
-   Operations <linalg/operations/index.rst>
+   Linalg Operations <linalg/operations/index.rst>
 
 .. toctree::
    :maxdepth: 1
