@@ -95,49 +95,40 @@ def tanh(a: Tensor) -> Tensor:
 
 
 def clip(a: Tensor, min_value: _Scalar, max_value: _Scalar) -> Tensor:
-    """Clips the values of the tensor to a specified range element-wise."""
     return ufunc.clip(a, min_value, max_value)
 
 
 def abs(a: Tensor) -> Tensor:
-    """Element-wise absolute value."""
     return ufunc.abs(a)
 
 
 def sign(a: Tensor) -> Tensor:
-    """Element-wise sign function."""
     return ufunc.sign(a)
 
 
 def reciprocal(a: Tensor) -> Tensor:
-    """Element-wise reciprocal."""
     return ufunc.reciprocal(a)
 
 
 def square(a: Tensor) -> Tensor:
-    """Element-wise square."""
     return ufunc.square(a)
 
 
 def cube(a: Tensor) -> Tensor:
-    """Element-wise cube."""
     return ufunc.cube(a)
 
 
 def transpose(a: Tensor, axes: list[int] | None = None) -> Tensor:
-    """Transpose over axes."""
     return ufunc.transpose(a, axes)
 
 
 def sum(
     a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> Tensor:
-    """Sum along the specified axis."""
     return ufunc.sum(a, axis, keepdims)
 
 
 def trace(a: Tensor) -> Tensor:
-    """Trace operation."""
     return ufunc.trace(a)
 
 
@@ -150,8 +141,6 @@ def mean(
 def var(
     a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> Tensor:
-    """Compute the variance along the specified axis; if `axis=None`,
-    variance of the entire tensor is returned."""
     return ufunc.var(a, axis, keepdims)
 
 
@@ -161,7 +150,6 @@ def zeros(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    """Create a zero-tensor with the specified shape."""
     return gfunc.zeros(shape, dtype, requires_grad, keep_grad)
 
 
@@ -171,7 +159,6 @@ def zeros_like(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    """Create a zero-tensor of shape same with the given tensor."""
     return zeros_like(a, dtype, requires_grad, keep_grad)
 
 
@@ -181,7 +168,6 @@ def ones(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    """Create an one-tensor with the specified shape."""
     return gfunc.ones(shape, dtype, requires_grad, keep_grad)
 
 
@@ -191,7 +177,6 @@ def ones_like(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    """Create an one-tensor of shape same with the given tensor."""
     return gfunc.ones_like(a, dtype, requires_grad, keep_grad)
 
 
@@ -203,7 +188,6 @@ def eye(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    """Create an identical matrix of shape `(N, M)`."""
     return gfunc.eye(N, M, k, dtype, requires_grad, keep_grad)
 
 
@@ -214,7 +198,6 @@ def diag(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    """Create a diagonal matrix from the given vector."""
     return gfunc.diag(v, k, dtype, requires_grad, keep_grad)
 
 

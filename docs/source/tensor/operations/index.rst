@@ -17,6 +17,12 @@ Tensor Operations
    ufunc/sinh.rst
    ufunc/cosh.rst
    ufunc/tanh.rst
+   ufunc/clip.rst
+   ufunc/abs.rst
+   ufunc/sign.rst
+   ufunc/reciprocal.rst
+   ufunc/square.rst
+   ufunc/cube.rst
 
 .. toctree::
    :maxdepth: 1
