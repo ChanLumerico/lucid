@@ -36,3 +36,5 @@ Lumeruco's Comprehensive Interface for Deep Learning
    :hidden:
 
    others/types.rst
+   others/no_grad.rst
+   others/grad_enabled.rst
