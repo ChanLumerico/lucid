@@ -1,6 +1,8 @@
 lucid.var
 =========
 
+.. autofunction:: lucid.var
+
 The `var` function computes the variance of the elements in 
 the input tensor along the specified axis or axes.
 

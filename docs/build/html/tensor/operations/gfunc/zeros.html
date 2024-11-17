@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.sub" href="sub.html" /><link rel="prev" title="lucid.var" href="../ufunc/var.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/operations/bfunc/add.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.linalg.inv" href="../../../linalg/inv.html" /><link rel="prev" title="lucid.matmul" href="../bfunc/matmul.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/operations/gfunc/zeros.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.add - Lucid 0.10 documentation</title>
+        <title>lucid.zeros - Lucid 0.10 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -227,17 +227,17 @@
 <li class="toctree-l2"><a class="reference internal" href="../ufunc/trace.html">lucid.trace</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../ufunc/mean.html">lucid.mean</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../ufunc/var.html">lucid.var</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.add</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sub.html">lucid.sub</a></li>
-<li class="toctree-l2"><a class="reference internal" href="mul.html">lucid.mul</a></li>
-<li class="toctree-l2"><a class="reference internal" href="div.html">lucid.div</a></li>
-<li class="toctree-l2"><a class="reference internal" href="minimum.html">lucid.minimum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="maximum.html">lucid.maximum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="power.html">lucid.power</a></li>
-<li class="toctree-l2"><a class="reference internal" href="dot.html">lucid.dot</a></li>
-<li class="toctree-l2"><a class="reference internal" href="inner.html">lucid.inner</a></li>
-<li class="toctree-l2"><a class="reference internal" href="matmul.html">lucid.matmul</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../gfunc/zeros.html">lucid.zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/add.html">lucid.add</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/sub.html">lucid.sub</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/mul.html">lucid.mul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/div.html">lucid.div</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/minimum.html">lucid.minimum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/maximum.html">lucid.maximum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/power.html">lucid.power</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/dot.html">lucid.dot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/inner.html">lucid.inner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../bfunc/matmul.html">lucid.matmul</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.zeros</a></li>
 </ul>
 </li>
 </ul>
@@ -268,7 +268,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/tensor/operations/bfunc/add.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/tensor/operations/gfunc/zeros.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -288,79 +288,87 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-add">
-<h1>lucid.add<a class="headerlink" href="#lucid-add" title="Link to this heading">¶</a></h1>
+          <section id="lucid-zeros">
+<h1>lucid.zeros<a class="headerlink" href="#lucid-zeros" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.add">
-<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.add" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.zeros">
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">zeros</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">shape:</span> <span class="pre">list[int]</span> <span class="pre">|</span> <span class="pre">tuple[int],</span> <span class="pre">dtype:</span> <span class="pre">~typing.Any</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'numpy.float32'&gt;,</span> <span class="pre">requires_grad:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False,</span> <span class="pre">keep_grad:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.zeros" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>add</cite> function performs element-wise addition between two <cite>Tensor</cite> objects.
-It returns a new <cite>Tensor</cite> as the sum of the inputs, with support for gradient
-calculation during backpropagation.</p>
+<p>The <cite>zeros</cite> function creates a tensor filled with zeros of the specified shape and data type.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">zeros</span><span class="p">(</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="n">_ShapeLike</span><span class="p">,</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+    <span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">keep_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>a</strong> (<em>Tensor</em>): The first tensor in the addition operation.</p></li>
-<li><p><strong>b</strong> (<em>Tensor</em>): The second tensor in the addition operation.</p></li>
+<li><dl class="simple">
+<dt><strong>shape</strong> (<em>_ShapeLike</em>):</dt><dd><p>The shape of the output tensor. Can be a list or tuple of integers.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>dtype</strong> (<em>Any</em>, optional):</dt><dd><p>The data type of the elements in the tensor. Defaults to <cite>np.float32</cite>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>requires_grad</strong> (<em>bool</em>, optional):</dt><dd><p>If <cite>True</cite>, the resulting tensor will be part of the computation graph and
+capable of tracking gradients. Defaults to <cite>False</cite>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>keep_grad</strong> (<em>bool</em>, optional):</dt><dd><p>If <cite>True</cite>, the gradient history will be preserved even if the tensor does not
+require gradients. Defaults to <cite>False</cite>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> representing the element-wise sum of <cite>a</cite> and <cite>b</cite>.
-If either <cite>a</cite> or <cite>b</cite> requires gradients, the resulting tensor will also require
-gradients.</p>
+<dt><strong>Tensor</strong>:</dt><dd><p>A tensor filled with zeros, having the specified shape and data type.</p>
 </dd>
 </dl>
 </li>
 </ul>
 </section>
-<section id="forward-calculation">
-<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward calculation for the addition operation is straightforward:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out} = a + b\]</div>
-</div>
-<p>where <span class="math notranslate nohighlight">\(a\)</span> and <span class="math notranslate nohighlight">\(b\)</span> are the data contained in the tensors <cite>a</cite> and <cite>b</cite>,
-respectively.</p>
-</section>
-<section id="backward-gradient-calculation">
-<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For each tensor <cite>a</cite> and <cite>b</cite> involved in the addition, the gradient with respect
-to the output (<cite>out</cite>) is computed as:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\frac{\partial \text{out}}{\partial a} = 1, \quad \frac{\partial \text{out}}{\partial b} = 1\]</div>
-</div>
-</section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Using <cite>add</cite> to sum two tensors:</p>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([5.0, 7.0, 9.0], grad=None)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">z</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<span class="go">Tensor([[0. 0. 0.]</span>
+<span class="go">        [0. 0. 0.]])</span>
 </pre></div>
 </div>
-<p>After calling <cite>backward()</cite> on <cite>out</cite>, gradients for <cite>a</cite> and <cite>b</cite> will be
-accumulated based on the backpropagation rules:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[1.0, 1.0, 1.0]</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[1.0, 1.0, 1.0]</span>
+<p>The <cite>zeros</cite> function also allows specifying <cite>requires_grad</cite>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">z</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">)</span>
+<span class="go">True</span>
 </pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>This function is often used for initialization purposes in neural
+networks and other numerical applications.</p></li>
+<li><p>The <cite>requires_grad</cite> parameter is useful for differentiable operations
+in computation graphs.</p></li>
+<li><p>If <cite>keep_grad</cite> is set to <cite>True</cite>, the tensor will retain its gradient
+history even if <cite>requires_grad</cite> is <cite>False</cite>.</p></li>
+</ul>
 </div>
 </section>
 </section>
@@ -370,23 +378,23 @@ accumulated based on the backpropagation rules:</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="sub.html">
+          <a class="next-page" href="../../../linalg/inv.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.sub</div>
+                <div class="title">lucid.linalg.inv</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../ufunc/var.html">
+          <a class="prev-page" href="../bfunc/matmul.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.var</div>
+                <div class="title">lucid.matmul</div>
                 
               </div>
             </a>
@@ -420,14 +428,12 @@ accumulated based on the backpropagation rules:</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.add</a><ul>
-<li><a class="reference internal" href="#lucid.add"><code class="docutils literal notranslate"><span class="pre">add()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.zeros</a><ul>
+<li><a class="reference internal" href="#lucid.zeros"><code class="docutils literal notranslate"><span class="pre">zeros()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
-<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
-<li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#example">Example</a></li>
 </ul>
 </li>
 </ul>
@@ -443,6 +449,5 @@ accumulated based on the backpropagation rules:</p>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>

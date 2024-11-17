@@ -43,3 +43,9 @@ Tensor Operations
    bfunc/dot.rst
    bfunc/inner.rst
    bfunc/matmul.rst
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Tensor Generating Functions
+
+   gfunc/zeros.rst
