@@ -25,3 +25,10 @@ Lumeruco's Comprehensive Interface for Deep Learning
    :hidden:
 
    linalg/inv.rst
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Types
+   :hidden:
+
+   types/types.rst
