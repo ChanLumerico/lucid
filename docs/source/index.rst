@@ -31,6 +31,15 @@ Lumeruco's Comprehensive Interface for Deep Learning
    Linalg Operations <linalg/operations/index.rst>
 
 .. toctree::
+   :maxdepth: 2
+   :caption: Random
+   :hidden:
+
+   random/random.rst
+
+   RNG Functions <random/functions/index.rst>
+
+.. toctree::
    :maxdepth: 1
    :caption: Others
    :hidden:
