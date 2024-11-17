@@ -23,6 +23,7 @@ Tensor Operations
    ufunc/reciprocal.rst
    ufunc/square.rst
    ufunc/cube.rst
+   ufunc/transpose.rst
 
 .. toctree::
    :maxdepth: 1

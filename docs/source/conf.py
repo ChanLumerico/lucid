@@ -22,6 +22,7 @@ release = "0.10"
 html_baseurl = "https://chanlumerico.github.io/lucid/"
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx_autodoc_typehints",
     "sphinx.ext.githubpages",
 ]
 

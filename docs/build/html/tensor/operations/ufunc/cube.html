@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.add" href="../bfunc/add.html" /><link rel="prev" title="lucid.square" href="square.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.transpose" href="transpose.html" /><link rel="prev" title="lucid.square" href="square.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/operations/ufunc/cube.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
@@ -222,6 +222,7 @@
 <li class="toctree-l2"><a class="reference internal" href="reciprocal.html">lucid.reciprocal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="square.html">lucid.square</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.cube</a></li>
+<li class="toctree-l2"><a class="reference internal" href="transpose.html">lucid.transpose</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../bfunc/add.html">lucid.add</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../bfunc/sub.html">lucid.sub</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../bfunc/mul.html">lucid.mul</a></li>
@@ -238,6 +239,10 @@
 <p class="caption" role="heading"><span class="caption-text">Linear Algebra</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../linalg/inv.html">lucid.linalg.inv</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Types</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../types/types.html">lucid.types</a></li>
 </ul>
 
 </div>
@@ -282,8 +287,13 @@
 <h1>lucid.cube<a class="headerlink" href="#lucid-cube" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="lucid.cube">
-<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">cube</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.cube" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">cube</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.cube" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="../../Tensor.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
 
 <p>The <cite>cube</cite> function computes the element-wise cube of each element in the input tensor.</p>
 <section id="function-signature">
@@ -341,12 +351,12 @@ If <strong>a</strong> requires gradients, the resulting tensor will also require
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="../bfunc/add.html">
+          <a class="next-page" href="transpose.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.add</div>
+                <div class="title">lucid.transpose</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
