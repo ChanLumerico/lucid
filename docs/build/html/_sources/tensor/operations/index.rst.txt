@@ -26,6 +26,8 @@ Tensor Operations
    ufunc/transpose.rst
    ufunc/sum.rst
    ufunc/trace.rst
+   ufunc/mean.rst
+   ufunc/var.rst
 
 .. toctree::
    :maxdepth: 1
