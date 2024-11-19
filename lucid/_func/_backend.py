@@ -44,6 +44,52 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     return reshaped_grad
 
 
+# TODO: Test this generalized decorator factory
+def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable:
+
+    def decorator(func: callable) -> callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> tuple[Tensor, ...]:
+            tensors: list[Tensor] = []
+            requires_grad = False
+
+            for arg in args[:n_in]:
+                tensor = _check_is_tensor(arg)
+                tensors.append(tensor)
+                requires_grad = requires_grad or tensor.requires_grad
+
+            if len(tensors) != n_in:
+                return ValueError(f"Number of input tensors foes not match.")
+
+            new_args = (*tensors, *args[n_in:])
+            results, compute_grad = func(*new_args, **kwargs)
+
+            if len(results) != n_ret:
+                return ValueError(f"Number of returned tensors does not match.")
+
+            for result in results:
+                result.requires_grad = requires_grad and has_gradient
+
+            if not lucid.grad_enabled():
+                return results
+
+            def _backward_op() -> None:
+                grads: tuple[_NumPyArray] = compute_grad()
+                for i in range(n_in):
+                    new_grad = _match_grad_shape(tensors[i].data, grads[i])
+                    _set_tensor_grad(tensor[i], new_grad)
+
+            for result in results:
+                result._backward_op = _backward_op
+                result._prev = tensors
+
+            return results
+
+        return wrapper
+
+    return decorator
+
+
 def create_bfunc_op(has_gradient: bool = True) -> callable:
 
     def decorator(func: callable) -> callable:

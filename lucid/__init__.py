@@ -1,7 +1,16 @@
 """
-lucid
-=====
-Lumeruco's Comprehensive Interface for Deep Learning
+# `Lucid `
+
+**Lucid** is an educational deep learning framework developed to help users understand 
+the underlying mechanics of deep learning models and tensor operations. 
+
+It is designed to provide a simple yet powerful environment to experiment with neural networks, 
+optimization, and backpropagation using only `NumPy`. 
+
+Lucid is ideal for those who want to learn about the inner workings of deep learning 
+algorithms and operations without the complexity of high-level frameworks.
+
+[📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
 """
 
 from contextlib import contextmanager
