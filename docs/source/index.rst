@@ -13,12 +13,10 @@ Lumeruco's Comprehensive Interface for Deep Learning
    :caption: Tensor
    :hidden:
 
-   tensor/Tensor.rst
-   
+   tensor/Tensor_.rst
    tensor/tensor.rst
 
    Tensor Operations <tensor/operations/index.rst>
-
    Tensor Utilites <tensor/utilities/index.rst>
 
 .. toctree::
