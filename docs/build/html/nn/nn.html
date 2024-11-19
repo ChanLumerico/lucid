@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="prev" title="lucid.newaxis" href="../others/newaxis.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.types" href="../others/types.html" /><link rel="prev" title="lucid.random.randn" href="../random/functions/randn.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/nn.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
@@ -268,7 +268,17 @@
 <p class="caption" role="heading"><span class="caption-text">Random</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../random/random.html">lucid.random</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../random/functions/index.html">RNG Functions</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../random/functions/index.html">RNG Functions</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of RNG Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../random/functions/seed.html">lucid.random.seed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../random/functions/rand.html">lucid.random.rand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../random/functions/randint.html">lucid.random.randint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../random/functions/randn.html">lucid.random.randn</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Neural Networks</span></p>
+<ul class="current">
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">lucid.nn</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Others</span></p>
 <ul>
@@ -276,10 +286,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../others/no_grad.html">lucid.no_grad</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../others/grad_enabled.html">lucid.grad_enabled</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../others/newaxis.html">lucid.newaxis</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Neural Networks</span></p>
-<ul class="current">
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">lucid.nn</a></li>
 </ul>
 
 </div>
@@ -338,7 +344,7 @@ tensor operations, gradient computation, and more.</p></li>
 </section>
 <section id="key-components">
 <h2>Key Components<a class="headerlink" href="#key-components" title="Link to this heading">¶</a></h2>
-<p>### <cite>Parameter</cite></p>
+<p class="rubric"><cite>Parameter</cite></p>
 <p>A <cite>Parameter</cite> is a wrapper for tensors that require gradient computation.
 It is used to define weights, biases, or any other trainable components in a neural network.</p>
 <div class="admonition important">
@@ -363,7 +369,7 @@ Use it wisely for variables that require gradients.</p>
 <p>Ensure all trainable parameters are properly registered under the parent <cite>Module</cite>.
 Failure to do so might result in missed gradients during backpropagation.</p>
 </div>
-<p>### <cite>Module</cite></p>
+<p class="rubric"><cite>Module</cite></p>
 <p>The <cite>Module</cite> class serves as the base class for all neural network models.
 It provides functionality for organizing parameters, defining forward passes, and composing layers.</p>
 <div class="admonition tip">
@@ -466,15 +472,23 @@ specific research or production needs.</p>
       <footer>
         
         <div class="related-pages">
-          
-          <a class="prev-page" href="../others/newaxis.html">
+          <a class="next-page" href="../others/types.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">lucid.types</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../random/functions/randn.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.newaxis</div>
+                <div class="title">lucid.random.randn</div>
                 
               </div>
             </a>

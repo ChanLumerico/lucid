@@ -39,6 +39,13 @@ Lumeruco's Comprehensive Interface for Deep Learning
 
 .. toctree::
    :maxdepth: 1
+   :caption: Neural Networks
+   :hidden:
+
+   nn/nn.rst
+
+.. toctree::
+   :maxdepth: 1
    :caption: Others
    :hidden:
 
@@ -46,10 +53,3 @@ Lumeruco's Comprehensive Interface for Deep Learning
    others/no_grad.rst
    others/grad_enabled.rst
    others/newaxis.rst
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Neural Networks
-   :hidden:
-
-   nn/nn.rst

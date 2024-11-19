@@ -179,7 +179,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -268,7 +268,17 @@
 <p class="caption" role="heading"><span class="caption-text">Random</span></p>
 <ul class="current">
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">lucid.random</a></li>
-<li class="toctree-l1"><a class="reference internal" href="functions/index.html">RNG Functions</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="functions/index.html">RNG Functions</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of RNG Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="functions/seed.html">lucid.random.seed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions/rand.html">lucid.random.rand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions/randint.html">lucid.random.randint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions/randn.html">lucid.random.randn</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Neural Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../nn/nn.html">lucid.nn</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Others</span></p>
 <ul>
@@ -310,7 +320,7 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
@@ -318,6 +328,95 @@
         <article role="main" id="furo-main-content">
           <section id="lucid-random">
 <h1>lucid.random<a class="headerlink" href="#lucid-random" title="Link to this heading">¶</a></h1>
+<p>The <cite>lucid.random</cite> package provides utilities for generating random tensors,
+initializing parameters, and ensuring reproducibility in deep learning experiments.</p>
+<p>These tools are essential for experiments where randomness plays a critical role,
+such as weight initialization and data augmentation.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<p>This package offers the following functionalities:</p>
+<ul class="simple">
+<li><p><strong>Random Tensor Generation</strong>: Create tensors with random values following specific distributions.</p></li>
+<li><p><strong>Seed Management</strong>: Ensure reproducibility by controlling the random seed.</p></li>
+<li><p><strong>Specialized Random Sampling</strong>: Generate samples for various applications,
+such as noise addition or probabilistic modeling.</p></li>
+</ul>
+</section>
+<section id="key-features">
+<h2>Key Features<a class="headerlink" href="#key-features" title="Link to this heading">¶</a></h2>
+<p class="rubric"><cite>Random Tensor Generation</cite></p>
+<p>The package supports a variety of random tensor generation methods,
+including uniform, normal, and custom distributions.</p>
+<div class="admonition-example admonition">
+<p class="admonition-title">Example</p>
+<p>Generate random tensors using the <cite>lucid.random</cite> package:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">random_tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">random_tensor</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This generates a 3x3 tensor with random values drawn from a standard normal distribution.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Use <cite>rand</cite> for uniform distributions and <cite>randint</cite> for discrete random values.</p>
+</div>
+<p class="rubric"><cite>Seed Management</cite></p>
+<p>To ensure reproducibility across runs, you can set a global random seed.</p>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>Setting a random seed is critical when comparing results from different runs of the same experiment.</p>
+</div>
+<div class="admonition-example admonition">
+<p class="admonition-title">Example</p>
+<p>Set a random seed and generate consistent random values:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">consistent_tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">consistent_tensor</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Subsequent runs with the same seed will produce identical outputs.</p>
+</div>
+<div class="admonition caution">
+<p class="admonition-title">Caution</p>
+<p>Remember to set the seed at the beginning of your script to ensure reproducibility
+across the entire program.</p>
+</div>
+<p class="rubric"><cite>Specialized Random Sampling</cite></p>
+<p>The package also includes utilities for generating random integers, sampling with replacement,
+and creating tensors for probabilistic tasks.</p>
+<div class="admonition-example admonition">
+<p class="admonition-title">Example</p>
+<p>Generate random integers or perform sampling:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">random_integers</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">random_integers</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This creates a 3x3 tensor with random integers between 0 and 10.</p>
+</div>
+</section>
+<section id="integration-with-lucid">
+<h2>Integration with <cite>lucid</cite><a class="headerlink" href="#integration-with-lucid" title="Link to this heading">¶</a></h2>
+<p>The <cite>lucid.random</cite> package is fully compatible with other parts of the <cite>lucid</cite> library.
+Random tensors generated here can be directly used in neural network layers,
+data preprocessing pipelines, or other computational tasks.</p>
+<div class="admonition attention">
+<p class="admonition-title">Attention</p>
+<p>Ensure that your random tensors are correctly shaped and scaled when used as
+inputs for models or algorithms. Improper initialization may lead to unexpected behavior.</p>
+</div>
+</section>
+<section id="conclusion">
+<h2>Conclusion<a class="headerlink" href="#conclusion" title="Link to this heading">¶</a></h2>
+<p>The <cite>lucid.random</cite> package is a versatile utility for generating random data and ensuring
+reproducibility in deep learning workflows. Its seamless integration with the <cite>lucid</cite>
+library makes it a valuable tool for model development and experimentation.</p>
+<div class="admonition-learn-more admonition">
+<p class="admonition-title">Learn More</p>
+<p>Explore additional functions in the <cite>lucid.random</cite> module by referring to the source
+code or interactive documentation for further details.</p>
+</div>
+</section>
 </section>
 
         </article>
@@ -363,8 +462,30 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">lucid.random</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#key-features">Key Features</a></li>
+<li><a class="reference internal" href="#integration-with-lucid">Integration with <cite>lucid</cite></a></li>
+<li><a class="reference internal" href="#conclusion">Conclusion</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>

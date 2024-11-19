@@ -21,7 +21,7 @@ The `lucid.nn` package is designed to facilitate the development of neural netwo
 Key Components
 --------------
 
-### `Parameter`
+.. rubric:: `Parameter`
 
 A `Parameter` is a wrapper for tensors that require gradient computation. 
 It is used to define weights, biases, or any other trainable components in a neural network.
@@ -50,7 +50,7 @@ It is used to define weights, biases, or any other trainable components in a neu
     Ensure all trainable parameters are properly registered under the parent `Module`. 
     Failure to do so might result in missed gradients during backpropagation.
 
-### `Module`
+.. rubric:: `Module`
 
 The `Module` class serves as the base class for all neural network models. 
 It provides functionality for organizing parameters, defining forward passes, and composing layers.

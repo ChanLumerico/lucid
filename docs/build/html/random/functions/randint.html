@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.random.seed" href="seed.html" /><link rel="prev" title="lucid.random" href="../random.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/random/functions/index.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.random.randn" href="randn.html" /><link rel="prev" title="lucid.random.rand" href="rand.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/random/functions/randint.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>Random Number Generations - Lucid 0.15 documentation</title>
+        <title>lucid.random.randint - Lucid 0.15 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -179,7 +179,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -268,10 +268,10 @@
 <p class="caption" role="heading"><span class="caption-text">Random</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../random.html">lucid.random</a></li>
-<li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">RNG Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of RNG Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">RNG Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of RNG Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="seed.html">lucid.random.seed</a></li>
 <li class="toctree-l2"><a class="reference internal" href="rand.html">lucid.random.rand</a></li>
-<li class="toctree-l2"><a class="reference internal" href="randint.html">lucid.random.randint</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.random.randint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="randn.html">lucid.random.randn</a></li>
 </ul>
 </li>
@@ -306,7 +306,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/random/functions/index.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/random/functions/randint.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -320,22 +320,77 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="random-number-generations">
-<h1>Random Number Generations<a class="headerlink" href="#random-number-generations" title="Link to this heading">¶</a></h1>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="seed.html">lucid.random.seed</a></li>
-<li class="toctree-l1"><a class="reference internal" href="rand.html">lucid.random.rand</a></li>
-<li class="toctree-l1"><a class="reference internal" href="randint.html">lucid.random.randint</a></li>
-<li class="toctree-l1"><a class="reference internal" href="randn.html">lucid.random.randn</a></li>
+          <section id="lucid-random-randint">
+<h1>lucid.random.randint<a class="headerlink" href="#lucid-random-randint" title="Link to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="lucid.random.randint">
+<span class="sig-prename descclassname"><span class="pre">lucid.random.</span></span><span class="sig-name descname"><span class="pre">randint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">low</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">requires_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keep_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.random.randint" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The <cite>randint</cite> function generates a tensor of the specified shape,
+filled with random integer values from a specified range.</p>
+<section id="function-signature">
+<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">randint</span><span class="p">(</span>
+    <span class="n">low</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">high</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">_ShapeLike</span><span class="p">,</span>
+    <span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">keep_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+</pre></div>
+</div>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>low</strong> (<em>int</em>): The lowest integer (inclusive) in the range from which random
+values will be drawn.</p></li>
+<li><p><strong>high</strong> (<em>int</em>, optional): The highest integer (exclusive) in the range.
+If <cite>None</cite>, the random values will be drawn from the range <span class="math notranslate nohighlight">\([0, \text{low})\)</span>.</p></li>
+<li><p><strong>size</strong> (<em>int</em> or <em>ShapeLike</em>): The shape of the output tensor.</p></li>
+<li><p><strong>requires_grad</strong> (<em>bool</em>, optional): If <cite>True</cite>, the resulting tensor will track
+gradients for automatic differentiation. Defaults to <cite>False</cite>.</p></li>
+<li><p><strong>keep_grad</strong> (<em>bool</em>, optional): Determines whether gradient history should persist
+across multiple operations. Defaults to <cite>False</cite>.</p></li>
+</ul>
+</section>
+<section id="returns">
+<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Tensor</strong>: A tensor of shape <cite>size</cite> filled with random integers drawn from the specified range.</p></li>
+</ul>
+</section>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="go">Tensor([[9, 7, 3],</span>
+<span class="go">        [7, 8, 2]], grad=None)</span>
+</pre></div>
+</div>
+<p>By default, the generated tensor does not track gradients. Set <cite>requires_grad=True</cite> to enable gradient tracking:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>The random values are drawn from a discrete uniform distribution.</p></li>
+<li><p>Use <cite>lucid.random.seed</cite> to ensure reproducibility of random values.</p></li>
+<li><p>The gradient calculation for this operation is not defined because the output is discrete.</p></li>
 </ul>
 </div>
+</section>
 </section>
 
         </article>
@@ -343,23 +398,23 @@
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="seed.html">
+          <a class="next-page" href="randn.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.random.seed</div>
+                <div class="title">lucid.random.randn</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../random.html">
+          <a class="prev-page" href="rand.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.random</div>
+                <div class="title">lucid.random.rand</div>
                 
               </div>
             </a>
@@ -381,8 +436,31 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">lucid.random.randint</a><ul>
+<li><a class="reference internal" href="#lucid.random.randint"><code class="docutils literal notranslate"><span class="pre">randint()</span></code></a></li>
+<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#returns">Returns</a></li>
+<li><a class="reference internal" href="#example">Example</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
