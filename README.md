@@ -1,4 +1,4 @@
-# Lucid 
+# Lucid 💎
 
 **Lucid** is an educational deep learning framework developed to help users understand 
 the underlying mechanics of deep learning models and tensor operations. 
@@ -8,6 +8,8 @@ optimization, and backpropagation using only **`NumPy`**.
 
 Lucid is ideal for those who want to learn about the inner workings of deep learning 
 algorithms and operations without the complexity of high-level frameworks.
+
+*Latest version: **0.16***
 
 [📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
 

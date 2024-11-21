@@ -184,25 +184,23 @@ Notes
 -----
 
 .. note::
-   Lucid is built for learning and experimenting with deep learning concepts, 
-   allowing users to see how operations like backpropagation, optimization, 
-   and activation functions are implemented at a low level.
+   - Lucid is built for learning and experimenting with deep learning concepts, 
+     allowing users to see how operations like backpropagation, optimization, 
+     and activation functions are implemented at a low level.
 
-.. note::
-   Lucid is lightweight, with no external dependencies beyond NumPy, 
-   making it easy to install and use without complex setups or specialized hardware.
+   - Lucid is lightweight, with no external dependencies beyond NumPy, 
+     making it easy to install and use without complex setups or specialized hardware.
 
 Limitations
 -----------
 
 .. warning::
-   Lucid does not aim to provide the high-level functionalities of production-ready frameworks. 
-   Instead, it focuses on educational value and understanding how deep 
-   learning models are built from scratch.
+   - Lucid does not aim to provide the high-level functionalities of production-ready frameworks. 
+     Instead, it focuses on educational value and understanding how deep 
+     learning models are built from scratch.
 
-.. warning::
-   Performance optimizations that are available in specialized libraries may not be as 
-   efficient in Lucid, as it is not optimized for production workloads.
+   - Performance optimizations that are available in specialized libraries may not be as 
+     efficient in Lucid, as it is not optimized for production workloads.
 
 Conclusion
 ----------
@@ -216,5 +214,4 @@ For further information and usage details, refer to the documentation of specifi
 `lucid.nn` and `lucid.linalg`
 
 .. seealso::
-   `lucid.nn`
-   `lucid.linalg`
+   `lucid.nn`, `lucid.linalg`

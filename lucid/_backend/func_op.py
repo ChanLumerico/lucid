@@ -7,8 +7,11 @@ import lucid
 from lucid._tensor import Tensor
 from lucid.types import _NumPyArray, _ArrayOrScalar
 
-_ResultGradFuncPair = Tuple[Tensor, Callable[[None], Tuple[_NumPyArray, ...]]]
-_FuncOpReturnType = _ResultGradFuncPair | Tuple[_ResultGradFuncPair, ...]
+_GradFuncType = Callable[[None], _NumPyArray | Tuple[_NumPyArray, ...]]
+
+_ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
+
+_FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
 
 
 def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:
