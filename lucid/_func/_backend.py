@@ -1,11 +1,14 @@
 import functools
-from typing import Any
+from typing import Callable, Tuple
 
 import numpy as np
 
 import lucid
 from lucid._tensor import Tensor
 from lucid.types import _NumPyArray, _ArrayOrScalar
+
+_ResultGradFuncPair = Tuple[Tensor, Callable[[None], Tuple[_NumPyArray, ...]]]
+_FuncOpReturnType = _ResultGradFuncPair | Tuple[_ResultGradFuncPair, ...]
 
 
 def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:
@@ -44,10 +47,9 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     return reshaped_grad
 
 
-# TODO: Test this generalized decorator factory
 def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable:
 
-    def decorator(func: callable) -> callable:
+    def decorator(func: Callable[..., _FuncOpReturnType]) -> callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> tuple[Tensor, ...]:
             tensors: list[Tensor] = []
@@ -59,31 +61,35 @@ def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable
                 requires_grad = requires_grad or tensor.requires_grad
 
             if len(tensors) != n_in:
-                return ValueError(f"Number of input tensors foes not match.")
+                raise ValueError(f"Number of input tensors does not match.")
 
             new_args = (*tensors, *args[n_in:])
-            results, compute_grad = func(*new_args, **kwargs)
+            result_grad_func_pairs = func(*new_args, **kwargs)
 
-            if len(results) != n_ret:
-                return ValueError(f"Number of returned tensors does not match.")
+            if n_ret == 1:
+                result_grad_func_pairs = (result_grad_func_pairs,)
 
-            for result in results:
+            if len(result_grad_func_pairs) != n_ret:
+                raise ValueError(f"Number of returned tensors does not match.")
+
+            results = []
+            for result, compute_grad in result_grad_func_pairs:
                 result.requires_grad = requires_grad and has_gradient
+                results.append(result)
 
-            if not lucid.grad_enabled():
-                return results
+                def _backward_op(_func: callable = compute_grad) -> None:
+                    grads = _func()
+                    for tensor, grad in zip(tensors, grads):
+                        new_grad = _match_grad_shape(tensor.data, grad)
+                        _set_tensor_grad(tensor, new_grad)
 
-            def _backward_op() -> None:
-                grads: tuple[_NumPyArray] = compute_grad()
-                for i in range(n_in):
-                    new_grad = _match_grad_shape(tensors[i].data, grads[i])
-                    _set_tensor_grad(tensor[i], new_grad)
+                if not lucid.grad_enabled():
+                    continue
 
-            for result in results:
                 result._backward_op = _backward_op
                 result._prev = tensors
 
-            return results
+            return tuple(results) if n_ret > 1 else results[0]
 
         return wrapper
 
@@ -91,67 +97,8 @@ def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable
 
 
 def create_bfunc_op(has_gradient: bool = True) -> callable:
-
-    def decorator(func: callable) -> callable:
-        @functools.wraps(func)
-        def wrapper(self: Any, other: Any, *args, **kwargs) -> Tensor:
-            self = _check_is_tensor(self)
-            other = _check_is_tensor(other)
-
-            result, compute_grad = func(self, other, *args, **kwargs)
-            result.requires_grad = self.requires_grad or other.requires_grad
-
-            if not has_gradient:
-                result.requires_grad = False
-
-            if not lucid.grad_enabled():
-                return result
-
-            def _backward_op() -> None:
-                self_grad, other_grad = compute_grad()
-                self_grad = _match_grad_shape(self.data, self_grad)
-                other_grad = _match_grad_shape(other.data, other_grad)
-
-                _set_tensor_grad(self, self_grad)
-                _set_tensor_grad(other, other_grad)
-
-            result._backward_op = _backward_op
-            result._prev = [self, other]
-
-            return result
-
-        return wrapper
-
-    return decorator
+    return create_func_op(n_in=2, n_ret=1, has_gradient=has_gradient)
 
 
 def create_ufunc_op(has_gradient: bool = True) -> callable:
-
-    def decorator(func: callable) -> callable:
-        @functools.wraps(func)
-        def wrapper(self: Any, *args, **kwargs) -> Tensor:
-            self = _check_is_tensor(self)
-
-            result, compute_grad = func(self, *args, **kwargs)
-            result.requires_grad = self.requires_grad
-
-            if not has_gradient:
-                result.requires_grad = False
-
-            if not lucid.grad_enabled():
-                return result
-
-            def _backward_op() -> None:
-                self_grad = compute_grad()
-                self_grad = _match_grad_shape(self.data, self_grad)
-
-                _set_tensor_grad(self, self_grad)
-
-            result._backward_op = _backward_op
-            result._prev = [self]
-
-            return result
-
-        return wrapper
-
-    return decorator
+    return create_func_op(n_in=1, n_ret=1, has_gradient=has_gradient)
