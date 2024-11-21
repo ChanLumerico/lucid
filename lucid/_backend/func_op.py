@@ -52,34 +52,31 @@ def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable
     def decorator(func: Callable[..., _FuncOpReturnType]) -> callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> tuple[Tensor, ...]:
-            tensors: list[Tensor] = []
+            tensors: tuple[Tensor] = tuple()
             requires_grad = False
 
             for arg in args[:n_in]:
                 tensor = _check_is_tensor(arg)
-                tensors.append(tensor)
+                tensors += (tensor,)
                 requires_grad = requires_grad or tensor.requires_grad
 
-            if len(tensors) != n_in:
-                raise ValueError(f"Number of input tensors does not match.")
-
             new_args = (*tensors, *args[n_in:])
-            result_grad_func_pairs = func(*new_args, **kwargs)
+            func_return_pairs = func(*new_args, **kwargs)
 
             if n_ret == 1:
-                result_grad_func_pairs = (result_grad_func_pairs,)
+                func_return_pairs = (func_return_pairs,)
 
-            if len(result_grad_func_pairs) != n_ret:
-                raise ValueError(f"Number of returned tensors does not match.")
-
-            results = []
-            for result, compute_grad in result_grad_func_pairs:
+            results: tuple[Tensor] = tuple()
+            for result, compute_grad in func_return_pairs:
                 result.requires_grad = requires_grad and has_gradient
-                results.append(result)
+                results += (result,)
 
                 def _backward_op(_func: callable = compute_grad) -> None:
                     grads = _func()
-                    for tensor, grad in zip(tensors, grads):
+                    if n_in == 1:
+                        grads = (grads,)
+
+                    for tensor, grad in zip(tensors, grads, strict=True):
                         new_grad = _match_grad_shape(tensor.data, grad)
                         _set_tensor_grad(tensor, new_grad)
 
@@ -89,7 +86,7 @@ def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable
                 result._backward_op = _backward_op
                 result._prev = tensors
 
-            return tuple(results) if n_ret > 1 else results[0]
+            return results
 
         return wrapper
 

@@ -2,12 +2,12 @@ from typing import Optional
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid._func._backend import create_ufunc_op
-from lucid.types import _NumPyArray
+from lucid._backend import create_ufunc_op, _FuncOpReturnType
+from lucid.types import _NumPyArray, _Scalar
 
 
 @create_ufunc_op()
-def _pow(self: Tensor, exp: int | float) -> tuple[Tensor, callable]:
+def _pow(self: Tensor, exp: _Scalar) -> _FuncOpReturnType:
     result = Tensor(self.data**exp)
 
     def compute_grad() -> _NumPyArray:
@@ -17,7 +17,7 @@ def _pow(self: Tensor, exp: int | float) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def _neg(self: Tensor) -> tuple[Tensor, callable]:
+def _neg(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(-self.data)
 
     def compute_grad() -> _NumPyArray:
@@ -27,7 +27,7 @@ def _neg(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def exp(self: Tensor) -> tuple[Tensor, callable]:
+def exp(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.exp(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -37,7 +37,7 @@ def exp(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def log(self: Tensor) -> tuple[Tensor, callable]:
+def log(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.log(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -47,7 +47,7 @@ def log(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def sqrt(self: Tensor) -> tuple[Tensor, callable]:
+def sqrt(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.sqrt(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -57,7 +57,7 @@ def sqrt(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def sin(self: Tensor) -> tuple[Tensor, callable]:
+def sin(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.sin(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -67,7 +67,7 @@ def sin(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def cos(self: Tensor) -> tuple[Tensor, callable]:
+def cos(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.cos(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -77,7 +77,7 @@ def cos(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def tan(self: Tensor) -> tuple[Tensor, callable]:
+def tan(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.tan(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -117,7 +117,7 @@ def arctan(self: Tensor) -> Tensor:
 
 
 @create_ufunc_op()
-def sinh(self: Tensor) -> tuple[Tensor, callable]:
+def sinh(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.sinh(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -127,7 +127,7 @@ def sinh(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def cosh(self: Tensor) -> tuple[Tensor, callable]:
+def cosh(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.cosh(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -137,7 +137,7 @@ def cosh(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def tanh(self: Tensor) -> tuple[Tensor, callable]:
+def tanh(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.tanh(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -147,7 +147,7 @@ def tanh(self: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_ufunc_op()
-def clip(self: Tensor, min_value: float, max_value: float) -> tuple[Tensor, callable]:
+def clip(self: Tensor, min_value: float, max_value: float) -> _FuncOpReturnType:
     result = Tensor(np.clip(self.data, min_value, max_value))
 
     def compute_grad() -> _NumPyArray:
@@ -221,9 +221,7 @@ def _T(self: Tensor) -> Tensor:
 
 
 @create_ufunc_op()
-def transpose(
-    self: Tensor, axes: Optional[list[int]] = None
-) -> tuple[Tensor, callable]:
+def transpose(self: Tensor, axes: Optional[list[int]] = None) -> _FuncOpReturnType:
     if axes is None:
         axes = list(reversed(range(self.ndim)))
     result = Tensor(np.transpose(self.data, axes))
@@ -237,7 +235,7 @@ def transpose(
 @create_ufunc_op()
 def sum(
     self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
-) -> tuple[Tensor, callable]:
+) -> _FuncOpReturnType:
     result = Tensor(np.sum(self.data, axis=axis, keepdims=keepdims))
 
     def compute_grad() -> _NumPyArray:
@@ -254,7 +252,7 @@ def sum(
 
 
 @create_ufunc_op()
-def trace(self: Tensor) -> tuple[Tensor, callable]:
+def trace(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.trace(self.data))
 
     def compute_grad() -> _NumPyArray:
@@ -268,7 +266,7 @@ def trace(self: Tensor) -> tuple[Tensor, callable]:
 @create_ufunc_op()
 def mean(
     self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
-) -> tuple[Tensor, callable]:
+) -> _FuncOpReturnType:
     result = Tensor(np.mean(self.data, axis=axis, keepdims=keepdims))
 
     def compute_grad() -> _NumPyArray:
@@ -292,7 +290,7 @@ def mean(
 @create_ufunc_op()
 def var(
     self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
-) -> tuple[Tensor, callable]:
+) -> _FuncOpReturnType:
     result = Tensor(np.var(self.data, axis=axis, keepdims=keepdims))
 
     def compute_grad() -> _NumPyArray:

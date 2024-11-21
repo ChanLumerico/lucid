@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.linalg.eig" href="eig.html" /><link rel="prev" title="lucid.linalg.norm" href="norm.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/operations/cholesky.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.random" href="../../random/random.html" /><link rel="prev" title="lucid.linalg.cholesky" href="cholesky.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/operations/eig.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.linalg.cholesky - Lucid 0.15 documentation</title>
+        <title>lucid.linalg.eig - Lucid 0.15 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -261,8 +261,8 @@
 <li class="toctree-l2"><a class="reference internal" href="inv.html">lucid.linalg.inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="solve.html">lucid.linalg.solve</a></li>
 <li class="toctree-l2"><a class="reference internal" href="norm.html">lucid.linalg.norm</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.linalg.cholesky</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eig.html">lucid.linalg.eig</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cholesky.html">lucid.linalg.cholesky</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.linalg.eig</a></li>
 </ul>
 </li>
 </ul>
@@ -307,7 +307,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/linalg/operations/cholesky.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/linalg/operations/eig.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -327,17 +327,17 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-linalg-cholesky">
-<h1>lucid.linalg.cholesky<a class="headerlink" href="#lucid-linalg-cholesky" title="Link to this heading">¶</a></h1>
+          <section id="lucid-linalg-eig">
+<h1>lucid.linalg.eig<a class="headerlink" href="#lucid-linalg-eig" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.linalg.cholesky">
-<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">cholesky</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.linalg.cholesky" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.linalg.eig">
+<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">eig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.linalg.eig" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>cholesky</cite> function performs the Cholesky decomposition of a symmetric positive-definite matrix.</p>
+<p>The <cite>eig</cite> function computes the eigenvalues and eigenvectors of a square matrix.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">cholesky</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">eig</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">Tensor</span><span class="p">]</span>
 </pre></div>
 </div>
 </section>
@@ -345,7 +345,7 @@
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>A symmetric, positive-definite matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> to decompose.</p>
+<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor, which must be a square matrix (same number of rows and columns).</p>
 </dd>
 </dl>
 </li>
@@ -353,13 +353,13 @@
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
-<ul>
-<li><dl>
-<dt><strong>Tensor</strong>:</dt><dd><p>A lower triangular matrix <span class="math notranslate nohighlight">\(\mathbf{L}\)</span> such that:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\mathbf{A} = \mathbf{L} \mathbf{L}^\top\]</div>
-</div>
+<ul class="simple">
+<li><dl class="simple">
+<dt><strong>Tuple[Tensor, Tensor]</strong>: A tuple containing two tensors:</dt><dd><ul>
+<li><p>The first tensor contains the eigenvalues of the input matrix.</p></li>
+<li><p>The second tensor contains the eigenvectors of the input matrix,
+each column corresponding to an eigenvector.</p></li>
+</ul>
 </dd>
 </dl>
 </li>
@@ -367,52 +367,74 @@
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The Cholesky decomposition computes a lower triangular matrix <span class="math notranslate nohighlight">\(\mathbf{L}\)</span> such that:</p>
+<p>The forward calculation for <cite>eig</cite> computes the eigenvalues and eigenvectors of a square matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>.
+The eigenvalues <span class="math notranslate nohighlight">\(\lambda\)</span> and eigenvectors <span class="math notranslate nohighlight">\(\mathbf{v}\)</span> satisfy the equation:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{A} = \mathbf{L} \mathbf{L}^\top\]</div>
+\[\mathbf{A} \mathbf{v} = \lambda \mathbf{v}\]</div>
 </div>
-<p>Here, <span class="math notranslate nohighlight">\(\mathbf{L}^\top\)</span> is the transpose of the matrix <span class="math notranslate nohighlight">\(\mathbf{L}\)</span>.</p>
+<p>where <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> is the input matrix, <span class="math notranslate nohighlight">\(\mathbf{v}\)</span> is the eigenvector,
+and <span class="math notranslate nohighlight">\(\lambda\)</span> is the eigenvalue.</p>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>The gradient of the Cholesky decomposition involves differentiating the decomposition itself.
-For a positive-definite matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>, the gradient with respect to <span class="math notranslate nohighlight">\(\mathbf{L}\)</span>
-is computed using matrix calculus techniques.</p>
+<p>Let the eigenvalues of the input matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> be <span class="math notranslate nohighlight">\(\lambda_1, \lambda_2, \dots, \lambda_n\)</span>
+and the corresponding eigenvectors be <span class="math notranslate nohighlight">\(\mathbf{v}_1, \mathbf{v}_2, \dots, \mathbf{v}_n\)</span>.</p>
+<p>For a given eigenvalue <span class="math notranslate nohighlight">\(\lambda_i\)</span> and eigenvector <span class="math notranslate nohighlight">\(\mathbf{v}_i\)</span>, the gradients of
+the eigenvalue and eigenvector with respect to the input matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>
+can be computed using the following formulas:</p>
+<ol class="arabic">
+<li><p><strong>Gradient of the eigenvalue</strong> with respect to the input matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>:</p>
+<blockquote>
+<div><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\frac{\partial \lambda_i}{\partial \mathbf{A}} = \mathbf{v}_i \mathbf{v}_i^\top\]</div>
+</div>
+</div></blockquote>
+</li>
+<li><p><strong>Gradient of the eigenvector</strong> with respect to the input matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>:</p>
+<blockquote>
+<div><p>The gradient of the eigenvector <span class="math notranslate nohighlight">\(\mathbf{v}_i\)</span> with respect to the input matrix
+<span class="math notranslate nohighlight">\(\mathbf{A}\)</span> is more complex and involves a perturbation of the matrix around the eigenvector:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{A}}{\partial \mathbf{L}} =
-2 \cdot \mathbf{L} \cdot \frac{\partial \mathbf{L}}{\partial \mathbf{L}^\top}\]</div>
+\[\frac{\partial \mathbf{v}_i}{\partial \mathbf{A}} =
+\mathbf{v}_i (\mathbf{v}_i^\top \mathbf{A} - \lambda_i \mathbf{v}_i^\top)\]</div>
 </div>
+</div></blockquote>
+</li>
+</ol>
+<p>These gradients are propagated through the eigenvectors and eigenvalues during backpropagation.</p>
 </section>
 <section id="raises">
 <h2>Raises<a class="headerlink" href="#raises" title="Link to this heading">¶</a></h2>
 <div class="admonition attention">
 <p class="admonition-title">Attention</p>
 <ul class="simple">
-<li><p><strong>ValueError</strong>: If the input tensor <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> is not square.</p></li>
-<li><p><strong>LinAlgError</strong>: If the input tensor <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>
-is not symmetric or not positive definite.</p></li>
+<li><p><strong>ValueError</strong>: If the input tensor is not a square matrix.</p></li>
+<li><p><strong>LinAlgError</strong>: If the eigenvalues and eigenvectors cannot be computed
+(e.g., for non-diagonalizable matrices or matrices with complex eigenvalues).</p></li>
 </ul>
 </div>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">]])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">l</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">cholesky</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">l</span><span class="p">)</span>
-<span class="go">Tensor([[2.0, 0.0], [1.0, 1.41421356]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">4.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span>  <span class="mf">1.0</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eig</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">eigvals</span><span class="p">)</span>
+<span class="go">Tensor([3.0, 2.0])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">eigvecs</span><span class="p">)</span>
+<span class="go">Tensor([[ 0.89442719, -0.70710678],</span>
+<span class="go">        [ 0.4472136 ,  0.70710678]])</span>
 </pre></div>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <ul class="simple">
-<li><p>The Cholesky decomposition is unique if <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> is
-symmetric and positive definite.</p></li>
-<li><p>The input matrix must satisfy these conditions for the function to work as expected.</p></li>
-<li><p>The resulting lower triangular matrix <span class="math notranslate nohighlight">\(\mathbf{L}\)</span>
-can be used to solve linear systems or compute determinants.</p></li>
+<li><p>Eigenvalues and eigenvectors describe the scaling and directions of transformation in a vector space.</p></li>
+<li><p>The input tensor must have two dimensions and be square, i.e., <span class="math notranslate nohighlight">\(a.shape[0] == a.shape[1]\)</span>.</p></li>
+<li><p>If the matrix is not diagonalizable, or has complex eigenvalues, this function may raise an error.</p></li>
 </ul>
 </div>
 </section>
@@ -423,23 +445,23 @@ can be used to solve linear systems or compute determinants.</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="eig.html">
+          <a class="next-page" href="../../random/random.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.linalg.eig</div>
+                <div class="title">lucid.random</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="norm.html">
+          <a class="prev-page" href="cholesky.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.linalg.norm</div>
+                <div class="title">lucid.linalg.cholesky</div>
                 
               </div>
             </a>
@@ -473,8 +495,8 @@ can be used to solve linear systems or compute determinants.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.linalg.cholesky</a><ul>
-<li><a class="reference internal" href="#lucid.linalg.cholesky"><code class="docutils literal notranslate"><span class="pre">cholesky()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.linalg.eig</a><ul>
+<li><a class="reference internal" href="#lucid.linalg.eig"><code class="docutils literal notranslate"><span class="pre">eig()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>

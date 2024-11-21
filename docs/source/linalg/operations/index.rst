@@ -9,3 +9,4 @@ Linear Algebra Operations
     solve.rst
     norm.rst
     cholesky.rst
+    eig.rst

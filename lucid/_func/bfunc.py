@@ -1,12 +1,12 @@
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid._func._backend import create_bfunc_op
+from lucid._backend import create_bfunc_op, _FuncOpReturnType
 from lucid.types import _NumPyArray
 
 
 @create_bfunc_op()
-def _add(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _add(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(self.data + other.data)
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -16,7 +16,7 @@ def _add(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def _sub(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _sub(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(self.data - other.data)
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -26,7 +26,7 @@ def _sub(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def _mul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _mul(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(self.data * other.data)
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -36,7 +36,7 @@ def _mul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def _truediv(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _truediv(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(self.data / other.data)
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -49,7 +49,7 @@ def _truediv(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op(has_gradient=False)
-def _equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data == other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -59,7 +59,7 @@ def _equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op(has_gradient=False)
-def _not_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _not_equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data != other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -69,7 +69,7 @@ def _not_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op(has_gradient=False)
-def _greater(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _greater(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data > other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -79,7 +79,7 @@ def _greater(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op(has_gradient=False)
-def _greater_or_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _greater_or_equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data >= other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -89,7 +89,7 @@ def _greater_or_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op(has_gradient=False)
-def _less(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _less(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data < other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -99,7 +99,7 @@ def _less(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op(has_gradient=False)
-def _less_or_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _less_or_equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data <= other.data).astype(self.dtype))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -109,7 +109,7 @@ def _less_or_equal(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def minimum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def minimum(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.minimum(self.data, other.data))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -121,7 +121,7 @@ def minimum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def maximum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def maximum(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.maximum(self.data, other.data))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -133,7 +133,7 @@ def maximum(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def power(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def power(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.power(self.data, other.data))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -145,7 +145,7 @@ def power(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def dot(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def dot(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.dot(self.data, other.data))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -158,7 +158,7 @@ def dot(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def inner(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def inner(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.inner(self.data, other.data))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
@@ -171,7 +171,7 @@ def inner(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
 
 
 @create_bfunc_op()
-def _matmul(self: Tensor, other: Tensor) -> tuple[Tensor, callable]:
+def _matmul(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.matmul(self.data, other.data))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:

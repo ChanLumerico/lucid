@@ -20,3 +20,7 @@ def cholesky(a: Tensor) -> Tensor:
 
 def norm(a: Tensor, ord: int = 2) -> Tensor:
     return _func.norm(a, ord)
+
+
+def eig(a: Tensor) -> tuple[Tensor, Tensor]:
+    return _func.eig(a)
