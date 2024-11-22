@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.linalg.norm" href="norm.html" /><link rel="prev" title="lucid.linalg.inv" href="inv.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/operations/solve.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.random" href="../../random/random.html" /><link rel="prev" title="lucid.linalg.matrix_power" href="matrix_power.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/operations/pinv.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.linalg.solve - Lucid 0.16 documentation</title>
+        <title>lucid.linalg.pinv - Lucid 0.16 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -260,14 +260,14 @@
 <li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Linalg Operations</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Linalg Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="det.html">lucid.linalg.det</a></li>
 <li class="toctree-l2"><a class="reference internal" href="inv.html">lucid.linalg.inv</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.linalg.solve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="solve.html">lucid.linalg.solve</a></li>
 <li class="toctree-l2"><a class="reference internal" href="norm.html">lucid.linalg.norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cholesky.html">lucid.linalg.cholesky</a></li>
 <li class="toctree-l2"><a class="reference internal" href="eig.html">lucid.linalg.eig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qr.html">lucid.linalg.qr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="svd.html">lucid.linalg.svd</a></li>
 <li class="toctree-l2"><a class="reference internal" href="matrix_power.html">lucid.linalg.matrix_power</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pinv.html">lucid.linalg.pinv</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.linalg.pinv</a></li>
 </ul>
 </li>
 </ul>
@@ -312,7 +312,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/linalg/operations/solve.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/linalg/operations/pinv.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -332,104 +332,174 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-linalg-solve">
-<h1>lucid.linalg.solve<a class="headerlink" href="#lucid-linalg-solve" title="Link to this heading">¶</a></h1>
+          <section id="lucid-linalg-pinv">
+<h1>lucid.linalg.pinv<a class="headerlink" href="#lucid-linalg-pinv" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.linalg.solve">
-<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">solve</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.linalg.solve" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.linalg.pinv">
+<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">pinv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.linalg.pinv" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>solve</cite> function solves a linear system of equations
-<span class="math notranslate nohighlight">\(\mathbf{A} \mathbf{x} = \mathbf{b}\)</span>.</p>
+<p>The <cite>pinv</cite> function computes the Moore-Penrose pseudo-inverse of a matrix.
+Given any matrix <strong>A</strong>, it returns the pseudo-inverse <strong>A⁺</strong>,
+which generalizes the concept of the inverse to non-square or singular matrices.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">solve</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">pinv</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>The coefficient matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>.
-It must be square (same number of rows and columns).</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>b</strong> (<em>Tensor</em>):</dt><dd><p>The right-hand side matrix or vector <span class="math notranslate nohighlight">\(\mathbf{b}\)</span>.
-Its number of rows must match the number of rows in <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>a</strong> (<em>Tensor</em>):
+The input tensor, which can be any two-dimensional tensor (matrix),
+regardless of shape or rank.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A tensor containing the solution vector or matrix <span class="math notranslate nohighlight">\(\mathbf{x}\)</span>
-to the equation <span class="math notranslate nohighlight">\(\mathbf{A} \mathbf{x} = \mathbf{b}\)</span>.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>Tensor</strong>: The pseudo-inverse of the input matrix <strong>a</strong>.</p></li>
 </ul>
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward calculation for <cite>solve</cite> finds the solution <span class="math notranslate nohighlight">\(\mathbf{x}\)</span> that satisfies:</p>
+<p>The forward calculation for <cite>pinv</cite> computes the Moore-Penrose pseudo-inverse
+using Singular Value Decomposition (SVD):</p>
+<ol class="arabic">
+<li><p><strong>Compute the SVD of A</strong>:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{A} \mathbf{x} = \mathbf{b}\]</div>
+\[\mathbf{A} = \mathbf{U} \mathbf{\Sigma} \mathbf{V}^\mathrm{T}\]</div>
 </div>
+<p>where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\mathbf{U}\)</span> is an orthogonal matrix containing the left singular vectors.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{\Sigma}\)</span> is a diagonal matrix containing the singular values (non-negative real numbers).</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{V}\)</span> is an orthogonal matrix containing the right singular vectors.</p></li>
+</ul>
+</li>
+<li><p><strong>Compute the reciprocal of non-zero singular values</strong>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathbf{\Sigma}^+ = \operatorname{diag}\left( \frac{1}{\sigma_i} \right)\]</div>
+</div>
+<p>for each non-zero singular value σᵢ. Singular values close to zero can be
+regularized to avoid numerical instability.</p>
+</li>
+<li><p><strong>Compute the pseudo-inverse</strong>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathbf{A}^+ = \mathbf{V} \mathbf{\Sigma}^+ \mathbf{U}^\mathrm{T}\]</div>
+</div>
+</li>
+</ol>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For a linear system, the gradient calculations are based on perturbing the matrices
-<span class="math notranslate nohighlight">\(\mathbf{A}\)</span> and <span class="math notranslate nohighlight">\(\mathbf{b}\)</span>.</p>
-<p>If the solution is <span class="math notranslate nohighlight">\(\mathbf{x}\)</span>, the gradients are computed as follows:</p>
+<p>The gradient of the pseudo-inverse with respect to the input matrix <strong>A</strong>
+is computed using advanced matrix calculus involving the SVD components.</p>
+<p>The derivative is given by:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{x}}{\partial \mathbf{A}} =
--\mathbf{A}^{-1} \cdot \mathbf{x} \cdot \frac{\partial \mathbf{b}}{\partial \mathbf{A}}\]</div>
+\[\frac{\partial \mathbf{A}^+}{\partial \mathbf{A}} =
+-\mathbf{A}^+ \otimes \mathbf{A}^+ + \mathbf{A}^+
+\left( \mathbf{A}^{+\mathrm{T}} \otimes \left( \mathbf{I} - \mathbf{A} \mathbf{A}^+ \right) +
+\left( \mathbf{I} - \mathbf{A}^+ \mathbf{A} \right) \otimes \mathbf{A}^{+\mathrm{T}} \right) \mathbf{A}^+\]</div>
 </div>
+<p>In practical implementation, this involves:</p>
+<ol class="arabic">
+<li><p><strong>Compute the SVD of A</strong> (from the forward pass).</p></li>
+<li><p><strong>Compute the necessary intermediate matrices</strong>:</p>
+<ul>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{S}^{-2}\)</span>: Diagonal matrix with elements <span class="math notranslate nohighlight">\(1/\sigma_i^2\)</span>.</p></li>
+<li><p><strong>Orthogonal projectors</strong>:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{x}}{\partial \mathbf{b}} = \mathbf{A}^{-1}\]</div>
+\[\mathbf{P}_U = \mathbf{U} \mathbf{U}^\mathrm{T}, \quad \mathbf{P}_V =
+\mathbf{V} \mathbf{V}^\mathrm{T}\]</div>
 </div>
-<p>This leverages matrix differentiation and propagates gradients efficiently.</p>
+</li>
+</ul>
+</li>
+<li><p><strong>Compute the gradient</strong>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\frac{\partial L}{\partial \mathbf{A}} =
+-\mathbf{A}^+ \frac{\partial L}{\partial \mathbf{A}^+} \mathbf{A}^+ +
+\mathbf{P}_V \frac{\partial L}{\partial \mathbf{A}^+}^\mathrm{T}
+\left( \mathbf{I} - \mathbf{A} \mathbf{A}^+ \right ) +
+\left( \mathbf{I} - \mathbf{A}^+ \mathbf{A} \right )
+\frac{\partial L}{\partial \mathbf{A}^+}^\mathrm{T} \mathbf{P}_U\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(\frac{\partial L}{\partial \mathbf{A}^+}\)</span> is the gradient of
+the loss function with respect to the pseudo-inverse <strong>A⁺</strong>.</p>
+</li>
+</ol>
+<p><strong>Explanation</strong>:</p>
+<ul class="simple">
+<li><p>The gradient involves several terms accounting for the non-square and potentially singular nature of <strong>A</strong>.</p></li>
+<li><p>It ensures that during backpropagation, the gradients are correctly propagated through the pseudo-inverse operation.</p></li>
+</ul>
 </section>
 <section id="raises">
 <h2>Raises<a class="headerlink" href="#raises" title="Link to this heading">¶</a></h2>
 <div class="admonition attention">
 <p class="admonition-title">Attention</p>
 <ul class="simple">
-<li><p><strong>ValueError</strong>: If the matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>
-is not square or if the dimensions of <span class="math notranslate nohighlight">\(\mathbf{b}\)</span> do not align with <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>.</p></li>
-<li><p><strong>LinAlgError</strong>: If the matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>
-is singular and the system cannot be solved.</p></li>
+<li><p><strong>LinAlgError</strong>: If the SVD computation does not converge during the calculation
+of the pseudo-inverse or its gradient.</p></li>
+<li><p><strong>ValueError</strong>: If the input tensor <strong>a</strong> is not a two-dimensional tensor.</p></li>
 </ul>
 </div>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">]])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mf">9.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="go">Tensor([2.0, 3.0])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">pinv</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+<span class="go">Tensor([[-1.33333333, -0.33333333,  0.66666667],</span>
+<span class="go">        [ 1.08333333,  0.33333333, -0.41666667]])</span>
 </pre></div>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <ul class="simple">
-<li><p>The input tensor <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> must be invertible
-to ensure a unique solution exists.</p></li>
-<li><p>If <span class="math notranslate nohighlight">\(\mathbf{b}\)</span> is a matrix, the function computes
-solutions for multiple right-hand sides.</p></li>
+<li><p>The pseudo-inverse is particularly useful for solving least squares problems and
+systems of linear equations that do not have a unique solution.</p></li>
+<li><p>The function supports backpropagation, allowing it to be used in optimization
+problems involving pseudo-inverses.</p></li>
+<li><p>Numerical stability is maintained by handling singular values close to zero
+appropriately during the computation.</p></li>
 </ul>
 </div>
+</section>
+<section id="additional-details">
+<h2>Additional Details<a class="headerlink" href="#additional-details" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Singular Values Near Zero</strong>:</p>
+<ul>
+<li><p>Small singular values can cause numerical instability due to division by very small numbers.</p></li>
+<li><p>In practice, a threshold or regularization parameter may be used to avoid dividing by zero or
+extremely small values.</p></li>
+</ul>
+</li>
+<li><p><strong>Applications</strong>:</p>
+<ul>
+<li><p>The pseudo-inverse is widely used in machine learning, statistics, and engineering for solving
+ill-posed problems.</p></li>
+<li><p>It is essential in computing solutions to linear systems that are underdetermined or overdetermined.</p></li>
+</ul>
+</li>
+<li><p><strong>Performance Considerations</strong>:</p>
+<ul>
+<li><p>Computing the SVD can be computationally intensive for large matrices.</p></li>
+<li><p>For performance-critical applications, consider using approximations or specialized
+algorithms optimized for large-scale computations.</p></li>
+</ul>
+</li>
+</ul>
 </section>
 </section>
 
@@ -438,23 +508,23 @@ solutions for multiple right-hand sides.</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="norm.html">
+          <a class="next-page" href="../../random/random.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.linalg.norm</div>
+                <div class="title">lucid.random</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="inv.html">
+          <a class="prev-page" href="matrix_power.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.linalg.inv</div>
+                <div class="title">lucid.linalg.matrix_power</div>
                 
               </div>
             </a>
@@ -488,8 +558,8 @@ solutions for multiple right-hand sides.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.linalg.solve</a><ul>
-<li><a class="reference internal" href="#lucid.linalg.solve"><code class="docutils literal notranslate"><span class="pre">solve()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.linalg.pinv</a><ul>
+<li><a class="reference internal" href="#lucid.linalg.pinv"><code class="docutils literal notranslate"><span class="pre">pinv()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
@@ -497,6 +567,7 @@ solutions for multiple right-hand sides.</p></li>
 <li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
 <li><a class="reference internal" href="#raises">Raises</a></li>
 <li><a class="reference internal" href="#example">Example</a></li>
+<li><a class="reference internal" href="#additional-details">Additional Details</a></li>
 </ul>
 </li>
 </ul>

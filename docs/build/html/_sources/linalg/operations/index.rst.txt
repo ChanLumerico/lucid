@@ -13,3 +13,4 @@ Linear Algebra Operations
     qr.rst
     svd.rst
     matrix_power.rst
+    pinv.rst

@@ -36,3 +36,7 @@ def svd(a: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
 
 def matrix_power(a: Tensor, n: int) -> Tensor:
     return _func.matrix_power(a, n)
+
+
+def pinv(a: Tensor) -> Tensor:
+    return _func.pinv(a)

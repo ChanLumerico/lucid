@@ -188,3 +188,31 @@ def matrix_power(self: Tensor, n: int) -> _FuncOpReturnType:
         return grad
 
     return result, compute_grad
+
+
+@create_ufunc_op()
+def pinv(self: Tensor) -> _FuncOpReturnType:
+    result = Tensor(np.linalg.pinv(self.data))
+
+    def compute_grad() -> _ArrayOrScalar:
+        U, S, Vh = np.linalg.svd(self.data, full_matrices=False)
+        S_inv_squared = np.diag(1 / (S**2))
+
+        term_1 = (
+            Vh.T
+            @ S_inv_squared
+            @ U.T
+            @ result.grad.T
+            @ (np.eye(self.shape[0]) - self.data @ result.data)
+        )
+        term_2 = (
+            (np.eye(self.shape[1]) - result.data @ self.data)
+            @ result.grad.T
+            @ U
+            @ S_inv_squared
+            @ Vh
+        )
+        grad = -result.data.T @ result.grad.T @ result.data.T + term_1 + term_2
+        return grad.T
+
+    return result, compute_grad
