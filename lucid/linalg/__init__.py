@@ -24,3 +24,11 @@ def norm(a: Tensor, ord: int = 2) -> Tensor:
 
 def eig(a: Tensor) -> tuple[Tensor, Tensor]:
     return _func.eig(a)
+
+
+def qr(a: Tensor) -> tuple[Tensor, Tensor]:
+    return _func.qr(a)
+
+
+def svd(a: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
+    return _func.svd(a, full_matrices)

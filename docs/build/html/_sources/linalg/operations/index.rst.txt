@@ -10,3 +10,5 @@ Linear Algebra Operations
     norm.rst
     cholesky.rst
     eig.rst
+    qr.rst
+    svd.rst

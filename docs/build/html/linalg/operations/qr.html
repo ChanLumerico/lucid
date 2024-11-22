@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.unsqueeze" href="unsqueeze.html" /><link rel="prev" title="lucid.reshape" href="reshape.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/utilities/squeeze.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.linalg.svd" href="svd.html" /><link rel="prev" title="lucid.linalg.eig" href="eig.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/operations/qr.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.squeeze - Lucid 0.16 documentation</title>
+        <title>lucid.linalg.qr - Lucid 0.16 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -200,72 +200,72 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Tensor</span></p>
-<ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="../Tensor_.html">lucid.Tensor</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tensor.html">lucid.tensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../operations/index.html">Tensor Operations</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Tensor Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/exp.html">lucid.exp</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/log.html">lucid.log</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/sqrt.html">lucid.sqrt</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/sin.html">lucid.sin</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/cos.html">lucid.cos</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/tan.html">lucid.tan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/arcsin.html">lucid.arcsin</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/arccos.html">lucid.arccos</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/arctan.html">lucid.arctan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/sinh.html">lucid.sinh</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/cosh.html">lucid.cosh</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/tanh.html">lucid.tanh</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/clip.html">lucid.clip</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/abs.html">lucid.abs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/sign.html">lucid.sign</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/reciprocal.html">lucid.reciprocal</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/square.html">lucid.square</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/cube.html">lucid.cube</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/transpose.html">lucid.transpose</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/sum.html">lucid.sum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/trace.html">lucid.trace</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/mean.html">lucid.mean</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/ufunc/var.html">lucid.var</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/add.html">lucid.add</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/sub.html">lucid.sub</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/mul.html">lucid.mul</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/div.html">lucid.div</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/minimum.html">lucid.minimum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/maximum.html">lucid.maximum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/power.html">lucid.power</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/dot.html">lucid.dot</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/inner.html">lucid.inner</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/outer.html">lucid.outer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/bfunc/matmul.html">lucid.matmul</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/gfunc/zeros.html">lucid.zeros</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/gfunc/zeros_like.html">lucid.zeros_like</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/gfunc/ones.html">lucid.ones</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/gfunc/ones_like.html">lucid.ones_like</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/gfunc/eye.html">lucid.eye</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../operations/gfunc/diag.html">lucid.diag</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tensor/Tensor_.html">lucid.Tensor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tensor/tensor.html">lucid.tensor</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../tensor/operations/index.html">Tensor Operations</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Tensor Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/exp.html">lucid.exp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/log.html">lucid.log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/sqrt.html">lucid.sqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/sin.html">lucid.sin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/cos.html">lucid.cos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/tan.html">lucid.tan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/arcsin.html">lucid.arcsin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/arccos.html">lucid.arccos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/arctan.html">lucid.arctan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/sinh.html">lucid.sinh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/cosh.html">lucid.cosh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/tanh.html">lucid.tanh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/clip.html">lucid.clip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/abs.html">lucid.abs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/sign.html">lucid.sign</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/reciprocal.html">lucid.reciprocal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/square.html">lucid.square</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/cube.html">lucid.cube</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/transpose.html">lucid.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/sum.html">lucid.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/trace.html">lucid.trace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/mean.html">lucid.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/ufunc/var.html">lucid.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/add.html">lucid.add</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/sub.html">lucid.sub</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/mul.html">lucid.mul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/div.html">lucid.div</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/minimum.html">lucid.minimum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/maximum.html">lucid.maximum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/power.html">lucid.power</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/dot.html">lucid.dot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/inner.html">lucid.inner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/outer.html">lucid.outer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/bfunc/matmul.html">lucid.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/gfunc/zeros.html">lucid.zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/gfunc/zeros_like.html">lucid.zeros_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/gfunc/ones.html">lucid.ones</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/gfunc/ones_like.html">lucid.ones_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/gfunc/eye.html">lucid.eye</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/operations/gfunc/diag.html">lucid.diag</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Tensor Utilites</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of Tensor Utilites</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="reshape.html">lucid.reshape</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.squeeze</a></li>
-<li class="toctree-l2"><a class="reference internal" href="unsqueeze.html">lucid.unsqueeze</a></li>
-<li class="toctree-l2"><a class="reference internal" href="ravel.html">lucid.ravel</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../tensor/utilities/index.html">Tensor Utilites</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of Tensor Utilites</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/utilities/reshape.html">lucid.reshape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/utilities/squeeze.html">lucid.squeeze</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/utilities/unsqueeze.html">lucid.unsqueeze</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tensor/utilities/ravel.html">lucid.ravel</a></li>
 </ul>
 </li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Linear Algebra</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../linalg/linalg.html">lucid.linalg</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../linalg/operations/index.html">Linalg Operations</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Linalg Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/det.html">lucid.linalg.det</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/inv.html">lucid.linalg.inv</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/solve.html">lucid.linalg.solve</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/norm.html">lucid.linalg.norm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/cholesky.html">lucid.linalg.cholesky</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/eig.html">lucid.linalg.eig</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/qr.html">lucid.linalg.qr</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/svd.html">lucid.linalg.svd</a></li>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../linalg.html">lucid.linalg</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Linalg Operations</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Linalg Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="det.html">lucid.linalg.det</a></li>
+<li class="toctree-l2"><a class="reference internal" href="inv.html">lucid.linalg.inv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="solve.html">lucid.linalg.solve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm.html">lucid.linalg.norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cholesky.html">lucid.linalg.cholesky</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eig.html">lucid.linalg.eig</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.linalg.qr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="svd.html">lucid.linalg.svd</a></li>
 </ul>
 </li>
 </ul>
@@ -310,7 +310,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/tensor/utilities/squeeze.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/linalg/operations/qr.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -330,29 +330,27 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-squeeze">
-<h1>lucid.squeeze<a class="headerlink" href="#lucid-squeeze" title="Link to this heading">¶</a></h1>
+          <section id="lucid-linalg-qr">
+<h1>lucid.linalg.qr<a class="headerlink" href="#lucid-linalg-qr" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.squeeze">
-<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">squeeze</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.squeeze" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.linalg.qr">
+<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">qr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.linalg.qr" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>squeeze</cite> function removes single-dimensional entries from the shape of a tensor.
-It is commonly used to remove dimensions of size 1 from the tensor’s shape.</p>
+<p>The <cite>qr</cite> function computes the QR decomposition of a matrix,
+decomposing it into an orthogonal matrix <strong>Q</strong> and an upper triangular
+matrix <strong>R</strong>.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">squeeze</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="n">_ShapeLike</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">qr</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">Tensor</span><span class="p">]</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>a</strong> (<em>Tensor</em>): The input tensor to squeeze.</p></li>
 <li><dl class="simple">
-<dt><strong>axis</strong> (<em>_ShapeLike</em> | <em>None</em>, optional):</dt><dd><p>The dimensions to remove.
-If <cite>None</cite>, all dimensions of size 1 will be removed.
-If specified, only the listed axes with size 1 will be removed.</p>
+<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor, which must be a two-dimensional matrix.</p>
 </dd>
 </dl>
 </li>
@@ -362,8 +360,10 @@ If specified, only the listed axes with size 1 will be removed.</p>
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A tensor with the specified dimensions removed.
-If <strong>a</strong> requires gradients, the resulting tensor will also require gradients.</p>
+<dt><strong>Tuple[Tensor, Tensor]</strong>: A tuple containing two tensors:</dt><dd><ul>
+<li><p><strong>Q</strong> (<em>Tensor</em>): An orthogonal matrix where the columns are orthonormal vectors.</p></li>
+<li><p><strong>R</strong> (<em>Tensor</em>): An upper triangular matrix.</p></li>
+</ul>
 </dd>
 </dl>
 </li>
@@ -371,35 +371,72 @@ If <strong>a</strong> requires gradients, the resulting tensor will also require
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The <cite>squeeze</cite> operation removes dimensions with a size of 1 from the tensor.</p>
+<p>The forward calculation for <cite>qr</cite> decomposes a matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>
+into the product of an orthogonal matrix <span class="math notranslate nohighlight">\(\mathbf{Q}\)</span> and an upper
+triangular matrix <span class="math notranslate nohighlight">\(\mathbf{R}\)</span>:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{out}_i = \text{squeeze}(\mathbf{a}_i)\]</div>
+\[\mathbf{A} = \mathbf{Q} \mathbf{R}\]</div>
 </div>
+<p>where:
+- <span class="math notranslate nohighlight">\(\mathbf{Q}\)</span> is an orthogonal matrix (<span class="math notranslate nohighlight">\(\mathbf{Q}^\top \mathbf{Q} = \mathbf{I}\)</span>),
+- <span class="math notranslate nohighlight">\(\mathbf{R}\)</span> is an upper triangular matrix.</p>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For a squeezed tensor, the gradient is passed through unchanged,
-as the operation only affects the shape and not the data.</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{out}}{\partial \mathbf{a}} = \mathbf{I}\]</div>
+<p>Given the QR decomposition <span class="math notranslate nohighlight">\(\mathbf{A} = \mathbf{Q} \mathbf{R}\)</span>,
+the gradients of <strong>Q</strong> and <strong>R</strong> with respect to the input matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>
+can be computed as follows:</p>
+<ol class="arabic">
+<li><p><strong>Gradient of Q</strong> with respect to <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>:</p>
+<blockquote>
+<div><p>The gradient is derived based on the orthogonality of <strong>Q</strong>.
+It involves projecting the gradient onto the space orthogonal to <strong>Q</strong>.</p>
+</div></blockquote>
+</li>
+<li><p><strong>Gradient of R</strong> with respect to <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>:</p>
+<blockquote>
+<div><p>Since <strong>R</strong> is upper triangular, the gradient computation takes into
+account the structure of <strong>R</strong> to ensure that the gradients respect the
+upper triangular form.</p>
+</div></blockquote>
+</li>
+</ol>
+<p>These gradients are propagated through <strong>Q</strong> and <strong>R</strong> during backpropagation,
+allowing for the optimization of parameters in models that involve QR decomposition.</p>
+</section>
+<section id="raises">
+<h2>Raises<a class="headerlink" href="#raises" title="Link to this heading">¶</a></h2>
+<div class="admonition attention">
+<p class="admonition-title">Attention</p>
+<ul class="simple">
+<li><p><strong>ValueError</strong>: If the input tensor is not a two-dimensional matrix.</p></li>
+<li><p><strong>LinAlgError</strong>: If the QR decomposition cannot be computed
+(e.g., if the input matrix contains NaNs or infinities).</p></li>
+</ul>
 </div>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">squeezed</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>  <span class="c1"># or a.squeeze()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">squeezed</span><span class="p">)</span>
-<span class="go">Tensor([1. 2. 3.], grad=None)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span><span class="p">,</span> <span class="n">r</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">qr</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
+<span class="go">Tensor([[-0.31622777, -0.9486833 ],</span>
+<span class="go">        [-0.9486833 ,  0.31622777]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="go">Tensor([[-3.16227766, -4.42718872],</span>
+<span class="go">        [ 0.        ,  0.63245553]])</span>
 </pre></div>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <ul class="simple">
-<li><p>If <cite>axis</cite> is provided, it will only remove the specified dimensions of size 1.</p></li>
-<li><p>The resulting tensor will have the same number of elements but a potentially different shape.</p></li>
+<li><p>QR decomposition is useful for solving linear systems, least squares problems, and eigenvalue algorithms.</p></li>
+<li><p>The input tensor must have two dimensions, i.e., <span class="math notranslate nohighlight">\(a.ndim == 2\)</span>.</p></li>
+<li><p>The matrix <strong>Q</strong> is orthogonal, meaning <span class="math notranslate nohighlight">\(\mathbf{Q}^\top \mathbf{Q} = \mathbf{I}\)</span>.</p></li>
+<li><p>The matrix <strong>R</strong> is upper triangular, which means all elements below the main diagonal are zero.</p></li>
+<li><p>This function does not support batch processing; each input must be a single matrix.</p></li>
 </ul>
 </div>
 </section>
@@ -410,23 +447,23 @@ as the operation only affects the shape and not the data.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="unsqueeze.html">
+          <a class="next-page" href="svd.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.unsqueeze</div>
+                <div class="title">lucid.linalg.svd</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="reshape.html">
+          <a class="prev-page" href="eig.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.reshape</div>
+                <div class="title">lucid.linalg.eig</div>
                 
               </div>
             </a>
@@ -460,13 +497,14 @@ as the operation only affects the shape and not the data.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.squeeze</a><ul>
-<li><a class="reference internal" href="#lucid.squeeze"><code class="docutils literal notranslate"><span class="pre">squeeze()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.linalg.qr</a><ul>
+<li><a class="reference internal" href="#lucid.linalg.qr"><code class="docutils literal notranslate"><span class="pre">qr()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
 <li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
 <li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li><a class="reference internal" href="#raises">Raises</a></li>
 <li><a class="reference internal" href="#example">Example</a></li>
 </ul>
 </li>

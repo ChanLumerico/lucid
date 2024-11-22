@@ -116,3 +116,50 @@ def eig(self: Tensor) -> _FuncOpReturnType:
         (result_eigvals, compute_grad_eigvals),
         (result_eigvecs, compute_grad_eigvecs),
     )
+
+
+@create_func_op(n_in=1, n_ret=2)
+def qr(self: Tensor) -> _FuncOpReturnType:
+    Q, R = np.linalg.qr(self.data)
+
+    result_q = Tensor(Q)
+    result_r = Tensor(R)
+
+    def compute_grad_q() -> _ArrayOrScalar:
+        grad_q = result_q.grad
+        qt_grad_q = np.einsum("...ik,...kj->...ij", Q.mT, grad_q)
+        qt_grad_q_r = np.einsum("...ij,...jk->...ik", qt_grad_q, R)
+
+        return np.einsum("...ij,...jk->...ik", grad_q, R) - np.einsum(
+            "...ij,...jk->...ik", Q, qt_grad_q_r
+        )
+
+    def compute_grad_r() -> _ArrayOrScalar:
+        grad_r = result_r.grad
+        return np.einsum("...ij,...jk->...ik", Q, grad_r)
+
+    return (result_q, compute_grad_q), (result_r, compute_grad_r)
+
+
+@create_func_op(n_in=1, n_ret=3)
+def svd(self: Tensor, full_matrices: bool = True) -> _FuncOpReturnType:
+    U, S, VT = np.linalg.svd(self.data, full_matrices=full_matrices)
+
+    result_u = Tensor(U)
+    result_s = Tensor(S)
+    result_vt = Tensor(VT)
+
+    def compute_grad_u() -> _ArrayOrScalar:
+        return np.einsum("...ik,...k,...jk->...ij", result_u.grad, S, VT.mT)
+
+    def compute_grad_s() -> _ArrayOrScalar:
+        return np.einsum("...ik,...k,...jk->...ij", U, result_s.grad, VT.mT)
+
+    def compute_grad_vt() -> _ArrayOrScalar:
+        return np.einsum("...ik,...k,...jk->...ij", U, S, result_vt.grad.mT)
+
+    return (
+        (result_u, compute_grad_u),
+        (result_s, compute_grad_s),
+        (result_vt, compute_grad_vt),
+    )
