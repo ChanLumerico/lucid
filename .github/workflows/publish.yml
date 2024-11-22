@@ -45,9 +45,12 @@ jobs:
           VERSION=${{ steps.extract-version.outputs.VERSION }}
           sed -i "s/{{VERSION_PLACEHOLDER}}/$VERSION/g" setup.py
 
-      - name: Build and publish
+      - name: Build the package
         run: |
           python setup.py sdist bdist_wheel
 
       - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m twine upload dist/* -u __token__ -p $PYPI_TOKEN
