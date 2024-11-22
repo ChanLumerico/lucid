@@ -42,6 +42,7 @@ Tensor Operations
    bfunc/power.rst
    bfunc/dot.rst
    bfunc/inner.rst
+   bfunc/outer.rst
    bfunc/matmul.rst
 
 .. toctree::

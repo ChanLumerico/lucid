@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.square" href="square.html" /><link rel="prev" title="lucid.sign" href="sign.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/operations/ufunc/reciprocal.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.matmul" href="matmul.html" /><link rel="prev" title="lucid.inner" href="inner.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/operations/bfunc/outer.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.reciprocal - Lucid 0.16 documentation</title>
+        <title>lucid.outer - Lucid 0.16 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -204,40 +204,40 @@
 <li class="toctree-l1"><a class="reference internal" href="../../Tensor_.html">lucid.Tensor</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../tensor.html">lucid.tensor</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Tensor Operations</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Tensor Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="exp.html">lucid.exp</a></li>
-<li class="toctree-l2"><a class="reference internal" href="log.html">lucid.log</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sqrt.html">lucid.sqrt</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sin.html">lucid.sin</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cos.html">lucid.cos</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tan.html">lucid.tan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="arcsin.html">lucid.arcsin</a></li>
-<li class="toctree-l2"><a class="reference internal" href="arccos.html">lucid.arccos</a></li>
-<li class="toctree-l2"><a class="reference internal" href="arctan.html">lucid.arctan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sinh.html">lucid.sinh</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cosh.html">lucid.cosh</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tanh.html">lucid.tanh</a></li>
-<li class="toctree-l2"><a class="reference internal" href="clip.html">lucid.clip</a></li>
-<li class="toctree-l2"><a class="reference internal" href="abs.html">lucid.abs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sign.html">lucid.sign</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.reciprocal</a></li>
-<li class="toctree-l2"><a class="reference internal" href="square.html">lucid.square</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cube.html">lucid.cube</a></li>
-<li class="toctree-l2"><a class="reference internal" href="transpose.html">lucid.transpose</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sum.html">lucid.sum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="trace.html">lucid.trace</a></li>
-<li class="toctree-l2"><a class="reference internal" href="mean.html">lucid.mean</a></li>
-<li class="toctree-l2"><a class="reference internal" href="var.html">lucid.var</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/add.html">lucid.add</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/sub.html">lucid.sub</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/mul.html">lucid.mul</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/div.html">lucid.div</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/minimum.html">lucid.minimum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/maximum.html">lucid.maximum</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/power.html">lucid.power</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/dot.html">lucid.dot</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/inner.html">lucid.inner</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/outer.html">lucid.outer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../bfunc/matmul.html">lucid.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/exp.html">lucid.exp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/log.html">lucid.log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/sqrt.html">lucid.sqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/sin.html">lucid.sin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/cos.html">lucid.cos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/tan.html">lucid.tan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/arcsin.html">lucid.arcsin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/arccos.html">lucid.arccos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/arctan.html">lucid.arctan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/sinh.html">lucid.sinh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/cosh.html">lucid.cosh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/tanh.html">lucid.tanh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/clip.html">lucid.clip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/abs.html">lucid.abs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/sign.html">lucid.sign</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/reciprocal.html">lucid.reciprocal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/square.html">lucid.square</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/cube.html">lucid.cube</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/transpose.html">lucid.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/sum.html">lucid.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/trace.html">lucid.trace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/mean.html">lucid.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ufunc/var.html">lucid.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="add.html">lucid.add</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sub.html">lucid.sub</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mul.html">lucid.mul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="div.html">lucid.div</a></li>
+<li class="toctree-l2"><a class="reference internal" href="minimum.html">lucid.minimum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="maximum.html">lucid.maximum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="power.html">lucid.power</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dot.html">lucid.dot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="inner.html">lucid.inner</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.outer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="matmul.html">lucid.matmul</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../gfunc/zeros.html">lucid.zeros</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../gfunc/zeros_like.html">lucid.zeros_like</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../gfunc/ones.html">lucid.ones</a></li>
@@ -308,7 +308,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/tensor/operations/ufunc/reciprocal.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/tensor/operations/bfunc/outer.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -328,33 +328,35 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-reciprocal">
-<h1>lucid.reciprocal<a class="headerlink" href="#lucid-reciprocal" title="Link to this heading">¶</a></h1>
+          <section id="lucid-outer">
+<h1>lucid.outer<a class="headerlink" href="#lucid-outer" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.reciprocal">
-<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">reciprocal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.reciprocal" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.outer">
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">outer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.outer" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>reciprocal</cite> function computes the element-wise reciprocal of each element in the input tensor.</p>
+<p>The <cite>outer</cite> function computes the outer product of two tensors.</p>
+<p>This operation results in a new tensor formed by multiplying each element
+of the first tensor with each element of the second tensor.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">reciprocal</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">outer</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>a</strong> (<em>Tensor</em>):
-The input tensor for which reciprocals are computed.</p></li>
+<li><p><strong>a</strong> (<em>Tensor</em>): The first input tensor.</p></li>
+<li><p><strong>b</strong> (<em>Tensor</em>): The second input tensor.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new tensor containing the reciprocals of the elements in the input tensor.
-If <strong>a</strong> requires gradients, the resulting tensor will also require gradients.</p>
+<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> containing the outer product result.
+If either <cite>a</cite> or <cite>b</cite> requires gradients, the resulting tensor will also require gradients.</p>
 </dd>
 </dl>
 </li>
@@ -362,25 +364,89 @@ If <strong>a</strong> requires gradients, the resulting tensor will also require
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
+<p>The forward calculation for the <cite>outer</cite> operation is:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{out}_i = \frac{1}{\mathbf{a}_i}\]</div>
+\[\mathbf{out}_{ij} = \mathbf{a}_i \mathbf{b}_j\]</div>
 </div>
+<p>For vectors:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}\mathbf{out} =
+\begin{bmatrix}
+\mathbf{a}_1 \mathbf{b}_1 &amp; \mathbf{a}_1 \mathbf{b}_2 &amp; \dots \\
+\mathbf{a}_2 \mathbf{b}_1 &amp; \mathbf{a}_2 \mathbf{b}_2 &amp; \dots \\
+\vdots &amp; \vdots &amp; \ddots
+\end{bmatrix}\end{split}\]</div>
+</div>
+<p>For higher-dimensional tensors, the tensors are first flattened into vectors, and the outer product is calculated.</p>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
+<p>For tensors <strong>a</strong> and <strong>b</strong> involved in the <cite>outer</cite> operation,
+the gradients with respect to the output (<strong>out</strong>) are computed as follows:</p>
+<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{a}\)</span>:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{out}_i}{\partial \mathbf{a}_i} = -\frac{1}{\mathbf{a}_i^2}\]</div>
+\[\frac{\partial \mathbf{out}}{\partial \mathbf{a}} = \sum_j \mathbf{b}_j\]</div>
 </div>
+<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{b}\)</span>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\frac{\partial \mathbf{out}}{\partial \mathbf{b}} = \sum_i \mathbf{a}_i\]</div>
+</div>
+<p>For higher-dimensional tensors:</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{a}\)</span>:</dt><dd><p>propagates back along the flattened version of <span class="math notranslate nohighlight">\(\mathbf{a}\)</span>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{b}\)</span>:</dt><dd><p>propagates back along the flattened version of <span class="math notranslate nohighlight">\(\mathbf{b}\)</span>.</p>
+</dd>
+</dl>
+</li>
+</ul>
 </section>
-<section id="example">
-<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p>Using <cite>outer</cite> for a simple outer product:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">reciprocal</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([1. 0.5 0.25], grad=None)</span>
+<span class="go">Tensor([[3.0, 4.0], [6.0, 8.0]], grad=None)</span>
+</pre></div>
+</div>
+<p>Backpropagation computes gradients for both <cite>a</cite> and <cite>b</cite>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">[7.0, 7.0]  # Sum along b</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">[3.0, 9.0]  # Sum along a</span>
+</pre></div>
+</div>
+<p>Using <cite>outer</cite> for higher-dimensional tensors:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="go">Tensor(</span>
+<span class="go">    [[ 5.0,  6.0,  7.0,  8.0],</span>
+<span class="go">     [10.0, 12.0, 14.0, 16.0],</span>
+<span class="go">     [15.0, 18.0, 21.0, 24.0],</span>
+<span class="go">     [20.0, 24.0, 28.0, 32.0]], grad=None)</span>
+</pre></div>
+</div>
+<p>Backpropagation propagates gradients through the tensors:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">[[26.0, 26.0], [26.0, 26.0]]  # Gradients aggregated for a</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">[[10.0, 26.0], [18.0, 34.0]]  # Gradients aggregated for b</span>
 </pre></div>
 </div>
 </section>
@@ -391,23 +457,23 @@ If <strong>a</strong> requires gradients, the resulting tensor will also require
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="square.html">
+          <a class="next-page" href="matmul.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.square</div>
+                <div class="title">lucid.matmul</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="sign.html">
+          <a class="prev-page" href="inner.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.sign</div>
+                <div class="title">lucid.inner</div>
                 
               </div>
             </a>
@@ -441,14 +507,14 @@ If <strong>a</strong> requires gradients, the resulting tensor will also require
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.reciprocal</a><ul>
-<li><a class="reference internal" href="#lucid.reciprocal"><code class="docutils literal notranslate"><span class="pre">reciprocal()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.outer</a><ul>
+<li><a class="reference internal" href="#lucid.outer"><code class="docutils literal notranslate"><span class="pre">outer()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
 <li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
 <li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
-<li><a class="reference internal" href="#example">Example</a></li>
+<li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>
 </ul>

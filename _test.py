@@ -1,12 +1,13 @@
 import lucid
 
-lucid.random.seed(42)
+lucid.random.seed(10)
 
 
-A = lucid.random.randn(2, 2, requires_grad=True)
+A = lucid.random.randn(3, requires_grad=True)
+B = lucid.random.randn(3, requires_grad=True)
 
-L, V = lucid.linalg.eig(A)
-L.backward()
-V.backward()
+C = lucid.outer(A, B)
+C.backward()
 
 print(A.grad)
+print(B.grad)

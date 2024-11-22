@@ -42,6 +42,10 @@ def inner(a: Tensor, b: Tensor) -> Tensor:
     return bfunc.inner(a, b)
 
 
+def outer(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc.outer(a.ravel(), b.ravel())
+
+
 def matmul(a: Tensor, b: Tensor) -> Tensor:
     return bfunc.matmul(a, b)
 
@@ -222,6 +226,7 @@ Tensor.__pow__ = ufunc._pow
 Tensor.__neg__ = ufunc._neg
 
 Tensor.T = ufunc._T
+Tensor.mT = ufunc._mT
 Tensor.dot = bfunc.dot
 Tensor.matmul = bfunc._matmul
 Tensor.sum = ufunc.sum

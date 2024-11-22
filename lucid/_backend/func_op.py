@@ -74,7 +74,7 @@ def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable
                 result.requires_grad = requires_grad and has_gradient
                 results += (result,)
 
-                def _backward_op(_func: callable = compute_grad) -> None:
+                def _backward_op(*, _func: callable = compute_grad) -> None:
                     grads = _func()
                     if n_in == 1:
                         grads = (grads,)
@@ -89,7 +89,7 @@ def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable
                 result._backward_op = _backward_op
                 result._prev = tensors
 
-            return results
+            return results if n_ret > 1 else results[0]
 
         return wrapper
 

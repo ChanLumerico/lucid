@@ -220,6 +220,17 @@ def _T(self: Tensor) -> Tensor:
     return result, compute_grad
 
 
+@property
+@create_ufunc_op()
+def _mT(self: Tensor) -> Tensor:
+    result = Tensor(self.data.mT)
+
+    def compute_grad() -> _NumPyArray:
+        return result.grad.mT
+
+    return result, compute_grad
+
+
 @create_ufunc_op()
 def transpose(self: Tensor, axes: Optional[list[int]] = None) -> _FuncOpReturnType:
     if axes is None:

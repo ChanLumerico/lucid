@@ -150,8 +150,8 @@ def dot(self: Tensor, other: Tensor) -> _FuncOpReturnType:
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
         return (
-            result.grad.dot(np.swapaxes(other.data, -1, -2)),
-            np.swapaxes(self.data, -1, -2).dot(result.grad),
+            result.grad.dot(other.data.mT),
+            self.data.mT.dot(result.grad),
         )
 
     return result, compute_grad
@@ -171,13 +171,26 @@ def inner(self: Tensor, other: Tensor) -> _FuncOpReturnType:
 
 
 @create_bfunc_op()
+def outer(self: Tensor, other: Tensor) -> _FuncOpReturnType:
+    result = Tensor(np.outer(self.data, other.data))
+
+    def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
+        return (
+            np.tensordot(result.grad, other.data, axes=(1, 0)),
+            np.tensordot(result.grad, self.data, axes=(0, 0)),
+        )
+
+    return result, compute_grad
+
+
+@create_bfunc_op()
 def _matmul(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.matmul(self.data, other.data))
 
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
         return (
-            np.matmul(result.grad, np.swapaxes(other.data, -1, -2)),
-            np.matmul(np.swapaxes(self.data, -1, -2), result.grad),
+            np.matmul(result.grad, other.data.mT),
+            np.matmul(self.data.mT, result.grad),
         )
 
     return result, compute_grad
