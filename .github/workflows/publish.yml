@@ -1,7 +1,5 @@
 on:
-  push:
-    tags:
-      - 'v*[0-9].[0-9].[0-9]'
+  workflow_dispatch: # Allow manual triggering via GitHub Actions UI
 
 jobs:
   pypi-publish:
@@ -14,6 +12,24 @@ jobs:
       - name: Check out the code
         uses: actions/checkout@v3
 
+      # Extract the commit message
+      - name: Get commit message
+        id: get-commit-message
+        run: echo "::set-output name=COMMIT_MESSAGE::$(git log -1 --pretty=%B)"
+
+      # Extract version from commit message
+      - name: Extract version from commit message
+        id: extract-version
+        run: |
+          COMMIT_MESSAGE=${{ steps.get-commit-message.outputs.COMMIT_MESSAGE }}
+          if [[ "$COMMIT_MESSAGE" =~ release-([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "::set-output name=VERSION::$VERSION"
+          else
+            echo "Commit message does not match the release pattern. Exiting."
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v3
         with:
@@ -24,14 +40,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install setuptools wheel twine
 
-      - name: Extract tag name
-        id: tag
-        run: echo "::set-output name=TAG_NAME::${GITHUB_REF#refs/tags/}"
-
       - name: Update version in setup.py
         run: |
-          VERSION=${{ steps.tag.outputs.TAG_NAME }}
-          VERSION=${VERSION#v}
+          VERSION=${{ steps.extract-version.outputs.VERSION }}
           sed -i "s/{{VERSION_PLACEHOLDER}}/$VERSION/g" setup.py
 
       - name: Build and publish
