@@ -32,3 +32,7 @@ def qr(a: Tensor) -> tuple[Tensor, Tensor]:
 
 def svd(a: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     return _func.svd(a, full_matrices)
+
+
+def matrix_power(a: Tensor, n: int) -> Tensor:
+    return _func.matrix_power(a, n)

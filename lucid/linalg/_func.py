@@ -163,3 +163,28 @@ def svd(self: Tensor, full_matrices: bool = True) -> _FuncOpReturnType:
         (result_s, compute_grad_s),
         (result_vt, compute_grad_vt),
     )
+
+
+@create_ufunc_op()
+def matrix_power(self: Tensor, n: int) -> _FuncOpReturnType:
+    result = Tensor(np.linalg.matrix_power(self.data, n))
+
+    def compute_grad() -> _ArrayOrScalar:
+        grad = np.zeros_like(self.data)
+        if n == 0:
+            return grad
+        else:
+            for k in range(abs(n)):
+                left_exp = n - np.sign(n) * k - np.sign(n)
+                right_exp = np.sign(n) * k
+
+                left = np.linalg.matrix_power(self.data, left_exp)
+                right = np.linalg.matrix_power(self.data, right_exp)
+
+                grad += left @ result.grad @ right
+            if n < 0:
+                grad = -grad
+
+        return grad
+
+    return result, compute_grad
