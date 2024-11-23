@@ -20,8 +20,20 @@ def ravel(a: Tensor) -> Tensor:
     return func.ravel(a)
 
 
-def stack(*arr: Tensor, axis: int = 0) -> Tensor:
+def stack(arr: tuple[Tensor, ...], axis: int = 0) -> Tensor:
     return func.stack(*arr, axis=axis)
+
+
+def hstack(arr: tuple[Tensor, ...]) -> Tensor:
+    return func.hstack(*arr)
+
+
+def vstack(arr: tuple[Tensor, ...]) -> Tensor:
+    return func.vstack(*arr)
+
+
+def concatenate(arr: tuple[Tensor, ...], axis: int = 0) -> Tensor:
+    return func.concatenate(*arr, axis=axis)
 
 
 Tensor.reshape = func._reshape_inplace

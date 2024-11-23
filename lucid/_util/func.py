@@ -70,3 +70,55 @@ def stack(*tensors: Tensor, axis: int = 0) -> _FuncOpReturnType:
         return tuple(split_grads)
 
     return result, compute_grad
+
+
+@create_mfunc_op()
+def concatenate(*tensors: Tensor, axis: int = 0) -> _FuncOpReturnType:
+    data_arr = [tensor.data for tensor in tensors]
+    result = Tensor(np.concatenate(data_arr, axis=axis))
+
+    def compute_grad() -> tuple[_NumPyArray, ...]:
+        split_sizes = [tensor.shape[axis] for tensor in tensors]
+        split_indices = np.cumsum(split_sizes)[:-1]
+        split_grads = np.split(result.grad, split_indices, axis=axis)
+
+        return tuple(split_grads)
+
+    return result, compute_grad
+
+
+@create_mfunc_op()
+def hstack(*tensors: Tensor) -> _FuncOpReturnType:
+    data_arr = [tensor.data for tensor in tensors]
+    result = Tensor(np.hstack(data_arr))
+
+    def compute_grad() -> tuple[_NumPyArray, ...]:
+        split_sizes = [
+            tensor.shape[1] if result.ndim > 1 else tensor.shape[0]
+            for tensor in tensors
+        ]
+        split_indices = np.cumsum(split_sizes)[:-1]
+        split_grads = (
+            np.hsplit(result.grad, split_indices)
+            if result.ndim > 1
+            else np.split(result.grad, len(tensors))
+        )
+
+        return tuple(split_grads)
+
+    return result, compute_grad
+
+
+@create_mfunc_op()
+def vstack(*tensors: Tensor) -> _FuncOpReturnType:
+    data_arr = [tensor.data for tensor in tensors]
+    result = Tensor(np.vstack(data_arr))
+
+    def compute_grad() -> tuple[_NumPyArray, ...]:
+        split_sizes = [tensor.shape[0] for tensor in tensors]
+        split_indices = np.cumsum(split_sizes)[:-1]
+        split_grads = np.split(result.grad, split_indices, axis=0)
+
+        return tuple(split_grads)
+
+    return result, compute_grad

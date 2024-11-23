@@ -9,3 +9,6 @@ Tensor Utilites
    unsqueeze.rst
    ravel.rst
    stack.rst
+   hstack.rst
+   vstack.rst
+   concatenate.rst

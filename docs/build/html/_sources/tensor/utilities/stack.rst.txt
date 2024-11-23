@@ -12,13 +12,13 @@ Function Signature
 
 .. code-block:: python
 
-    def stack(*arr: Tensor, axis: int = 0) -> Tensor
+    def stack(arr: tuple[Tensor, ...], axis: int = 0) -> Tensor
 
 Parameters
 ----------
 
-- **\*arr** (*Tensor*): 
-    A sequence of tensors to be stacked. All tensors must have the same shape.
+- **arr** (*Tensor*): 
+    A tuple of tensors to be stacked. All tensors must have the same shape.
     
 - **axis** (*int*, optional): 
     The axis along which to stack the tensors. Defaults to `0`.
@@ -56,12 +56,12 @@ Example
     >>> import lucid
     >>> a = Tensor([1.0, 2.0], requires_grad=True)
     >>> b = Tensor([3.0, 4.0], requires_grad=True)
-    >>> stacked = lucid.stack(a, b, axis=0)
+    >>> stacked = lucid.stack((a, b), axis=0)
     >>> print(stacked)
     Tensor([[1. 2.],
             [3. 4.]], grad=None)
     
-    >>> stacked = lucid.stack(a, b, axis=1)
+    >>> stacked = lucid.stack((a, b), axis=1)
     >>> print(stacked)
     Tensor([[1. 3.],
             [2. 4.]], grad=None)
