@@ -50,36 +50,52 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     return reshaped_grad
 
 
-def create_func_op(n_in: int, n_ret: int, has_gradient: bool = True) -> callable:
+def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> callable:
 
     def decorator(func: Callable[..., _FuncOpReturnType]) -> callable:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> tuple[Tensor, ...]:
-            tensors: tuple[Tensor] = tuple()
+        def wrapper(*args, **kwargs) -> Tuple[Tensor, ...]:
+            tensors: Tuple[Tensor, ...] = tuple()
             requires_grad = False
 
-            for arg in args[:n_in]:
+            if n_in is None:
+                tensor_args = args
+            else:
+                if len(args) < n_in:
+                    raise ValueError(
+                        f"Expected at least {n_in} tensor arguments, got {len(args)}"
+                    )
+                tensor_args = args[:n_in]
+
+            for arg in tensor_args:
                 tensor = _check_is_tensor(arg)
                 tensors += (tensor,)
                 requires_grad = requires_grad or tensor.requires_grad
 
-            new_args = (*tensors, *args[n_in:])
+            non_tensor_args = args[n_in:] if n_in is not None else ()
+            new_args = (*tensors, *non_tensor_args)
+
             func_return_pairs = func(*new_args, **kwargs)
 
             if n_ret == 1:
                 func_return_pairs = (func_return_pairs,)
 
-            results: tuple[Tensor] = tuple()
+            results: Tuple[Tensor, ...] = tuple()
             for result, compute_grad in func_return_pairs:
                 result.requires_grad = requires_grad and has_gradient
                 results += (result,)
 
-                def _backward_op(*, _func: callable = compute_grad) -> None:
+                def _backward_op(*, _func: Callable = compute_grad) -> None:
                     grads = _func()
-                    if n_in == 1:
+                    if n_in == 1 or not isinstance(grads, tuple):
                         grads = (grads,)
 
-                    for tensor, grad in zip(tensors, grads, strict=True):
+                    if len(grads) != len(tensors):
+                        raise ValueError(
+                            f"Expected {len(tensors)} gradients, got {len(grads)}."
+                        )
+
+                    for tensor, grad in zip(tensors, grads):
                         new_grad = _match_grad_shape(tensor.data, grad)
                         _set_tensor_grad(tensor, new_grad)
 
@@ -102,3 +118,7 @@ def create_bfunc_op(has_gradient: bool = True) -> callable:
 
 def create_ufunc_op(has_gradient: bool = True) -> callable:
     return create_func_op(n_in=1, n_ret=1, has_gradient=has_gradient)
+
+
+def create_mfunc_op(has_gradient: bool = True) -> callable:
+    return create_func_op(n_in=None, n_ret=1, has_gradient=has_gradient)

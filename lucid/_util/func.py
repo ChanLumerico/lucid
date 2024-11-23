@@ -3,7 +3,7 @@ import numpy as np
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _NumPyArray
 
-from lucid._backend import create_ufunc_op, _FuncOpReturnType
+from lucid._backend import create_ufunc_op, create_mfunc_op, _FuncOpReturnType
 
 
 @create_ufunc_op()
@@ -56,5 +56,17 @@ def ravel(self: Tensor) -> _FuncOpReturnType:
 
     def compute_grad() -> _NumPyArray:
         return result.grad.reshape(original_shape)
+
+    return result, compute_grad
+
+
+@create_mfunc_op()
+def stack(*tensors: Tensor, axis: int = 0) -> _FuncOpReturnType:
+    data_arr = [tensor.data for tensor in tensors]
+    result = Tensor(np.stack(data_arr, axis=axis))
+
+    def compute_grad() -> tuple[_NumPyArray, ...]:
+        split_grads = np.split(result.grad, len(tensors), axis=axis)
+        return tuple(split_grads)
 
     return result, compute_grad

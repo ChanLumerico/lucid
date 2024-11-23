@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.squeeze" href="squeeze.html" /><link rel="prev" title="Tensor Utilites" href="index.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/utilities/reshape.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.linalg" href="../../linalg/linalg.html" /><link rel="prev" title="lucid.ravel" href="ravel.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/utilities/stack.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.reshape - Lucid 0.1.0 documentation</title>
+        <title>lucid.stack - Lucid 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -247,11 +247,11 @@
 </ul>
 </li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Tensor Utilites</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of Tensor Utilites</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.reshape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="reshape.html">lucid.reshape</a></li>
 <li class="toctree-l2"><a class="reference internal" href="squeeze.html">lucid.squeeze</a></li>
 <li class="toctree-l2"><a class="reference internal" href="unsqueeze.html">lucid.unsqueeze</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ravel.html">lucid.ravel</a></li>
-<li class="toctree-l2"><a class="reference internal" href="stack.html">lucid.stack</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.stack</a></li>
 </ul>
 </li>
 </ul>
@@ -313,7 +313,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/tensor/utilities/reshape.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/tensor/utilities/stack.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -333,35 +333,43 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-reshape">
-<h1>lucid.reshape<a class="headerlink" href="#lucid-reshape" title="Link to this heading">¶</a></h1>
+          <section id="lucid-stack">
+<h1>lucid.stack<a class="headerlink" href="#lucid-stack" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.reshape">
-<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">reshape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.reshape" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.stack">
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">stack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">arr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.stack" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>reshape</cite> function changes the shape of a tensor while keeping the same data.
-It does not alter the underlying data, only the way it is viewed.</p>
+<p>The <cite>stack</cite> function concatenates a sequence of tensors along a new dimension.
+It stacks the input tensors along the specified axis, creating a new tensor
+with one more dimension than the input tensors.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">reshape</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">shape</span><span class="p">:</span> <span class="n">_ShapeLike</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">stack</span><span class="p">(</span><span class="o">*</span><span class="n">arr</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>a</strong> (<em>Tensor</em>): The input tensor to reshape.</p></li>
-<li><p><strong>shape</strong> (<em>_ShapeLike</em>): The new shape for the tensor.
-This can be a list or tuple of integers.</p></li>
+<li><dl class="simple">
+<dt><strong>*arr</strong> (<em>Tensor</em>):</dt><dd><p>A sequence of tensors to be stacked. All tensors must have the same shape.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>axis</strong> (<em>int</em>, optional):</dt><dd><p>The axis along which to stack the tensors. Defaults to <cite>0</cite>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new tensor with the specified shape.
-If the input tensor <strong>a</strong> requires gradients, the resulting tensor will also require gradients.</p>
+<dt><strong>Tensor</strong>:</dt><dd><p>A new tensor resulting from stacking the input tensors along the specified axis.
+The resulting tensor has one additional dimension compared to the input tensors.</p>
 </dd>
 </dl>
 </li>
@@ -369,39 +377,44 @@ If the input tensor <strong>a</strong> requires gradients, the resulting tensor 
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward operation simply reshapes the tensor without changing its underlying data.
-The total number of elements in the new shape must match the original tensor.</p>
+<p>The <cite>stack</cite> operation concatenates the input tensors along a new dimension specified by <cite>axis</cite>.</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{out} = \text{reshape}(\mathbf{a}, \text{shape})\]</div>
+\[\mathbf{out}[i, j, \dots] = \mathbf{arr}[i][j, \dots]\]</div>
 </div>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>The gradient for reshaping is the identity function for the restructured tensor.
-There is no change in the values of the tensor elements, only the way they are indexed.
-Hence, the backward pass follows the same shape.</p>
+<p>The gradient for the stack operation is distributed to each of the input tensors along the stacked axis.</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{out}}{\partial \mathbf{a}} = \mathbf{I}\]</div>
+\[\frac{\partial \mathbf{out}}{\partial \mathbf{arr}_k} = \mathbf{I}_k\]</div>
 </div>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">reshaped</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>  <span class="c1"># or a.reshape(2, 3)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">reshaped</span><span class="p">)</span>
-<span class="go">Tensor([[1. 2. 3.] [4. 5. 6.]], grad=None)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">stacked</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">stacked</span><span class="p">)</span>
+<span class="go">Tensor([[1. 2.],</span>
+<span class="go">        [3. 4.]], grad=None)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">stacked</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">stacked</span><span class="p">)</span>
+<span class="go">Tensor([[1. 3.],</span>
+<span class="go">        [2. 4.]], grad=None)</span>
 </pre></div>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <ul class="simple">
-<li><p>The reshape operation does not change the total number of elements in the tensor,
-but rather the shape in which they are accessed.</p></li>
-<li><p>The operation supports broadcasting and views.</p></li>
-<li><p>Gradients are propagated through the reshaped tensor in the same way as the original tensor.</p></li>
+<li><p>All input tensors must have the same shape.</p></li>
+<li><p>The <cite>axis</cite> parameter specifies the new dimension; for example, <cite>axis=0</cite>
+stacks tensors vertically, while <cite>axis=1</cite> stacks them horizontally.</p></li>
+<li><p>The resulting tensor will have one more dimension than the input tensors.</p></li>
+<li><p>If any of the input tensors require gradients, the resulting tensor will also require gradients.</p></li>
 </ul>
 </div>
 </section>
@@ -412,23 +425,23 @@ but rather the shape in which they are accessed.</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="squeeze.html">
+          <a class="next-page" href="../../linalg/linalg.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.squeeze</div>
+                <div class="title">lucid.linalg</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="index.html">
+          <a class="prev-page" href="ravel.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Tensor Utilites</div>
+                <div class="title">lucid.ravel</div>
                 
               </div>
             </a>
@@ -462,8 +475,8 @@ but rather the shape in which they are accessed.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.reshape</a><ul>
-<li><a class="reference internal" href="#lucid.reshape"><code class="docutils literal notranslate"><span class="pre">reshape()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.stack</a><ul>
+<li><a class="reference internal" href="#lucid.stack"><code class="docutils literal notranslate"><span class="pre">stack()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>

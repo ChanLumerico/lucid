@@ -3,9 +3,15 @@ import lucid
 lucid.random.seed(42)
 
 
-A = lucid.random.randn(2, 2, requires_grad=True)
+arr = [
+    lucid.tensor([1, 2, 3], requires_grad=True),
+    lucid.tensor([4, 5, 6], requires_grad=True),
+    lucid.tensor([7, 8, 9], requires_grad=True),
+]
 
-B = lucid.linalg.pinv(A)
+B = lucid.stack(*arr, axis=0) ** 2 / 2
 B.backward()
 
-print(A.grad)
+
+print(*arr, sep="\n")
+print(*[a.grad for a in arr], sep="\n")

@@ -20,6 +20,10 @@ def ravel(a: Tensor) -> Tensor:
     return func.ravel(a)
 
 
+def stack(*arr: Tensor, axis: int = 0) -> Tensor:
+    return func.stack(*arr, axis=axis)
+
+
 Tensor.reshape = func._reshape_inplace
 Tensor.squeeze = func.squeeze
 Tensor.unsqueeze = func.unsqueeze

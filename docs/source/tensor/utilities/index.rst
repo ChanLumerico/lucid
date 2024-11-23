@@ -8,3 +8,4 @@ Tensor Utilites
    squeeze.rst
    unsqueeze.rst
    ravel.rst
+   stack.rst
