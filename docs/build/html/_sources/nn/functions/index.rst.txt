@@ -7,3 +7,14 @@ lucid.nn.functional
 
     linear/linear.rst
     linear/bilinear.rst
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Non-linear Functions
+
+    non_linear/relu.rst
+    non_linear/leaky_relu.rst
+    non_linear/elu.rst
+    non_linear/selu.rst
+    non_linear/sigmoid.rst
+    non_linear/tanh.rst

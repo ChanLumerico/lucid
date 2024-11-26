@@ -3,9 +3,6 @@ import lucid
 from lucid._tensor import Tensor
 
 
-__all__ = ["linear", "bilinear"]
-
-
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
     output = input_ @ weight.mT
     if bias is not None:

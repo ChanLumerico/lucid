@@ -1,5 +1,5 @@
-lucid.nn.functional.linear
-===========================
+nn.functional.linear
+=====================
 
 .. autofunction:: lucid.nn.functional.linear
 

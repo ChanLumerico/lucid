@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.types" href="../../../others/types.html" /><link rel="prev" title="lucid.nn.functional.linear" href="linear.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.relu" href="../non_linear/relu.html" /><link rel="prev" title="nn.functional.linear" href="linear.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/linear/bilinear.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.nn.functional.bilinear - Lucid 0.2.0 documentation</title>
+        <title>nn.functional.bilinear - Lucid 0.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 0.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 0.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -290,8 +290,14 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../../nn.html">lucid.nn</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Neural Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Neural Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="linear.html">lucid.nn.functional.linear</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.nn.functional.bilinear</a></li>
+<li class="toctree-l2"><a class="reference internal" href="linear.html">nn.functional.linear</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">nn.functional.bilinear</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../non_linear/relu.html">nn.functional.relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../non_linear/leaky_relu.html">nn.functional.leaky_relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../non_linear/elu.html">nn.functional.elu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../non_linear/selu.html">nn.functional.selu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../non_linear/sigmoid.html">nn.functional.sigmoid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../non_linear/tanh.html">nn.functional.tanh</a></li>
 </ul>
 </li>
 </ul>
@@ -341,8 +347,8 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-nn-functional-bilinear">
-<h1>lucid.nn.functional.bilinear<a class="headerlink" href="#lucid-nn-functional-bilinear" title="Link to this heading">¶</a></h1>
+          <section id="nn-functional-bilinear">
+<h1>nn.functional.bilinear<a class="headerlink" href="#nn-functional-bilinear" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="lucid.nn.functional.bilinear">
 <span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">bilinear</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_1</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.bilinear" title="Link to this definition">¶</a></dt>
@@ -521,12 +527,12 @@ the gradients with respect to the output (<strong>out</strong>) are computed as 
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="../../../others/types.html">
+          <a class="next-page" href="../non_linear/relu.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.types</div>
+                <div class="title">nn.functional.relu</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -537,7 +543,7 @@ the gradients with respect to the output (<strong>out</strong>) are computed as 
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.nn.functional.linear</div>
+                <div class="title">nn.functional.linear</div>
                 
               </div>
             </a>
@@ -571,7 +577,7 @@ the gradients with respect to the output (<strong>out</strong>) are computed as 
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.nn.functional.bilinear</a><ul>
+<li><a class="reference internal" href="#">nn.functional.bilinear</a><ul>
 <li><a class="reference internal" href="#lucid.nn.functional.bilinear"><code class="docutils literal notranslate"><span class="pre">bilinear()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
@@ -590,7 +596,7 @@ the gradients with respect to the output (<strong>out</strong>) are computed as 
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=938c9ccc"></script>
+</div><script src="../../../_static/documentation_options.js?v=e259d695"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
