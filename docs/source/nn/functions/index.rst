@@ -16,5 +16,6 @@ lucid.nn.functional
     non_linear/leaky_relu.rst
     non_linear/elu.rst
     non_linear/selu.rst
+    non_linear/gelu.rst
     non_linear/sigmoid.rst
     non_linear/tanh.rst

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -169,7 +169,7 @@ def abs(self: Tensor) -> Tensor:
     return result, compute_grad
 
 
-@create_ufunc_op(has_gradient=False)
+@create_ufunc_op()
 def sign(self: Tensor) -> Tensor:
     result = Tensor(np.sign(self.data))
 
@@ -321,5 +321,32 @@ def var(
             grad = np.reshape(grad, grad_shape)
 
         return grad
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def _min_or_max(
+    self: Tensor,
+    mode: Literal["min", "max"],
+    axis: int | tuple[int] | None = None,
+    keepdims: bool = False,
+) -> Tensor:
+    result = Tensor(
+        np.max(self.data, axis=axis, keepdims=keepdims)
+        if mode == "max"
+        else np.min(self.data, axis=axis, keepdims=keepdims)
+    )
+
+    def compute_grad() -> _NumPyArray:
+        grad = result.grad
+        if not keepdims and axis is not None:
+            grad = np.expand_dims(grad, axis=axis)
+
+        mask = self.data == result.data
+        counts = np.sum(mask, axis=axis, keepdims=True)
+        counts = np.where(counts == 0, 1, counts)
+
+        return mask * grad / counts
 
     return result, compute_grad

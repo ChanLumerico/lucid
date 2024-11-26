@@ -29,6 +29,10 @@ def selu(input_: Tensor) -> Tensor:
     return _non_linear.selu(input_)
 
 
+def gelu(input_: Tensor) -> Tensor:
+    return _non_linear.gelu(input_)
+
+
 def sigmoid(input_: Tensor) -> Tensor:
     return _non_linear.sigmoid(input_)
 

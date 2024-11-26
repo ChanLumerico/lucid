@@ -31,6 +31,9 @@ _grad_enabled: bool = True
 
 newaxis = np.newaxis
 
+pi = np.pi
+inf = np.inf
+
 
 def tensor(
     data: Tensor | _ArrayOrScalar, requires_grad: bool = False, dtype: Any = np.float32

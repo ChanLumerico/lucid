@@ -148,6 +148,18 @@ def var(
     return ufunc.var(a, axis, keepdims)
 
 
+def min(
+    a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
+) -> Tensor:
+    return ufunc._min_or_max(a, "min", axis, keepdims)
+
+
+def max(
+    a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
+) -> Tensor:
+    return ufunc._min_or_max(a, "max", axis, keepdims)
+
+
 def zeros(
     shape: _ShapeLike,
     dtype: Any = np.float32,

@@ -7,7 +7,6 @@ def relu(input_: Tensor) -> Tensor:
     return lucid.maximum(0, input_)
 
 
-# TODO: resolve for (1 - mask), the `int` 1 not being treated as a `Tensor`.
 def leaky_relu(input_: Tensor, negative_slope: float = 0.01) -> Tensor:
     mask = input_ > 0
     out = input_ * mask + input_ * negative_slope * (1 - mask)
@@ -29,6 +28,11 @@ def selu(input_: Tensor) -> Tensor:
     pos = _scale * input_ * mask
     neg = _scale * _alpha * (lucid.exp(input_) - 1) * (1 - mask)
     return pos + neg
+
+
+def gelu(input_: Tensor) -> Tensor:
+    c = lucid.sqrt(2 / lucid.pi)
+    return 0.5 * input_ * (1 + lucid.tanh(c * (input_ + 0.044715 * input_**3)))
 
 
 def sigmoid(input_: Tensor) -> Tensor:
