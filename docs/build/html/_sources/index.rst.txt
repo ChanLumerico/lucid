@@ -39,6 +39,8 @@
 
    nn/nn.rst
 
+   Neural Functions <nn/functions/index.rst>
+
 .. toctree::
    :maxdepth: 1
    :caption: Others
