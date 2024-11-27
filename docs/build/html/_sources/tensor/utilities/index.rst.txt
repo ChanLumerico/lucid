@@ -12,3 +12,6 @@ Tensor Utilites
    hstack.rst
    vstack.rst
    concatenate.rst
+   pad.rst
+   repeat.rst
+   tile.rst

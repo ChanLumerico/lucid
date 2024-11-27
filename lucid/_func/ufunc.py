@@ -169,7 +169,7 @@ def abs(self: Tensor) -> Tensor:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@create_ufunc_op(has_gradient=False)
 def sign(self: Tensor) -> Tensor:
     result = Tensor(np.sign(self.data))
 

@@ -48,7 +48,7 @@ def _truediv(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_bfunc_op()
+@create_bfunc_op(has_gradient=False)
 def _equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data == other.data).astype(self.dtype))
 
@@ -58,7 +58,7 @@ def _equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_bfunc_op()
+@create_bfunc_op(has_gradient=False)
 def _not_equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data != other.data).astype(self.dtype))
 
@@ -68,7 +68,7 @@ def _not_equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_bfunc_op()
+@create_bfunc_op(has_gradient=False)
 def _greater(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data > other.data).astype(self.dtype))
 
@@ -78,7 +78,7 @@ def _greater(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_bfunc_op()
+@create_bfunc_op(has_gradient=False)
 def _greater_or_equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data >= other.data).astype(self.dtype))
 
@@ -88,7 +88,7 @@ def _greater_or_equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_bfunc_op()
+@create_bfunc_op(has_gradient=False)
 def _less(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data < other.data).astype(self.dtype))
 
@@ -98,7 +98,7 @@ def _less(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_bfunc_op()
+@create_bfunc_op(has_gradient=False)
 def _less_or_equal(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor((self.data <= other.data).astype(self.dtype))
 

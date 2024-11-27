@@ -50,7 +50,7 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     return reshaped_grad
 
 
-def create_func_op(n_in: int | None, n_ret: int) -> callable:
+def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> callable:
 
     def decorator(func: Callable[..., _FuncOpReturnType]) -> callable:
         @functools.wraps(func)
@@ -82,7 +82,7 @@ def create_func_op(n_in: int | None, n_ret: int) -> callable:
 
             results: Tuple[Tensor, ...] = tuple()
             for result, compute_grad in func_return_pairs:
-                result.requires_grad = requires_grad
+                result.requires_grad = requires_grad and has_gradient
                 results += (result,)
 
                 def _backward_op(*, _func: Callable = compute_grad) -> None:
@@ -113,13 +113,13 @@ def create_func_op(n_in: int | None, n_ret: int) -> callable:
     return decorator
 
 
-def create_bfunc_op() -> callable:
-    return create_func_op(n_in=2, n_ret=1)
+def create_bfunc_op(has_gradient: bool = True) -> callable:
+    return create_func_op(n_in=2, n_ret=1, has_gradient=has_gradient)
 
 
-def create_ufunc_op() -> callable:
-    return create_func_op(n_in=1, n_ret=1)
+def create_ufunc_op(has_gradient: bool = True) -> callable:
+    return create_func_op(n_in=1, n_ret=1, has_gradient=has_gradient)
 
 
-def create_mfunc_op() -> callable:
-    return create_func_op(n_in=None, n_ret=1)
+def create_mfunc_op(has_gradient: bool = True) -> callable:
+    return create_func_op(n_in=None, n_ret=1, has_gradient=has_gradient)

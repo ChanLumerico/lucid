@@ -1,5 +1,6 @@
+from typing import Sequence
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike
+from lucid.types import _ShapeLike, _ArrayLikeInt
 
 from lucid._util import func
 
@@ -36,7 +37,22 @@ def concatenate(arr: tuple[Tensor, ...], axis: int = 0) -> Tensor:
     return func.concatenate(*arr, axis=axis)
 
 
+def pad(a: Tensor, pad_width: _ArrayLikeInt) -> Tensor:
+    return func.pad(a, pad_width)
+
+
+def repeat(a: Tensor, repeats: int | Sequence[int], axis: int | None = None) -> Tensor:
+    return func.repeat(a, repeats, axis=axis)
+
+
+def tile(a: Tensor, reps: int | Sequence[int]) -> Tensor:
+    return func.tile(a, reps)
+
+
 Tensor.reshape = func._reshape_inplace
 Tensor.squeeze = func.squeeze
 Tensor.unsqueeze = func.unsqueeze
 Tensor.ravel = func.ravel
+Tensor.pad = func.pad
+Tensor.repeat = func.repeat
+Tensor.tile = func.tile

@@ -1,6 +1,6 @@
-from typing import Self
+from typing import Self, Sequence
 
-from lucid.types import _Scalar, _ArrayOrScalar, _ShapeLike
+from lucid.types import _Scalar, _ArrayOrScalar, _ShapeLike, _ArrayLikeInt
 
 
 class _TensorOps:
@@ -67,3 +67,9 @@ class _TensorOps:
     def unsqueeze(self, axis: _ShapeLike) -> Self: ...
 
     def ravel(self) -> Self: ...
+
+    def pad(self, pad_width: _ArrayLikeInt) -> Self: ...
+
+    def repeat(self, repeats: int | Sequence[int], axis: int | None = None) -> Self: ...
+
+    def tile(self, reps: int | Sequence[int]) -> Self: ...
