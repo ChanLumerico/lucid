@@ -1,13 +1,10 @@
 import lucid
 import lucid.nn.functional as F
 
-lucid.random.seed(42)
 
-a = lucid.tensor([[-1, 2], [3, -4]], requires_grad=True)
-b = a.tile((2, 3))
-b = lucid.linalg.norm(b)
+input_ = lucid.ones((1, 1, 4, 4), requires_grad=True)
+weight = lucid.ones((1, 1, 3, 3), requires_grad=True)
+bias = lucid.zeros((1,), requires_grad=True)
 
-b.backward()
-
-print(b)
-print(a.grad)
+out = F._conv._im2col_2d(input_, (3, 3), 1, 0)
+out.backward()

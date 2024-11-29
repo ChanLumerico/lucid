@@ -1,6 +1,6 @@
 from lucid._tensor import Tensor
 
-from lucid.nn.functional import _linear, _non_linear
+from lucid.nn.functional import _linear, _non_linear, _conv
 
 
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:

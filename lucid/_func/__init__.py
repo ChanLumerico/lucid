@@ -239,6 +239,7 @@ Tensor.__neg__ = ufunc._neg
 
 Tensor.T = ufunc._T
 Tensor.mT = ufunc._mT
+Tensor.transpose = ufunc.transpose
 Tensor.dot = bfunc.dot
 Tensor.matmul = bfunc._matmul
 Tensor.sum = ufunc.sum

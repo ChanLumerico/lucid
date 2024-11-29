@@ -73,16 +73,50 @@ class Tensor(_TensorOps):
         sliced_data = self.data[idx]
         new_tensor = Tensor(sliced_data, requires_grad=self.requires_grad)
 
-        def _backward_op() -> None:
-            if self.requires_grad:
-                if self.grad is None:
-                    self.grad = np.zeros_like(self.data)
-                np.add.at(self.grad, idx, new_tensor.grad)
+        if self.requires_grad:
+            if not isinstance(new_tensor, Tensor):
+                raise TypeError("Sliced value must be a Tensor.")
 
-        new_tensor._backward_op = _backward_op
-        new_tensor._prev = [self]
+            def _backward_op() -> None:
+                if self.requires_grad:
+                    if self.grad is None:
+                        self.grad = np.zeros_like(self.data)
+                    if new_tensor.grad is not None:
+                        np.add.at(self.grad, idx, new_tensor.grad)
+
+            original_backward = self._backward_op
+
+            def new_backward_op() -> None:
+                _backward_op()
+                original_backward()
+
+            self._backward_op = new_backward_op
+            self._prev.append(new_tensor)  # TODO: Bug here
 
         return new_tensor
+
+    def __setitem__(self, idx: SupportsIndex, value: Any) -> None:
+        if self.requires_grad:
+            if not isinstance(value, Tensor):
+                value = Tensor(value, requires_grad=False)
+
+            def _backward_op() -> None:
+                if self.grad is None:
+                    self.grad = np.zeros_like(self.data)
+
+                if value.grad is not None:
+                    np.add.at(self.grad, idx, value.grad)
+
+            original_backward = self._backward_op
+
+            def new_backward_op() -> None:
+                _backward_op()
+                original_backward()
+
+            self._backward_op = new_backward_op
+            self._prev.append(value)
+
+        self.data[idx] = value.data
 
     def __iter__(self) -> Iterator[Self]:
         for i in range(self.shape[0]):
