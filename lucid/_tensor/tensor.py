@@ -84,6 +84,23 @@ class Tensor(_TensorOps):
 
         return new_tensor
 
+    def __setitem__(self, idx: SupportsIndex, value: Self | _ArrayOrScalar) -> None:
+        if isinstance(value, Tensor):
+            self.data[idx] = value.data
+
+            def _backward_op():
+                if self.requires_grad and self.grad is not None:
+                    if value.grad is None:
+                        value.grad = np.zeros_like(value.data)
+                    np.add.at(value.grad, (), self.grad[idx])
+
+            if value.requires_grad:
+                existing_backward = self._backward_op
+                self._backward_op = lambda: (existing_backward(), _backward_op())
+                self._prev.append(value)
+        else:
+            self.data[idx] = value
+
     def __iter__(self) -> Iterator[Self]:
         for i in range(self.shape[0]):
             yield self[i]
