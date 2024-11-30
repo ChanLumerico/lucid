@@ -19,3 +19,12 @@ lucid.nn.functional
     non_linear/gelu.rst
     non_linear/sigmoid.rst
     non_linear/tanh.rst
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Convolutions
+
+    conv/im2col.rst
+    conv/conv1d.rst
+    conv/conv2d.rst
+    conv/conv3d.rst

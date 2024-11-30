@@ -21,7 +21,7 @@ from lucid._tensor import Tensor
 from lucid._func import *
 from lucid._util import *
 
-from lucid.types import _ArrayOrScalar
+from lucid.types import _ArrayOrScalar, _ShapeLike, _NumPyArray
 
 import lucid.linalg as linalg
 import lucid.random as random
@@ -56,3 +56,10 @@ def no_grad() -> Generator:
 
 def grad_enabled() -> bool:
     return _grad_enabled
+
+
+def shape(a: Tensor | _NumPyArray) -> _ShapeLike:
+    if hasattr(a, "shape"):
+        return a.shape
+
+    raise ValueError(f"The argument must be a Tensor or a NumPy array.")

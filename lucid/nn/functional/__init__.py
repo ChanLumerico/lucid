@@ -39,3 +39,42 @@ def sigmoid(input_: Tensor) -> Tensor:
 
 def tanh(input_: Tensor) -> Tensor:
     return _non_linear.tanh(input_)
+
+
+def im2col(
+    input_: Tensor,
+    filter_size: tuple[int, ...],
+    stride: tuple[int, ...],
+    padding: tuple[int, ...],
+) -> Tensor:
+    return _conv.im2col(input_, filter_size, stride, padding)
+
+
+def conv1d(
+    input_: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, ...] = 1,
+    padding: int | tuple[int, ...] = 0,
+) -> Tensor:
+    return _conv.conv1d(input_, weight, bias, stride, padding)
+
+
+def conv2d(
+    input_: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, ...] = 1,
+    padding: int | tuple[int, ...] = 0,
+) -> Tensor:
+    return _conv.conv2d(input_, weight, bias, stride, padding)
+
+
+def conv3d(
+    input_: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, ...] = 1,
+    padding: int | tuple[int, ...] = 0,
+) -> Tensor:
+    return _conv.conv3d(input_, weight, bias, stride, padding)
