@@ -1,6 +1,6 @@
 from lucid._tensor import Tensor
 
-from lucid.nn.functional import _linear, _non_linear, _conv
+from lucid.nn.functional import _linear, _non_linear, _conv, _pool
 
 
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
@@ -78,3 +78,30 @@ def conv3d(
     padding: int | tuple[int, ...] = 0,
 ) -> Tensor:
     return _conv.conv3d(input_, weight, bias, stride, padding)
+
+
+def avg_pool1d(
+    input_: Tensor,
+    kernel_size: int | tuple[int] = 1,
+    stride: int | tuple[int] = 1,
+    padding: int | tuple[int] = 0,
+) -> Tensor:
+    return _pool.avg_pool1d(input_, kernel_size, stride, padding)
+
+
+def avg_pool2d(
+    input_: Tensor,
+    kernel_size: int | tuple[int, int] = 1,
+    stride: int | tuple[int, int] = 1,
+    padding: int | tuple[int, int] = 0,
+) -> Tensor:
+    return _pool.avg_pool2d(input_, kernel_size, stride, padding)
+
+
+def avg_pool3d(
+    input_: Tensor,
+    kernel_size: int | tuple[int, int, int] = 1,
+    stride: int | tuple[int, int, int] = 1,
+    padding: int | tuple[int, int, int] = 0,
+) -> Tensor:
+    return _pool.avg_pool3d(input_, kernel_size, stride, padding)

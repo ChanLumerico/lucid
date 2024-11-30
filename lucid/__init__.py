@@ -21,7 +21,7 @@ from lucid._tensor import Tensor
 from lucid._func import *
 from lucid._util import *
 
-from lucid.types import _ArrayOrScalar, _ShapeLike, _NumPyArray
+from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike
 
 import lucid.linalg as linalg
 import lucid.random as random
@@ -36,11 +36,14 @@ inf = np.inf
 
 
 def tensor(
-    data: Tensor | _ArrayOrScalar, requires_grad: bool = False, dtype: Any = np.float32
+    data: Tensor | _ArrayOrScalar,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    dtype: Any = np.float32,
 ) -> Tensor:
     if isinstance(data, Tensor):
         data = data.data
-    return Tensor(data, requires_grad, dtype)
+    return Tensor(data, requires_grad, keep_grad, dtype)
 
 
 @contextmanager
@@ -56,6 +59,15 @@ def no_grad() -> Generator:
 
 def grad_enabled() -> bool:
     return _grad_enabled
+
+
+def to_tensor(
+    a: _ArrayLike,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    dtype: Any = np.float32,
+) -> Tensor:
+    return tensor(a, requires_grad, keep_grad, dtype)
 
 
 def shape(a: Tensor | _NumPyArray) -> _ShapeLike:

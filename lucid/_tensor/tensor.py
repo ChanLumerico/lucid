@@ -49,7 +49,6 @@ class Tensor(_TensorOps):
 
         for tensor in topo_order:
             tensor._backward_op()
-
             if not tensor.is_leaf and not keep_grad:
                 self.zero_grad()
 

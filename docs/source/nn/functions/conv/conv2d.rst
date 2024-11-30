@@ -49,6 +49,7 @@ Returns
     .. math::
 
         H_{out} = \frac{H + 2 \cdot \text{padding}[0] - \text{kernel height}}{\text{stride}[0]} + 1
+        
         W_{out} = \frac{W + 2 \cdot \text{padding}[1] - \text{kernel width}}{\text{stride}[1]} + 1
 
 Examples

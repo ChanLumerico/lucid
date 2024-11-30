@@ -175,7 +175,7 @@ def zeros_like(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    return zeros_like(a, dtype, requires_grad, keep_grad)
+    return gfunc.zeros_like(a, dtype, requires_grad, keep_grad)
 
 
 def ones(
