@@ -37,9 +37,7 @@ def avg_pool1d(
         patch = padded_input[..., start:end:stride_]
         patches.append(patch)
 
-    stacked = lucid.stack(patches, axis=-1)
-    avg_pooled = stacked.mean(axis=-1)
-    return avg_pooled
+    return lucid.stack(patches, axis=-1).mean(axis=-1)
 
 
 def avg_pool2d(
@@ -79,9 +77,7 @@ def avg_pool2d(
             ]
             patches.append(patch)
 
-    stacked = lucid.stack(patches, axis=-1)
-    avg_pooled = stacked.mean(axis=-1)
-    return avg_pooled
+    return lucid.stack(patches, axis=-1).mean(axis=-1)
 
 
 def avg_pool3d(
@@ -126,6 +122,4 @@ def avg_pool3d(
                 ]
                 patches.append(patch)
 
-    stacked = lucid.stack(patches, axis=-1)
-    avg_pooled = stacked.mean(axis=-1)
-    return avg_pooled
+    return lucid.stack(patches, axis=-1).mean(axis=-1)

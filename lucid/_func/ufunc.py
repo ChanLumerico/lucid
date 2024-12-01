@@ -283,14 +283,15 @@ def mean(
     def compute_grad() -> _NumPyArray:
         if axis is None:
             count = self.data.size
+            grad_shape = self.shape
         else:
             axis_tuple = axis if isinstance(axis, tuple) else (axis,)
             count = np.prod([self.shape[ax] for ax in axis_tuple])
 
-        grad_shape = list(result.grad.shape)
-        if axis is not None and not keepdims:
-            for ax in axis_tuple:
-                grad_shape.insert(ax, 1)
+            grad_shape = list(self.shape)
+            if not keepdims:
+                for ax in sorted(axis_tuple):
+                    grad_shape[ax] = 1
 
         grad = np.reshape(result.grad, grad_shape)
         return grad / count

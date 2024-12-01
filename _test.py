@@ -1,14 +1,19 @@
 import lucid
 import lucid.nn.functional as F
 
+lucid.random.seed(42)
 
-input_ = lucid.random.randn(1, 1, 3, 3, requires_grad=True)
-weight = lucid.random.randn(1, 1, 2, 2, requires_grad=True)
-bias = lucid.zeros((1,), requires_grad=True)
 
-out = F.unfold(input_, (2, 2), (1, 1), (0, 0))
+X = lucid.random.randn(10, 32, 28, 28, requires_grad=True)
 
-print(f"out-shape: {out.shape}")
+W1 = lucid.random.randn(64, 32, 3, 3, requires_grad=True)
+W2 = lucid.random.randn(128, 64, 3, 3, requires_grad=True)
 
-out.backward()
-print(input_.grad)
+X = F.conv2d(X, W1, stride=1, padding=0)
+X = F.conv2d(F.relu(X), W2, stride=1, padding=0)
+X = F.avg_pool2d(X, kernel_size=2, stride=2, padding=0)
+
+X.backward()
+
+print(W1.grad.shape)
+print(W2.grad.shape)

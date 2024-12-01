@@ -97,6 +97,9 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     if data.shape == grad.shape:
         return grad
 
+    if data.ndim == 0:
+        return grad.sum()
+
     matched_grad = grad
     if data.ndim > grad.ndim:
         matched_grad = grad.reshape(data.shape)

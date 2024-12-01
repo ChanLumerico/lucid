@@ -76,7 +76,7 @@ class Tensor(_TensorOps):
             if self.grad is None:
                 self.grad = np.zeros_like(self.data)
 
-            new_grad = lucid._match_grad_shape(self.data, new_tensor.grad)
+            new_grad = lucid._match_grad_shape(self.data[idx], new_tensor.grad)
             lucid._set_tensor_grad(self, new_grad, at=idx)
 
         if self.requires_grad:
