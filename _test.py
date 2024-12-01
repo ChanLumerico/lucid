@@ -14,8 +14,11 @@ import lucid.nn.functional as F
 
 # out.backward()
 
-a = lucid.zeros((13, 13), requires_grad=True)
+a = lucid.zeros((10, 10), requires_grad=True)
 b = lucid.zeros_like(a, requires_grad=True)
 
-c = lucid.stack([a[:, :10:2], b[:, :10:2]], axis=-1)
+c = lucid.stack([a[:3], b[:3]], axis=-1)
 c.backward()
+
+print(a.grad.shape)
+print(b.grad.shape)

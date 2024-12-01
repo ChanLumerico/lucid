@@ -73,13 +73,17 @@ class Tensor(_TensorOps):
         new_tensor = Tensor(sliced_data, requires_grad=self.requires_grad)
 
         def _backward_op() -> None:
-            if self.requires_grad:
-                if self.grad is None:
-                    self.grad = np.zeros_like(self.data)
-                np.add.at(self.grad, idx, new_tensor.grad)
+            if self.grad is None:
+                self.grad = np.zeros_like(self.data)
 
-        new_tensor._backward_op = _backward_op
-        new_tensor._prev = [self]
+            new_grad = lucid._match_grad_shape(
+                self.data, new_tensor.grad, final_broadcast=False
+            )
+            lucid._set_tensor_grad(self, new_grad, idx=idx)
+
+        if self.requires_grad:
+            new_tensor._backward_op = _backward_op
+            new_tensor._prev = [self]
 
         return new_tensor
 

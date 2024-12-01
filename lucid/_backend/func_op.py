@@ -14,42 +14,6 @@ _ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
 _FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
 
 
-def _set_tensor_grad(tensor: Tensor, grad: _NumPyArray) -> None:
-    if tensor.requires_grad:
-        if tensor.grad is None:
-            tensor.grad = grad
-        else:
-            tensor.grad = tensor.grad + grad
-
-
-def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
-    if not isinstance(any, Tensor):
-        return Tensor(any)
-    return any
-
-
-def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
-    if data.shape == grad.shape:
-        return grad
-
-    if data.size == grad.size:
-        reshaped_grad = grad
-    elif data.size < grad.size:
-        axis = []
-        if data.ndim == 0:
-            axis.extend(range(grad.ndim))
-        else:
-            for ax in range(data.ndim):
-                if data.shape[ax] != grad.shape[ax] and data.shape[ax] == 1:
-                    axis.append(ax)
-
-        reshaped_grad = np.sum(grad, axis=tuple(axis)).reshape(data.shape)
-    else:
-        reshaped_grad = np.broadcast_to(grad, data.shape)
-
-    return reshaped_grad
-
-
 def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> callable:
 
     def decorator(func: Callable[..., _FuncOpReturnType]) -> callable:
@@ -68,7 +32,7 @@ def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> c
                 tensor_args = args[:n_in]
 
             for arg in tensor_args:
-                tensor = _check_is_tensor(arg)
+                tensor = lucid._check_is_tensor(arg)
                 tensors += (tensor,)
                 requires_grad = requires_grad or tensor.requires_grad
 
@@ -96,8 +60,8 @@ def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> c
                         )
 
                     for tensor, grad in zip(tensors, grads):
-                        new_grad = _match_grad_shape(tensor.data, grad)
-                        _set_tensor_grad(tensor, new_grad)
+                        new_grad = lucid._match_grad_shape(tensor.data, grad)
+                        lucid._set_tensor_grad(tensor, new_grad)
 
                 if not lucid.grad_enabled():
                     continue

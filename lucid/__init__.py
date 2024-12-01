@@ -14,7 +14,7 @@ algorithms and operations without the complexity of high-level frameworks.
 """
 
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Any, Generator, SupportsIndex
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -75,3 +75,79 @@ def shape(a: Tensor | _NumPyArray) -> _ShapeLike:
         return a.shape
 
     raise ValueError(f"The argument must be a Tensor or a NumPy array.")
+
+
+def _set_tensor_grad(
+    tensor: Tensor, grad: _NumPyArray, idx: SupportsIndex = ...
+) -> None:
+    if tensor.requires_grad:
+        if tensor.grad is None:
+            tensor.grad = grad
+        else:
+            tensor.grad[idx] = tensor.grad[idx] + grad
+
+
+def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
+    if not isinstance(any, Tensor):
+        return Tensor(any)
+    return any
+
+
+def _match_grad_shape_(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
+    if data.shape == grad.shape:
+        return grad
+
+    if data.size == grad.size:
+        matched_grad = grad
+    elif data.size < grad.size:
+        axis = []
+        if data.ndim == 0:
+            axis.extend(range(grad.ndim))
+        else:
+            for ax in range(data.ndim):
+                if data.shape[ax] != grad.shape[ax] and data.shape[ax] == 1:
+                    axis.append(ax)
+
+        matched_grad = np.sum(grad, axis=tuple(axis)).reshape(data.shape)
+    else:
+        matched_grad = np.broadcast_to(grad, data.shape)
+
+    return matched_grad
+
+
+def _match_grad_shape(
+    data: _NumPyArray, grad: _NumPyArray, final_broadcast: bool = True
+) -> _NumPyArray:
+    if data.shape == grad.shape:
+        return grad
+
+    matched_grad = None
+    if data.ndim > grad.ndim:
+        matched_grad = grad.reshape(data.shape)
+
+    elif data.ndim < grad.ndim:
+        squeezed = grad.squeeze()
+        matched_grad = squeezed.reshape(data.shape)
+
+    else:
+        if data.size == grad.size:
+            matched_grad = grad
+        elif data.size < grad.size:
+            axis = []
+            if data.ndim == 0:
+                axis.extend(range(grad.ndim))
+            else:
+                for ax in range(data.ndim):
+                    if data.shape[ax] != grad.shape[ax] and data.shape[ax] == 1:
+                        axis.append(ax)
+
+            matched_grad = np.sum(grad, axis=tuple(axis)).reshape(data.shape)
+        else:
+            if final_broadcast:
+                matched_grad = np.broadcast_to(grad, data.shape)
+
+    # DEBUG:
+    if matched_grad is None:
+        print(data.shape, grad.shape)
+
+    return matched_grad
