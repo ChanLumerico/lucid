@@ -11,7 +11,7 @@ W2 = lucid.random.randn(128, 64, 3, 3, requires_grad=True)
 
 X = F.conv2d(X, W1, stride=1, padding=0)
 X = F.conv2d(F.relu(X), W2, stride=1, padding=0)
-X = F.avg_pool2d(X, kernel_size=2, stride=2, padding=0)
+X = F.max_pool2d(X, kernel_size=2, stride=2, padding=0)
 
 X.backward()
 

@@ -275,7 +275,7 @@ def trace(self: Tensor) -> _FuncOpReturnType:
 
 
 @create_ufunc_op()
-def mean(
+def mean(  # TODO: Need to fix shape errors when axis=None
     self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> _FuncOpReturnType:
     result = Tensor(np.mean(self.data, axis=axis, keepdims=keepdims))
@@ -344,7 +344,15 @@ def _min_or_max(
         if not keepdims and axis is not None:
             grad = np.expand_dims(grad, axis=axis)
 
-        mask = self.data == result.data
+        if isinstance(axis, tuple):
+            for ax in axis:
+                grad = np.expand_dims(grad, axis=ax)
+
+        result_expanded = (
+            result.data if axis is None else np.expand_dims(result.data, axis=axis)
+        )
+        mask = self.data == result_expanded
+
         counts = np.sum(mask, axis=axis, keepdims=True)
         counts = np.where(counts == 0, 1, counts)
 

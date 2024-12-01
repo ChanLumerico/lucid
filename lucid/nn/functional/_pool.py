@@ -8,11 +8,11 @@ def _pad_input(input_: Tensor, padding: tuple[int, ...]) -> Tensor:
     return lucid.pad(input_, pad_config)
 
 
-def avg_pool1d(
+def _pool1d(
     input_: Tensor,
-    kernel_size: int | tuple[int] = 1,
-    stride: int | tuple[int] = 1,
-    padding: int | tuple[int] = 0,
+    kernel_size: int | tuple[int],
+    stride: int | tuple[int],
+    padding: int | tuple[int],
 ) -> Tensor:
     if isinstance(kernel_size, int):
         kernel_size = (kernel_size,)
@@ -37,14 +37,14 @@ def avg_pool1d(
         patch = padded_input[..., start:end:stride_]
         patches.append(patch)
 
-    return lucid.stack(patches, axis=-1).mean(axis=-1)
+    return lucid.stack(patches, axis=-1)
 
 
-def avg_pool2d(
+def _pool2d(
     input_: Tensor,
-    kernel_size: int | tuple[int, int] = 1,
-    stride: int | tuple[int, int] = 1,
-    padding: int | tuple[int, int] = 0,
+    kernel_size: int | tuple[int, int],
+    stride: int | tuple[int, int],
+    padding: int | tuple[int, int],
 ) -> Tensor:
     if isinstance(kernel_size, int):
         kernel_size = (kernel_size, kernel_size)
@@ -77,14 +77,14 @@ def avg_pool2d(
             ]
             patches.append(patch)
 
-    return lucid.stack(patches, axis=-1).mean(axis=-1)
+    return lucid.stack(patches, axis=-1)
 
 
-def avg_pool3d(
+def _pool3d(
     input_: Tensor,
-    kernel_size: int | tuple[int, int, int] = 1,
-    stride: int | tuple[int, int, int] = 1,
-    padding: int | tuple[int, int, int] = 0,
+    kernel_size: int | tuple[int, int, int],
+    stride: int | tuple[int, int, int],
+    padding: int | tuple[int, int, int],
 ) -> Tensor:
     if isinstance(kernel_size, int):
         kernel_size = (kernel_size, kernel_size, kernel_size)
@@ -93,12 +93,12 @@ def avg_pool3d(
     if isinstance(padding, int):
         padding = (padding, padding, padding)
 
-    _, _, D_in, H, W = input_.shape
+    _, _, D, H, W = input_.shape
     kernel_d, kernel_h, kernel_w = kernel_size
     stride_d, stride_h, stride_w = stride
     pad_d, pad_h, pad_w = padding
 
-    out_D = math.floor((D_in + 2 * pad_d - kernel_d) / stride_d + 1)
+    out_D = math.floor((D + 2 * pad_d - kernel_d) / stride_d + 1)
     out_H = math.floor((H + 2 * pad_h - kernel_h) / stride_h + 1)
     out_W = math.floor((W + 2 * pad_w - kernel_w) / stride_w + 1)
     padded_input = _pad_input(input_, padding)
@@ -122,4 +122,58 @@ def avg_pool3d(
                 ]
                 patches.append(patch)
 
-    return lucid.stack(patches, axis=-1).mean(axis=-1)
+    return lucid.stack(patches, axis=-1)
+
+
+def avg_pool1d(
+    input_: Tensor,
+    kernel_size: int | tuple[int] = 1,
+    stride: int | tuple[int] = 1,
+    padding: int | tuple[int] = 0,
+) -> Tensor:
+    return _pool1d(input_, kernel_size, stride, padding).mean(axis=-1)
+
+
+def avg_pool2d(
+    input_: Tensor,
+    kernel_size: int | tuple[int, int] = 1,
+    stride: int | tuple[int, int] = 1,
+    padding: int | tuple[int, int] = 0,
+) -> Tensor:
+    return _pool2d(input_, kernel_size, stride, padding).mean(axis=-1)
+
+
+def avg_pool3d(
+    input_: Tensor,
+    kernel_size: int | tuple[int, int, int] = 1,
+    stride: int | tuple[int, int, int] = 1,
+    padding: int | tuple[int, int, int] = 0,
+) -> Tensor:
+    return _pool3d(input_, kernel_size, stride, padding).mean(axis=-1)
+
+
+def max_pool1d(
+    input_: Tensor,
+    kernel_size: int | tuple[int] = 1,
+    stride: int | tuple[int] = 1,
+    padding: int | tuple[int] = 0,
+) -> Tensor:
+    return lucid.max(_pool1d(input_, kernel_size, stride, padding), axis=-1)
+
+
+def max_pool2d(
+    input_: Tensor,
+    kernel_size: int | tuple[int, int] = 1,
+    stride: int | tuple[int, int] = 1,
+    padding: int | tuple[int, int] = 0,
+) -> Tensor:
+    return lucid.max(_pool2d(input_, kernel_size, stride, padding), axis=-1)
+
+
+def max_pool3d(
+    input_: Tensor,
+    kernel_size: int | tuple[int, int, int] = 1,
+    stride: int | tuple[int, int, int] = 1,
+    padding: int | tuple[int, int, int] = 0,
+) -> Tensor:
+    return lucid.max(_pool3d(input_, kernel_size, stride, padding), axis=-1)

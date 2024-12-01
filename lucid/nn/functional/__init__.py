@@ -105,3 +105,30 @@ def avg_pool3d(
     padding: int | tuple[int, int, int] = 0,
 ) -> Tensor:
     return _pool.avg_pool3d(input_, kernel_size, stride, padding)
+
+
+def max_pool1d(
+    input_: Tensor,
+    kernel_size: int | tuple[int] = 1,
+    stride: int | tuple[int] = 1,
+    padding: int | tuple[int] = 0,
+) -> Tensor:
+    return _pool.max_pool1d(input_, kernel_size, stride, padding)
+
+
+def max_pool2d(
+    input_: Tensor,
+    kernel_size: int | tuple[int, int] = 1,
+    stride: int | tuple[int, int] = 1,
+    padding: int | tuple[int, int] = 0,
+) -> Tensor:
+    return _pool.max_pool2d(input_, kernel_size, stride, padding)
+
+
+def max_pool3d(
+    input_: Tensor,
+    kernel_size: int | tuple[int, int, int] = 1,
+    stride: int | tuple[int, int, int] = 1,
+    padding: int | tuple[int, int, int] = 0,
+) -> Tensor:
+    return _pool.max_pool3d(input_, kernel_size, stride, padding)
