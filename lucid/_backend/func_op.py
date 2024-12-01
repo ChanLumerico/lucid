@@ -5,7 +5,7 @@ import numpy as np
 
 import lucid
 from lucid._tensor import Tensor
-from lucid.types import _NumPyArray, _ArrayOrScalar
+from lucid.types import _NumPyArray
 
 _GradFuncType = Callable[[None], _NumPyArray | Tuple[_NumPyArray, ...]]
 

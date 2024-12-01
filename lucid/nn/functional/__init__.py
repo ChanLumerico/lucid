@@ -41,13 +41,13 @@ def tanh(input_: Tensor) -> Tensor:
     return _non_linear.tanh(input_)
 
 
-def im2col(
+def unfold(
     input_: Tensor,
     filter_size: tuple[int, ...],
     stride: tuple[int, ...],
     padding: tuple[int, ...],
 ) -> Tensor:
-    return _conv.im2col(input_, filter_size, stride, padding)
+    return _conv.unfold(input_, filter_size, stride, padding)
 
 
 def conv1d(

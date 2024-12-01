@@ -22,9 +22,9 @@ lucid.nn.functional
 
 .. toctree::
     :maxdepth: 1
-    :caption: Convolutions
+    :caption: Convolution Functions
 
-    conv/im2col.rst
+    conv/unfold.rst
     conv/conv1d.rst
     conv/conv2d.rst
     conv/conv3d.rst

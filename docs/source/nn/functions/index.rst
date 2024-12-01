@@ -24,7 +24,7 @@ lucid.nn.functional
     :maxdepth: 1
     :caption: Convolution Functions
 
-    conv/im2col.rst
+    conv/unfold.rst
     conv/conv1d.rst
     conv/conv2d.rst
     conv/conv3d.rst

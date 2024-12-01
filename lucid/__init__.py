@@ -46,6 +46,15 @@ def tensor(
     return Tensor(data, requires_grad, keep_grad, dtype)
 
 
+def to_tensor(
+    a: _ArrayLike,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    dtype: Any = np.float32,
+) -> Tensor:
+    return tensor(a, requires_grad, keep_grad, dtype)
+
+
 @contextmanager
 def no_grad() -> Generator:
     global _grad_enabled
@@ -61,15 +70,6 @@ def grad_enabled() -> bool:
     return _grad_enabled
 
 
-def to_tensor(
-    a: _ArrayLike,
-    requires_grad: bool = False,
-    keep_grad: bool = False,
-    dtype: Any = np.float32,
-) -> Tensor:
-    return tensor(a, requires_grad, keep_grad, dtype)
-
-
 def shape(a: Tensor | _NumPyArray) -> _ShapeLike:
     if hasattr(a, "shape"):
         return a.shape
@@ -78,13 +78,13 @@ def shape(a: Tensor | _NumPyArray) -> _ShapeLike:
 
 
 def _set_tensor_grad(
-    tensor: Tensor, grad: _NumPyArray, idx: SupportsIndex = ...
+    tensor: Tensor, grad: _NumPyArray, at: SupportsIndex = ...
 ) -> None:
     if tensor.requires_grad:
         if tensor.grad is None:
             tensor.grad = grad
         else:
-            tensor.grad[idx] = tensor.grad[idx] + grad
+            tensor.grad[at] = tensor.grad[at] + grad
 
 
 def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
@@ -93,35 +93,11 @@ def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
     return any
 
 
-def _match_grad_shape_(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
+def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     if data.shape == grad.shape:
         return grad
 
-    if data.size == grad.size:
-        matched_grad = grad
-    elif data.size < grad.size:
-        axis = []
-        if data.ndim == 0:
-            axis.extend(range(grad.ndim))
-        else:
-            for ax in range(data.ndim):
-                if data.shape[ax] != grad.shape[ax] and data.shape[ax] == 1:
-                    axis.append(ax)
-
-        matched_grad = np.sum(grad, axis=tuple(axis)).reshape(data.shape)
-    else:
-        matched_grad = np.broadcast_to(grad, data.shape)
-
-    return matched_grad
-
-
-def _match_grad_shape(
-    data: _NumPyArray, grad: _NumPyArray, final_broadcast: bool = True
-) -> _NumPyArray:
-    if data.shape == grad.shape:
-        return grad
-
-    matched_grad = None
+    matched_grad = grad
     if data.ndim > grad.ndim:
         matched_grad = grad.reshape(data.shape)
 
@@ -143,11 +119,7 @@ def _match_grad_shape(
 
             matched_grad = np.sum(grad, axis=tuple(axis)).reshape(data.shape)
         else:
-            if final_broadcast:
+            if data.size % grad.size == 0:
                 matched_grad = np.broadcast_to(grad, data.shape)
-
-    # DEBUG:
-    if matched_grad is None:
-        print(data.shape, grad.shape)
 
     return matched_grad

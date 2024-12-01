@@ -76,10 +76,8 @@ class Tensor(_TensorOps):
             if self.grad is None:
                 self.grad = np.zeros_like(self.data)
 
-            new_grad = lucid._match_grad_shape(
-                self.data, new_tensor.grad, final_broadcast=False
-            )
-            lucid._set_tensor_grad(self, new_grad, idx=idx)
+            new_grad = lucid._match_grad_shape(self.data, new_tensor.grad)
+            lucid._set_tensor_grad(self, new_grad, at=idx)
 
         if self.requires_grad:
             new_tensor._backward_op = _backward_op
@@ -88,21 +86,15 @@ class Tensor(_TensorOps):
         return new_tensor
 
     def __setitem__(self, idx: SupportsIndex, value: Self | _ArrayOrScalar) -> None:
-        def _backward_op():
-            if self.requires_grad and self.grad is not None:
-                if value.grad is None:
-                    value.grad = np.zeros_like(value.data)
-                np.add.at(value.grad, (), self.grad[idx])
+        if self.requires_grad:
+            raise RuntimeError(
+                "Cannot perform in-place item setting on a "
+                + "Tensor that requires gradients. "
+            )
 
-        if isinstance(value, Tensor):
-            self.data[idx] = value.data
-
-            if value.requires_grad:
-                existing_backward = self._backward_op
-                self._backward_op = lambda: (existing_backward(), _backward_op())
-                self._prev.append(value)
-        else:
-            self.data[idx] = value
+        if not isinstance(value, Tensor):
+            value = Tensor(value)
+        self.data[idx] = value.data
 
     def __iter__(self) -> Iterator[Self]:
         for i in range(self.shape[0]):

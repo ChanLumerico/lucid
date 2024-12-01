@@ -1,9 +1,9 @@
-nn.functional.im2col
+nn.functional.unfold
 ====================
 
-.. autofunction:: lucid.nn.functional.im2col
+.. autofunction:: lucid.nn.functional.unfold
 
-The `im2col` function extracts sliding local blocks from a tensor and
+The `unfold` function extracts sliding local blocks from a tensor and
 rearranges them into columns, a common preprocessing step in
 convolutional operations.
 
@@ -12,7 +12,7 @@ Function Signature
 
 .. code-block:: python
 
-    def im2col(
+    def unfold(
         input_: Tensor,
         filter_size: tuple[int, ...],
         stride: tuple[int, ...],
@@ -47,7 +47,7 @@ Returns
 Forward Calculation
 -------------------
 
-The `im2col` operation rearranges local patches of the input tensor 
+The `unfold` operation rearranges local patches of the input tensor 
 into columns for efficient computation in convolution operations. 
 Given an input tensor and the specified filter size, stride, and padding:
 
@@ -61,7 +61,7 @@ local patch of the input tensor.
 Example
 -------
 
-Using `im2col` to preprocess input data for a convolution operation:
+Using `unfold` to preprocess input data for a convolution operation:
 
 .. code-block:: python
 
@@ -71,7 +71,7 @@ Using `im2col` to preprocess input data for a convolution operation:
     >>> stride = (1, 1)  # Stride: 1
     >>> padding = (0, 0)  # No padding
 
-    >>> col = F.im2col(input_, filter_size, stride, padding)
+    >>> col = F.unfold(input_, filter_size, stride, padding)
     >>> print(col)
     Tensor([
         [1, 2, 4, 5],
