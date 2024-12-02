@@ -28,3 +28,14 @@ lucid.nn.functional
     conv/conv1d.rst
     conv/conv2d.rst
     conv/conv3d.rst
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Pooling Functions
+
+    pool/avg_pool1d.rst
+    pool/avg_pool2d.rst
+    pool/avg_pool3d.rst
+    pool/max_pool1d.rst
+    pool/max_pool2d.rst
+    pool/max_pool3d.rst

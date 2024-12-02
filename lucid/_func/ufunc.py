@@ -250,13 +250,17 @@ def sum(
     result = Tensor(np.sum(self.data, axis=axis, keepdims=keepdims))
 
     def compute_grad() -> _NumPyArray:
-        grad_shape = list(result.grad.shape)
-        if axis is not None and not keepdims:
-            axis_tuple = axis if isinstance(axis, tuple) else (axis,)
-            for ax in axis_tuple:
-                grad_shape.insert(ax, 1)
+        if axis is None:
+            grad = np.ones_like(self.data) * result.grad
+        else:
+            grad_shape = list(result.grad.shape)
+            if not keepdims:
+                axis_tuple = axis if isinstance(axis, tuple) else (axis,)
+                for ax in axis_tuple:
+                    grad_shape.insert(ax, 1)
 
-        grad = np.reshape(result.grad, grad_shape)
+            grad = np.reshape(result.grad, grad_shape)
+
         return grad
 
     return result, compute_grad
@@ -275,7 +279,7 @@ def trace(self: Tensor) -> _FuncOpReturnType:
 
 
 @create_ufunc_op()
-def mean(  # TODO: Need to fix shape errors when axis=None
+def mean(
     self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> _FuncOpReturnType:
     result = Tensor(np.mean(self.data, axis=axis, keepdims=keepdims))
@@ -283,17 +287,18 @@ def mean(  # TODO: Need to fix shape errors when axis=None
     def compute_grad() -> _NumPyArray:
         if axis is None:
             count = self.data.size
-            grad_shape = self.shape
+            grad = np.ones_like(self.data) * result.grad
         else:
             axis_tuple = axis if isinstance(axis, tuple) else (axis,)
             count = np.prod([self.shape[ax] for ax in axis_tuple])
 
-            grad_shape = list(self.shape)
+            grad_shape = list(result.grad.shape)
             if not keepdims:
                 for ax in sorted(axis_tuple):
-                    grad_shape[ax] = 1
+                    grad_shape.insert(ax, 1)
 
-        grad = np.reshape(result.grad, grad_shape)
+            grad = np.reshape(result.grad, grad_shape)
+
         return grad / count
 
     return result, compute_grad
