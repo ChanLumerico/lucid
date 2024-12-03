@@ -39,3 +39,13 @@ lucid.nn.functional
     pool/max_pool1d.rst
     pool/max_pool2d.rst
     pool/max_pool3d.rst
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Dropout Functions
+
+    drop/dropout.rst
+    drop/dropout1d.rst
+    drop/dropout2d.rst
+    drop/dropout3d.rst
+    drop/alpha_dropout.rst

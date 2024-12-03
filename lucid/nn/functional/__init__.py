@@ -1,6 +1,6 @@
 from lucid._tensor import Tensor
 
-from lucid.nn.functional import _linear, _non_linear, _conv, _pool
+from lucid.nn.functional import _linear, _non_linear, _conv, _pool, _drop
 
 
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
@@ -132,3 +132,23 @@ def max_pool3d(
     padding: int | tuple[int, int, int] = 0,
 ) -> Tensor:
     return _pool.max_pool3d(input_, kernel_size, stride, padding)
+
+
+def dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
+    return _drop.dropout(input_, p, training)
+
+
+def dropout1d(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
+    return _drop.dropoutnd(input_, p, training)
+
+
+def dropout2d(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
+    return _drop.dropoutnd(input_, p, training)
+
+
+def dropout3d(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
+    return _drop.dropoutnd(input_, p, training)
+
+
+def alpha_dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
+    return _drop.alpha_dropout(input_, p, training)
