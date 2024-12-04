@@ -49,3 +49,11 @@ lucid.nn.functional
     drop/dropout2d.rst
     drop/dropout3d.rst
     drop/alpha_dropout.rst
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Normalization Functions
+
+    norm/batch_norm.rst
+    norm/layer_norm.rst
+    norm/instance_norm.rst

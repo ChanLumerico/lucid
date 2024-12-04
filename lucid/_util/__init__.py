@@ -49,6 +49,10 @@ def tile(a: Tensor, reps: int | Sequence[int]) -> Tensor:
     return func.tile(a, reps)
 
 
+def flatten(a: Tensor) -> Tensor:
+    return func.flatten(a)
+
+
 Tensor.reshape = func._reshape_inplace
 Tensor.squeeze = func.squeeze
 Tensor.unsqueeze = func.unsqueeze
@@ -56,3 +60,4 @@ Tensor.ravel = func.ravel
 Tensor.pad = func.pad
 Tensor.repeat = func.repeat
 Tensor.tile = func.tile
+Tensor.flatten = func.flatten

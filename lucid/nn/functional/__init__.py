@@ -1,6 +1,7 @@
 from lucid._tensor import Tensor
+from lucid.types import _ShapeLike
 
-from lucid.nn.functional import _linear, _non_linear, _conv, _pool, _drop
+from lucid.nn.functional import _linear, _non_linear, _conv, _pool, _drop, _norm
 
 
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
@@ -152,3 +153,43 @@ def dropout3d(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
 
 def alpha_dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     return _drop.alpha_dropout(input_, p, training)
+
+
+def batch_norm(
+    input_: Tensor,
+    running_mean: Tensor,
+    running_var: Tensor,
+    weight: Tensor | None = None,
+    bias: Tensor | None = None,
+    training: bool = True,
+    momentum: float = 0.1,
+    eps: float = 1e-5,
+) -> Tensor:
+    return _norm.batch_norm(
+        input_, running_mean, running_var, weight, bias, training, momentum, eps
+    )
+
+
+def layer_norm(
+    input_: Tensor,
+    normalized_shape: _ShapeLike,
+    weight: Tensor | None = None,
+    bias: Tensor | None = None,
+    eps: float = 1e-5,
+) -> Tensor:
+    return _norm.layer_norm(input_, normalized_shape, weight, bias, eps)
+
+
+def instance_norm(
+    input_: Tensor,
+    running_mean: Tensor,
+    running_var: Tensor,
+    weight: Tensor | None = None,
+    bias: Tensor | None = None,
+    training: bool = True,
+    momentum: float = 0.1,
+    eps: float = 1e-5,
+) -> Tensor:
+    return _norm.instance_norm(
+        input_, running_mean, running_var, weight, bias, training, momentum, eps
+    )

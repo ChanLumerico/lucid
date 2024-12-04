@@ -15,3 +15,4 @@ Tensor Utilites
    pad.rst
    repeat.rst
    tile.rst
+   flatten.rst

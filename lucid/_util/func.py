@@ -267,3 +267,14 @@ def tile(self: Tensor, reps: int | Sequence[int]) -> _FuncOpReturnType:
         return grad_output_reshape.sum(axis=axes_to_sum)
 
     return result, compute_grad
+
+
+@create_ufunc_op()
+def flatten(self: Tensor) -> _FuncOpReturnType:
+    original_shape = self.shape
+    result = Tensor(self.data.reshape(-1))
+
+    def compute_grad() -> _NumPyArray:
+        return result.grad.reshape(*original_shape)
+
+    return result, compute_grad
