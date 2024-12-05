@@ -1,7 +1,8 @@
+from typing import Literal
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
 
-from lucid.nn.functional import _linear, _non_linear, _conv, _pool, _drop, _norm
+from lucid.nn.functional import _linear, _non_linear, _conv, _pool, _drop, _norm, _loss
 
 
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
@@ -193,3 +194,50 @@ def instance_norm(
     return _norm.instance_norm(
         input_, running_mean, running_var, weight, bias, training, momentum, eps
     )
+
+
+_ReductionType = Literal["mean", "sum"]
+
+
+def mse_loss(
+    input_: Tensor, target: Tensor, reduction: _ReductionType | None = "mean"
+) -> Tensor:
+    return _loss.mse_loss(input_, target, reduction)
+
+
+def binary_cross_entropy(
+    input_: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    reduction: _ReductionType | None = "mean",
+    eps: float = 1e-7,
+) -> Tensor:
+    return _loss.binary_cross_entropy(input_, target, weight, reduction, eps)
+
+
+def cross_entropy(
+    input_: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    reduction: _ReductionType | None = "mean",
+    eps: float = 1e-7,
+) -> Tensor:
+    return _loss.cross_entropy(input_, target, weight, reduction, eps)
+
+
+def nll_loss(
+    input_: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    reduction: _ReductionType | None = "mean",
+) -> Tensor:
+    return _loss.nll_loss(input_, target, weight, reduction)
+
+
+def huber_loss(
+    input_: Tensor,
+    target: Tensor,
+    delta: float = 1.0,
+    reduction: _ReductionType | None = "mean",
+) -> Tensor:
+    return _loss.huber_loss(input_, target, delta, reduction)

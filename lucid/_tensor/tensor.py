@@ -2,7 +2,7 @@ from typing import Any, Iterator, Optional, Self, SupportsIndex
 import numpy as np
 import lucid
 from lucid._tensor.tensor_ops import _TensorOps
-from lucid.types import _ArrayOrScalar, _NumPyArray
+from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar
 
 
 class Tensor(_TensorOps):
@@ -63,6 +63,17 @@ class Tensor(_TensorOps):
     @property
     def size(self) -> int:
         return self.data.size
+
+    def item(self) -> _Scalar:
+        if self.ndim != 0:
+            raise ValueError(
+                "Tensor must be 0-dimensional(scalar) to pop its item.",
+            )
+        item = self.data
+        if item % 1 == 0:
+            return int(item)
+        else:
+            return float(item)
 
     def zero_grad(self) -> None:
         if not self.keep_grad:

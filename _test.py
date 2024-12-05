@@ -4,21 +4,29 @@ import lucid.nn.functional as F
 lucid.random.seed(42)
 
 
-X = lucid.random.randn(10, 32, 28, 28, requires_grad=True)
+# X = lucid.random.randn(10, 32, 28, 28, requires_grad=True)
 
-W1 = lucid.random.randn(64, 32, 3, 3, requires_grad=True)
-W2 = lucid.random.randn(128, 64, 3, 3, requires_grad=True)
+# W1 = lucid.random.randn(64, 32, 3, 3, requires_grad=True)
+# W2 = lucid.random.randn(128, 64, 3, 3, requires_grad=True)
 
-X = F.conv2d(X, W1, stride=1, padding=0)
-X = F.conv2d(X, W2, stride=1, padding=0)
-X = F.relu(X)
-X = F.avg_pool2d(X, kernel_size=2, stride=2, padding=0)
-X = F.max_pool2d(X, kernel_size=2, stride=2, padding=0)
-X = F.dropout(X, p=0.2)
+# X = F.conv2d(X, W1, stride=1, padding=0)
+# X = F.conv2d(X, W2, stride=1, padding=0)
+# X = F.relu(X)
+# X = F.avg_pool2d(X, kernel_size=2, stride=2, padding=0)
+# X = F.max_pool2d(X, kernel_size=2, stride=2, padding=0)
+# X = F.dropout(X, p=0.2)
 
-print(X.shape)
+# print(X.shape)
 
-X.backward()
+# X.backward()
 
-print(W1.grad.shape)
-print(W2.grad.shape)
+# print(W1.grad.shape)
+# print(W2.grad.shape)
+
+if __name__ == "__main__":
+    logits = lucid.tensor([[2.0, 1.0, 0.1], [0.1, 2.0, 1.0]], requires_grad=True)
+    labels = lucid.tensor([0, 1])
+
+    cross = F.cross_entropy(logits, labels)
+
+    cross.backward()
