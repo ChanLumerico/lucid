@@ -33,7 +33,7 @@
    RNG Functions <random/functions/index.rst>
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 3
    :caption: Neural Networks
    :hidden:
 

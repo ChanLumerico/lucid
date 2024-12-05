@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.conv3d" href="conv3d.html" /><link rel="prev" title="nn.functional.conv1d" href="conv1d.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/conv/conv2d.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.linear" href="linear.html" /><link rel="prev" title="lucid.nn.functional" href="../index.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/linear/index.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.functional.conv2d - Lucid 0.10.0 documentation</title>
+        <title>Linear Functions - Lucid 0.10.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -179,7 +179,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -296,9 +296,9 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../../nn.html">lucid.nn</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Neural Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Neural Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2 has-children"><a class="reference internal" href="../linear/index.html">Linear Functions</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle navigation of Linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../linear/linear.html">nn.functional.linear</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../linear/bilinear.html">nn.functional.bilinear</a></li>
+<li class="toctree-l2 current has-children current-page"><a class="current reference internal" href="#">Linear Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle navigation of Linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="linear.html">nn.functional.linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="bilinear.html">nn.functional.bilinear</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../non_linear/relu.html">nn.functional.relu</a></li>
@@ -308,10 +308,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../non_linear/gelu.html">nn.functional.gelu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../non_linear/sigmoid.html">nn.functional.sigmoid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../non_linear/tanh.html">nn.functional.tanh</a></li>
-<li class="toctree-l2"><a class="reference internal" href="unfold.html">nn.functional.unfold</a></li>
-<li class="toctree-l2"><a class="reference internal" href="conv1d.html">nn.functional.conv1d</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">nn.functional.conv2d</a></li>
-<li class="toctree-l2"><a class="reference internal" href="conv3d.html">nn.functional.conv3d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conv/unfold.html">nn.functional.unfold</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conv/conv1d.html">nn.functional.conv1d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conv/conv2d.html">nn.functional.conv2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conv/conv3d.html">nn.functional.conv3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../pool/avg_pool1d.html">nn.functional.avg_pool1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../pool/avg_pool2d.html">nn.functional.avg_pool2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../pool/avg_pool3d.html">nn.functional.avg_pool3d</a></li>
@@ -355,7 +355,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/nn/functions/conv/conv2d.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/nn/functions/linear/index.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -369,93 +369,20 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-functional-conv2d">
-<h1>nn.functional.conv2d<a class="headerlink" href="#nn-functional-conv2d" title="Link to this heading">¶</a></h1>
-<dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.functional.conv2d">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">conv2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.conv2d" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<p>The <cite>conv2d</cite> function performs a two-dimensional convolution operation on the input tensor.
-This is essential in image processing tasks and neural networks for computer vision.</p>
-<section id="function-signature">
-<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">conv2d</span><span class="p">(</span>
-    <span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
-    <span class="n">weight</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
-    <span class="n">bias</span><span class="p">:</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-    <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
-</pre></div>
-</div>
-</section>
-<section id="parameters">
-<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of shape (N, C_in, H, W), where N is the batch size,
-C_in is the input channels, H is the height, and W is the width.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>weight</strong> (<em>Tensor</em>):</dt><dd><p>The weight tensor of shape (C_out, C_in, K_H, K_W),
-where K_H and K_W are the kernel height and width.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>bias</strong> (<em>Tensor</em>, optional):</dt><dd><p>The bias tensor of shape (C_out,). If None, no bias is added.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>stride</strong> (<em>int | tuple[int, …]</em>, optional):</dt><dd><p>The stride of the convolution. Default: 1.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>padding</strong> (<em>int | tuple[int, …]</em>, optional):</dt><dd><p>The amount of zero-padding added to all sides of the input. Default: 0.</p>
-</dd>
-</dl>
-</li>
-</ul>
-</section>
-<section id="returns">
-<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
+          <section id="linear-functions">
+<h1>Linear Functions<a class="headerlink" href="#linear-functions" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
 <ul>
-<li><dl>
-<dt><strong>Tensor</strong>:</dt><dd><p>The result of the 2D convolution operation,
-with shape (N, C_out, H_out, W_out), where:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[ \begin{align}\begin{aligned}H_{out} = \frac{H + 2 \cdot \text{padding}[0] - \text{kernel height}}{\text{stride}[0]} + 1\\W_{out} = \frac{W + 2 \cdot \text{padding}[1] - \text{kernel width}}{\text{stride}[1]} + 1\end{aligned}\end{align} \]</div>
-</div>
-</dd>
-</dl>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="linear.html">nn.functional.linear</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bilinear.html">nn.functional.bilinear</a></li>
 </ul>
-</section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Performing a simple 2D convolution:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]]]])</span>  <span class="c1"># Shape: (1, 1, 2, 2)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">weight</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]]]])</span>  <span class="c1"># Shape: (1, 1, 2, 2)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">bias</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># Shape: (1,)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">conv2d</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">weight</span><span class="p">,</span> <span class="n">bias</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([[[[10.0]]]])</span>
-</pre></div>
 </div>
-</section>
 </section>
 
         </article>
@@ -463,23 +390,23 @@ with shape (N, C_out, H_out, W_out), where:</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="conv3d.html">
+          <a class="next-page" href="linear.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.functional.conv3d</div>
+                <div class="title">nn.functional.linear</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="conv1d.html">
+          <a class="prev-page" href="../index.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">nn.functional.conv1d</div>
+                <div class="title">lucid.nn.functional</div>
                 
               </div>
             </a>
@@ -501,31 +428,8 @@ with shape (N, C_out, H_out, W_out), where:</p>
         
       </footer>
     </div>
-    <aside class="toc-drawer">
+    <aside class="toc-drawer no-toc">
       
-      
-      <div class="toc-sticky toc-scroll">
-        <div class="toc-title-container">
-          <span class="toc-title">
-            On this page
-          </span>
-        </div>
-        <div class="toc-tree-container">
-          <div class="toc-tree">
-            <ul>
-<li><a class="reference internal" href="#">nn.functional.conv2d</a><ul>
-<li><a class="reference internal" href="#lucid.nn.functional.conv2d"><code class="docutils literal notranslate"><span class="pre">conv2d()</span></code></a></li>
-<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
-<li><a class="reference internal" href="#parameters">Parameters</a></li>
-<li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#examples">Examples</a></li>
-</ul>
-</li>
-</ul>
-
-          </div>
-        </div>
-      </div>
       
       
     </aside>

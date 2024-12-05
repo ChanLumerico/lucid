@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="nn.functional.linear" href="linear/linear.html" /><link rel="prev" title="lucid.nn" href="../nn.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="Linear Functions" href="linear/index.html" /><link rel="prev" title="lucid.nn" href="../nn.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/index.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
@@ -296,8 +296,11 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../nn.html">lucid.nn</a></li>
 <li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">Neural Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Neural Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="linear/linear.html">nn.functional.linear</a></li>
-<li class="toctree-l2"><a class="reference internal" href="linear/bilinear.html">nn.functional.bilinear</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="linear/index.html">Linear Functions</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle navigation of Linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="linear/linear.html">nn.functional.linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="linear/bilinear.html">nn.functional.bilinear</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="non_linear/relu.html">nn.functional.relu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="non_linear/leaky_relu.html">nn.functional.leaky_relu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="non_linear/elu.html">nn.functional.elu</a></li>
@@ -377,58 +380,251 @@
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Linear Functions</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="linear/linear.html">nn.functional.linear</a></li>
-<li class="toctree-l1"><a class="reference internal" href="linear/bilinear.html">nn.functional.bilinear</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linear/index.html">Linear Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="linear/linear.html">nn.functional.linear</a></li>
+<li class="toctree-l2"><a class="reference internal" href="linear/bilinear.html">nn.functional.bilinear</a></li>
+</ul>
+</li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Non-linear Functions</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="non_linear/relu.html">nn.functional.relu</a></li>
-<li class="toctree-l1"><a class="reference internal" href="non_linear/leaky_relu.html">nn.functional.leaky_relu</a></li>
-<li class="toctree-l1"><a class="reference internal" href="non_linear/elu.html">nn.functional.elu</a></li>
-<li class="toctree-l1"><a class="reference internal" href="non_linear/selu.html">nn.functional.selu</a></li>
-<li class="toctree-l1"><a class="reference internal" href="non_linear/gelu.html">nn.functional.gelu</a></li>
-<li class="toctree-l1"><a class="reference internal" href="non_linear/sigmoid.html">nn.functional.sigmoid</a></li>
-<li class="toctree-l1"><a class="reference internal" href="non_linear/tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="non_linear/relu.html">nn.functional.relu</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/relu.html#lucid.nn.functional.relu"><code class="docutils literal notranslate"><span class="pre">relu()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/relu.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/relu.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/relu.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/relu.html#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/relu.html#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/relu.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="non_linear/leaky_relu.html">nn.functional.leaky_relu</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/leaky_relu.html#lucid.nn.functional.leaky_relu"><code class="docutils literal notranslate"><span class="pre">leaky_relu()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/leaky_relu.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/leaky_relu.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/leaky_relu.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/leaky_relu.html#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/leaky_relu.html#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/leaky_relu.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="non_linear/elu.html">nn.functional.elu</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/elu.html#lucid.nn.functional.elu"><code class="docutils literal notranslate"><span class="pre">elu()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/elu.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/elu.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/elu.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/elu.html#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/elu.html#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/elu.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="non_linear/selu.html">nn.functional.selu</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/selu.html#lucid.nn.functional.selu"><code class="docutils literal notranslate"><span class="pre">selu()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/selu.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/selu.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/selu.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/selu.html#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/selu.html#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/selu.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="non_linear/gelu.html">nn.functional.gelu</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/gelu.html#lucid.nn.functional.gelu"><code class="docutils literal notranslate"><span class="pre">gelu()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/gelu.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/gelu.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/gelu.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/gelu.html#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/gelu.html#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/gelu.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="non_linear/sigmoid.html">nn.functional.sigmoid</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/sigmoid.html#lucid.nn.functional.sigmoid"><code class="docutils literal notranslate"><span class="pre">sigmoid()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/sigmoid.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/sigmoid.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/sigmoid.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/sigmoid.html#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/sigmoid.html#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/sigmoid.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="non_linear/tanh.html">nn.functional.tanh</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/tanh.html#lucid.nn.functional.tanh"><code class="docutils literal notranslate"><span class="pre">tanh()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/tanh.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/tanh.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/tanh.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/tanh.html#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/tanh.html#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="non_linear/tanh.html#examples">Examples</a></li>
+</ul>
+</li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Convolution Functions</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="conv/unfold.html">nn.functional.unfold</a></li>
-<li class="toctree-l1"><a class="reference internal" href="conv/conv1d.html">nn.functional.conv1d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="conv/conv2d.html">nn.functional.conv2d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="conv/conv3d.html">nn.functional.conv3d</a></li>
+<li class="toctree-l1"><a class="reference internal" href="conv/unfold.html">nn.functional.unfold</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="conv/unfold.html#lucid.nn.functional.unfold"><code class="docutils literal notranslate"><span class="pre">unfold()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/unfold.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/unfold.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/unfold.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/unfold.html#forward-calculation">Forward Calculation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/unfold.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="conv/conv1d.html">nn.functional.conv1d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv1d.html#lucid.nn.functional.conv1d"><code class="docutils literal notranslate"><span class="pre">conv1d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv1d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv1d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv1d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv1d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="conv/conv2d.html">nn.functional.conv2d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv2d.html#lucid.nn.functional.conv2d"><code class="docutils literal notranslate"><span class="pre">conv2d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv2d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv2d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv2d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv2d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="conv/conv3d.html">nn.functional.conv3d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv3d.html#lucid.nn.functional.conv3d"><code class="docutils literal notranslate"><span class="pre">conv3d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv3d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv3d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv3d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conv/conv3d.html#examples">Examples</a></li>
+</ul>
+</li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Pooling Functions</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="pool/avg_pool1d.html">nn.functional.avg_pool1d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="pool/avg_pool2d.html">nn.functional.avg_pool2d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="pool/avg_pool3d.html">nn.functional.avg_pool3d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="pool/max_pool1d.html">nn.functional.max_pool1d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="pool/max_pool2d.html">nn.functional.max_pool2d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="pool/max_pool3d.html">nn.functional.max_pool3d</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pool/avg_pool1d.html">nn.functional.avg_pool1d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool1d.html#lucid.nn.functional.avg_pool1d"><code class="docutils literal notranslate"><span class="pre">avg_pool1d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool1d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool1d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool1d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool1d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pool/avg_pool2d.html">nn.functional.avg_pool2d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool2d.html#lucid.nn.functional.avg_pool2d"><code class="docutils literal notranslate"><span class="pre">avg_pool2d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool2d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool2d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool2d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool2d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pool/avg_pool3d.html">nn.functional.avg_pool3d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool3d.html#lucid.nn.functional.avg_pool3d"><code class="docutils literal notranslate"><span class="pre">avg_pool3d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool3d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool3d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool3d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/avg_pool3d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pool/max_pool1d.html">nn.functional.max_pool1d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool1d.html#lucid.nn.functional.max_pool1d"><code class="docutils literal notranslate"><span class="pre">max_pool1d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool1d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool1d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool1d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool1d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pool/max_pool2d.html">nn.functional.max_pool2d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool2d.html#lucid.nn.functional.max_pool2d"><code class="docutils literal notranslate"><span class="pre">max_pool2d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool2d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool2d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool2d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool2d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pool/max_pool3d.html">nn.functional.max_pool3d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool3d.html#lucid.nn.functional.max_pool3d"><code class="docutils literal notranslate"><span class="pre">max_pool3d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool3d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool3d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool3d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pool/max_pool3d.html#examples">Examples</a></li>
+</ul>
+</li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Dropout Functions</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="drop/dropout.html">nn.functional.dropout</a></li>
-<li class="toctree-l1"><a class="reference internal" href="drop/dropout1d.html">nn.functional.dropout1d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="drop/dropout2d.html">nn.functional.dropout2d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="drop/dropout3d.html">nn.functional.dropout3d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="drop/alpha_dropout.html">nn.functional.alpha_dropout</a></li>
+<li class="toctree-l1"><a class="reference internal" href="drop/dropout.html">nn.functional.dropout</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout.html#lucid.nn.functional.dropout"><code class="docutils literal notranslate"><span class="pre">dropout()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="drop/dropout1d.html">nn.functional.dropout1d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout1d.html#lucid.nn.functional.dropout1d"><code class="docutils literal notranslate"><span class="pre">dropout1d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout1d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout1d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout1d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout1d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="drop/dropout2d.html">nn.functional.dropout2d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout2d.html#lucid.nn.functional.dropout2d"><code class="docutils literal notranslate"><span class="pre">dropout2d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout2d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout2d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout2d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout2d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="drop/dropout3d.html">nn.functional.dropout3d</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout3d.html#lucid.nn.functional.dropout3d"><code class="docutils literal notranslate"><span class="pre">dropout3d()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout3d.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout3d.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout3d.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/dropout3d.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="drop/alpha_dropout.html">nn.functional.alpha_dropout</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="drop/alpha_dropout.html#lucid.nn.functional.alpha_dropout"><code class="docutils literal notranslate"><span class="pre">alpha_dropout()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/alpha_dropout.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/alpha_dropout.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/alpha_dropout.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="drop/alpha_dropout.html#examples">Examples</a></li>
+</ul>
+</li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Normalization Functions</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="norm/batch_norm.html">nn.functional.batch_norm</a></li>
-<li class="toctree-l1"><a class="reference internal" href="norm/layer_norm.html">nn.functional.layer_norm</a></li>
-<li class="toctree-l1"><a class="reference internal" href="norm/instance_norm.html">nn.functional.instance_norm</a></li>
+<li class="toctree-l1"><a class="reference internal" href="norm/batch_norm.html">nn.functional.batch_norm</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="norm/batch_norm.html#lucid.nn.functional.batch_norm"><code class="docutils literal notranslate"><span class="pre">batch_norm()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/batch_norm.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/batch_norm.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/batch_norm.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/batch_norm.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="norm/layer_norm.html">nn.functional.layer_norm</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="norm/layer_norm.html#lucid.nn.functional.layer_norm"><code class="docutils literal notranslate"><span class="pre">layer_norm()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/layer_norm.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/layer_norm.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/layer_norm.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/layer_norm.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="norm/instance_norm.html">nn.functional.instance_norm</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="norm/instance_norm.html#lucid.nn.functional.instance_norm"><code class="docutils literal notranslate"><span class="pre">instance_norm()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/instance_norm.html#function-signature">Function Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/instance_norm.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/instance_norm.html#returns">Returns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="norm/instance_norm.html#examples">Examples</a></li>
+</ul>
+</li>
 </ul>
 </div>
 </section>
@@ -438,12 +634,12 @@
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="linear/linear.html">
+          <a class="next-page" href="linear/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.functional.linear</div>
+                <div class="title">Linear Functions</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

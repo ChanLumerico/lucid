@@ -2,14 +2,13 @@ lucid.nn.functional
 ===================
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :caption: Linear Functions
 
-    linear/linear.rst
-    linear/bilinear.rst
+    Linear Functions <linear/index.rst>
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :caption: Non-linear Functions
 
     non_linear/relu.rst
@@ -21,7 +20,7 @@ lucid.nn.functional
     non_linear/tanh.rst
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :caption: Convolution Functions
 
     conv/unfold.rst
@@ -30,7 +29,7 @@ lucid.nn.functional
     conv/conv3d.rst
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :caption: Pooling Functions
 
     pool/avg_pool1d.rst
@@ -41,7 +40,7 @@ lucid.nn.functional
     pool/max_pool3d.rst
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :caption: Dropout Functions
 
     drop/dropout.rst
@@ -51,7 +50,7 @@ lucid.nn.functional
     drop/alpha_dropout.rst
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :caption: Normalization Functions
 
     norm/batch_norm.rst
