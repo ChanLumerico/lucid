@@ -1,4 +1,4 @@
-from typing import Literal, LiteralString
+from typing import Literal
 
 import lucid
 from lucid._tensor import Tensor
@@ -43,21 +43,19 @@ def binary_cross_entropy(
     return _loss_reduction(loss, reduction)
 
 
-def cross_entropy(  # TODO: Need to be inspected; shape mismatch during backward
+def cross_entropy(
     input_: Tensor,
     target: Tensor,
     weight: Tensor | None = None,
     reduction: _ReductionType | None = "mean",
     eps: float = 1e-7,
 ) -> Tensor:
-    input_ = input_ - lucid.max(input_, axis=1, keepdims=True)
-    log_probs = input_ - lucid.log(lucid.exp(input_).sum(axis=1, keepdims=True) + eps)
+    exp_logits = lucid.exp(input_ - lucid.max(input_, axis=1, keepdims=True))
+    prob = exp_logits / lucid.sum(exp_logits, axis=1, keepdims=True)
 
-    loss = -log_probs[:, target.data.astype(int)]
+    loss = -lucid.log(prob[:, target.data.astype(int)] + eps)
     if weight is not None:
         loss *= weight[target.data.astype(int)]
-
-    print(input_.shape, log_probs.shape, loss.shape)
 
     return _loss_reduction(loss, reduction)
 

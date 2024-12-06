@@ -338,26 +338,35 @@ def _min_or_max(
     axis: int | tuple[int] | None = None,
     keepdims: bool = False,
 ) -> Tensor:
-    result = Tensor(
-        np.max(self.data, axis=axis, keepdims=keepdims)
-        if mode == "max"
-        else np.min(self.data, axis=axis, keepdims=keepdims)
-    )
+    if mode == "max":
+        data = np.max(self.data, axis=axis, keepdims=keepdims)
+    else:
+        data = np.min(self.data, axis=axis, keepdims=keepdims)
+    result = Tensor(data)
 
     def compute_grad() -> _NumPyArray:
         grad = result.grad
         if not keepdims and axis is not None:
-            grad = np.expand_dims(grad, axis=axis)
+            if isinstance(axis, tuple):
+                for ax in sorted(axis):
+                    grad = np.expand_dims(grad, axis=ax)
+            else:
+                grad = np.expand_dims(grad, axis=axis)
 
-        if isinstance(axis, tuple):
-            for ax in axis:
-                grad = np.expand_dims(grad, axis=ax)
+        if keepdims:
+            result_expanded = result.data
+        else:
+            if axis is None:
+                result_expanded = result.data.reshape((1,) * self.data.ndim)
+            else:
+                if isinstance(axis, tuple):
+                    result_expanded = result.data
+                    for ax in sorted(axis):
+                        result_expanded = np.expand_dims(result_expanded, axis=ax)
+                else:
+                    result_expanded = np.expand_dims(result.data, axis=axis)
 
-        result_expanded = (
-            result.data if axis is None else np.expand_dims(result.data, axis=axis)
-        )
         mask = self.data == result_expanded
-
         counts = np.sum(mask, axis=axis, keepdims=True)
         counts = np.where(counts == 0, 1, counts)
 

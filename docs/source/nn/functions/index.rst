@@ -36,3 +36,9 @@ lucid.nn.functional
     :caption: Normalization Functions
 
     Normalization Functions <norm/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Loss Functions
+
+    Loss Functions <loss/index.rst>
