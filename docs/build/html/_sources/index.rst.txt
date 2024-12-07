@@ -38,6 +38,8 @@
    :hidden:
 
    nn/nn.rst
+   nn/Parameter.rst
+   nn/Module.rst
 
    Neural Functions <nn/functions/index.rst>
 
