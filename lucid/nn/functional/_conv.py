@@ -86,10 +86,18 @@ def _conv(
     stride: Tuple[int, ...],
     padding: Tuple[int, ...],
     dilation: Tuple[int, ...],
+    groups: int = 1,
 ) -> Tensor:
-    N, _, *input_spatial = input_.shape
-    C_out, _, *filter_size = weight.shape
+    N, C_in, *input_spatial = input_.shape
+    C_out, C_in_div_g, *filter_size = weight.shape
     D = len(filter_size)
+
+    if C_in % groups != 0:
+        raise ValueError("Number of input channels is not divisible by groups.")
+    if C_out % groups != 0:
+        raise ValueError("Number of output channels is not divisible by groups.")
+    if (C_in_div_g * groups) != C_in:
+        raise ValueError("Weight shape is inconsistent with given number of groups.")
 
     out_dims = []
     for i in range(D):
@@ -99,15 +107,38 @@ def _conv(
         ) + 1
         if out_dim <= 0:
             raise ValueError(
-                f"Calculated output dimension is non-positive for dimension {i}: {out_dim}."
+                f"Calculated output dimension is non-positive "
+                + f"for dimension {i}: {out_dim}."
             )
         out_dims.append(out_dim)
 
     col = unfold(input_, filter_size, stride, padding, dilation)
-    weight_reshape = weight.reshape((C_out, -1))
 
-    out = col @ weight_reshape.T
-    out = out.reshape([N, C_out] + out_dims)
+    prod_filter_size = 1
+    for fs in filter_size:
+        prod_filter_size *= fs
+
+    C_in_group = C_in // groups
+    C_out_group = C_out // groups
+
+    weight_reshape = weight.reshape(groups, C_out_group, C_in_group * prod_filter_size)
+
+    N_out_product = N
+    for od in out_dims:
+        N_out_product *= od
+
+    col_reshape = col.reshape(N_out_product, groups, C_in_group * prod_filter_size)
+
+    out_groups = []
+    for g in range(groups):
+        col_g = col_reshape[:, g, :]
+        w_g = weight_reshape[g]
+
+        out_g = col_g @ w_g.T
+        out_groups.append(out_g)
+
+    out_concated = lucid.concatenate(out_groups, axis=1)
+    out = out_concated.reshape([N, C_out] + out_dims)
 
     if bias is not None:
         bias_shape = [1, C_out] + [1] * D
@@ -123,6 +154,7 @@ def conv1d(
     stride: int | Tuple[int, ...] = 1,
     padding: int | Tuple[int, ...] = 0,
     dilation: int | Tuple[int, ...] = 1,
+    groups: int = 1,
 ) -> Tensor:
     if isinstance(stride, int):
         stride = (stride,)
@@ -131,7 +163,7 @@ def conv1d(
     if isinstance(dilation, int):
         dilation = (dilation,)
 
-    return _conv(input_, weight, bias, stride, padding, dilation)
+    return _conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv2d(
@@ -141,6 +173,7 @@ def conv2d(
     stride: int | Tuple[int, ...] = 1,
     padding: int | Tuple[int, ...] = 0,
     dilation: int | Tuple[int, ...] = 1,
+    groups: int = 1,
 ) -> Tensor:
     if isinstance(stride, int):
         stride = (stride, stride)
@@ -149,7 +182,7 @@ def conv2d(
     if isinstance(dilation, int):
         dilation = (dilation, dilation)
 
-    return _conv(input_, weight, bias, stride, padding, dilation)
+    return _conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv3d(
@@ -159,6 +192,7 @@ def conv3d(
     stride: int | Tuple[int, ...] = 1,
     padding: int | Tuple[int, ...] = 0,
     dilation: int | Tuple[int, ...] = 1,
+    groups: int = 1,
 ) -> Tensor:
     if isinstance(stride, int):
         stride = (stride, stride, stride)
@@ -167,4 +201,4 @@ def conv3d(
     if isinstance(dilation, int):
         dilation = (dilation, dilation, dilation)
 
-    return _conv(input_, weight, bias, stride, padding, dilation)
+    return _conv(input_, weight, bias, stride, padding, dilation, groups)

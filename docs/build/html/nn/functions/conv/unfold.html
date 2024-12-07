@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/conv/unfold.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.functional.unfold - Lucid 0.12.0 documentation</title>
+        <title>nn.functional.unfold - Lucid 0.12.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 0.12.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 0.12.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 0.12.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 0.12.1 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -404,7 +404,7 @@
 <h1>nn.functional.unfold<a class="headerlink" href="#nn-functional-unfold" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="lucid.nn.functional.unfold">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">unfold</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.unfold" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">unfold</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dilation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.unfold" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>unfold</cite> function extracts sliding local blocks from a tensor and
@@ -417,6 +417,7 @@ convolutional operations.</p>
     <span class="n">filter_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
     <span class="n">stride</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
     <span class="n">padding</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+    <span class="n">dilation</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
@@ -424,54 +425,41 @@ convolutional operations.</p>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of shape (N, C, H, W), where N is the batch size,
-C is the number of channels, and H, W are the height and width of
-the input.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>filter_size</strong> (<em>tuple[int, …]</em>):</dt><dd><p>The size of the sliding filter (kernel) as (filter_height, filter_width).</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>stride</strong> (<em>tuple[int, …]</em>):</dt><dd><p>The stride of the sliding filter as (stride_height, stride_width).</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>padding</strong> (<em>tuple[int, …]</em>):</dt><dd><p>The padding applied to the input tensor as (padding_height, padding_width).</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>input_</strong> (<em>Tensor</em>):
+The input tensor of shape (N, C, H, W), where N is the batch size,
+C is the number of channels, and H, W are the height and width of the input.</p></li>
+<li><p><strong>filter_size</strong> (<em>tuple[int, …]</em>):
+The size of the sliding filter (kernel) as (filter_height, filter_width).</p></li>
+<li><p><strong>stride</strong> (<em>tuple[int, …]</em>):
+The stride of the sliding filter as (stride_height, stride_width).</p></li>
+<li><p><strong>padding</strong> (<em>tuple[int, …]</em>):
+The padding applied to the input tensor as (padding_height, padding_width).</p></li>
+<li><p><strong>dilation</strong> (<em>tuple[int, …]</em>):
+The spacing between kernel elements, as (dilation_height, dilation_width).
+A value of (1, 1) applies no dilation, and larger values increase the effective
+size of the filter by spacing out its elements.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A tensor of shape (N, C * filter_height * filter_width, output_height * output_width),
-where output_height and output_width are computed based on the input size,
-filter size, stride, and padding.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>Tensor</strong>:
+A tensor of shape (N, C * filter_height * filter_width, output_height * output_width),
+where <cite>output_height</cite> and <cite>output_width</cite> are computed based on the input size,
+filter size, stride, padding, and dilation.</p></li>
 </ul>
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The <cite>unfold</cite> operation rearranges local patches of the input tensor
-into columns for efficient computation in convolution operations.
-Given an input tensor and the specified filter size, stride, and padding:</p>
+<p>The <cite>unfold</cite> operation rearranges local patches of the input tensor into columns for efficient
+computation in convolution operations. Given an input tensor and the specified filter size, stride, padding, and dilation:</p>
 <ol class="arabic simple">
 <li><p>Apply padding to the input tensor.</p></li>
-<li><p>Extract sliding patches of size <cite>filter_size</cite> from the input tensor with a stride <cite>stride</cite>.</p></li>
+<li><p>Expand the effective filter size by applying dilation.</p></li>
+<li><p>Extract sliding patches of size <cite>filter_size</cite> from the input tensor with stride <cite>stride</cite> and dilation <cite>dilation</cite>.</p></li>
 <li><p>Rearrange these patches into columns.</p></li>
 </ol>
-<p>The result is a matrix where each column corresponds to a flattened
-local patch of the input tensor.</p>
+<p>The result is a matrix where each column corresponds to a flattened local patch of the input tensor.</p>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
@@ -481,8 +469,9 @@ local patch of the input tensor.</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">filter_size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># Kernel size: 2x2</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">stride</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># Stride: 1</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">padding</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># No padding</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dilation</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># No dilation</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">col</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">unfold</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">stride</span><span class="p">,</span> <span class="n">padding</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">col</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">unfold</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">stride</span><span class="p">,</span> <span class="n">padding</span><span class="p">,</span> <span class="n">dilation</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
 <span class="go">Tensor([</span>
 <span class="go">    [1, 2, 4, 5],</span>
@@ -499,6 +488,22 @@ local patch of the input tensor.</p>
 and is often used in conjunction with matrix multiplication
 for optimized computation of convolutions.</p>
 </div>
+</section>
+<section id="advanced-example-with-dilation">
+<h2>Advanced Example with Dilation<a class="headerlink" href="#advanced-example-with-dilation" title="Link to this heading">¶</a></h2>
+<p>Using <cite>unfold</cite> with a dilation factor to extract spaced-out patches:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">dilation</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># Dilation of 2</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">col</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">unfold</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">stride</span><span class="p">,</span> <span class="n">padding</span><span class="p">,</span> <span class="n">dilation</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+<span class="go">Tensor([</span>
+<span class="go">    [1, 3],</span>
+<span class="go">    [4, 6],</span>
+<span class="go">    [7, 9]</span>
+<span class="go">], grad=None)  # Shape: (1, 4, 1)</span>
+</pre></div>
+</div>
+<p>With dilation, the effective filter size increases, allowing the function to capture patches with spaced-out elements.</p>
 </section>
 </section>
 
@@ -564,6 +569,7 @@ for optimized computation of convolutions.</p>
 <li><a class="reference internal" href="#returns">Returns</a></li>
 <li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
 <li><a class="reference internal" href="#example">Example</a></li>
+<li><a class="reference internal" href="#advanced-example-with-dilation">Advanced Example with Dilation</a></li>
 </ul>
 </li>
 </ul>
@@ -575,7 +581,7 @@ for optimized computation of convolutions.</p>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=61ccb1f1"></script>
+</div><script src="../../../_static/documentation_options.js?v=c5b435e8"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>

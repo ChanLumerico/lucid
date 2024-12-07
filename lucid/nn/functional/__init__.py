@@ -60,8 +60,9 @@ def conv1d(
     stride: int | tuple[int, ...] = 1,
     padding: int | tuple[int, ...] = 0,
     dilation: int | tuple[int, ...] = 1,
+    groups: int = 1,
 ) -> Tensor:
-    return _conv.conv1d(input_, weight, bias, stride, padding, dilation)
+    return _conv.conv1d(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv2d(
@@ -71,8 +72,9 @@ def conv2d(
     stride: int | tuple[int, ...] = 1,
     padding: int | tuple[int, ...] = 0,
     dilation: int | tuple[int, ...] = 1,
+    groups: int = 1,
 ) -> Tensor:
-    return _conv.conv2d(input_, weight, bias, stride, padding, dilation)
+    return _conv.conv2d(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv3d(
@@ -82,8 +84,9 @@ def conv3d(
     stride: int | tuple[int, ...] = 1,
     padding: int | tuple[int, ...] = 0,
     dilation: int | tuple[int, ...] = 1,
+    groups: int = 1,
 ) -> Tensor:
-    return _conv.conv3d(input_, weight, bias, stride, padding, dilation)
+    return _conv.conv3d(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def avg_pool1d(

@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/conv/conv3d.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.functional.conv3d - Lucid 0.12.0 documentation</title>
+        <title>nn.functional.conv3d - Lucid 0.12.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 0.12.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 0.12.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 0.12.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 0.12.1 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -404,7 +404,7 @@
 <h1>nn.functional.conv3d<a class="headerlink" href="#nn-functional-conv3d" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="lucid.nn.functional.conv3d">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">conv3d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.conv3d" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">conv3d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dilation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.conv3d" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>conv3d</cite> function performs a three-dimensional convolution operation on the input tensor.
@@ -417,6 +417,8 @@ This is commonly used in 3D data processing, such as video processing or volumet
     <span class="n">bias</span><span class="p">:</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">dilation</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">groups</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
@@ -424,65 +426,87 @@ This is commonly used in 3D data processing, such as video processing or volumet
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of shape (N, C_in, D, H, W), where D is the depth,
-H is the height, and W is the width.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>weight</strong> (<em>Tensor</em>):</dt><dd><p>The weight tensor of shape (C_out, C_in, K_D, K_H, K_W),
-where K_D, K_H, and K_W are the kernel depth, height, and width.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>bias</strong> (<em>Tensor</em>, optional):</dt><dd><p>The bias tensor of shape (C_out,). If None, no bias is added.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>stride</strong> (<em>int | tuple[int, …]</em>, optional):</dt><dd><p>The stride of the convolution. Default: 1.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>padding</strong> (<em>int | tuple[int, …]</em>, optional):</dt><dd><p>The amount of zero-padding added to all sides of the input. Default: 0.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>input_</strong> (<em>Tensor</em>):
+The input tensor of shape (N, C_in, D, H, W), where N is the batch size,
+C_in is the input channels, D is the depth, H is the height, and W is the width.</p></li>
+<li><p><strong>weight</strong> (<em>Tensor</em>):
+The weight tensor of shape (C_out, C_in // groups, K_D, K_H, K_W),
+where C_out is the output channels, and K_D, K_H, and K_W are the kernel depth, height, and width.
+If <cite>groups</cite> &gt; 1, the number of input channels (<cite>C_in</cite>) is divided by <cite>groups</cite>,
+and each group processes <cite>C_in // groups</cite> input channels independently,
+with each group having its own set of filters.</p></li>
+<li><p><strong>bias</strong> (<em>Tensor | None</em>, optional):
+The bias tensor of shape (C_out,). If None, no bias is added. Default: None.</p></li>
+<li><p><strong>stride</strong> (<em>int | tuple[int, …]</em>, optional):
+The stride of the convolution. Can be an integer or a tuple. Default: 1.</p></li>
+<li><p><strong>padding</strong> (<em>int | tuple[int, …]</em>, optional):
+The amount of zero-padding added to all sides of the input. Default: 0.</p></li>
+<li><p><strong>dilation</strong> (<em>int | tuple[int, …]</em>, optional):
+The spacing between kernel elements. A dilation value of 1 means no spacing,
+and larger values increase the effective size of the kernel by spacing out its elements. Default: 1.</p></li>
+<li><p><strong>groups</strong> (<em>int</em>, optional):
+The number of groups to divide the input channels into. When <cite>groups &gt; 1</cite>,
+the convolution operates separately on each group of channels. If <cite>C_in</cite>
+is divisible by <cite>groups</cite>, each group processes <cite>C_in // groups</cite> input channels independently,
+and the output channels are concatenated. Depthwise convolution can be achieved
+by setting <cite>groups = C_in</cite>. Default: 1.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul>
-<li><dl>
-<dt><strong>Tensor</strong>:</dt><dd><p>The result of the 3D convolution operation,
+<li><p><strong>Tensor</strong>:
+The result of the 3D convolution operation,
 with shape (N, C_out, D_out, H_out, W_out), where:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[ \begin{align}\begin{aligned}D_{out} = \frac{D + 2 \cdot \text{padding}[0] -
-\text{kernel depth}}{\text{stride}[0]} + 1\\H_{out} = \frac{H + 2 \cdot \text{padding}[1] -
-\text{kernel height}}{\text{stride}[1]} + 1\\W_{out} = \frac{W + 2 \cdot \text{padding}[2] -
-\text{kernel width}}{\text{stride}[2]} + 1\end{aligned}\end{align} \]</div>
+\[ \begin{align}\begin{aligned}\begin{split}D_{out} = \\frac{D + 2 \\cdot \\text{padding}[0] - \\text{dilation}[0]
+\\cdot (K_D - 1) - 1}{\\text{stride}[0]} + 1\end{split}\\\begin{split}H_{out} = \\frac{H + 2 \\cdot \\text{padding}[1] - \\text{dilation}[1]
+\\cdot (K_H - 1) - 1}{\\text{stride}[1]} + 1\end{split}\\\begin{split}W_{out} = \\frac{W + 2 \\cdot \\text{padding}[2] - \\text{dilation}[2]
+\\cdot (K_W - 1) - 1}{\\text{stride}[2]} + 1\end{split}\end{aligned}\end{align} \]</div>
 </div>
-</dd>
-</dl>
 </li>
 </ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p><strong>Basic Example</strong></p>
 <p>Performing a simple 3D convolution:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[[</span><span class="mf">1.0</span><span class="p">]]]]])</span>  <span class="c1"># Shape: (1, 1, 1, 1, 1)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">weight</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[[</span><span class="mf">1.0</span><span class="p">]]]]])</span>  <span class="c1"># Shape: (1, 1, 1, 1, 1)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">bias</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># Shape: (1,)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">conv3d</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">weight</span><span class="p">,</span> <span class="n">bias</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">conv3d</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">weight</span><span class="p">,</span> <span class="n">bias</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dilation</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">groups</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
 <span class="go">Tensor([[[[[1.0]]]]])</span>
 </pre></div>
 </div>
+<p><strong>Advanced Example with Dilation</strong></p>
+<p>Using <cite>conv3d</cite> with a dilation factor:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]],</span> <span class="p">[[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]]]]])</span>  <span class="c1"># Shape: (1, 1, 2, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">weight</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]]]]])</span>  <span class="c1"># Shape: (1, 1, 2, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bias</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># Shape: (1,)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">conv3d</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">weight</span><span class="p">,</span> <span class="n">bias</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dilation</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">groups</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="go">Tensor([[[[[1.0]]]]])  # Output with dilation applied</span>
+</pre></div>
+</div>
+<p>In this example, the dilation factor increases the effective kernel size,
+allowing it to cover a larger region of the input tensor.</p>
+<p><strong>Advanced Example with Groups</strong></p>
+<p>Using <cite>conv3d</cite> with a group of 2:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]],</span> <span class="p">[[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]]],</span>
+<span class="gp">&gt;&gt;&gt; </span>                  <span class="p">[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]],</span> <span class="p">[[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]]]]])</span>  <span class="c1"># Shape: (1, 2, 2, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">weight</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]]]],</span> <span class="p">[[[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">]]]])</span>  <span class="c1"># Shape: (2, 1, 2, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bias</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># Shape: (2,)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">conv3d</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">weight</span><span class="p">,</span> <span class="n">bias</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dilation</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">groups</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="go">Tensor([[[[[10.0]]], [[[19.0]]]]])</span>
+</pre></div>
+</div>
+<p>In this example, the input tensor has two input channels, but since <cite>groups=2</cite>,
+each input channel is convolved independently using its corresponding filter.
+This is often used in depthwise convolutions in neural networks.</p>
 </section>
 </section>
 
@@ -558,7 +582,7 @@ with shape (N, C_out, D_out, H_out, W_out), where:</p>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=61ccb1f1"></script>
+</div><script src="../../../_static/documentation_options.js?v=c5b435e8"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
