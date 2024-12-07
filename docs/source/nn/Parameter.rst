@@ -57,7 +57,9 @@ Methods
 Performs backpropagation from this parameter, computing gradients for preceding tensors.
 
 **Parameters**:
-- **keep_grad** (*bool*, optional): Whether to retain the gradient after backpropagation. Defaults to `False`.
+
+- **keep_grad** (*bool*, optional): 
+  Whether to retain the gradient after backpropagation. Defaults to `False`.
 
 .. code-block:: python
 

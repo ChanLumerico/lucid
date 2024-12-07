@@ -32,6 +32,7 @@ Dynamically manages the addition of `Parameter` or `Module` objects as attribute
 Ensures that attributes are appropriately stored in `_parameters` or `_modules`.
 
 **Parameters**:
+
 - **name** (*str*): The name of the attribute to be added.
 - **value** (*Any*): The attribute value, which could be a `Parameter`, `Module`, or other type.
 
@@ -42,10 +43,12 @@ Ensures that attributes are appropriately stored in `_parameters` or `_modules`.
 Adds a submodule to the current module. Ensures that the submodule is registered correctly.
 
 **Parameters**:
+
 - **name** (*str*): The name of the submodule.
 - **module** (*Module*): The submodule instance to add.
 
 **Raises**:
+
 - **TypeError**: If the `module` is not an instance of `Module` or `None`.
 
 .. code-block:: python
@@ -55,10 +58,12 @@ Adds a submodule to the current module. Ensures that the submodule is registered
 Registers a parameter to the module. The parameter becomes part of the model's learnable parameters.
 
 **Parameters**:
+
 - **name** (*str*): The name of the parameter.
 - **param** (*Parameter*): The `Parameter` instance to register.
 
 **Raises**:
+
 - **TypeError**: If `param` is not a `Parameter` or `None`.
 
 .. code-block:: python
@@ -68,12 +73,12 @@ Registers a parameter to the module. The parameter becomes part of the model's l
 Placeholder for the forward pass. Must be implemented by subclasses.
 
 **Returns**:
+
 - A `Tensor` or a tuple of `Tensor` objects representing the output of the forward pass.
 
 **Raises**:
-- **NotImplementedError**: If not overridden by the subclass.
 
-**Utilities**
+- **NotImplementedError**: If not overridden by the subclass.
 
 .. code-block:: python
 
@@ -83,9 +88,11 @@ Returns an iterator over all parameters in the module.
 Includes parameters from submodules if `recurse` is `True`.
 
 **Parameters**:
+
 - **recurse** (*bool*, optional): Whether to include parameters from submodules. Defaults to `True`.
 
 **Yields**:
+
 - **Parameter**: The parameters in the module.
 
 .. code-block:: python
@@ -95,6 +102,7 @@ Includes parameters from submodules if `recurse` is `True`.
 Returns an iterator over all submodules, including the current module.
 
 **Yields**:
+
 - **Module**: The submodules of the current module.
 
 .. code-block:: python
@@ -109,11 +117,15 @@ Returns an iterator over all submodules, including the current module.
 Returns a dictionary containing the state of the module, including parameters and submodules.
 
 **Parameters**:
-- **destination** (*OrderedDict | None*, optional): The destination dictionary to populate. Defaults to a new `OrderedDict`.
+
+- **destination** (*OrderedDict | None*, optional): 
+    The destination dictionary to populate. Defaults to a new `OrderedDict`.
+
 - **prefix** (*str*, optional): A prefix to prepend to parameter names. Defaults to an empty string.
 - **keep_vars** (*bool*, optional): Whether to keep the variable references. Defaults to `False`.
 
 **Returns**:
+
 - **dict[str, Parameter]**: A dictionary mapping parameter names to their values.
 
 .. code-block:: python
@@ -123,10 +135,13 @@ Returns a dictionary containing the state of the module, including parameters an
 Loads parameters from a `state_dict`. Matches parameters by name and assigns them to the module.
 
 **Parameters**:
+
 - **state_dict** (*dict[str, Parameter]*): A dictionary containing the parameters to load.
-- **strict** (*bool*, optional): Whether to enforce an exact match between `state_dict` and the module. Defaults to `True`.
+- **strict** (*bool*, optional): 
+    Whether to enforce an exact match between `state_dict` and the module. Defaults to `True`.
 
 **Raises**:
+
 - **KeyError**: If there are missing or unexpected keys in `state_dict` when `strict` is `True`.
 
 **Special Methods**
@@ -138,10 +153,12 @@ Loads parameters from a `state_dict`. Matches parameters by name and assigns the
 Calls the `forward` method of the module, passing the provided arguments and keyword arguments.
 
 **Parameters**:
+
 - **args**: Positional arguments to pass to the `forward` method.
 - **kwargs**: Keyword arguments to pass to the `forward` method.
 
 **Returns**:
+
 - **Tensor | tuple[Tensor, ...]**: The result of the `forward` method.
 
 Examples

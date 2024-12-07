@@ -427,51 +427,70 @@ enabling functionality like forward propagation, parameter management, and seria
 </div>
 <p>Dynamically manages the addition of <cite>Parameter</cite> or <cite>Module</cite> objects as attributes to the module.
 Ensures that attributes are appropriately stored in <cite>_parameters</cite> or <cite>_modules</cite>.</p>
-<p><strong>Parameters</strong>:
-- <strong>name</strong> (<em>str</em>): The name of the attribute to be added.
-- <strong>value</strong> (<em>Any</em>): The attribute value, which could be a <cite>Parameter</cite>, <cite>Module</cite>, or other type.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>): The name of the attribute to be added.</p></li>
+<li><p><strong>value</strong> (<em>Any</em>): The attribute value, which could be a <cite>Parameter</cite>, <cite>Module</cite>, or other type.</p></li>
+</ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">add_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">Module</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </pre></div>
 </div>
 <p>Adds a submodule to the current module. Ensures that the submodule is registered correctly.</p>
-<p><strong>Parameters</strong>:
-- <strong>name</strong> (<em>str</em>): The name of the submodule.
-- <strong>module</strong> (<em>Module</em>): The submodule instance to add.</p>
-<p><strong>Raises</strong>:
-- <strong>TypeError</strong>: If the <cite>module</cite> is not an instance of <cite>Module</cite> or <cite>None</cite>.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>): The name of the submodule.</p></li>
+<li><p><strong>module</strong> (<em>Module</em>): The submodule instance to add.</p></li>
+</ul>
+<p><strong>Raises</strong>:</p>
+<ul class="simple">
+<li><p><strong>TypeError</strong>: If the <cite>module</cite> is not an instance of <cite>Module</cite> or <cite>None</cite>.</p></li>
+</ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">register_parameter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">param</span><span class="p">:</span> <span class="n">Parameter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </pre></div>
 </div>
 <p>Registers a parameter to the module. The parameter becomes part of the model’s learnable parameters.</p>
-<p><strong>Parameters</strong>:
-- <strong>name</strong> (<em>str</em>): The name of the parameter.
-- <strong>param</strong> (<em>Parameter</em>): The <cite>Parameter</cite> instance to register.</p>
-<p><strong>Raises</strong>:
-- <strong>TypeError</strong>: If <cite>param</cite> is not a <cite>Parameter</cite> or <cite>None</cite>.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>): The name of the parameter.</p></li>
+<li><p><strong>param</strong> (<em>Parameter</em>): The <cite>Parameter</cite> instance to register.</p></li>
+</ul>
+<p><strong>Raises</strong>:</p>
+<ul class="simple">
+<li><p><strong>TypeError</strong>: If <cite>param</cite> is not a <cite>Parameter</cite> or <cite>None</cite>.</p></li>
+</ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>Placeholder for the forward pass. Must be implemented by subclasses.</p>
-<p><strong>Returns</strong>:
-- A <cite>Tensor</cite> or a tuple of <cite>Tensor</cite> objects representing the output of the forward pass.</p>
-<p><strong>Raises</strong>:
-- <strong>NotImplementedError</strong>: If not overridden by the subclass.</p>
-<p><strong>Utilities</strong></p>
+<p><strong>Returns</strong>:</p>
+<ul class="simple">
+<li><p>A <cite>Tensor</cite> or a tuple of <cite>Tensor</cite> objects representing the output of the forward pass.</p></li>
+</ul>
+<p><strong>Raises</strong>:</p>
+<ul class="simple">
+<li><p><strong>NotImplementedError</strong>: If not overridden by the subclass.</p></li>
+</ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">recurse</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span>
 </pre></div>
 </div>
 <p>Returns an iterator over all parameters in the module.
 Includes parameters from submodules if <cite>recurse</cite> is <cite>True</cite>.</p>
-<p><strong>Parameters</strong>:
-- <strong>recurse</strong> (<em>bool</em>, optional): Whether to include parameters from submodules. Defaults to <cite>True</cite>.</p>
-<p><strong>Yields</strong>:
-- <strong>Parameter</strong>: The parameters in the module.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><p><strong>recurse</strong> (<em>bool</em>, optional): Whether to include parameters from submodules. Defaults to <cite>True</cite>.</p></li>
+</ul>
+<p><strong>Yields</strong>:</p>
+<ul class="simple">
+<li><p><strong>Parameter</strong>: The parameters in the module.</p></li>
+</ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">modules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span>
 </pre></div>
 </div>
 <p>Returns an iterator over all submodules, including the current module.</p>
-<p><strong>Yields</strong>:
-- <strong>Module</strong>: The submodules of the current module.</p>
+<p><strong>Yields</strong>:</p>
+<ul class="simple">
+<li><p><strong>Module</strong>: The submodules of the current module.</p></li>
+</ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">state_dict</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">destination</span><span class="p">:</span> <span class="n">OrderedDict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -481,31 +500,51 @@ Includes parameters from submodules if <cite>recurse</cite> is <cite>True</cite>
 </pre></div>
 </div>
 <p>Returns a dictionary containing the state of the module, including parameters and submodules.</p>
-<p><strong>Parameters</strong>:
-- <strong>destination</strong> (<em>OrderedDict | None</em>, optional): The destination dictionary to populate. Defaults to a new <cite>OrderedDict</cite>.
-- <strong>prefix</strong> (<em>str</em>, optional): A prefix to prepend to parameter names. Defaults to an empty string.
-- <strong>keep_vars</strong> (<em>bool</em>, optional): Whether to keep the variable references. Defaults to <cite>False</cite>.</p>
-<p><strong>Returns</strong>:
-- <strong>dict[str, Parameter]</strong>: A dictionary mapping parameter names to their values.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt><strong>destination</strong> (<em>OrderedDict | None</em>, optional):</dt><dd><p>The destination dictionary to populate. Defaults to a new <cite>OrderedDict</cite>.</p>
+</dd>
+</dl>
+</li>
+<li><p><strong>prefix</strong> (<em>str</em>, optional): A prefix to prepend to parameter names. Defaults to an empty string.</p></li>
+<li><p><strong>keep_vars</strong> (<em>bool</em>, optional): Whether to keep the variable references. Defaults to <cite>False</cite>.</p></li>
+</ul>
+<p><strong>Returns</strong>:</p>
+<ul class="simple">
+<li><p><strong>dict[str, Parameter]</strong>: A dictionary mapping parameter names to their values.</p></li>
+</ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">load_state_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">],</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </pre></div>
 </div>
 <p>Loads parameters from a <cite>state_dict</cite>. Matches parameters by name and assigns them to the module.</p>
-<p><strong>Parameters</strong>:
-- <strong>state_dict</strong> (<em>dict[str, Parameter]</em>): A dictionary containing the parameters to load.
-- <strong>strict</strong> (<em>bool</em>, optional): Whether to enforce an exact match between <cite>state_dict</cite> and the module. Defaults to <cite>True</cite>.</p>
-<p><strong>Raises</strong>:
-- <strong>KeyError</strong>: If there are missing or unexpected keys in <cite>state_dict</cite> when <cite>strict</cite> is <cite>True</cite>.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><p><strong>state_dict</strong> (<em>dict[str, Parameter]</em>): A dictionary containing the parameters to load.</p></li>
+<li><dl class="simple">
+<dt><strong>strict</strong> (<em>bool</em>, optional):</dt><dd><p>Whether to enforce an exact match between <cite>state_dict</cite> and the module. Defaults to <cite>True</cite>.</p>
+</dd>
+</dl>
+</li>
+</ul>
+<p><strong>Raises</strong>:</p>
+<ul class="simple">
+<li><p><strong>KeyError</strong>: If there are missing or unexpected keys in <cite>state_dict</cite> when <cite>strict</cite> is <cite>True</cite>.</p></li>
+</ul>
 <p><strong>Special Methods</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>Calls the <cite>forward</cite> method of the module, passing the provided arguments and keyword arguments.</p>
-<p><strong>Parameters</strong>:
-- <strong>args</strong>: Positional arguments to pass to the <cite>forward</cite> method.
-- <strong>kwargs</strong>: Keyword arguments to pass to the <cite>forward</cite> method.</p>
-<p><strong>Returns</strong>:
-- <strong>Tensor | tuple[Tensor, …]</strong>: The result of the <cite>forward</cite> method.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><p><strong>args</strong>: Positional arguments to pass to the <cite>forward</cite> method.</p></li>
+<li><p><strong>kwargs</strong>: Keyword arguments to pass to the <cite>forward</cite> method.</p></li>
+</ul>
+<p><strong>Returns</strong>:</p>
+<ul class="simple">
+<li><p><strong>Tensor | tuple[Tensor, …]</strong>: The result of the <cite>forward</cite> method.</p></li>
+</ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
