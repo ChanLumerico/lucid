@@ -6,9 +6,11 @@ lucid.nn.Parameter
 The `Parameter` class is a specialized subclass of `Tensor`, 
 designed to represent learnable parameters in a neural network. 
 
-By default, `Parameter` instances have `requires_grad` and 
-`keep_grad` set to `True`, ensuring that gradients are calculated 
-and retained during backpropagation.
+By default, `Parameter` instances have `requires_grad` and `keep_grad` set to `True`, 
+ensuring that gradients are calculated and retained during backpropagation.
+
+The `Parameter` class allows parameters to be easily registered in `Module` classes 
+and included in their state dictionaries for saving and loading models.
 
 Class Signature
 ---------------
@@ -17,15 +19,15 @@ Class Signature
 
     class Parameter(Tensor):
         def __init__(
-            data: Tensor | _ArrayOrScalar, dtype: Any = np.float32
+            data: Tensor | _ArrayOrScalar,
+            dtype: Any = np.float32
         ) -> None
 
 Parameters
 ----------
 
 - **data** (*Tensor | _ArrayOrScalar*):  
-  Input data to initialize the parameter. 
-  Can be a `Tensor` or any type convertible to a NumPy array.
+  Input data to initialize the parameter. Can be a `Tensor` or any type convertible to a NumPy array.
 
 - **dtype** (*Any*, optional):  
   Data type of the parameter's elements. Defaults to `np.float32`.
@@ -37,8 +39,7 @@ Attributes
   The actual data stored in the parameter.
 
 - **requires_grad** (*bool*):  
-  Always set to `True`, indicating that this parameter will participate 
-  in gradient computation.
+  Always set to `True`, indicating that this parameter will participate in gradient computation.
 
 - **keep_grad** (*bool*):  
   Always set to `True`, retaining gradients after each backpropagation pass.
@@ -49,71 +50,82 @@ Attributes
 Methods
 -------
 
-Inherited from `Tensor`:
+.. code-block:: python
 
-- **backward(keep_grad: bool = False) -> None**:  
-  Performs backpropagation from this parameter, computing gradients for preceding tensors.
+    def backward(self, keep_grad: bool = False) -> None
 
-- **zero_grad() -> None**:  
-  Resets the gradient to `None`.
+Performs backpropagation from this parameter, computing gradients for preceding tensors.
+
+**Parameters**:
+- **keep_grad** (*bool*, optional): Whether to retain the gradient after backpropagation. Defaults to `False`.
+
+.. code-block:: python
+
+    def zero_grad(self) -> None
+
+Resets the gradient to `None`. Useful for clearing gradients before a new optimization step.
 
 Properties
 ----------
 
-Inherited from `Tensor`:
+- **shape** (*tuple[int, ...]*):  
+  Shape of the parameter.
 
-- **shape** (*tuple[int, ...]*): Shape of the parameter.
+- **ndim** (*int*):  
+  Number of dimensions of the parameter.
 
-- **ndim** (*int*): Number of dimensions of the parameter.
-
-- **size** (*int*): Total number of elements in the parameter.
+- **size** (*int*):  
+  Total number of elements in the parameter.
 
 Examples
 --------
 
-.. tip:: **Creating a Parameter**
+.. admonition:: **Creating a Parameter**
+   :class: note
 
-    Use `Parameter` to define learnable parameters in your models. 
-    These parameters automatically enable gradient computation.
+   .. code-block:: python
 
-    .. code-block:: python
+       import lucid.nn as nn
 
-        >>> import lucid.nn as nn
-        >>> p = nn.Parameter([1, 2, 3])
-        >>> print(p)
-        [1. 2. 3.]
+       p = nn.Parameter([1.0, 2.0, 3.0])
+       print(p)
+       # Output: [1.0, 2.0, 3.0]
 
-.. note:: **Gradient Retention**
+.. tip:: **Using parameters in a model**
 
-    Unlike regular tensors, `Parameter` objects retain their gradients 
-    after each backpropagation pass, enabling easier inspection of gradients.
+   Parameters can be seamlessly integrated into models and accessed as attributes.
 
-    .. code-block:: python
+   .. code-block:: python
 
-        >>> p.backward(keep_grad=False)
-        >>> print(p.grad)
-        [1. 1. 1.]
+       class MyModel(nn.Module):
+           def __init__(self):
+               super().__init__()
+               self.param = nn.Parameter([0.5, -0.5])
 
-.. important:: **Using Parameters in Models**
+       model = MyModel()
+       print(model.param)
+       # Output: [0.5, -0.5]
 
-    Parameters can be seamlessly integrated into models and accessed as 
-    attributes for modularity and simplicity.
+.. important:: **Retaining gradients**
 
-    .. code-block:: python
+   By default, `Parameter` retains gradients during backpropagation, 
+   enabling inspection or re-use.
 
-        >>> class MyModel:
-        >>>     def __init__(self):
-        >>>         self.param = nn.Parameter([0.5, -0.5])
-        >>>
-        >>> model = MyModel()
-        >>> print(model.param)
-        [ 0.5 -0.5]
+   .. code-block:: python
 
-.. hint:: **Indexing and Slicing**
+       p = nn.Parameter([1.0, 2.0, 3.0])
+       p.backward()
+       print(p.grad)
+       # Output: [1.0, 1.0, 1.0]
 
-    Like tensors, `Parameter` objects support indexing and slicing operations.
+.. hint:: **State dictionary inclusion**
 
-    .. code-block:: python
+   Parameters are automatically included in a `Module`'s `state_dict`, 
+   allowing for easy saving and loading of model parameters.
 
-        >>> print(p[0])
-        Tensor(1.0, grad=None)
+   .. code-block:: python
+
+       model = MyModel()
+       state_dict = model.state_dict()
+       print(state_dict)
+       # Output: {'param': nn.Parameter([...])}

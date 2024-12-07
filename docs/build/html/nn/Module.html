@@ -407,13 +407,11 @@
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">Module</span></span><a class="headerlink" href="#lucid.nn.Module" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>Module</cite> class is a foundational building block of the <cite>lucid</cite> library.
-It provides a modular interface for creating and managing neural network components,
-handling the registration of submodules and parameters, and maintaining their
-state during training and evaluation.</p>
+<p>The <cite>Module</cite> class is a foundational building block of the <cite>lucid</cite> library.</p>
+<p>It provides a modular interface for creating and managing neural network components,
+handling the registration of submodules and parameters, and maintaining their state during training and evaluation.</p>
 <p>The <cite>Module</cite> class serves as a base for defining custom neural network layers,
-enabling functionality like forward propagation, parameter management,
-and serialization of model states.</p>
+enabling functionality like forward propagation, parameter management, and serialization of model states.</p>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Module</span><span class="p">:</span>
@@ -423,89 +421,95 @@ and serialization of model states.</p>
 </section>
 <section id="methods">
 <h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
-<p>### Core Methods</p>
-<ul>
-<li><p><strong>__setattr__(name: str, value: Any) -&gt; None</strong>:
-Dynamically manages the addition of <cite>Parameter</cite> or <cite>Module</cite> objects as
-attributes to the module. Ensures that attributes are appropriately
-stored in <cite>_parameters</cite> or <cite>_modules</cite>.</p>
-<p><strong>Parameters</strong>
+<p><strong>Core Methods</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</pre></div>
+</div>
+<p>Dynamically manages the addition of <cite>Parameter</cite> or <cite>Module</cite> objects as attributes to the module.
+Ensures that attributes are appropriately stored in <cite>_parameters</cite> or <cite>_modules</cite>.</p>
+<p><strong>Parameters</strong>:
 - <strong>name</strong> (<em>str</em>): The name of the attribute to be added.
 - <strong>value</strong> (<em>Any</em>): The attribute value, which could be a <cite>Parameter</cite>, <cite>Module</cite>, or other type.</p>
-</li>
-<li><p><strong>add_module(name: str, module: Self) -&gt; None</strong>:
-Adds a submodule to the current module. Ensures that the submodule is registered correctly.</p>
-<p><strong>Parameters</strong>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">add_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">Module</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</pre></div>
+</div>
+<p>Adds a submodule to the current module. Ensures that the submodule is registered correctly.</p>
+<p><strong>Parameters</strong>:
 - <strong>name</strong> (<em>str</em>): The name of the submodule.
 - <strong>module</strong> (<em>Module</em>): The submodule instance to add.</p>
-<p><strong>Raises</strong>
+<p><strong>Raises</strong>:
 - <strong>TypeError</strong>: If the <cite>module</cite> is not an instance of <cite>Module</cite> or <cite>None</cite>.</p>
-</li>
-<li><p><strong>register_parameter(name: str, param: Parameter) -&gt; None</strong>:
-Registers a parameter to the module. The parameter becomes part of the model’s
-learnable parameters.</p>
-<p><strong>Parameters</strong>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">register_parameter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">param</span><span class="p">:</span> <span class="n">Parameter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</pre></div>
+</div>
+<p>Registers a parameter to the module. The parameter becomes part of the model’s learnable parameters.</p>
+<p><strong>Parameters</strong>:
 - <strong>name</strong> (<em>str</em>): The name of the parameter.
 - <strong>param</strong> (<em>Parameter</em>): The <cite>Parameter</cite> instance to register.</p>
-<p><strong>Raises</strong>
+<p><strong>Raises</strong>:
 - <strong>TypeError</strong>: If <cite>param</cite> is not a <cite>Parameter</cite> or <cite>None</cite>.</p>
-</li>
-<li><p><strong>forward() -&gt; Tensor | tuple[Tensor, …]</strong>:
-Placeholder for the forward pass. Must be implemented by subclasses.</p>
-<p><strong>Returns</strong>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Placeholder for the forward pass. Must be implemented by subclasses.</p>
+<p><strong>Returns</strong>:
 - A <cite>Tensor</cite> or a tuple of <cite>Tensor</cite> objects representing the output of the forward pass.</p>
-<p><strong>Raises</strong>
+<p><strong>Raises</strong>:
 - <strong>NotImplementedError</strong>: If not overridden by the subclass.</p>
-</li>
-</ul>
-<p>### Utilities</p>
-<ul>
-<li><p><strong>parameters(recurse: bool = True) -&gt; Iterator</strong>:
-Returns an iterator over all parameters in the module.
+<p><strong>Utilities</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">recurse</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span>
+</pre></div>
+</div>
+<p>Returns an iterator over all parameters in the module.
 Includes parameters from submodules if <cite>recurse</cite> is <cite>True</cite>.</p>
-<p><strong>Parameters</strong>
+<p><strong>Parameters</strong>:
 - <strong>recurse</strong> (<em>bool</em>, optional): Whether to include parameters from submodules. Defaults to <cite>True</cite>.</p>
-<p><strong>Yields</strong>
+<p><strong>Yields</strong>:
 - <strong>Parameter</strong>: The parameters in the module.</p>
-</li>
-<li><p><strong>modules() -&gt; Iterator</strong>:
-Returns an iterator over all submodules, including the current module.</p>
-<p><strong>Yields</strong>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">modules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span>
+</pre></div>
+</div>
+<p>Returns an iterator over all submodules, including the current module.</p>
+<p><strong>Yields</strong>:
 - <strong>Module</strong>: The submodules of the current module.</p>
-</li>
-<li><p><strong>state_dict(destination: OrderedDict | None = None, prefix: str = &quot;&quot;, keep_vars: bool = False) -&gt; dict[str, Parameter]</strong>:
-Returns a dictionary containing the state of the module, including parameters and submodules.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">state_dict</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">destination</span><span class="p">:</span> <span class="n">OrderedDict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">keep_vars</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Returns a dictionary containing the state of the module, including parameters and submodules.</p>
 <p><strong>Parameters</strong>:
 - <strong>destination</strong> (<em>OrderedDict | None</em>, optional): The destination dictionary to populate. Defaults to a new <cite>OrderedDict</cite>.
 - <strong>prefix</strong> (<em>str</em>, optional): A prefix to prepend to parameter names. Defaults to an empty string.
 - <strong>keep_vars</strong> (<em>bool</em>, optional): Whether to keep the variable references. Defaults to <cite>False</cite>.</p>
 <p><strong>Returns</strong>:
 - <strong>dict[str, Parameter]</strong>: A dictionary mapping parameter names to their values.</p>
-</li>
-<li><p><strong>load_state_dict(state_dict: dict[str, Parameter], strict: bool = True) -&gt; None</strong>:
-Loads parameters from a <cite>state_dict</cite>. Matches parameters by name and assigns them to the module.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">load_state_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">],</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</pre></div>
+</div>
+<p>Loads parameters from a <cite>state_dict</cite>. Matches parameters by name and assigns them to the module.</p>
 <p><strong>Parameters</strong>:
 - <strong>state_dict</strong> (<em>dict[str, Parameter]</em>): A dictionary containing the parameters to load.
 - <strong>strict</strong> (<em>bool</em>, optional): Whether to enforce an exact match between <cite>state_dict</cite> and the module. Defaults to <cite>True</cite>.</p>
 <p><strong>Raises</strong>:
 - <strong>KeyError</strong>: If there are missing or unexpected keys in <cite>state_dict</cite> when <cite>strict</cite> is <cite>True</cite>.</p>
-</li>
-</ul>
-<p>### Special Methods</p>
-<ul>
-<li><p><strong>__call__(*args: Any, **kwargs: Any) -&gt; Tensor | tuple[Tensor, …]</strong>:
-Calls the <cite>forward</cite> method of the module, passing the provided arguments and keyword arguments.</p>
+<p><strong>Special Methods</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Calls the <cite>forward</cite> method of the module, passing the provided arguments and keyword arguments.</p>
 <p><strong>Parameters</strong>:
 - <strong>args</strong>: Positional arguments to pass to the <cite>forward</cite> method.
 - <strong>kwargs</strong>: Keyword arguments to pass to the <cite>forward</cite> method.</p>
 <p><strong>Returns</strong>:
 - <strong>Tensor | tuple[Tensor, …]</strong>: The result of the <cite>forward</cite> method.</p>
-</li>
-</ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<div class="admonition-defining-a-custom-module admonition">
+<div class="note admonition">
 <p class="admonition-title"><strong>Defining a custom module</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
 
@@ -539,7 +543,8 @@ Calls the <cite>forward</cite> method of the module, passing the provided argume
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p><strong>State dictionary mismatch</strong></p>
-<p>When loading a state dictionary, ensure the keys match the module’s structure. If <cite>strict=True</cite>, mismatched keys will raise an error.</p>
+<p>When loading a state dictionary, ensure the keys match the module’s structure.
+If <cite>strict=True</cite>, mismatched keys will raise an error.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">state_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;param1&#39;</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">])}</span>
 <span class="n">model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </pre></div>

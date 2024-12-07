@@ -409,14 +409,16 @@
 
 <p>The <cite>Parameter</cite> class is a specialized subclass of <cite>Tensor</cite>,
 designed to represent learnable parameters in a neural network.</p>
-<p>By default, <cite>Parameter</cite> instances have <cite>requires_grad</cite> and
-<cite>keep_grad</cite> set to <cite>True</cite>, ensuring that gradients are calculated
-and retained during backpropagation.</p>
+<p>By default, <cite>Parameter</cite> instances have <cite>requires_grad</cite> and <cite>keep_grad</cite> set to <cite>True</cite>,
+ensuring that gradients are calculated and retained during backpropagation.</p>
+<p>The <cite>Parameter</cite> class allows parameters to be easily registered in <cite>Module</cite> classes
+and included in their state dictionaries for saving and loading models.</p>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Parameter</span><span class="p">(</span><span class="n">Tensor</span><span class="p">):</span>
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
-        <span class="n">data</span><span class="p">:</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="n">_ArrayOrScalar</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span>
+        <span class="n">data</span><span class="p">:</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="n">_ArrayOrScalar</span><span class="p">,</span>
+        <span class="n">dtype</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </pre></div>
 </div>
@@ -425,8 +427,7 @@ and retained during backpropagation.</p>
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><strong>data</strong> (<em>Tensor | _ArrayOrScalar</em>):
-Input data to initialize the parameter.
-Can be a <cite>Tensor</cite> or any type convertible to a NumPy array.</p></li>
+Input data to initialize the parameter. Can be a <cite>Tensor</cite> or any type convertible to a NumPy array.</p></li>
 <li><p><strong>dtype</strong> (<em>Any</em>, optional):
 Data type of the parameter’s elements. Defaults to <cite>np.float32</cite>.</p></li>
 </ul>
@@ -437,8 +438,7 @@ Data type of the parameter’s elements. Defaults to <cite>np.float32</cite>.</p
 <li><p><strong>data</strong> (<em>np.ndarray</em>):
 The actual data stored in the parameter.</p></li>
 <li><p><strong>requires_grad</strong> (<em>bool</em>):
-Always set to <cite>True</cite>, indicating that this parameter will participate
-in gradient computation.</p></li>
+Always set to <cite>True</cite>, indicating that this parameter will participate in gradient computation.</p></li>
 <li><p><strong>keep_grad</strong> (<em>bool</em>):
 Always set to <cite>True</cite>, retaining gradients after each backpropagation pass.</p></li>
 <li><p><strong>grad</strong> (<em>Optional[np.ndarray]</em>):
@@ -447,69 +447,76 @@ Gradient of the parameter, computed during backpropagation.</p></li>
 </section>
 <section id="methods">
 <h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
-<p>Inherited from <cite>Tensor</cite>:</p>
-<ul class="simple">
-<li><p><strong>backward(keep_grad: bool = False) -&gt; None</strong>:
-Performs backpropagation from this parameter, computing gradients for preceding tensors.</p></li>
-<li><p><strong>zero_grad() -&gt; None</strong>:
-Resets the gradient to <cite>None</cite>.</p></li>
-</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">backward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keep_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</pre></div>
+</div>
+<p>Performs backpropagation from this parameter, computing gradients for preceding tensors.</p>
+<p><strong>Parameters</strong>:
+- <strong>keep_grad</strong> (<em>bool</em>, optional): Whether to retain the gradient after backpropagation. Defaults to <cite>False</cite>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">zero_grad</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</pre></div>
+</div>
+<p>Resets the gradient to <cite>None</cite>. Useful for clearing gradients before a new optimization step.</p>
 </section>
 <section id="properties">
 <h2>Properties<a class="headerlink" href="#properties" title="Link to this heading">¶</a></h2>
-<p>Inherited from <cite>Tensor</cite>:</p>
 <ul class="simple">
-<li><p><strong>shape</strong> (<em>tuple[int, …]</em>): Shape of the parameter.</p></li>
-<li><p><strong>ndim</strong> (<em>int</em>): Number of dimensions of the parameter.</p></li>
-<li><p><strong>size</strong> (<em>int</em>): Total number of elements in the parameter.</p></li>
+<li><p><strong>shape</strong> (<em>tuple[int, …]</em>):
+Shape of the parameter.</p></li>
+<li><p><strong>ndim</strong> (<em>int</em>):
+Number of dimensions of the parameter.</p></li>
+<li><p><strong>size</strong> (<em>int</em>):
+Total number of elements in the parameter.</p></li>
 </ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<div class="admonition tip">
-<p class="admonition-title">Tip</p>
-<p><strong>Creating a Parameter</strong></p>
-<p>Use <cite>Parameter</cite> to define learnable parameters in your models.
-These parameters automatically enable gradient computation.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
-<span class="go">[1. 2. 3.]</span>
+<div class="note admonition">
+<p class="admonition-title"><strong>Creating a Parameter</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+
+<span class="n">p</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="c1"># Output: [1.0, 2.0, 3.0]</span>
 </pre></div>
 </div>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p><strong>Gradient Retention</strong></p>
-<p>Unlike regular tensors, <cite>Parameter</cite> objects retain their gradients
-after each backpropagation pass, enabling easier inspection of gradients.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p</span><span class="o">.</span><span class="n">backward</span><span class="p">(</span><span class="n">keep_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[1. 1. 1.]</span>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p><strong>Using parameters in a model</strong></p>
+<p>Parameters can be seamlessly integrated into models and accessed as attributes.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">param</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.5</span><span class="p">])</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">MyModel</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">param</span><span class="p">)</span>
+<span class="c1"># Output: [0.5, -0.5]</span>
 </pre></div>
 </div>
 </div>
 <div class="admonition important">
 <p class="admonition-title">Important</p>
-<p><strong>Using Parameters in Models</strong></p>
-<p>Parameters can be seamlessly integrated into models and accessed as
-attributes for modularity and simplicity.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">MyModel</span><span class="p">:</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="bp">self</span><span class="o">.</span><span class="n">param</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.5</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">MyModel</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">param</span><span class="p">)</span>
-<span class="go">[ 0.5 -0.5]</span>
+<p><strong>Retaining gradients</strong></p>
+<p>By default, <cite>Parameter</cite> retains gradients during backpropagation,
+enabling inspection or re-use.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">p</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">])</span>
+<span class="n">p</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="c1"># Output: [1.0, 1.0, 1.0]</span>
 </pre></div>
 </div>
 </div>
 <div class="admonition hint">
 <p class="admonition-title">Hint</p>
-<p><strong>Indexing and Slicing</strong></p>
-<p>Like tensors, <cite>Parameter</cite> objects support indexing and slicing operations.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<span class="go">Tensor(1.0, grad=None)</span>
+<p><strong>State dictionary inclusion</strong></p>
+<p>Parameters are automatically included in a <cite>Module</cite>’s <cite>state_dict</cite>,
+allowing for easy saving and loading of model parameters.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model</span> <span class="o">=</span> <span class="n">MyModel</span><span class="p">()</span>
+<span class="n">state_dict</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">state_dict</span><span class="p">)</span>
+<span class="c1"># Output: {&#39;param&#39;: nn.Parameter([...])}</span>
 </pre></div>
 </div>
 </div>
