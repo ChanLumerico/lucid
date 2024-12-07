@@ -10,6 +10,7 @@ def unfold(
     filter_size: Tuple[int, ...],
     stride: Tuple[int, ...],
     padding: Tuple[int, ...],
+    dilation: Tuple[int, ...],
 ) -> Tensor:
     input_shape = input_.shape
     if len(input_shape) < 2:
@@ -20,19 +21,22 @@ def unfold(
     N, C, *spatial_dims = input_shape
     D = len(spatial_dims)
 
-    if not (len(filter_size) == len(stride) == len(padding) == D):
+    if not (len(filter_size) == len(stride) == len(padding) == len(dilation) == D):
         raise ValueError(
-            "filter_size, stride, and padding must have the same"
-            + " length as the number of spatial dimensions."
+            "filter_size, stride, padding, and dilation must have the same "
+            "length as the number of spatial dimensions."
         )
 
     out_dims = []
     for i in range(D):
-        out_dim = (spatial_dims[i] + 2 * padding[i] - filter_size[i]) // stride[i] + 1
+        effective_filter_size = dilation[i] * (filter_size[i] - 1) + 1
+        out_dim = (
+            (spatial_dims[i] + 2 * padding[i] - effective_filter_size) // stride[i]
+        ) + 1
         if out_dim <= 0:
             raise ValueError(
-                "Calculated output dimension is non-positive "
-                + f"for spatial dimension {i}: {out_dim}."
+                f"Calculated output dimension is non-positive "
+                f"for spatial dimension {i}: {out_dim}."
             )
         out_dims.append(out_dim)
 
@@ -46,7 +50,7 @@ def unfold(
         slices = [slice(None), slice(None)]
 
         for d in range(D):
-            start = offset[d]
+            start = offset[d] * dilation[d]
             end = start + stride[d] * out_dims[d]
             step = stride[d]
             slices.append(slice(start, end, step))
@@ -56,11 +60,13 @@ def unfold(
         patches.append(patch)
 
     col = lucid.concatenate(patches, axis=2 + D)
+
     new_shape = [N, C] + list(filter_size) + list(out_dims)
     col = col.reshape(new_shape)
 
     permute_order = [0] + list(range(2 + D, 2 + D + D)) + [1] + list(range(2, 2 + D))
     col = col.transpose(permute_order)
+
     N_times_out = N
     for od in out_dims:
         N_times_out *= od
@@ -79,6 +85,7 @@ def _conv(
     bias: Optional[Tensor],
     stride: Tuple[int, ...],
     padding: Tuple[int, ...],
+    dilation: Tuple[int, ...],
 ) -> Tensor:
     N, _, *input_spatial = input_.shape
     C_out, _, *filter_size = weight.shape
@@ -86,10 +93,17 @@ def _conv(
 
     out_dims = []
     for i in range(D):
-        out_dim = (input_spatial[i] + 2 * padding[i] - filter_size[i]) // stride[i] + 1
+        effective_filter_size = dilation[i] * (filter_size[i] - 1) + 1
+        out_dim = (
+            (input_spatial[i] + 2 * padding[i] - effective_filter_size) // stride[i]
+        ) + 1
+        if out_dim <= 0:
+            raise ValueError(
+                f"Calculated output dimension is non-positive for dimension {i}: {out_dim}."
+            )
         out_dims.append(out_dim)
 
-    col = unfold(input_, filter_size, stride, padding)
+    col = unfold(input_, filter_size, stride, padding, dilation)
     weight_reshape = weight.reshape((C_out, -1))
 
     out = col @ weight_reshape.T
@@ -108,13 +122,16 @@ def conv1d(
     bias: Optional[Tensor] = None,
     stride: int | Tuple[int, ...] = 1,
     padding: int | Tuple[int, ...] = 0,
+    dilation: int | Tuple[int, ...] = 1,
 ) -> Tensor:
     if isinstance(stride, int):
         stride = (stride,)
     if isinstance(padding, int):
         padding = (padding,)
+    if isinstance(dilation, int):
+        dilation = (dilation,)
 
-    return _conv(input_, weight, bias, stride, padding)
+    return _conv(input_, weight, bias, stride, padding, dilation)
 
 
 def conv2d(
@@ -123,13 +140,16 @@ def conv2d(
     bias: Optional[Tensor] = None,
     stride: int | Tuple[int, ...] = 1,
     padding: int | Tuple[int, ...] = 0,
+    dilation: int | Tuple[int, ...] = 1,
 ) -> Tensor:
     if isinstance(stride, int):
         stride = (stride, stride)
     if isinstance(padding, int):
         padding = (padding, padding)
+    if isinstance(dilation, int):
+        dilation = (dilation, dilation)
 
-    return _conv(input_, weight, bias, stride, padding)
+    return _conv(input_, weight, bias, stride, padding, dilation)
 
 
 def conv3d(
@@ -138,10 +158,13 @@ def conv3d(
     bias: Optional[Tensor] = None,
     stride: int | Tuple[int, ...] = 1,
     padding: int | Tuple[int, ...] = 0,
+    dilation: int | Tuple[int, ...] = 1,
 ) -> Tensor:
     if isinstance(stride, int):
         stride = (stride, stride, stride)
     if isinstance(padding, int):
         padding = (padding, padding, padding)
+    if isinstance(dilation, int):
+        dilation = (dilation, dilation, dilation)
 
-    return _conv(input_, weight, bias, stride, padding)
+    return _conv(input_, weight, bias, stride, padding, dilation)

@@ -1,42 +1,20 @@
 import lucid
 import lucid.nn as nn
 
-
-# Example custom modules
-class Linear(nn.Module):
-    def __init__(self, in_features: int, out_features: int):
-        super().__init__()
-        weight_ = lucid.random.randn(in_features, out_features)
-        bias_ = lucid.zeros((1, out_features))
-
-        self.weight = nn.Parameter(weight_)
-        self.bias = nn.Parameter(bias_)
-
-    def forward(self, x):
-        return x @ self.weight + self.bias
+lucid.random.seed(42)
 
 
-class MLP(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, output_size: int):
-        super().__init__()
-        # Register two Linear submodules
-        self.lin1 = Linear(input_size, hidden_size)
-        self.lin2 = Linear(hidden_size, output_size)
+lin1 = nn.Linear(in_features=3, out_features=6)
+lin2 = nn.Linear(in_features=6, out_features=2)
 
-    def forward(self, x):
-        x = self.lin1(x)
-        x = self.lin2(x)
-        return x
+x = lucid.random.randn(1, 3, requires_grad=True)
 
+out = lin1(x)
+out = lin2(out)
+out = nn.Identity()(out)
 
-# Testing parameters() and modules()
-if __name__ == "__main__":
-    model = MLP(input_size=5, hidden_size=10, output_size=3)
+out.backward()
 
-    print("Modules in the model:")
-    for m in model.modules():
-        print(m)
-
-    print("\nParameters in the model:")
-    for p in model.parameters():
-        print(p.shape)
+print(lin1.weight.grad)
+print(lin2.weight.grad)
+print(x.grad)
