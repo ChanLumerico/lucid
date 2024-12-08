@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="Activation Layers" href="../activation/index.html" /><link rel="prev" title="nn.Conv2D" href="Conv2D.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/conv/Conv3D.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.MaxPool3d" href="MaxPool3d.html" /><link rel="prev" title="nn.MaxPool1d" href="MaxPool1d.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/pool/MaxPool2d.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.Conv3D - Lucid 0.13.0 documentation</title>
+        <title>nn.MaxPool2d - Lucid 0.14.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 0.13.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 0.14.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 0.13.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 0.14.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -360,10 +360,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../linear/Bilinear.html">nn.Bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Convolution Layers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><div class="visually-hidden">Toggle navigation of Convolution Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="Conv1D.html">nn.Conv1D</a></li>
-<li class="toctree-l3"><a class="reference internal" href="Conv2D.html">nn.Conv2D</a></li>
-<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.Conv3D</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../conv/index.html">Convolution Layers</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><div class="visually-hidden">Toggle navigation of Convolution Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv1d.html">nn.Conv1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv2d.html">nn.Conv2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv3d.html">nn.Conv3d</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../activation/index.html">Activation Layers</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><div class="visually-hidden">Toggle navigation of Activation Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -374,6 +374,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../activation/GELU.html">nn.GELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../activation/Sigmoid.html">nn.Sigmoid</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../activation/Tanh.html">nn.Tanh</a></li>
+</ul>
+</li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Pooling Layers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><div class="visually-hidden">Toggle navigation of Pooling Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="AvgPool1d.html">nn.AvgPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="AvgPool2d.html">nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="AvgPool3d.html">nn.AvgPool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="MaxPool1d.html">nn.MaxPool1d</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="MaxPool3d.html">nn.MaxPool3d</a></li>
 </ul>
 </li>
 </ul>
@@ -405,7 +414,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/nn/modules/conv/Conv3D.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/nn/modules/pool/MaxPool2d.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -425,30 +434,25 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-conv3d">
-<h1>nn.Conv3D<a class="headerlink" href="#nn-conv3d" title="Link to this heading">¶</a></h1>
+          <section id="nn-maxpool2d">
+<h1>nn.MaxPool2d<a class="headerlink" href="#nn-maxpool2d" title="Link to this heading">¶</a></h1>
 <dl class="py class">
-<dt class="sig sig-object py" id="lucid.nn.Conv3D">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">Conv3D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'same'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'valid'</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dilation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.Conv3D" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.nn.MaxPool2d">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">MaxPool2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.MaxPool2d" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>Conv3D</cite> module performs a three-dimensional convolution operation over an input
-signal composed of several input channels. This layer is commonly used in neural
-networks for tasks such as video analysis, volumetric data processing, and
-spatio-temporal feature extraction. The convolution operation enables the model
-to capture spatial and temporal patterns within the input data by applying
-learnable 3D filters.</p>
+<p>The <cite>MaxPool2d</cite> module applies a two-dimensional maximum pooling operation over an input
+signal composed of several input channels. This layer is commonly used in convolutional
+neural networks to reduce the spatial dimensions (height and width) of the input, thereby
+reducing the number of parameters and computation in the network.</p>
+<p>The maximum pooling operation highlights the most prominent features within each window,
+helping to make the representation approximately invariant to small translations of the input.</p>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv3D</span><span class="p">(</span>
-    <span class="n">in_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-    <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-    <span class="n">kernel_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">MaxPool2d</span><span class="p">(</span>
+    <span class="n">kernel_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-    <span class="n">padding</span><span class="p">:</span> <span class="n">_PaddingStr</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-    <span class="n">dilation</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-    <span class="n">groups</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-    <span class="n">bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -457,47 +461,21 @@ learnable 3D filters.</p>
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>in_channels</strong> (<em>int</em>):</dt><dd><p>Number of channels in the input signal.</p>
+<dt><strong>kernel_size</strong> (<em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Size of the window to take a maximum over. Can be a single integer or a tuple specifying
+the size in each spatial dimension. Default is <cite>1</cite>.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>out_channels</strong> (<em>int</em>):</dt><dd><p>Number of channels produced by the convolution.</p>
+<dt><strong>stride</strong> (<em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Stride of the window. Can be a single integer or a tuple specifying the stride in each
+spatial dimension. If not provided, it defaults to the same value as <cite>kernel_size</cite>.
+Default is <cite>1</cite>.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>kernel_size</strong> (<em>int</em> or <em>tuple[int, …]</em>):</dt><dd><p>Size of the convolving kernel. Can be a single integer or a tuple specifying the size
-in each spatial dimension.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>stride</strong> (<em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Stride of the convolution. Default is <cite>1</cite>. Can be a single integer or a tuple specifying
-the stride in each spatial dimension.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>padding</strong> (<em>_PaddingStr</em> or <em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Zero-padding added to all sides of the input. Default is <cite>0</cite>. Can be a string
-(<cite>‘same’</cite>, <cite>‘valid’</cite>), an integer, or a tuple specifying the padding in each
-spatial dimension.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>dilation</strong> (<em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Spacing between kernel elements. Default is <cite>1</cite>. Can be a single integer or a tuple
-specifying the dilation in each spatial dimension.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>groups</strong> (<em>int</em>, optional):</dt><dd><p>Number of blocked connections from input channels to output channels. Default is <cite>1</cite>.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>bias</strong> (<em>bool</em>, optional):</dt><dd><p>If <cite>True</cite>, adds a learnable bias to the output. Default is <cite>True</cite>.</p>
+<dt><strong>padding</strong> (<em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Zero-padding added to both sides of the input. Can be a single integer or a tuple
+specifying the padding in each spatial dimension. Default is <cite>0</cite>.</p>
 </dd>
 </dl>
 </li>
@@ -506,196 +484,133 @@ specifying the dilation in each spatial dimension.</p>
 <section id="attributes">
 <h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>weight</strong> (<em>Tensor</em>):</dt><dd><p>Learnable weights of the module of shape <cite>(out_channels, in_channels // groups, *kernel_size)</cite>.
-Initialized from a uniform distribution.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>bias</strong> (<em>Tensor</em> or <em>None</em>):</dt><dd><p>Learnable bias of the module of shape <cite>(out_channels)</cite>. If <cite>bias</cite> is set to <cite>False</cite>, this
-attribute is <cite>None</cite>.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>None</strong></p></li>
 </ul>
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The <cite>Conv3D</cite> module computes the convolution of the input tensor with the weight tensor
-and adds the bias if enabled.</p>
+<p>The <cite>MaxPool2d</cite> module performs the following operation:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{y} = \mathbf{x} * \mathbf{W} + \mathbf{b}\]</div>
+\[\mathbf{y}_{i,j} = \max \left( \mathbf{x}_{i \times s + m - p,\ j \times s + n - p} \right)
+\quad \text{for} \quad m = 0, \dots, k-1 \text{ and } n = 0, \dots, k-1\]</div>
 </div>
 <p>Where:</p>
 <ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor of shape <span class="math notranslate nohighlight">\((N, C_{in}, D_{in}, H_{in}, W_{in})\)</span>.</p></li>
-<li><p><span class="math notranslate nohighlight">\(\mathbf{W}\)</span> is the weight tensor of shape <span class="math notranslate nohighlight">\((C_{out}, C_{in} / \text{groups}, K_D, K_H, K_W)\)</span>.</p></li>
-<li><p><span class="math notranslate nohighlight">\(\mathbf{b}\)</span> is the bias tensor of shape <span class="math notranslate nohighlight">\((C_{out})\)</span>, if applicable.</p></li>
-<li><p><span class="math notranslate nohighlight">\(\mathbf{y}\)</span> is the output tensor of shape <span class="math notranslate nohighlight">\((N, C_{out}, D_{out}, H_{out}, W_{out})\)</span>.</p></li>
-<li><p><span class="math notranslate nohighlight">\(*\)</span> denotes the convolution operation.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor of shape <span class="math notranslate nohighlight">\((N, C, H_{in}, W_{in})\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{y}\)</span> is the output tensor of shape <span class="math notranslate nohighlight">\((N, C, H_{out}, W_{out})\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(k\)</span> is the <cite>kernel_size</cite>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(s\)</span> is the <cite>stride</cite>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(p\)</span> is the <cite>padding</cite>.</p></li>
 <li><p><span class="math notranslate nohighlight">\(N\)</span> is the batch size.</p></li>
-<li><p><span class="math notranslate nohighlight">\(C_{in}\)</span> is the number of input channels.</p></li>
-<li><p><span class="math notranslate nohighlight">\(C_{out}\)</span> is the number of output channels.</p></li>
-<li><p><span class="math notranslate nohighlight">\(D_{in}\)</span>, <span class="math notranslate nohighlight">\(H_{in}\)</span>, <span class="math notranslate nohighlight">\(W_{in}\)</span> are the depth, height, and width of the input.</p></li>
-<li><p><span class="math notranslate nohighlight">\(K_D\)</span>, <span class="math notranslate nohighlight">\(K_H\)</span>, <span class="math notranslate nohighlight">\(K_W\)</span> are the depth, height, and width of the kernel.</p></li>
-<li><p><span class="math notranslate nohighlight">\(D_{out}\)</span>, <span class="math notranslate nohighlight">\(H_{out}\)</span>, <span class="math notranslate nohighlight">\(W_{out}\)</span> are the depth, height, and width of the output, determined by
-the convolution parameters.</p></li>
+<li><p><span class="math notranslate nohighlight">\(C\)</span> is the number of channels.</p></li>
+<li><p><span class="math notranslate nohighlight">\(H_{in}\)</span>, <span class="math notranslate nohighlight">\(W_{in}\)</span> are the height and width of the input.</p></li>
+<li><p><span class="math notranslate nohighlight">\(H_{out}\)</span>, <span class="math notranslate nohighlight">\(W_{out}\)</span> are the height and width of the output, determined by
+the pooling parameters.</p></li>
 </ul>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For tensors <strong>x</strong>, <strong>W</strong>, and <strong>b</strong> involved in the <cite>Conv3D</cite> operation, the gradients with
-respect to the output (<strong>y</strong>) are computed as follows:</p>
-<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{x}\)</span>:</p>
+<p>During backpropagation, the gradient with respect to the input is routed to the position of the
+maximum value in each pooling window, and zero elsewhere.</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{y}}{\partial \mathbf{x}} = \mathbf{W}^\top * \mathbf{1}\]</div>
+\[\begin{split}\frac{\partial \mathbf{y}_{i,j}}{\partial \mathbf{x}_{m,n}} =
+\begin{cases}
+    1 &amp; \text{if } \mathbf{x}_{m,n} \text{ is the max in its pooling window} \\
+    0 &amp; \text{otherwise}
+\end{cases}\end{split}\]</div>
 </div>
-<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{W}\)</span>:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{y}}{\partial \mathbf{W}} = \mathbf{x} * \mathbf{1}^\top\]</div>
-</div>
-<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{b}\)</span> (if bias is used):</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{y}}{\partial \mathbf{b}} = \mathbf{1}\]</div>
-</div>
-<p>Where:</p>
-<ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(\mathbf{1}\)</span> represents a tensor of ones with appropriate shape to facilitate
-gradient computation.</p></li>
-</ul>
-<p>This means that during backpropagation, gradients flow through the weights and biases
-according to these derivatives, allowing the model to learn the optimal parameters.</p>
+<p>This ensures that only the input element contributing to the maximum value receives the gradient.</p>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p><strong>Using `Conv3D` for a simple convolution without bias:</strong></p>
+<p><strong>Using `MaxPool2d` with a simple input tensor:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span>
-<span class="gp">... </span>    <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span>
-<span class="gp">... </span>     <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]],</span>
-<span class="gp">... </span>    <span class="p">[[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span>
-<span class="gp">... </span>     <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]]</span>
-<span class="gp">... </span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 2, 2, 2, 2)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">conv3d</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv3D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv3d</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span>
-<span class="go">Tensor([[</span>
-<span class="go">    [[[1.0, 2.0],</span>
-<span class="go">      [3.0, 4.0]],</span>
-<span class="go">     [[5.0, 6.0],</span>
-<span class="go">      [7.0, 8.0]]]</span>
-<span class="go">]], requires_grad=True)  # Shape: (1, 2, 2, 2, 2)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">conv3d</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 1, 1, 1)</span>
+<span class="gp">... </span>    <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span>
+<span class="gp">... </span>     <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]]</span>
+<span class="gp">... </span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">max_pool</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MaxPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">max_pool</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 1, 1)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
-<span class="go">Tensor([[[[[204.0]]]]], grad=None)</span>
+<span class="go">Tensor([[[[4.0]]]], grad=None)</span>
 
 <span class="go"># Backpropagation</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">(</span><span class="n">Tensor</span><span class="p">([[[[</span><span class="mf">1.0</span><span class="p">]]]]))</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_tensor</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
 <span class="go">Tensor([[</span>
-<span class="go">    [[[1.0, 2.0],</span>
-<span class="go">      [3.0, 4.0]],</span>
-<span class="go">     [[5.0, 6.0],</span>
-<span class="go">      [7.0, 8.0]]]</span>
-<span class="go">]])  # Gradient with respect to input_tensor</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv3d</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">Tensor([[</span>
-<span class="go">    [[[1.0, 2.0],</span>
-<span class="go">      [3.0, 4.0]],</span>
-<span class="go">     [[1.0, 2.0],</span>
-<span class="go">      [3.0, 4.0]]]</span>
-<span class="go">]])  # Gradient with respect to weight</span>
+<span class="go">    [[0.0, 0.0],</span>
+<span class="go">     [0.0, 1.0]]</span>
+<span class="go">]])  # Gradients with respect to input_tensor</span>
 </pre></div>
 </div>
-<p><strong>Using `Conv3D` with bias for a batch of inputs:</strong></p>
+<p><strong>Using `MaxPool2d` with padding:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span>
-<span class="gp">... </span>    <span class="p">[</span>
-<span class="gp">... </span>        <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">,</span> <span class="mf">9.0</span><span class="p">]],</span>
-<span class="gp">... </span>        <span class="p">[[</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">11.0</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">13.0</span><span class="p">,</span> <span class="mf">14.0</span><span class="p">,</span> <span class="mf">15.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">16.0</span><span class="p">,</span> <span class="mf">17.0</span><span class="p">,</span> <span class="mf">18.0</span><span class="p">]]</span>
-<span class="gp">... </span>    <span class="p">],</span>
-<span class="gp">... </span>    <span class="p">[</span>
-<span class="gp">... </span>        <span class="p">[[</span><span class="mf">19.0</span><span class="p">,</span> <span class="mf">20.0</span><span class="p">,</span> <span class="mf">21.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">22.0</span><span class="p">,</span> <span class="mf">23.0</span><span class="p">,</span> <span class="mf">24.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">25.0</span><span class="p">,</span> <span class="mf">26.0</span><span class="p">,</span> <span class="mf">27.0</span><span class="p">]],</span>
-<span class="gp">... </span>        <span class="p">[[</span><span class="mf">28.0</span><span class="p">,</span> <span class="mf">29.0</span><span class="p">,</span> <span class="mf">30.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">31.0</span><span class="p">,</span> <span class="mf">32.0</span><span class="p">,</span> <span class="mf">33.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">34.0</span><span class="p">,</span> <span class="mf">35.0</span><span class="p">,</span> <span class="mf">36.0</span><span class="p">]]</span>
-<span class="gp">... </span>    <span class="p">]</span>
-<span class="gp">... </span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (2, 2, 3, 3, 3)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">conv3d</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv3D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv3d</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span>
-<span class="go">Tensor([</span>
-<span class="go">    [</span>
-<span class="go">        [[[1.0, 2.0],</span>
-<span class="go">          [3.0, 4.0]],</span>
-<span class="go">         [[5.0, 6.0],</span>
-<span class="go">          [7.0, 8.0]]]</span>
-<span class="go">    ],</span>
-<span class="go">    [</span>
-<span class="go">        [[[9.0, 10.0],</span>
-<span class="go">          [11.0, 12.0]],</span>
-<span class="go">         [[13.0, 14.0],</span>
-<span class="go">          [15.0, 16.0]]]</span>
-<span class="go">    ]</span>
-<span class="go">], requires_grad=True)  # Shape: (2, 2, 2, 2, 2)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv3d</span><span class="o">.</span><span class="n">bias</span><span class="p">)</span>
-<span class="go">Tensor([17.0, 18.0], requires_grad=True)  # Shape: (2,)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">conv3d</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Shape: (2, 2, 2, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span>
+<span class="gp">... </span>    <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span>
+<span class="gp">... </span>     <span class="p">[</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span>
+<span class="gp">... </span>     <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">,</span> <span class="mf">9.0</span><span class="p">]]</span>
+<span class="gp">... </span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 3, 3)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">max_pool</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MaxPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">max_pool</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 3, 3)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
 <span class="go">Tensor([[</span>
-<span class="go">    [[[...]], [[...]]]</span>
-<span class="go">],</span>
-<span class="go">[</span>
-<span class="go">    [[[...]], [[...]]]</span>
+<span class="go">    [[1.0, 3.0, 3.0],</span>
+<span class="go">     [5.0, 6.0, 6.0],</span>
+<span class="go">     [7.0, 9.0, 9.0]]</span>
 <span class="go">]], grad=None)</span>
 
 <span class="go"># Backpropagation</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">(</span><span class="n">Tensor</span><span class="p">([[</span>
+<span class="gp">... </span>    <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span>
+<span class="gp">... </span>     <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span>
+<span class="gp">... </span>     <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]]</span>
+<span class="gp">... </span><span class="p">]]))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_tensor</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">Tensor([[</span>
+<span class="go">    [[1.0, 0.0, 0.0],</span>
+<span class="go">     [0.0, 1.0, 0.0],</span>
+<span class="go">     [0.0, 0.0, 1.0]]</span>
+<span class="go">]])  # Gradients with respect to input_tensor</span>
 </pre></div>
 </div>
-<p><strong>Integrating `Conv3D` into a Neural Network Model:</strong></p>
+<p><strong>Integrating `MaxPool2d` into a Neural Network Model:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Conv3DModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">MaxPool2dModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 <span class="gp">... </span>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="gp">... </span>        <span class="nb">super</span><span class="p">(</span><span class="n">Conv3DModel</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv3D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">relu</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">()</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">conv2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv3D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">pool</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MaxPool3D</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="mi">16</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span> <span class="n">out_features</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="nb">super</span><span class="p">(</span><span class="n">MaxPool2dModel</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">max_pool</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MaxPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="mi">1</span> <span class="o">*</span> <span class="mi">1</span> <span class="o">*</span> <span class="mi">1</span><span class="p">,</span> <span class="n">out_features</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 <span class="gp">...</span>
 <span class="gp">... </span>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
 <span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_pool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 <span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <span class="gp">... </span>        <span class="k">return</span> <span class="n">x</span>
-<span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">Conv3DModel</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_data</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">(</span>
-<span class="gp">... </span><span class="p">[</span>
-<span class="gp">... </span>    <span class="p">[[[</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">,</span> <span class="mf">3.3</span><span class="p">],</span>
-<span class="gp">... </span>      <span class="p">[</span><span class="mf">0.7</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.3</span><span class="p">],</span>
-<span class="gp">... </span>      <span class="p">[</span><span class="mf">4.1</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">,</span> <span class="mf">6.6</span><span class="p">]]]</span>
-<span class="gp">... </span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 3, 3, 3)</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">MaxPool2dModel</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_data</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span>
+<span class="gp">... </span>    <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">],</span>
+<span class="gp">... </span>     <span class="p">[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">,</span> <span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">],</span>
+<span class="gp">... </span>     <span class="p">[</span><span class="mf">9.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">,</span> <span class="mf">11.0</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">],</span>
+<span class="gp">... </span>     <span class="p">[</span><span class="mf">13.0</span><span class="p">,</span> <span class="mf">14.0</span><span class="p">,</span> <span class="mf">15.0</span><span class="p">,</span> <span class="mf">16.0</span><span class="p">]]</span>
+<span class="gp">... </span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 4, 4)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_data</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
-<span class="go">Tensor([[...]], grad=None)  # Output tensor after passing through the model</span>
+<span class="go">Tensor([[[16.0]]], grad=None)  # Example output after passing through the model</span>
 
 <span class="go"># Backpropagation</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">(</span><span class="n">Tensor</span><span class="p">([[[</span><span class="mf">1.0</span><span class="p">]]]))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_data</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">Tensor([[</span>
+<span class="go">    [[0.0, 0.0, 0.0, 0.0],</span>
+<span class="go">     [0.0, 0.0, 0.0, 0.0],</span>
+<span class="go">     [0.0, 0.0, 1.0, 0.0],</span>
+<span class="go">     [0.0, 0.0, 0.0, 0.0]]</span>
+<span class="go">]])  # Gradients with respect to input_data</span>
 </pre></div>
 </div>
 </section>
@@ -706,23 +621,23 @@ according to these derivatives, allowing the model to learn the optimal paramete
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="../activation/index.html">
+          <a class="next-page" href="MaxPool3d.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Activation Layers</div>
+                <div class="title">nn.MaxPool3d</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="Conv2D.html">
+          <a class="prev-page" href="MaxPool1d.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">nn.Conv2D</div>
+                <div class="title">nn.MaxPool1d</div>
                 
               </div>
             </a>
@@ -756,8 +671,8 @@ according to these derivatives, allowing the model to learn the optimal paramete
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">nn.Conv3D</a><ul>
-<li><a class="reference internal" href="#lucid.nn.Conv3D"><code class="docutils literal notranslate"><span class="pre">Conv3D</span></code></a></li>
+<li><a class="reference internal" href="#">nn.MaxPool2d</a><ul>
+<li><a class="reference internal" href="#lucid.nn.MaxPool2d"><code class="docutils literal notranslate"><span class="pre">MaxPool2d</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#attributes">Attributes</a></li>
@@ -775,7 +690,7 @@ according to these derivatives, allowing the model to learn the optimal paramete
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=1019fba8"></script>
+</div><script src="../../../_static/documentation_options.js?v=9e420a66"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>

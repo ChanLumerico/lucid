@@ -7,14 +7,20 @@ lucid.random.seed(42)
 
 x = lucid.random.randn(1, 3, 28, 28, requires_grad=True)
 
-conv1 = nn.Conv2D(3, 6, kernel_size=3, stride=1, padding=0)
-conv2 = nn.Conv2D(6, 12, kernel_size=3, stride=1, padding=0)
+conv1 = nn.Conv2d(3, 6, kernel_size=3, stride=1, padding="same")
+conv2 = nn.Conv2d(6, 12, kernel_size=3, stride=1, padding="same")
+
+relu1 = nn.ReLU()
+relu2 = nn.ReLU()
+
+pool = nn.MaxPool2d(2, 2)
 
 
 def conv_test(x: lucid.Tensor) -> lucid.Tensor:
     x = conv1(x)
-    x = conv2(F.relu(x))
-    return F.relu(x)
+    x = conv2(relu1(x))
+    x = pool(relu2(x))
+    return x
 
 
 out = conv_test(x)

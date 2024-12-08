@@ -31,6 +31,7 @@ The `Sigmoid` module performs the following operation:
     \mathbf{y} = \sigma(\mathbf{x}) = \frac{1}{1 + e^{-\mathbf{x}}}
 
 Where:
+
 - :math:`\mathbf{x}` is the input tensor.
 - :math:`\mathbf{y}` is the output tensor after applying the sigmoid activation function.
 - :math:`\sigma` denotes the sigmoid function.

@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.Conv3D" href="Conv3D.html" /><link rel="prev" title="nn.Conv1D" href="Conv1D.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/conv/Conv2D.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.Conv2d" href="Conv2d.html" /><link rel="prev" title="Convolution Layers" href="index.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/conv/Conv1d.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.Conv2D - Lucid 0.13.0 documentation</title>
+        <title>nn.Conv1d - Lucid 0.14.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 0.13.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 0.14.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 0.13.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 0.14.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -361,9 +361,9 @@
 </ul>
 </li>
 <li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Convolution Layers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><div class="visually-hidden">Toggle navigation of Convolution Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="Conv1D.html">nn.Conv1D</a></li>
-<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.Conv2D</a></li>
-<li class="toctree-l3"><a class="reference internal" href="Conv3D.html">nn.Conv3D</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.Conv1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Conv2d.html">nn.Conv2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Conv3d.html">nn.Conv3d</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../activation/index.html">Activation Layers</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><div class="visually-hidden">Toggle navigation of Activation Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -374,6 +374,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../activation/GELU.html">nn.GELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../activation/Sigmoid.html">nn.Sigmoid</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../activation/Tanh.html">nn.Tanh</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../pool/index.html">Pooling Layers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><div class="visually-hidden">Toggle navigation of Pooling Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool1d.html">nn.AvgPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool2d.html">nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool3d.html">nn.AvgPool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool1d.html">nn.MaxPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool2d.html">nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool3d.html">nn.MaxPool3d</a></li>
 </ul>
 </li>
 </ul>
@@ -405,7 +414,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/nn/modules/conv/Conv2D.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/nn/modules/conv/Conv1d.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -425,21 +434,21 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-conv2d">
-<h1>nn.Conv2D<a class="headerlink" href="#nn-conv2d" title="Link to this heading">¶</a></h1>
+          <section id="nn-conv1d">
+<h1>nn.Conv1d<a class="headerlink" href="#nn-conv1d" title="Link to this heading">¶</a></h1>
 <dl class="py class">
-<dt class="sig sig-object py" id="lucid.nn.Conv2D">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">Conv2D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'same'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'valid'</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dilation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.Conv2D" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.nn.Conv1d">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">Conv1d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'same'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'valid'</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dilation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.Conv1d" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>Conv2D</cite> module performs a two-dimensional convolution operation over an input
+<p>The <cite>Conv1d</cite> module performs a one-dimensional convolution operation over an input
 signal composed of several input channels. This layer is widely used in neural
-networks for tasks such as image recognition, computer vision, and spatial data
-analysis. The convolution operation allows the model to capture spatial hierarchies
-and patterns within the input data by applying learnable filters.</p>
+networks for tasks such as time series analysis, natural language processing, and
+audio processing. The convolution operation allows the model to capture local
+patterns and temporal dependencies within the input data.</p>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv1d</span><span class="p">(</span>
     <span class="n">in_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">kernel_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
@@ -456,7 +465,7 @@ and patterns within the input data by applying learnable filters.</p>
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>in_channels</strong> (<em>int</em>):</dt><dd><p>Number of channels in the input image.</p>
+<dt><strong>in_channels</strong> (<em>int</em>):</dt><dd><p>Number of channels in the input signal.</p>
 </dd>
 </dl>
 </li>
@@ -467,25 +476,25 @@ and patterns within the input data by applying learnable filters.</p>
 </li>
 <li><dl class="simple">
 <dt><strong>kernel_size</strong> (<em>int</em> or <em>tuple[int, …]</em>):</dt><dd><p>Size of the convolving kernel. Can be a single integer or a tuple specifying the size
-in each spatial dimension.</p>
+in each dimension.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt><strong>stride</strong> (<em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Stride of the convolution. Default is <cite>1</cite>. Can be a single integer or a tuple specifying
-the stride in each spatial dimension.</p>
+the stride in each dimension.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt><strong>padding</strong> (<em>_PaddingStr</em> or <em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Zero-padding added to both sides of the input. Default is <cite>0</cite>. Can be a string (<cite>‘same’</cite>,
-<cite>‘valid’</cite>) or an integer or a tuple specifying the padding in each spatial dimension.</p>
+<cite>‘valid’</cite>) or an integer or a tuple specifying the padding in each dimension.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt><strong>dilation</strong> (<em>int</em> or <em>tuple[int, …]</em>, optional):</dt><dd><p>Spacing between kernel elements. Default is <cite>1</cite>. Can be a single integer or a tuple specifying
-the dilation in each spatial dimension.</p>
+the dilation in each dimension.</p>
 </dd>
 </dl>
 </li>
@@ -505,7 +514,7 @@ the dilation in each spatial dimension.</p>
 <h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>weight</strong> (<em>Tensor</em>):</dt><dd><p>Learnable weights of the module of shape <cite>(out_channels, in_channels // groups, *kernel_size)</cite>.
+<dt><strong>weight</strong> (<em>Tensor</em>):</dt><dd><p>Learnable weights of the module of shape <cite>(out_channels, in_channels // groups, kernel_size)</cite>.
 Initialized from a uniform distribution.</p>
 </dd>
 </dl>
@@ -520,31 +529,29 @@ attribute is <cite>None</cite>.</p>
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The <cite>Conv2D</cite> module computes the convolution of the input tensor with the weight tensor
-and adds the bias if enabled.</p>
+<p>The <cite>Conv1d</cite> module computes the convolution of the input tensor with the weight tensor and
+adds the bias if enabled.</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[\mathbf{y} = \mathbf{x} * \mathbf{W} + \mathbf{b}\]</div>
 </div>
 <p>Where:</p>
 <ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor of shape <span class="math notranslate nohighlight">\((N, C_{in}, H_{in}, W_{in})\)</span>.</p></li>
-<li><p><span class="math notranslate nohighlight">\(\mathbf{W}\)</span> is the weight tensor of shape <span class="math notranslate nohighlight">\((C_{out}, C_{in} / \text{groups}, K_H, K_W)\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor of shape <span class="math notranslate nohighlight">\((N, C_{in}, L_{in})\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{W}\)</span> is the weight tensor of shape <span class="math notranslate nohighlight">\((C_{out}, C_{in} / \text{groups}, K)\)</span>.</p></li>
 <li><p><span class="math notranslate nohighlight">\(\mathbf{b}\)</span> is the bias tensor of shape <span class="math notranslate nohighlight">\((C_{out})\)</span>, if applicable.</p></li>
-<li><p><span class="math notranslate nohighlight">\(\mathbf{y}\)</span> is the output tensor of shape <span class="math notranslate nohighlight">\((N, C_{out}, H_{out}, W_{out})\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{y}\)</span> is the output tensor of shape <span class="math notranslate nohighlight">\((N, C_{out}, L_{out})\)</span>.</p></li>
 <li><p><span class="math notranslate nohighlight">\(*\)</span> denotes the convolution operation.</p></li>
 <li><p><span class="math notranslate nohighlight">\(N\)</span> is the batch size.</p></li>
 <li><p><span class="math notranslate nohighlight">\(C_{in}\)</span> is the number of input channels.</p></li>
 <li><p><span class="math notranslate nohighlight">\(C_{out}\)</span> is the number of output channels.</p></li>
-<li><p><span class="math notranslate nohighlight">\(H_{in}\)</span>, <span class="math notranslate nohighlight">\(W_{in}\)</span> are the height and width of the input.</p></li>
-<li><p><span class="math notranslate nohighlight">\(K_H\)</span>, <span class="math notranslate nohighlight">\(K_W\)</span> are the height and width of the kernel.</p></li>
-<li><p><span class="math notranslate nohighlight">\(H_{out}\)</span>, <span class="math notranslate nohighlight">\(W_{out}\)</span> are the height and width of the output, determined by
-the convolution parameters.</p></li>
+<li><p><span class="math notranslate nohighlight">\(L_{in}\)</span> is the length of the input signal.</p></li>
+<li><p><span class="math notranslate nohighlight">\(L_{out}\)</span> is the length of the output signal, determined by the convolution parameters.</p></li>
 </ul>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For tensors <strong>x</strong>, <strong>W</strong>, and <strong>b</strong> involved in the <cite>Conv2D</cite> operation, the gradients with
+<p>For tensors <strong>x</strong>, <strong>W</strong>, and <strong>b</strong> involved in the <cite>Conv1d</cite> operation, the gradients with
 respect to the output (<strong>y</strong>) are computed as follows:</p>
 <p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{x}\)</span>:</p>
 <div class="math-wrapper docutils container">
@@ -571,121 +578,79 @@ according to these derivatives, allowing the model to learn the optimal paramete
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p><strong>Using `Conv2D` for a simple convolution without bias:</strong></p>
+<p><strong>Using `Conv1d` for a simple convolution without bias:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span>
-<span class="gp">... </span>    <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span>
-<span class="gp">... </span>     <span class="p">[</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span>
-<span class="gp">... </span>     <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">,</span> <span class="mf">9.0</span><span class="p">]]</span>
-<span class="gp">... </span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 3, 3)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">conv2d</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv2d</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span>
-<span class="go">Tensor([[</span>
-<span class="go">    [[1.0, 2.0],</span>
-<span class="go">     [3.0, 4.0]]</span>
-<span class="go">]], requires_grad=True)  # Shape: (1, 1, 2, 2)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">conv2d</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 4)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">conv1d</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv1d</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv1d</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span>
+<span class="go">Tensor([[[5.0, 6.0]]], requires_grad=True)  # Shape: (1, 1, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">conv1d</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 3)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+<span class="go">Tensor([[[1*5 + 2*6, 2*5 + 3*6, 3*5 + 4*6]]], grad=None)  # Tensor([[ [17.0, 27.0, 37.0]]], grad=None)</span>
 
 <span class="go"># Backpropagation</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_tensor</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">Tensor([[</span>
-<span class="go">    [[1.0, 2.0],</span>
-<span class="go">     [3.0, 4.0]]</span>
-<span class="go">]])  # Gradient with respect to input_tensor</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv2d</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">Tensor([[</span>
-<span class="go">    [[1.0, 2.0],</span>
-<span class="go">     [4.0, 5.0]]</span>
-<span class="go">]])  # Gradient with respect to weight</span>
+<span class="go">Tensor([[[5.0, 6.0, 5.0]]])  # Gradient with respect to input_tensor</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv1d</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">Tensor([[[1.0, 2.0, 3.0]]])  # Gradient with respect to weight</span>
 </pre></div>
 </div>
-<p><strong>Using `Conv2D` with bias for a batch of inputs:</strong></p>
+<p><strong>Using `Conv1d` with bias for a batch of inputs:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span>
-<span class="gp">... </span>    <span class="p">[</span>
-<span class="gp">... </span>        <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">,</span> <span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">9.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">,</span> <span class="mf">11.0</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">]]</span>
-<span class="gp">... </span>    <span class="p">],</span>
-<span class="gp">... </span>    <span class="p">[</span>
-<span class="gp">... </span>        <span class="p">[[</span><span class="mf">13.0</span><span class="p">,</span> <span class="mf">14.0</span><span class="p">,</span> <span class="mf">15.0</span><span class="p">,</span> <span class="mf">16.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">17.0</span><span class="p">,</span> <span class="mf">18.0</span><span class="p">,</span> <span class="mf">19.0</span><span class="p">,</span> <span class="mf">20.0</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">21.0</span><span class="p">,</span> <span class="mf">22.0</span><span class="p">,</span> <span class="mf">23.0</span><span class="p">,</span> <span class="mf">24.0</span><span class="p">]]</span>
-<span class="gp">... </span>    <span class="p">]</span>
-<span class="gp">... </span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (2, 1, 3, 4)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">conv2d</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv2d</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="p">[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">]],</span>
+<span class="gp">... </span>    <span class="p">[[</span><span class="mf">6.0</span><span class="p">,</span> <span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">,</span> <span class="mf">9.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">]]</span>
+<span class="gp">... </span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (2, 1, 5)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">conv1d</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv1d</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv1d</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span>
 <span class="go">Tensor([</span>
-<span class="go">    [[[1.0, 2.0],</span>
-<span class="go">      [3.0, 4.0]]],</span>
-<span class="go">    [[[5.0, 6.0],</span>
-<span class="go">      [7.0, 8.0]]]</span>
-<span class="go">], requires_grad=True)  # Shape: (2, 1, 2, 2)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv2d</span><span class="o">.</span><span class="n">bias</span><span class="p">)</span>
-<span class="go">Tensor([9.0, 10.0], requires_grad=True)  # Shape: (2,)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">conv2d</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Shape: (2, 2, 2, 3)</span>
+<span class="go">    [[11.0, 12.0, 13.0]],</span>
+<span class="go">    [[14.0, 15.0, 16.0]]</span>
+<span class="go">], requires_grad=True)  # Shape: (2, 1, 3)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv1d</span><span class="o">.</span><span class="n">bias</span><span class="p">)</span>
+<span class="go">Tensor([17.0, 18.0], requires_grad=True)  # Shape: (2,)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">conv1d</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Shape: (2, 2, 3)</span>
 
 <span class="go"># Backpropagation</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_tensor</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
 <span class="go">Tensor([</span>
-<span class="go">    [</span>
-<span class="go">        [[1.0, 2.0],</span>
-<span class="go">         [3.0, 4.0]]</span>
-<span class="go">    ],</span>
-<span class="go">    [</span>
-<span class="go">        [[5.0, 6.0],</span>
-<span class="go">         [7.0, 8.0]]</span>
-<span class="go">    ]</span>
+<span class="go">    [[11.0, 12.0, 13.0],</span>
+<span class="go">     [14.0, 15.0, 16.0]],</span>
+<span class="go">    [[11.0, 12.0, 13.0],</span>
+<span class="go">     [14.0, 15.0, 16.0]]</span>
 <span class="go">])  # Gradients with respect to input_tensor</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv2d</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv1d</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
 <span class="go">Tensor([</span>
-<span class="go">    [</span>
-<span class="go">        [[1.0, 2.0],</span>
-<span class="go">         [3.0, 4.0]]</span>
-<span class="go">    ],</span>
-<span class="go">    [</span>
-<span class="go">        [[1.0, 2.0],</span>
-<span class="go">         [3.0, 4.0]]</span>
-<span class="go">    ]</span>
+<span class="go">    [[1.0, 2.0, 3.0],</span>
+<span class="go">     [4.0, 5.0, 6.0]]</span>
 <span class="go">])  # Gradients with respect to weight</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv2d</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">conv1d</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
 <span class="go">Tensor([2.0, 2.0])  # Gradients with respect to bias</span>
 </pre></div>
 </div>
-<p><strong>Integrating `Conv2D` into a Neural Network Model:</strong></p>
+<p><strong>Integrating `Conv1d` into a Neural Network Model:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Conv2DModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Conv1dModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 <span class="gp">... </span>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="gp">... </span>        <span class="nb">super</span><span class="p">(</span><span class="n">Conv2DModel</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="nb">super</span><span class="p">(</span><span class="n">Conv1dModel</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv1d</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 <span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">relu</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">()</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">conv2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">pool</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MaxPool2D</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="mi">32</span> <span class="o">*</span> <span class="mi">16</span> <span class="o">*</span> <span class="mi">16</span><span class="p">,</span> <span class="n">out_features</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">conv2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv1d</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 <span class="gp">...</span>
 <span class="gp">... </span>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
 <span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <span class="gp">... </span>        <span class="k">return</span> <span class="n">x</span>
 <span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">Conv2DModel</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">Conv1dModel</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">input_data</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span>
-<span class="gp">... </span>    <span class="p">[</span>
-<span class="gp">... </span>        <span class="p">[[</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">,</span> <span class="mf">3.3</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">4.1</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">5.5</span><span class="p">,</span> <span class="mf">6.6</span><span class="p">,</span> <span class="mf">7.7</span><span class="p">,</span> <span class="mf">8.8</span><span class="p">],</span>
-<span class="gp">... </span>         <span class="p">[</span><span class="mf">9.9</span><span class="p">,</span> <span class="mf">10.1</span><span class="p">,</span> <span class="mf">11.2</span><span class="p">,</span> <span class="mf">12.3</span><span class="p">]]</span>
-<span class="gp">... </span>    <span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 3, 4, 4)</span>
+<span class="gp">... </span>    <span class="p">[[</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">,</span> <span class="mf">3.3</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">]],</span>
+<span class="gp">... </span>    <span class="p">[[</span><span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">4.1</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">]]</span>
+<span class="gp">... </span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (2, 1, 5)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_data</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
-<span class="go">Tensor([[...]], grad=None)  # Output tensor after passing through the model</span>
 
 <span class="go"># Backpropagation</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
@@ -699,23 +664,23 @@ according to these derivatives, allowing the model to learn the optimal paramete
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="Conv3D.html">
+          <a class="next-page" href="Conv2d.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.Conv3D</div>
+                <div class="title">nn.Conv2d</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="Conv1D.html">
+          <a class="prev-page" href="index.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">nn.Conv1D</div>
+                <div class="title">Convolution Layers</div>
                 
               </div>
             </a>
@@ -749,8 +714,8 @@ according to these derivatives, allowing the model to learn the optimal paramete
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">nn.Conv2D</a><ul>
-<li><a class="reference internal" href="#lucid.nn.Conv2D"><code class="docutils literal notranslate"><span class="pre">Conv2D</span></code></a></li>
+<li><a class="reference internal" href="#">nn.Conv1d</a><ul>
+<li><a class="reference internal" href="#lucid.nn.Conv1d"><code class="docutils literal notranslate"><span class="pre">Conv1d</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#attributes">Attributes</a></li>
@@ -768,7 +733,7 @@ according to these derivatives, allowing the model to learn the optimal paramete
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=1019fba8"></script>
+</div><script src="../../../_static/documentation_options.js?v=9e420a66"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>

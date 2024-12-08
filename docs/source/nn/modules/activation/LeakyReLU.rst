@@ -37,6 +37,7 @@ The `LeakyReLU` module performs the following operation:
     \end{cases}
 
 Where:
+
 - :math:`\mathbf{x}` is the input tensor.
 - :math:`\mathbf{y}` is the output tensor after applying the leaky ReLU activation.
 

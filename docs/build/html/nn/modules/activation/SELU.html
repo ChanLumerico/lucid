@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/activation/SELU.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.SELU - Lucid 0.13.0 documentation</title>
+        <title>nn.SELU - Lucid 0.14.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 0.13.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 0.14.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 0.13.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 0.14.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -361,9 +361,9 @@
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../conv/index.html">Convolution Layers</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><div class="visually-hidden">Toggle navigation of Convolution Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../conv/Conv1D.html">nn.Conv1D</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/Conv2D.html">nn.Conv2D</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/Conv3D.html">nn.Conv3D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv1d.html">nn.Conv1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv2d.html">nn.Conv2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv3d.html">nn.Conv3d</a></li>
 </ul>
 </li>
 <li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Activation Layers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><div class="visually-hidden">Toggle navigation of Activation Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
@@ -374,6 +374,15 @@
 <li class="toctree-l3"><a class="reference internal" href="GELU.html">nn.GELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="Sigmoid.html">nn.Sigmoid</a></li>
 <li class="toctree-l3"><a class="reference internal" href="Tanh.html">nn.Tanh</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../pool/index.html">Pooling Layers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><div class="visually-hidden">Toggle navigation of Pooling Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool1d.html">nn.AvgPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool2d.html">nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool3d.html">nn.AvgPool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool1d.html">nn.MaxPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool2d.html">nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool3d.html">nn.MaxPool3d</a></li>
 </ul>
 </li>
 </ul>
@@ -467,11 +476,13 @@ vanishing and exploding gradients.</p>
     \alpha (\exp(\mathbf{x}) - 1) &amp; \text{otherwise}
 \end{cases}\end{split}\]</div>
 </div>
-<p>Where:
-- <span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor.
-- <span class="math notranslate nohighlight">\(\mathbf{y}\)</span> is the output tensor after applying the SELU activation.
-- <span class="math notranslate nohighlight">\(\alpha\)</span> is a predefined constant, typically set to <cite>1.67326</cite>.
-- <span class="math notranslate nohighlight">\(\lambda\)</span> is a predefined scaling constant, typically set to <cite>1.0507</cite>.</p>
+<p>Where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{y}\)</span> is the output tensor after applying the SELU activation.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\alpha\)</span> is a predefined constant, typically set to <cite>1.67326</cite>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\lambda\)</span> is a predefined scaling constant, typically set to <cite>1.0507</cite>.</p></li>
+</ul>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
@@ -635,7 +646,7 @@ non-zero gradients that help in training deeper networks.</p>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=1019fba8"></script>
+</div><script src="../../../_static/documentation_options.js?v=9e420a66"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>

@@ -16,3 +16,8 @@ Modules
     :maxdepth: 2
 
     Activation Layers <activation/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+
+    Pooling Layers <pool/index.rst>

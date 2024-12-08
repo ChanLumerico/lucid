@@ -6,7 +6,7 @@ from lucid._tensor import Tensor
 from typing import Any, Literal
 
 
-__all__ = ["Conv1D", "Conv2D", "Conv3D"]
+__all__ = ["Conv1d", "Conv2d", "Conv3d"]
 
 
 def _single_to_tuple(value: Any, times: int) -> tuple[Any, ...]:
@@ -18,7 +18,7 @@ def _single_to_tuple(value: Any, times: int) -> tuple[Any, ...]:
 _PaddingStr = Literal["same", "valid"]
 
 
-class _ConvND(nn.Module):
+class _ConvNd(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -73,7 +73,7 @@ class _ConvND(nn.Module):
             self.bias = None
 
 
-class Conv1D(_ConvND):
+class Conv1d(_ConvNd):
     def __init__(
         self,
         in_channels: int,
@@ -108,7 +108,7 @@ class Conv1D(_ConvND):
         return self._conv_forward(input_, self.weight, self.bias)
 
 
-class Conv2D(_ConvND):
+class Conv2d(_ConvNd):
     def __init__(
         self,
         in_channels: int,
@@ -143,7 +143,7 @@ class Conv2D(_ConvND):
         return self._conv_forward(input_, self.weight, self.bias)
 
 
-class Conv3D(_ConvND):
+class Conv3d(_ConvNd):
     def __init__(
         self,
         in_channels: int,

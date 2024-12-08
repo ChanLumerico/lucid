@@ -1,9 +1,9 @@
-nn.Conv2D
+nn.Conv2d
 =========
 
-.. autoclass:: lucid.nn.Conv2D
+.. autoclass:: lucid.nn.Conv2d
     
-The `Conv2D` module performs a two-dimensional convolution operation over an input 
+The `Conv2d` module performs a two-dimensional convolution operation over an input 
 signal composed of several input channels. This layer is widely used in neural 
 networks for tasks such as image recognition, computer vision, and spatial data 
 analysis. The convolution operation allows the model to capture spatial hierarchies 
@@ -13,7 +13,7 @@ Class Signature
 ---------------
 .. code-block:: python
 
-    class lucid.nn.Conv2D(
+    class lucid.nn.Conv2d(
         in_channels: int,
         out_channels: int,
         kernel_size: int | tuple[int, ...],
@@ -66,7 +66,7 @@ Attributes
 
 Forward Calculation
 -------------------
-The `Conv2D` module computes the convolution of the input tensor with the weight tensor 
+The `Conv2d` module computes the convolution of the input tensor with the weight tensor 
 and adds the bias if enabled.
 
 .. math::
@@ -90,7 +90,7 @@ Where:
 
 Backward Gradient Calculation
 -----------------------------
-For tensors **x**, **W**, and **b** involved in the `Conv2D` operation, the gradients with 
+For tensors **x**, **W**, and **b** involved in the `Conv2d` operation, the gradients with 
 respect to the output (**y**) are computed as follows:
 
 **Gradient with respect to** :math:`\mathbf{x}`:
@@ -121,7 +121,7 @@ according to these derivatives, allowing the model to learn the optimal paramete
 
 Examples
 --------
-**Using `Conv2D` for a simple convolution without bias:**
+**Using `Conv2d` for a simple convolution without bias:**
 
 .. code-block:: python
 
@@ -131,7 +131,7 @@ Examples
     ...      [4.0, 5.0, 6.0],
     ...      [7.0, 8.0, 9.0]]
     ... ]], requires_grad=True)  # Shape: (1, 1, 3, 3)
-    >>> conv2d = nn.Conv2D(in_channels=1, out_channels=1, kernel_size=2, bias=False)
+    >>> conv2d = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=2, bias=False)
     >>> print(conv2d.weight)
     Tensor([[
         [[1.0, 2.0],
@@ -152,7 +152,7 @@ Examples
          [4.0, 5.0]]
     ]])  # Gradient with respect to weight
 
-**Using `Conv2D` with bias for a batch of inputs:**
+**Using `Conv2d` with bias for a batch of inputs:**
 
 .. code-block:: python
 
@@ -169,7 +169,7 @@ Examples
     ...          [21.0, 22.0, 23.0, 24.0]]
     ...     ]
     ... ], requires_grad=True)  # Shape: (2, 1, 3, 4)
-    >>> conv2d = nn.Conv2D(in_channels=1, out_channels=2, kernel_size=2, bias=True)
+    >>> conv2d = nn.Conv2d(in_channels=1, out_channels=2, kernel_size=2, bias=True)
     >>> print(conv2d.weight)
     Tensor([
         [[[1.0, 2.0],
@@ -208,17 +208,17 @@ Examples
     >>> print(conv2d.bias.grad)
     Tensor([2.0, 2.0])  # Gradients with respect to bias
 
-**Integrating `Conv2D` into a Neural Network Model:**
+**Integrating `Conv2d` into a Neural Network Model:**
 
 .. code-block:: python
 
     >>> import lucid.nn as nn
-    >>> class Conv2DModel(nn.Module):
+    >>> class Conv2dModel(nn.Module):
     ...     def __init__(self):
-    ...         super(Conv2DModel, self).__init__()
-    ...         self.conv1 = nn.Conv2D(in_channels=3, out_channels=16, kernel_size=3, padding=1)
+    ...         super(Conv2dModel, self).__init__()
+    ...         self.conv1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)
     ...         self.relu = nn.ReLU()
-    ...         self.conv2 = nn.Conv2D(in_channels=16, out_channels=32, kernel_size=3, padding=1)
+    ...         self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
     ...         self.pool = nn.MaxPool2D(kernel_size=2, stride=2)
     ...         self.fc = nn.Linear(in_features=32 * 16 * 16, out_features=10)
     ...
@@ -232,7 +232,7 @@ Examples
     ...         x = self.fc(x)
     ...         return x
     >>>
-    >>> model = Conv2DModel()
+    >>> model = Conv2dModel()
     >>> input_data = Tensor([
     ...     [
     ...         [[0.5, -1.2, 3.3, 0.7],

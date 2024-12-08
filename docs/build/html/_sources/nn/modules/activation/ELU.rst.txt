@@ -41,6 +41,7 @@ The `ELU` module performs the following operation:
     \end{cases}
 
 Where:
+
 - :math:`\mathbf{x}` is the input tensor.
 - :math:`\mathbf{y}` is the output tensor after applying the ELU activation.
 - :math:`\alpha` is the negative slope parameter.

@@ -38,6 +38,7 @@ The `SELU` module performs the following operation:
     \end{cases}
     
 Where:
+
 - :math:`\mathbf{x}` is the input tensor.
 - :math:`\mathbf{y}` is the output tensor after applying the SELU activation.
 - :math:`\alpha` is a predefined constant, typically set to `1.67326`.

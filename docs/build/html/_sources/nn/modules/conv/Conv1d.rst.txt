@@ -1,9 +1,9 @@
-nn.Conv1D
+nn.Conv1d
 =========
 
-.. autoclass:: lucid.nn.Conv1D
+.. autoclass:: lucid.nn.Conv1d
 
-The `Conv1D` module performs a one-dimensional convolution operation over an input 
+The `Conv1d` module performs a one-dimensional convolution operation over an input 
 signal composed of several input channels. This layer is widely used in neural 
 networks for tasks such as time series analysis, natural language processing, and 
 audio processing. The convolution operation allows the model to capture local 
@@ -13,7 +13,7 @@ Class Signature
 ---------------
 .. code-block:: python
 
-    class lucid.nn.Conv1D(
+    class lucid.nn.Conv1d(
         in_channels: int,
         out_channels: int,
         kernel_size: int | tuple[int, ...],
@@ -66,7 +66,7 @@ Attributes
 
 Forward Calculation
 -------------------
-The `Conv1D` module computes the convolution of the input tensor with the weight tensor and 
+The `Conv1d` module computes the convolution of the input tensor with the weight tensor and 
 adds the bias if enabled.
 
 .. math::
@@ -88,7 +88,7 @@ Where:
 
 Backward Gradient Calculation
 -----------------------------
-For tensors **x**, **W**, and **b** involved in the `Conv1D` operation, the gradients with 
+For tensors **x**, **W**, and **b** involved in the `Conv1d` operation, the gradients with 
 respect to the output (**y**) are computed as follows:
 
 **Gradient with respect to** :math:`\mathbf{x}`:
@@ -119,13 +119,13 @@ according to these derivatives, allowing the model to learn the optimal paramete
 
 Examples
 --------
-**Using `Conv1D` for a simple convolution without bias:**
+**Using `Conv1d` for a simple convolution without bias:**
 
 .. code-block:: python
 
     >>> import lucid.nn as nn
     >>> input_tensor = Tensor([[[1.0, 2.0, 3.0, 4.0]]], requires_grad=True)  # Shape: (1, 1, 4)
-    >>> conv1d = nn.Conv1D(in_channels=1, out_channels=1, kernel_size=2, bias=False)
+    >>> conv1d = nn.Conv1d(in_channels=1, out_channels=1, kernel_size=2, bias=False)
     >>> print(conv1d.weight)
     Tensor([[[5.0, 6.0]]], requires_grad=True)  # Shape: (1, 1, 2)
     >>> output = conv1d(input_tensor)  # Shape: (1, 1, 3)
@@ -139,7 +139,7 @@ Examples
     >>> print(conv1d.weight.grad)
     Tensor([[[1.0, 2.0, 3.0]]])  # Gradient with respect to weight
 
-**Using `Conv1D` with bias for a batch of inputs:**
+**Using `Conv1d` with bias for a batch of inputs:**
 
 .. code-block:: python
 
@@ -148,7 +148,7 @@ Examples
     ...     [[1.0, 2.0, 3.0, 4.0, 5.0]],
     ...     [[6.0, 7.0, 8.0, 9.0, 10.0]]
     ... ], requires_grad=True)  # Shape: (2, 1, 5)
-    >>> conv1d = nn.Conv1D(in_channels=1, out_channels=2, kernel_size=3, bias=True)
+    >>> conv1d = nn.Conv1d(in_channels=1, out_channels=2, kernel_size=3, bias=True)
     >>> print(conv1d.weight)
     Tensor([
         [[11.0, 12.0, 13.0]],
@@ -175,17 +175,17 @@ Examples
     >>> print(conv1d.bias.grad)
     Tensor([2.0, 2.0])  # Gradients with respect to bias
 
-**Integrating `Conv1D` into a Neural Network Model:**
+**Integrating `Conv1d` into a Neural Network Model:**
 
 .. code-block:: python
 
     >>> import lucid.nn as nn
-    >>> class Conv1DModel(nn.Module):
+    >>> class Conv1dModel(nn.Module):
     ...     def __init__(self):
-    ...         super(Conv1DModel, self).__init__()
-    ...         self.conv1 = nn.Conv1D(in_channels=1, out_channels=4, kernel_size=3, padding=1)
+    ...         super(Conv1dModel, self).__init__()
+    ...         self.conv1 = nn.Conv1d(in_channels=1, out_channels=4, kernel_size=3, padding=1)
     ...         self.relu = nn.ReLU()
-    ...         self.conv2 = nn.Conv1D(in_channels=4, out_channels=2, kernel_size=3)
+    ...         self.conv2 = nn.Conv1d(in_channels=4, out_channels=2, kernel_size=3)
     ...
     ...     def forward(self, x):
     ...         x = self.conv1(x)
@@ -193,7 +193,7 @@ Examples
     ...         x = self.conv2(x)
     ...         return x
     >>>
-    >>> model = Conv1DModel()
+    >>> model = Conv1dModel()
     >>> input_data = Tensor([
     ...     [[0.5, -1.2, 3.3, 0.7, 2.2]],
     ...     [[1.5, 2.2, -0.3, 4.1, 5.5]]

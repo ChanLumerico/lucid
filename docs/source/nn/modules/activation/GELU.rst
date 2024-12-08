@@ -40,6 +40,7 @@ The `GELU` module performs the following operation:
     \mathbf{y} = \mathbf{x} \cdot \Phi(\mathbf{x})
     
 Where:
+
 - :math:`\mathbf{x}` is the input tensor.
 - :math:`\Phi(\mathbf{x})` is the cumulative distribution function of the standard normal distribution.
 - :math:`\mathbf{y}` is the output tensor after applying the GELU activation.

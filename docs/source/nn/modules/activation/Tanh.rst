@@ -31,6 +31,7 @@ The `Tanh` module performs the following operation:
     \mathbf{y} = \tanh(\mathbf{x})
     
 Where:
+
 - :math:`\mathbf{x}` is the input tensor.
 - :math:`\mathbf{y}` is the output tensor after applying the hyperbolic tangent activation function.
 

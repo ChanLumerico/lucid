@@ -1,9 +1,9 @@
-nn.Conv3D
+nn.Conv3d
 =========
 
-.. autoclass:: lucid.nn.Conv3D
+.. autoclass:: lucid.nn.Conv3d
     
-The `Conv3D` module performs a three-dimensional convolution operation over an input 
+The `Conv3d` module performs a three-dimensional convolution operation over an input 
 signal composed of several input channels. This layer is commonly used in neural 
 networks for tasks such as video analysis, volumetric data processing, and 
 spatio-temporal feature extraction. The convolution operation enables the model 
@@ -14,7 +14,7 @@ Class Signature
 ---------------
 .. code-block:: python
     
-    class lucid.nn.Conv3D(
+    class lucid.nn.Conv3d(
         in_channels: int,
         out_channels: int,
         kernel_size: int | tuple[int, ...],
@@ -68,7 +68,7 @@ Attributes
     
 Forward Calculation
 -------------------
-The `Conv3D` module computes the convolution of the input tensor with the weight tensor 
+The `Conv3d` module computes the convolution of the input tensor with the weight tensor 
 and adds the bias if enabled.
     
 .. math::
@@ -92,7 +92,7 @@ Where:
     
 Backward Gradient Calculation
 -----------------------------
-For tensors **x**, **W**, and **b** involved in the `Conv3D` operation, the gradients with 
+For tensors **x**, **W**, and **b** involved in the `Conv3d` operation, the gradients with 
 respect to the output (**y**) are computed as follows:
     
 **Gradient with respect to** :math:`\mathbf{x}`:
@@ -123,7 +123,7 @@ according to these derivatives, allowing the model to learn the optimal paramete
     
 Examples
 --------
-**Using `Conv3D` for a simple convolution without bias:**
+**Using `Conv3d` for a simple convolution without bias:**
     
 .. code-block:: python
     
@@ -134,7 +134,7 @@ Examples
     ...     [[5.0, 6.0],
     ...      [7.0, 8.0]]
     ... ]], requires_grad=True)  # Shape: (1, 2, 2, 2, 2)
-    >>> conv3d = nn.Conv3D(in_channels=2, out_channels=1, kernel_size=2, bias=False)
+    >>> conv3d = nn.Conv3d(in_channels=2, out_channels=1, kernel_size=2, bias=False)
     >>> print(conv3d.weight)
     Tensor([[
         [[[1.0, 2.0],
@@ -163,7 +163,7 @@ Examples
           [3.0, 4.0]]]
     ]])  # Gradient with respect to weight
     
-**Using `Conv3D` with bias for a batch of inputs:**
+**Using `Conv3d` with bias for a batch of inputs:**
     
 .. code-block:: python
     
@@ -186,7 +186,7 @@ Examples
     ...          [34.0, 35.0, 36.0]]
     ...     ]
     ... ], requires_grad=True)  # Shape: (2, 2, 3, 3, 3)
-    >>> conv3d = nn.Conv3D(in_channels=2, out_channels=2, kernel_size=2, bias=True)
+    >>> conv3d = nn.Conv3d(in_channels=2, out_channels=2, kernel_size=2, bias=True)
     >>> print(conv3d.weight)
     Tensor([
         [
@@ -216,17 +216,17 @@ Examples
     # Backpropagation
     >>> output.backward()
     
-**Integrating `Conv3D` into a Neural Network Model:**
+**Integrating `Conv3d` into a Neural Network Model:**
     
 .. code-block:: python
     
     >>> import lucid.nn as nn
-    >>> class Conv3DModel(nn.Module):
+    >>> class Conv3dModel(nn.Module):
     ...     def __init__(self):
-    ...         super(Conv3DModel, self).__init__()
-    ...         self.conv1 = nn.Conv3D(in_channels=1, out_channels=8, kernel_size=3, padding=1)
+    ...         super(Conv3dModel, self).__init__()
+    ...         self.conv1 = nn.Conv3d(in_channels=1, out_channels=8, kernel_size=3, padding=1)
     ...         self.relu = nn.ReLU()
-    ...         self.conv2 = nn.Conv3D(in_channels=8, out_channels=16, kernel_size=3)
+    ...         self.conv2 = nn.Conv3d(in_channels=8, out_channels=16, kernel_size=3)
     ...         self.pool = nn.MaxPool3D(kernel_size=2, stride=2)
     ...         self.fc = nn.Linear(in_features=16 * 4 * 4 * 4, out_features=10)
     ...
@@ -240,7 +240,7 @@ Examples
     ...         x = self.fc(x)
     ...         return x
     >>>
-    >>> model = Conv3DModel()
+    >>> model = Conv3dModel()
     >>> input_data = Tensor(
     ... [
     ...     [[[0.5, -1.2, 3.3],
