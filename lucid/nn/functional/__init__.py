@@ -2,7 +2,7 @@ from typing import Literal
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
 
-from lucid.nn.functional import _linear, _non_linear, _conv, _pool, _drop, _norm, _loss
+from lucid.nn.functional import _activation, _linear, _conv, _pool, _drop, _norm, _loss
 
 
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
@@ -16,31 +16,31 @@ def bilinear(
 
 
 def relu(input_: Tensor) -> Tensor:
-    return _non_linear.relu(input_)
+    return _activation.relu(input_)
 
 
 def leaky_relu(input_: Tensor, negative_slope: float = 0.01) -> Tensor:
-    return _non_linear.leaky_relu(input_, negative_slope)
+    return _activation.leaky_relu(input_, negative_slope)
 
 
 def elu(input_: Tensor, alpha: float = 1.0) -> Tensor:
-    return _non_linear.elu(input_, alpha)
+    return _activation.elu(input_, alpha)
 
 
 def selu(input_: Tensor) -> Tensor:
-    return _non_linear.selu(input_)
+    return _activation.selu(input_)
 
 
 def gelu(input_: Tensor) -> Tensor:
-    return _non_linear.gelu(input_)
+    return _activation.gelu(input_)
 
 
 def sigmoid(input_: Tensor) -> Tensor:
-    return _non_linear.sigmoid(input_)
+    return _activation.sigmoid(input_)
 
 
 def tanh(input_: Tensor) -> Tensor:
-    return _non_linear.tanh(input_)
+    return _activation.tanh(input_)
 
 
 def unfold(

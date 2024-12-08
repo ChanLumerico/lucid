@@ -1,4 +1,4 @@
-Non-linear Functions
+Activation Functions
 ====================
 
 .. toctree::
