@@ -19,6 +19,9 @@ class Identity(nn.Module):
 class Linear(nn.Module):
     def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+
         weight_ = lucid.random.randn(out_features, in_features)
         self.weight = nn.Parameter(weight_)
 
@@ -37,6 +40,10 @@ class Bilinear(nn.Module):
         self, in1_features: int, in2_features: int, out_features: int, bias: bool = True
     ) -> None:
         super().__init__()
+        self.in1_features = in1_features
+        self.in2_features = in2_features
+        self.out_features = out_features
+
         weight_ = lucid.random.randn(out_features, in1_features, in2_features)
         self.weight = nn.Parameter(weight_)
 

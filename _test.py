@@ -6,11 +6,19 @@ lucid.random.seed(42)
 
 
 x = lucid.random.randn(1, 3, 28, 28, requires_grad=True)
-w = lucid.random.randn(6, 1, 3, 3, requires_grad=True) * 0.01
 
-out = F.conv2d(x, w, stride=1, padding=0, dilation=1, groups=3)
+conv1 = nn.Conv2D(3, 6, kernel_size=3, stride=1, padding=0)
+conv2 = nn.Conv2D(6, 12, kernel_size=3, stride=1, padding=0)
+
+
+def conv_test(x: lucid.Tensor) -> lucid.Tensor:
+    x = conv1(x)
+    x = conv2(F.relu(x))
+    return F.relu(x)
+
+
+out = conv_test(x)
 out.backward()
 
 print(out.shape)
 print(x.grad.shape)
-print(w.grad.shape)
