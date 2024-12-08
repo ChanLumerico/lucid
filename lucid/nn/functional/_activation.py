@@ -23,7 +23,7 @@ def elu(input_: Tensor, alpha: float = 1.0) -> Tensor:
 def selu(input_: Tensor) -> Tensor:
     _scale = 1.0507009873554805
     _alpha = 1.6732632423543772
-
+    
     mask = input_ >= 0
     pos = _scale * input_ * mask
     neg = _scale * _alpha * (lucid.exp(input_) - 1) * (1 - mask)
