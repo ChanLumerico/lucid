@@ -1,10 +1,7 @@
-lucid.nn.Identity
-==================
+nn.Identity
+===========
 
 .. autoclass:: lucid.nn.Identity
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 The `Identity` module is a neural network layer that performs the identity transformation. 
 It returns the input tensor unchanged. This module is useful as a placeholder or when a 

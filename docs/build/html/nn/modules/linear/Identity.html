@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.types" href="../../../others/types.html" /><link rel="prev" title="Linear Layers" href="index.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.Linear" href="Linear.html" /><link rel="prev" title="Linear Layers" href="index.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/linear/Identity.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.nn.Identity - Lucid 0.12.1 documentation</title>
+        <title>nn.Identity - Lucid 0.12.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -355,7 +355,9 @@
 </li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Modules</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of Modules</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Linear Layers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" role="switch" type="checkbox"/><label for="toctree-checkbox-14"><div class="visually-hidden">Toggle navigation of Linear Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">lucid.nn.Identity</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.Identity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Linear.html">nn.Linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Bilinear.html">nn.Bilinear</a></li>
 </ul>
 </li>
 </ul>
@@ -407,18 +409,12 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-nn-identity">
-<h1>lucid.nn.Identity<a class="headerlink" href="#lucid-nn-identity" title="Link to this heading">¶</a></h1>
+          <section id="nn-identity">
+<h1>nn.Identity<a class="headerlink" href="#nn-identity" title="Link to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="lucid.nn.Identity">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">Identity</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.Identity" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="../../Module.html#lucid.nn.Module" title="lucid.nn.base.Module"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.nn.Identity.forward">
-<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.Identity.forward" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
-
-</dd></dl>
 
 <p>The <cite>Identity</cite> module is a neural network layer that performs the identity transformation.
 It returns the input tensor unchanged. This module is useful as a placeholder or when a
@@ -515,12 +511,12 @@ same as the gradient of the loss with respect to the output.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="../../../others/types.html">
+          <a class="next-page" href="Linear.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.types</div>
+                <div class="title">nn.Linear</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -565,11 +561,8 @@ same as the gradient of the loss with respect to the output.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.nn.Identity</a><ul>
-<li><a class="reference internal" href="#lucid.nn.Identity"><code class="docutils literal notranslate"><span class="pre">Identity</span></code></a><ul>
-<li><a class="reference internal" href="#lucid.nn.Identity.forward"><code class="docutils literal notranslate"><span class="pre">Identity.forward()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#">nn.Identity</a><ul>
+<li><a class="reference internal" href="#lucid.nn.Identity"><code class="docutils literal notranslate"><span class="pre">Identity</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#attributes">Attributes</a></li>
