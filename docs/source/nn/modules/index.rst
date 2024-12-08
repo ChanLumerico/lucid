@@ -11,3 +11,8 @@ Modules
     :maxdepth: 2
 
     Convolution Layers <conv/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+
+    Activation Layers <activation/index.rst>

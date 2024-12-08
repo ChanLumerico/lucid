@@ -9,7 +9,7 @@ __all__ = ["ReLU", "LeakyReLU", "ELU", "SELU", "GELU", "Sigmoid", "Tanh"]
 
 
 class ReLU(nn.Module):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def forward(self, input_: Tensor) -> Tensor:

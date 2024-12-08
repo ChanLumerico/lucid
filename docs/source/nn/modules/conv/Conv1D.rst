@@ -75,10 +75,10 @@ adds the bias if enabled.
 
 Where:
 
-- :math:`\mathbf{x}` is the input tensor of shape `(N, C_{in}, L_{in})`.
-- :math:`\mathbf{W}` is the weight tensor of shape `(C_{out}, C_{in} / \text{groups}, K)`.
-- :math:`\mathbf{b}` is the bias tensor of shape `(C_{out})`, if applicable.
-- :math:`\mathbf{y}` is the output tensor of shape `(N, C_{out}, L_{out})`.
+- :math:`\mathbf{x}` is the input tensor of shape :math:`(N, C_{in}, L_{in})`.
+- :math:`\mathbf{W}` is the weight tensor of shape :math:`(C_{out}, C_{in} / \text{groups}, K)`.
+- :math:`\mathbf{b}` is the bias tensor of shape :math:`(C_{out})`, if applicable.
+- :math:`\mathbf{y}` is the output tensor of shape :math:`(N, C_{out}, L_{out})`.
 - :math:`*` denotes the convolution operation.
 - :math:`N` is the batch size.
 - :math:`C_{in}` is the number of input channels.

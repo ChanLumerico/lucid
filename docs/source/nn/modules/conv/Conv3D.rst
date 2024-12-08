@@ -77,10 +77,10 @@ and adds the bias if enabled.
     
 Where:
     
-- :math:`\mathbf{x}` is the input tensor of shape `(N, C_{in}, D_{in}, H_{in}, W_{in})`.
-- :math:`\mathbf{W}` is the weight tensor of shape `(C_{out}, C_{in} / \text{groups}, K_D, K_H, K_W)`.
-- :math:`\mathbf{b}` is the bias tensor of shape `(C_{out})`, if applicable.
-- :math:`\mathbf{y}` is the output tensor of shape `(N, C_{out}, D_{out}, H_{out}, W_{out})`.
+- :math:`\mathbf{x}` is the input tensor of shape :math:`(N, C_{in}, D_{in}, H_{in}, W_{in})`.
+- :math:`\mathbf{W}` is the weight tensor of shape :math:`(C_{out}, C_{in} / \text{groups}, K_D, K_H, K_W)`.
+- :math:`\mathbf{b}` is the bias tensor of shape :math:`(C_{out})`, if applicable.
+- :math:`\mathbf{y}` is the output tensor of shape :math:`(N, C_{out}, D_{out}, H_{out}, W_{out})`.
 - :math:`*` denotes the convolution operation.
 - :math:`N` is the batch size.
 - :math:`C_{in}` is the number of input channels.
@@ -236,16 +236,16 @@ Examples
     ...         x = self.conv2(x)
     ...         x = self.relu(x)
     ...         x = self.pool(x)
-    ...         x = x.view(x.size(0), -1)
+    ...         x = x.reshape(x.shape[0], -1)
     ...         x = self.fc(x)
     ...         return x
     >>>
     >>> model = Conv3DModel()
-    >>> input_data = Tensor([
-    ...     [
-    ...         [[[0.5, -1.2, 3.3],
-    ...           [0.7, 2.2, -0.3],
-    ...           [4.1, 5.5, 6.6]]]
+    >>> input_data = Tensor(
+    ... [
+    ...     [[[0.5, -1.2, 3.3],
+    ...       [0.7, 2.2, -0.3],
+    ...       [4.1, 5.5, 6.6]]]
     ... ], requires_grad=True)  # Shape: (1, 1, 3, 3, 3)
     >>> output = model(input_data)
     >>> print(output)
