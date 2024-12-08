@@ -15,6 +15,10 @@ class Parameter(Tensor):
 
 class Module:
     def __init__(self) -> None:
+        self._parameters: OrderedDict
+        self._modules: OrderedDict
+        self.training = True
+
         object.__setattr__(self, "_parameters", OrderedDict())
         object.__setattr__(self, "_modules", OrderedDict())
 
@@ -53,6 +57,15 @@ class Module:
         raise NotImplementedError(
             "The forward method must be implemented by the subclass."
         )
+
+    def train(self, mode: bool = True) -> Self:
+        self.training = mode
+        for module in self._modules.values():
+            module.train(mode)
+        return self
+
+    def eval(self) -> Self:
+        return self.train(mode=False)
 
     def parameters(self, recurse: bool = True) -> Iterator:
         for _, param in self._parameters.items():

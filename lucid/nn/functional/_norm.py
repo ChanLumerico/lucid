@@ -6,8 +6,8 @@ from lucid.types import _ShapeLike
 
 def batch_norm(
     input_: Tensor,
-    running_mean: Tensor,
-    running_var: Tensor,
+    running_mean: Tensor | None,
+    running_var: Tensor | None,
     weight: Tensor | None = None,
     bias: Tensor | None = None,
     training: bool = True,
@@ -17,12 +17,17 @@ def batch_norm(
     C = input_.shape[1]
     spatial_dim = input_.ndim - 2
 
-    if training:
+    use_batch_stats = training or running_mean is None or running_var is None
+
+    if use_batch_stats:
         batch_mean = input_.mean(axis=(0, *range(2, input_.ndim)), keepdims=True)
         batch_var = input_.var(axis=(0, *range(2, input_.ndim)), keepdims=True)
 
-        running_mean = momentum * batch_mean.flatten() + (1 - momentum) * running_mean
-        running_var = momentum * batch_var.flatten() + (1 - momentum) * running_var
+        if running_mean is not None and running_var is not None:
+            running_mean = (
+                momentum * batch_mean.flatten() + (1 - momentum) * running_mean
+            )
+            running_var = momentum * batch_var.flatten() + (1 - momentum) * running_var
 
         mean = batch_mean
         var = batch_var
@@ -31,6 +36,7 @@ def batch_norm(
         var = running_var.reshape(1, C, *(1,) * spatial_dim)
 
     normalized = (input_ - mean) / lucid.sqrt(var + eps)
+
     if weight is not None:
         weight = weight.reshape((1, C) + (1,) * spatial_dim)
         normalized *= weight

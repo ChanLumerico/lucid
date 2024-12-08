@@ -11,3 +11,4 @@ Activation Layers
     GELU.rst
     Sigmoid.rst
     Tanh.rst
+    Softmax.rst

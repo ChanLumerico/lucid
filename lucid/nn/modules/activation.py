@@ -5,7 +5,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 
-__all__ = ["ReLU", "LeakyReLU", "ELU", "SELU", "GELU", "Sigmoid", "Tanh"]
+__all__ = ["ReLU", "LeakyReLU", "ELU", "SELU", "GELU", "Sigmoid", "Tanh", "Softmax"]
 
 
 class ReLU(nn.Module):
@@ -64,3 +64,12 @@ class Tanh(nn.Module):
 
     def forward(self, input_: Tensor) -> Tensor:
         return F.tanh(input_)
+
+
+class Softmax(nn.Module):
+    def __init__(self, axis: int = -1) -> None:
+        super().__init__()
+        self.axis = axis
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.softmax(input_, self.axis)

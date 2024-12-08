@@ -6,6 +6,9 @@ from lucid._tensor import Tensor
 from typing import Any
 
 
+__all__ = ["AvgPool1d", "AvgPool2d", "AvgPool3d", "MaxPool1d", "MaxPool2d", "MaxPool3d"]
+
+
 def _single_to_tuple(value: Any, times: int) -> tuple[Any, ...]:
     if isinstance(value, tuple):
         return value

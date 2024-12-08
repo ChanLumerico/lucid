@@ -75,6 +75,9 @@ class Tensor(_TensorOps):
         else:
             return float(item)
 
+    def zero(self) -> None:
+        self.data = np.zeros_like(self.data)
+
     def zero_grad(self) -> None:
         if not self.keep_grad:
             self.grad = None
