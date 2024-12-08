@@ -42,6 +42,7 @@
    nn/Module.rst
 
    Neural Functions <nn/functions/index.rst>
+   Modules <nn/modules/index.rst>
 
 .. toctree::
    :maxdepth: 1

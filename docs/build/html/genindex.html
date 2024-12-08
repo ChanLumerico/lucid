@@ -301,14 +301,14 @@
 <li class="toctree-l3"><a class="reference internal" href="nn/functions/linear/bilinear.html">nn.functional.bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="nn/functions/non_linear/index.html">Non-linear Functions</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Non-linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="nn/functions/non_linear/relu.html">nn.functional.relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="nn/functions/non_linear/leaky_relu.html">nn.functional.leaky_relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="nn/functions/non_linear/elu.html">nn.functional.elu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="nn/functions/non_linear/selu.html">nn.functional.selu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="nn/functions/non_linear/gelu.html">nn.functional.gelu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="nn/functions/non_linear/sigmoid.html">nn.functional.sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="nn/functions/non_linear/tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="nn/functions/activation/index.html">Activation Functions</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="nn/functions/activation/relu.html">nn.functional.relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nn/functions/activation/leaky_relu.html">nn.functional.leaky_relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nn/functions/activation/elu.html">nn.functional.elu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nn/functions/activation/selu.html">nn.functional.selu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nn/functions/activation/gelu.html">nn.functional.gelu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nn/functions/activation/sigmoid.html">nn.functional.sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="nn/functions/activation/tanh.html">nn.functional.tanh</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="nn/functions/conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -347,6 +347,13 @@
 <li class="toctree-l3"><a class="reference internal" href="nn/functions/loss/cross_entropy.html">nn.functional.cross_entropy</a></li>
 <li class="toctree-l3"><a class="reference internal" href="nn/functions/loss/nll_loss.html">nn.functional.nll_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="nn/functions/loss/huber_loss.html">nn.functional.huber_loss</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="nn/modules/index.html">Modules</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of Modules</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="nn/modules/linear/index.html">Linear Layers</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" role="switch" type="checkbox"/><label for="toctree-checkbox-14"><div class="visually-hidden">Toggle navigation of Linear Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="nn/modules/linear/Identity.html">lucid.nn.Identity</a></li>
 </ul>
 </li>
 </ul>
@@ -503,7 +510,7 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="linalg/operations/eig.html#lucid.linalg.eig">eig() (in module lucid.linalg)</a>
 </li>
-        <li><a href="nn/functions/non_linear/elu.html#lucid.nn.functional.elu">elu() (in module lucid.nn.functional)</a>
+        <li><a href="nn/functions/activation/elu.html#lucid.nn.functional.elu">elu() (in module lucid.nn.functional)</a>
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
@@ -522,6 +529,10 @@
         <li><a href="tensor/utilities/flatten.html#lucid.flatten">flatten() (in module lucid)</a>
 </li>
     </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="nn/modules/linear/Identity.html#lucid.nn.Identity.forward">forward() (lucid.nn.Identity method)</a>
+</li>
+    </ul></td>
   </tr></table>
 </section>
 
@@ -529,7 +540,7 @@
   <h2>G</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="nn/functions/non_linear/gelu.html#lucid.nn.functional.gelu">gelu() (in module lucid.nn.functional)</a>
+        <li><a href="nn/functions/activation/gelu.html#lucid.nn.functional.gelu">gelu() (in module lucid.nn.functional)</a>
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
@@ -557,6 +568,8 @@
   <h2>I</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="nn/modules/linear/Identity.html#lucid.nn.Identity">Identity (class in lucid.nn)</a>
+</li>
         <li><a href="tensor/operations/bfunc/inner.html#lucid.inner">inner() (in module lucid)</a>
 </li>
     </ul></td>
@@ -575,7 +588,7 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="nn/functions/norm/layer_norm.html#lucid.nn.functional.layer_norm">layer_norm() (in module lucid.nn.functional)</a>
 </li>
-        <li><a href="nn/functions/non_linear/leaky_relu.html#lucid.nn.functional.leaky_relu">leaky_relu() (in module lucid.nn.functional)</a>
+        <li><a href="nn/functions/activation/leaky_relu.html#lucid.nn.functional.leaky_relu">leaky_relu() (in module lucid.nn.functional)</a>
 </li>
         <li><a href="nn/functions/linear/linear.html#lucid.nn.functional.linear">linear() (in module lucid.nn.functional)</a>
 </li>
@@ -713,7 +726,7 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="tensor/operations/ufunc/reciprocal.html#lucid.reciprocal">reciprocal() (in module lucid)</a>
 </li>
-        <li><a href="nn/functions/non_linear/relu.html#lucid.nn.functional.relu">relu() (in module lucid.nn.functional)</a>
+        <li><a href="nn/functions/activation/relu.html#lucid.nn.functional.relu">relu() (in module lucid.nn.functional)</a>
 </li>
         <li><a href="tensor/utilities/repeat.html#lucid.repeat">repeat() (in module lucid)</a>
 </li>
@@ -729,9 +742,9 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="random/functions/seed.html#lucid.random.seed">seed() (in module lucid.random)</a>
 </li>
-        <li><a href="nn/functions/non_linear/selu.html#lucid.nn.functional.selu">selu() (in module lucid.nn.functional)</a>
+        <li><a href="nn/functions/activation/selu.html#lucid.nn.functional.selu">selu() (in module lucid.nn.functional)</a>
 </li>
-        <li><a href="nn/functions/non_linear/sigmoid.html#lucid.nn.functional.sigmoid">sigmoid() (in module lucid.nn.functional)</a>
+        <li><a href="nn/functions/activation/sigmoid.html#lucid.nn.functional.sigmoid">sigmoid() (in module lucid.nn.functional)</a>
 </li>
         <li><a href="tensor/operations/ufunc/sign.html#lucid.sign">sign() (in module lucid)</a>
 </li>
@@ -770,7 +783,7 @@
         <li><a href="tensor/operations/ufunc/tanh.html#lucid.tanh">tanh() (in module lucid)</a>
 
         <ul>
-          <li><a href="nn/functions/non_linear/tanh.html#lucid.nn.functional.tanh">(in module lucid.nn.functional)</a>
+          <li><a href="nn/functions/activation/tanh.html#lucid.nn.functional.tanh">(in module lucid.nn.functional)</a>
 </li>
         </ul></li>
         <li><a href="tensor/Tensor_.html#lucid.Tensor">Tensor (class in lucid)</a>

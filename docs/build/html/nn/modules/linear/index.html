@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.selu" href="selu.html" /><link rel="prev" title="nn.functional.leaky_relu" href="leaky_relu.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/non_linear/elu.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="lucid.nn.Identity" href="Identity.html" /><link rel="prev" title="Modules" href="../index.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/linear/index.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.functional.elu - Lucid 0.12.1 documentation</title>
+        <title>Linear Layers - Lucid 0.12.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -179,7 +179,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -297,58 +297,65 @@
 <li class="toctree-l1"><a class="reference internal" href="../../nn.html">lucid.nn</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../Parameter.html">lucid.nn.Parameter</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../Module.html">lucid.nn.Module</a></li>
-<li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Neural Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Neural Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2 has-children"><a class="reference internal" href="../linear/index.html">Linear Functions</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle navigation of Linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../linear/linear.html">nn.functional.linear</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../linear/bilinear.html">nn.functional.bilinear</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../functions/index.html">Neural Functions</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Neural Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/linear/index.html">Linear Functions</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle navigation of Linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/linear/linear.html">nn.functional.linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/linear/bilinear.html">nn.functional.bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Non-linear Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Non-linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="relu.html">nn.functional.relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="leaky_relu.html">nn.functional.leaky_relu</a></li>
-<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.functional.elu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="selu.html">nn.functional.selu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="gelu.html">nn.functional.gelu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sigmoid.html">nn.functional.sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/activation/index.html">Activation Functions</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/relu.html">nn.functional.relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/leaky_relu.html">nn.functional.leaky_relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/elu.html">nn.functional.elu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/selu.html">nn.functional.selu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/gelu.html">nn.functional.gelu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/sigmoid.html">nn.functional.sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/tanh.html">nn.functional.tanh</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../conv/unfold.html">nn.functional.unfold</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv1d.html">nn.functional.conv1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv2d.html">nn.functional.conv2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv3d.html">nn.functional.conv3d</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/unfold.html">nn.functional.unfold</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv1d.html">nn.functional.conv1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv2d.html">nn.functional.conv2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv3d.html">nn.functional.conv3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../pool/index.html">Pooling Functions</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><div class="visually-hidden">Toggle navigation of Pooling Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool1d.html">nn.functional.avg_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool2d.html">nn.functional.avg_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool3d.html">nn.functional.avg_pool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool1d.html">nn.functional.max_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool2d.html">nn.functional.max_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool3d.html">nn.functional.max_pool3d</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/pool/index.html">Pooling Functions</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><div class="visually-hidden">Toggle navigation of Pooling Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool1d.html">nn.functional.avg_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool2d.html">nn.functional.avg_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool3d.html">nn.functional.avg_pool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool1d.html">nn.functional.max_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool2d.html">nn.functional.max_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool3d.html">nn.functional.max_pool3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../drop/index.html">Dropout Functions</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><div class="visually-hidden">Toggle navigation of Dropout Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout.html">nn.functional.dropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout1d.html">nn.functional.dropout1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout2d.html">nn.functional.dropout2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout3d.html">nn.functional.dropout3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/alpha_dropout.html">nn.functional.alpha_dropout</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/drop/index.html">Dropout Functions</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><div class="visually-hidden">Toggle navigation of Dropout Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout.html">nn.functional.dropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout1d.html">nn.functional.dropout1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout2d.html">nn.functional.dropout2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout3d.html">nn.functional.dropout3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/alpha_dropout.html">nn.functional.alpha_dropout</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../norm/index.html">Normalization Functions</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle navigation of Normalization Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../norm/batch_norm.html">nn.functional.batch_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/layer_norm.html">nn.functional.layer_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/instance_norm.html">nn.functional.instance_norm</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/norm/index.html">Normalization Functions</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle navigation of Normalization Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/batch_norm.html">nn.functional.batch_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/layer_norm.html">nn.functional.layer_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/instance_norm.html">nn.functional.instance_norm</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../loss/index.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><div class="visually-hidden">Toggle navigation of Loss Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../loss/mse_loss.html">nn.functional.mse_loss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/binary_cross_entropy.html">nn.functional.binary_cross_entropy</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/cross_entropy.html">nn.functional.cross_entropy</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/nll_loss.html">nn.functional.nll_loss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/huber_loss.html">nn.functional.huber_loss</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/loss/index.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><div class="visually-hidden">Toggle navigation of Loss Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/mse_loss.html">nn.functional.mse_loss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/binary_cross_entropy.html">nn.functional.binary_cross_entropy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/cross_entropy.html">nn.functional.cross_entropy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/nll_loss.html">nn.functional.nll_loss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/huber_loss.html">nn.functional.huber_loss</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Modules</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of Modules</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2 current has-children current-page"><a class="current reference internal" href="#">Linear Layers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" role="switch" type="checkbox"/><label for="toctree-checkbox-14"><div class="visually-hidden">Toggle navigation of Linear Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="Identity.html">lucid.nn.Identity</a></li>
 </ul>
 </li>
 </ul>
@@ -380,7 +387,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/nn/functions/non_linear/elu.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/nn/modules/linear/index.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -394,98 +401,19 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-functional-elu">
-<h1>nn.functional.elu<a class="headerlink" href="#nn-functional-elu" title="Link to this heading">¶</a></h1>
-<dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.functional.elu">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">elu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.elu" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<p>The <cite>elu</cite> function applies the Exponential Linear Unit activation function element-wise
-to the input tensor. ELU is designed to combine the benefits of ReLUs and alleviate some
-of their drawbacks by allowing negative values when the input is less than zero.</p>
-<section id="function-signature">
-<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">elu</span><span class="p">(</span><span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
-</pre></div>
-</div>
-</section>
-<section id="parameters">
-<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of any shape.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>alpha</strong> (<em>float</em>, optional):</dt><dd><p>The value to scale the negative factor. Default is <cite>1.0</cite>.</p>
-</dd>
-</dl>
-</li>
+          <section id="linear-layers">
+<h1>Linear Layers<a class="headerlink" href="#linear-layers" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Identity.html">lucid.nn.Identity</a></li>
 </ul>
-</section>
-<section id="returns">
-<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> where each element is the result of applying the ELU function
-to the corresponding element in <cite>input_</cite>. If <cite>input_</cite> requires gradients,
-the resulting tensor will also require gradients.</p>
-</dd>
-</dl>
-</li>
-</ul>
-</section>
-<section id="forward-calculation">
-<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward calculation for the <cite>elu</cite> operation is:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}\mathbf{out} =
-\begin{cases}
-    \mathbf{input\_} &amp; \text{if } \mathbf{input\_} &gt; 0 \\
-    \alpha \cdot (\exp(\mathbf{input\_}) - 1) &amp; \text{otherwise}
-\end{cases}\end{split}\]</div>
 </div>
-</section>
-<section id="backward-gradient-calculation">
-<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For the tensor <strong>input_</strong> involved in the <cite>elu</cite> operation,
-the gradient with respect to the output (<strong>out</strong>) is computed as follows:</p>
-<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{input\_}\)</span>:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}\frac{\partial \mathbf{out}}{\partial \mathbf{input\_}} =
-\begin{cases}
-    1 &amp; \text{if } \mathbf{input\_} &gt; 0 \\
-    \mathbf{out} + \alpha &amp; \text{otherwise}
-\end{cases}\end{split}\]</div>
-</div>
-</section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Using <cite>elu</cite> on a tensor:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">elu</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([-0.6321, 0.0, 2.0], grad=None)</span>
-</pre></div>
-</div>
-<p>Backpropagation computes gradients for <cite>input_</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[0.3679, 1.0, 1.0]</span>
-</pre></div>
-</div>
-</section>
 </section>
 
         </article>
@@ -493,23 +421,23 @@ the gradient with respect to the output (<strong>out</strong>) is computed as fo
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="selu.html">
+          <a class="next-page" href="Identity.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.functional.selu</div>
+                <div class="title">lucid.nn.Identity</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="leaky_relu.html">
+          <a class="prev-page" href="../index.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">nn.functional.leaky_relu</div>
+                <div class="title">Modules</div>
                 
               </div>
             </a>
@@ -531,33 +459,8 @@ the gradient with respect to the output (<strong>out</strong>) is computed as fo
         
       </footer>
     </div>
-    <aside class="toc-drawer">
+    <aside class="toc-drawer no-toc">
       
-      
-      <div class="toc-sticky toc-scroll">
-        <div class="toc-title-container">
-          <span class="toc-title">
-            On this page
-          </span>
-        </div>
-        <div class="toc-tree-container">
-          <div class="toc-tree">
-            <ul>
-<li><a class="reference internal" href="#">nn.functional.elu</a><ul>
-<li><a class="reference internal" href="#lucid.nn.functional.elu"><code class="docutils literal notranslate"><span class="pre">elu()</span></code></a></li>
-<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
-<li><a class="reference internal" href="#parameters">Parameters</a></li>
-<li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
-<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
-<li><a class="reference internal" href="#examples">Examples</a></li>
-</ul>
-</li>
-</ul>
-
-          </div>
-        </div>
-      </div>
       
       
     </aside>

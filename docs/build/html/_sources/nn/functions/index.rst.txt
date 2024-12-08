@@ -9,9 +9,9 @@ lucid.nn.functional
 
 .. toctree::
     :maxdepth: 2
-    :caption: Non-linear Functions
+    :caption: activation Functions
 
-    Non-linear Functions <non_linear/index.rst>
+    Activation Functions <activation/index.rst>
 
 .. toctree::
     :maxdepth: 2
