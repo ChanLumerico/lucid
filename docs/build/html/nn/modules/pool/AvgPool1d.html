@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/pool/AvgPool1d.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.AvgPool1d - Lucid 0.14.0 documentation</title>
+        <title>nn.AvgPool1d - Lucid 0.14.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 0.14.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 0.14.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 0.14.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 0.14.1 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -311,6 +311,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../../functions/activation/gelu.html">nn.functional.gelu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../functions/activation/sigmoid.html">nn.functional.sigmoid</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../functions/activation/tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/softmax.html">nn.functional.softmax</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -493,8 +494,8 @@ same value as <cite>kernel_size</cite>.</p>
 </div>
 <p>Where:</p>
 <ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor of shape <cite>(N, C, L_{in})</cite>.</p></li>
-<li><p><span class="math notranslate nohighlight">\(\mathbf{y}\)</span> is the output tensor of shape <cite>(N, C, L_{out})</cite>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor of shape <span class="math notranslate nohighlight">\((N, C, L_{in})\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{y}\)</span> is the output tensor of shape <span class="math notranslate nohighlight">\((N, C, L_{out})\)</span>.</p></li>
 <li><p><span class="math notranslate nohighlight">\(k\)</span> is the <cite>kernel_size</cite>.</p></li>
 <li><p><span class="math notranslate nohighlight">\(s\)</span> is the <cite>stride</cite>.</p></li>
 <li><p><span class="math notranslate nohighlight">\(p\)</span> is the <cite>padding</cite>.</p></li>
@@ -515,8 +516,8 @@ distributing the gradient from the output equally to each element in the pooling
 </div>
 <p>Where:</p>
 <ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(\mathbf{y}_i\)</span> is the output at position <cite>i</cite>.</p></li>
-<li><p><span class="math notranslate nohighlight">\(\mathbf{x}_j\)</span> is the input at position <cite>j</cite>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{y}_i\)</span> is the output at position <span class="math notranslate nohighlight">\(i\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{x}_j\)</span> is the input at position <span class="math notranslate nohighlight">\(j\)</span>.</p></li>
 <li><p><span class="math notranslate nohighlight">\(\text{window}_i\)</span> defines the indices of the input that contribute
 to the output at position <cite>i</cite>.</p></li>
 </ul>
@@ -655,7 +656,7 @@ to the output at position <cite>i</cite>.</p></li>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=9e420a66"></script>
+</div><script src="../../../_static/documentation_options.js?v=3a3a8e7f"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>

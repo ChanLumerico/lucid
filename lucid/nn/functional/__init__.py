@@ -43,6 +43,10 @@ def tanh(input_: Tensor) -> Tensor:
     return _activation.tanh(input_)
 
 
+def softmax(input_: Tensor, axis: int = -1) -> Tensor:
+    return _activation.softmax(input_, axis)
+
+
 def unfold(
     input_: Tensor,
     filter_size: tuple[int, ...],

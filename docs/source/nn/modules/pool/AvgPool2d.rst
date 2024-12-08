@@ -52,8 +52,8 @@ The `AvgPool2d` module performs the following operation:
 
 Where:
 
-- :math:`\mathbf{x}` is the input tensor of shape `(N, C, H_{in}, W_{in})`.
-- :math:`\mathbf{y}` is the output tensor of shape `(N, C, H_{out}, W_{out})`.
+- :math:`\mathbf{x}` is the input tensor of shape :math:`(N, C, H_{in}, W_{in})`.
+- :math:`\mathbf{y}` is the output tensor of shape :math:`(N, C, H_{out}, W_{out})`.
 - :math:`k_h` and :math:`k_w` are the kernel heights and widths.
 - :math:`s_h` and :math:`s_w` are the strides for height and width.
 - :math:`p_h` and :math:`p_w` are the padding for height and width.
@@ -78,8 +78,8 @@ the gradient from each output element equally to all elements in the correspondi
 
 Where:
 
-- :math:`\mathbf{y}_{i,j}` is the output at position `(i, j)`.
-- :math:`\mathbf{x}_{m,n}` is the input at position `(m, n)`.
+- :math:`\mathbf{y}_{i,j}` is the output at position :math:`(i, j)`.
+- :math:`\mathbf{x}_{m,n}` is the input at position :math:`(m, n)`.
 
 This ensures that the gradient is appropriately averaged and propagated back to the input tensor.
 

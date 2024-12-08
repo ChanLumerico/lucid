@@ -11,3 +11,4 @@ Activation Functions
     gelu.rst
     sigmoid.rst
     tanh.rst
+    softmax.rst

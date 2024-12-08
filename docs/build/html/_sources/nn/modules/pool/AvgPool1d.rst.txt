@@ -47,8 +47,8 @@ The `AvgPool1d` module performs the following operation:
 
 Where:
 
-- :math:`\mathbf{x}` is the input tensor of shape `(N, C, L_{in})`.
-- :math:`\mathbf{y}` is the output tensor of shape `(N, C, L_{out})`.
+- :math:`\mathbf{x}` is the input tensor of shape :math:`(N, C, L_{in})`.
+- :math:`\mathbf{y}` is the output tensor of shape :math:`(N, C, L_{out})`.
 - :math:`k` is the `kernel_size`.
 - :math:`s` is the `stride`.
 - :math:`p` is the `padding`.
@@ -69,8 +69,8 @@ distributing the gradient from the output equally to each element in the pooling
 
 Where:
 
-- :math:`\mathbf{y}_i` is the output at position `i`.
-- :math:`\mathbf{x}_j` is the input at position `j`.
+- :math:`\mathbf{y}_i` is the output at position :math:`i`.
+- :math:`\mathbf{x}_j` is the input at position :math:`j`.
 - :math:`\text{window}_i` defines the indices of the input that contribute 
   to the output at position `i`.
 

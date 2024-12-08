@@ -51,8 +51,8 @@ The `AvgPool3d` module performs the following operation:
 
 Where:
 
-- :math:`\mathbf{x}` is the input tensor of shape `(N, C, D_{in}, H_{in}, W_{in})`.
-- :math:`\mathbf{y}` is the output tensor of shape `(N, C, D_{out}, H_{out}, W_{out})`.
+- :math:`\mathbf{x}` is the input tensor of shape :math:`(N, C, D_{in}, H_{in}, W_{in})`.
+- :math:`\mathbf{y}` is the output tensor of shape :math:`(N, C, D_{out}, H_{out}, W_{out})`.
 - :math:`k_d`, :math:`k_h`, :math:`k_w` are the kernel sizes for depth, height, and width.
 - :math:`s_d`, :math:`s_h`, :math:`s_w` are the strides for depth, height, and width.
 - :math:`p_d`, :math:`p_h`, :math:`p_w` are the padding for depth, height, and width.
@@ -77,8 +77,8 @@ the gradient from each output element equally to all elements in the correspondi
 
 Where:
 
-- :math:`\mathbf{y}_{d,h,w}` is the output at position `(d, h, w)`.
-- :math:`\mathbf{x}_{m,n,o}` is the input at position `(m, n, o)`.
+- :math:`\mathbf{y}_{d,h,w}` is the output at position :math:`(d, h, w)`.
+- :math:`\mathbf{x}_{m,n,o}` is the input at position :math:`(m, n, o)`.
 
 This ensures that the gradient is appropriately averaged and propagated back to the input tensor.
 

@@ -20,6 +20,7 @@ def conv_test(x: lucid.Tensor) -> lucid.Tensor:
     x = conv1(x)
     x = conv2(relu1(x))
     x = pool(relu2(x))
+    x = F.softmax(x, axis=-1)
     return x
 
 

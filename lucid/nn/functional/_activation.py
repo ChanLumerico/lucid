@@ -41,3 +41,14 @@ def sigmoid(input_: Tensor) -> Tensor:
 
 def tanh(input_: Tensor) -> Tensor:
     return lucid.tanh(input_)
+
+
+def softmax(input_: Tensor, axis: int = -1) -> Tensor:
+    input_max = lucid.max(input_, axis=axis, keepdims=True)
+    input_stable = input_ - input_max
+
+    e_input = lucid.exp(input_stable)
+    sum_e_input = e_input.sum(axis=axis, keepdims=True)
+
+    output = e_input / sum_e_input
+    return output

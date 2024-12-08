@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.dropout1d" href="dropout1d.html" /><link rel="prev" title="Dropout Functions" href="index.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/drop/dropout.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="Convolution Functions" href="../conv/index.html" /><link rel="prev" title="nn.functional.tanh" href="tanh.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/activation/softmax.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.functional.dropout - Lucid 0.14.1 documentation</title>
+        <title>nn.functional.softmax - Lucid 0.14.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -303,15 +303,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../linear/bilinear.html">nn.functional.bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../activation/index.html">Activation Functions</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../activation/relu.html">nn.functional.relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/leaky_relu.html">nn.functional.leaky_relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/elu.html">nn.functional.elu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/selu.html">nn.functional.selu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/gelu.html">nn.functional.gelu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/sigmoid.html">nn.functional.sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/tanh.html">nn.functional.tanh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/softmax.html">nn.functional.softmax</a></li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Activation Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="relu.html">nn.functional.relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="leaky_relu.html">nn.functional.leaky_relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="elu.html">nn.functional.elu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="selu.html">nn.functional.selu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="gelu.html">nn.functional.gelu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sigmoid.html">nn.functional.sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.functional.softmax</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -330,12 +330,12 @@
 <li class="toctree-l3"><a class="reference internal" href="../pool/max_pool3d.html">nn.functional.max_pool3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Dropout Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><div class="visually-hidden">Toggle navigation of Dropout Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.functional.dropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="dropout1d.html">nn.functional.dropout1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="dropout2d.html">nn.functional.dropout2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="dropout3d.html">nn.functional.dropout3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="alpha_dropout.html">nn.functional.alpha_dropout</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../drop/index.html">Dropout Functions</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><div class="visually-hidden">Toggle navigation of Dropout Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../drop/dropout.html">nn.functional.dropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/dropout1d.html">nn.functional.dropout1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/dropout2d.html">nn.functional.dropout2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/dropout3d.html">nn.functional.dropout3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/alpha_dropout.html">nn.functional.alpha_dropout</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../norm/index.html">Normalization Functions</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle navigation of Normalization Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -415,7 +415,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/nn/functions/drop/dropout.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/nn/functions/activation/softmax.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -435,18 +435,22 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-functional-dropout">
-<h1>nn.functional.dropout<a class="headerlink" href="#nn-functional-dropout" title="Link to this heading">¶</a></h1>
+          <section id="nn-functional-softmax">
+<h1>nn.functional.softmax<a class="headerlink" href="#nn-functional-softmax" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.functional.dropout">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">dropout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">training</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.dropout" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.nn.functional.softmax">
+<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">softmax</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.softmax" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>dropout</cite> function randomly zeroes some elements of the input
-tensor with a probability <cite>p</cite> during training to prevent overfitting.</p>
+<p>The <cite>softmax</cite> function applies the softmax activation to the input tensor along a
+specified axis. Softmax is commonly used in neural networks, particularly in the
+output layer for multi-class classification tasks, to convert raw logits into
+probabilities that sum to one. This normalization allows the model to interpret
+the output as a probability distribution over different classes.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">dropout</span><span class="p">(</span><span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">training</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">softmax</span><span class="p">(</span><span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">_activation</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">axis</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -454,17 +458,14 @@ tensor with a probability <cite>p</cite> during training to prevent overfitting.
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of any shape.</p>
+<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor containing raw scores (logits) that need to be normalized
+into probabilities.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>p</strong> (<em>float</em>, optional):</dt><dd><p>Probability of an element to be zeroed. Default: 0.5.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>training</strong> (<em>bool</em>, optional):</dt><dd><p>Apply dropout if True; do nothing if False. Default: True.</p>
+<dt><strong>axis</strong> (<em>int</em>, optional):</dt><dd><p>The axis along which softmax will be computed. Default is <cite>-1</cite>, which typically
+corresponds to the last dimension of the tensor.</p>
 </dd>
 </dl>
 </li>
@@ -474,21 +475,85 @@ tensor with a probability <cite>p</cite> during training to prevent overfitting.
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A tensor of the same shape as the input, with elements randomly
-zeroed with probability <cite>p</cite> if training is True.</p>
+<dt><strong>Tensor</strong>:</dt><dd><p>A tensor of the same shape as <cite>input_</cite> with softmax applied along the specified axis.
+The values along the specified axis sum to one.</p>
 </dd>
 </dl>
 </li>
 </ul>
 </section>
+<section id="forward-calculation">
+<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
+<dl class="simple">
+<dt>The <cite>softmax</cite> function computes the softmax of each element along the specified axis using</dt><dd><p>the following formula:</p>
+</dd>
+</dl>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\text{softmax}(\mathbf{x})_i = \frac{e^{\mathbf{x}_i}}{\sum_{j} e^{\mathbf{x}_j}}\]</div>
+</div>
+<p>Where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> is the input tensor.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{x}_i\)</span> is the ith element along the specified axis.</p></li>
+<li><p>The exponential function is applied element-wise, and the results are normalized by
+dividing by the sum of exponentials along the specified axis.</p></li>
+</ul>
+</section>
+<section id="backward-gradient-calculation">
+<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
+<p>During backpropagation, the gradient of the loss with respect to the input tensor is
+computed as follows:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\frac{\partial \text{softmax}(\mathbf{x})_i}{\partial \mathbf{x}_j} =
+\text{softmax}(\mathbf{x})_i \left( \delta_{ij} - \text{softmax}(\mathbf{x})_j \right)\]</div>
+</div>
+<p>Where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\delta_{ij}\)</span> is the Kronecker delta, which is 1 if <span class="math notranslate nohighlight">\(i = j\)</span> and 0 otherwise.</p></li>
+<li><p>This derivative ensures that gradients are properly scaled and normalized, facilitating
+effective learning during training.</p></li>
+</ul>
+</section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Applying dropout during training:</p>
+<p><strong>Applying `softmax` to a single input tensor:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go"># Example output: Tensor([1.0, 0.0, 3.0])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (1, 3)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+<span class="go">Tensor([[0.6590, 0.2424, 0.0986]], grad=None)</span>
+
+<span class="go"># Backpropagation</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">(</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]]))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_tensor</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">Tensor([[0.6590, -0.2424, -0.0986]])  # Gradients with respect to input_tensor</span>
+</pre></div>
+</div>
+<p><strong>Applying `softmax` along a different axis:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span>
+<span class="gp">... </span>    <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">]</span>
+<span class="gp">... </span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Shape: (2, 3)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+<span class="go">Tensor([</span>
+<span class="go">    [0.7311, 0.1192, 0.7311],</span>
+<span class="go">    [0.2689, 0.8808, 0.2689]</span>
+<span class="go">], grad=None)</span>
+
+<span class="go"># Backpropagation</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">(</span><span class="n">Tensor</span><span class="p">([</span>
+<span class="gp">... </span>    <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]</span>
+<span class="gp">... </span><span class="p">]))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_tensor</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">Tensor([</span>
+<span class="go">    [0.1966, -0.1192, 0.1966],</span>
+<span class="go">    [-0.1966, 0.1192, -0.1966]</span>
+<span class="go">])  # Gradients with respect to input_tensor</span>
 </pre></div>
 </div>
 </section>
@@ -499,23 +564,23 @@ zeroed with probability <cite>p</cite> if training is True.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="dropout1d.html">
+          <a class="next-page" href="../conv/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.functional.dropout1d</div>
+                <div class="title">Convolution Functions</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="index.html">
+          <a class="prev-page" href="tanh.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Dropout Functions</div>
+                <div class="title">nn.functional.tanh</div>
                 
               </div>
             </a>
@@ -549,11 +614,13 @@ zeroed with probability <cite>p</cite> if training is True.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">nn.functional.dropout</a><ul>
-<li><a class="reference internal" href="#lucid.nn.functional.dropout"><code class="docutils literal notranslate"><span class="pre">dropout()</span></code></a></li>
+<li><a class="reference internal" href="#">nn.functional.softmax</a><ul>
+<li><a class="reference internal" href="#lucid.nn.functional.softmax"><code class="docutils literal notranslate"><span class="pre">softmax()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
+<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
+<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>
@@ -570,5 +637,6 @@ zeroed with probability <cite>p</cite> if training is True.</p>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>
