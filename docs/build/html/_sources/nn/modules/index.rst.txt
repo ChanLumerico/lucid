@@ -24,3 +24,9 @@ Modules
     :caption: Pooling Layers
 
     Pooling Layers <pool/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Normalization Layers
+
+    Normalization Layers <norm/index.rst>

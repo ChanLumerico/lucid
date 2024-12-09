@@ -8,6 +8,11 @@ from lucid._tensor import Tensor
 __all__ = ["BatchNorm1d", "BatchNorm2d", "BatchNorm3d"]
 
 
+def _check_input_dim(tensor: Tensor, dim: int) -> None:
+    if tensor.ndim != dim:
+        raise ValueError(f"expected {dim}D input (got {tensor.ndim}D input).")
+
+
 class _NormBase(nn.Module):
     def __init__(
         self,
@@ -82,16 +87,19 @@ class _BatchNorm(_NormBase):
 
 class BatchNorm1d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
+        _check_input_dim(input_, dim=3)
         return super().forward(input_)
 
 
 class BatchNorm2d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
+        _check_input_dim(input_, dim=4)
         return super().forward(input_)
 
 
 class BatchNorm3d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
+        _check_input_dim(input_, dim=5)
         return super().forward(input_)
 
 

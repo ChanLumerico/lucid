@@ -15,6 +15,11 @@ def _single_to_tuple(value: Any, times: int) -> tuple[Any, ...]:
     return (value,) * times
 
 
+def _check_input_dim(tensor: Tensor, dim: int) -> None:
+    if tensor.ndim != dim:
+        raise ValueError(f"expected {dim}D input (got {tensor.ndim}D input).")
+
+
 _PaddingStr = Literal["same", "valid"]
 
 
@@ -100,6 +105,7 @@ class Conv1d(_ConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
+        _check_input_dim(input_, dim=3)
         return F.conv1d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
@@ -135,6 +141,7 @@ class Conv2d(_ConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
+        _check_input_dim(input_, dim=4)
         return F.conv2d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
@@ -170,6 +177,7 @@ class Conv3d(_ConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
+        _check_input_dim(input_, dim=5)
         return F.conv3d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
