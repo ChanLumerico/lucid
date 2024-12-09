@@ -1,6 +1,8 @@
-./scripts/black.sh lucid
+cd scripts
+./black.sh ../lucid
+./rm_pyc.sh ../lucid
 
-cd docs
+cd ../docs
 rm -r build/
 make html
 make html
