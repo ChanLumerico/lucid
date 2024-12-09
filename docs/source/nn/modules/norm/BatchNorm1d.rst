@@ -26,24 +26,23 @@ Class Signature
 Parameters
 ----------
 - **num_features** (*int*):
-    - The number of features or channels in the input tensor. 
-    For a 1D input, this typically corresponds to the number of channels.
+  The number of features or channels in the input tensor. 
+  For a 1D input, this typically corresponds to the number of channels.
 
 - **eps** (*float*, optional):
-    - A small value added to the denominator for numerical stability. Default is `1e-5`.
+  A small value added to the denominator for numerical stability. Default is `1e-5`.
 
 - **momentum** (*float* or *None*, optional):
-    - The value used for the running mean and running variance computation. 
-    When set to `None`, it defaults to `1 - momentum` in some frameworks. Default is `0.1`.
+  The value used for the running mean and running variance computation. 
+  When set to `None`, it defaults to `1 - momentum` in some frameworks. Default is `0.1`.
 
 - **affine** (*bool*, optional):
-    - If `True`, the module has learnable affine parameters (scale and shift). 
-    Default is `True`.
+  If `True`, the module has learnable affine parameters (scale and shift). Default is `True`.
 
 - **track_running_stats** (*bool*, optional):
-    - If `True`, the module tracks the running mean and variance, 
-    which are not trainable but are updated during training and used during evaluation. 
-    Default is `True`.
+  If `True`, the module tracks the running mean and variance, 
+  which are not trainable but are updated during training and used during evaluation. 
+  Default is `True`.
 
 Attributes
 ----------

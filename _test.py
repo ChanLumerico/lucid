@@ -23,6 +23,7 @@ def conv_test(x: lucid.Tensor) -> lucid.Tensor:
     x = relu1(bn1(conv1(x)))
     x = relu2(bn2(conv2(x)))
     x = pool(x)
+    x = nn.LayerNorm(x.shape)(x)  # tmp
     return x
 
 

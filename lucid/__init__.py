@@ -77,6 +77,11 @@ def shape(a: Tensor | _NumPyArray) -> _ShapeLike:
     raise ValueError(f"The argument must be a Tensor or a NumPy array.")
 
 
+def _check_input_dim(tensor: Tensor, dim: int) -> None:
+    if tensor.ndim != dim:
+        raise ValueError(f"expected {dim}D input (got {tensor.ndim}D input).")
+
+
 def _set_tensor_grad(
     tensor: Tensor, grad: _NumPyArray, at: SupportsIndex = ...
 ) -> None:
@@ -96,7 +101,6 @@ def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
 def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     if data.shape == grad.shape:
         return grad
-
     if data.ndim == 0:
         return grad.sum()
 

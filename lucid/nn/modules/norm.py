@@ -3,14 +3,18 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+from lucid.types import _ShapeLike
 
 
-__all__ = ["BatchNorm1d", "BatchNorm2d", "BatchNorm3d"]
-
-
-def _check_input_dim(tensor: Tensor, dim: int) -> None:
-    if tensor.ndim != dim:
-        raise ValueError(f"expected {dim}D input (got {tensor.ndim}D input).")
+__all__ = [
+    "BatchNorm1d",
+    "BatchNorm2d",
+    "BatchNorm3d",
+    "InstanceNorm1d",
+    "InstanceNorm2d",
+    "InstanceNorm3d",
+    "LayerNorm",
+]
 
 
 class _NormBase(nn.Module):
@@ -87,21 +91,94 @@ class _BatchNorm(_NormBase):
 
 class BatchNorm1d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        _check_input_dim(input_, dim=3)
+        lucid._check_input_dim(input_, dim=3)
         return super().forward(input_)
 
 
 class BatchNorm2d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        _check_input_dim(input_, dim=4)
+        lucid._check_input_dim(input_, dim=4)
         return super().forward(input_)
 
 
 class BatchNorm3d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        _check_input_dim(input_, dim=5)
+        lucid._check_input_dim(input_, dim=5)
         return super().forward(input_)
 
 
-class _InstanceNorm(_NormBase):  # TODO: Build `InstanceNormNd`
-    NotImplemented
+class _InstanceNorm(_NormBase):
+    def __init__(
+        self,
+        num_features: int,
+        eps: float = 1e-5,
+        momentum: float | None = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = True,
+    ) -> None:
+        super().__init__(num_features, eps, momentum, affine, track_running_stats)
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.instance_norm(
+            input_,
+            self.running_mean,
+            self.running_var,
+            self.weight,
+            self.bias,
+            self.training,
+            self.momentum if self.momentum is not None else 0.1,
+            self.eps,
+        )
+
+
+class InstanceNorm1d(_InstanceNorm):
+    def forward(self, input_: Tensor) -> Tensor:
+        lucid._check_input_dim(input_, dim=3)
+        return super().forward(input_)
+
+
+class InstanceNorm2d(_InstanceNorm):
+    def forward(self, input_: Tensor) -> Tensor:
+        lucid._check_input_dim(input_, dim=4)
+        return super().forward(input_)
+
+
+class InstanceNorm3d(_InstanceNorm):
+    def forward(self, input_: Tensor) -> Tensor:
+        lucid._check_input_dim(input_, dim=5)
+        return super().forward(input_)
+
+
+class LayerNorm(nn.Module):
+    def __init__(
+        self,
+        normalized_shape: _ShapeLike | int,
+        eps: float = 1e-5,
+        elementwise_affine: bool = True,
+        bias: bool = True,
+    ) -> None:
+        super().__init__()
+        if isinstance(normalized_shape, int):
+            normalized_shape = (normalized_shape,)
+
+        self.normalized_shape = tuple(normalized_shape)
+        self.eps = eps
+        self.elementwise_affine = elementwise_affine
+
+        if elementwise_affine:
+            weight_ = lucid.ones(self.normalized_shape)
+            self.weight = nn.Parameter(weight_)
+
+            if bias:
+                bias_ = lucid.zeros(self.normalized_shape)
+                self.bias = nn.Parameter(bias_)
+            else:
+                self.bias = None
+        else:
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.layer_norm(
+            input_, self.normalized_shape, self.weight, self.bias, self.eps
+        )

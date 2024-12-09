@@ -169,8 +169,8 @@ def alpha_dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tens
 
 def batch_norm(
     input_: Tensor,
-    running_mean: Tensor,
-    running_var: Tensor,
+    running_mean: Tensor | None = None,
+    running_var: Tensor | None = None,
     weight: Tensor | None = None,
     bias: Tensor | None = None,
     training: bool = True,
@@ -194,8 +194,8 @@ def layer_norm(
 
 def instance_norm(
     input_: Tensor,
-    running_mean: Tensor,
-    running_var: Tensor,
+    running_mean: Tensor | None = None,
+    running_var: Tensor | None = None,
     weight: Tensor | None = None,
     bias: Tensor | None = None,
     training: bool = True,
