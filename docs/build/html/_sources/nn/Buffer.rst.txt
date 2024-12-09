@@ -1,5 +1,5 @@
-lucid.nn.Buffer
-===============
+nn.Buffer
+=========
 
 .. autoclass:: lucid.nn.Buffer
 
