@@ -1,2 +1,4 @@
-from lucid.nn.base import Parameter, Buffer, Module
+from lucid.nn.parameter import Parameter, Buffer
+from lucid.nn.container import Module
+
 from lucid.nn.modules import *

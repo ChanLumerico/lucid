@@ -3,3 +3,4 @@ from lucid.nn.modules.conv import *
 from lucid.nn.modules.activation import *
 from lucid.nn.modules.pool import *
 from lucid.nn.modules.norm import *
+from lucid.nn.modules.drop import *

@@ -23,12 +23,14 @@ def conv_test(x: lucid.Tensor) -> lucid.Tensor:
     x = relu1(bn1(conv1(x)))
     x = relu2(bn2(conv2(x)))
     x = pool(x)
-    x = nn.LayerNorm(x.shape)(x)  # tmp
+    x = nn.Dropout(p=0.2)(x)  # tmp
     return x
 
 
 out = conv_test(x)
 out.backward()
+
+print(out[0, 0, :3, :3])
 
 print(out.shape)
 print(x.grad.shape)

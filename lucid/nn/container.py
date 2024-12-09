@@ -5,27 +5,15 @@ import numpy as np
 from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar
 
-
-class Parameter(Tensor):
-    def __init__(self, data: Tensor | _ArrayOrScalar, dtype=np.float32) -> None:
-        if isinstance(data, Tensor):
-            data = data.data
-        super().__init__(data, requires_grad=True, keep_grad=True, dtype=dtype)
-
-
-class Buffer(Tensor):
-    def __init__(self, data: Tensor | _ArrayOrScalar, dtype=np.float32) -> None:
-        if isinstance(data, Tensor):
-            data = data.data
-        super().__init__(data, requires_grad=False, keep_grad=False, dtype=dtype)
+import lucid.nn as nn
 
 
 class Module:
     _registry_map: dict[Type, OrderedDict[str, Any]] = {}
 
     def __init__(self) -> None:
-        self._parameters: OrderedDict[str, Parameter]
-        self._buffers: OrderedDict[str, Buffer]
+        self._parameters: OrderedDict[str, nn.Parameter]
+        self._buffers: OrderedDict[str, nn.Buffer]
         self._modules: OrderedDict[str, Self]
 
         object.__setattr__(self, "_parameters", OrderedDict())
@@ -36,8 +24,8 @@ class Module:
 
     def __setattr__(self, name: str, value: Any) -> None:
         registry_map: dict[Type, OrderedDict[str, Any]] = {
-            Parameter: self._parameters,
-            Buffer: self._buffers,
+            nn.Parameter: self._parameters,
+            nn.Buffer: self._buffers,
             Module: self._modules,
         }
 
@@ -65,18 +53,21 @@ class Module:
 
         self.__setattr__(name, module)
 
-    def register_parameter(self, name: str, param: Parameter | None) -> None:
-        if not isinstance(param, Parameter) and param is not None:
-            raise TypeError(f"{param} is not a Parameter.")
+    def register_parameter(self, name: str, param: nn.Parameter | None) -> None:
+        if not isinstance(param, nn.Parameter) and param is not None:
+            raise TypeError(f"{param} is not a nn.Parameter.")
 
         self.__setattr__(name, param)
 
     def register_buffer(
-        self, name: str, buffer: Buffer | _ArrayOrScalar | None, dtype: Any = np.float32
+        self,
+        name: str,
+        buffer: nn.Buffer | _ArrayOrScalar | None,
+        dtype: Any = np.float32,
     ) -> None:
         if buffer is not None:
-            if not isinstance(buffer, Buffer):
-                buffer = Buffer(buffer, dtype=dtype)
+            if not isinstance(buffer, nn.Buffer):
+                buffer = nn.Buffer(buffer, dtype=dtype)
 
         self.__setattr__(name, buffer)
 
@@ -94,14 +85,14 @@ class Module:
     def eval(self) -> Self:
         return self.train(mode=False)
 
-    def parameters(self, recurse: bool = True) -> Iterator[Parameter]:
+    def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]:
         for _, param in self._parameters.items():
             yield param
         if recurse:
             for module in self._modules.values():
                 yield from module.parameters(recurse=recurse)
 
-    def buffers(self, recurse: bool = True) -> Iterator[Buffer]:
+    def buffers(self, recurse: bool = True) -> Iterator[nn.Buffer]:
         for buffer in self._buffers.values():
             yield buffer
         if recurse:
@@ -153,7 +144,7 @@ class Module:
         for key, value in state_dict.items():
             if key in own_state:
                 attr = own_state[key]
-                if isinstance(attr, (Parameter, Buffer)):
+                if isinstance(attr, (nn.Parameter, nn.Buffer)):
                     if isinstance(value, Tensor):
                         attr.data = value.data
                     else:
@@ -165,3 +156,24 @@ class Module:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
         return self.forward(*args, **kwargs)
+
+
+# TODO: Further implementations :D
+class Sequential(Module):
+    NotImplemented
+
+
+class ModuleList(Module):
+    NotImplemented
+
+
+class ModuleDict(Module):
+    NotImplemented
+
+
+class ParameterList(Module):
+    NotImplemented
+
+
+class ParameterDict(Module):
+    NotImplemented
