@@ -1,4 +1,5 @@
 import lucid
+import lucid.nn as nn
 from lucid._tensor import Tensor
 
 from lucid.types import _ShapeLike
@@ -24,10 +25,18 @@ def batch_norm(
         batch_var = input_.var(axis=(0, *range(2, input_.ndim)), keepdims=True)
 
         if running_mean is not None and running_var is not None:
-            running_mean = (
-                momentum * batch_mean.flatten() + (1 - momentum) * running_mean
+            running_stats_ = (
+                momentum * batch_mean.flatten() + (1 - momentum) * running_mean,
+                momentum * batch_var.flatten() + (1 - momentum) * running_var,
             )
-            running_var = momentum * batch_var.flatten() + (1 - momentum) * running_var
+
+            if isinstance(running_mean, nn.Buffer) and isinstance(
+                running_var, nn.Buffer
+            ):
+                running_mean.data = running_stats_[0].data
+                running_var.data = running_stats_[1].data
+            else:
+                running_mean, running_var = running_stats_
 
         mean = batch_mean
         var = batch_var
@@ -79,8 +88,8 @@ def layer_norm(
 
 def instance_norm(
     input_: Tensor,
-    running_mean: Tensor,
-    running_var: Tensor,
+    running_mean: Tensor | None,
+    running_var: Tensor | None,
     weight: Tensor | None = None,
     bias: Tensor | None = None,
     training: bool = True,
@@ -91,26 +100,40 @@ def instance_norm(
     spatial_dims = input_.shape[2:]
 
     if training:
-        batch_mean = input_.mean(axis=(2, *range(2, input_.ndim)), keepdims=True)
-        batch_var = input_.var(axis=(2, *range(2, input_.ndim)), keepdims=True)
+        axes = tuple(range(2, input_.ndim))
+        instance_mean = input_.mean(axis=axes, keepdims=True)
+        instance_var = input_.var(axis=axes, keepdims=True)
 
-        running_mean = (
-            momentum * batch_mean.mean(axis=0).flatten() + (1 - momentum) * running_mean
-        )
-        running_var = (
-            momentum * batch_var.mean(axis=0).flatten() + (1 - momentum) * running_var
-        )
+        if running_mean is not None and running_var is not None:
+            running_stats_ = (
+                momentum * instance_mean.mean(axis=0).flatten()
+                + (1 - momentum) * running_mean,
+                momentum * instance_var.mean(axis=0).flatten()
+                + (1 - momentum) * running_var,
+            )
 
-        mean = batch_mean
-        var = batch_var
+            if isinstance(running_mean, nn.Buffer) and isinstance(
+                running_var, nn.Buffer
+            ):
+                running_mean.data = running_stats_[0].data
+                running_var.data = running_stats_[1].data
+            else:
+                running_mean, running_var = running_stats_
+
+        mean = instance_mean
+        var = instance_var
     else:
         mean = running_mean.reshape(1, C, *(1,) * len(spatial_dims))
         var = running_var.reshape(1, C, *(1,) * len(spatial_dims))
 
     normalized = (input_ - mean) / lucid.sqrt(var + eps)
+
     if weight is not None:
-        normalized *= weight.reshape(1, C, *(1,) * len(spatial_dims))
+        weight = weight.reshape((1, C) + (1,) * len(spatial_dims))
+        normalized *= weight
+
     if bias is not None:
-        normalized += bias.reshape(1, C, *(1,) * len(spatial_dims))
+        bias = bias.reshape((1, C) + (1,) * len(spatial_dims))
+        normalized += bias
 
     return normalized

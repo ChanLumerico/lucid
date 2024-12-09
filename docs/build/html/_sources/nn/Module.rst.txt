@@ -1,5 +1,5 @@
-lucid.nn.Module
-===============
+nn.Module
+=========
 
 .. autoclass:: lucid.nn.Module
 

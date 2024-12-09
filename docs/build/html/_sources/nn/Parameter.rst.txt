@@ -1,5 +1,5 @@
-lucid.nn.Parameter
-==================
+nn.Parameter
+============
 
 .. autoclass:: lucid.nn.Parameter
 

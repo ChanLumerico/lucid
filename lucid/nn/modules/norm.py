@@ -35,15 +35,18 @@ class _NormBase(nn.Module):
             self.bias = None
 
         if track_running_stats:
-            self.runnung_mean = lucid.zeros((num_features,))
-            self.running_var = lucid.ones((num_features,))
+            self.running_mean: nn.Buffer
+            self.running_var: nn.Buffer
+
+            self.register_buffer("running_mean", lucid.ones((num_features,)))
+            self.register_buffer("running_var", lucid.zeros((num_features,)))
         else:
-            self.runnung_mean = None
+            self.running_mean = None
             self.running_var = None
 
     def reset_running_stats(self) -> None:
         if self.track_running_stats:
-            self.runnung_mean.zero()
+            self.running_mean.zero()
             self.running_var.data = lucid.ones((self.num_features,)).data
 
     def reset_parameters(self) -> None:
@@ -65,22 +68,32 @@ class _BatchNorm(_NormBase):
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
 
     def forward(self, input_: Tensor) -> Tensor:
-        if self.track_running_stats:
-            running_mean = self.runnung_mean
-            running_var = self.running_var
-        else:
-            running_mean = None
-            running_var = None
-
-        training_mode = self.training
-
         return F.batch_norm(
             input_,
-            running_mean,
-            running_var,
+            self.running_mean,
+            self.running_var,
             self.weight,
             self.bias,
-            training_mode,
+            self.training,
             self.momentum if self.momentum is not None else 0.1,
             self.eps,
         )
+
+
+class BatchNorm1d(_BatchNorm):
+    def forward(self, input_: Tensor) -> Tensor:
+        return super().forward(input_)
+
+
+class BatchNorm2d(_BatchNorm):
+    def forward(self, input_: Tensor) -> Tensor:
+        return super().forward(input_)
+
+
+class BatchNorm3d(_BatchNorm):
+    def forward(self, input_: Tensor) -> Tensor:
+        return super().forward(input_)
+
+
+class _InstanceNorm(_NormBase):  # TODO: Build `InstanceNormNd`
+    NotImplemented

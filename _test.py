@@ -13,14 +13,16 @@ conv2 = nn.Conv2d(6, 12, kernel_size=3, stride=1, padding="same")
 relu1 = nn.ReLU()
 relu2 = nn.ReLU()
 
+bn1 = nn.BatchNorm2d(6)
+bn2 = nn.BatchNorm2d(12)
+
 pool = nn.MaxPool2d(2, 2)
 
 
 def conv_test(x: lucid.Tensor) -> lucid.Tensor:
-    x = conv1(x)
-    x = conv2(relu1(x))
-    x = pool(relu2(x))
-    x = F.softmax(x, axis=-1)
+    x = relu1(bn1(conv1(x)))
+    x = relu2(bn2(conv2(x)))
+    x = pool(x)
     return x
 
 

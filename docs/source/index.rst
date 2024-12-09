@@ -39,6 +39,7 @@
 
    nn/nn.rst
    nn/Parameter.rst
+   nn/Buffer.rst
    nn/Module.rst
 
    Neural Functions <nn/functions/index.rst>
