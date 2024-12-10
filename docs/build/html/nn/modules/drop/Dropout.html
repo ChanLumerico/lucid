@@ -463,11 +463,9 @@
 <dd></dd></dl>
 
 <p>The <cite>Dropout</cite> module applies Dropout to the input tensor.</p>
-<blockquote>
-<div><p>Dropout is a regularization technique used to prevent overfitting in neural networks
+<p>Dropout is a regularization technique used to prevent overfitting in neural networks
 by randomly zeroing out a subset of activations during training. This encourages
 the network to learn more robust features that are not reliant on specific activations.</p>
-</div></blockquote>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
@@ -519,8 +517,9 @@ distribution with probability <cite>1 - p</cite> of being <cite>1</cite>.</p>
 <p><strong>During Evaluation:</strong></p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[ \begin{align}\begin{aligned} \mathbf{y} = \mathbf{x}\\Dropout is not applied during evaluation; the input is passed through unchanged.\end{aligned}\end{align} \]</div>
+\[\mathbf{y} = \mathbf{x}\]</div>
 </div>
+<p>Dropout is not applied during evaluation; the input is passed through unchanged.</p>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>

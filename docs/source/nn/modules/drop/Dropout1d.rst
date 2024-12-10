@@ -3,8 +3,9 @@ nn.Dropout1d
     
 .. autoclass:: lucid.nn.Dropout1d
     
-The `Dropout1d` module applies Dropout to a one-dimensional input tensor. Dropout is a 
-regularization technique used to prevent overfitting in neural networks by randomly 
+The `Dropout1d` module applies Dropout to a one-dimensional input tensor. 
+
+Dropout is a regularization technique used to prevent overfitting in neural networks by randomly 
 zeroing out a subset of activations during training. This encourages the network to 
 learn more robust features that are not reliant on specific activations.
     
@@ -60,7 +61,7 @@ The `Dropout1d` module performs the following operations:
     
     \mathbf{y} = \mathbf{x}
     
-   Dropout is not applied during evaluation; the input is passed through unchanged.
+Dropout is not applied during evaluation; the input is passed through unchanged.
     
 Backward Gradient Calculation
 -----------------------------

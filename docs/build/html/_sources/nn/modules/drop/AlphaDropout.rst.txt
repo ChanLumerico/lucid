@@ -3,8 +3,9 @@ nn.AlphaDropout
 
 .. autoclass:: lucid.nn.AlphaDropout
 
-The `AlphaDropout` module applies Alpha Dropout to the input tensor. Alpha Dropout is a 
-specialized dropout technique designed to maintain the self-normalizing properties of 
+The `AlphaDropout` module applies Alpha Dropout to the input tensor. 
+
+Alpha Dropout is a specialized dropout technique designed to maintain the self-normalizing properties of 
 activation functions like SELU (Scaled Exponential Linear Unit). Unlike standard Dropout, 
 which randomly zeroes out elements, Alpha Dropout randomly sets elements to a specific 
 value that preserves the mean and variance of the input, thereby ensuring stable 
@@ -69,7 +70,7 @@ The `AlphaDropout` module performs the following operations:
 
     \mathbf{y} = \mathbf{x}
 
-   Dropout is not applied during evaluation; the input is passed through unchanged.
+Dropout is not applied during evaluation; the input is passed through unchanged.
 
 Backward Gradient Calculation
 -----------------------------

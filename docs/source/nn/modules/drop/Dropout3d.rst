@@ -3,8 +3,9 @@ nn.Dropout3d
     
 .. autoclass:: lucid.nn.Dropout3d
     
-The `Dropout3d` module applies Dropout to a three-dimensional input tensor. Dropout is a 
-regularization technique used to prevent overfitting in neural networks by randomly 
+The `Dropout3d` module applies Dropout to a three-dimensional input tensor. 
+
+Dropout is a regularization technique used to prevent overfitting in neural networks by randomly 
 zeroing out entire channels during training. This encourages the network to learn more 
 robust features that are not reliant on specific channels.
     
@@ -60,7 +61,7 @@ The `Dropout3d` module performs the following operations:
     
     \mathbf{y} = \mathbf{x}
     
-   Dropout is not applied during evaluation; the input is passed through unchanged.
+Dropout is not applied during evaluation; the input is passed through unchanged.
     
 Backward Gradient Calculation
 -----------------------------

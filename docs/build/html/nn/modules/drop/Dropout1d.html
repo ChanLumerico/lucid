@@ -462,8 +462,8 @@
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">Dropout1d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.Dropout1d" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>Dropout1d</cite> module applies Dropout to a one-dimensional input tensor. Dropout is a
-regularization technique used to prevent overfitting in neural networks by randomly
+<p>The <cite>Dropout1d</cite> module applies Dropout to a one-dimensional input tensor.</p>
+<p>Dropout is a regularization technique used to prevent overfitting in neural networks by randomly
 zeroing out a subset of activations during training. This encourages the network to
 learn more robust features that are not reliant on specific activations.</p>
 <section id="class-signature">
@@ -518,8 +518,9 @@ with probability <cite>1 - p</cite> of being <cite>1</cite>.</p>
 <p><strong>During Evaluation:</strong></p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[ \begin{align}\begin{aligned} \mathbf{y} = \mathbf{x}\\Dropout is not applied during evaluation; the input is passed through unchanged.\end{aligned}\end{align} \]</div>
+\[\mathbf{y} = \mathbf{x}\]</div>
 </div>
+<p>Dropout is not applied during evaluation; the input is passed through unchanged.</p>
 </section>
 <section id="backward-gradient-calculation">
 <h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
