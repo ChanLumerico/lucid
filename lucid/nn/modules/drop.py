@@ -1,6 +1,5 @@
 import lucid
 import lucid.nn as nn
-import lucid.nn.container
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor

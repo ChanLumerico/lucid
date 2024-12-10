@@ -1,179 +1,104 @@
-from typing import Any, Iterator, Self, Type
 from collections import OrderedDict
-import numpy as np
+from typing import Iterator, Self, overload
 
 from lucid._tensor import Tensor
-from lucid.types import _ArrayOrScalar
-
 import lucid.nn as nn
 
 
-class Module:
-    _registry_map: dict[Type, OrderedDict[str, Any]] = {}
+class Sequential(nn.Module):  # NOTE: **WIP**
+    @overload
+    def __init__(self, *modules: nn.Module) -> None: ...
 
-    def __init__(self) -> None:
-        self._parameters: OrderedDict[str, nn.Parameter]
-        self._buffers: OrderedDict[str, nn.Buffer]
-        self._modules: OrderedDict[str, Self]
+    @overload
+    def __init__(self, ordered_dict: OrderedDict[str, nn.Module]) -> None: ...
 
-        object.__setattr__(self, "_parameters", OrderedDict())
-        object.__setattr__(self, "_buffers", OrderedDict())
-        object.__setattr__(self, "_modules", OrderedDict())
-
-        self.training = True
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        registry_map: dict[Type, OrderedDict[str, Any]] = {
-            nn.Parameter: self._parameters,
-            nn.Buffer: self._buffers,
-            Module: self._modules,
-        }
-
-        target_registry = None
-        for cls, registry in registry_map.items():
-            if isinstance(value, cls):
-                target_registry = registry
-                break
-
-        if target_registry is not None:
-            for registry in registry_map.values():
-                if registry is not target_registry and name in registry:
-                    del registry[name]
-            target_registry[name] = value
+    def __init__(self, *args: nn.Module | OrderedDict[str, nn.Module]) -> None:
+        super().__init__()
+        if len(args) == 1 and isinstance(args[0], OrderedDict):
+            for name, module in args[0].items():
+                self.add_module(name, module)
         else:
-            for registry in registry_map.values():
-                if name in registry:
-                    del registry[name]
+            for idx, module in enumerate(args):
+                self.add_module(str(idx), module)
 
-        super().__setattr__(name, value)
-
-    def add_module(self, name: str, module: Self) -> None:
-        if not isinstance(module, Module) and module is not None:
-            raise TypeError(f"{module} is not a Module.")
-
-        self.__setattr__(name, module)
-
-    def register_parameter(self, name: str, param: nn.Parameter | None) -> None:
-        if not isinstance(param, nn.Parameter) and param is not None:
-            raise TypeError(f"{param} is not a nn.Parameter.")
-
-        self.__setattr__(name, param)
-
-    def register_buffer(
-        self,
-        name: str,
-        buffer: nn.Buffer | _ArrayOrScalar | None,
-        dtype: Any = np.float32,
-    ) -> None:
-        if buffer is not None:
-            if not isinstance(buffer, nn.Buffer):
-                buffer = nn.Buffer(buffer, dtype=dtype)
-
-        self.__setattr__(name, buffer)
-
-    def forward(self) -> Tensor | tuple[Tensor, ...]:
-        raise NotImplementedError(
-            "The forward method must be implemented by the subclass."
-        )
-
-    def train(self, mode: bool = True) -> Self:
-        self.training = mode
+    def forward(self, input: Tensor) -> Tensor:
         for module in self._modules.values():
-            module.train(mode)
-        return self
+            input = module(input)
+        return input
 
-    def eval(self) -> Self:
-        return self.train(mode=False)
+    def __getitem__(self, idx: int | slice) -> nn.Module | Self:
+        if isinstance(idx, slice):
+            modules_slice = list(self._modules.items())[idx]
+            return Sequential(OrderedDict(modules_slice))
 
-    def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]:
-        for _, param in self._parameters.items():
-            yield param
-        if recurse:
-            for module in self._modules.values():
-                yield from module.parameters(recurse=recurse)
+        elif isinstance(idx, int):
+            if idx < 0:
+                idx += len(self._modules)
+            keys = list(self._modules.keys())
 
-    def buffers(self, recurse: bool = True) -> Iterator[nn.Buffer]:
-        for buffer in self._buffers.values():
-            yield buffer
-        if recurse:
-            for module in self._modules.values():
-                yield from module.buffers(recurse=recurse)
+            if idx < 0 or idx >= len(keys):
+                raise IndexError("Index out of range")
 
-    def modules(self) -> Iterator[Self]:
-        yield self
-        for module in self._modules.values():
-            yield from module.modules()
+            return self._modules[keys[idx]]
+        else:
+            raise TypeError(f"Invalid index type: {type(idx)}. Must be int or slice.")
 
-    def state_dict(
-        self,
-        destination: OrderedDict[str, Any] | None = None,
-        prefix: str = "",
-        keep_vars: bool = False,
-    ) -> dict[str, Any]:
-        if destination is None:
-            destination = OrderedDict()
+    def __setitem__(self, idx: int, module: nn.Module) -> None:
+        if not isinstance(idx, int):
+            raise TypeError("Indices should be integers for __setitem__.")
 
-        for name, param in self._parameters.items():
-            destination[prefix + name] = param if keep_vars else param.data
+        keys = list(self._modules.keys())
+        if idx < 0:
+            idx += len(keys)
+        if idx < 0 or idx >= len(keys):
+            raise IndexError("Index out of range")
 
-        for name, buffer in self._buffers.items():
-            destination[prefix + name] = buffer if keep_vars else buffer.data
+        old_key = keys[idx]
+        del self._modules[old_key]
+        self._modules[old_key] = module
 
-        for name, module in self._modules.items():
-            module.state_dict(
-                destination=destination, prefix=prefix + name + ".", keep_vars=keep_vars
-            )
+    def __delitem__(self, idx: int) -> None:
+        if not isinstance(idx, int):
+            raise TypeError("Indices should be integers for __delitem__.")
 
-        return destination
+        keys = list(self._modules.keys())
+        if idx < 0:
+            idx += len(keys)
+        if idx < 0 or idx >= len(keys):
+            raise IndexError("Index out of range")
 
-    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True) -> None:
-        own_state = self.state_dict(keep_vars=True)
+        del self._modules[keys[idx]]
 
-        missing_keys = set(own_state.keys()) - set(state_dict.keys())
-        unexpected_keys = set(state_dict.keys()) - set(own_state.keys())
+    def __len__(self) -> int:
+        return len(self._modules)
 
-        if strict:
-            msg = ""
-            if missing_keys:
-                msg += f"Missing keys in state_dict: {missing_keys}\n"
-            if unexpected_keys:
-                msg += f"Unexpected keys in state_dict: {unexpected_keys}\n"
-            if msg:
-                raise KeyError("Error(s) in loading state_dict:\n" + msg)
+    def append(self, module: nn.Module) -> None:
+        self.add_module(str(len(self._modules)), module)
 
-        for key, value in state_dict.items():
-            if key in own_state:
-                attr = own_state[key]
-                if isinstance(attr, (nn.Parameter, nn.Buffer)):
-                    if isinstance(value, Tensor):
-                        attr.data = value.data
-                    else:
-                        attr.data = value
-                else:
-                    setattr(self, key, value)
-            elif strict:
-                raise KeyError(f"Unexpected key '{key}' in state_dict.")
+    def extend(self, modules: Iterator[nn.Module]) -> None:
+        for module in modules:
+            self.append(module)
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
-        return self.forward(*args, **kwargs)
+    @classmethod
+    def from_ordered_dict(cls: type[Self], odict: OrderedDict[str, nn.Module]) -> Self:
+        return cls(odict)
+
+    @classmethod
+    def from_modules(cls: type[Self], *modules: nn.Module) -> Self:
+        return cls(*modules)
 
 
-# TODO: Further implementations :D
-class Sequential(Module):
+class ModuleList(nn.Module):
     NotImplemented
 
 
-class ModuleList(Module):
+class ModuleDict(nn.Module):
     NotImplemented
 
 
-class ModuleDict(Module):
+class ParameterList(nn.Module):
     NotImplemented
 
 
-class ParameterList(Module):
-    NotImplemented
-
-
-class ParameterDict(Module):
+class ParameterDict(nn.Module):
     NotImplemented

@@ -5,8 +5,8 @@ import lucid.nn.functional as F
 lucid.random.seed(42)
 
 
-x = lucid.random.randn(10, 3, 28, 28, requires_grad=True)
-y = lucid.random.rand(10) >= 0.5
+x = lucid.random.randn(100, 3, 28, 28, requires_grad=True)
+y = lucid.tensor([0, 1, 2, 3] * 25)
 
 conv1 = nn.Conv2d(3, 6, kernel_size=3, stride=1)
 conv2 = nn.Conv2d(6, 12, kernel_size=3, stride=1)
@@ -40,8 +40,14 @@ def conv_test(x: lucid.Tensor) -> lucid.Tensor:
     return loss(x, target=y)
 
 
+import time
+
+t0 = time.time_ns()
+
 out = conv_test(x)
 out.backward()
+
+print(f"{(time.time_ns() - t0) / 1e9} sec\n")
 
 print(out.shape if out.ndim > 0 else out.item())
 print(x.grad.shape)
