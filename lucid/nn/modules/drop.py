@@ -14,7 +14,7 @@ __all__ = [
     "Dropout2d",
     "Dropout3d",
     "AlphaDropout",
-]  # NOTE: Need to be doc'ed.
+]
 
 
 class _DropoutNd(nn.Module):

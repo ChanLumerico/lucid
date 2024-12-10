@@ -30,3 +30,9 @@ Modules
     :caption: Normalization Layers
 
     Normalization Layers <norm/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Dropout Layers
+
+    Dropout Layers <drop/index.rst>
