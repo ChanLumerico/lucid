@@ -36,3 +36,9 @@ Modules
     :caption: Dropout Layers
 
     Dropout Layers <drop/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Loss Layers
+
+    Loss Layers <loss/index.rst>
