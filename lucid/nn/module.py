@@ -1,4 +1,4 @@
-from typing import Any, Iterator, Self, Type
+from typing import Any, Iterator, Self, Type, overload
 from collections import OrderedDict
 import numpy as np
 
@@ -156,3 +156,102 @@ class Module:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
         return self.forward(*args, **kwargs)
+
+
+class Sequential(Module):
+    @overload
+    def __init__(self, *modules: Module) -> None: ...
+
+    @overload
+    def __init__(self, ordered_dict: OrderedDict[str, Module]) -> None: ...
+
+    def __init__(self, *args: Module | OrderedDict[str, Module]) -> None:
+        super().__init__()
+        if len(args) == 1 and isinstance(args[0], OrderedDict):
+            for name, module in args[0].items():
+                self.add_module(name, module)
+        else:
+            for idx, module in enumerate(args):
+                self.add_module(str(idx), module)
+
+    def forward(self, input: Tensor) -> Tensor:
+        for module in self._modules.values():
+            input = module(input)
+        return input
+
+    def __getitem__(self, idx: int | slice) -> Module | Self:
+        if isinstance(idx, slice):
+            modules_slice = list(self._modules.items())[idx]
+            return Sequential(OrderedDict(modules_slice))
+
+        elif isinstance(idx, int):
+            if idx < 0:
+                idx += len(self._modules)
+            keys = list(self._modules.keys())
+
+            if idx < 0 or idx >= len(keys):
+                raise IndexError("Index out of range")
+
+            return self._modules[keys[idx]]
+        else:
+            raise TypeError(f"Invalid index type: {type(idx)}. Must be int or slice.")
+
+    def __setitem__(self, idx: int, module: Module) -> None:
+        if not isinstance(idx, int):
+            raise TypeError("Indices should be integers for __setitem__.")
+
+        keys = list(self._modules.keys())
+        if idx < 0:
+            idx += len(keys)
+        if idx < 0 or idx >= len(keys):
+            raise IndexError("Index out of range")
+
+        old_key = keys[idx]
+        del self._modules[old_key]
+        self._modules[old_key] = module
+
+    def __delitem__(self, idx: int) -> None:
+        if not isinstance(idx, int):
+            raise TypeError("Indices should be integers for __delitem__.")
+
+        keys = list(self._modules.keys())
+        if idx < 0:
+            idx += len(keys)
+        if idx < 0 or idx >= len(keys):
+            raise IndexError("Index out of range")
+
+        del self._modules[keys[idx]]
+
+    def __len__(self) -> int:
+        return len(self._modules)
+
+    def append(self, module: Module) -> None:
+        self.add_module(str(len(self._modules)), module)
+
+    def extend(self, modules: Iterator[Module]) -> None:
+        for module in modules:
+            self.append(module)
+
+    @classmethod
+    def from_ordered_dict(cls: type[Self], odict: OrderedDict[str, Module]) -> Self:
+        return cls(odict)
+
+    @classmethod
+    def from_modules(cls: type[Self], *modules: Module) -> Self:
+        return cls(*modules)
+
+
+class ModuleList(Module):
+    NotImplemented
+
+
+class ModuleDict(Module):
+    NotImplemented
+
+
+class ParameterList(Module):
+    NotImplemented
+
+
+class ParameterDict(Module):
+    NotImplemented

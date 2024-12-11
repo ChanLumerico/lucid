@@ -44,6 +44,7 @@
 
    Neural Functions <nn/functions/index.rst>
    Modules <nn/modules/index.rst>
+   Containers <nn/containers/index.rst>
 
 .. toctree::
    :maxdepth: 1
