@@ -241,8 +241,91 @@ class Sequential(Module):
         return cls(*modules)
 
 
-class ModuleList(Module):
-    NotImplemented
+class ModuleList(Module):  # TODO: Need to be documented.
+    def __init__(self, *modules: Module) -> None:
+        super().__init__()
+        if modules is not None:
+            self.extend(modules)
+
+    def __getitem__(self, idx: int | slice) -> Module | Self:
+        if isinstance(idx, slice):
+            mod_slice = list(self._modules.items())[idx]
+            ml = ModuleList()
+            for i, (_, m) in enumerate(mod_slice):
+                ml.add_module(str(i), m)
+            return ml
+
+        elif isinstance(idx, int):
+            if idx < 0:
+                idx += len(self._modules)
+            keys = list(self._modules.keys())
+            if idx < 0 or idx >= len(keys):
+                raise IndexError("Index out of range.")
+
+            return self._modules[keys[idx]]
+        else:
+            raise TypeError(f"Invalid index type: {type(idx)}. Must be int or slice.")
+
+    def __setitem__(self, idx: int, module: Module) -> None:
+        if not isinstance(idx, int):
+            raise TypeError("Indices should be integers.")
+
+        keys = list(self._modules.keys())
+        if idx < 0:
+            idx += len(keys)
+        if idx < 0 or idx >= len(keys):
+            raise IndexError("Index out of range.")
+
+        old_key = keys[idx]
+        del self._modules[old_key]
+        self.add_module(old_key, module)
+
+    def __delitem__(self, idx: int) -> None:
+        if not isinstance(idx, int):
+            raise TypeError("Indices should be integers.")
+
+        keys = list(self._modules.keys())
+        if idx < 0:
+            idx += len(keys)
+        if idx < 0 or idx >= len(keys):
+            raise IndexError("Index out of range.")
+
+        items = list(self._modeuls.items())
+        self._modules.clear()
+        for i, (_, m) in enumerate(items):
+            self._modules[str(i)] = m
+
+    def __len__(self) -> int:
+        return len(self._modules)
+
+    def __iter__(self) -> Iterator[Module]:
+        return iter(self._modules.values())
+
+    def append(self, module: Module) -> None:
+        self.add_module(str(len(self._modules)), module)
+
+    def extend(self, *modules: Module) -> None:
+        for m in modules:
+            self.append(m)
+
+    def insert(self, index: int, module: Module) -> None:
+        if not isinstance(index, int):
+            raise TypeError("Index should be an integer.")
+
+        total = len(self._modules)
+        if index < 0:
+            index += total
+        if index < 0:
+            index = 0
+        if index > total:
+            index = total
+
+        items = list(self._modules.items())
+        items.insert(index, (str(index), module))
+
+        self._modules.clear()
+        for i, (_, m) in enumerate(items):
+            self._modules[str(i)] = m
 
 
 class ModuleDict(Module):
