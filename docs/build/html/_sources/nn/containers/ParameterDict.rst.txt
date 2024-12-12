@@ -14,8 +14,8 @@ especially in scenarios where parameters need to be dynamically added or accesse
 
 .. warning::
 
-    All keys in a `ParameterDict` must be unique strings.
-     Adding parameters with duplicate keys will overwrite existing parameters without warning.
+    All keys in a `ParameterDict` must be unique strings. 
+    Adding parameters with duplicate keys will overwrite existing parameters without warning.
 
 Class Signature
 ---------------

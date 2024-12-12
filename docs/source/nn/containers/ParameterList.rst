@@ -66,7 +66,7 @@ gradients based on the loss.
 .. note::
 
     All `Parameter` objects added to a `ParameterList` must support gradient computation for
-     backpropagation to function correctly. Failure to do so will prevent the model from learning effectively.
+    backpropagation to function correctly. Failure to do so will prevent the model from learning effectively.
 
 Examples
 --------
