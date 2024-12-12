@@ -4,6 +4,9 @@ from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar
 
 
+__all__ = ["Parameter", "Buffer"]
+
+
 class Parameter(Tensor):
     def __init__(self, data: Tensor | _ArrayOrScalar, dtype=np.float32) -> None:
         if isinstance(data, Tensor):

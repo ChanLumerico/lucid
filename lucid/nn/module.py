@@ -1,4 +1,4 @@
-from typing import Any, Iterator, Self, Type, overload
+from typing import Any, ItemsView, Iterator, KeysView, Self, Type, ValuesView, overload
 from collections import OrderedDict
 import numpy as np
 
@@ -6,6 +6,16 @@ from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar
 
 import lucid.nn as nn
+
+
+__all__ = [
+    "Module",
+    "Sequential",
+    "ModuleList",
+    "ModuleDict",
+    "ParameterList",
+    "ParameterDict",
+]
 
 
 class Module:
@@ -241,8 +251,8 @@ class Sequential(Module):
         return cls(*modules)
 
 
-class ModuleList(Module):  # TODO: Need to be documented.
-    def __init__(self, *modules: Module) -> None:
+class ModuleList(Module):
+    def __init__(self, modules: list[Module] | None = None) -> None:
         super().__init__()
         if modules is not None:
             self.extend(modules)
@@ -304,7 +314,7 @@ class ModuleList(Module):  # TODO: Need to be documented.
     def append(self, module: Module) -> None:
         self.add_module(str(len(self._modules)), module)
 
-    def extend(self, *modules: Module) -> None:
+    def extend(self, modules: list[Module]) -> None:
         for m in modules:
             self.append(m)
 
@@ -329,12 +339,187 @@ class ModuleList(Module):  # TODO: Need to be documented.
 
 
 class ModuleDict(Module):
-    NotImplemented
+    def __init__(self, modules: dict[str, Module] | None = None) -> None:
+        super().__init__()
+        if modules is not None:
+            self.update(modules)
+
+    def update(self, modules: dict[str, Module]) -> None:
+        for k, m in modules.items():
+            self[k] = m
+
+    def clear(self) -> None:
+        self._modules.clear()
+
+    def pop(self, key: str) -> Module:
+        module = self._modules[key]
+        del self._modules[key]
+        return module
+
+    def __getitem__(self, key: str) -> Module:
+        return self._modules[key]
+
+    def __setitem__(self, key: str, module: Module) -> None:
+        if not isinstance(module, Module):
+            raise TypeError(f"Expected Module, got {type(module)}.")
+        self.add_module(key, module)
+
+    def __delitem__(self, key: str) -> None:
+        del self._modules[key]
+
+    def __len__(self) -> int:
+        return len(self._modules)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._modules)
+
+    def keys(self) -> KeysView[str]:
+        return self._modules.keys()
+
+    def values(self) -> ValuesView[Module]:
+        return self._modules.values()
+
+    def items(self) -> ItemsView[str, Module]:
+        return self._modules.items()
 
 
 class ParameterList(Module):
-    NotImplemented
+    def __init__(self, parameters: list[nn.Parameter] | None = None) -> None:
+        super().__init__()
+        if parameters is not None:
+            self.extend(parameters)
+
+    def __getitem__(self, idx: int | slice) -> nn.Parameter | Self:
+        if isinstance(idx, slice):
+            items = list(self._parameters.items())[idx]
+            plist = ParameterList()
+
+            for i, (_, p) in enumerate(items):
+                plist.register_parameter(str(i), p)
+            return plist
+
+        elif isinstance(idx, int):
+            if idx < 0:
+                idx += len(self._parameters)
+            keys = list(self._parameters.keys())
+
+            if idx < 0 or idx >= len(keys):
+                raise IndexError("Index out of range.")
+            return self._parameters[keys[idx]]
+
+        else:
+            return TypeError(f"Invalid index type: {type(idx)}. Must be int or slice.")
+
+    def __setitem__(self, idx: int, param: nn.Parameter) -> None:
+        if not isinstance(idx, int):
+            raise TypeError("Indices should be integers.")
+        if not isinstance(param, nn.Parameter):
+            raise TypeError("Can only set Parameter in ParameterList.")
+
+        keys = list(self._parameters.keys())
+        if idx < 0:
+            idx += len(keys)
+        if idx < 0 or idx >= len(keys):
+            raise IndexError("Index out of range.")
+
+        old_key = keys[idx]
+        del self._parameters[old_key]
+        self.register_parameter(old_key, param)
+
+    def __delitem__(self, idx: int) -> None:
+        if not isinstance(idx, int):
+            raise TypeError("Indices should be integers.")
+
+        keys = list(self._parameters.keys())
+        if idx < 0:
+            idx += len(keys)
+        if idx < 0 or idx >= len(keys):
+            raise IndexError("Index out of range")
+
+        del self._parameters[keys[idx]]
+
+        items = list(self._parameters.items())
+        self._parameters.clear()
+        for i, (_, p) in enumerate(items):
+            self._parameters[str(i)] = p
+
+    def __len__(self) -> int:
+        return len(self._parameters)
+
+    def __iter__(self) -> Iterator[nn.Parameter]:
+        return iter(self._parameters.values())
+
+    def append(self, param: nn.Parameter) -> None:
+        if not isinstance(param, nn.Parameter):
+            raise TypeError("Can only append Parameter to ParameterList.")
+        self.register_parameter(str(len(self._parameters)), param)
+
+    def extend(self, parameters) -> None:
+        for p in parameters:
+            self.append(p)
+
+    def insert(self, index: int, param: nn.Parameter) -> None:
+        if not isinstance(index, int):
+            raise TypeError("Index should be an integer for insert.")
+        if not isinstance(param, nn.Parameter):
+            raise TypeError("Can only insert Parameter into ParameterList.")
+
+        total = len(self._parameters)
+        if index < 0:
+            index += total
+        if index < 0:
+            index = 0
+        if index > total:
+            index = total
+
+        items = list(self._parameters.items())
+        items.insert(index, (str(index), param))
+
+        self._parameters.clear()
+        for i, (_, p) in enumerate(items):
+            self._parameters[str(i)] = p
 
 
 class ParameterDict(Module):
-    NotImplemented
+    def __init__(self, parameters: dict[str, nn.Parameter] | None = None) -> None:
+        super().__init__()
+        if parameters is not None:
+            self.update(parameters)
+
+    def update(self, parameters: dict[str, nn.Parameter]) -> None:
+        for k, p in parameters.items():
+            self[k] = p
+
+    def clear(self) -> None:
+        self._parameters.clear()
+
+    def pop(self, key: str) -> nn.Parameter:
+        param = self._parameters[key]
+        del self._parameters[key]
+        return param
+
+    def __getitem__(self, key: str) -> nn.Parameter:
+        return self._parameters[key]
+
+    def __setitem__(self, key: str, param: nn.Parameter) -> None:
+        if not isinstance(param, nn.Parameter):
+            raise TypeError(f"Expected nn.Parameter, got {type(param)}")
+        self.register_parameter(key, param)
+
+    def __delitem__(self, key: str) -> None:
+        del self._parameters[key]
+
+    def __len__(self) -> int:
+        return len(self._parameters)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._parameters)
+
+    def keys(self) -> KeysView[str]:
+        return self._parameters.keys()
+
+    def values(self) -> ValuesView[nn.Parameter]:
+        return self._parameters.values()
+
+    def items(self) -> ItemsView[str, nn.Parameter]:
+        return self._parameters.items()
