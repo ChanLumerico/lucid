@@ -1,12 +1,12 @@
 from collections import defaultdict
-from typing import Any, Callable, Iterable
+from typing import Any, Iterable
 from abc import ABC, abstractmethod
 import copy
 
 import lucid
 import lucid.nn as nn
 
-from lucid.types import _StateDict
+from lucid.types import _StateDict, _OptimClosure
 
 
 class Optimizer(ABC):
@@ -28,7 +28,7 @@ class Optimizer(ABC):
         return [{"params": list(params), **defaults}]
 
     @abstractmethod
-    def step(self, closure: Callable[[], Any] | None = None) -> Any | None:
+    def step(self, closure: _OptimClosure | None = None) -> Any | None:
         raise NotImplementedError("The step method must be implemented by subclasses.")
 
     def zero_grad(self) -> None:

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Sequence
+from typing import Any, Callable, Dict, Sequence
 import numpy as np
 
 
@@ -12,3 +12,5 @@ _ArrayLike = list | _NumPyArray
 _ArrayLikeInt = int | Sequence[int | tuple[int, int]]
 
 _StateDict = Dict[str, Any]
+
+_OptimClosure = Callable[[], Any]

@@ -30,7 +30,8 @@ based on the following formulas:
 
 .. math::
 
-    v_{t} &= \text{momentum} \times v_{t-1} + \text{gradient}_{t} + \text{weight\_decay} \times \theta_{t} \\
+    v_{t} &= \text{momentum} \times v_{t-1} + \text{gradient}_{t} + \text{weight_decay} \times \theta_{t}
+    
     \theta_{t+1} &= \theta_{t} - \text{lr} \times v_{t}
 
 Where:

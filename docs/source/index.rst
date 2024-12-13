@@ -49,6 +49,7 @@
 .. toctree::
     :maxdepth: 2
     :caption: Optimization
+    :hidden:
 
     optim/optim.rst
     optim/Optimizer.rst

@@ -40,15 +40,15 @@ y_train = lucid.Tensor(y_train)
 
 batch_size = 100
 num_epochs = 100
-lr = 0.01
+lr = 0.05
 
 import numpy as np
 
 num_samples = X_train.shape[0]
 indices = np.arange(num_samples)
 
-model = MLP(input_size=784, hidden_size=128, output_size=10)
-optimizer = optim.SGD(model.parameters(), lr=lr)
+model = MLP(input_size=784, hidden_size=256, output_size=10)
+optimizer = optim.ASGD(model.parameters(), lr=lr, momentum=0.9)
 
 
 def train():
@@ -83,7 +83,7 @@ import matplotlib.pyplot as plt
 plt.plot(loss_avgs)
 plt.xlabel("Epochs")
 plt.ylabel("Cross-Entropy Loss")
-plt.title("Lucid Test on MLP with SGD for MNIST")
+plt.title(f"Lucid Test on MLP with {type(optimizer).__name__} for MNIST")
 plt.grid(alpha=0.2)
 
 plt.tight_layout()
