@@ -10,12 +10,10 @@ It facilitates the creation of complex models by chaining together layers
 and other modules, ensuring that the output of one module serves as the input to the next. 
 This modular approach promotes code reusability and simplifies the architecture of neural 
 networks, making it easier to build, understand, and maintain models.
-    
-**Admonition: Note**
-    
-    `Sequential` is ideal for models where each layer has exactly one input tensor 
-    and one output tensor. It does not support models with multiple inputs or outputs, 
-    or layers that require additional arguments during the forward pass.
+
+ `Sequential` is ideal for models where each layer has exactly one input tensor 
+ and one output tensor. It does not support models with multiple inputs or outputs, 
+ or layers that require additional arguments during the forward pass.
 
 Class Signature
 ---------------

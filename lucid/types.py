@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Any, Dict, Sequence
 import numpy as np
 
 
@@ -10,3 +10,5 @@ _ShapeLike = list[int] | tuple[int]
 
 _ArrayLike = list | _NumPyArray
 _ArrayLikeInt = int | Sequence[int | tuple[int, int]]
+
+_StateDict = Dict[str, Any]

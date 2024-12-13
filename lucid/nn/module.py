@@ -3,7 +3,7 @@ from collections import OrderedDict
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid.types import _ArrayOrScalar
+from lucid.types import _ArrayOrScalar, _StateDict
 
 import lucid.nn as nn
 
@@ -119,7 +119,7 @@ class Module:
         destination: OrderedDict[str, Any] | None = None,
         prefix: str = "",
         keep_vars: bool = False,
-    ) -> dict[str, Any]:
+    ) -> _StateDict:
         if destination is None:
             destination = OrderedDict()
 
@@ -136,7 +136,7 @@ class Module:
 
         return destination
 
-    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True) -> None:
+    def load_state_dict(self, state_dict: _StateDict, strict: bool = True) -> None:
         own_state = self.state_dict(keep_vars=True)
 
         missing_keys = set(own_state.keys()) - set(state_dict.keys())

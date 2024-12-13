@@ -22,7 +22,7 @@ class Linear(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
 
-        weight_ = lucid.random.randn(out_features, in_features)
+        weight_ = lucid.random.randn(out_features, in_features) * 0.01
         self.weight = nn.Parameter(weight_)
 
         if bias:
@@ -44,7 +44,7 @@ class Bilinear(nn.Module):
         self.in2_features = in2_features
         self.out_features = out_features
 
-        weight_ = lucid.random.randn(out_features, in1_features, in2_features)
+        weight_ = lucid.random.randn(out_features, in1_features, in2_features) * 0.01
         self.weight = nn.Parameter(weight_)
 
         if bias:

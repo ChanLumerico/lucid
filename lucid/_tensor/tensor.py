@@ -49,8 +49,8 @@ class Tensor(_TensorOps):
 
         for tensor in topo_order:
             tensor._backward_op()
-            if not tensor.is_leaf and not keep_grad:
-                self.zero_grad()
+            if not (tensor.is_leaf or keep_grad or self.keep_grad):
+                self.grad = None
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -79,12 +79,13 @@ class Tensor(_TensorOps):
         self.data = np.zeros_like(self.data)
 
     def zero_grad(self) -> None:
-        if not self.keep_grad:
-            self.grad = None
+        self.grad = np.zeros_like(self.grad)
 
     def __getitem__(self, idx: SupportsIndex) -> Self:
         sliced_data = self.data[idx]
-        new_tensor = Tensor(sliced_data, requires_grad=self.requires_grad)
+        new_tensor = Tensor(
+            sliced_data, requires_grad=self.requires_grad, keep_grad=self.keep_grad
+        )
 
         def _backward_op() -> None:
             if self.grad is None:
