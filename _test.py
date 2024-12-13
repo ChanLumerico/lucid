@@ -40,7 +40,7 @@ y_train = lucid.Tensor(y_train)
 
 batch_size = 100
 num_epochs = 100
-lr = 0.05
+lr = 0.02
 
 import numpy as np
 
@@ -48,7 +48,7 @@ num_samples = X_train.shape[0]
 indices = np.arange(num_samples)
 
 model = MLP(input_size=784, hidden_size=256, output_size=10)
-optimizer = optim.ASGD(model.parameters(), lr=lr, momentum=0.9)
+optimizer = optim.RMSprop(model.parameters(), lr=lr)
 
 
 def train():
