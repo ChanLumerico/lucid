@@ -425,6 +425,15 @@
 </ul>
 </li>
 </ul>
+<p class="caption" role="heading"><span class="caption-text">Optimization</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../optim/optim.html">lucid.optim</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../optim/Optimizer.html">optim.Optimizer</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../optim/optimizers/index.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" role="switch" type="checkbox"/><label for="toctree-checkbox-22"><div class="visually-hidden">Toggle navigation of Optimizers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../optim/optimizers/SGD.html">optim.SGD</a></li>
+</ul>
+</li>
+</ul>
 <p class="caption" role="heading"><span class="caption-text">Others</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../others/types.html">lucid.types</a></li>
@@ -486,7 +495,6 @@ multiple neural network modules in a sequential manner.</p>
 and other modules, ensuring that the output of one module serves as the input to the next.
 This modular approach promotes code reusability and simplifies the architecture of neural
 networks, making it easier to build, understand, and maintain models.</p>
-<p><strong>Admonition: Note</strong></p>
 <blockquote>
 <div><p><cite>Sequential</cite> is ideal for models where each layer has exactly one input tensor
 and one output tensor. It does not support models with multiple inputs or outputs,

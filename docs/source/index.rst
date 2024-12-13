@@ -47,6 +47,15 @@
    Containers <nn/containers/index.rst>
 
 .. toctree::
+    :maxdepth: 2
+    :caption: Optimization
+
+    optim/optim.rst
+    optim/Optimizer.rst
+
+    Optimizers <optim/optimizers/index.rst>
+
+.. toctree::
    :maxdepth: 1
    :caption: Others
    :hidden:

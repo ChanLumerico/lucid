@@ -6,7 +6,7 @@ import lucid.nn as nn
 import lucid.optim as optim
 
 
-__all__ = ["SGD"]
+__all__ = ["SGD", "ASGD"]
 
 
 class SGD(optim.Optimizer):
@@ -52,3 +52,6 @@ class SGD(optim.Optimizer):
                 param.data = param.data - lr * d_p
 
         return loss
+
+
+class ASGD(optim.Optimizer): ...

@@ -32,27 +32,27 @@ X_sc = sc.fit_transform(X)
 from sklearn.model_selection import train_test_split
 
 X_train, X_test, y_train, y_test = train_test_split(
-    X_sc, y, test_size=0.3, random_state=42
+    X_sc, y, test_size=0.8, random_state=42, shuffle=True, stratify=y
 )
 
 X_train = lucid.Tensor(X_train)
 y_train = lucid.Tensor(y_train)
 
 batch_size = 100
-num_epochs = 10
+num_epochs = 100
 lr = 0.01
 
 import numpy as np
 
 num_samples = X_train.shape[0]
 indices = np.arange(num_samples)
-np.random.shuffle(indices)
 
-model = MLP(input_size=784, hidden_size=100, output_size=10)
+model = MLP(input_size=784, hidden_size=128, output_size=10)
 optimizer = optim.SGD(model.parameters(), lr=lr)
 
 
-def train(epoch):
+def train():
+    loss_arr = []
     for start_idx in range(0, num_samples, batch_size):
         end_idx = min(start_idx + batch_size, num_samples)
         batch_indices = list(indices[start_idx:end_idx])
@@ -66,21 +66,25 @@ def train(epoch):
         optimizer.step()
         optimizer.zero_grad()
 
-        if start_idx % 1000 == 0:
-            loss_history.append(loss.item())
+        loss_arr.append(loss.item())
 
-        if start_idx % 5000 == 0 or start_idx == 0:
-            print(f"Epoch {epoch} - Batch {start_idx}, Loss: {loss.item()}")
+    return np.mean(loss_arr)
 
 
-loss_history = []
+loss_avgs = []
 for epoch in range(1, num_epochs + 1):
-    train(epoch)
-    print()
+    loss_avg = train()
+    loss_avgs.append(loss_avg)
+    print(f"Epoch [{epoch}/{num_epochs}], Loss Avg. {loss_avg}")
 
 
 import matplotlib.pyplot as plt
 
-plt.plot(loss_history, lw=1)
+plt.plot(loss_avgs)
+plt.xlabel("Epochs")
+plt.ylabel("Cross-Entropy Loss")
+plt.title("Lucid Test on MLP with SGD for MNIST")
+plt.grid(alpha=0.2)
+
 plt.tight_layout()
 plt.savefig("mnist_mlp_test")
