@@ -8,3 +8,4 @@ Random Number Generations
     rand.rst
     randint.rst
     randn.rst
+    uniform.rst

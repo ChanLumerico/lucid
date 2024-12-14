@@ -1,7 +1,7 @@
 from lucid.random import _func
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike
+from lucid.types import _ShapeLike, _Scalar
 
 
 def seed(seed: int) -> None:
@@ -24,3 +24,13 @@ def randint(
 
 def randn(*shape: int, requires_grad: bool = False, keep_grad: bool = False) -> Tensor:
     return _func.randn(*shape, requires_grad=requires_grad, keep_grad=keep_grad)
+
+
+def uniform(
+    low: _Scalar,
+    high: _Scalar,
+    size: int | _ShapeLike,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor:
+    return _func.uniform(low, high, size, requires_grad, keep_grad)

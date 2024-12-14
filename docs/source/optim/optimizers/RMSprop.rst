@@ -33,16 +33,27 @@ based on the following formulas:
     
 .. math::
     
-    E[g^2]_t &= \alpha \times E[g^2]_{t-1} + (1 - \alpha) \times g_t^2 \\
+    E[g^2]_t &= \alpha \times E[g^2]_{t-1} + (1 - \alpha) \times g_t^2
+    
     \theta_{t+1} &= \theta_t - \frac{\text{lr} \times g_t}{\sqrt{E[g^2]_t + \epsilon}}
     
-    \text{If momentum is used:} \\
-    v_t &= \text{momentum} \times v_{t-1} + \frac{\text{lr} \times g_t}{\sqrt{E[g^2]_t + \epsilon}} \\
+
+**If momentum is used:**
+
+.. math::
+
+    v_t &= \text{momentum} \times v_{t-1} + \frac{\text{lr} \times g_t}{\sqrt{E[g^2]_t + \epsilon}}
+    
     \theta_{t+1} &= \theta_t - v_t
     
-    \text{If centered:} \\
-    E[g]_t &= \alpha \times E[g]_{t-1} + (1 - \alpha) \times g_t \\
-    E[g^2]_t &= \alpha \times E[g^2]_{t-1} + (1 - \alpha) \times g_t^2 \\
+**If centered:**
+
+.. math::
+
+    E[g]_t &= \alpha \times E[g]_{t-1} + (1 - \alpha) \times g_t
+
+    E[g^2]_t &= \alpha \times E[g^2]_{t-1} + (1 - \alpha) \times g_t^2
+
     \theta_{t+1} &= \theta_t - \frac{\text{lr} \times g_t}{\sqrt{E[g^2]_t - E[g]_t^2 + \epsilon}}
     
 Where:
