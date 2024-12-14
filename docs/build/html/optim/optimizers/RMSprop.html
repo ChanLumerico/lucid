@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="optim.SGD" href="SGD.html" /><link rel="prev" title="optim.Optimizer" href="../Optimizer.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/optim/optimizers/index.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.types" href="../../others/types.html" /><link rel="prev" title="optim.ASGD" href="ASGD.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/optim/optimizers/RMSprop.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>Optimizers - Lucid 0.18.2 documentation</title>
+        <title>optim.RMSprop - Lucid 0.18.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -179,7 +179,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -430,10 +430,10 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../optim.html">lucid.optim</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../Optimizer.html">optim.Optimizer</a></li>
-<li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">Optimizers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" role="switch" type="checkbox"/><label for="toctree-checkbox-22"><div class="visually-hidden">Toggle navigation of Optimizers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Optimizers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" role="switch" type="checkbox"/><label for="toctree-checkbox-22"><div class="visually-hidden">Toggle navigation of Optimizers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="SGD.html">optim.SGD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ASGD.html">optim.ASGD</a></li>
-<li class="toctree-l2"><a class="reference internal" href="RMSprop.html">optim.RMSprop</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">optim.RMSprop</a></li>
 </ul>
 </li>
 </ul>
@@ -463,7 +463,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/optim/optimizers/index.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/optim/optimizers/RMSprop.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -477,22 +477,148 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="optimizers">
-<h1>Optimizers<a class="headerlink" href="#optimizers" title="Link to this heading">¶</a></h1>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">SGD Series</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="SGD.html">optim.SGD</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ASGD.html">optim.ASGD</a></li>
-<li class="toctree-l1"><a class="reference internal" href="RMSprop.html">optim.RMSprop</a></li>
+          <section id="optim-rmsprop">
+<h1>optim.RMSprop<a class="headerlink" href="#optim-rmsprop" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lucid.optim.RMSprop">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.optim.</span></span><span class="sig-name descname"><span class="pre">RMSprop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../nn/Parameter.html#lucid.nn.Parameter" title="lucid.nn.parameter.Parameter"><span class="pre">Parameter</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.99</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-08</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_decay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">momentum</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">centered</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.optim.RMSprop" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The <cite>RMSprop</cite> class implements the Root Mean Square Propagation optimization algorithm
+with optional momentum and weight decay. It inherits from the abstract <cite>Optimizer</cite>
+base class and provides an adaptive learning rate method that adjusts the learning rate
+for each parameter based on the magnitude of recent gradients.</p>
+<section id="class-signature">
+<h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">RMSprop</span><span class="p">(</span><span class="n">optim</span><span class="o">.</span><span class="n">Optimizer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">],</span>
+        <span class="n">lr</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-2</span><span class="p">,</span>
+        <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.99</span><span class="p">,</span>
+        <span class="n">eps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-8</span><span class="p">,</span>
+        <span class="n">weight_decay</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">momentum</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">centered</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</pre></div>
+</div>
+</section>
+<section id="algorithm">
+<h2>Algorithm<a class="headerlink" href="#algorithm" title="Link to this heading">¶</a></h2>
+<p>The Root Mean Square Propagation (RMSprop) algorithm updates the model parameters
+based on the following formulas:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[ \begin{align}\begin{aligned}\begin{split}E[g^2]_t &amp;= \alpha \times E[g^2]_{t-1} + (1 - \alpha) \times g_t^2 \\
+\theta_{t+1} &amp;= \theta_t - \frac{\text{lr} \times g_t}{\sqrt{E[g^2]_t + \epsilon}}\end{split}\\\begin{split}\text{If momentum is used:} \\
+v_t &amp;= \text{momentum} \times v_{t-1} + \frac{\text{lr} \times g_t}{\sqrt{E[g^2]_t + \epsilon}} \\
+\theta_{t+1} &amp;= \theta_t - v_t\end{split}\\\begin{split}\text{If centered:} \\
+E[g]_t &amp;= \alpha \times E[g]_{t-1} + (1 - \alpha) \times g_t \\
+E[g^2]_t &amp;= \alpha \times E[g^2]_{t-1} + (1 - \alpha) \times g_t^2 \\
+\theta_{t+1} &amp;= \theta_t - \frac{\text{lr} \times g_t}{\sqrt{E[g^2]_t - E[g]_t^2 + \epsilon}}\end{split}\end{aligned}\end{align} \]</div>
+</div>
+<p>Where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\theta_{t}\)</span> are the parameters at iteration <span class="math notranslate nohighlight">\(t\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(g_t\)</span> is the gradient of the loss with respect to <span class="math notranslate nohighlight">\(\theta_{t}\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(E[g^2]_t\)</span> is the moving average of the squared gradients.</p></li>
+<li><p><span class="math notranslate nohighlight">\(v_t\)</span> is the velocity (momentum buffer) at iteration <span class="math notranslate nohighlight">\(t\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{lr}\)</span> is the learning rate.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\alpha\)</span> is the smoothing constant.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\epsilon\)</span> is a small constant to prevent division by zero.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{momentum}\)</span> is the momentum factor.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{weight_decay}\)</span> is the weight decay coefficient.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{centered}\)</span> determines whether to use the centered version of RMSprop.</p></li>
+</ul>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<div class="note admonition">
+<p class="admonition-title"><strong>Using the RMSprop Optimizer</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.optim</span> <span class="k">as</span> <span class="nn">optim</span>
+<span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+
+<span class="c1"># Define a simple model</span>
+<span class="k">class</span> <span class="nc">MyModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">param</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">])</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">param</span>
+
+<span class="c1"># Initialize model and RMSprop optimizer</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">MyModel</span><span class="p">()</span>
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">RMSprop</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span>
+    <span class="n">lr</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="o">=</span><span class="mf">0.99</span><span class="p">,</span>
+    <span class="n">eps</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">,</span>
+    <span class="n">weight_decay</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+    <span class="n">momentum</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
+    <span class="n">centered</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Training loop</span>
+<span class="k">for</span> <span class="nb">input</span><span class="p">,</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+    <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">compute_loss</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+    <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+    <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="tip admonition">
+<p class="admonition-title"><strong>Inspecting Optimizer State</strong></p>
+<p>Use the <cite>state_dict()</cite> and <cite>load_state_dict()</cite> methods to save and load the
+optimizer state.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Save state</span>
+<span class="n">optimizer_state</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">state_dict</span><span class="p">()</span>
+
+<span class="c1"># Load state</span>
+<span class="n">optimizer</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">optimizer_state</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Learning Rate (`lr`)</strong>:
+Controls the step size during parameter updates.
+A higher learning rate can speed up training but may cause instability,
+while a lower learning rate ensures more stable convergence.</p></li>
+<li><p><strong>Smoothing Constant (`alpha`)</strong>:
+Decay rate for the moving average of squared gradients. Typically set close to 1 (e.g., 0.99) to give more weight to past gradients.</p></li>
+<li><p><strong>Epsilon (`eps`)</strong>:
+A small constant added to the denominator to improve numerical stability and prevent division by zero.</p></li>
+<li><p><strong>Weight Decay (`weight_decay`)</strong>:
+Adds a regularization term to prevent overfitting by penalizing large weights.
+This corresponds to L2 regularization.</p></li>
+<li><p><strong>Momentum (`momentum`)</strong>:
+Accelerates RMSprop in the relevant direction and dampens oscillations.
+Momentum values typically range between <cite>0.0</cite> (no momentum) and <cite>1.0</cite>.</p></li>
+<li><p><strong>Centered (`centered`)</strong>:
+If <cite>True</cite>, computes the centered RMSprop, which maintains an estimate of the mean of the gradients
+and uses it to normalize the gradients, potentially leading to better convergence.</p></li>
+</ul>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<ul class="simple">
+<li><p><cite>lucid.optim.Optimizer</cite> - Abstract base class for all optimizers.</p></li>
+<li><p><cite>lucid.nn.Module</cite> - Base class for all neural network modules.</p></li>
+<li><p><cite>lucid.Parameter</cite> - Represents a parameter in a neural network module.</p></li>
 </ul>
 </div>
+</section>
 </section>
 
         </article>
@@ -500,23 +626,23 @@
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="SGD.html">
+          <a class="next-page" href="../../others/types.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">optim.SGD</div>
+                <div class="title">lucid.types</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../Optimizer.html">
+          <a class="prev-page" href="ASGD.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">optim.Optimizer</div>
+                <div class="title">optim.ASGD</div>
                 
               </div>
             </a>
@@ -538,8 +664,31 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">optim.RMSprop</a><ul>
+<li><a class="reference internal" href="#lucid.optim.RMSprop"><code class="docutils literal notranslate"><span class="pre">RMSprop</span></code></a></li>
+<li><a class="reference internal" href="#class-signature">Class Signature</a></li>
+<li><a class="reference internal" href="#algorithm">Algorithm</a></li>
+<li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>

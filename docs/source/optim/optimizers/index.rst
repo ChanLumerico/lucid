@@ -7,3 +7,4 @@ Optimizers
 
     SGD.rst
     ASGD.rst
+    RMSprop.rst

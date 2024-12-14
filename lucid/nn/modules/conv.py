@@ -61,7 +61,7 @@ class _ConvNd(nn.Module):
         if out_channels % groups != 0:
             raise ValueError("out_channels mube be divisible by groups.")
 
-        weight_ = lucid.random.randn(
+        weight_ = lucid.random.rand(
             out_channels, in_channels // groups, *self.kernel_size
         )
         self.weight = nn.Parameter(weight_ * 0.01)
