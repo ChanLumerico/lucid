@@ -53,9 +53,12 @@ def cross_entropy(
     exp_logits = lucid.exp(input_ - lucid.max(input_, axis=1, keepdims=True))
     prob = exp_logits / lucid.sum(exp_logits, axis=1, keepdims=True)
 
-    loss = -lucid.log(prob[:, target.data.astype(int)] + eps)
+    indices = lucid.arange(input_.shape[0]).astype(int)
+    target_int = target.astype(int)
+
+    loss = -lucid.log(prob[indices, target_int] + eps)
     if weight is not None:
-        loss *= weight[target.data.astype(int)]
+        loss *= weight[target_int]
 
     return _loss_reduction(loss, reduction)
 
@@ -66,9 +69,10 @@ def nll_loss(
     weight: Tensor | None = None,
     reduction: _ReductionType | None = "mean",
 ) -> Tensor:
-    loss = -input_[:, target.data.astype(int)]
+    target_int = target.astype(int)
+    loss = -input_[:, target_int]
     if weight is not None:
-        loss *= weight[target.data.astype(int)]
+        loss *= weight[target_int]
 
     return _loss_reduction(loss, reduction)
 

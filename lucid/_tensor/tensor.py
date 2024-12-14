@@ -81,8 +81,22 @@ class Tensor(_TensorOps):
     def zero_grad(self) -> None:
         self.grad = np.zeros_like(self.grad)
 
+    def astype(self, dtype: type) -> Self:
+        self.data = self.data.astype(dtype)
+        return self
+
     def __getitem__(self, idx: SupportsIndex) -> Self:
-        sliced_data = self.data[idx]
+        new_idx = idx
+        if isinstance(idx, Tensor):
+            new_idx = idx.data
+        if isinstance(idx, tuple):
+            new_idx = tuple()
+            for id in idx:
+                if isinstance(id, Tensor):
+                    id = id.data
+                new_idx += (id,)
+
+        sliced_data = self.data[new_idx]
         new_tensor = Tensor(
             sliced_data, requires_grad=self.requires_grad, keep_grad=self.keep_grad
         )
@@ -91,8 +105,8 @@ class Tensor(_TensorOps):
             if self.grad is None:
                 self.grad = np.zeros_like(self.data)
 
-            new_grad = lucid._match_grad_shape(self.data[idx], new_tensor.grad)
-            lucid._set_tensor_grad(self, new_grad, at=idx)
+            new_grad = lucid._match_grad_shape(self.data[new_idx], new_tensor.grad)
+            lucid._set_tensor_grad(self, new_grad, at=new_idx)
 
         if self.requires_grad:
             new_tensor._backward_op = _backward_op

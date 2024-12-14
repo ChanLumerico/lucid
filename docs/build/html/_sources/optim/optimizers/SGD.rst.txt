@@ -22,6 +22,22 @@ Class Signature
             weight_decay: float = 0.0,
         ) -> None
 
+Parameters
+----------
+
+- **Learning Rate (`lr`)**:
+  Controls the step size during parameter updates. 
+  A higher learning rate can speed up training but may cause instability, 
+  while a lower learning rate ensures more stable convergence.
+
+- **Momentum (`momentum`)**:
+  Accelerates SGD in the relevant direction and dampens oscillations. 
+  Momentum values typically range between `0.0` (no momentum) and `1.0`.
+
+- **Weight Decay (`weight_decay`)**:
+  Adds a regularization term to prevent overfitting by penalizing large weights. 
+  This corresponds to L2 regularization.
+
 Algorithm
 ---------
 
@@ -88,22 +104,6 @@ Examples
 
        # Load state
        optimizer.load_state_dict(optimizer_state)
-
-Parameters
-----------
-
-- **Learning Rate (`lr`)**:
-  Controls the step size during parameter updates. 
-  A higher learning rate can speed up training but may cause instability, 
-  while a lower learning rate ensures more stable convergence.
-
-- **Momentum (`momentum`)**:
-  Accelerates SGD in the relevant direction and dampens oscillations. 
-  Momentum values typically range between `0.0` (no momentum) and `1.0`.
-
-- **Weight Decay (`weight_decay`)**:
-  Adds a regularization term to prevent overfitting by penalizing large weights. 
-  This corresponds to L2 regularization.
 
 .. seealso::
 

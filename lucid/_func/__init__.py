@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, overload
 import numpy as np
 
 from lucid._func import bfunc, gfunc, ufunc
@@ -215,6 +215,53 @@ def diag(
     keep_grad: bool = False,
 ) -> Tensor:
     return gfunc.diag(v, k, dtype, requires_grad, keep_grad)
+
+
+@overload
+def arange(
+    stop: _Scalar,
+    *,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+@overload
+def arange(
+    start: _Scalar,
+    stop: _Scalar,
+    *,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+@overload
+def arange(
+    start: _Scalar,
+    stop: _Scalar,
+    step: _Scalar,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+def arange(
+    *args, dtype: Any = np.float32, requires_grad: bool = False, keep_grad: bool = False
+) -> Tensor:
+    if len(args) == 1:
+        arange_args = (0.0, *args, 1.0)
+    elif len(args) == 2:
+        arange_args = (*args, 1.0)
+    elif len(args) == 3:
+        arange_args = (*args,)
+    else:
+        raise ValueError(f"Expected <=3 arguments got {len(args)} arguments.")
+
+    return gfunc.arange(*arange_args, dtype, requires_grad, keep_grad)
 
 
 Tensor.__add__ = bfunc._add

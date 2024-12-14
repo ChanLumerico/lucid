@@ -57,3 +57,4 @@ Tensor Operations
    gfunc/ones_like.rst
    gfunc/eye.rst
    gfunc/diag.rst
+   gfunc/arange.rst

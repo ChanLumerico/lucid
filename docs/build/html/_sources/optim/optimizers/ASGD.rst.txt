@@ -25,6 +25,32 @@ Class Signature
             lambd: float = 1e-4,
         ) -> None
 
+Parameters
+----------
+    
+- **Learning Rate (`lr`)**:
+  Controls the step size during parameter updates. 
+  A higher learning rate can speed up training but may cause instability, 
+  while a lower learning rate ensures more stable convergence.
+
+- **Momentum (`momentum`)**:
+  Accelerates SGD in the relevant direction and dampens oscillations. 
+  Momentum values typically range between `0.0` (no momentum) and `1.0`.
+
+- **Weight Decay (`weight_decay`)**:
+  Adds a regularization term to prevent overfitting by penalizing large weights. 
+  This corresponds to L2 regularization.
+
+- **Averaging Factor (`alpha`)**:
+  Controls the contribution of the current parameters to the averaged parameters. 
+  A higher value gives more weight to past parameters, leading to smoother averaging.
+
+- **Averaging Schedule (`t0`)**:
+  The number of iterations before averaging starts. A larger value delays the averaging process.
+
+- **Lambda (`lambd`)**:
+  A regularization parameter that controls the decay rate of the averaging process.
+
 Algorithm
 ---------
     
@@ -33,7 +59,7 @@ based on the following formulas:
     
 .. math::
     
-    v_{t} &= \text{momentum} \times v_{t-1} + \text{gradient}_{t} + \text{weight\_decay} \times \theta_{t}
+    v_{t} &= \text{momentum} \times v_{t-1} + \text{gradient}_{t} + \text{weight_decay} \times \theta_{t}
     
     \theta_{t+1} &= \theta_{t} - \text{lr} \times v_{t}
     
@@ -121,32 +147,6 @@ Examples
 
        # Load state
        optimizer.load_state_dict(optimizer_state)
-
-Parameters
-----------
-    
-- **Learning Rate (`lr`)**:
-  Controls the step size during parameter updates. 
-  A higher learning rate can speed up training but may cause instability, 
-  while a lower learning rate ensures more stable convergence.
-
-- **Momentum (`momentum`)**:
-  Accelerates SGD in the relevant direction and dampens oscillations. 
-  Momentum values typically range between `0.0` (no momentum) and `1.0`.
-
-- **Weight Decay (`weight_decay`)**:
-  Adds a regularization term to prevent overfitting by penalizing large weights. 
-  This corresponds to L2 regularization.
-
-- **Averaging Factor (`alpha`)**:
-  Controls the contribution of the current parameters to the averaged parameters. 
-  A higher value gives more weight to past parameters, leading to smoother averaging.
-
-- **Averaging Schedule (`t0`)**:
-  The number of iterations before averaging starts. A larger value delays the averaging process.
-
-- **Lambda (`lambd`)**:
-  A regularization parameter that controls the decay rate of the averaging process.
 
 .. seealso::
 

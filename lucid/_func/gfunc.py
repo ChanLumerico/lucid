@@ -2,7 +2,7 @@ from typing import Any
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLike
+from lucid.types import _ShapeLike, _ArrayLike, _Scalar
 
 
 def zeros(
@@ -70,3 +70,14 @@ def diag(
     if not isinstance(v, Tensor):
         v = Tensor(v, requires_grad, keep_grad, dtype)
     return Tensor(np.diag(v.data, k), v.requires_grad, v.keep_grad)
+
+
+def arange(
+    start: _Scalar,
+    stop: _Scalar,
+    step: _Scalar,
+    dtype: Any = np.float32,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor:
+    return Tensor(np.arange(start, stop, step), requires_grad, keep_grad, dtype)
