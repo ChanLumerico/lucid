@@ -43,6 +43,7 @@
    nn/Module.rst
 
    Neural Functions <nn/functions/index.rst>
+   Weight Initializations <nn/init/index.rst>
    Modules <nn/modules/index.rst>
    Containers <nn/containers/index.rst>
 

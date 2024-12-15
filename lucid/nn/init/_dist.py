@@ -37,4 +37,27 @@ def constant_(tensor: Tensor, val: _Scalar) -> None:
     tensor.data = lucid.ones_like(tensor).data * val
 
 
-def xavier_uniform_(tensor: Tensor, gain: _Scalar) -> None: ...  # TODO: Begin from here
+def xavier_uniform_(tensor: Tensor, gain: _Scalar) -> None:
+    fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
+    bound = (6 / (fan_in + fan_out)) ** 0.5 * gain
+    tensor.data = lucid.random.uniform(-bound, bound, tensor.shape).data
+
+
+def xavier_normal_(tensor: Tensor, gain: _Scalar) -> None:
+    fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
+    std = (2 / (fan_in + fan_out)) ** 0.5 * gain
+    tensor.data = lucid.random.randn(tensor.shape).data * std
+
+
+def kaiming_uniform_(tensor: Tensor, mode: str) -> None:
+    fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
+    fan = fan_in if mode == "fan_in" else fan_out
+    bound = (6 / fan) ** 0.5
+    tensor.data = lucid.random.uniform(-bound, bound, tensor.shape).data
+
+
+def kaiming_normal_(tensor: Tensor, mode: str) -> None:
+    fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
+    fan = fan_in if mode == "fan_in" else fan_out
+    std = (2 / fan) ** 5
+    tensor.data = lucid.random.randn(tensor.shape).data * std
