@@ -26,8 +26,8 @@ target = lucid.Tensor(y_train)
 class MLP(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(28 * 28, 128)
-        self.fc2 = nn.Linear(128, 10)
+        self.fc1 = nn.Linear(28 * 28, 100)
+        self.fc2 = nn.Linear(100, 10)
 
         self.relu = nn.ReLU()
 
@@ -40,9 +40,11 @@ class MLP(nn.Module):
 
 model_sgd = MLP()
 model_rms = MLP()
+model_adam = MLP()
 
-sgd = optim.SGD(model_sgd.parameters(), lr=0.01)
-rmsprop = optim.Rprop(model_rms.parameters(), lr=0.01)
+sgd = optim.SGD(model_sgd.parameters(), lr=0.001)
+rms = optim.RMSprop(model_rms.parameters(), lr=0.001)
+adam = optim.Adam(model_adam.parameters(), lr=0.001)
 criterion = nn.CrossEntropyLoss()
 
 batch_size = 64
@@ -54,7 +56,7 @@ indices = lucid.arange(num_samples).astype(int)
 
 def train(model, optimizer):
     loss_arr = []
-    for i, start_idx in enumerate(range(0, num_samples, batch_size)):
+    for start_idx in range(0, num_samples, batch_size):
         end_idx = min(start_idx + batch_size, num_samples)
         batch_indices = indices[start_idx:end_idx]
 
@@ -69,16 +71,20 @@ def train(model, optimizer):
 
         loss_arr.append(loss.item())
 
-    return lucid.mean(loss_arr).item()
+    return loss_arr
 
 
 def fit_model(model, optimizer):
     loss_hist = []
     for epoch in range(1, num_epochs + 1):
-        loss_avg = train(model, optimizer)
-        loss_hist.append(loss_avg)
+        loss_arr = train(model, optimizer)
+        loss_avg = lucid.mean(loss_arr).item()
+        loss_hist.extend(loss_arr)
 
-        print(f"Epoch {epoch}/{num_epochs}, Avg. Loss {loss_avg}")
+        print(
+            f"[{type(optimizer).__name__}]",
+            f"Epoch {epoch}/{num_epochs}, Avg. Loss {loss_avg}",
+        )
 
     with lucid.no_grad():
         import numpy as np
@@ -92,15 +98,18 @@ def fit_model(model, optimizer):
     return loss_hist, accuracy
 
 
-loss_rms, acc_rms = fit_model(model_rms, rmsprop)
 loss_sgd, acc_sgd = fit_model(model_sgd, sgd)
+loss_rms, acc_rms = fit_model(model_rms, rms)
+loss_adam, acc_adam = fit_model(model_adam, adam)
 
-best_acc = max(acc_sgd, acc_rms)
+best_acc = max(acc_sgd, acc_adam)
 
 import matplotlib.pyplot as plt
 
-plt.plot(loss_sgd, label="SGD")
-plt.plot(loss_rms, label="RMSprop")
+plt.figure(figsize=(10, 5))
+plt.plot(loss_sgd, label="SGD", lw=0.5, alpha=0.7)
+plt.plot(loss_rms, label="RMSprop", lw=0.5, alpha=0.7)
+plt.plot(loss_adam, label="Adam", lw=0.5, alpha=0.7)
 plt.xlabel("Epochs")
 plt.ylabel("Cross-Entropy Loss")
 plt.title(f"Lucid Test on MLP for MNIST [Acc: {best_acc:.4f}]")
@@ -108,4 +117,4 @@ plt.grid(alpha=0.2)
 plt.legend()
 plt.tight_layout()
 
-plt.savefig(f"mlp_test_sgd_rmsprop")
+plt.savefig(f"mlp_sgd_rms_adam")

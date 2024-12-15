@@ -8,3 +8,5 @@ Optimizers
     SGD.rst
     ASGD.rst
     RMSprop.rst
+    Rprop.rst
+    Adam.rst
