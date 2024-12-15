@@ -1,8 +1,9 @@
-from typing import Any, Iterator, Optional, Self, SupportsIndex
+from typing import Iterator, Optional, Self, SupportsIndex
 import numpy as np
+
 import lucid
 from lucid._tensor.tensor_ops import _TensorOps
-from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar
+from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _base_dtype
 
 
 class Tensor(_TensorOps):
@@ -11,11 +12,13 @@ class Tensor(_TensorOps):
         data: _ArrayOrScalar,
         requires_grad: bool = False,
         keep_grad: bool = False,
-        dtype: Any = np.float32,
+        dtype: type = _base_dtype,
     ) -> None:
         if not isinstance(data, _NumPyArray):
             self.data = np.array(data, dtype=dtype)
         else:
+            if data.dtype != dtype:
+                data = data.astype(dtype)
             self.data = data
 
         self.requires_grad = requires_grad and lucid.grad_enabled()

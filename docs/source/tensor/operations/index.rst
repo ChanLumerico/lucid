@@ -58,3 +58,5 @@ Tensor Operations
    gfunc/eye.rst
    gfunc/diag.rst
    gfunc/arange.rst
+   gfunc/empty.rst
+   gfunc/empty_like.rst

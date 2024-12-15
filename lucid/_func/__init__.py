@@ -1,9 +1,9 @@
-from typing import Any, overload
-import numpy as np
+from typing import overload
 
+import lucid
 from lucid._func import bfunc, gfunc, ufunc
 from lucid._tensor import Tensor
-from lucid.types import _Scalar, _ShapeLike, _ArrayLike
+from lucid.types import _Scalar, _ShapeLike, _ArrayLike, _base_dtype
 
 
 def add(a: Tensor, b: Tensor) -> Tensor:
@@ -160,36 +160,74 @@ def max(
     return ufunc._min_or_max(a, "max", axis, keepdims)
 
 
+@overload
+def zeros(
+    *shape: int,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+@overload
 def zeros(
     shape: _ShapeLike,
-    dtype: Any = np.float32,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+def zeros(
+    *args: int | _ShapeLike,
+    dtype: type = _base_dtype,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
+    shape = lucid._get_overloaded_shape(args)
     return gfunc.zeros(shape, dtype, requires_grad, keep_grad)
 
 
 def zeros_like(
     a: Tensor | _ArrayLike,
-    dtype: Any = None,
+    dtype: type = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
     return gfunc.zeros_like(a, dtype, requires_grad, keep_grad)
 
 
+@overload
+def ones(
+    *shape: int,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+@overload
 def ones(
     shape: _ShapeLike,
-    dtype: Any = np.float32,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+def ones(
+    *args: int | _ShapeLike,
+    dtype: type = _base_dtype,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
+    shape = lucid._get_overloaded_shape(args)
     return gfunc.ones(shape, dtype, requires_grad, keep_grad)
 
 
 def ones_like(
     a: Tensor | _ArrayLike,
-    dtype: Any = None,
+    dtype: type = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -200,7 +238,7 @@ def eye(
     N: int,
     M: int | None = None,
     k: int = 0,
-    dtype: Any = np.float32,
+    dtype: type = _base_dtype,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -210,7 +248,7 @@ def eye(
 def diag(
     v: Tensor | _ArrayLike,
     k: int = 0,
-    dtype: Any = np.float32,
+    dtype: type = _base_dtype,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -221,7 +259,7 @@ def diag(
 def arange(
     stop: _Scalar,
     *,
-    dtype: Any = np.float32,
+    dtype: type = _base_dtype,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor: ...
@@ -232,7 +270,7 @@ def arange(
     start: _Scalar,
     stop: _Scalar,
     *,
-    dtype: Any = np.float32,
+    dtype: type = _base_dtype,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor: ...
@@ -243,14 +281,17 @@ def arange(
     start: _Scalar,
     stop: _Scalar,
     step: _Scalar,
-    dtype: Any = np.float32,
+    dtype: type = _base_dtype,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor: ...
 
 
 def arange(
-    *args, dtype: Any = np.float32, requires_grad: bool = False, keep_grad: bool = False
+    *args,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
 ) -> Tensor:
     if len(args) == 1:
         arange_args = (0.0, *args, 1.0)
@@ -262,6 +303,43 @@ def arange(
         raise ValueError(f"Expected <=3 arguments got {len(args)} arguments.")
 
     return gfunc.arange(*arange_args, dtype, requires_grad, keep_grad)
+
+
+@overload
+def empty(
+    *shape: int,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+@overload
+def empty(
+    shape: _ShapeLike,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor: ...
+
+
+def empty(
+    *args: int | _ShapeLike,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor:
+    shape = lucid._get_overloaded_shape(args)
+    return gfunc.empty(shape, dtype, requires_grad, keep_grad)
+
+
+def empty_like(
+    a: Tensor | _ArrayLike,
+    dtype: type | None = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor:
+    return gfunc.empty_like(a, dtype, requires_grad, keep_grad)
 
 
 Tensor.__add__ = bfunc._add

@@ -130,3 +130,11 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
                 matched_grad = np.broadcast_to(grad, data.shape)
 
     return matched_grad
+
+
+def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:
+    if len(args) == 1 and isinstance(args[0], (tuple, list)):
+        shape = tuple(args[0])
+    else:
+        shape = tuple(args)
+    return shape
