@@ -1,3 +1,5 @@
+import math
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -22,14 +24,24 @@ class Linear(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
 
-        weight_ = lucid.random.rand(out_features, in_features)
-        self.weight = nn.Parameter(weight_ * 0.01)
+        weight_ = lucid.empty(out_features, in_features)
+        self.weight = nn.Parameter(weight_)
 
         if bias:
-            bias_ = lucid.zeros((1, out_features))
+            bias_ = lucid.empty(1, out_features)
             self.bias = nn.Parameter(bias_)
         else:
-            self.bias = None
+            self.register_parameter("bias", None)
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        nn.init.kaiming_uniform(self.weight)
+
+        if self.bias is not None:
+            fan_in, _ = nn.init._dist._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            nn.init.uniform(self.bias, -bound, bound)
 
     def forward(self, input_: Tensor) -> Tensor:
         return F.linear(input_, self.weight, self.bias)
@@ -44,14 +56,23 @@ class Bilinear(nn.Module):
         self.in2_features = in2_features
         self.out_features = out_features
 
-        weight_ = lucid.random.rand(out_features, in1_features, in2_features)
-        self.weight = nn.Parameter(weight_ * 0.01)
+        weight_ = lucid.empty(out_features, in1_features, in2_features)
+        self.weight = nn.Parameter(weight_)
 
         if bias:
-            bias_ = lucid.zeros((1, out_features))
+            bias_ = lucid.empty(1, out_features)
             self.bias = nn.Parameter(bias_)
         else:
-            self.bias = None
+            self.register_parameter("bias", None)
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        bound = 1 / math.sqrt(self.weight.shape[1])
+        nn.init.uniform(self.weight, -bound, bound)
+
+        if self.bias is not None:
+            nn.init.uniform(self.bias, -bound, bound)
 
     def forward(self, input_1: Tensor, input_2: Tensor) -> Tensor:
         return F.bilinear(input_1, input_2, self.weight, self.bias)

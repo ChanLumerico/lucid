@@ -40,8 +40,8 @@ class _NormBase(nn.Module):
             bias_ = lucid.zeros((num_features,))
             self.bias = nn.Parameter(bias_)
         else:
-            self.weight = None
-            self.bias = None
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
 
         if track_running_stats:
             self.running_mean: nn.Buffer
@@ -50,8 +50,8 @@ class _NormBase(nn.Module):
             self.register_buffer("running_mean", lucid.ones((num_features,)))
             self.register_buffer("running_var", lucid.zeros((num_features,)))
         else:
-            self.running_mean = None
-            self.running_var = None
+            self.register_buffer("running_mean", None)
+            self.register_buffer("running_var", None)
 
     def reset_running_stats(self) -> None:
         if self.track_running_stats:

@@ -37,11 +37,12 @@ class MLP(nn.Module):
         x = self.fc2(x)
         return x
 
+
 model_sgd = MLP()
 model_rms = MLP()
 
 sgd = optim.SGD(model_sgd.parameters(), lr=0.01)
-rmsprop = optim.RMSprop(model_rms.parameters(), lr=0.001)
+rmsprop = optim.Rprop(model_rms.parameters(), lr=0.01)
 criterion = nn.CrossEntropyLoss()
 
 batch_size = 64
@@ -79,7 +80,6 @@ def fit_model(model, optimizer):
 
         print(f"Epoch {epoch}/{num_epochs}, Avg. Loss {loss_avg}")
 
-
     with lucid.no_grad():
         import numpy as np
 
@@ -88,11 +88,12 @@ def fit_model(model, optimizer):
         y_test_out = np.argmax(y_test_soft.data, axis=1)
 
         accuracy = np.sum(y_test == y_test_out) / y_test.size
-    
+
     return loss_hist, accuracy
 
-loss_sgd, acc_sgd = fit_model(model_sgd, sgd)
+
 loss_rms, acc_rms = fit_model(model_rms, rmsprop)
+loss_sgd, acc_sgd = fit_model(model_sgd, sgd)
 
 best_acc = max(acc_sgd, acc_rms)
 
@@ -102,9 +103,7 @@ plt.plot(loss_sgd, label="SGD")
 plt.plot(loss_rms, label="RMSprop")
 plt.xlabel("Epochs")
 plt.ylabel("Cross-Entropy Loss")
-plt.title(
-    f"Lucid Test on MLP for MNIST [Acc: {best_acc:.4f}]"
-)
+plt.title(f"Lucid Test on MLP for MNIST [Acc: {best_acc:.4f}]")
 plt.grid(alpha=0.2)
 plt.legend()
 plt.tight_layout()

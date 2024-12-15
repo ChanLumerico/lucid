@@ -4,7 +4,7 @@ import lucid
 import lucid.nn as nn
 import lucid.optim as optim
 
-from lucid.types import _OptimClosure
+from lucid.types import _OptimClosure, _Scalar
 
 
 __all__ = ["RMSprop", "Rprop"]
@@ -31,7 +31,7 @@ class RMSprop(optim.Optimizer):
         )
         super().__init__(params, defaults)
 
-    def step(self, closure: _OptimClosure | None = None) -> None:  # Beta
+    def step(self, closure: _OptimClosure | None = None) -> None:
         loss = None
         if closure is not None:
             loss = closure()
@@ -87,4 +87,53 @@ class RMSprop(optim.Optimizer):
         return loss
 
 
-class Rprop(optim.Optimizer): ...
+class Rprop(optim.Optimizer):  # NOTE: WIP
+    def __init__(
+        self,
+        params: Iterable[nn.Parameter],
+        lr: float = 1e-2,
+        etas: tuple[_Scalar, _Scalar] = (0.5, 1.2),
+        step_sizes: tuple[_Scalar, _Scalar] = (1e-6, 50.0),
+    ) -> None:
+        defaults = dict(lr=lr, etas=etas, step_sizes=step_sizes)
+        super().__init__(params, defaults)
+
+    def step(self, closure: _OptimClosure | None = None) -> None:
+        loss = None
+        if closure is not None:
+            loss = closure()
+
+        for group in self.param_groups:
+            lr = group.get("lr", self.defaults["lr"])
+            etaminus, etaplus = group.get("etas", self.defaults["etas"])
+            step_min, step_max = group.get("step_sizes", self.defaults["step_sizes"])
+
+            for param in group["params"]:
+                if param.grad is None:
+                    continue
+
+                grad = param.grad.copy()
+                state = self.state[param]
+
+                if len(state) == 0:
+                    state["step"] = 0
+                    state["prev_grad"] = lucid.zeros_like(param).data
+                    state["step_size"] = lucid.ones_like(param).data * lr
+
+                state["step"] += 1
+
+                step_size = state["step_size"]
+                prev_grad = state["prev_grad"]
+
+                sign_change = grad * prev_grad
+
+                step_size[sign_change > 0] *= etaplus
+                step_size[sign_change < 0] *= etaminus
+                step_size[:] = lucid.clip(step_size, step_min, step_max).data
+
+                grad[sign_change < 0] = 0
+                state["prev_grad"] = grad.copy()
+
+                param.data -= lucid.sign(grad).data * step_size
+
+        return loss

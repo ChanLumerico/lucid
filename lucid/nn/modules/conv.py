@@ -1,9 +1,11 @@
+import math
+from typing import Any, Literal
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from typing import Any, Literal
 
 
 __all__ = ["Conv1d", "Conv2d", "Conv3d"]
@@ -61,16 +63,25 @@ class _ConvNd(nn.Module):
         if out_channels % groups != 0:
             raise ValueError("out_channels mube be divisible by groups.")
 
-        weight_ = lucid.random.rand(
-            out_channels, in_channels // groups, *self.kernel_size
-        )
-        self.weight = nn.Parameter(weight_ * 0.01)
+        weight_ = lucid.empty(out_channels, in_channels // groups, *self.kernel_size)
+        self.weight = nn.Parameter(weight_)
 
         if bias:
-            bias_ = lucid.zeros((out_channels,))
+            bias_ = lucid.empty((out_channels,))
             self.bias = nn.Parameter(bias_)
         else:
-            self.bias = None
+            self.register_parameter("bias", None)
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        nn.init.kaiming_uniform(self.weight)
+
+        if self.bias is not None:
+            fan_in, _ = nn.init._dist._calculate_fan_in_and_fan_out(self.weight)
+            if fan_in != 0:
+                bound = 1 / math.sqrt(fan_in)
+                nn.init.uniform(self.bias, -bound, bound)
 
 
 class Conv1d(_ConvNd):

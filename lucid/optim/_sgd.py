@@ -36,7 +36,7 @@ class SGD(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad
+                grad = param.grad.copy()
                 if weight_decay != 0:
                     grad = grad + weight_decay * param.data
 
@@ -94,7 +94,7 @@ class ASGD(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad
+                grad = param.grad.copy()
                 if weight_decay != 0:
                     grad = grad + weight_decay * param.data
                 state = self.state[param]

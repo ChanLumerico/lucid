@@ -86,6 +86,7 @@ class Tensor(_TensorOps):
 
     def astype(self, dtype: type) -> Self:
         self.data = self.data.astype(dtype)
+        self.dtype = self.data.dtype
         return self
 
     def __getitem__(self, idx: SupportsIndex) -> Self:
@@ -100,9 +101,7 @@ class Tensor(_TensorOps):
                 new_idx += (id,)
 
         sliced_data = self.data[new_idx]
-        new_tensor = Tensor(
-            sliced_data, requires_grad=self.requires_grad, keep_grad=self.keep_grad
-        )
+        new_tensor = Tensor(sliced_data, self.requires_grad, self.keep_grad, self.dtype)
 
         def _backward_op() -> None:
             if self.grad is None:
