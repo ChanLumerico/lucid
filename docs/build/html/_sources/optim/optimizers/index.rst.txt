@@ -3,10 +3,11 @@ Optimizers
 
 .. toctree::
     :maxdepth: 1
-    :caption: SGD Series
 
     SGD.rst
     ASGD.rst
     RMSprop.rst
     Rprop.rst
     Adam.rst
+    AdamW.rst
+    NAdam.rst

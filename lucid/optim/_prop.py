@@ -87,7 +87,7 @@ class RMSprop(optim.Optimizer):
         return loss
 
 
-class Rprop(optim.Optimizer):  # NOTE: WIP
+class Rprop(optim.Optimizer):
     def __init__(
         self,
         params: Iterable[nn.Parameter],

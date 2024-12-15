@@ -15,8 +15,6 @@ optimization, and backpropagation using only **`NumPy`**.
 Lucid is ideal for those who want to learn about the inner workings of deep learning 
 algorithms and operations without the complexity of high-level frameworks.
 
-*Latest version: **0.20.0***
-
 [📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
 
 ## Overview

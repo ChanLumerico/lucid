@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/optim/optimizers/RMSprop.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>optim.RMSprop - Lucid 0.20.0 documentation</title>
+        <title>optim.RMSprop - Lucid 0.21.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">Lucid 0.20.0 documentation</div></a>
+      <a href="../../index.html"><div class="brand">Lucid 0.21.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 0.20.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 0.21.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -449,6 +449,8 @@
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">optim.RMSprop</a></li>
 <li class="toctree-l2"><a class="reference internal" href="Rprop.html">optim.Rprop</a></li>
 <li class="toctree-l2"><a class="reference internal" href="Adam.html">optim.Adam</a></li>
+<li class="toctree-l2"><a class="reference internal" href="AdamW.html">optim.AdamW</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NAdam.html">optim.NAdam</a></li>
 </ul>
 </li>
 </ul>
@@ -524,6 +526,28 @@ for each parameter based on the magnitude of recent gradients.</p>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </pre></div>
 </div>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Learning Rate (`lr`)</strong>:
+Controls the step size during parameter updates.
+A higher learning rate can speed up training but may cause instability,
+while a lower learning rate ensures more stable convergence.</p></li>
+<li><p><strong>Smoothing Constant (`alpha`)</strong>:
+Decay rate for the moving average of squared gradients. Typically set close to 1 (e.g., 0.99) to give more weight to past gradients.</p></li>
+<li><p><strong>Epsilon (`eps`)</strong>:
+A small constant added to the denominator to improve numerical stability and prevent division by zero.</p></li>
+<li><p><strong>Weight Decay (`weight_decay`)</strong>:
+Adds a regularization term to prevent overfitting by penalizing large weights.
+This corresponds to L2 regularization.</p></li>
+<li><p><strong>Momentum (`momentum`)</strong>:
+Accelerates RMSprop in the relevant direction and dampens oscillations.
+Momentum values typically range between <cite>0.0</cite> (no momentum) and <cite>1.0</cite>.</p></li>
+<li><p><strong>Centered (`centered`)</strong>:
+If <cite>True</cite>, computes the centered RMSprop, which maintains an estimate of the mean of the gradients
+and uses it to normalize the gradients, potentially leading to better convergence.</p></li>
+</ul>
 </section>
 <section id="algorithm">
 <h2>Algorithm<a class="headerlink" href="#algorithm" title="Link to this heading">¶</a></h2>
@@ -607,28 +631,6 @@ optimizer state.</p>
 </pre></div>
 </div>
 </div>
-</section>
-<section id="parameters">
-<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><strong>Learning Rate (`lr`)</strong>:
-Controls the step size during parameter updates.
-A higher learning rate can speed up training but may cause instability,
-while a lower learning rate ensures more stable convergence.</p></li>
-<li><p><strong>Smoothing Constant (`alpha`)</strong>:
-Decay rate for the moving average of squared gradients. Typically set close to 1 (e.g., 0.99) to give more weight to past gradients.</p></li>
-<li><p><strong>Epsilon (`eps`)</strong>:
-A small constant added to the denominator to improve numerical stability and prevent division by zero.</p></li>
-<li><p><strong>Weight Decay (`weight_decay`)</strong>:
-Adds a regularization term to prevent overfitting by penalizing large weights.
-This corresponds to L2 regularization.</p></li>
-<li><p><strong>Momentum (`momentum`)</strong>:
-Accelerates RMSprop in the relevant direction and dampens oscillations.
-Momentum values typically range between <cite>0.0</cite> (no momentum) and <cite>1.0</cite>.</p></li>
-<li><p><strong>Centered (`centered`)</strong>:
-If <cite>True</cite>, computes the centered RMSprop, which maintains an estimate of the mean of the gradients
-and uses it to normalize the gradients, potentially leading to better convergence.</p></li>
-</ul>
 <div class="admonition seealso">
 <p class="admonition-title">See also</p>
 <ul class="simple">
@@ -698,9 +700,9 @@ and uses it to normalize the gradients, potentially leading to better convergenc
 <li><a class="reference internal" href="#">optim.RMSprop</a><ul>
 <li><a class="reference internal" href="#lucid.optim.RMSprop"><code class="docutils literal notranslate"><span class="pre">RMSprop</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#algorithm">Algorithm</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
-<li><a class="reference internal" href="#parameters">Parameters</a></li>
 </ul>
 </li>
 </ul>
@@ -712,7 +714,7 @@ and uses it to normalize the gradients, potentially leading to better convergenc
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=b52c616d"></script>
+</div><script src="../../_static/documentation_options.js?v=c4f92b34"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>

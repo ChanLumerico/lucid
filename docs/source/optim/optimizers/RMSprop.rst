@@ -24,6 +24,32 @@ Class Signature
             momentum: float = 0.0,
             centered: bool = False,
         ) -> None
+
+Parameters
+----------
+    
+- **Learning Rate (`lr`)**:
+  Controls the step size during parameter updates. 
+  A higher learning rate can speed up training but may cause instability, 
+  while a lower learning rate ensures more stable convergence.
+    
+- **Smoothing Constant (`alpha`)**:
+  Decay rate for the moving average of squared gradients. Typically set close to 1 (e.g., 0.99) to give more weight to past gradients.
+    
+- **Epsilon (`eps`)**:
+  A small constant added to the denominator to improve numerical stability and prevent division by zero.
+    
+- **Weight Decay (`weight_decay`)**:
+  Adds a regularization term to prevent overfitting by penalizing large weights. 
+  This corresponds to L2 regularization.
+    
+- **Momentum (`momentum`)**:
+  Accelerates RMSprop in the relevant direction and dampens oscillations. 
+  Momentum values typically range between `0.0` (no momentum) and `1.0`.
+    
+- **Centered (`centered`)**:
+  If `True`, computes the centered RMSprop, which maintains an estimate of the mean of the gradients 
+  and uses it to normalize the gradients, potentially leading to better convergence.
     
 Algorithm
 ---------
@@ -122,32 +148,6 @@ Examples
     
        # Load state
        optimizer.load_state_dict(optimizer_state)
-    
-Parameters
-----------
-    
-- **Learning Rate (`lr`)**:
-  Controls the step size during parameter updates. 
-  A higher learning rate can speed up training but may cause instability, 
-  while a lower learning rate ensures more stable convergence.
-    
-- **Smoothing Constant (`alpha`)**:
-  Decay rate for the moving average of squared gradients. Typically set close to 1 (e.g., 0.99) to give more weight to past gradients.
-    
-- **Epsilon (`eps`)**:
-  A small constant added to the denominator to improve numerical stability and prevent division by zero.
-    
-- **Weight Decay (`weight_decay`)**:
-  Adds a regularization term to prevent overfitting by penalizing large weights. 
-  This corresponds to L2 regularization.
-    
-- **Momentum (`momentum`)**:
-  Accelerates RMSprop in the relevant direction and dampens oscillations. 
-  Momentum values typically range between `0.0` (no momentum) and `1.0`.
-    
-- **Centered (`centered`)**:
-  If `True`, computes the centered RMSprop, which maintains an estimate of the mean of the gradients 
-  and uses it to normalize the gradients, potentially leading to better convergence.
     
 .. seealso::
     
