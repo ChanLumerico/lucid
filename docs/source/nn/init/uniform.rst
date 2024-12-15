@@ -1,9 +1,9 @@
-nn.init.uniform_
-================
+nn.init.uniform
+===============
 
-.. autofunction:: lucid.nn.init.uniform_
+.. autofunction:: lucid.nn.init.uniform
 
-The `uniform_` function fills the input `tensor` with values sampled from a uniform 
+The `uniform` function fills the input `tensor` with values sampled from a uniform 
 distribution :math:`U(a, b)`, where :math:`a` and :math:`b` are the lower and upper 
 bounds of the distribution.
 
@@ -12,7 +12,7 @@ Function Signature
 
 .. code-block:: python
 
-    def uniform_(tensor: Tensor, a: _Scalar = 0, b: _Scalar = 1) -> None
+    def uniform(tensor: Tensor, a: _Scalar = 0, b: _Scalar = 1) -> None
 
 Parameters
 ----------
@@ -39,9 +39,9 @@ Examples
 .. code-block:: python
 
     >>> import lucid
-    >>> from lucid.nn.init import uniform_
+    >>> from lucid.nn.init import uniform
     >>> tensor = lucid.zeros((3, 3))
-    >>> uniform_(tensor, a=-1, b=1)
+    >>> uniform(tensor, a=-1, b=1)
     >>> print(tensor)
     Tensor([[ 0.423, -0.234,  0.678],
             [-0.123,  0.654, -0.543],

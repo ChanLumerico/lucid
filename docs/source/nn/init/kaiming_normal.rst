@@ -1,9 +1,9 @@
-nn.init.kaiming_normal_
-=======================
+nn.init.kaiming_normal
+======================
 
-.. autofunction:: lucid.nn.init.kaiming_normal_
+.. autofunction:: lucid.nn.init.kaiming_normal
 
-The `kaiming_normal_` function initializes the input `tensor` with values sampled from a normal distribution 
+The `kaiming_normal` function initializes the input `tensor` with values sampled from a normal distribution 
 :math:`\mathcal{N}(0, \sigma^2)`, where the standard deviation :math:`\sigma` is calculated to maintain 
 a stable variance of activations in the layer. 
 
@@ -14,7 +14,7 @@ Function Signature
 
 .. code-block:: python
 
-    def kaiming_normal_(tensor: Tensor, mode: _FanMode = "fan_in") -> None
+    def kaiming_normal(tensor: Tensor, mode: _FanMode = "fan_in") -> None
 
 Parameters
 ----------
@@ -60,9 +60,9 @@ Examples
 .. code-block:: python
 
     >>> import lucid
-    >>> from lucid.nn.init import kaiming_normal_
+    >>> from lucid.nn.init import kaiming_normal
     >>> tensor = lucid.zeros((3, 2))
-    >>> kaiming_normal_(tensor)
+    >>> kaiming_normal(tensor)
     >>> print(tensor)
     Tensor([[ 0.423, -0.234],
             [ 0.342, -0.678],
@@ -73,7 +73,7 @@ Examples
 .. code-block:: python
 
     >>> tensor = lucid.zeros((4, 4))
-    >>> kaiming_normal_(tensor, mode="fan_out")
+    >>> kaiming_normal(tensor, mode="fan_out")
     >>> print(tensor)
     Tensor([[ 0.563, -0.342,  0.421, -0.678],
             [-0.321,  0.654, -0.276,  0.345],
@@ -84,9 +84,3 @@ Examples
 
     - Kaiming initialization is best suited for layers with ReLU or similar non-linear activations.
     - For layers with tanh or sigmoid activations, consider using **Xavier Initialization** instead for better performance.
-
-.. seealso::
-    
-    - :func:`kaiming_uniform_`
-    - :func:`xavier_uniform_`
-    - :func:`xavier_normal_`

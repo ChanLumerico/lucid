@@ -25,38 +25,38 @@ def _calculate_fan_in_and_fan_out(tensor: Tensor) -> tuple[int, int]:
     return fan_in, fan_out
 
 
-def uniform_(tensor: Tensor, a: _Scalar, b: _Scalar) -> None:
+def uniform(tensor: Tensor, a: _Scalar, b: _Scalar) -> None:
     tensor.data = lucid.random.uniform(a, b, tensor.shape).data
 
 
-def normal_(tensor: Tensor, mean: _Scalar, std: _Scalar) -> None:
+def normal(tensor: Tensor, mean: _Scalar, std: _Scalar) -> None:
     tensor.data = lucid.random.randn(tensor.shape).data * std + mean
 
 
-def constant_(tensor: Tensor, val: _Scalar) -> None:
+def constant(tensor: Tensor, val: _Scalar) -> None:
     tensor.data = lucid.ones_like(tensor).data * val
 
 
-def xavier_uniform_(tensor: Tensor, gain: _Scalar) -> None:
+def xavier_uniform(tensor: Tensor, gain: _Scalar) -> None:
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     bound = (6 / (fan_in + fan_out)) ** 0.5 * gain
     tensor.data = lucid.random.uniform(-bound, bound, tensor.shape).data
 
 
-def xavier_normal_(tensor: Tensor, gain: _Scalar) -> None:
+def xavier_normal(tensor: Tensor, gain: _Scalar) -> None:
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = (2 / (fan_in + fan_out)) ** 0.5 * gain
     tensor.data = lucid.random.randn(tensor.shape).data * std
 
 
-def kaiming_uniform_(tensor: Tensor, mode: str) -> None:
+def kaiming_uniform(tensor: Tensor, mode: str) -> None:
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     fan = fan_in if mode == "fan_in" else fan_out
     bound = (6 / fan) ** 0.5
     tensor.data = lucid.random.uniform(-bound, bound, tensor.shape).data
 
 
-def kaiming_normal_(tensor: Tensor, mode: str) -> None:
+def kaiming_normal(tensor: Tensor, mode: str) -> None:
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     fan = fan_in if mode == "fan_in" else fan_out
     std = (2 / fan) ** 5

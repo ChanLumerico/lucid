@@ -1,16 +1,16 @@
-nn.init.constant_
-=================
+nn.init.constant
+================
 
-.. autofunction:: lucid.nn.init.constant_
+.. autofunction:: lucid.nn.init.constant
 
-The `constant_` function fills the input `tensor` with a constant value.
+The `constant` function fills the input `tensor` with a constant value.
 
 Function Signature
 ------------------
 
 .. code-block:: python
 
-    def constant_(tensor: Tensor, val: _Scalar) -> None
+    def constant(tensor: Tensor, val: _Scalar) -> None
 
 Parameters
 ----------
@@ -33,9 +33,9 @@ Examples
 .. code-block:: python
 
     >>> import lucid
-    >>> from lucid.nn.init import constant_
+    >>> from lucid.nn.init import constant
     >>> tensor = lucid.zeros((3, 3))
-    >>> constant_(tensor, val=5)
+    >>> constant(tensor, val=5)
     >>> print(tensor)
     Tensor([[ 5,  5,  5],
             [ 5,  5,  5],

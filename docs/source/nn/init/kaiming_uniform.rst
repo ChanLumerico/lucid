@@ -1,9 +1,9 @@
-nn.init.kaiming_uniform_
-========================
+nn.init.kaiming_uniform
+=======================
 
-.. autofunction:: lucid.nn.init.kaiming_uniform_
+.. autofunction:: lucid.nn.init.kaiming_uniform
 
-The `kaiming_uniform_` function initializes the input `tensor` with values sampled from a uniform distribution 
+The `kaiming_uniform` function initializes the input `tensor` with values sampled from a uniform distribution 
 :math:`U(-\text{bound}, \text{bound})`, where the bound is calculated to maintain a stable 
 variance of activations in the layer. 
 
@@ -14,7 +14,7 @@ Function Signature
 
 .. code-block:: python
 
-    def kaiming_uniform_(tensor: Tensor, mode: _FanMode = "fan_in") -> None
+    def kaiming_uniform(tensor: Tensor, mode: _FanMode = "fan_in") -> None
 
 Parameters
 ----------
@@ -59,9 +59,9 @@ Examples
 .. code-block:: python
 
     >>> import lucid
-    >>> from lucid.nn.init import kaiming_uniform_
+    >>> from lucid.nn.init import kaiming_uniform
     >>> tensor = lucid.zeros((3, 2))
-    >>> kaiming_uniform_(tensor)
+    >>> kaiming_uniform(tensor)
     >>> print(tensor)
     Tensor([[ 0.423, -0.234],
             [ 0.342, -0.678],
@@ -72,7 +72,7 @@ Examples
 .. code-block:: python
 
     >>> tensor = lucid.zeros((4, 4))
-    >>> kaiming_uniform_(tensor, mode="fan_out")
+    >>> kaiming_uniform(tensor, mode="fan_out")
     >>> print(tensor)
     Tensor([[ 0.563, -0.342,  0.421, -0.678],
             [-0.321,  0.654, -0.276,  0.345],
@@ -85,9 +85,3 @@ Examples
       non-linear activations.
     - For layers with tanh or sigmoid activations, consider using **Xavier Initialization** 
       instead for better performance.
-
-.. seealso::
-
-    - :func:`kaiming_normal_`
-    - :func:`xavier_uniform_`
-    - :func:`xavier_normal_`

@@ -4,10 +4,10 @@ Weight Initializations
 .. toctree::
     :maxdepth: 1
 
-    uniform_.rst
-    normal_.rst
-    constant_.rst
-    xavier_uniform_.rst
-    xavier_normal_.rst
-    kaiming_uniform_.rst
-    kaiming_normal_.rst
+    uniform.rst
+    normal.rst
+    constant.rst
+    xavier_uniform.rst
+    xavier_normal.rst
+    kaiming_uniform.rst
+    kaiming_normal.rst

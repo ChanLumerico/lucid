@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="nn.init.kaiming_normal" href="kaiming_normal_.html" /><link rel="prev" title="nn.init.xavier_normal" href="xavier_normal_.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/init/kaiming_uniform_.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="nn.init.constant" href="constant.html" /><link rel="prev" title="nn.init.uniform" href="uniform.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/init/normal.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.init.kaiming_uniform - Lucid 0.19.0 documentation</title>
+        <title>nn.init.normal - Lucid 0.19.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -360,13 +360,13 @@
 </ul>
 </li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Weight Initializations</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of Weight Initializations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="uniform_.html">nn.init.uniform</a></li>
-<li class="toctree-l2"><a class="reference internal" href="normal_.html">nn.init.normal</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constant_.html">nn.init.constant</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xavier_uniform_.html">nn.init.xavier_uniform</a></li>
-<li class="toctree-l2"><a class="reference internal" href="xavier_normal_.html">nn.init.xavier_normal</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">nn.init.kaiming_uniform</a></li>
-<li class="toctree-l2"><a class="reference internal" href="kaiming_normal_.html">nn.init.kaiming_normal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="uniform.html">nn.init.uniform</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">nn.init.normal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constant.html">nn.init.constant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xavier_uniform.html">nn.init.xavier_uniform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xavier_normal.html">nn.init.xavier_normal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="kaiming_uniform.html">nn.init.kaiming_uniform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="kaiming_normal.html">nn.init.kaiming_normal</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../modules/index.html">Modules</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" role="switch" type="checkbox"/><label for="toctree-checkbox-14"><div class="visually-hidden">Toggle navigation of Modules</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -476,7 +476,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/nn/init/kaiming_uniform_.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/nn/init/normal.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -496,20 +496,19 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-init-kaiming-uniform">
-<h1><a class="reference internal" href="#nn-init-kaiming-uniform">nn.init.kaiming_uniform</a><a class="headerlink" href="#nn-init-kaiming-uniform" title="Link to this heading">¶</a></h1>
+          <section id="nn-init-normal">
+<h1>nn.init.normal<a class="headerlink" href="#nn-init-normal" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.init.kaiming_uniform_">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.init.</span></span><span class="sig-name descname"><span class="pre">kaiming_uniform_</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'fan_in'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'fan_out'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'fan_in'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lucid.nn.init.kaiming_uniform_" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.nn.init.normal">
+<span class="sig-prename descclassname"><span class="pre">lucid.nn.init.</span></span><span class="sig-name descname"><span class="pre">normal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lucid.nn.init.normal" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>kaiming_uniform_</cite> function initializes the input <cite>tensor</cite> with values sampled from a uniform distribution
-<span class="math notranslate nohighlight">\(U(-\text{bound}, \text{bound})\)</span>, where the bound is calculated to maintain a stable
-variance of activations in the layer.</p>
-<p>This initialization method is well-suited for layers using ReLU or other non-linear activation functions.</p>
+<p>The <cite>normal</cite> function fills the input <cite>tensor</cite> with values sampled from a normal
+distribution <span class="math notranslate nohighlight">\(\mathcal{N}(\mu, \sigma^2)\)</span>, where <span class="math notranslate nohighlight">\(\mu\)</span> is the mean and
+<span class="math notranslate nohighlight">\(\sigma\)</span> is the standard deviation.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">kaiming_uniform_</span><span class="p">(</span><span class="n">tensor</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="n">_FanMode</span> <span class="o">=</span> <span class="s2">&quot;fan_in&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">normal</span><span class="p">(</span><span class="n">tensor</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">mean</span><span class="p">:</span> <span class="n">_Scalar</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">std</span><span class="p">:</span> <span class="n">_Scalar</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </pre></div>
 </div>
 </section>
@@ -517,76 +516,32 @@ variance of activations in the layer.</p>
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><strong>tensor</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>):
-The tensor to be initialized. The shape of the tensor determines the fan-in and
-fan-out for the initialization.</p></li>
-<li><p><strong>mode</strong> (<cite>_FanMode</cite>, optional):
-Determines whether to use <cite>fan_in</cite> or <cite>fan_out</cite> for computing the bound.
-Defaults to <cite>fan_in</cite>.</p></li>
+The tensor to be initialized.</p></li>
+<li><p><strong>mean</strong> (<cite>_Scalar</cite>, optional):
+The mean of the normal distribution. Defaults to 0.0.</p></li>
+<li><p><strong>std</strong> (<cite>_Scalar</cite>, optional):
+The standard deviation of the normal distribution. Defaults to 1.0.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><strong>None</strong>:
-The function modifies the <cite>tensor</cite> in-place with new values sampled
-from the uniform distribution.</p></li>
-</ul>
-</section>
-<section id="forward-calculation">
-<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The values in the tensor are sampled from a uniform distribution
-<span class="math notranslate nohighlight">\(U(-\text{bound}, \text{bound})\)</span>, where the bound is calculated as:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{bound} = \sqrt{\frac{6}{\text{fan}}}\]</div>
-</div>
-<p>Where <span class="math notranslate nohighlight">\(\text{fan}\)</span> is determined by the <cite>mode</cite> parameter:</p>
-<ul class="simple">
-<li><p>If <cite>mode=”fan_in”</cite>, then <span class="math notranslate nohighlight">\(\text{fan} = \text{fan\_in}\)</span> where <span class="math notranslate nohighlight">\(\text{fan\_in}\)</span>
-is the number of input units in the weight tensor.</p></li>
-<li><p>If <cite>mode=”fan_out”</cite>, then <span class="math notranslate nohighlight">\(\text{fan} = \text{fan\_out}\)</span> where <span class="math notranslate nohighlight">\(\text{fan\_out}\)</span>
-is the number of output units in the weight tensor.</p></li>
+The function modifies the <cite>tensor</cite> in-place with new values sampled from
+the normal distribution.</p></li>
 </ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p><strong>Basic Kaiming Uniform Initialization</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">lucid.nn.init</span> <span class="kn">import</span> <span class="n">kaiming_uniform_</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">kaiming_uniform_</span><span class="p">(</span><span class="n">tensor</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">lucid.nn.init</span> <span class="kn">import</span> <span class="n">normal</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">normal</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">tensor</span><span class="p">)</span>
-<span class="go">Tensor([[ 0.423, -0.234],</span>
-<span class="go">        [ 0.342, -0.678],</span>
-<span class="go">        [ 0.678,  0.123]], requires_grad=False)</span>
+<span class="go">Tensor([[ 0.423, -0.234,  0.678],</span>
+<span class="go">        [-0.123,  0.654, -0.543],</span>
+<span class="go">        [ 0.543, -0.345,  0.234]], requires_grad=False)</span>
 </pre></div>
-</div>
-<p><strong>Kaiming Uniform Initialization with fan_out mode</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">kaiming_uniform_</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;fan_out&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">tensor</span><span class="p">)</span>
-<span class="go">Tensor([[ 0.563, -0.342,  0.421, -0.678],</span>
-<span class="go">        [-0.321,  0.654, -0.276,  0.345],</span>
-<span class="go">        [ 0.876,  0.124, -0.563, -0.234],</span>
-<span class="go">        [ 0.543, -0.234,  0.657, -0.421]], requires_grad=False)</span>
-</pre></div>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<ul class="simple">
-<li><p>Kaiming initialization is best suited for layers with ReLU or similar
-non-linear activations.</p></li>
-<li><p>For layers with tanh or sigmoid activations, consider using <strong>Xavier Initialization</strong>
-instead for better performance.</p></li>
-</ul>
-</div>
-<div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<ul class="simple">
-<li><p><code class="xref py py-func docutils literal notranslate"><span class="pre">kaiming_normal_()</span></code></p></li>
-<li><p><code class="xref py py-func docutils literal notranslate"><span class="pre">xavier_uniform_()</span></code></p></li>
-<li><p><code class="xref py py-func docutils literal notranslate"><span class="pre">xavier_normal_()</span></code></p></li>
-</ul>
 </div>
 </section>
 </section>
@@ -596,23 +551,23 @@ instead for better performance.</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="kaiming_normal_.html">
+          <a class="next-page" href="constant.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.init.kaiming_normal</div>
+                <div class="title">nn.init.constant</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="xavier_normal_.html">
+          <a class="prev-page" href="uniform.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">nn.init.xavier_normal</div>
+                <div class="title">nn.init.uniform</div>
                 
               </div>
             </a>
@@ -646,12 +601,11 @@ instead for better performance.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">nn.init.kaiming_uniform</a><ul>
-<li><a class="reference internal" href="#lucid.nn.init.kaiming_uniform_"><code class="docutils literal notranslate"><span class="pre">kaiming_uniform_()</span></code></a></li>
+<li><a class="reference internal" href="#">nn.init.normal</a><ul>
+<li><a class="reference internal" href="#lucid.nn.init.normal"><code class="docutils literal notranslate"><span class="pre">normal()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>

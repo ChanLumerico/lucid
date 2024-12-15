@@ -1,9 +1,9 @@
-nn.init.xavier_normal_
-======================
+nn.init.xavier_normal
+=====================
 
-.. autofunction:: lucid.nn.init.xavier_normal_
+.. autofunction:: lucid.nn.init.xavier_normal
 
-The `xavier_normal_` function initializes the input `tensor` with values sampled from a normal distribution 
+The `xavier_normal` function initializes the input `tensor` with values sampled from a normal distribution 
 :math:`\mathcal{N}(0, \sigma^2)`, where the standard deviation :math:`\sigma` is calculated 
 to maintain a stable variance of activations across layers. 
 
@@ -14,7 +14,7 @@ Function Signature
 
 .. code-block:: python
 
-    def xavier_normal_(tensor: Tensor, gain: _Scalar = 1.0) -> None
+    def xavier_normal(tensor: Tensor, gain: _Scalar = 1.0) -> None
 
 Parameters
 ----------
@@ -57,9 +57,9 @@ Examples
 .. code-block:: python
 
     >>> import lucid
-    >>> from lucid.nn.init import xavier_normal_
+    >>> from lucid.nn.init import xavier_normal
     >>> tensor = lucid.zeros((3, 2))
-    >>> xavier_normal_(tensor)
+    >>> xavier_normal(tensor)
     >>> print(tensor)
     Tensor([[ 0.123, -0.234],
             [ 0.342, -0.678],
@@ -70,7 +70,7 @@ Examples
 .. code-block:: python
 
     >>> tensor = lucid.zeros((4, 4))
-    >>> xavier_normal_(tensor, gain=2.0)
+    >>> xavier_normal(tensor, gain=2.0)
     >>> print(tensor)
     Tensor([[ 0.563, -0.342,  0.421, -0.678],
             [-0.321,  0.654, -0.276,  0.345],
@@ -84,8 +84,3 @@ Examples
     - For ReLU activations, consider using **Kaiming Initialization** instead for better 
       performance.
 
-.. seealso::
-
-    - :func:`xavier_uniform_`
-    - :func:`kaiming_uniform_`
-    - :func:`kaiming_normal_`

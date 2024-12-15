@@ -1,9 +1,9 @@
-nn.init.xavier_uniform_
-=======================
+nn.init.xavier_uniform
+======================
 
-.. autofunction:: lucid.nn.init.xavier_uniform_
+.. autofunction:: lucid.nn.init.xavier_uniform
 
-The `xavier_uniform_` function initializes the input `tensor` with values sampled from a uniform distribution
+The `xavier_uniform` function initializes the input `tensor` with values sampled from a uniform distribution
 within a specific range to maintain a stable variance of activations across layers. This initialization method is commonly used
 with activation functions like sigmoid and tanh.
 
@@ -12,7 +12,7 @@ Function Signature
 
 .. code-block:: python
 
-    def xavier_uniform_(tensor: Tensor, gain: _Scalar = 1.0) -> None
+    def xavier_uniform(tensor: Tensor, gain: _Scalar = 1.0) -> None
 
 Parameters
 ----------
@@ -48,7 +48,7 @@ Where:
 
 Backward Gradient Calculation
 -----------------------------
-Since `xavier_uniform_` is an initialization function, it does not have a gradient of its own. 
+Since `xavier_uniform` is an initialization function, it does not have a gradient of its own. 
 However, if the tensor is used in subsequent operations that require gradients, 
 those gradients will flow backward as part of the computation graph.
 
@@ -60,9 +60,9 @@ Examples
 .. code-block:: python
 
     >>> import lucid
-    >>> from lucid import xavier_uniform_
+    >>> from lucid import xavier_uniform
     >>> tensor = lucid.zeros((3, 2))
-    >>> xavier_uniform_(tensor)
+    >>> xavier_uniform(tensor)
     >>> print(tensor)
     Tensor([[ 0.123, -0.234],
             [ 0.342, -0.678],
@@ -73,7 +73,7 @@ Examples
 .. code-block:: python
 
     >>> tensor = lucid.zeros((4, 4))
-    >>> xavier_uniform_(tensor, gain=2.0)
+    >>> xavier_uniform(tensor, gain=2.0)
     >>> print(tensor)
     Tensor([[ 0.563, -0.342,  0.421, -0.678],
             [-0.321,  0.654, -0.276,  0.345],
@@ -86,9 +86,3 @@ Examples
       activation functions such as tanh or sigmoid.
     - For ReLU activations, consider using **Kaiming Initialization** instead 
       for better performance.
-
-.. seealso::
-
-    - :func:`xavier_normal_`
-    - :func:`kaiming_uniform_`
-    - :func:`kaiming_normal_`
