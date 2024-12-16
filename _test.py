@@ -21,6 +21,9 @@ X_train_sc = sc.fit_transform(X_train).reshape(-1, 1, 28, 28)
 input_ = lucid.Tensor(X_train_sc)
 target = lucid.Tensor(y_train)
 
+num_samples = input_.shape[0]
+indices = lucid.arange(num_samples).astype(int)
+
 
 class LeNet5(nn.Module):
     def __init__(self):
@@ -50,17 +53,6 @@ class LeNet5(nn.Module):
         return x
 
 
-model = LeNet5()
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adafactor(model.parameters())
-
-batch_size = 64
-num_epochs = 1
-num_samples = input_.shape[0]
-
-indices = lucid.arange(num_samples).astype(int)
-
-
 def train(model, optimizer, epoch):
     loss_arr = []
     for i, start_idx in enumerate(range(0, num_samples, batch_size), start=1):
@@ -70,7 +62,7 @@ def train(model, optimizer, epoch):
         X_batch, y_batch = input_[batch_indices], target[batch_indices]
 
         y_pred = model(X_batch)
-        loss = criterion(y_pred, y_batch)
+        loss = F.cross_entropy(y_pred, y_batch)
         loss.backward()
 
         optimizer.step()
@@ -78,7 +70,8 @@ def train(model, optimizer, epoch):
 
         loss_arr.append(loss.item())
 
-        if i % 10 == 0:
+        if i % 50 == 0:
+            print(f"[{type(optimizer).__name__}]", end=" ")
             print(f"Epoch {epoch} - Batch {i}, Loss {loss.item()}")
 
     return loss_arr
@@ -91,6 +84,7 @@ def fit_model(model, optimizer):
         loss_avg = lucid.mean(loss_arr).item()
         loss_hist.extend(loss_arr)
 
+        print(f"[{type(optimizer).__name__}]", end=" ")
         print(f"Epoch {epoch}/{num_epochs}, Avg. Loss {loss_avg}\n")
 
     with lucid.no_grad():
@@ -105,24 +99,46 @@ def fit_model(model, optimizer):
     return loss_hist, accuracy
 
 
-loss_arr, acc = fit_model(model, optimizer)
-
+# =======================[ Train & Eval ]======================== #
 
 import matplotlib.pyplot as plt
 
-plt.figure(figsize=(8, 5))
-plt.plot(
-    loss_arr,
-    label=type(optimizer).__name__,
-    lw=0.5,
-    c="green",
-    alpha=0.5,
-)
-plt.xlabel("Entire Batches")
+optimizers_list = [
+    optim.SGD,
+    optim.RMSprop,
+    optim.Adam,
+    optim.AdamW,
+    optim.NAdam,
+    optim.Adamax,
+    optim.Adagrad,
+    optim.Adadelta,
+]
+
+model_type = LeNet5
+
+batch_size = 64
+num_epochs = 1
+lr = 0.001
+
+plt.figure(figsize=(10, 5))
+
+best_acc = -lucid.inf
+for optimizer in optimizers_list:
+    model_ = model_type()
+    optim_ = optimizer(
+        model_.parameters(), lr=lr if optimizer is not optim.Adadelta else 1.0
+    )
+
+    loss_arr_, acc_ = fit_model(model=model_, optimizer=optim_)
+    if acc_ > best_acc:
+        best_acc = acc_
+
+    plt.plot(loss_arr_, label=optimizer.__name__, lw=0.5, alpha=0.7)
+
+plt.xlabel("Batches")
 plt.ylabel("Cross-Entropy Loss")
-plt.title(f"LeNet-5 on Lucid for MNIST [Acc: {acc:.4f}]")
+plt.title(f"LeNet-5 on Lucid for MNIST [Acc: {best_acc:.4f}]")
 plt.grid(alpha=0.2)
 plt.legend()
 plt.tight_layout()
-
-plt.savefig(f"lenet5_mnist_{type(optimizer).__name__.lower()}")
+plt.savefig(f"lenet5_optims_comp")
