@@ -2,7 +2,7 @@
 
 ![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-2.7k-yellow)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-3.1k-yellow)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 

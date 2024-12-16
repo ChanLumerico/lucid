@@ -51,22 +51,22 @@ The RAdam optimization algorithm updates each parameter according to the followi
 
 .. math::
 
-    m_t &= \beta_1 m_{t-1} + (1 - \beta_1) \nabla_{t} 
+    m_t = \beta_1 m_{t-1} + (1 - \beta_1) \nabla_{t} 
 
-    v_t &= \beta_2 v_{t-1} + (1 - \beta_2) \nabla_{t}^2 
+    v_t = \beta_2 v_{t-1} + (1 - \beta_2) \nabla_{t}^2 
 
-    \hat{m}_t &= \frac{m_t}{1 - \beta_1^t} 
+    \hat{m}_t = \frac{m_t}{1 - \beta_1^t} 
 
-    \hat{v}_t &= \frac{v_t}{1 - \beta_2^t} 
+    \hat{v}_t = \frac{v_t}{1 - \beta_2^t} 
 
-    \rho_{\infty} &= \frac{2}{1 - \beta_2} - 1 
+    \rho_{\infty} = \frac{2}{1 - \beta_2} - 1 
 
-    \rho_t &= \rho_{\infty} - 2 \cdot t \cdot \frac{\beta_2^t}{1 - \beta_2^t} 
+    \rho_t = \rho_{\infty} - 2 \cdot t \cdot \frac{\beta_2^t}{1 - \beta_2^t} 
 
-    r_t &= \sqrt{\frac{(\rho_t - 4) \cdot (\rho_t - 2) \cdot 
+    r_t = \sqrt{\frac{(\rho_t - 4) \cdot (\rho_t - 2) \cdot 
     \rho_{\infty}}{(\rho_{\infty} - 4) \cdot (\rho_{\infty} - 2)}} 
 
-    \theta_{t+1} &= \begin{cases} 
+    \theta_{t+1} = \begin{cases} 
       \theta_t - \text{lr} \cdot \hat{m}_t, & \text{if} \ \rho_t \leq 4 \\
       \theta_t - \frac{\text{lr} \cdot r_t \cdot \hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}, & \text{if} \ \rho_t > 4 
     \end{cases}

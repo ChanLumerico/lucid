@@ -12,3 +12,6 @@ Optimizers
     AdamW.rst
     NAdam.rst
     RAdam.rst
+    Adamax.rst
+    Adagrad.rst
+    Adadelta.rst

@@ -52,10 +52,10 @@ class LeNet5(nn.Module):
 
 model = LeNet5()
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.RAdam(model.parameters(), lr=0.001)
+optimizer = optim.Adafactor(model.parameters())
 
 batch_size = 64
-num_epochs = 10
+num_epochs = 1
 num_samples = input_.shape[0]
 
 indices = lucid.arange(num_samples).astype(int)
@@ -111,8 +111,13 @@ loss_arr, acc = fit_model(model, optimizer)
 import matplotlib.pyplot as plt
 
 plt.figure(figsize=(8, 5))
-plt.plot(loss_arr, label=type(optimizer).__name__, lw=0.75, c="orange")
-
+plt.plot(
+    loss_arr,
+    label=type(optimizer).__name__,
+    lw=0.5,
+    c="green",
+    alpha=0.5,
+)
 plt.xlabel("Entire Batches")
 plt.ylabel("Cross-Entropy Loss")
 plt.title(f"LeNet-5 on Lucid for MNIST [Acc: {acc:.4f}]")
