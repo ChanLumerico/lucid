@@ -52,9 +52,9 @@ on the following formulas:
       s_{t}, & \text{otherwise}
     \end{cases}
     
-    \nabla_{t} &= \text{gradient at iteration} \ t
+    \nabla_{t} = \text{gradient at iteration} \ t
     
-    \theta_{t+1} &= \theta_{t} - \text{sign}(\nabla_{t}) \cdot s_{t+1}
+    \theta_{t+1} = \theta_{t} - \text{sign}(\nabla_{t}) \cdot s_{t+1}
 
 Where:
 

@@ -11,3 +11,4 @@ Optimizers
     Adam.rst
     AdamW.rst
     NAdam.rst
+    RAdam.rst

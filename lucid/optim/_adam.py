@@ -228,7 +228,7 @@ class NAdam(optim.Optimizer):
         return loss
 
 
-class RAdam(optim.Optimizer):  # TODO: Need to be tested
+class RAdam(optim.Optimizer):
     def __init__(
         self,
         params: Iterable[nn.Parameter],

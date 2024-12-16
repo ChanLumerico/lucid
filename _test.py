@@ -52,7 +52,7 @@ class LeNet5(nn.Module):
 
 model = LeNet5()
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.NAdam(model.parameters(), lr=0.002)
+optimizer = optim.RAdam(model.parameters(), lr=0.001)
 
 batch_size = 64
 num_epochs = 10
