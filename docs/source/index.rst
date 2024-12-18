@@ -58,6 +58,15 @@
     Optimizers <optim/optimizers/index.rst>
 
 .. toctree::
+    :maxdepth: 2
+    :caption: Data
+    :hidden:
+
+    data/Dataset.rst
+    data/ConcatDataset.rst
+    data/Dataloader.rst
+
+.. toctree::
    :maxdepth: 1
    :caption: Others
    :hidden:

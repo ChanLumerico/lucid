@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Self, Any
+import random
 
 import lucid
 
@@ -53,3 +54,38 @@ class ConcatDataset(Dataset):
                 return self.datasets[dataset_idx][idx]
 
         raise IndexError("Index out of range.")
+
+
+class DataLoader:
+    def __init__(
+        self, dataset: Dataset, batch_size: int = 1, shuffle: bool = False
+    ) -> None:
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.indices = list(range(len(dataset)))
+
+        if shuffle:
+            self._shuffle_indices()
+
+    def _shuffle_indices(self) -> None:
+        random.shuffle(self.indices)
+
+    def __iter__(self) -> Self:
+        self.current_index = 0
+        if self.shuffle:
+            self._shuffle_indices()
+        return self
+
+    def __next__(self) -> Any:
+        if self.current_index >= len(self.indices):
+            raise StopIteration()
+
+        start = self.current_index
+        end = min(start + self.batch_size, len(self.indices))
+
+        batch_indices = self.indices[start:end]
+        batch = [self.dataset[idx] for idx in batch_indices]
+
+        self.current_index = end
+        return batch
