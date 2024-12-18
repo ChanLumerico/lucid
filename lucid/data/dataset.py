@@ -5,7 +5,7 @@ import random
 import lucid
 
 
-__all__ = ["Dataset", "ConcatDataset"]
+__all__ = ["Dataset", "ConcatDataset", "DataLoader"]
 
 
 class Dataset(ABC):
