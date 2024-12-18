@@ -62,9 +62,10 @@
     :caption: Data
     :hidden:
 
+    data/data.rst
     data/Dataset.rst
     data/ConcatDataset.rst
-    data/Dataloader.rst
+    data/DataLoader.rst
 
 .. toctree::
    :maxdepth: 1
