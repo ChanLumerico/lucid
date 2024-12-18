@@ -2,11 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Self, Any
 import random
 
-import lucid
-
-
-__all__ = ["Dataset", "ConcatDataset", "DataLoader"]
-
 
 class Dataset(ABC):
     @abstractmethod
