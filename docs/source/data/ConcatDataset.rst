@@ -1,5 +1,5 @@
-lucid.data.ConcatDataset
-========================
+data.ConcatDataset
+==================
 
 .. autoclass:: lucid.data.ConcatDataset
 

@@ -1,5 +1,5 @@
-lucid.data.Dataset
-==================
+data.Dataset
+============
 
 .. autoclass:: lucid.data.Dataset
 

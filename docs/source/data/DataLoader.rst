@@ -1,5 +1,5 @@
-lucid.data.DataLoader
-=====================
+data.DataLoader
+===============
 
 .. autoclass:: lucid.data.DataLoader
 
