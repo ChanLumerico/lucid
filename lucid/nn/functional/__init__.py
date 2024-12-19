@@ -2,7 +2,16 @@ from typing import Literal
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
 
-from lucid.nn.functional import _activation, _linear, _conv, _pool, _drop, _norm, _loss
+from lucid.nn.functional import (
+    _activation,
+    _linear,
+    _conv,
+    _pool,
+    _drop,
+    _norm,
+    _loss,
+    _util,
+)
 
 
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
@@ -252,3 +261,6 @@ def huber_loss(
     reduction: _ReductionType | None = "mean",
 ) -> Tensor:
     return _loss.huber_loss(input_, target, delta, reduction)
+
+
+def interpolate(input_: Tensor, *args, **kwargs) -> Tensor: ...
