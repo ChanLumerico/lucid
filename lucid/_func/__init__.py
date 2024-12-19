@@ -370,3 +370,4 @@ Tensor.matmul = bfunc._matmul
 Tensor.sum = ufunc.sum
 Tensor.mean = ufunc.mean
 Tensor.var = ufunc.var
+Tensor.clip = clip

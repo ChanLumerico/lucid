@@ -263,4 +263,21 @@ def huber_loss(
     return _loss.huber_loss(input_, target, delta, reduction)
 
 
-def interpolate(input_: Tensor, *args, **kwargs) -> Tensor: ...
+_InterpolateType = Literal["bilinear", "nearest", "area"]
+
+
+def interpolate(
+    input_: Tensor,
+    size: tuple[int, int],
+    mode: _InterpolateType = "bilinear",
+    align_corners: bool = False,
+) -> Tensor:
+    match mode:
+        case "bilinear":
+            return _util._interpolate_bilinear(input_, size, align_corners)
+        case "nearest":
+            return _util._interpolate_nearest(input_, size, align_corners)
+        case "area":
+            return _util._interpolate_area(input_, size, align_corners)
+        case _:
+            raise ValueError("Invalid interpolation type.")

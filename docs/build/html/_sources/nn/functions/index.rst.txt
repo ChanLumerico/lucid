@@ -42,3 +42,9 @@ lucid.nn.functional
     :caption: Loss Functions
 
     Loss Functions <loss/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Utility Functions
+
+    Utility Functions <util/index.rst>
