@@ -51,12 +51,12 @@ The forward calculation for the `interpolate` operation varies depending on the 
 
   .. math::
       
-      \mathbf{out}_{ij} = (1 - h_lerp) (1 - w_lerp) \cdot \mathbf{I}_{top\_left} 
-      + h_lerp (1 - w_lerp) \cdot \mathbf{I}_{bottom\_left} 
-      + (1 - h_lerp) w_lerp \cdot \mathbf{I}_{top\_right} 
-      + h_lerp w_lerp \cdot \mathbf{I}_{bottom\_right}
+      \mathbf{out}_{ij} = (1 - h_{lerp}) (1 - w_{lerp}) \cdot \mathbf{I}_{top\_left} 
+      + h_{lerp} (1 - w_{lerp}) \cdot \mathbf{I}_{bottom\_left} 
+      + (1 - h_{lerp}) w_{lerp} \cdot \mathbf{I}_{top\_right} 
+      + h_{lerp} w_{lerp} \cdot \mathbf{I}_{bottom\_right}
 
-  Where \( h_{lerp} \) and \( w_{lerp} \) are the interpolation coefficients along 
+  Where :math:`h_{lerp}` and :math:`w_{lerp}` are the interpolation coefficients along 
   the height and width dimensions.
 
 - **Nearest Neighbor Interpolation**:

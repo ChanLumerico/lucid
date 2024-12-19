@@ -68,6 +68,17 @@
     data/DataLoader.rst
 
 .. toctree::
+    :maxdepth: 2
+    :caption: Transformation
+    :hidden:
+
+    transforms/transforms.rst
+    transforms/Compose.rst
+    transforms/ToTensor.rst
+
+    Image Transforms <transforms/image/index.rst>
+
+.. toctree::
    :maxdepth: 1
    :caption: Others
    :hidden:

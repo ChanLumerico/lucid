@@ -30,7 +30,7 @@ def rand(*args: int, requires_grad: bool = False, keep_grad: bool = False) -> Te
 def randint(
     low: int,
     high: int | None,
-    size: int | _ShapeLike,
+    size: int | _ShapeLike = 1,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -57,9 +57,9 @@ def randn(
 
 
 def uniform(
-    low: _Scalar,
-    high: _Scalar,
-    size: int | _ShapeLike,
+    low: _Scalar = 0,
+    high: _Scalar = 1,
+    size: int | _ShapeLike = 1,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
