@@ -1,10 +1,15 @@
-from typing import Sequence
+from typing import Literal, Sequence
 import numpy as np
 
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _NumPyArray, _ArrayLikeInt
 
-from lucid._backend import create_ufunc_op, create_mfunc_op, _FuncOpReturnType
+from lucid._backend import (
+    create_func_op,
+    create_ufunc_op,
+    create_mfunc_op,
+    _FuncOpReturnType,
+)
 
 
 @create_ufunc_op()
@@ -278,3 +283,27 @@ def flatten(self: Tensor) -> _FuncOpReturnType:
         return result.grad.reshape(*original_shape)
 
     return result, compute_grad
+
+
+@create_func_op(n_in=2, n_ret=2)
+def meshgrid(
+    self: Tensor, other: Tensor, indexing: Literal["xy", "ij"]
+) -> _FuncOpReturnType:
+    if self.ndim != 1 or other.ndim != 1:
+        raise ValueError("Inputs must be 1D tensors.")
+
+    if indexing not in {"xy", "ij"}:
+        raise ValueError("indexing must be either 'xy' or 'ij'")
+
+    X = self.reshape(1, -1).repeat(other.shape[0], axis=0)
+    Y = other.reshape(-1, 1).repeat(self.shape[0], axis=1)
+
+    if indexing == "xy":
+        X, Y = Y, X
+
+    def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
+        grad_x = np.sum(X.grad, axis=0)
+        grad_y = np.sum(Y.grad, axis=1)
+        return grad_x, grad_y
+
+    return (X, compute_grad), (Y, compute_grad)

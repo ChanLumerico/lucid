@@ -16,3 +16,4 @@ Tensor Utilites
    repeat.rst
    tile.rst
    flatten.rst
+   meshgrid.rst

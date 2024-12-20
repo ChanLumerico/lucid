@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Literal, Sequence
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _ArrayLikeInt
 
@@ -51,6 +51,12 @@ def tile(a: Tensor, reps: int | Sequence[int]) -> Tensor:
 
 def flatten(a: Tensor) -> Tensor:
     return func.flatten(a)
+
+
+def meshgrid(
+    self: Tensor, other: Tensor, indexing: Literal["xy", "ij"] = "xy"
+) -> tuple[Tensor, Tensor]:
+    return func.meshgrid(self, other, indexing)
 
 
 Tensor.reshape = func._reshape_inplace
