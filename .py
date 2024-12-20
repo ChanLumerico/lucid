@@ -1,9 +1,7 @@
-import lucid
-import lucid.nn.functional as F
+from lucid.datasets import MNIST
 
+mnist_train = MNIST(root="./data", train=True, download=True)
 
-img = lucid.arange(7).reshape(-1, 1).repeat(7, axis=1)
-img = img.reshape(1, 1, 7, 7)
+image, label = mnist_train[0]
 
-rot = F.rotate(img, angle=45)
-print(rot)
+print(f"Image Shape: {image.shape}, Label: {label}")

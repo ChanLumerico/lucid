@@ -1,8 +1,9 @@
 import os
-import gzip
+import pandas as pd
 import numpy as np
 from urllib import request
 from pathlib import Path
+from typing import Optional, Tuple, Union
 
 import lucid
 from lucid.data import Dataset
@@ -15,13 +16,16 @@ __all__ = ["MNIST"]
 class MNIST(Dataset):
     def __init__(
         self,
-        root: str | Path,
-        train: bool = True,
-        download: bool = False,
-        **__transform_kwargs,  # NOTE: Support this after impl. of `lucid.transforms`
+        root: Union[str, Path],
+        train: Optional[bool] = True,
+        download: Optional[bool] = False,
+        transform: Optional[callable] = None,
+        target_transform: Optional[callable] = None,
     ) -> None:
-        self.root = root
+        self.root = Path(root)
         self.train = train
+        self.transform = transform
+        self.target_transform = target_transform
 
         if download:
             self._download()
@@ -32,43 +36,46 @@ class MNIST(Dataset):
             self.data, self.targets = self._load_data("test")
 
     def _download(self) -> None:
-        urls = {  # NOTE: It seems these links are forbidden. Try for other mirrors.
-            "train_images": "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz",
-            "train_labels": "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz",
-            "test_images": "http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz",
-            "test_labels": "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz",
-        }
+        urls = {...}  # TODO: Need to be fixed.
 
-        os.makedirs(self.root, exist_ok=True)
+        self.root.mkdir(parents=True, exist_ok=True)
+
         for _, url in urls.items():
-            file_path = os.path.join(self.root, url.split("/")[-1])
-
-            if not os.path.exists(file_path):
+            file_name = url.split("/")[-1]
+            file_path = self.root / file_name
+            if not file_path.exists():
                 print(f"Downloading {url} to {file_path}")
-                request.urlretrieve(url, file_path)
+                try:
+                    request.urlretrieve(url, file_path)
+                    print(f"Successfully downloaded {file_path}")
+                except Exception as e:
+                    print(f"Failed to download {url}. Error: {e}")
 
-    def _load_data(self, split: str) -> tuple[Tensor, Tensor]:
+    def _load_data(self, split: str) -> Tuple[Tensor, Tensor]:
         if split == "train":
-            images_path = os.path.join(self.root, "train-images-idx3-ubyte.gz")
-            labels_path = os.path.join(self.root, "train-labels-idx1-ubyte.gz")
+            images_path = self.root / "MNIST_train.csv"
+            labels_path = self.root / "MNIST_train_labels.csv"
         else:
-            images_path = os.path.join(self.root, "t10k-images-idx3-ubyte.gz")
-            labels_path = os.path.join(self.root, "t10k-labels-idx1-ubyte.gz")
+            images_path = self.root / "MNIST_test.csv"
+            labels_path = self.root / "MNIST_test_labels.csv"
 
-        with gzip.open(images_path, "rb") as img_path:
-            images = np.frombuffer(img_path.read(), np.uint8, offset=16).reshape(
-                -1, 28, 28
+        try:
+            images_df = pd.read_csv(images_path, header=None)
+            labels_df = pd.read_csv(labels_path, header=None)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load MNIST {split} data. Ensure files exist. Error: {e}"
             )
 
-        with gzip.open(labels_path, "rb") as lbl_path:
-            labels = np.frombuffer(lbl_path.read(), np.uint8, offset=8)
+        images = images_df.to_numpy().reshape(-1, 28, 28)
+        labels = labels_df.to_numpy().flatten()
 
-        images_t = lucid.to_tensor(images, dtype=images.dtype)
-        labels_t = lucid.to_tensor(labels, dtype=labels.dtype)
+        images_t = lucid.to_tensor(images, dtype=np.float32)
+        labels_t = lucid.to_tensor(labels, dtype=np.int64)
 
         return images_t, labels_t
 
-    def __getitem__(self, index: int) -> tuple[Tensor, Tensor]:
+    def __getitem__(self, index: int) -> Tuple[Tensor, Tensor]:
         image = self.data[index]
         label = self.targets[index]
 

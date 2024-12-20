@@ -21,6 +21,7 @@ setuptools.setup(
     python_requires=">=3.12",
     install_requires=[
         "numpy",
+        "pandas",
     ],
     include_package_data=True,
 )
