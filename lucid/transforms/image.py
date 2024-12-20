@@ -2,6 +2,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor import Tensor
+import lucid.nn.functional
 
 
 __all__ = [
@@ -11,6 +12,7 @@ __all__ = [
     "RandomVerticalFlip",
     "RandomCrop",
     "CenterCrop",
+    "RandomRotation",
     "RandomGrayscale",
 ]
 
@@ -84,6 +86,16 @@ class CenterCrop(nn.Module):
         return img[:, :, top : top + crop_h, left : left + crop_w]
 
 
+class RandomRotation(nn.Module):
+    def __init__(self, degrees: float) -> None:
+        super().__init__()
+        self.degrees = degrees
+
+    def forward(self, img: Tensor) -> Tensor:
+        angle = lucid.random.uniform(-self.degrees, self.degrees)
+        return lucid.nn.functional.rotate(img, angle)
+
+
 class RandomGrayscale(nn.Module):
     def __init__(self, p: float = 0.1):
         super().__init__()
@@ -91,35 +103,7 @@ class RandomGrayscale(nn.Module):
 
     def forward(self, img: Tensor) -> Tensor:
         if lucid.random.uniform() < self.p:
-            img = img.mean(axis=1, keepdims=True)
-            img = img.repeat(3, axis=1)
-        return img
-
-
-class ColorJitter(nn.Module):
-    def __init__(
-        self,
-        brightness: float = 0.0,
-        contrast: float = 0.0,
-        saturation: float = 0.0,
-        hue: float = 0.0,
-    ) -> None:
-        super().__init__()
-        self.brightness = brightness
-        self.contrast = contrast
-        self.saturation = saturation
-        self.hue = hue
-
-    def forward(self, img: Tensor) -> Tensor:
-        if self.brightness > 0:
-            img *= 1 + lucid.random.uniform(-self.brightness, self.brightness)
-        if self.contrast > 0:
-            mean = img.mean()
-            img = (img - mean) * (
-                1 + lucid.random.uniform(-self.contrast, self.contrast)
-            ) + mean
-        if self.saturation > 0:
-            img *= 1 + lucid.random.uniform(-self.saturation, self.saturation)
-        if self.hue > 0:
-            img += lucid.random.uniform(-self.hue, self.hue)
+            r, g, b = img[:, 0:1, ...], img[:, 1:2, ...], img[:, 2:3, ...]
+            grayscale = 0.299 * r + 0.587 * g + 0.114 * b
+            img = grayscale.repeat(3, axis=1)
         return img

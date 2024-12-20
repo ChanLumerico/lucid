@@ -8,3 +8,7 @@ Image Transformations
     Resize.rst
     RandomHorizontalFlip.rst
     RandomVerticalFlip.rst
+    RandomCrop.rst
+    CenterCrop.rst
+    RandomRotation.rst
+    RandomGrayscale.rst
