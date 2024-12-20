@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.sigmoid" href="sigmoid.html" /><link rel="prev" title="nn.functional.selu" href="selu.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/activation/gelu.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="Weight Initializations" href="../../init/index.html" /><link rel="prev" title="nn.functional.interpolate" href="interpolate.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/util/rotate.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.functional.gelu - Lucid 0.23.1 documentation</title>
+        <title>nn.functional.rotate - Lucid 0.23.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -309,15 +309,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../linear/bilinear.html">nn.functional.bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Activation Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="relu.html">nn.functional.relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="leaky_relu.html">nn.functional.leaky_relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="elu.html">nn.functional.elu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="selu.html">nn.functional.selu</a></li>
-<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.functional.gelu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sigmoid.html">nn.functional.sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="tanh.html">nn.functional.tanh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="softmax.html">nn.functional.softmax</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../activation/index.html">Activation Functions</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../activation/relu.html">nn.functional.relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/leaky_relu.html">nn.functional.leaky_relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/elu.html">nn.functional.elu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/selu.html">nn.functional.selu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/gelu.html">nn.functional.gelu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/sigmoid.html">nn.functional.sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/softmax.html">nn.functional.softmax</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -358,9 +358,9 @@
 <li class="toctree-l3"><a class="reference internal" href="../loss/huber_loss.html">nn.functional.huber_loss</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../util/index.html">Utility Functions</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of Utility Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../util/interpolate.html">nn.functional.interpolate</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../util/rotate.html">nn.functional.rotate</a></li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Utility Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of Utility Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="interpolate.html">nn.functional.interpolate</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.functional.rotate</a></li>
 </ul>
 </li>
 </ul>
@@ -510,7 +510,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/nn/functions/activation/gelu.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/nn/functions/util/rotate.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -530,88 +530,80 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-functional-gelu">
-<h1>nn.functional.gelu<a class="headerlink" href="#nn-functional-gelu" title="Link to this heading">¶</a></h1>
+          <section id="nn-functional-rotate">
+<h1>nn.functional.rotate<a class="headerlink" href="#nn-functional-rotate" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.functional.gelu">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">gelu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.gelu" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.nn.functional.rotate">
+<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">rotate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">angle</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.rotate" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>gelu</cite> function applies the Gaussian Error Linear Unit activation function element-wise
-to the input tensor. GELU is a smooth, non-linear activation function that combines properties
-of dropout and activation functions, providing better performance in certain neural network architectures.</p>
+<p>The <cite>rotate</cite> function rotates an input tensor (typically an image) by a specified angle
+around a specified center point. This is a common operation in image processing and data
+augmentation for training neural networks.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">gelu</span><span class="p">(</span><span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">rotate</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">angle</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">center</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of any shape.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>x</strong> (<em>Tensor</em>):
+The input image tensor of shape <cite>(N, C, H, W)</cite>, where <cite>N</cite> is the batch size, <cite>C</cite> is the number
+of channels, <cite>H</cite> is the height, and <cite>W</cite> is the width.</p></li>
+<li><p><strong>angle</strong> (<em>float</em>):
+The rotation angle in degrees. Positive values rotate counterclockwise,
+and negative values rotate clockwise.</p></li>
+<li><p><strong>center</strong> (<em>tuple[float, float] | None</em>, optional):
+The center of rotation <cite>(x, y)</cite> in the image. If <cite>None</cite>, the center of the image
+(<cite>(W/2, H/2)</cite>) is used as the rotation center. Default is <cite>None</cite>.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> where each element is the result of applying the GELU function
-to the corresponding element in <cite>input_</cite>. If <cite>input_</cite> requires gradients,
-the resulting tensor will also require gradients.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>Tensor</strong>:
+The rotated image tensor with the same shape <cite>(N, C, H, W)</cite> as the input tensor <cite>x</cite>.</p></li>
 </ul>
 </section>
-<section id="forward-calculation">
-<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward calculation for the <cite>gelu</cite> operation is:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\mathbf{out} = \mathbf{input\_} \cdot \Phi(\mathbf{input\_})\]</div>
-</div>
-<p>Where <span class="math notranslate nohighlight">\(\Phi\)</span> is the cumulative distribution function of the
-standard normal distribution.</p>
-<p>An approximate formulation commonly used is:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\mathbf{out} = 0.5 \cdot \mathbf{input\_} \cdot
-\left(1 + \tanh\left(\sqrt{\frac{2}{\pi}} \left(\mathbf{input\_} +
-0.044715 \cdot \mathbf{input\_}^3\right)\right)\right)\]</div>
-</div>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
+<p>The <cite>rotate</cite> function is commonly used in image preprocessing and data augmentation
+to improve the robustness of neural network models. It allows images to be randomly
+or deterministically rotated during training.</p>
 </section>
-<section id="backward-gradient-calculation">
-<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For the tensor <strong>input_</strong> involved in the <cite>gelu</cite> operation,
-the gradient with respect to the output (<strong>out</strong>) is computed as follows:</p>
-<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{input\_}\)</span>:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{out}}{\partial \mathbf{input\_}} =
-\Phi(\mathbf{input\_}) + \mathbf{input\_} \cdot \phi(\mathbf{input\_})\]</div>
-</div>
-<p>Where <span class="math notranslate nohighlight">\(\phi\)</span> is the probability density function of the standard normal distribution.</p>
-</section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Using <cite>gelu</cite> on a tensor:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">gelu</span><span class="p">(</span><span class="n">input_</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([-0.1588, 0.0, 0.8413], grad=None)</span>
+<section id="example-usage">
+<h2>Example Usage<a class="headerlink" href="#example-usage" title="Link to this heading">¶</a></h2>
+<p><strong>Rotating an image by 45 degrees (center default to image center)</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]]]])</span>  <span class="c1"># Shape: (1, 1, 2, 2)</span>
+<span class="n">rotated_image</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">angle</span><span class="o">=</span><span class="mi">45</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">rotated_image</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Backpropagation computes gradients for <cite>input_</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[0.1588, 0.5, 0.8413]</span>
+<p><strong>Rotating an image by -30 degrees around a custom center point (2, 2)</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]]]])</span>  <span class="c1"># Shape: (1, 1, 2, 2)</span>
+<span class="n">rotated_image</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">angle</span><span class="o">=-</span><span class="mi">30</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">rotated_image</span><span class="p">)</span>
 </pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p><strong>Shape Preservation</strong>: The shape of the output tensor is identical to the input tensor.
+The content of the image is rotated within its original size, which may result in
+some content being clipped.</p></li>
+<li><p><strong>Center of Rotation</strong>: By default, the rotation is centered at <cite>(W/2, H/2)</cite>. If a custom center
+is provided, the rotation occurs around that point.</p></li>
+<li><p><strong>Batch Support</strong>: The <cite>rotate</cite> function operates on batches of images, so it can process
+multiple images simultaneously if <cite>N &gt; 1</cite>.</p></li>
+<li><p><strong>Data Augmentation</strong>: This function is commonly used for data augmentation to increase
+the diversity of training datasets and improve model generalization.</p></li>
+</ul>
 </div>
 </section>
 </section>
@@ -621,23 +613,23 @@ the gradient with respect to the output (<strong>out</strong>) is computed as fo
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="sigmoid.html">
+          <a class="next-page" href="../../init/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.functional.sigmoid</div>
+                <div class="title">Weight Initializations</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="selu.html">
+          <a class="prev-page" href="interpolate.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">nn.functional.selu</div>
+                <div class="title">nn.functional.interpolate</div>
                 
               </div>
             </a>
@@ -671,14 +663,13 @@ the gradient with respect to the output (<strong>out</strong>) is computed as fo
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">nn.functional.gelu</a><ul>
-<li><a class="reference internal" href="#lucid.nn.functional.gelu"><code class="docutils literal notranslate"><span class="pre">gelu()</span></code></a></li>
+<li><a class="reference internal" href="#">nn.functional.rotate</a><ul>
+<li><a class="reference internal" href="#lucid.nn.functional.rotate"><code class="docutils literal notranslate"><span class="pre">rotate()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
-<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
-<li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#usage">Usage</a></li>
+<li><a class="reference internal" href="#example-usage">Example Usage</a></li>
 </ul>
 </li>
 </ul>
@@ -694,6 +685,5 @@ the gradient with respect to the output (<strong>out</strong>) is computed as fo
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>

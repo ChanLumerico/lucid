@@ -1,13 +1,9 @@
 import lucid
+import lucid.nn.functional as F
 
 
-x = lucid.arange(5, requires_grad=True)
-y = -lucid.arange(5, requires_grad=True)
+img = lucid.arange(7).reshape(-1, 1).repeat(7, axis=1)
+img = img.reshape(1, 1, 7, 7)
 
-a, b = lucid.meshgrid(x, y, indexing="xy")
-
-c = a * b
-c.backward()
-
-print(a.grad)
-print(b.grad)
+rot = F.rotate(img, angle=45)
+print(rot)

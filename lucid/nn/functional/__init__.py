@@ -1,6 +1,6 @@
 from typing import Literal
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike
+from lucid.types import _ShapeLike, _Scalar
 
 from lucid.nn.functional import (
     _activation,
@@ -281,3 +281,9 @@ def interpolate(
             return _util._interpolate_area(input_, size, align_corners)
         case _:
             raise ValueError("Invalid interpolation type.")
+
+
+def rotate(
+    input_: Tensor, angle: float, center: tuple[_Scalar, _Scalar] | None = None
+) -> Tensor:
+    return _util.rotate(input_, angle, center)

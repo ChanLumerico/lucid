@@ -38,29 +38,7 @@ Forward Calculation
 -------------------
 
 The forward calculation for `meshgrid` involves repeating the x and y coordinates 
-to form two 2D grids, `X` and `Y`. The forward computation is as follows:
-
-1. **Reshape x**: 
-   .. math::
-      
-      X = x.reshape(1, -1)
-      
-2. **Repeat x** across rows to match the shape of `y`:
-   .. math::
-      
-      X = X \text{ (repeated across rows)}
-      
-3. **Reshape y**: 
-   .. math::
-      
-      Y = y.reshape(-1, 1)
-      
-4. **Repeat y** across columns to match the shape of `x`:
-   .. math::
-      
-      Y = Y \text{ (repeated across columns)}
-
-For 'xy' indexing, the roles of `X` and `Y` are swapped.
+to form two 2D grids, `X` and `Y`.
 
 Backward Gradient Calculation
 -----------------------------

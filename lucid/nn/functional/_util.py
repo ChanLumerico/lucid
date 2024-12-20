@@ -1,7 +1,8 @@
 import lucid
+import lucid.nn.functional
 
 from lucid._tensor import Tensor
-import lucid.nn.functional
+from lucid.types import _Scalar
 
 
 def _interpolate_bilinear(
@@ -73,3 +74,48 @@ def _interpolate_area(
         stride=(int(scale_h), int(scale_w)),
     )
     return pooled[:, :, out_h, out_w]
+
+
+def rotate(
+    input_: Tensor, angle: float, center: tuple[_Scalar, _Scalar] | None = None
+) -> Tensor:
+    N, C, H, W = input_.shape
+
+    if center is None:
+        center_x = W / 2
+        center_y = H / 2
+    else:
+        center_x, center_y = center
+
+    angle_rad = -angle * (lucid.pi / 180)
+    cos_a = lucid.cos(angle_rad).item()
+    sin_a = lucid.sin(angle_rad).item()
+
+    rot_mat = [
+        [cos_a, -sin_a, center_x - cos_a * center_x + sin_a * center_y],
+        [sin_a, cos_a, center_y - sin_a * center_x - cos_a * center_y],
+    ]
+    rot_mat = lucid.to_tensor(rot_mat)
+
+    y_coords, x_coords = lucid.arange(H), lucid.arange(W)
+    y_grid, x_grid = lucid.meshgrid(y_coords, x_coords, indexing="ij")
+
+    x_flat = x_grid.ravel()
+    y_flat = y_grid.ravel()
+
+    ones = lucid.ones_like(x_flat)
+    homogen_coords = lucid.stack([x_flat, y_flat, ones])
+
+    new_coords = rot_mat @ homogen_coords
+    new_x = new_coords[0].reshape(H, W)
+    new_y = new_coords[1].reshape(H, W)
+
+    new_x = new_x.clip(0, W - 1).astype(int)
+    new_y = new_y.clip(0, H - 1).astype(int)
+
+    rotated_img = lucid.zeros_like(input_)
+    for n in range(N):
+        for c in range(C):
+            rotated_img[n, c] = input_[n, c, new_y, new_x]
+
+    return rotated_img

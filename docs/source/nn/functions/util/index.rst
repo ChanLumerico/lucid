@@ -5,3 +5,4 @@ Utility Functions
     :maxdepth: 1
 
     interpolate.rst
+    rotate.rst
