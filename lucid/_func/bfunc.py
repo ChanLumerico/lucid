@@ -1,3 +1,4 @@
+from typing import Callable
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -196,7 +197,7 @@ def _matmul(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-_radd: callable = lambda self, other: _add(self, other)
-_rsub: callable = lambda self, other: _sub(other, self)
-_rmul: callable = lambda self, other: _mul(self, other)
-_rtruediv: callable = lambda self, other: _truediv(other, self)
+_radd: Callable = lambda self, other: _add(self, other)
+_rsub: Callable = lambda self, other: _sub(other, self)
+_rmul: Callable = lambda self, other: _mul(self, other)
+_rtruediv: Callable = lambda self, other: _truediv(other, self)

@@ -1,8 +1,6 @@
 import functools
 from typing import Callable, Tuple
 
-import numpy as np
-
 import lucid
 from lucid._tensor import Tensor
 from lucid.types import _NumPyArray
@@ -14,9 +12,9 @@ _ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
 _FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
 
 
-def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> callable:
+def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> Callable:
 
-    def decorator(func: Callable[..., _FuncOpReturnType]) -> callable:
+    def decorator(func: Callable[..., _FuncOpReturnType]) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> Tuple[Tensor, ...]:
             tensors: Tuple[Tensor, ...] = tuple()
@@ -77,13 +75,13 @@ def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> c
     return decorator
 
 
-def create_bfunc_op(has_gradient: bool = True) -> callable:
+def create_bfunc_op(has_gradient: bool = True) -> Callable:
     return create_func_op(n_in=2, n_ret=1, has_gradient=has_gradient)
 
 
-def create_ufunc_op(has_gradient: bool = True) -> callable:
+def create_ufunc_op(has_gradient: bool = True) -> Callable:
     return create_func_op(n_in=1, n_ret=1, has_gradient=has_gradient)
 
 
-def create_mfunc_op(has_gradient: bool = True) -> callable:
+def create_mfunc_op(has_gradient: bool = True) -> Callable:
     return create_func_op(n_in=None, n_ret=1, has_gradient=has_gradient)

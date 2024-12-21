@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Self, Any
 import random
 
+import lucid
+
 
 class Dataset(ABC):
     @abstractmethod
@@ -72,15 +74,15 @@ class DataLoader:
             self._shuffle_indices()
         return self
 
-    def __next__(self) -> Any:
+    def __next__(self):
         if self.current_index >= len(self.indices):
-            raise StopIteration()
+            raise StopIteration
 
         start = self.current_index
         end = min(start + self.batch_size, len(self.indices))
 
         batch_indices = self.indices[start:end]
-        batch = [self.dataset[idx] for idx in batch_indices]
+        batch = self.dataset[batch_indices]
 
         self.current_index = end
         return batch

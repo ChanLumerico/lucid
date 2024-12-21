@@ -22,6 +22,7 @@ setuptools.setup(
     install_requires=[
         "numpy",
         "pandas",
+        "openml",
     ],
     include_package_data=True,
 )

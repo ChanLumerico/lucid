@@ -1,11 +1,15 @@
-import os
 import pandas as pd
 import numpy as np
-from urllib import request
+import openml
+import math
+
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Optional, SupportsIndex, Tuple, Union
 
 import lucid
+import lucid.nn as nn
+
+from lucid.transforms import Compose
 from lucid.data import Dataset
 from lucid._tensor import Tensor
 
@@ -19,13 +23,18 @@ class MNIST(Dataset):
         root: Union[str, Path],
         train: Optional[bool] = True,
         download: Optional[bool] = False,
-        transform: Optional[callable] = None,
-        target_transform: Optional[callable] = None,
+        transform: Optional[nn.Module | Compose] = None,
+        target_transform: Optional[nn.Module | Compose] = None,
+        test_size: float = 0.2,
+        to_tensor: bool = True,
     ) -> None:
         self.root = Path(root)
         self.train = train
         self.transform = transform
         self.target_transform = target_transform
+        self.test_size = test_size
+        self.to_tensor = to_tensor
+        self.root.mkdir(parents=True, exist_ok=True)
 
         if download:
             self._download()
@@ -36,52 +45,44 @@ class MNIST(Dataset):
             self.data, self.targets = self._load_data("test")
 
     def _download(self) -> None:
-        urls = {...}  # TODO: Need to be fixed.
+        try:
+            dataset = openml.datasets.get_dataset(554)
+            df, _, _, _ = dataset.get_data(dataset_format="dataframe")
+            df.to_csv(self.root / "MNIST.csv", index=False)
 
-        self.root.mkdir(parents=True, exist_ok=True)
-
-        for _, url in urls.items():
-            file_name = url.split("/")[-1]
-            file_path = self.root / file_name
-            if not file_path.exists():
-                print(f"Downloading {url} to {file_path}")
-                try:
-                    request.urlretrieve(url, file_path)
-                    print(f"Successfully downloaded {file_path}")
-                except Exception as e:
-                    print(f"Failed to download {url}. Error: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to download the MNIST dataset. Error: {e}")
 
     def _load_data(self, split: str) -> Tuple[Tensor, Tensor]:
-        if split == "train":
-            images_path = self.root / "MNIST_train.csv"
-            labels_path = self.root / "MNIST_train_labels.csv"
-        else:
-            images_path = self.root / "MNIST_test.csv"
-            labels_path = self.root / "MNIST_test_labels.csv"
-
-        try:
-            images_df = pd.read_csv(images_path, header=None)
-            labels_df = pd.read_csv(labels_path, header=None)
-        except Exception as e:
+        csv_path = self.root / "MNIST.csv"
+        if not csv_path.exists():
             raise RuntimeError(
-                f"Failed to load MNIST {split} data. Ensure files exist. Error: {e}"
+                f"MNIST dataset CSV file not found at {csv_path}. Use `download=True`."
             )
 
-        images = images_df.to_numpy().reshape(-1, 28, 28)
-        labels = labels_df.to_numpy().flatten()
+        df = pd.read_csv(csv_path)
+        labels = df["class"].values.astype(np.int64)
+        images = df.drop(columns=["class"]).values.astype(np.float32)
+        images = images.reshape(-1, 1, 28, 28)
 
-        images_t = lucid.to_tensor(images, dtype=np.float32)
-        labels_t = lucid.to_tensor(labels, dtype=np.int64)
+        train_size = int(math.floor(len(images) * (1 - self.test_size)))
+        if split == "train":
+            images, labels = images[:train_size], labels[:train_size]
+        else:
+            images, labels = images[train_size:], labels[train_size:]
 
-        return images_t, labels_t
+        if self.to_tensor:
+            images = lucid.to_tensor(images, dtype=np.float32)
+            labels = lucid.to_tensor(labels, dtype=np.int64)
 
-    def __getitem__(self, index: int) -> Tuple[Tensor, Tensor]:
-        image = self.data[index]
+        return images, labels
+
+    def __getitem__(self, index: SupportsIndex) -> Tuple[Tensor, Tensor]:
+        image = self.data[index].reshape(-1, 1, 28, 28)
         label = self.targets[index]
 
         if self.transform:
             image = self.transform(image)
-
         if self.target_transform:
             label = self.target_transform(label)
 

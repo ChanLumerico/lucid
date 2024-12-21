@@ -1,4 +1,4 @@
-from typing import Iterator, Optional, Self, SupportsIndex
+from typing import Callable, Iterator, Optional, Self, SupportsIndex
 import numpy as np
 
 import lucid
@@ -26,7 +26,7 @@ class Tensor(_TensorOps):
         self.dtype = self.data.dtype
 
         self.grad: Optional[_NumPyArray] = None
-        self._backward_op: callable = lambda: None
+        self._backward_op: Callable = lambda: None
         self._prev: list[Tensor] = []
 
     @property
@@ -126,6 +126,12 @@ class Tensor(_TensorOps):
         if not isinstance(value, Tensor):
             value = Tensor(value)
         self.data[idx] = value.data
+
+    def __len__(self) -> int:
+        if self.ndim == 0:
+            return self.size
+        else:
+            return self.shape[0]
 
     def __iter__(self) -> Iterator[Self]:
         for i in range(self.shape[0]):

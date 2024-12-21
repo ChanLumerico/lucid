@@ -69,6 +69,15 @@
 
 .. toctree::
     :maxdepth: 2
+    :caption: Datasets
+    :hidden:
+
+    datasets/datasets.rst
+
+    Image Datasets <datasets/image/index.rst>
+
+.. toctree::
+    :maxdepth: 2
     :caption: Transformation
     :hidden:
 

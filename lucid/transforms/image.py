@@ -69,6 +69,9 @@ class RandomCrop(nn.Module):
         top = lucid.random.randint(0, H - crop_h + 1)
         left = lucid.random.randint(0, W - crop_w + 1)
 
+        top = top.astype(int).squeeze().item()
+        left = left.astype(int).squeeze().item()
+
         return img[:, :, top : top + crop_h, left : left + crop_w]
 
 
@@ -93,7 +96,7 @@ class RandomRotation(nn.Module):
 
     def forward(self, img: Tensor) -> Tensor:
         angle = lucid.random.uniform(-self.degrees, self.degrees)
-        return lucid.nn.functional.rotate(img, angle)
+        return lucid.nn.functional.rotate(img, angle.squeeze().item())
 
 
 class RandomGrayscale(nn.Module):

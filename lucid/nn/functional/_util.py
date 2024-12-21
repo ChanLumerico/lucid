@@ -88,8 +88,8 @@ def rotate(
         center_x, center_y = center
 
     angle_rad = -angle * (lucid.pi / 180)
-    cos_a = lucid.cos(angle_rad).item()
-    sin_a = lucid.sin(angle_rad).item()
+    cos_a = lucid.cos(angle_rad).data
+    sin_a = lucid.sin(angle_rad).data
 
     rot_mat = [
         [cos_a, -sin_a, center_x - cos_a * center_x + sin_a * center_y],
