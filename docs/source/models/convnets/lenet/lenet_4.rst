@@ -42,7 +42,7 @@ The LeNet-4 architecture consists of:
    - FC1: Input features: :math:`12 \times 4 \times 4 = 192`, output features: 84.
    - FC2: Input features: 84, output features: 10 (number of classes).
 
-***Total Parameters***: 18,378
+**Total Parameters**: 18,378
 
 Example Usage
 -------------

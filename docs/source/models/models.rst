@@ -17,8 +17,8 @@ ConvNets
 
     * - Model
       - Input Shape
-      - Param. Count
-      - implemented
+      - Parameter Count
+      - Implemented
     
     * - :func:`lucid.models.lenet_1`
       - :math:`(N,1,28,28)`

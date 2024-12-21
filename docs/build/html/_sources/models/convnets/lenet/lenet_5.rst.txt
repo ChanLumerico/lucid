@@ -44,7 +44,7 @@ The LeNet-5 architecture consists of:
    - FC2: Input features: 120, output features: 84.
    - FC3: Input features: 84, output features: 10 (number of classes).
 
-***Total Parameters***: 61,706
+**Total Parameters**: 61,706
 
 Example Usage
 -------------

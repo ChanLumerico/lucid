@@ -42,7 +42,7 @@ The LeNet-1 architecture consists of:
    - Input features: :math:`12 \times 4 \times 4 = 192`.
    - Output features: 10 (number of classes).
 
-***Total Parameters***: 3,246
+**Total Parameters**: 3,246
 
 Example Usage
 -------------
