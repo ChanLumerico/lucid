@@ -1,0 +1,37 @@
+lucid.models
+============
+
+The `lucid.models` package provides a collection of predefined neural network 
+architectures that are ready to use for various tasks, such as image classification 
+and feature extraction. These models are designed to demonstrate key deep learning 
+concepts while leveraging the modular and educational nature of the `lucid` framework.
+
+
+ConvNets
+--------
+
+**LeNet**
+
+.. list-table::
+    :header-rows: 1
+
+    * - Model
+      - Input Shape
+      - Param. Count
+      - implemented
+    
+    * - :func:`lucid.models.lenet_1`
+      - :math:`(N,1,28,28)`
+      - 3,246
+      - ✅
+    
+    * - :func:`lucid.models.lenet_4`
+      - :math:`(N,1,28,28)`
+      - 18,378
+      - ✅
+    
+    * - :func:`lucid.models.lenet_5`
+      - :math:`(N,1,32,32)`
+      - 61,706
+      - ✅
+

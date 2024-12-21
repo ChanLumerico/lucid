@@ -77,6 +77,15 @@
     Image Datasets <datasets/image/index.rst>
 
 .. toctree::
+    :maxdepth: 3
+    :caption: Models
+    :hidden:
+
+    models/models.rst
+
+    ConvNets <models/convnets/index.rst>
+
+.. toctree::
     :maxdepth: 2
     :caption: Transformation
     :hidden:

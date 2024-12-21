@@ -116,6 +116,14 @@ class Module:
         for module in self._modules.values():
             yield from module.modules()
 
+    def count_parameters(self, recurse: bool = True) -> int:
+        total_params = sum(p.size for p in self.parameters(recurse=recurse))
+        return total_params
+
+    @property
+    def parameter_size(self) -> int:
+        return self.count_parameters(recurse=True)
+
     def state_dict(
         self,
         destination: OrderedDict[str, Any] | None = None,
