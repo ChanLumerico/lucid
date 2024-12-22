@@ -21,23 +21,30 @@ shaping modern CNNs.
     :header-rows: 1
     :align: left
 
-    * - Model
+    * - Name
+      - Model
       - Input Shape
       - Parameter Count
       - Implemented
     
-    * - :func:`lucid.models.lenet_1`
+    * - LeNet-1
+      - :ref:`lenet_1`
       - :math:`(N,1,28,28)`
       - 3,246
       - ✅
     
-    * - :func:`lucid.models.lenet_4`
+    * - LeNet-4
+      - :ref:`lenet_4`
       - :math:`(N,1,28,28)`
       - 18,378
       - ✅
     
-    * - :func:`lucid.models.lenet_5`
+    * - LeNet-5
+      - :ref:`lenet_5`
       - :math:`(N,1,32,32)`
       - 61,706
       - ✅
 
+.. rubric:: AlexNet
+
+*To be implemented...🔮*
