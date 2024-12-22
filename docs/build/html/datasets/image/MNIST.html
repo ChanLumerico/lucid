@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/datasets/image/MNIST.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>MNIST - Lucid 1.0.0 documentation</title>
+        <title>datasets.MNIST - Lucid 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -475,7 +475,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../datasets.html">lucid.datasets</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Image Datasets</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-25" name="toctree-checkbox-25" role="switch" type="checkbox"/><label for="toctree-checkbox-25"><div class="visually-hidden">Toggle navigation of Image Datasets</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">MNIST</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">datasets.MNIST</a></li>
 </ul>
 </li>
 </ul>
@@ -483,8 +483,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../models/models.html">lucid.models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../models/convnets/index.html">ConvNets</a><input class="toctree-checkbox" id="toctree-checkbox-26" name="toctree-checkbox-26" role="switch" type="checkbox"/><label for="toctree-checkbox-26"><div class="visually-hidden">Toggle navigation of ConvNets</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../models/convnets/lenet/index.html">LeNet</a><input class="toctree-checkbox" id="toctree-checkbox-27" name="toctree-checkbox-27" role="switch" type="checkbox"/><label for="toctree-checkbox-27"><div class="visually-hidden">Toggle navigation of LeNet</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../models/convnets/lenet/LeNet.html">LeNet</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../models/convnets/lenet/LeNet.html">LeNet</a><input class="toctree-checkbox" id="toctree-checkbox-27" name="toctree-checkbox-27" role="switch" type="checkbox"/><label for="toctree-checkbox-27"><div class="visually-hidden">Toggle navigation of LeNet</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../models/convnets/lenet/lenet_1.html">lenet_1</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../models/convnets/lenet/lenet_4.html">lenet_4</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../models/convnets/lenet/lenet_5.html">lenet_5</a></li>
@@ -556,8 +555,8 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="mnist">
-<h1>MNIST<a class="headerlink" href="#mnist" title="Link to this heading">¶</a></h1>
+          <section id="datasets-mnist">
+<h1>datasets.MNIST<a class="headerlink" href="#datasets-mnist" title="Link to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="lucid.datasets.MNIST">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.datasets.</span></span><span class="sig-name descname"><span class="pre">MNIST</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">root</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../../transforms/Compose.html#lucid.transforms.Compose" title="lucid.transforms._base.Compose"><span class="pre">Compose</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_transform</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../../transforms/Compose.html#lucid.transforms.Compose" title="lucid.transforms._base.Compose"><span class="pre">Compose</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_tensor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.datasets.MNIST" title="Link to this definition">¶</a></dt>
@@ -716,7 +715,7 @@ Returns the total number of samples in the dataset.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">MNIST</a><ul>
+<li><a class="reference internal" href="#">datasets.MNIST</a><ul>
 <li><a class="reference internal" href="#lucid.datasets.MNIST"><code class="docutils literal notranslate"><span class="pre">MNIST</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>

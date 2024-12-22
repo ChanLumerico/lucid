@@ -1,6 +1,14 @@
 LeNet
 =====
 
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    lenet_1.rst
+    lenet_4.rst
+    lenet_5.rst
+
 .. autoclass:: lucid.models.LeNet
 
 Overview
