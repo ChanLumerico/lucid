@@ -156,6 +156,20 @@ def max_pool3d(
     return _pool.max_pool3d(input_, kernel_size, stride, padding)
 
 
+def adaptive_avg_pool1d(input_: Tensor, output_size: int) -> Tensor:
+    return _pool.adaptive_avg_pool1d(input_, output_size)
+
+
+def adaptive_avg_pool2d(input_: Tensor, output_size: int | tuple[int, int]) -> Tensor:
+    return _pool.adaptive_avg_pool2d(input_, output_size)
+
+
+def adaptive_avg_pool3d(
+    input_: Tensor, output_size: int | tuple[int, int, int]
+) -> Tensor:
+    return _pool.adaptive_avg_pool3d(input_, output_size)
+
+
 def dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     return _drop.dropout(input_, p, training)
 

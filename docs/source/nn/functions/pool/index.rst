@@ -10,3 +10,6 @@ Pooling Functions
     max_pool1d.rst
     max_pool2d.rst
     max_pool3d.rst
+    adaptive_avg_pool1d.rst
+    adaptive_avg_pool2d.rst
+    adaptive_avg_pool3d.rst

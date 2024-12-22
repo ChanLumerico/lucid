@@ -1,6 +1,6 @@
 # Lucid 💎
 
-![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl)
+![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl)
 ![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-3.8k-yellow)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)

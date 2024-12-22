@@ -6,7 +6,17 @@ from lucid._tensor import Tensor
 from typing import Any
 
 
-__all__ = ["AvgPool1d", "AvgPool2d", "AvgPool3d", "MaxPool1d", "MaxPool2d", "MaxPool3d"]
+__all__ = [
+    "AvgPool1d",
+    "AvgPool2d",
+    "AvgPool3d",
+    "MaxPool1d",
+    "MaxPool2d",
+    "MaxPool3d",
+    "AdaptiveAvgPool1d",
+    "AdaptiveAvgPool2d",
+    "AdaptiveAvgPool3d",
+]
 
 
 def _single_to_tuple(value: Any, times: int) -> tuple[Any, ...]:
@@ -106,3 +116,30 @@ class MaxPool3d(_PoolNd):
 
     def forward(self, input_: Tensor) -> Tensor:
         return F.max_pool3d(input_, self.kernel_size, self.stride, self.padding)
+
+
+class AdaptiveAvgPool1d(nn.Module):
+    def __init__(self, output_size: int) -> None:
+        super().__init__()
+        self.output_size = output_size
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.adaptive_avg_pool1d(input_, self.output_size)
+
+
+class AdaptiveAvgPool2d(nn.Module):
+    def __init__(self, output_size: int | tuple[int, int]) -> None:
+        super().__init__()
+        self.output_size = output_size
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.adaptive_avg_pool2d(input_, self.output_size)
+
+
+class AdaptiveAvgPool3d(nn.Module):
+    def __init__(self, output_size: int | tuple[int, int, int]) -> None:
+        super().__init__()
+        self.output_size = output_size
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.adaptive_avg_pool3d(input_, self.output_size)
