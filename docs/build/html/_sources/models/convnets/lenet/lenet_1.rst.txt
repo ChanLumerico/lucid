@@ -1,5 +1,5 @@
-lenet_1
-=======
+models.lenet_1
+==============
 
 .. autofunction:: lucid.models.lenet_1
 
