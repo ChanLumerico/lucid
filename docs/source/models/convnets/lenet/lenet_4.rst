@@ -12,6 +12,8 @@ an enhanced version of the LeNet series designed for small-scale image classific
 It is suitable for grayscale input images with a size of :math:`28 \times 28`, 
 such as those in the MNIST dataset.
 
+**Total Parameters**: 18,378
+
 Function Signature
 ------------------
 
@@ -41,8 +43,6 @@ The LeNet-4 architecture consists of:
    Two fully connected layers:
    - FC1: Input features: :math:`12 \times 4 \times 4 = 192`, output features: 84.
    - FC2: Input features: 84, output features: 10 (number of classes).
-
-**Total Parameters**: 18,378
 
 Example Usage
 -------------

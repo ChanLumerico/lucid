@@ -7,6 +7,8 @@ The `zfnet` function in `lucid.models` provides a convenient way to
 create an instance of the `ZFNet` module, a convolutional neural network 
 designed for image classification with enhanced feature learning.
 
+**Total Parameters**: 62,357,608
+
 Function Signature
 ------------------
 

@@ -7,3 +7,4 @@ ConvNets
     LeNet <lenet/LeNet.rst>
     AlexNet <alex/AlexNet.rst>
     ZFNet <zfnet/ZFNet.rst>
+    VGGNet <vgg/VGGNet.rst>

@@ -13,6 +13,8 @@ other small-scale image classification tasks.
 It is suitable for grayscale input images with a size of :math:`32 \times 32`, 
 such as those in the original LeNet dataset.
 
+**Total Parameters**: 61,706
+
 Function Signature
 ------------------
 
@@ -42,9 +44,7 @@ The LeNet-5 architecture consists of:
    Three fully connected layers:
    - FC1: Input features: :math:`16 \times 5 \times 5 = 400`, output features: 120.
    - FC2: Input features: 120, output features: 84.
-   - FC3: Input features: 84, output features: 10 (number of classes).
-
-**Total Parameters**: 61,706
+   - FC3: Input features: 84, output features: 10 (number of classes)
 
 Example Usage
 -------------

@@ -101,4 +101,46 @@ recognition and provided insights into deep learning interpretability.
       - 62,357,608
       - ✅
 
+.. rubric:: VGGNet
+
+VGGNet is a deep convolutional neural network known for its simplicity and use of 
+small 3x3 convolutional filters, which significantly improved object recognition accuracy.
+
+ Simonyan, Karen, and Andrew Zisserman. "Very Deep Convolutional Networks for 
+ Large-Scale Image Recognition." *arXiv preprint arXiv:1409.1556*, 2014.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - VGGNet-11
+      - `vggnet_11 <convnets/vgg/vggnet_11>`_
+      - :math:`(N,3,224,224)`
+      - 132,863,336
+      - ✅
+    
+    * - VGGNet-13
+      - `vggnet_13 <convnets/vgg/vggnet_13>`_
+      - :math:`(N,3,224,224)`
+      - 133,047,848
+      - ✅
+    
+    * - VGGNet-16
+      - `vggnet_16 <convnets/vgg/vggnet_16>`_
+      - :math:`(N,3,224,224)`
+      - 138,357,544
+      - ✅
+    
+    * - VGGNet-19
+      - `vggnet_19 <convnets/vgg/vggnet_19>`_
+      - :math:`(N,3,224,224)`
+      - 143,667,240
+      - ✅
+
 *To be implemented...🔮*

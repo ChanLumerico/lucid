@@ -6,6 +6,8 @@ models.alexnet
 The `alexnet` provides a convenient way to create an instance of the `AlexNet` module, 
 a convolutional neural network designed for image classification tasks.
 
+**Total Parameters**: 61,100,840
+
 Function Signature
 ------------------
 

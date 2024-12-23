@@ -12,6 +12,8 @@ a simplified version of the LeNet series designed for small-scale image classifi
 It is suitable for grayscale input images with a size of :math:`28 \times 28`, 
 such as those in the MNIST dataset.
 
+**Total Parameters**: 3,246
+
 Function Signature
 ------------------
 
@@ -41,8 +43,6 @@ The LeNet-1 architecture consists of:
    One fully connected layer:
    - Input features: :math:`12 \times 4 \times 4 = 192`.
    - Output features: 10 (number of classes).
-
-**Total Parameters**: 3,246
 
 Example Usage
 -------------
