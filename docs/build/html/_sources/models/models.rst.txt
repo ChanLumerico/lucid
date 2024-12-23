@@ -28,19 +28,19 @@ shaping modern CNNs.
       - Implemented
     
     * - LeNet-1
-      - `lenet_1 <convnets/lenet/lenet_1.rst>`_
+      - `lenet_1 <convnets/lenet/lenet_1>`_
       - :math:`(N,1,28,28)`
       - 3,246
       - ✅
     
     * - LeNet-4
-      - `lenet_4 <convnets/lenet/lenet_4.rst>`_
+      - `lenet_4 <convnets/lenet/lenet_4>`_
       - :math:`(N,1,28,28)`
       - 18,378
       - ✅
     
     * - LeNet-5
-      - `lenet_5 <convnets/lenet/lenet_5.rst>`_
+      - `lenet_5 <convnets/lenet/lenet_5>`_
       - :math:`(N,1,32,32)`
       - 61,706
       - ✅

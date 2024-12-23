@@ -2,7 +2,6 @@ ConvNets
 ========
 
 .. toctree::
-    :maxdepth: 2
-    :caption: LeNet
+    :maxdepth: 1
     
     LeNet <lenet/LeNet.rst>
