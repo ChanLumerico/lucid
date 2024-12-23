@@ -5,3 +5,5 @@ ConvNets
     :maxdepth: 1
     
     LeNet <lenet/LeNet.rst>
+    AlexNet <alex/AlexNet.rst>
+    ZFNet <zfnet/ZFNet.rst>
