@@ -83,7 +83,7 @@
 
     models/models.rst
 
-    ConvNets <models/convnets/index.rst>
+    ConvNets <models/conv/index.rst>
 
 .. toctree::
     :maxdepth: 2
@@ -105,6 +105,7 @@
    others/no_grad.rst
    others/grad_enabled.rst
    others/newaxis.rst
+   others/register_model.rst
 
 
 .. module:: lucid

@@ -1,0 +1,56 @@
+{
+    "lenet_1": {
+        "name": "lenet_1",
+        "family": "LeNet",
+        "param_size": 3246,
+        "arch": "conv"
+    },
+    "lenet_4": {
+        "name": "lenet_4",
+        "family": "LeNet",
+        "param_size": 18378,
+        "arch": "conv"
+    },
+    "lenet_5": {
+        "name": "lenet_5",
+        "family": "LeNet",
+        "param_size": 61706,
+        "arch": "conv"
+    },
+    "alexnet": {
+        "name": "alexnet",
+        "family": "AlexNet",
+        "param_size": 61100840,
+        "arch": "conv"
+    },
+    "zfnet": {
+        "name": "zfnet",
+        "family": "ZFNet",
+        "param_size": 62357608,
+        "arch": "conv"
+    },
+    "vggnet_11": {
+        "name": "vggnet_11",
+        "family": "VGGNet",
+        "param_size": 132863336,
+        "arch": "conv"
+    },
+    "vggnet_13": {
+        "name": "vggnet_13",
+        "family": "VGGNet",
+        "param_size": 133047848,
+        "arch": "conv"
+    },
+    "vggnet_16": {
+        "name": "vggnet_16",
+        "family": "VGGNet",
+        "param_size": 138357544,
+        "arch": "conv"
+    },
+    "vggnet_19": {
+        "name": "vggnet_19",
+        "family": "VGGNet",
+        "param_size": 143667240,
+        "arch": "conv"
+    }
+}

@@ -6,7 +6,7 @@ architectures that are ready to use for various tasks, such as image classificat
 and feature extraction. These models are designed to demonstrate key deep learning 
 concepts while leveraging the modular and educational nature of the `lucid` framework.
 
-ConvNets
+conv
 --------
 
 .. rubric:: LeNet
@@ -31,19 +31,19 @@ shaping modern CNNs.
       - Implemented
     
     * - LeNet-1
-      - `lenet_1 <convnets/lenet/lenet_1>`_
+      - `lenet_1 <conv/lenet/lenet_1>`_
       - :math:`(N,1,28,28)`
       - 3,246
       - ✅
     
     * - LeNet-4
-      - `lenet_4 <convnets/lenet/lenet_4>`_
+      - `lenet_4 <conv/lenet/lenet_4>`_
       - :math:`(N,1,28,28)`
       - 18,378
       - ✅
     
     * - LeNet-5
-      - `lenet_5 <convnets/lenet/lenet_5>`_
+      - `lenet_5 <conv/lenet/lenet_5>`_
       - :math:`(N,1,32,32)`
       - 61,706
       - ✅
@@ -69,7 +69,7 @@ Challenge (ILSVRC) in 2012, popularizing deep learning for computer vision.
       - Implemented
     
     * - AlexNet
-      - `alexnet <convnets/alex/alexnet>`_
+      - `alexnet <conv/alex/alexnet>`_
       - :math:`(N,3,224,224)`
       - 61,100,840
       - ✅
@@ -96,7 +96,7 @@ recognition and provided insights into deep learning interpretability.
       - Implemented
     
     * - ZFNet
-      - `zfnet <convnets/zfnet/zfnet>`_
+      - `zfnet <conv/zfnet/zfnet>`_
       - :math:`(N,3,224,224)`
       - 62,357,608
       - ✅
@@ -120,25 +120,25 @@ small 3x3 convolutional filters, which significantly improved object recognition
       - Implemented
     
     * - VGGNet-11
-      - `vggnet_11 <convnets/vgg/vggnet_11>`_
+      - `vggnet_11 <conv/vgg/vggnet_11>`_
       - :math:`(N,3,224,224)`
       - 132,863,336
       - ✅
     
     * - VGGNet-13
-      - `vggnet_13 <convnets/vgg/vggnet_13>`_
+      - `vggnet_13 <conv/vgg/vggnet_13>`_
       - :math:`(N,3,224,224)`
       - 133,047,848
       - ✅
     
     * - VGGNet-16
-      - `vggnet_16 <convnets/vgg/vggnet_16>`_
+      - `vggnet_16 <conv/vgg/vggnet_16>`_
       - :math:`(N,3,224,224)`
       - 138,357,544
       - ✅
     
     * - VGGNet-19
-      - `vggnet_19 <convnets/vgg/vggnet_19>`_
+      - `vggnet_19 <conv/vgg/vggnet_19>`_
       - :math:`(N,3,224,224)`
       - 143,667,240
       - ✅

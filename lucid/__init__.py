@@ -14,7 +14,13 @@ algorithms and operations without the complexity of high-level frameworks.
 """
 
 from contextlib import contextmanager
-from typing import Any, Generator, SupportsIndex
+from typing import Any, Generator, SupportsIndex, Callable
+from functools import wraps
+from pathlib import Path
+
+import os
+import sys
+import json
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -138,3 +144,45 @@ def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:
     else:
         shape = tuple(args)
     return shape
+
+
+REGISTRY_PATH: Path = Path("lucid/models/registry.json")
+
+
+def register_model(func: Callable) -> Callable:
+    @wraps(func)
+    def wrapper(*args, **kwargs) -> Any:
+        if os.environ.get("SPHINX_BUILD"):
+            return func(*args, **kwargs)
+
+        if not REGISTRY_PATH.exists():
+            REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(REGISTRY_PATH, "w") as f:
+                json.dump({}, f)
+
+        with open(REGISTRY_PATH, "r") as f:
+            registry = json.load(f)
+
+        model = func(*args, **kwargs)
+        name = func.__name__
+
+        if name in registry:
+            return model
+
+        family = model.__class__.__name__
+        param_size = model.parameter_size
+        arch = sys.modules[func.__module__].__package__.replace("lucid.models.", "")
+
+        registry[name] = dict(
+            name=name,
+            family=family,
+            param_size=param_size,
+            arch=arch,
+        )
+
+        with open(REGISTRY_PATH, "w") as f:
+            json.dump(registry, f, indent=4)
+
+        return model
+
+    return wrapper

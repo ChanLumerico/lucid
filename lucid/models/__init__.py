@@ -1,1 +1,1 @@
-from lucid.models.convnet import *
+from lucid.models.conv import *
