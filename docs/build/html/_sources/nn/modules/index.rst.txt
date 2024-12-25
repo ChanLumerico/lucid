@@ -42,3 +42,9 @@ Modules
     :caption: Loss Layers
 
     Loss Layers <loss/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Fused Layers
+
+    Fused Layers <fused/index.rst>

@@ -6,4 +6,4 @@ from lucid.nn.modules.norm import *
 from lucid.nn.modules.drop import *
 from lucid.nn.modules.loss import *
 
-from lucid.nn.modules._fused import *
+from lucid.nn.modules.fused import *
