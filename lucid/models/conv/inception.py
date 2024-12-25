@@ -66,7 +66,7 @@ class _InceptionAux(nn.Module):
         self.fc2 = nn.Linear(1024, num_classes)
 
         self.relu = nn.ReLU()
-        self.dropout = nn.Dropout2d(p=0.7)  # Need to be fixed
+        self.dropout = nn.Dropout(p=0.7)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.avgpool(x)

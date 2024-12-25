@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/models.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.models - Lucid 1.2.2 documentation</title>
+        <title>lucid.models - Lucid 1.2.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Lucid 1.2.2 documentation</div></a>
+      <a href="../index.html"><div class="brand">Lucid 1.2.3 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 1.2.2 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.2.3 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -516,6 +516,10 @@
 <li class="toctree-l3"><a class="reference internal" href="conv/vgg/vggnet_19.html">models.vggnet_19</a></li>
 </ul>
 </li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="conv/inception/Inception.html">Inception</a><input class="toctree-checkbox" id="toctree-checkbox-32" name="toctree-checkbox-32" role="switch" type="checkbox"/><label for="toctree-checkbox-32"><div class="visually-hidden">Toggle navigation of Inception</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="conv/inception/inception_v1.html">models.inception_v1</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -524,7 +528,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-32" name="toctree-checkbox-32" role="switch" type="checkbox"/><label for="toctree-checkbox-32"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-33" name="toctree-checkbox-33" role="switch" type="checkbox"/><label for="toctree-checkbox-33"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -737,6 +741,36 @@ Large-Scale Image Recognition.” <em>arXiv preprint arXiv:1409.1556</em>, 2014.
 </tbody>
 </table>
 </div>
+<p class="rubric">Inception</p>
+<p>The <strong>Inception</strong> architecture, introduced in the GoogLeNet model, is a deep convolutional
+neural network designed for efficient feature extraction using parallel convolutional and
+pooling branches, reducing computational cost. It achieves this by combining multi-scale
+feature processing within each module, making it highly effective for image classification
+tasks.</p>
+<blockquote>
+<div><p>Szegedy, Christian, et al. “Going Deeper with Convolutions.” <em>Proceedings of the IEEE
+Conference on Computer Vision and Pattern Recognition (CVPR)</em>, 2015, pp. 1–9.</p>
+</div></blockquote>
+<div class="table-wrapper docutils container">
+<table class="docutils align-left">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Model</p></th>
+<th class="head"><p>Input Shape</p></th>
+<th class="head"><p>Parameter Count</p></th>
+<th class="head"><p>Implemented</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Inception-v1 (GoogLeNet)</p></td>
+<td><p><a class="reference external" href="conv/inception/inception_v1">inception_v1</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>13,393,352</p></td>
+<td><p>✅</p></td>
+</tr>
+</tbody>
+</table>
+</div>
 <p><em>To be implemented…🔮</em></p>
 </section>
 </section>
@@ -809,7 +843,7 @@ Large-Scale Image Recognition.” <em>arXiv preprint arXiv:1409.1556</em>, 2014.
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=fd7cadf9"></script>
+</div><script src="../_static/documentation_options.js?v=590429e0"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>

@@ -8,3 +8,4 @@ ConvNets
     AlexNet <alex/AlexNet.rst>
     ZFNet <zfnet/ZFNet.rst>
     VGGNet <vgg/VGGNet.rst>
+    Inception <inception/Inception.rst>
