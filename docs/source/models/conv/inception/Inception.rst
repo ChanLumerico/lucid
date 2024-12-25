@@ -6,6 +6,7 @@ Inception
     :hidden:
 
     inception_v1.rst
+    inception_v3.rst
 
 .. autoclass:: lucid.models.Inception
 
@@ -35,16 +36,3 @@ Parameters
 - **use_aux** (*bool*, optional)
   Whether to include auxiliary classifiers. Auxiliary classifiers are 
   additional branches used during training to assist optimization. Default is `True`.
-
-Attributes
-----------
-
-- **feature_extractor** (*nn.Sequential*)
-  A sequential model containing the convolutional and pooling layers of the 
-  Inception architecture.
-
-- **classifier** (*nn.Sequential*)
-  A sequential model containing the fully connected layers for classification.
-
-- **aux_classifier** (*nn.Module* or *None*)
-  An optional auxiliary classifier, present only if `use_aux` is set to `True`.

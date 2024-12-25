@@ -14,6 +14,7 @@ Function Signature
 
 .. code-block:: python
 
+    @register_model
     def zfnet(num_classes: int = 1000, **kwargs) -> ZFNet
 
 Parameters

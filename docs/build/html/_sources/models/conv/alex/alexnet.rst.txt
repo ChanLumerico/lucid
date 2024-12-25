@@ -13,6 +13,7 @@ Function Signature
 
 .. code-block:: python
 
+    @register_model
     def alexnet(num_classes: int = 1000, **kwargs) -> AlexNet
 
 Parameters

@@ -13,6 +13,7 @@ Function Signature
 
 .. code-block:: python
 
+    @register_model
     def vggnet_19(num_classes: int = 1000, **kwargs) -> VGGNet
 
 Parameters

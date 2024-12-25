@@ -11,6 +11,8 @@ This model was introduced in the paper "Going Deeper with Convolutions" by Szege
 It is designed for image classification tasks and includes the option to use auxiliary 
 classifiers to improve optimization during training.
 
+**Total Parameters**: 13,393,352
+
 Function Signature
 ------------------
 

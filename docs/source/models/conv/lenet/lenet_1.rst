@@ -19,6 +19,7 @@ Function Signature
 
 .. code-block:: python
 
+   @register_model
    def lenet_1(**kwargs) -> LeNet
 
 Returns

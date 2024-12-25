@@ -58,5 +58,11 @@
         "family": "Inception",
         "param_size": 13393352,
         "arch": "conv"
+    },
+    "inception_v3": {
+        "name": "inception_v3",
+        "family": "Inception",
+        "param_size": 30817392,
+        "arch": "conv"
     }
 }

@@ -145,14 +145,14 @@ small 3x3 convolutional filters, which significantly improved object recognition
 
 .. rubric:: Inception
 
-The **Inception** architecture, introduced in the GoogLeNet model, is a deep convolutional 
+The Inception architecture, introduced in the GoogLeNet model, is a deep convolutional 
 neural network designed for efficient feature extraction using parallel convolutional and 
 pooling branches, reducing computational cost. It achieves this by combining multi-scale 
 feature processing within each module, making it highly effective for image classification 
 tasks.
 
  Szegedy, Christian, et al. "Going Deeper with Convolutions." *Proceedings of the IEEE 
- Conference on Computer Vision and Pattern Recognition (CVPR)*, 2015, pp. 1–9.
+ Conference on Computer Vision and Pattern Recognition (CVPR)*, 2015, pp. 1-9.
 
 .. list-table::
     :header-rows: 1
@@ -168,6 +168,12 @@ tasks.
       - `inception_v1 <conv/inception/inception_v1>`_
       - :math:`(N,3,224,224)`
       - 13,393,352
+      - ✅
+    
+    * - Inception-v3
+      - `inception_v3 <conv/inception/inception_v3>`_
+      - :math:`(N,3,299,299)`
+      - 30,817,392
       - ✅
 
 *To be implemented...🔮*
