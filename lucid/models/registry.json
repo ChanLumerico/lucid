@@ -52,5 +52,11 @@
         "family": "VGGNet",
         "param_size": 143667240,
         "arch": "conv"
+    },
+    "inception_v1": {
+        "name": "inception_v1",
+        "family": "Inception_V1",
+        "param_size": 13393352,
+        "arch": "conv"
     }
 }

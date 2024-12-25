@@ -131,11 +131,7 @@ def avg_pool1d(
     stride: int | tuple[int] = 1,
     padding: int | tuple[int] = 0,
 ) -> Tensor:
-    return (
-        _pool1d(input_, kernel_size, stride, padding)
-        .mean(axis=-1, keepdims=True)
-        .squeeze()
-    )
+    return _pool1d(input_, kernel_size, stride, padding).mean(axis=-1)
 
 
 def avg_pool2d(
@@ -144,11 +140,7 @@ def avg_pool2d(
     stride: int | tuple[int, int] = 1,
     padding: int | tuple[int, int] = 0,
 ) -> Tensor:
-    return (
-        _pool2d(input_, kernel_size, stride, padding)
-        .mean(axis=-1, keepdims=True)
-        .squeeze()
-    )
+    return _pool2d(input_, kernel_size, stride, padding).mean(axis=-1)
 
 
 def avg_pool3d(
@@ -157,11 +149,7 @@ def avg_pool3d(
     stride: int | tuple[int, int, int] = 1,
     padding: int | tuple[int, int, int] = 0,
 ) -> Tensor:
-    return (
-        _pool3d(input_, kernel_size, stride, padding)
-        .mean(axis=-1, keepdims=True)
-        .squeeze()
-    )
+    return _pool3d(input_, kernel_size, stride, padding).mean(axis=-1)
 
 
 def max_pool1d(

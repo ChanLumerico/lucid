@@ -83,7 +83,7 @@ class Module:
 
     def reset_parameters(self) -> None: ...
 
-    def forward(self) -> Tensor | tuple[Tensor, ...]:
+    def forward(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]:
         raise NotImplementedError(
             "The forward method must be implemented by the subclass."
         )

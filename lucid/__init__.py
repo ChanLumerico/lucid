@@ -149,9 +149,9 @@ def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:
 REGISTRY_PATH: Path = Path("lucid/models/registry.json")
 
 
-def register_model(func: Callable) -> Callable:
+def register_model(func: Callable) -> Callable[[Any], nn.Module]:
     @wraps(func)
-    def wrapper(*args, **kwargs) -> Any:
+    def wrapper(*args, **kwargs) -> nn.Module:
         if os.environ.get("SPHINX_BUILD"):
             return func(*args, **kwargs)
 
