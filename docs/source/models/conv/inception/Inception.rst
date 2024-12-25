@@ -18,8 +18,6 @@ various versions of the Inception architecture, including Inception v1, v3, and 
 It facilitates the configuration of the feature extraction and classification components 
 through arguments, making it adaptable for different versions of the Inception series.
 
-**Total Parameters**: 13,393,352
-
 Class Signature
 ---------------
 

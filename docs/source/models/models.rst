@@ -6,7 +6,7 @@ architectures that are ready to use for various tasks, such as image classificat
 and feature extraction. These models are designed to demonstrate key deep learning 
 concepts while leveraging the modular and educational nature of the `lucid` framework.
 
-conv
+ConvNets
 --------
 
 .. rubric:: LeNet

@@ -154,6 +154,112 @@ class Inception_V1(Inception):
         return x, aux2, aux1
 
 
+class _InceptionModule_V2A(nn.Module):
+    def __init__(self, in_channels: int) -> None:
+        super().__init__()
+
+        self.branch1 = nn.Sequential(
+            nn.ConvBNReLU2d(in_channels, 64, kernel_size=3),
+            nn.ConvBNReLU2d(64, 96, kernel_size=3, padding=1),
+            nn.ConvBNReLU2d(96, 96, kernel_size=3, padding=1),
+        )
+
+        self.branch2 = nn.Sequential(
+            nn.ConvBNReLU2d(in_channels, 48, kernel_size=1),
+            nn.ConvBNReLU2d(48, 64, kernel_size=3, padding=1),
+        )
+
+        self.branch3 = nn.Sequential(
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+            nn.ConvBNReLU2d(in_channels, 64, kernel_size=1),
+        )
+
+        self.branch4 = nn.ConvBNReLU2d(in_channels, 64, kernel_size=1)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return lucid.concatenate(
+            [self.branch1(x), self.branch2(x), self.branch3(x), self.branch4(x)],
+            axis=1,
+        )
+
+
+class _InceptionModule_V2B(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        super().__init__()
+
+        self.branch1 = nn.Sequential(
+            nn.ConvBNReLU2d(in_channels, out_channels, kernel_size=1),
+            nn.ConvBNReLU2d(
+                out_channels, out_channels, kernel_size=(1, 7), padding=(0, 3)
+            ),
+            nn.ConvBNReLU2d(
+                out_channels, out_channels, kernel_size=(7, 1), padding=(3, 0)
+            ),
+            nn.ConvBNReLU2d(
+                out_channels, out_channels, kernel_size=(1, 7), padding=(0, 3)
+            ),
+            nn.ConvBNReLU2d(out_channels, 192, kernel_size=(7, 1), padding=(3, 0)),
+        )
+
+        self.branch2 = nn.Sequential(
+            nn.ConvBNReLU2d(in_channels, out_channels, kernel_size=1),
+            nn.ConvBNReLU2d(
+                out_channels, out_channels, kernel_size=(1, 7), padding=(0, 3)
+            ),
+            nn.ConvBNReLU2d(out_channels, 192, kernel_size=(7, 1), padding=(3, 0)),
+        )
+
+        self.branch3 = nn.Sequential(
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+            nn.ConvBNReLU2d(in_channels, 192, kernel_size=1),
+        )
+
+        self.branch4 = nn.ConvBNReLU2d(in_channels, 192, kernel_size=1)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return lucid.concatenate(
+            [self.branch1(x), self.branch2(x), self.branch3(x), self.branch4(x)],
+            axis=1,
+        )
+
+
+class _InceptionModule_V2C(nn.Module):
+    def __init__(self, in_channels: int) -> None:
+        super().__init__()
+
+        self.branch1_stem = nn.Sequential(
+            nn.ConvBNReLU2d(in_channels, 448, kernel_size=1),
+            nn.ConvBNReLU2d(448, 384, kernel_size=3, padding=1),
+        )
+        self.branch1_left = nn.ConvBNReLU2d(
+            384, 384, kernel_size=(1, 3), padding=(0, 1)
+        )
+        self.branch1_right = nn.ConvBNReLU2d(
+            384, 384, kernel_size=(3, 1), padding=(1, 0)
+        )
+
+        self.branch2_stem = nn.ConvBNReLU2d(in_channels, 384, kernel_size=1)
+        self.branch2_left = nn.ConvBNReLU2d(
+            384, 384, kernel_size=(1, 3), padding=(0, 1)
+        )
+        self.branch2_right = nn.ConvBNReLU2d(
+            384, 384, kernel_size=(3, 1), padding=(1, 0)
+        )
+
+        self.branch3 = nn.Sequential(
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+            nn.ConvBNReLU2d(in_channels, 192, kernel_size=1),
+        )
+
+        self.branch4 = nn.ConvBNReLU2d(in_channels, 320, kernel_size=1)
+
+    def forward(self, x: Tensor) -> Tensor:
+        branch1_stem = self.branch1_stem(x)
+        branch2_stem = self.branch2_stem(x)
+
+        # TODO: Begin from here
+
+
 @register_model
 def inception_v1(
     num_classes: int = 1000,
