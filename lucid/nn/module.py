@@ -28,7 +28,6 @@ __all__ = [
 ]
 
 _ForwardHookType = Callable[[Tensor, Tensor], None]
-_BackwardHookType = Callable[[_NumPyArray, _NumPyArray], None]
 
 
 class Module:
@@ -45,7 +44,6 @@ class Module:
 
         self.training = True
         self._forward_hooks: list[_ForwardHookType] = []
-        self._backward_hooks: list[_BackwardHookType] = []
 
     def __setattr__(self, name: str, value: Any) -> None:
         registry_map: dict[Type, OrderedDict[str, Any]] = {
@@ -103,23 +101,13 @@ class Module:
         self._forward_hooks.append(hook)
         return remove
 
-    def register_full_backward_hook(self, hook: _BackwardHookType) -> Callable:
-        def remove() -> None:
-            self._backward_hooks.remove(hook)
-
-        self._backward_hooks.append(hook)
-        return remove
-
     def _apply_forward_hooks(self, input: Tensor, output: Tensor) -> None:
         for hook in self._forward_hooks:
             hook(self, input, output)
 
-    def _apply_full_backward_hooks(
-        self, grad_input: _NumPyArray, grad_output: _NumPyArray
-    ) -> None:
-        # TODO: Begin from here
-
-    def reset_parameters(self) -> None: ...
+    def reset_parameters(self) -> None:
+        for param in self.parameters():
+            param.zero()
 
     def forward(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]:
         raise NotImplementedError(
