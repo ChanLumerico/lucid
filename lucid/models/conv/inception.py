@@ -7,11 +7,11 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["Inception", "inception_v1", "inception_v3"]
+__all__ = ["Inception", "inception_v1", "inception_v3", "inception_v4"]
 
 
 class Inception(nn.Module):
-    def __init__(self, num_classes: int, use_aux: bool = True) -> None:
+    def __init__(self, num_classes: int, use_aux: bool | None = True) -> None:
         super().__init__()
         self.num_classes = num_classes
         self.use_aux = use_aux
@@ -402,17 +402,17 @@ class _InceptionStem_V4(nn.Module):
         self.branch1_conv = nn.ConvBNReLU2d(64, 96, kernel_size=3, stride=2)
 
         self.branch2_left = nn.Sequential(
-            nn.ConvBNReLU2d(160, 64, kernel_size=1, padding=1),
+            nn.ConvBNReLU2d(160, 64, kernel_size=1),
             nn.ConvBNReLU2d(64, 96, kernel_size=3),
         )
         self.branch2_right = nn.Sequential(
-            nn.ConvBNReLU2d(160, 64, kernel_size=1, padding=1),
+            nn.ConvBNReLU2d(160, 64, kernel_size=1),
             nn.ConvBNReLU2d(64, 64, kernel_size=(7, 1), padding=(3, 0)),
             nn.ConvBNReLU2d(64, 64, kernel_size=(1, 7), padding=(0, 3)),
             nn.ConvBNReLU2d(64, 96, kernel_size=3),
         )
 
-        self.branch3_conv = nn.ConvBNReLU2d(192, 192, kernel_size=3)
+        self.branch3_conv = nn.ConvBNReLU2d(192, 192, kernel_size=3, stride=2)
         self.branch3_pool = nn.MaxPool2d(kernel_size=3, stride=2)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -492,10 +492,10 @@ class _InceptionModule_V4C(nn.Module):
             nn.AvgPool2d(kernel_size=3, padding=1),
             nn.ConvBNReLU2d(in_channels, 256, kernel_size=1),
         )
-        self.branch2 = nn.ConvBNReLU2d(in_channels, 96, kernel_size=1)
+        self.branch2 = nn.ConvBNReLU2d(in_channels, 256, kernel_size=1)
 
         self.branch3 = nn.ConvBNReLU2d(in_channels, 384, kernel_size=1)
-        self.branch3_left = nn.ConvBNReLU3d(
+        self.branch3_left = nn.ConvBNReLU2d(
             384, 256, kernel_size=(1, 3), padding=(0, 1)
         )
         self.branch3_right = nn.ConvBNReLU2d(
@@ -561,7 +561,7 @@ class _InceptionReduce_V4B(nn.Module):
 
         self.branch3 = nn.Sequential(
             nn.ConvBNReLU2d(in_channels, 256, kernel_size=1),
-            nn.ConvBNReLU2d(192, 256, kernel_size=(1, 7), padding=(0, 3)),
+            nn.ConvBNReLU2d(256, 256, kernel_size=(1, 7), padding=(0, 3)),
             nn.ConvBNReLU2d(256, 320, kernel_size=(7, 1), padding=(3, 0)),
             nn.ConvBNReLU2d(320, 320, kernel_size=3, stride=2),
         )
@@ -627,10 +627,6 @@ def inception_v3(
     return Inception_V3(num_classes, use_aux, dropout_prob, **kwargs)
 
 
-@register_model  # NOTE: Need to be tested
-def inception_v4(
-    num_classes: int = 1000,
-    use_aux: bool = True,
-    **kwargs,
-) -> Inception:
-    return Inception_V4(num_classes, use_aux, **kwargs)
+@register_model
+def inception_v4(num_classes: int = 1000, **kwargs) -> Inception:
+    return Inception_V4(num_classes, None, **kwargs)

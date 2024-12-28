@@ -7,6 +7,7 @@ Inception
 
     inception_v1.rst
     inception_v3.rst
+    inception_v4.rst
 
 .. autoclass:: lucid.models.Inception
 
