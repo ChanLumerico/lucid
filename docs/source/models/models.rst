@@ -175,5 +175,11 @@ tasks.
       - :math:`(N,3,299,299)`
       - 30,817,392
       - ✅
+    
+    * - Inception-v4
+      - `inception_v4 <conv/inception/inception_v4>`_
+      - :math:`(N,3,299,299)`
+      - 40,586,984
+      - ✅
 
 *To be implemented...🔮*

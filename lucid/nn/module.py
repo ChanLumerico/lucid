@@ -1,9 +1,19 @@
-from typing import Any, ItemsView, Iterator, KeysView, Self, Type, ValuesView, overload
+from typing import (
+    Any,
+    Callable,
+    ItemsView,
+    Iterator,
+    KeysView,
+    Self,
+    Type,
+    ValuesView,
+    overload,
+)
 from collections import OrderedDict
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid.types import _ArrayOrScalar, _StateDict
+from lucid.types import _ArrayOrScalar, _StateDict, _NumPyArray
 
 import lucid.nn as nn
 
@@ -31,6 +41,9 @@ class Module:
         object.__setattr__(self, "_modules", OrderedDict())
 
         self.training = True
+        self._forward_hooks: OrderedDict[int, Callable] = OrderedDict()
+        self._backward_hooks: OrderedDict[int, Callable] = OrderedDict()
+        self._hook_id_counter = 0
 
     def __setattr__(self, name: str, value: Any) -> None:
         registry_map: dict[Type, OrderedDict[str, Any]] = {
@@ -115,6 +128,13 @@ class Module:
         yield self
         for module in self._modules.values():
             yield from module.modules()
+
+    def register_forward_hook(self, hook: Callable) -> Callable:
+        hook_id = self._hook_id_counter
+        self._hook_id_counter += 1
+        self._forward_hooks[hook_id] = hook
+
+        # TODO: Begin from here
 
     def count_parameters(self, recurse: bool = True) -> int:
         total_params = sum(p.size for p in self.parameters(recurse=recurse))
