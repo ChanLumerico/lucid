@@ -82,6 +82,7 @@
     :hidden:
 
     models/models.rst
+    models/summarize.rst
 
     ConvNets <models/conv/index.rst>
 

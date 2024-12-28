@@ -27,7 +27,8 @@ __all__ = [
     "ParameterDict",
 ]
 
-_ForwardHookType = Callable[[Tensor, Tensor], None]
+_ForwardHookType = Callable[["Module", tuple[Tensor], tuple[Tensor]], None]
+_BackwardHookType = Callable[[Tensor, _NumPyArray], None]
 
 
 class Module:
@@ -44,6 +45,7 @@ class Module:
 
         self.training = True
         self._forward_hooks: list[_ForwardHookType] = []
+        self._backward_hooks: list[_BackwardHookType] = []
 
     def __setattr__(self, name: str, value: Any) -> None:
         registry_map: dict[Type, OrderedDict[str, Any]] = {
@@ -95,15 +97,12 @@ class Module:
         self.__setattr__(name, buffer)
 
     def register_forward_hook(self, hook: _ForwardHookType) -> Callable:
-        def remove() -> None:
-            self._forward_hooks.remove(hook)
-
         self._forward_hooks.append(hook)
-        return remove
+        return lambda: self._forward_hooks.remove(hook)
 
-    def _apply_forward_hooks(self, input: Tensor, output: Tensor) -> None:
-        for hook in self._forward_hooks:
-            hook(self, input, output)
+    def register_backward_hook(self, hook: _BackwardHookType) -> Callable:
+        self._backward_hooks.append(hook)
+        return lambda: self._backward_hooks.remove(hook)
 
     def reset_parameters(self) -> None:
         for param in self.parameters():
@@ -201,9 +200,14 @@ class Module:
                 raise KeyError(f"Unexpected key '{key}' in state_dict.")
 
     def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
-        input = args
         output = self.forward(*args, **kwargs)
-        self._apply_forward_hooks(input, output)
+        for hook in self._forward_hooks:
+            hook(self, args, output)
+
+        if isinstance(output, Tensor) and self._backward_hooks:
+            for hook in self._backward_hooks:
+                output.register_hook(hook)
+
         return output
 
 

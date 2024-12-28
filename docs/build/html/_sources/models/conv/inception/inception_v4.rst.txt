@@ -10,6 +10,8 @@ The `inception_v4` function implements the Inception v4 architecture, which comb
 the improved features of Inception v3 with residual connections to enhance gradient flow and optimization.
 This model excels in image classification tasks, leveraging deeper networks and improved module designs.
 
+**Total Parameters**: 40,586,984
+
 Function Signature
 ------------------
 

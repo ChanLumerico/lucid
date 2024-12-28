@@ -6,7 +6,7 @@ from lucid._tensor.tensor_ops import _TensorOps
 from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _base_dtype
 
 
-_HookType = Callable[[Self, _NumPyArray], None]
+_HookType = Callable[["Tensor", _NumPyArray], None]
 
 
 class Tensor(_TensorOps):
@@ -63,11 +63,8 @@ class Tensor(_TensorOps):
                 self.grad = None
 
     def register_hook(self, hook: _HookType) -> Callable:
-        def remove():
-            self._backward_hooks.remove(hook)
-
         self._backward_hooks.append(hook)
-        return remove
+        return lambda: self._backward_hooks.remove(hook)
 
     @property
     def shape(self) -> tuple[int, ...]:
