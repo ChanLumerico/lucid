@@ -6,6 +6,9 @@ from lucid._tensor.tensor_ops import _TensorOps
 from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _base_dtype
 
 
+_HookType = Callable[[Self, _NumPyArray], None]
+
+
 class Tensor(_TensorOps):
     def __init__(
         self,
@@ -28,6 +31,7 @@ class Tensor(_TensorOps):
         self.grad: Optional[_NumPyArray] = None
         self._backward_op: Callable = lambda: None
         self._prev: list[Tensor] = []
+        self._backward_hooks: list[_HookType] = []
 
     @property
     def is_leaf(self) -> bool:
@@ -52,8 +56,18 @@ class Tensor(_TensorOps):
 
         for tensor in topo_order:
             tensor._backward_op()
+            for hook in tensor._backward_hooks:
+                hook(tensor, tensor.grad)
+
             if not (tensor.is_leaf or keep_grad or self.keep_grad):
                 self.grad = None
+
+    def register_hook(self, hook: _HookType) -> Callable:
+        def remove():
+            self._backward_hooks.remove(hook)
+
+        self._backward_hooks.append(hook)
+        return remove
 
     @property
     def shape(self) -> tuple[int, ...]:

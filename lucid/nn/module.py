@@ -27,6 +27,9 @@ __all__ = [
     "ParameterDict",
 ]
 
+_ForwardHookType = Callable[[Tensor, Tensor], None]
+_BackwardHookType = Callable[[_NumPyArray, _NumPyArray], None]
+
 
 class Module:
     _registry_map: dict[Type, OrderedDict[str, Any]] = {}
@@ -41,9 +44,8 @@ class Module:
         object.__setattr__(self, "_modules", OrderedDict())
 
         self.training = True
-        self._forward_hooks: OrderedDict[int, Callable] = OrderedDict()
-        self._backward_hooks: OrderedDict[int, Callable] = OrderedDict()
-        self._hook_id_counter = 0
+        self._forward_hooks: list[_ForwardHookType] = []
+        self._backward_hooks: list[_BackwardHookType] = []
 
     def __setattr__(self, name: str, value: Any) -> None:
         registry_map: dict[Type, OrderedDict[str, Any]] = {
@@ -94,6 +96,29 @@ class Module:
 
         self.__setattr__(name, buffer)
 
+    def register_forward_hook(self, hook: _ForwardHookType) -> Callable:
+        def remove() -> None:
+            self._forward_hooks.remove(hook)
+
+        self._forward_hooks.append(hook)
+        return remove
+
+    def register_full_backward_hook(self, hook: _BackwardHookType) -> Callable:
+        def remove() -> None:
+            self._backward_hooks.remove(hook)
+
+        self._backward_hooks.append(hook)
+        return remove
+
+    def _apply_forward_hooks(self, input: Tensor, output: Tensor) -> None:
+        for hook in self._forward_hooks:
+            hook(self, input, output)
+
+    def _apply_full_backward_hooks(
+        self, grad_input: _NumPyArray, grad_output: _NumPyArray
+    ) -> None:
+        # TODO: Begin from here
+
     def reset_parameters(self) -> None: ...
 
     def forward(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]:
@@ -128,13 +153,6 @@ class Module:
         yield self
         for module in self._modules.values():
             yield from module.modules()
-
-    def register_forward_hook(self, hook: Callable) -> Callable:
-        hook_id = self._hook_id_counter
-        self._hook_id_counter += 1
-        self._forward_hooks[hook_id] = hook
-
-        # TODO: Begin from here
 
     def count_parameters(self, recurse: bool = True) -> int:
         total_params = sum(p.size for p in self.parameters(recurse=recurse))
@@ -195,7 +213,10 @@ class Module:
                 raise KeyError(f"Unexpected key '{key}' in state_dict.")
 
     def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
-        return self.forward(*args, **kwargs)
+        input = args
+        output = self.forward(*args, **kwargs)
+        self._apply_forward_hooks(input, output)
+        return output
 
 
 class Sequential(Module):
