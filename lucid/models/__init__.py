@@ -15,7 +15,7 @@ def summarize(
     truncate_from: int | None = None,
 ) -> None:
 
-    def _register_hook(module: nn.Module) -> None:
+    def _register_hook(module: nn.Module, depth: int) -> None:
 
         def _hook(_module: nn.Module, input_: Tensor, output: Tensor) -> None:
             layer_name = type(_module).__name__
@@ -23,6 +23,11 @@ def summarize(
             output_shape = output.shape if isinstance(output, Tensor) else None
             param_size = _module.parameter_size
             layer_count = len(_module._modules)
+
+            if depth == 1:
+                layer_name = "+- " + layer_name
+            elif depth > 1:
+                layer_name = "| " * (depth - 2) + "+- " + layer_name
 
             module_summary.append(
                 dict(
@@ -36,11 +41,11 @@ def summarize(
 
         hooks.append(module.register_forward_hook(_hook))
 
-    def _recursive_register(module: nn.Module) -> None:
+    def _recursive_register(module: nn.Module, depth: int = 0) -> None:
         for _, submodule in module._modules.items():
-            _register_hook(submodule)
+            _register_hook(submodule, depth=depth)
             if recurse:
-                _recursive_register(submodule)
+                _recursive_register(submodule, depth=depth + 1)
 
     hooks = []
     module_summary = []
@@ -50,14 +55,14 @@ def summarize(
     model(dummy_input)
 
     title = f"Summary of {type(model).__name__}"
-    print(f"{title:^90}")
-    print("=" * 90)
-    print(f"{"Layer":<25}{"Input Shape":<25}", end="")
+    print(f"{title:^95}")
+    print("=" * 95)
+    print(f"{"Layer":<30}{"Input Shape":<25}", end="")
     print(f"{"Output Shape":<25}{"Parameter Size":<12}")
-    print("=" * 90)
+    print("=" * 95)
 
     total_layers = sum(layer["layer_count"] for layer in module_summary)
-    total_params = sum(layer["param_size"] for layer in module_summary)
+    total_params = model.parameter_size
 
     if truncate_from is not None:
         truncated_lines = len(module_summary) - truncate_from
@@ -65,18 +70,18 @@ def summarize(
 
     for layer in module_summary:
         print(
-            f"{layer["layer_name"]:<25}{str(layer["input_shape"]):<25}",
+            f"{layer["layer_name"]:<30}{str(layer["input_shape"]):<25}",
             f"{str(layer["output_shape"]):<25}{layer["param_size"]:<12,}",
             sep="",
         )
 
     if truncate_from is not None:
-        print(f"\n{f"... and more {truncated_lines} layer(s)":^90}")
+        print(f"\n{f"... and more {truncated_lines} layer(s)":^95}")
 
-    print("=" * 90)
+    print("=" * 95)
     print(f"Total Layers(Submodules): {total_layers:,}")
     print(f"Total Parameters: {total_params:,}")
-    print("=" * 90)
+    print("=" * 95)
 
     for hook in hooks:
         hook()
