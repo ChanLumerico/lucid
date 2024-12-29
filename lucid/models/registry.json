@@ -76,5 +76,11 @@
         "family": "InceptionResNet",
         "param_size": 22739128,
         "arch": "conv"
+    },
+    "inception_resnet_v2": {
+        "name": "inception_resnet_v2",
+        "family": "InceptionResNet",
+        "param_size": 35847512,
+        "arch": "conv"
     }
 }

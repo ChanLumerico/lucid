@@ -6,10 +6,10 @@ import lucid.nn as nn
 from lucid import register_model
 from lucid._tensor import Tensor
 
-from .inception import _InceptionReduce_V4A
+from .inception import _InceptionStem_V4, _InceptionReduce_V4A
 
 
-__all__ = ["InceptionResNet", "inception_resnet_v1"]
+__all__ = ["InceptionResNet", "inception_resnet_v1", "inception_resnet_v2"]
 
 
 class InceptionResNet(nn.Module):
@@ -133,7 +133,7 @@ class _InceptionResModule_C(nn.Module):
             nn.ConvBNReLU2d(cfg[0], cfg[1], kernel_size=(3, 1), padding=(1, 0)),
         )
 
-        self.conv_linear = nn.Conv2d(192 + cfg[1], cfg[2], kernel_size=1)
+        self.conv_linear = nn.Conv2d(192 + cfg[1], in_channels, kernel_size=1)
         self.relu = nn.ReLU()
 
     def forward(self, x: Tensor) -> Tensor:
@@ -222,6 +222,47 @@ class InceptionResNet_V1(InceptionResNet):
         return x
 
 
+class InceptionResNet_V2(InceptionResNet):
+    def __init__(self, num_classes: int = 1000) -> None:
+        super().__init__(num_classes)
+        in_channels = 3
+
+        self.stem = _InceptionStem_V4(in_channels)
+
+        modules = []
+        for _ in range(5):
+            modules.append(_InceptionResModule_A(384, version="v2"))
+        modules.append(_InceptionReduce_V4A(384, k=256, l=256, m=384, n=384))
+
+        for _ in range(10):
+            modules.append(_InceptionResModule_B(1152, version="v2"))
+        modules.append(_InceptionResReduce(1152, version="v2"))
+
+        for _ in range(5):
+            modules.append(_InceptionResModule_C(2144, version="v2"))
+
+        self.conv = nn.Sequential(*modules)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=0.8)
+        self.fc = nn.Linear(2144, num_classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.stem(x)
+        x = self.conv(x)
+        x = self.avgpool(x)
+
+        x = x.reshape(x.shape[0], -1)
+        x = self.dropout(x)
+        x = self.fc(x)
+
+        return x
+
+
 @register_model
 def inception_resnet_v1(num_classes: int = 1000, **kwargs) -> InceptionResNet:
     return InceptionResNet_V1(num_classes, **kwargs)
+
+
+@register_model
+def inception_resnet_v2(num_classes: int = 1000, **kwargs) -> InceptionResNet:
+    return InceptionResNet_V2(num_classes, **kwargs)

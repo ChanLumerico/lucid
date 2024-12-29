@@ -7,8 +7,10 @@ from lucid import models
 from lucid import datasets, transforms
 from lucid.data import DataLoader
 
-mnist_train = datasets.MNIST(root="./_data/mnist", train=True)
-mnist_test = datasets.MNIST(root="./_data/mnist", train=False)
+transform = transforms.Resize((32, 32))
+
+mnist_train = datasets.MNIST(root="./_data/mnist", train=True, transform=transform)
+mnist_test = datasets.MNIST(root="./_data/mnist", train=False, transform=transform)
 
 train_loader = DataLoader(mnist_train, batch_size=64, shuffle=True)
 test_loader = DataLoader(mnist_test, batch_size=64, shuffle=False)

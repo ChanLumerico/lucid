@@ -9,3 +9,4 @@ ConvNets
     ZFNet <zfnet/ZFNet.rst>
     VGGNet <vgg/VGGNet.rst>
     Inception <inception/Inception.rst>
+    Inception-ResNet <inception_res/InceptionResNet.rst>

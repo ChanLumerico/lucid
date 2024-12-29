@@ -182,4 +182,38 @@ tasks.
       - 40,586,984
       - ✅
 
+.. rubric:: Inception-ResNet
+
+The Inception-ResNet architecture builds upon the Inception model by integrating 
+residual connections, which improve gradient flow and training stability in very 
+deep networks. This combination of Inception's multi-scale feature processing with 
+ResNet's efficient backpropagation allows for a powerful and scalable design, suitable 
+for a wide range of image classification tasks.
+
+ Szegedy, Christian, et al. "Inception-v4, Inception-ResNet and the Impact of Residual 
+ Connections on Learning." *Proceedings of the AAAI Conference on Artificial Intelligence*, 
+ 2017, pp. 4278-4284.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - Inception-ResNet-v1
+      - `inception_resnet_v1 <conv/inception_res/inception_resnet_v1>`_
+      - :math:`(N,3,299,299)`
+      - 22,739,128
+      - ✅
+    
+    * - Inception-ResNet-v2
+      - `inception_resnet_v2 <conv/inception_res/inception_resnet_v2>`_
+      - :math:`(N,3,299,299)`
+      - 35,847,512
+      - ✅
+
 *To be implemented...🔮*
