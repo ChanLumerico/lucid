@@ -1,5 +1,5 @@
-models.inception_v1
-===================
+inception_v1
+============
 
 .. autofunction:: lucid.models.inception_v1
 

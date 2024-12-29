@@ -67,10 +67,8 @@ class ResNet(nn.Module):
         x = self.stem(x)
         x = self.maxpool(x)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        for layer in [self.layer1, self.layer2, self.layer3, self.layer4]:
+            x = layer(x)
 
         x = self.avgpool(x)
         x = x.reshape(x.shape[0], -1)

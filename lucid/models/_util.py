@@ -10,6 +10,7 @@ def summarize(
     input_shape: _ShapeLike,
     recurse: bool = True,
     truncate_from: int | None = None,
+    test_backward: bool = False,
 ) -> None:
     PIPELINE: str = r"│   "
     BRANCH: str = r"├── "
@@ -27,6 +28,8 @@ def summarize(
                 layer_name = BRANCH + layer_name
             elif depth > 1:
                 layer_name = PIPELINE * (depth - 2) + BRANCH + layer_name
+            if len(layer_name) > 30:
+                layer_name = layer_name[:27] + "..."
 
             summary_ = dict(
                 layer_name=layer_name,
@@ -51,7 +54,9 @@ def summarize(
     _recursive_register(module=model)
 
     dummy_input = lucid.zeros(input_shape)
-    model(dummy_input)
+    out = model(dummy_input)
+    if test_backward:
+        out.backward()
 
     module_summary.reverse()
 

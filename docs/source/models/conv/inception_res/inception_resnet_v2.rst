@@ -1,5 +1,5 @@
-models.inception_resnet_v2
-==========================
+inception_resnet_v2
+===================
 
 .. autofunction:: lucid.models.inception_resnet_v2
 

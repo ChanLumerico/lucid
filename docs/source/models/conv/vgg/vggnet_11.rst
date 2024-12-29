@@ -1,5 +1,5 @@
-models.vggnet_11
-================
+vggnet_11
+=========
 
 .. autofunction:: lucid.models.vggnet_11
 

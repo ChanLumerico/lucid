@@ -1,5 +1,5 @@
-models.zfnet
-============
+zfnet
+=====
 
 .. autofunction:: lucid.models.zfnet
 
