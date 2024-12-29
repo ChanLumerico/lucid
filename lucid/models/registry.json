@@ -82,5 +82,29 @@
         "family": "InceptionResNet",
         "param_size": 35847512,
         "arch": "conv"
+    },
+    "resnet_18": {
+        "name": "resnet_18",
+        "family": "ResNet",
+        "param_size": 11689512,
+        "arch": "conv"
+    },
+    "resnet_34": {
+        "name": "resnet_34",
+        "family": "ResNet",
+        "param_size": 21797672,
+        "arch": "conv"
+    },
+    "resnet_50": {
+        "name": "resnet_50",
+        "family": "ResNet",
+        "param_size": 25557032,
+        "arch": "conv"
+    },
+    "resnet_101": {
+        "name": "resnet_101",
+        "family": "ResNet",
+        "param_size": 44549160,
+        "arch": "conv"
     }
 }
