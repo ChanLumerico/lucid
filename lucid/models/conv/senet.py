@@ -113,6 +113,36 @@ class _SEModule(nn.Module):
         return out
 
 
+class _SEBottleneck(nn.Module):  # Bottleneck for `senet-154`
+    expansion: ClassVar[int] = 4
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        stride: int = 1,
+        reduction: int = 16,
+        downsample: nn.Module | None = None,
+    ) -> None:
+        super().__init__()
+        mid_channels = out_channels * (self.expansion // 2)
+
+        self.conv1 = nn.ConvBNReLU2d(
+            in_channels, mid_channels, kernel_size=1, conv_bias=False
+        )
+        self.conv2 = nn.ConvBNReLU2d(
+            mid_channels,
+            out_channels * self.expansion,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            conv_bias=False,
+        )
+
+        # TODO: Begin from here.
+        # Reference: [https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/senet.py]
+
+
 class _SEResNetModule(nn.Module):
     expansion: ClassVar[int] = 1
 
