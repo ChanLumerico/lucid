@@ -161,7 +161,7 @@ class _SEResNetModule(nn.Module):
         return out
 
 
-class _SEResNetBottleneck(nn.Module):  # NOTE: Need to be inspected
+class _SEResNetBottleneck(nn.Module):
     expansion: ClassVar[int] = 4
 
     def __init__(
@@ -173,25 +173,28 @@ class _SEResNetBottleneck(nn.Module):  # NOTE: Need to be inspected
         downsample: nn.Module | None = None,
     ) -> None:
         super().__init__()
-        mid_channels = out_channels // self.expansion
-
         self.conv1 = nn.ConvBNReLU2d(
-            in_channels, mid_channels, kernel_size=1, conv_bias=False
+            in_channels, out_channels, kernel_size=1, conv_bias=False
         )
         self.conv2 = nn.ConvBNReLU2d(
-            mid_channels,
-            mid_channels,
+            out_channels,
+            out_channels,
             kernel_size=3,
             stride=stride,
             padding=1,
             conv_bias=False,
         )
         self.conv3 = nn.Sequential(
-            nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels),
+            nn.Conv2d(
+                out_channels,
+                out_channels * self.expansion,
+                kernel_size=1,
+                bias=False,
+            ),
+            nn.BatchNorm2d(out_channels * self.expansion),
         )
 
-        self.se_module = _SEModule(out_channels, reduction)
+        self.se_module = _SEModule(out_channels * self.expansion, reduction)
         self.relu = nn.ReLU()
         self.downsample = downsample
 

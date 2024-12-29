@@ -142,5 +142,23 @@
         "family": "SENet",
         "param_size": 21958868,
         "arch": "conv"
+    },
+    "se_resnet_50": {
+        "name": "se_resnet_50",
+        "family": "SENet",
+        "param_size": 28088024,
+        "arch": "conv"
+    },
+    "se_resnet_101": {
+        "name": "se_resnet_101",
+        "family": "SENet",
+        "param_size": 49326872,
+        "arch": "conv"
+    },
+    "se_resnet_152": {
+        "name": "se_resnet_152",
+        "family": "SENet",
+        "param_size": 66821848,
+        "arch": "conv"
     }
 }

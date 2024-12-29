@@ -289,4 +289,54 @@ accuracy in tasks like image classification and object detection.
       - 149,071,016
       - ✅
 
+.. rubric:: SENet
+
+SENets (Squeeze-and-Excitation Networks) are deep neural network architectures that enhance t
+he representational power of models by explicitly modeling channel interdependencies. 
+They introduce a novel "squeeze-and-excitation" block, which adaptively recalibrates channel-wise 
+feature responses. 
+
+ Hu, Jie, et al. "Squeeze-and-Excitation Networks." *Proceedings of the IEEE Conference on 
+ Computer Vision and Pattern Recognition (CVPR)*, 2018, pp. 7132-7141.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+
+    * - SE-ResNet-18
+      - `se_resnet_18 <conv/senet/se_resnet_18>`_
+      - :math:`(N,3,224,224)`
+      - 11,778,592
+      - ✅
+    
+    * - SE-ResNet-34
+      - `se_resnet_34 <conv/senet/se_resnet_34>`_
+      - :math:`(N,3,224,224)`
+      - 21,958,868
+      - ✅
+    
+    * - SE-ResNet-50
+      - `se_resnet_50 <conv/senet/se_resnet_50>`_
+      - :math:`(N,3,224,224)`
+      - 28,088,024
+      - ✅
+    
+    * - SE-ResNet-101
+      - `se_resnet_101 <conv/senet/se_resnet_101>`_
+      - :math:`(N,3,224,224)`
+      - 49,326,872
+      - ✅
+    
+    * - SE-ResNet-152
+      - `se_resnet_152 <conv/senet/se_resnet_152>`_
+      - :math:`(N,3,224,224)`
+      - 66,821,848
+      - ✅
+
 *To be implemented...🔮*

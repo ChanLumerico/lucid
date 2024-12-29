@@ -11,3 +11,4 @@ ConvNets
     Inception <inception/Inception.rst>
     Inception-ResNet <inception_res/InceptionResNet.rst>
     ResNet <resnet/ResNet.rst>
+    SENet <senet/SENet.rst>

@@ -42,25 +42,28 @@ class Tensor(_TensorOps):
             self.grad = np.ones_like(self.data)
 
         visited = set()
-        topo_order: list[Tensor] = []
+        topo_order: list[Self] = []
+        stack = [self]
 
-        def _build_topo(tensor: Tensor) -> None:
-            if tensor not in visited:
-                visited.add(tensor)
-                for parent in tensor._prev:
-                    _build_topo(parent)
+        while stack:
+            tensor = stack.pop()
+            if tensor in visited:
                 topo_order.append(tensor)
+                continue
 
-        _build_topo(self)
-        topo_order.reverse()
+            visited.add(tensor)
+            stack.append(tensor)
+            for parent in tensor._prev:
+                if parent not in visited:
+                    stack.append(parent)
 
-        for tensor in topo_order:
+        for tensor in reversed(topo_order):
             tensor._backward_op()
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
 
             if not (tensor.is_leaf or keep_grad or self.keep_grad):
-                self.grad = None
+                tensor.grad = None
 
     def register_hook(self, hook: _HookType) -> Callable:
         self._backward_hooks.append(hook)

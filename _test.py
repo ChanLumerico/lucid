@@ -61,8 +61,8 @@ def fit_model(model, optimizer):
 import matplotlib.pyplot as plt
 
 optimizers_list = [
-    optim.SGD,
-    optim.RMSprop,
+    # optim.SGD,
+    # optim.RMSprop,
     optim.Adam,
     # optim.AdamW,
     # optim.NAdam,
