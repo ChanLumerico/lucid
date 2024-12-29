@@ -13,6 +13,9 @@ __all__ = [
     "resnet_50",
     "resnet_101",
     "resnet_152",
+    "resnet_200",
+    "resnet_269",
+    "resnet_1001",
 ]
 
 
@@ -132,7 +135,7 @@ class _Bottleneck(nn.Module):
         )
         self.conv2 = nn.ConvBNReLU2d(
             out_channels,
-            out_channels,  # ????????
+            out_channels,
             kernel_size=3,
             stride=stride,
             padding=1,
@@ -156,8 +159,8 @@ class _Bottleneck(nn.Module):
         identity = x
 
         out = self.conv1(x)
-        out = self.conv2(x)
-        out = self.conv3(x)
+        out = self.conv2(out)
+        out = self.conv3(out)
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -165,6 +168,56 @@ class _Bottleneck(nn.Module):
         out += identity
         out = self.relu(out)
 
+        return out
+
+
+class _PreActBottleneck(nn.Module):
+    expansion: ClassVar[int] = 4
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        stride: int = 1,
+        downsample: nn.Module | None = None,
+    ) -> None:
+        super().__init__()
+
+        self.bn1 = nn.BatchNorm2d(in_channels)
+        self.relu1 = nn.ReLU()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.relu2 = nn.ReLU()
+        self.conv2 = nn.Conv2d(
+            out_channels,
+            out_channels,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            bias=False,
+        )
+
+        self.bn3 = nn.BatchNorm2d(out_channels)
+        self.relu3 = nn.ReLU()
+        self.conv3 = nn.Conv2d(
+            out_channels, out_channels * self.expansion, kernel_size=1, bias=False
+        )
+
+        self.downsample = downsample
+
+    def forward(self, x: Tensor) -> Tensor:
+        identity = x
+
+        out = self.relu1(self.bn1(x))
+        if self.downsample is not None:
+            identity = self.downsample(out)
+
+        out = self.conv1(out)
+        out = self.conv2(self.relu2(self.bn2(out)))
+        out = self.conv3(self.relu3(self.bn3(out)))
+
+        out += identity
         return out
 
 
@@ -196,3 +249,21 @@ def resnet_101(num_classes: int = 1000, **kwargs) -> ResNet:
 def resnet_152(num_classes: int = 1000, **kwargs) -> ResNet:
     layers = [3, 8, 36, 3]
     return ResNet(_Bottleneck, layers, num_classes, **kwargs)
+
+
+@register_model
+def resnet_200(num_classes: int = 1000, **kwargs) -> ResNet:
+    layers = [3, 24, 36, 3]
+    return ResNet(_PreActBottleneck, layers, num_classes, **kwargs)
+
+
+@register_model
+def resnet_269(num_classes: int = 1000, **kwargs) -> ResNet:
+    layers = [3, 30, 48, 8]
+    return ResNet(_PreActBottleneck, layers, num_classes, **kwargs)
+
+
+@register_model
+def resnet_1001(num_classes: int = 1000, **kwargs) -> ResNet:
+    layers = [3, 94, 94, 3]
+    return ResNet(_PreActBottleneck, layers, num_classes, **kwargs)

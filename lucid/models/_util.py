@@ -40,17 +40,20 @@ def summarize(
         hooks.append(module.register_forward_hook(_hook))
 
     def _recursive_register(module: nn.Module, depth: int = 0) -> None:
+        _register_hook(module, depth)
         for _, submodule in module._modules.items():
             if recurse:
                 _recursive_register(submodule, depth=depth + 1)
-            _register_hook(submodule, depth=depth)
 
     hooks = []
     module_summary = []
+
     _recursive_register(module=model)
 
     dummy_input = lucid.zeros(input_shape)
     model(dummy_input)
+
+    module_summary.reverse()
 
     title = f"Summary of {type(model).__name__}"
     print(f"{title:^95}")

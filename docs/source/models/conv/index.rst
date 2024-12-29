@@ -10,3 +10,4 @@ ConvNets
     VGGNet <vgg/VGGNet.rst>
     Inception <inception/Inception.rst>
     Inception-ResNet <inception_res/InceptionResNet.rst>
+    ResNet <resnet/ResNet.rst>

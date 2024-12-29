@@ -106,5 +106,29 @@
         "family": "ResNet",
         "param_size": 44549160,
         "arch": "conv"
+    },
+    "resnet_152": {
+        "name": "resnet_152",
+        "family": "ResNet",
+        "param_size": 60192808,
+        "arch": "conv"
+    },
+    "resnet_200": {
+        "name": "resnet_200",
+        "family": "ResNet",
+        "param_size": 64669864,
+        "arch": "conv"
+    },
+    "resnet_269": {
+        "name": "resnet_269",
+        "family": "ResNet",
+        "param_size": 102069416,
+        "arch": "conv"
+    },
+    "resnet_1001": {
+        "name": "resnet_1001",
+        "family": "ResNet",
+        "param_size": 149071016,
+        "arch": "conv"
     }
 }

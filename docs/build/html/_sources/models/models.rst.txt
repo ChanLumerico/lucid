@@ -216,4 +216,77 @@ for a wide range of image classification tasks.
       - 35,847,512
       - ✅
 
+.. rubric:: ResNet
+
+ResNets (Residual Networks) are deep neural network architectures that use skip 
+connections (residual connections) to alleviate the vanishing gradient problem, 
+enabling the training of extremely deep models. They revolutionized deep learning 
+by introducing identity mappings, allowing efficient backpropagation and improved 
+accuracy in tasks like image classification and object detection.
+
+ He, Kaiming, et al. "Deep Residual Learning for Image Recognition." 
+ *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, 
+ 2016, pp. 770-778.
+
+ He, Kaiming, et al. "Identity Mappings in Deep Residual Networks." 
+ *European Conference on Computer Vision (ECCV)*, Springer, 2016, pp. 630-645.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+
+    * - ResNet-18
+      - `resnet_18 <conv/resnet/resnet_18>`_
+      - :math:`(N,3,224,224)`
+      - 11,689,512
+      - ✅
+    
+    * - ResNet-34
+      - `resnet_34 <conv/resnet/resnet_34>`_
+      - :math:`(N,3,224,224)`
+      - 21,797,672
+      - ✅
+    
+    * - ResNet-50
+      - `resnet_50 <conv/resnet/resnet_50>`_
+      - :math:`(N,3,224,224)`
+      - 25,557,032
+      - ✅
+    
+    * - ResNet-101
+      - `resnet_101 <conv/resnet/resnet_101>`_
+      - :math:`(N,3,224,224)`
+      - 44,549,160
+      - ✅
+    
+    * - ResNet-152
+      - `resnet_152 <conv/resnet/resnet_152>`_
+      - :math:`(N,3,224,224)`
+      - 60,192,808
+      - ✅
+    
+    * - ResNet-200
+      - `resnet_200 <conv/resnet/resnet_200>`_
+      - :math:`(N,3,224,224)`
+      - 64,669,864
+      - ✅
+    
+    * - ResNet-269
+      - `resnet_269 <conv/resnet/resnet_269>`_
+      - :math:`(N,3,224,224)`
+      - 102,069,416
+      - ✅
+    
+    * - ResNet-1001
+      - `resnet_1001 <conv/resnet/resnet_1001>`_
+      - :math:`(N,3,224,224)`
+      - 149,071,016
+      - ✅
+
 *To be implemented...🔮*
