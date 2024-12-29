@@ -1,5 +1,5 @@
-models.resnet_1001
-==================
+resnet_1001
+===========
 
 .. autofunction:: lucid.models.resnet_1001
 
@@ -44,8 +44,6 @@ Examples
 Creating a ResNet-1001 model for 1000 classes:
 
 .. code-block:: python
-
-    from resnet_functions import resnet_1001
 
     model = resnet_1001(num_classes=1000)
     print(model)

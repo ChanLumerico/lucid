@@ -1,5 +1,5 @@
-models.resnet_18
-================
+resnet_18
+=========
 
 .. autofunction:: lucid.models.resnet_18
 
@@ -43,8 +43,6 @@ Examples
 Creating a ResNet-18 model for 1000 classes:
 
 .. code-block:: python
-
-    from resnet_functions import resnet_18
 
     model = resnet_18(num_classes=1000)
     print(model)

@@ -1,5 +1,5 @@
-datasets.MNIST
-==============
+MNIST
+=====
 
 .. autoclass:: lucid.datasets.MNIST
 

@@ -1,5 +1,5 @@
-models.alexnet
-==============
+alexnet
+=======
 
 .. autofunction:: lucid.models.alexnet
 

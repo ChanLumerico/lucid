@@ -57,9 +57,20 @@ class SENet(nn.Module):
         stride: int,
         reduction: int,
     ) -> nn.Sequential:
-        layers = []
-        layers.append(block(self.in_channels, out_channels, stride, reduction))
+        downsample = None
+        if stride != 1 or self.in_channels != out_channels * block.expansion:
+            downsample = nn.Sequential(
+                nn.Conv2d(
+                    self.in_channels,
+                    out_channels * block.expansion,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),
+                nn.BatchNorm2d(out_channels * block.expansion),
+            )
 
+        layers = [block(self.in_channels, out_channels, stride, reduction, downsample)]
         self.in_channels = out_channels * block.expansion
         for _ in range(1, blocks):
             layers.append(block(self.in_channels, out_channels, 1, reduction))
@@ -111,6 +122,7 @@ class _SEResNetModule(nn.Module):
         out_channels: int,
         stride: int = 1,
         reduction: int = 16,
+        downsample: nn.Module | None = None,
     ) -> None:
         super().__init__()
 
@@ -134,32 +146,22 @@ class _SEResNetModule(nn.Module):
         )
 
         self.se_module = _SEModule(out_channels, reduction)
-        self.downsample = nn.Identity()
         self.relu = nn.ReLU()
-
-        if stride != 1 or in_channels != out_channels:
-            self.downsample = nn.Sequential(
-                nn.Conv2d(
-                    in_channels,
-                    out_channels,
-                    kernel_size=1,
-                    stride=stride,
-                    bias=False,
-                ),
-                nn.BatchNorm2d(out_channels),
-            )
+        self.downsample = downsample
 
     def forward(self, x: Tensor) -> Tensor:
         out = self.conv1(x)
         out = self.conv2(out)
-        out = self.se_module(out)
-        out += self.downsample(x)
-        out = self.relu(out)
 
+        out = self.se_module(out)
+        if self.downsample is not None:
+            out += self.downsample(x)
+
+        out = self.relu(out)
         return out
 
 
-class _SEResNetBottleneck(nn.Module):
+class _SEResNetBottleneck(nn.Module):  # NOTE: Need to be inspected
     expansion: ClassVar[int] = 4
 
     def __init__(
@@ -168,6 +170,7 @@ class _SEResNetBottleneck(nn.Module):
         out_channels: int,
         stride: int = 1,
         reduction: int = 16,
+        downsample: nn.Module | None = None,
     ) -> None:
         super().__init__()
         mid_channels = out_channels // self.expansion
@@ -189,16 +192,8 @@ class _SEResNetBottleneck(nn.Module):
         )
 
         self.se_module = _SEModule(out_channels, reduction)
-        self.downsample = nn.Identity()
         self.relu = nn.ReLU()
-
-        if stride != 1 or in_channels != out_channels:
-            self.downsample = nn.Sequential(
-                nn.Conv2d(
-                    in_channels, out_channels, kernel_size=1, stride=stride, bias=False
-                ),
-                nn.BatchNorm2d(out_channels),
-            )
+        self.downsample = downsample
 
     def forward(self, x: Tensor) -> Tensor:
         out = self.conv1(x)
@@ -206,9 +201,10 @@ class _SEResNetBottleneck(nn.Module):
         out = self.conv3(out)
 
         out = self.se_module(out)
-        out += self.downsample(x)
-        out = self.relu(out)
+        if self.downsample is not None:
+            out += self.downsample(x)
 
+        out = self.relu(out)
         return out
 
 
