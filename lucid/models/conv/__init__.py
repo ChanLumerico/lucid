@@ -6,3 +6,4 @@ from .inception import *
 from .inception_res import *
 from .resnet import *
 from .senet import *
+from .sknet import *

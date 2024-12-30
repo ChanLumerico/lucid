@@ -45,6 +45,7 @@
    Neural Functions <nn/functions/index.rst>
    Weight Initializations <nn/init/index.rst>
    Modules <nn/modules/index.rst>
+   Fused Modules <nn/fused/index.rst>
    Containers <nn/containers/index.rst>
 
 .. toctree::

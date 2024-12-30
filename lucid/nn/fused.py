@@ -3,17 +3,20 @@ from typing import Literal
 import lucid.nn as nn
 from lucid._tensor import Tensor
 
-from lucid.nn.modules.conv import Conv1d, Conv2d, Conv3d
-from lucid.nn.modules.norm import BatchNorm1d, BatchNorm2d, BatchNorm3d
 
-
-__all__ = ["ConvBNReLU1d", "ConvBNReLU2d", "ConvBNReLU3d"]
+__all__ = [
+    "ConvBNReLU1d",
+    "ConvBNReLU2d",
+    "ConvBNReLU3d",
+    "SEModule",
+    "SelectiveKernel",
+]
 
 
 _PaddingStr = Literal["same", "valid"]
 
-_Conv = [Conv1d, Conv2d, Conv3d]
-_BN = [BatchNorm1d, BatchNorm2d, BatchNorm3d]
+_Conv = [nn.Conv1d, nn.Conv2d, nn.Conv3d]
+_BN = [nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d]
 
 
 class _ConvBNReLU(nn.Module):
@@ -154,3 +157,30 @@ class ConvBNReLU3d(_ConvBNReLU):
             track_running_stats,
             D=3,
         )
+
+
+class SEModule(nn.Module):
+    def __init__(self, in_channels: int, reduction: int = 16) -> None:
+        super().__init__()
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+        self.fc1 = nn.Linear(in_channels, in_channels // reduction)
+        self.fc2 = nn.Linear(in_channels // reduction, in_channels)
+
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x: Tensor) -> Tensor:
+        spatial_ndim = x.ndim - 2
+        spatial_axes = tuple(range(x.ndim)[-spatial_ndim:])
+
+        y = self.avgpool(x).squeeze(axis=spatial_axes)
+        y = self.relu(self.fc1(y))
+        y = self.sigmoid(self.fc2(y))
+
+        y = y.unsqueeze(axis=spatial_axes)
+        out = x * y
+        return out
+
+
+class SelectiveKernel(nn.Module): ...

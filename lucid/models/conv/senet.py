@@ -1,4 +1,5 @@
 from typing import ClassVar, Type
+
 import lucid.nn as nn
 
 from lucid import register_model
@@ -92,82 +93,6 @@ class SENet(nn.Module):
         return x
 
 
-class _SEModule(nn.Module):
-    def __init__(self, in_channels: int, reduction: int = 16) -> None:
-        super().__init__()
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-
-        self.fc1 = nn.Linear(in_channels, in_channels // reduction)
-        self.fc2 = nn.Linear(in_channels // reduction, in_channels)
-
-        self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x: Tensor) -> Tensor:
-        y = self.avgpool(x).squeeze(axis=(-2, -1))
-        y = self.relu(self.fc1(y))
-        y = self.sigmoid(self.fc2(y))
-
-        y = y.unsqueeze(axis=(-2, -1))
-        out = x * y
-        return out
-
-
-class _SEBottleneck(nn.Module):
-    expansion: ClassVar[int] = 4
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        stride: int = 1,
-        reduction: int = 16,
-        downsample: nn.Module | None = None,
-    ) -> None:
-        super().__init__()
-        mid_channels = out_channels * (self.expansion // 2)
-
-        self.conv1 = nn.ConvBNReLU2d(
-            in_channels, mid_channels, kernel_size=1, conv_bias=False
-        )
-        self.conv2 = nn.ConvBNReLU2d(
-            mid_channels,
-            out_channels * self.expansion,
-            kernel_size=3,
-            stride=stride,
-            padding=1,
-            conv_bias=False,
-        )
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(
-                out_channels * self.expansion,
-                out_channels * self.expansion,
-                kernel_size=1,
-                bias=False,
-            ),
-            nn.BatchNorm2d(out_channels * self.expansion),
-        )
-
-        self.relu = nn.ReLU()
-        self.se_module = _SEModule(out_channels * self.expansion, reduction=reduction)
-        self.downsample = downsample
-
-    def forward(self, x: Tensor) -> Tensor:
-        identity = x
-
-        out = self.conv1(x)
-        out = self.conv2(out)
-        out = self.conv3(out)
-
-        if self.downsample is not None:
-            identity = self.downsample(x)
-
-        out = self.se_module(out) + identity
-        out = self.relu(out)
-
-        return out
-
-
 class _SEResNetModule(nn.Module):
     expansion: ClassVar[int] = 1
 
@@ -200,7 +125,7 @@ class _SEResNetModule(nn.Module):
             nn.BatchNorm2d(out_channels),
         )
 
-        self.se_module = _SEModule(out_channels, reduction)
+        self.se_module = nn.SEModule(out_channels, reduction)
         self.relu = nn.ReLU()
         self.downsample = downsample
 
@@ -249,7 +174,7 @@ class _SEResNetBottleneck(nn.Module):
             nn.BatchNorm2d(out_channels * self.expansion),
         )
 
-        self.se_module = _SEModule(out_channels * self.expansion, reduction)
+        self.se_module = nn.SEModule(out_channels * self.expansion, reduction)
         self.relu = nn.ReLU()
         self.downsample = downsample
 
