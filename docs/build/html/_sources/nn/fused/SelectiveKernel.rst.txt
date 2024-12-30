@@ -74,14 +74,14 @@ Examples
 
 .. code-block:: python
 
-    import torch
-    from selective_kernel import SelectiveKernel
+    import lucid
+    import lucid.nn as nn
 
     # Create an input tensor
-    x = torch.randn(1, 64, 32, 32)  # Shape: (batch_size, channels, height, width)
+    x = lucid.random.randn(1, 64, 32, 32)  # Shape: (batch_size, channels, height, width)
 
     # Initialize SelectiveKernel
-    sk = SelectiveKernel(64, 128, kernel_sizes=[3, 5, 7], stride=1)
+    sk = nn.SelectiveKernel(64, 128, kernel_sizes=[3, 5, 7], stride=1)
 
     # Forward pass
     output = sk(x)
