@@ -1,5 +1,6 @@
 from typing import Literal
 
+import lucid
 import lucid.nn as nn
 from lucid._tensor import Tensor
 
@@ -171,9 +172,10 @@ class SEModule(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x: Tensor) -> Tensor:
-        spatial_ndim = x.ndim - 2
-        spatial_axes = tuple(range(x.ndim)[-spatial_ndim:])
+        if x.ndim != 4:
+            raise ValueError("Only supports 4D-tensors.")
 
+        spatial_axes = (-1, -2)
         y = self.avgpool(x).squeeze(axis=spatial_axes)
         y = self.relu(self.fc1(y))
         y = self.sigmoid(self.fc2(y))
@@ -183,4 +185,59 @@ class SEModule(nn.Module):
         return out
 
 
-class SelectiveKernel(nn.Module): ...
+class SelectiveKernel(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_sizes: list[int],
+        stride: int = 1,
+        padding: _PaddingStr | None = None,
+        groups: int = 1,
+        reduction: int = 16,
+    ) -> None:
+        super().__init__()
+
+        branches = [
+            nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=ks,
+                stride=stride,
+                padding=(ks // 2 if padding is None else padding),
+                groups=groups,
+                bias=False,
+            )
+            for ks in kernel_sizes
+        ]
+        self.branches = nn.ModuleList(branches)
+
+        self.attention = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Conv2d(
+                out_channels, out_channels // reduction, kernel_size=1, bias=False
+            ),
+            nn.BatchNorm2d(out_channels // reduction),
+            nn.ReLU(),
+            nn.Conv2d(
+                out_channels // reduction,
+                len(kernel_sizes),
+                kernel_size=1,
+                bias=False,
+            ),
+        )
+
+        self.softmax = nn.Softmax(axis=1)
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.ndim != 4:
+            raise ValueError("Only supports 4D-tensors.")
+
+        branch_outs = [branch(x) for branch in self.branches]
+        branch_outs = lucid.stack(branch_outs, axis=1)
+
+        att_scores = self.attention(branch_outs.sum(axis=1))
+        att_weights = self.softmax(att_scores).unsqueeze(axis=2)
+
+        out = (branch_outs * att_weights).sum(axis=1)
+        return out

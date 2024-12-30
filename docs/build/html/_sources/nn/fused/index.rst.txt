@@ -3,7 +3,7 @@ Fused Layers
 
 .. toctree::
     :maxdepth: 1
-    :caption: ConvBnReLU
+    :caption: Conv-BatchNorm-ReLU
 
     ConvBNReLU1d.rst
     ConvBNReLU2d.rst
@@ -11,6 +11,12 @@ Fused Layers
 
 .. toctree::
     :maxdepth: 1
-    :caption: Squeeze & Excitation
+    :caption: Squeeze-and-Excitation
 
     SEModule.rst
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Selective Kernel
+
+    SelectiveKernel.rst
