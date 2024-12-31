@@ -29,7 +29,7 @@ def summarize(
             elif depth > 1:
                 layer_name = PIPELINE * (depth - 2) + BRANCH + layer_name
             if len(layer_name) > 30:
-                layer_name = layer_name[:27] + "..."
+                layer_name = layer_name[:26] + "..."
 
             summary_ = dict(
                 layer_name=layer_name,

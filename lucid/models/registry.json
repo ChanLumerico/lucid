@@ -160,5 +160,23 @@
         "family": "SENet",
         "param_size": 66821848,
         "arch": "conv"
+    },
+    "sk_resnet_18": {
+        "name": "sk_resnet_18",
+        "family": "SKNet",
+        "param_size": 25647368,
+        "arch": "conv"
+    },
+    "sk_resnet_34": {
+        "name": "sk_resnet_34",
+        "family": "SKNet",
+        "param_size": 45895512,
+        "arch": "conv"
+    },
+    "sk_resnet_50": {
+        "name": "sk_resnet_50",
+        "family": "SKNet",
+        "param_size": 57073368,
+        "arch": "conv"
     }
 }

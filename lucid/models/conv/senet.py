@@ -81,10 +81,8 @@ class SENet(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv(x)
 
-        x = self.stage1(x)
-        x = self.stage2(x)
-        x = self.stage3(x)
-        x = self.stage4(x)
+        for stage in [self.stage1, self.stage2, self.stage3, self.stage4]:
+            x = stage(x)
 
         x = self.avgpool(x)
         x = x.reshape(x.shape[0], -1)
