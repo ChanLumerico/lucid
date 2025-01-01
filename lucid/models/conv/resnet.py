@@ -1,4 +1,4 @@
-from typing import ClassVar, Type
+from typing import Any, ClassVar, Type, Literal
 
 import lucid.nn as nn
 
@@ -21,26 +21,64 @@ __all__ = [
 
 class ResNet(nn.Module):
     def __init__(
-        self, block: nn.Module, layers: list[int], num_classes: int = 1000
+        self,
+        block: nn.Module,
+        layers: list[int],
+        num_classes: int = 1000,
+        in_channels: int = 3,
+        stem_width: int = 64,
+        stem_type: Literal["deep"] | None = None,
+        channels: tuple[int] = (64, 128, 256, 512),
+        block_args: dict[str, Any] = {},
     ) -> None:
         super().__init__()
-        self.in_channels = 64
+        deep_stem = stem_type == "deep"
+        self.in_channels = stem_width * 2 if deep_stem else 64
 
-        self.stem = nn.ConvBNReLU2d(
-            3, self.in_channels, kernel_size=7, stride=2, padding=3, conv_bias=False
-        )
+        if deep_stem:
+            self.stem = nn.Sequential(
+                nn.Conv2d(in_channels, stem_width, 3, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(stem_width),
+                nn.ReLU(),
+                nn.Conv2d(stem_width, stem_width, 3, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(stem_width),
+                nn.ReLU(),
+                nn.Conv2d(stem_width, self.in_channels, 3, padding=1, bias=False),
+            )
+        else:
+            self.stem = nn.Sequential(
+                nn.Conv2d(
+                    in_channels, self.in_channels, 7, stride=2, padding=3, bias=False
+                ),
+                nn.BatchNorm2d(self.in_channels),
+                nn.ReLU(),
+            )
+
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.layer1 = self._make_layer(
+            block, channels[0], layers[0], stride=1, block_args=block_args
+        )
+        self.layer2 = self._make_layer(
+            block, channels[1], layers[1], stride=2, block_args=block_args
+        )
+        self.layer3 = self._make_layer(
+            block, channels[2], layers[2], stride=2, block_args=block_args
+        )
+        self.layer4 = self._make_layer(
+            block, channels[3], layers[3], stride=2, block_args=block_args
+        )
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
     def _make_layer(
-        self, block: Type[nn.Module], out_channels: int, blocks: int, stride: int = 1
+        self,
+        block: Type[nn.Module],
+        out_channels: int,
+        blocks: int,
+        stride: int = 1,
+        block_args: dict[str, Any] = {},
     ) -> nn.Sequential:
         downsample = None
         if stride != 1 or self.in_channels != out_channels * block.expansion:
@@ -55,11 +93,13 @@ class ResNet(nn.Module):
                 nn.BatchNorm2d(out_channels * block.expansion),
             )
 
-        layers = [block(self.in_channels, out_channels, stride, downsample)]
+        layers = [
+            block(self.in_channels, out_channels, stride, downsample, **block_args)
+        ]
         self.in_channels = out_channels * block.expansion
 
         for _ in range(1, blocks):
-            layers.append(block(self.in_channels, out_channels))
+            layers.append(block(self.in_channels, out_channels, stride=1, **block_args))
 
         return nn.Sequential(*layers)
 

@@ -1,9 +1,11 @@
-from typing import ClassVar, Type
+from typing import ClassVar
 
 import lucid.nn as nn
 
 from lucid import register_model
 from lucid._tensor import Tensor
+
+from .resnet import ResNet
 
 
 __all__ = [
@@ -16,7 +18,7 @@ __all__ = [
 ]
 
 
-class SENet(nn.Module):
+class SENet(ResNet):
     def __init__(
         self,
         block: nn.Module,
@@ -24,71 +26,9 @@ class SENet(nn.Module):
         num_classes: int = 1000,
         reduction: int = 16,
     ) -> None:
-        super().__init__()
-        self.in_channels = 64
-
-        self.conv = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+        super().__init__(
+            block, layers, num_classes, block_args={"reduction": reduction}
         )
-
-        self.stage1 = self._make_layer(
-            block, 64, layers[0], stride=1, reduction=reduction
-        )
-        self.stage2 = self._make_layer(
-            block, 128, layers[1], stride=2, reduction=reduction
-        )
-        self.stage3 = self._make_layer(
-            block, 256, layers[2], stride=2, reduction=reduction
-        )
-        self.stage4 = self._make_layer(
-            block, 512, layers[3], stride=2, reduction=reduction
-        )
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
-
-    def _make_layer(
-        self,
-        block: Type[nn.Module],
-        out_channels: int,
-        blocks: int,
-        stride: int,
-        reduction: int,
-    ) -> nn.Sequential:
-        downsample = None
-        if stride != 1 or self.in_channels != out_channels * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(
-                    self.in_channels,
-                    out_channels * block.expansion,
-                    kernel_size=1,
-                    stride=stride,
-                    bias=False,
-                ),
-                nn.BatchNorm2d(out_channels * block.expansion),
-            )
-
-        layers = [block(self.in_channels, out_channels, stride, reduction, downsample)]
-        self.in_channels = out_channels * block.expansion
-        for _ in range(1, blocks):
-            layers.append(block(self.in_channels, out_channels, 1, reduction))
-
-        return nn.Sequential(*layers)
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.conv(x)
-
-        for stage in [self.stage1, self.stage2, self.stage3, self.stage4]:
-            x = stage(x)
-
-        x = self.avgpool(x)
-        x = x.reshape(x.shape[0], -1)
-        x = self.fc(x)
-
-        return x
 
 
 class _SEResNetModule(nn.Module):
@@ -99,8 +39,8 @@ class _SEResNetModule(nn.Module):
         in_channels: int,
         out_channels: int,
         stride: int = 1,
-        reduction: int = 16,
         downsample: nn.Module | None = None,
+        reduction: int = 16,
     ) -> None:
         super().__init__()
 
@@ -147,8 +87,8 @@ class _SEResNetBottleneck(nn.Module):
         in_channels: int,
         out_channels: int,
         stride: int = 1,
-        reduction: int = 16,
         downsample: nn.Module | None = None,
+        reduction: int = 16,
     ) -> None:
         super().__init__()
         self.conv1 = nn.ConvBNReLU2d(
