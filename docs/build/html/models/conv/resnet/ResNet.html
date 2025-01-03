@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/conv/resnet/ResNet.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>ResNet - Lucid 1.7.2 documentation</title>
+        <title>ResNet - Lucid 1.8.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 1.7.2 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 1.8.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 1.7.2 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.8.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -549,6 +549,12 @@
 <li class="toctree-l3"><a class="reference internal" href="../senet/se_resnet_152.html">se_resnet_152</a></li>
 </ul>
 </li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../sknet/SKNet.html">SKNet</a><input class="toctree-checkbox" id="toctree-checkbox-36" name="toctree-checkbox-36" role="switch" type="checkbox"/><label for="toctree-checkbox-36"><div class="visually-hidden">Toggle navigation of SKNet</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sknet/sk_resnet_18.html">models.sk_resnet_18</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../sknet/sk_resnet_34.html">models.sk_resnet_34</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../sknet/sk_resnet_50.html">models.sk_resnet_50</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -557,7 +563,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-36" name="toctree-checkbox-36" role="switch" type="checkbox"/><label for="toctree-checkbox-36"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-37" name="toctree-checkbox-37" role="switch" type="checkbox"/><label for="toctree-checkbox-37"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -625,64 +631,131 @@
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">ResNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">block</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">layers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stem_width</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stem_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'deep'</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(64,</span> <span class="pre">128,</span> <span class="pre">256,</span> <span class="pre">512)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.ResNet" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>ResNet</cite> class serves as a foundational implementation for creating ResNet architectures.</p>
+<p>The <cite>ResNet</cite> class provides an implementation of the ResNet architecture. It allows flexibility
+in specifying custom block types, layer configurations, and hyperparameters, making it suitable
+for a wide range of tasks in computer vision.</p>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ResNet</span><span class="p">(</span><span class="n">block</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">Module</span><span class="p">],</span> <span class="n">layers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">ResNet</span><span class="p">(</span>
+    <span class="n">block</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+    <span class="n">layers</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="n">in_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="n">stem_width</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
+    <span class="n">stem_type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;deep&quot;</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">channels</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">512</span><span class="p">),</span>
+    <span class="n">block_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{},</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>block</strong> (<em>Type[Module]</em>):
-The block type to use (e.g., <cite>BasicBlock</cite> or <cite>Bottleneck</cite>).</p></li>
-<li><p><strong>layers</strong> (<em>List[int]</em>):
-A list of integers specifying the number of blocks at each stage of the ResNet.</p></li>
-<li><p><strong>num_classes</strong> (<em>int</em>, optional):
-Number of output classes for the final fully connected layer. Default is 1000.</p></li>
+<li><dl class="simple">
+<dt><strong>block</strong> (<em>nn.Module</em>):</dt><dd><p>The building block module used for the ResNet layers. Typically,
+this is a residual block such as <cite>BasicBlock</cite> or <cite>Bottleneck</cite>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>layers</strong> (<em>list[int]</em>):</dt><dd><p>Specifies the number of blocks in each stage of the network.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>num_classes</strong> (<em>int</em>, optional):</dt><dd><p>Number of output classes for the final fully connected layer. Default: 1000.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>in_channels</strong> (<em>int</em>, optional):</dt><dd><p>Number of input channels for the input images. Default: 3.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>stem_width</strong> (<em>int</em>, optional):</dt><dd><p>Number of output channels for the initial convolutional stem. Default: 64.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>stem_type</strong> (<em>Literal[“deep”] | None</em>, optional):</dt><dd><p>Specifies the type of stem. If “deep,” a deeper stem with multiple layers is used.
+If None, a standard single-layer stem is used. Default: None.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>channels</strong> (<em>tuple[int]</em>, optional):</dt><dd><p>Defines the output channel sizes for each stage of the network.
+Default: (64, 128, 256, 512).</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>block_args</strong> (<em>dict[str, Any]</em>, optional):</dt><dd><p>Additional keyword arguments passed to the <cite>block</cite> module during construction.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </section>
 <section id="attributes">
 <h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>conv1</strong> (<em>Conv2d</em>):
-The initial convolutional layer.</p></li>
-<li><p><strong>bn1</strong> (<em>BatchNorm2d</em>):
-Batch normalization applied after the initial convolution.</p></li>
-<li><p><strong>relu</strong> (<em>ReLU</em>):
-ReLU activation function.</p></li>
-<li><p><strong>maxpool</strong> (<em>MaxPool2d</em>):
-Max pooling operation applied after the first convolutional layer.</p></li>
-<li><p><strong>layer1, layer2, layer3, layer4</strong> (<em>Sequential</em>):
-Stages of the ResNet, each containing multiple blocks as specified
-in the <cite>layers</cite> parameter.</p></li>
-<li><p><strong>avgpool</strong> (<em>AdaptiveAvgPool2d</em>):
-Global average pooling layer before the fully connected layer.</p></li>
-<li><p><strong>fc</strong> (<em>Linear</em>):
-Fully connected layer for classification.</p></li>
+<li><dl class="simple">
+<dt><strong>stem</strong> (<em>nn.Module</em>):</dt><dd><p>The initial stem layer that processes the input tensor.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>layers</strong> (<em>list[nn.Module]</em>):</dt><dd><p>A list of stages, each containing a sequence of blocks.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>num_classes</strong> (<em>int</em>):</dt><dd><p>Stores the number of output classes.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>block</strong> (<em>nn.Module</em>):</dt><dd><p>Stores the block type used for building the layers.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward method defines the computation flow:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bn1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">maxpool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer3</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer4</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">avgpool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">x</span>
+<p>The forward pass of the ResNet model includes:</p>
+<ol class="arabic simple">
+<li><p><strong>Stem</strong>: Initial convolutional layers for feature extraction.</p></li>
+<li><p><strong>Residual Stages</strong>: Each stage consists of multiple blocks defined by the <cite>layers</cite> parameter.</p></li>
+<li><p><strong>Global Pooling</strong>: A global average pooling layer reduces the spatial dimensions.</p></li>
+<li><p><strong>Classifier</strong>: A fully connected layer maps the features to class scores.</p></li>
+</ol>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\text{output} = \text{FC}(\text{GAP}(\text{ResidualBlocks}(\text{Stem}(\text{input}))))\]</div>
+</div>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p><strong>Basic Example</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">lucid.models.blocks</span> <span class="kn">import</span> <span class="n">BasicBlock</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>  <span class="c1"># Configuration for ResNet-50</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ResNet</span><span class="p">(</span><span class="n">block</span><span class="o">=</span><span class="n">BasicBlock</span><span class="p">,</span> <span class="n">layers</span><span class="o">=</span><span class="n">layers</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">))</span>  <span class="c1"># Shape: (N, C, H, W)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>  <span class="c1"># Forward pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+<span class="go">(8, 1000)</span>
 </pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>The <cite>ResNet</cite> class supports flexible configurations for custom tasks by modifying the
+<cite>block</cite>, <cite>layers</cite>, or <cite>channels</cite> parameters.</p></li>
+<li><p>Adding a “deep” stem can improve feature extraction for larger or more complex datasets.</p></li>
+</ul>
 </div>
 </section>
 </section>
@@ -748,6 +821,7 @@ Fully connected layer for classification.</p></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#attributes">Attributes</a></li>
 <li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
+<li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>
 </ul>
@@ -759,9 +833,10 @@ Fully connected layer for classification.</p></li>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=908dc885"></script>
+</div><script src="../../../_static/documentation_options.js?v=b51e6972"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>

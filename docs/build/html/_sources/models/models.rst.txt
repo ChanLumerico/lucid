@@ -339,4 +339,43 @@ feature responses.
       - 66,821,848
       - ✅
 
+.. rubric:: SKNet
+
+SKNet (Selective Kernel Networks) is a deep learning architecture that enhances the 
+representational capacity of neural networks by enabling dynamic selection of kernel sizes 
+in convolutional layers. It introduces the concept of a "selective kernel" module, 
+which allows the network to adaptively choose the most appropriate receptive field for 
+each spatial location in an image, improving its ability to capture multi-scale features.
+
+ Li, X., Zhang, S., & Wang, X. (2019). "Selective Kernel Networks." Proceedings of the 
+ IEEE International Conference on Computer Vision (ICCV), 2019, pp. 510-519.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - SK-ResNet-18
+      - `sk_resnet_18 <conv/sknet/sk_resnet_18>`_
+      - :math:`(N,3,224,224)`
+      - 25,647,368
+      - ✅
+    
+    * - SK-ResNet-34
+      - `sk_resnet_34 <conv/sknet/sk_resnet_34>`_
+      - :math:`(N,3,224,224)`
+      - 45,895,512
+      - ✅
+    
+    * - SK-ResNet-50
+      - `sk_resnet_50 <conv/sknet/sk_resnet_50>`_
+      - :math:`(N,3,224,224)`
+      - 57,073,368
+      - ✅
+
 *To be implemented...🔮*
