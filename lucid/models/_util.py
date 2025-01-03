@@ -14,8 +14,9 @@ def summarize(
 ) -> None:
     PIPELINE: str = r"│   "
     BRANCH: str = r"├── "
+    LAST_BRANCH: str = r"└── "
 
-    def _register_hook(module: nn.Module, depth: int) -> None:
+    def _register_hook(module: nn.Module, depth: int, is_last: bool) -> None:
 
         def _hook(_module: nn.Module, input_: Tensor, output: Tensor) -> None:
             layer_name = type(_module).__name__
@@ -24,10 +25,11 @@ def summarize(
             param_size = _module.parameter_size
             layer_count = len(_module._modules)
 
+            prefix = LAST_BRANCH if is_last else BRANCH
             if depth == 1:
-                layer_name = BRANCH + layer_name
+                layer_name = prefix + layer_name
             elif depth > 1:
-                layer_name = PIPELINE * (depth - 2) + BRANCH + layer_name
+                layer_name = PIPELINE * (depth - 2) + prefix + layer_name
             if len(layer_name) > 30:
                 layer_name = layer_name[:26] + "..."
 
@@ -43,8 +45,10 @@ def summarize(
         hooks.append(module.register_forward_hook(_hook))
 
     def _recursive_register(module: nn.Module, depth: int = 0) -> None:
-        _register_hook(module, depth)
-        for _, submodule in module._modules.items():
+        submodules = list(module._modules.items())
+        for idx, (_, submodule) in enumerate(submodules):
+            is_last = idx == 0
+            _register_hook(submodule, depth + 1, is_last)
             if recurse:
                 _recursive_register(submodule, depth=depth + 1)
 
