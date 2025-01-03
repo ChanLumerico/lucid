@@ -79,22 +79,6 @@ The forward pass of the `SKNet` model includes:
 
     \text{output} = \text{FC}(\text{GAP}(\text{SKBlocks}(\text{Stem}(\text{input}))))
 
-Examples
---------
-
-**Basic Example**:
-
-.. code-block:: python
-
-    >>> import lucid.nn as nn
-    >>> from lucid.models.blocks import SKBlock
-    >>> layers = [3, 4, 6, 3]  # Configuration for SKNet-50
-    >>> model = nn.SKNet(block=SKBlock, layers=layers, num_classes=1000, kernel_sizes=[3, 5])
-    >>> input_tensor = Tensor(np.random.randn(8, 3, 224, 224))  # Shape: (N, C, H, W)
-    >>> output = model(input_tensor)  # Forward pass
-    >>> print(output.shape)
-    (8, 1000)
-
 .. note::
 
    - The `SKNet` is well-suited for tasks requiring multi-scale feature representation.
