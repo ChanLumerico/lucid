@@ -1,4 +1,4 @@
-from typing import ClassVar
+from typing import Any, ClassVar
 import lucid.nn as nn
 
 from lucid import register_model
@@ -7,7 +7,7 @@ from lucid._tensor import Tensor
 from .resnet import ResNet
 
 
-__all__ = ["SKNet", "sk_resnet_18", "sk_resnet_34", "sk_resnet_50"]
+__all__ = ["SKNet", "sk_resnet_18", "sk_resnet_34", "sk_resnet_50", "sk_resnet_50d"]
 
 
 class SKNet(ResNet):
@@ -19,6 +19,7 @@ class SKNet(ResNet):
         kernel_sizes: list[int] = [3, 5],
         base_width: int = 64,
         cardinality: int = 1,
+        **resnet_args: Any,
     ) -> None:
         super().__init__(
             block,
@@ -29,6 +30,7 @@ class SKNet(ResNet):
                 "base_width": base_width,
                 "cardinality": cardinality,
             },
+            **resnet_args,
         )
 
 
@@ -158,5 +160,9 @@ def sk_resnet_50(num_classes: int = 1000, **kwargs) -> SKNet:
     return SKNet(_SKResNetBottleneck, layers, num_classes, **kwargs)
 
 
-@register_model  # TODO: Impl. this
-def sk_resnet_50d(num_classes: int = 1000, **kwargs) -> SKNet: ...
+@register_model
+def sk_resnet_50d(num_classes: int = 1000, **kwargs) -> SKNet:
+    layers = [3, 4, 6, 3]
+    return SKNet(
+        _SKResNetBottleneck, layers, num_classes, stem_width=32, stem_type="deep"
+    )

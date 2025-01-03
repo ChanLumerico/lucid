@@ -28,6 +28,7 @@ class ResNet(nn.Module):
         in_channels: int = 3,
         stem_width: int = 64,
         stem_type: Literal["deep"] | None = None,
+        avg_down: bool = False,  # TODO: Adopt this feature.
         channels: tuple[int] = (64, 128, 256, 512),
         block_args: dict[str, Any] = {},
     ) -> None:
