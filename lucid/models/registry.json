@@ -178,5 +178,17 @@
         "family": "SKNet",
         "param_size": 57073368,
         "arch": "conv"
+    },
+    "wide_resnet_50": {
+        "name": "wide_resnet_50",
+        "family": "ResNet",
+        "param_size": 78973224,
+        "arch": "conv"
+    },
+    "wide_resnet_101": {
+        "name": "wide_resnet_101",
+        "family": "ResNet",
+        "param_size": 126886696,
+        "arch": "conv"
     }
 }

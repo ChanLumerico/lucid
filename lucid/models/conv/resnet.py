@@ -1,4 +1,5 @@
 from typing import Any, ClassVar, Type, Literal
+import math
 
 import lucid.nn as nn
 
@@ -16,6 +17,8 @@ __all__ = [
     "resnet_200",
     "resnet_269",
     "resnet_1001",
+    "wide_resnet_50",
+    "wide_resnet_101",
 ]
 
 
@@ -180,23 +183,29 @@ class _Bottleneck(nn.Module):
         out_channels: int,
         stride: int = 1,
         downsample: nn.Module | None = None,
+        cardinality: int = 1,
+        base_width: int = 64,
+        dilation: int = 1,
     ) -> None:
         super().__init__()
+        width = int(math.floor(out_channels * (base_width / 64)) * cardinality)
 
         self.conv1 = nn.ConvBNReLU2d(
-            in_channels, out_channels, kernel_size=1, stride=1, conv_bias=False
+            in_channels, width, kernel_size=1, stride=1, conv_bias=False
         )
         self.conv2 = nn.ConvBNReLU2d(
-            out_channels,
-            out_channels,
+            width,
+            width,
             kernel_size=3,
             stride=stride,
             padding=1,
+            dilation=dilation,
+            groups=cardinality,
             conv_bias=False,
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(
-                out_channels,
+                width,
                 out_channels * self.expansion,
                 kernel_size=1,
                 stride=1,
@@ -320,3 +329,17 @@ def resnet_269(num_classes: int = 1000, **kwargs) -> ResNet:
 def resnet_1001(num_classes: int = 1000, **kwargs) -> ResNet:
     layers = [3, 94, 94, 3]
     return ResNet(_PreActBottleneck, layers, num_classes, **kwargs)
+
+
+@register_model
+def wide_resnet_50(num_classes: int = 1000, **kwargs) -> ResNet:
+    layers = [3, 4, 6, 3]
+    block_args = {"base_width": 128}
+    return ResNet(_Bottleneck, layers, num_classes, block_args=block_args, **kwargs)
+
+
+@register_model
+def wide_resnet_101(num_classes: int = 1000, **kwargs) -> ResNet:
+    layers = [3, 4, 23, 3]
+    block_args = {"base_width": 128}
+    return ResNet(_Bottleneck, layers, num_classes, block_args=block_args, **kwargs)

@@ -58,7 +58,7 @@ def summarize(
     if test_backward:
         out.backward()
 
-    module_summary.insert(0, module_summary.pop())
+    module_summary.reverse()
 
     title = f"Summary of {type(model).__name__}"
     print(f"{title:^95}")
@@ -77,9 +77,14 @@ def summarize(
     for layer in module_summary:
         print(
             f"{layer['layer_name']:<30}{str(layer['input_shape']):<25}",
-            f"{str(layer['output_shape']):<25}{layer['param_size']:<12,}",
+            f"{str(layer['output_shape']):<25}",
             sep="",
+            end="",
         )
+        if layer["param_size"]:
+            print(f"{layer['param_size']:<12,}")
+        else:
+            print("-")
 
     if truncate_from is not None:
         print(f"\n{f"... and more {truncated_lines} layer(s)":^95}")
