@@ -28,13 +28,14 @@ class ResNet(nn.Module):
         in_channels: int = 3,
         stem_width: int = 64,
         stem_type: Literal["deep"] | None = None,
-        avg_down: bool = False,  # TODO: Adopt this feature.
+        avg_down: bool = False,
         channels: tuple[int] = (64, 128, 256, 512),
         block_args: dict[str, Any] = {},
     ) -> None:
         super().__init__()
         deep_stem = stem_type == "deep"
         self.in_channels = stem_width * 2 if deep_stem else 64
+        self.avg_down = avg_down
 
         if deep_stem:
             self.stem = nn.Sequential(
@@ -83,16 +84,29 @@ class ResNet(nn.Module):
     ) -> nn.Sequential:
         downsample = None
         if stride != 1 or self.in_channels != out_channels * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(
-                    self.in_channels,
-                    out_channels * block.expansion,
-                    kernel_size=1,
-                    stride=stride,
-                    bias=False,
-                ),
-                nn.BatchNorm2d(out_channels * block.expansion),
-            )
+            if self.avg_down:
+                downsample = nn.Sequential(
+                    nn.AvgPool2d(kernel_size=2, stride=stride),
+                    nn.Conv2d(
+                        self.in_channels,
+                        out_channels * block.expansion,
+                        kernel_size=1,
+                        stride=1,
+                        bias=False,
+                    ),
+                    nn.BatchNorm2d(out_channels * block.expansion),
+                )
+            else:
+                downsample = nn.Sequential(
+                    nn.Conv2d(
+                        self.in_channels,
+                        out_channels * block.expansion,
+                        kernel_size=1,
+                        stride=stride,
+                        bias=False,
+                    ),
+                    nn.BatchNorm2d(out_channels * block.expansion),
+                )
 
         layers = [
             block(self.in_channels, out_channels, stride, downsample, **block_args)
