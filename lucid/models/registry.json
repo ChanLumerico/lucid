@@ -178,11 +178,5 @@
         "family": "SKNet",
         "param_size": 57073368,
         "arch": "conv"
-    },
-    "sk_resnet_50d": {
-        "name": "sk_resnet_50d",
-        "family": "SKNet",
-        "param_size": 57092472,
-        "arch": "conv"
     }
 }

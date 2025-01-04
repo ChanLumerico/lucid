@@ -7,7 +7,7 @@ from lucid._tensor import Tensor
 from .resnet import ResNet
 
 
-__all__ = ["SKNet", "sk_resnet_18", "sk_resnet_34", "sk_resnet_50", "sk_resnet_50d"]
+__all__ = ["SKNet", "sk_resnet_18", "sk_resnet_34", "sk_resnet_50"]
 
 
 class SKNet(ResNet):
@@ -158,11 +158,3 @@ def sk_resnet_34(num_classes: int = 1000, **kwargs) -> SKNet:
 def sk_resnet_50(num_classes: int = 1000, **kwargs) -> SKNet:
     layers = [3, 4, 6, 3]
     return SKNet(_SKResNetBottleneck, layers, num_classes, **kwargs)
-
-
-@register_model
-def sk_resnet_50d(num_classes: int = 1000, **kwargs) -> SKNet:
-    layers = [3, 4, 6, 3]
-    return SKNet(
-        _SKResNetBottleneck, layers, num_classes, stem_width=32, stem_type="deep"
-    )
