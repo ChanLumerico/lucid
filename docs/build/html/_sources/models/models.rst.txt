@@ -400,4 +400,15 @@ each spatial location in an image, improving its ability to capture multi-scale 
       - 57,073,368
       - ✅
 
+.. rubric:: ResNeXt
+
+ResNeXt is an extension of the ResNet architecture that introduces a cardinality dimension 
+to the model, improving its performance and efficiency by allowing flexible aggregation of 
+transformations. ResNeXt builds on residual blocks by incorporating grouped convolutions, 
+enabling parallel pathways for feature learning.
+
+ Xie, Saining, et al. "Aggregated Residual Transformations for Deep Neural Networks." 
+ *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, 
+ 2017, pp. 5987-5995.
+
 *To be implemented...🔮*

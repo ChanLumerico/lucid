@@ -131,6 +131,18 @@
         "param_size": 149071016,
         "arch": "conv"
     },
+    "wide_resnet_50": {
+        "name": "wide_resnet_50",
+        "family": "ResNet",
+        "param_size": 78973224,
+        "arch": "conv"
+    },
+    "wide_resnet_101": {
+        "name": "wide_resnet_101",
+        "family": "ResNet",
+        "param_size": 126886696,
+        "arch": "conv"
+    },
     "se_resnet_18": {
         "name": "se_resnet_18",
         "family": "SENet",
@@ -179,16 +191,40 @@
         "param_size": 57073368,
         "arch": "conv"
     },
-    "wide_resnet_50": {
-        "name": "wide_resnet_50",
-        "family": "ResNet",
-        "param_size": 78973224,
+    "resnext_50_32x4d": {
+        "name": "resnext_50_32x4d",
+        "family": "ResNeXt",
+        "param_size": 25028904,
         "arch": "conv"
     },
-    "wide_resnet_101": {
-        "name": "wide_resnet_101",
-        "family": "ResNet",
-        "param_size": 126886696,
+    "resnext_101_32x4d": {
+        "name": "resnext_101_32x4d",
+        "family": "ResNeXt",
+        "param_size": 44177704,
+        "arch": "conv"
+    },
+    "resnext_101_32x8d": {
+        "name": "resnext_101_32x8d",
+        "family": "ResNeXt",
+        "param_size": 88791336,
+        "arch": "conv"
+    },
+    "resnext_101_32x16d": {
+        "name": "resnext_101_32x16d",
+        "family": "ResNeXt",
+        "param_size": 194026792,
+        "arch": "conv"
+    },
+    "resnext_101_32x32d": {
+        "name": "resnext_101_32x32d",
+        "family": "ResNeXt",
+        "param_size": 468530472,
+        "arch": "conv"
+    },
+    "resnext_101_64x4d": {
+        "name": "resnext_101_64x4d",
+        "family": "ResNeXt",
+        "param_size": 83455272,
         "arch": "conv"
     }
 }
