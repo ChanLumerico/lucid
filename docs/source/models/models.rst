@@ -311,6 +311,63 @@ accuracy in tasks like image classification and object detection.
       - 126,886,696
       - ✅
 
+.. rubric:: ResNeXt
+
+ResNeXt is an extension of the ResNet architecture that introduces a cardinality dimension 
+to the model, improving its performance and efficiency by allowing flexible aggregation of 
+transformations. ResNeXt builds on residual blocks by incorporating grouped convolutions, 
+enabling parallel pathways for feature learning.
+
+ Xie, Saining, et al. "Aggregated Residual Transformations for Deep Neural Networks." 
+ *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, 
+ 2017, pp. 5987-5995.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - ResNeXt-50-32x4d
+      - `resnext_50_32x4d <conv/resnext/resnext_50_32x4d>`_
+      - :math:`(N,3,224,224)`
+      - 25,028,904
+      - ✅
+    
+    * - ResNeXt-101-32x4d
+      - `resnext_101_32x4d <conv/resnext/resnext_101_32x4d>`_
+      - :math:`(N,3,224,224)`
+      - 44,177,704
+      - ✅
+    
+    * - ResNeXt-101-32x8d
+      - `resnext_101_32x8d <conv/resnext/resnext_101_32x8d>`_
+      - :math:`(N,3,224,224)`
+      - 88,791,336
+      - ✅
+    
+    * - ResNeXt-101-32x16d
+      - `resnext_101_32x16d <conv/resnext/resnext_101_32x16d>`_
+      - :math:`(N,3,224,224)`
+      - 194,026,792
+      - ✅
+    
+    * - ResNeXt-101-32x32d
+      - `resnext_101_32x32d <conv/resnext/resnext_101_32x32d>`_
+      - :math:`(N,3,224,224)`
+      - 468,530,472
+      - ✅
+    
+    * - ResNeXt-101-64x4d
+      - `resnext_101_64x4d <conv/resnext/resnext_101_64x4d>`_
+      - :math:`(N,3,224,224)`
+      - 83,455,272
+      - ✅
+
 .. rubric:: SENet
 
 SENets (Squeeze-and-Excitation Networks) are deep neural network architectures that enhance t
@@ -399,16 +456,5 @@ each spatial location in an image, improving its ability to capture multi-scale 
       - :math:`(N,3,224,224)`
       - 57,073,368
       - ✅
-
-.. rubric:: ResNeXt
-
-ResNeXt is an extension of the ResNet architecture that introduces a cardinality dimension 
-to the model, improving its performance and efficiency by allowing flexible aggregation of 
-transformations. ResNeXt builds on residual blocks by incorporating grouped convolutions, 
-enabling parallel pathways for feature learning.
-
- Xie, Saining, et al. "Aggregated Residual Transformations for Deep Neural Networks." 
- *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, 
- 2017, pp. 5987-5995.
 
 *To be implemented...🔮*
