@@ -289,6 +289,28 @@ accuracy in tasks like image classification and object detection.
       - 149,071,016
       - ✅
 
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - WideResNet-50
+      - `wide_resnet_50 <conv/resnet/wide_resnet_50>`_
+      - :math:`(N,3,224,224)`
+      - 78,973,224
+      - ✅
+    
+    * - WideResNet-101
+      - `wide_resnet_101 <conv/resnet/wide_resnet_101>`_
+      - :math:`(N,3,224,224)`
+      - 126,886,696
+      - ✅
+
 .. rubric:: SENet
 
 SENets (Squeeze-and-Excitation Networks) are deep neural network architectures that enhance t

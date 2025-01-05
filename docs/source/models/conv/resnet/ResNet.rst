@@ -14,6 +14,9 @@ ResNet
     resnet_269.rst
     resnet_1001.rst
 
+    wide_resnet_50.rst
+    wide_resnet_101.rst
+
 .. autoclass:: lucid.models.ResNet
 
 The `ResNet` class provides an implementation of the ResNet architecture. It allows flexibility
