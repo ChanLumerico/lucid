@@ -250,5 +250,11 @@
         "family": "SENet",
         "param_size": 88232984,
         "arch": "conv"
+    },
+    "sk_resnext_50_32x4d": {
+        "name": "sk_resnext_50_32x4d",
+        "family": "SKNet",
+        "param_size": 29274760,
+        "arch": "conv"
     }
 }

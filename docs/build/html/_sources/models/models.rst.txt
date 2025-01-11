@@ -490,5 +490,11 @@ each spatial location in an image, improving its ability to capture multi-scale 
       - :math:`(N,3,224,224)`
       - 57,073,368
       - ✅
+    
+    * - SK-ResNeXt-50-32x4d
+      - `sk_resnext_50_32x4d <conv/sknet/sk_resnext_50_32x4d>`_
+      - :math:`(N,3,224,224)`
+      - 29,274,760
+      - ✅
 
 *To be implemented...🔮*

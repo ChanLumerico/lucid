@@ -1,5 +1,5 @@
-models.sk_resnet_34
-===================
+sk_resnet_34
+============
 
 .. autofunction:: lucid.models.sk_resnet_34
 

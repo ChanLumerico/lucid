@@ -8,6 +8,7 @@ SKNet
     sk_resnet_18.rst
     sk_resnet_34.rst
     sk_resnet_50.rst
+    sk_resnext_50_32x4d.rst
 
 .. autoclass:: lucid.models.SKNet
 
