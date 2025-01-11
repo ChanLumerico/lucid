@@ -8,3 +8,4 @@ from .resnet import *
 from .resnext import *
 from .senet import *
 from .sknet import *
+from .dense import *

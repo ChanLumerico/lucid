@@ -491,10 +491,22 @@ each spatial location in an image, improving its ability to capture multi-scale 
       - 57,073,368
       - ✅
     
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+
     * - SK-ResNeXt-50-32x4d
       - `sk_resnext_50_32x4d <conv/sknet/sk_resnext_50_32x4d>`_
       - :math:`(N,3,224,224)`
       - 29,274,760
       - ✅
+
+.. rubric:: DenseNet
 
 *To be implemented...🔮*

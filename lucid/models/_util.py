@@ -1,3 +1,6 @@
+from pathlib import Path
+import json
+
 import lucid
 import lucid.nn as nn
 
@@ -100,3 +103,28 @@ def summarize(
 
     for hook in hooks:
         hook()
+
+
+def get_model_names(registry_path: Path = lucid.REGISTRY_PATH) -> list[str]:
+    model_name_list = []
+    try:
+        with open(registry_path, "r") as file:
+            registry = json.load(file)
+
+        for model_info in registry.values():
+            model_name_list.append(model_info["name"])
+
+    except FileNotFoundError:
+        print(f"File not found: {registry_path}")
+
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON in file: {registry_path}")
+
+    except KeyError as e:
+        print(f"Missing key {e} in one of the registry entries.")
+
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    model_name_list.sort()
+    return model_name_list
