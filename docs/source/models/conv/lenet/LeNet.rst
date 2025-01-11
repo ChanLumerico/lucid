@@ -20,6 +20,11 @@ various versions of the LeNet architecture, including LeNet-1, LeNet-4, and LeNe
 It allows the configuration of convolutional and fully connected layers through arguments, 
 making it adaptable for different use cases.
 
+.. image:: lenet.png
+    :width: 600
+    :alt: LeNet architecture
+    :align: center
+
 Class Signature
 ---------------
 
