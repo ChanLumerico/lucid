@@ -14,3 +14,4 @@ ConvNets
     ResNeXt <resnext/ResNeXt.rst>
     SENet <senet/SENet.rst>
     SKNet <sknet/SKNet.rst>
+    DenseNet <dense/DenseNet.rst>

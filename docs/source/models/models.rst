@@ -509,4 +509,48 @@ each spatial location in an image, improving its ability to capture multi-scale 
 
 .. rubric:: DenseNet
 
+A deep learning architecture designed to improve the flow of information and gradients 
+in neural networks by introducing dense connectivity between layers. It leverages the 
+concept of "dense blocks," where each layer is directly connected to all preceding layers 
+within the block. This dense connectivity pattern enhances feature reuse, reduces the number 
+of parameters, and improves the efficiency of gradient propagation during training.
+
+ Huang, G., Liu, Z., Van Der Maaten, L., & Weinberger, K. Q. (2017). 
+ "Densely Connected Convolutional Networks." *Proceedings of the IEEE Conference on 
+ Computer Vision and Pattern Recognition (CVPR)*, 2017, pp. 4700-4708.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - DenseNet-121
+      - `densenet_121 <conv/dense/densenet_121>`_
+      - :math:`(N,3,224,224)`
+      - 7,978,856
+      - ✅
+    
+    * - DenseNet-169
+      - `densenet_169 <conv/dense/densenet_169>`_
+      - :math:`(N,3,224,224)`
+      - 14,149,480
+      - ✅
+    
+    * - DenseNet-201
+      - `densenet_201 <conv/dense/densenet_201>`_
+      - :math:`(N,3,224,224)`
+      - 20,013,928
+      - ✅
+    
+    * - DenseNet-264
+      - `densenet_264 <conv/dense/densenet_264>`_
+      - :math:`(N,3,224,224)`
+      - 33,337,704
+      - ✅
+
 *To be implemented...🔮*

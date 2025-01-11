@@ -256,5 +256,29 @@
         "family": "SKNet",
         "param_size": 29274760,
         "arch": "conv"
+    },
+    "densenet_121": {
+        "name": "densenet_121",
+        "family": "DenseNet",
+        "param_size": 7978856,
+        "arch": "conv"
+    },
+    "densenet_169": {
+        "name": "densenet_169",
+        "family": "DenseNet",
+        "param_size": 14149480,
+        "arch": "conv"
+    },
+    "densenet_201": {
+        "name": "densenet_201",
+        "family": "DenseNet",
+        "param_size": 20013928,
+        "arch": "conv"
+    },
+    "densenet_264": {
+        "name": "densenet_264",
+        "family": "DenseNet",
+        "param_size": 33337704,
+        "arch": "conv"
     }
 }
