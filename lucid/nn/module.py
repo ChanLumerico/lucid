@@ -33,6 +33,7 @@ _BackwardHookType = Callable[[Tensor, _NumPyArray], None]
 
 class Module:
     _registry_map: dict[Type, OrderedDict[str, Any]] = {}
+    _alt_name: str = ""
 
     def __init__(self) -> None:
         self._parameters: OrderedDict[str, nn.Parameter]

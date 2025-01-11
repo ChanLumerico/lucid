@@ -418,6 +418,40 @@ feature responses.
       - 66,821,848
       - ✅
 
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - SE-ResNeXt-50-32x4d
+      - `se_resnext_50_32x4d <conv/senet/se_resnext_50_32x4d>`_
+      - :math:`(N,3,224,224)`
+      - 27,559,896
+      - ✅
+    
+    * - SE-ResNeXt-101-32x4d
+      - `se_resnext_101_32x4d <conv/senet/se_resnext_101_32x4d>`_
+      - :math:`(N,3,224,224)`
+      - 48,955,416
+      - ✅
+    
+    * - SE-ResNeXt-101-32x8d
+      - `se_resnext_101_32x8d <conv/senet/se_resnext_101_32x8d>`_
+      - :math:`(N,3,224,224)`
+      - 93,569,048
+      - ✅
+    
+    * - SE-ResNeXt-101-64x4d
+      - `se_resnext_101_64x4d <conv/senet/se_resnext_101_64x4d>`_
+      - :math:`(N,3,224,224)`
+      - 88,232,984
+      - ✅
+
 .. rubric:: SKNet
 
 SKNet (Selective Kernel Networks) is a deep learning architecture that enhances the 

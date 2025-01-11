@@ -61,6 +61,9 @@ def summarize(
     module_summary.reverse()
 
     title = f"Summary of {type(model).__name__}"
+    if model._alt_name:
+        title += f"({model._alt_name})"
+
     print(f"{title:^95}")
     print("=" * 95)
     print(f"{"Layer":<30}{"Input Shape":<25}", end="")
@@ -72,7 +75,8 @@ def summarize(
 
     if truncate_from is not None:
         truncated_lines = len(module_summary) - truncate_from
-        module_summary = module_summary[:truncate_from]
+        if truncated_lines > 0:
+            module_summary = module_summary[:truncate_from]
 
     for layer in module_summary:
         print(
@@ -86,7 +90,7 @@ def summarize(
         else:
             print("-")
 
-    if truncate_from is not None:
+    if truncate_from is not None and truncated_lines > 0:
         print(f"\n{f"... and more {truncated_lines} layer(s)":^95}")
 
     print("=" * 95)

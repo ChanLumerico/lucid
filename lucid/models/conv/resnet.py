@@ -186,6 +186,8 @@ class _Bottleneck(nn.Module):
         cardinality: int = 1,
         base_width: int = 64,
         dilation: int = 1,
+        se: bool = False,
+        se_args: dict = {},
     ) -> None:
         super().__init__()
         width = int(math.floor(out_channels * (base_width / 64)) * cardinality)
@@ -214,6 +216,7 @@ class _Bottleneck(nn.Module):
             nn.BatchNorm2d(out_channels * self.expansion),
         )
 
+        self.se = nn.SEModule(out_channels * self.expansion, **se_args) if se else None
         self.relu = nn.ReLU()
         self.downsample = downsample
 
@@ -223,6 +226,9 @@ class _Bottleneck(nn.Module):
         out = self.conv1(x)
         out = self.conv2(out)
         out = self.conv3(out)
+
+        if self.se is not None:
+            out = self.se(out)
 
         if self.downsample is not None:
             identity = self.downsample(x)

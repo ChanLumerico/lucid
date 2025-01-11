@@ -226,5 +226,29 @@
         "family": "ResNeXt",
         "param_size": 83455272,
         "arch": "conv"
+    },
+    "se_resnext_50_32x4d": {
+        "name": "se_resnext_50_32x4d",
+        "family": "SENet",
+        "param_size": 27559896,
+        "arch": "conv"
+    },
+    "se_resnext_101_32x4d": {
+        "name": "se_resnext_101_32x4d",
+        "family": "SENet",
+        "param_size": 48955416,
+        "arch": "conv"
+    },
+    "se_resnext_101_32x8d": {
+        "name": "se_resnext_101_32x8d",
+        "family": "SENet",
+        "param_size": 93569048,
+        "arch": "conv"
+    },
+    "se_resnext_101_64x4d": {
+        "name": "se_resnext_101_64x4d",
+        "family": "SENet",
+        "param_size": 88232984,
+        "arch": "conv"
     }
 }

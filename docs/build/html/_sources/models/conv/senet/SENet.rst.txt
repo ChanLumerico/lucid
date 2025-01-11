@@ -11,6 +11,11 @@ SENet
     se_resnet_101.rst
     se_resnet_152.rst
 
+    se_resnext_50_32x4d.rst
+    se_resnext_101_32x4d.rst
+    se_resnext_101_32x8d.rst
+    se_resnext_101_64x4d.rst
+
 .. autoclass:: lucid.models.SENet
 
 The `SENet` class serves as a foundational implementation for creating Squeeze-and-Excitation 

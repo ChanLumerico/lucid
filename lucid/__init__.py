@@ -166,6 +166,7 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
             registry = json.load(f)
 
         model = func(*args, **kwargs)
+        model._alt_name = func.__name__
         name = func.__name__
 
         if name in registry:

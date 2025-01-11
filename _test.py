@@ -78,7 +78,7 @@ lr = 0.001
 plt.figure(figsize=(10, 5))
 
 for optimizer in optimizers_list:
-    model_ = models.lenet_5()
+    model_ = models.lenet_5(_base_activation=nn.ReLU)
     optim_ = optimizer(
         model_.parameters(), lr=lr if optimizer is not optim.Adadelta else 1.0
     )

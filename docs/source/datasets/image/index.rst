@@ -5,3 +5,4 @@ Image Datasets
     :maxdepth: 1
 
     MNIST.rst
+    FashionMNIST.rst

@@ -3,8 +3,9 @@ import numpy as np
 import openml
 import math
 
+from abc import abstractmethod
 from pathlib import Path
-from typing import Optional, SupportsIndex, Tuple, Union
+from typing import Optional, SupportsIndex, Tuple, Union, ClassVar
 
 import lucid
 import lucid.nn as nn
@@ -14,10 +15,13 @@ from lucid.data import Dataset
 from lucid._tensor import Tensor
 
 
-__all__ = ["MNIST"]
+__all__ = ["MNIST", "FashionMNIST"]
 
 
-class MNIST(Dataset):
+class _DatasetBase(Dataset):
+
+    OPENML_ID: ClassVar[int]
+
     def __init__(
         self,
         root: Union[str, Path],
@@ -44,9 +48,23 @@ class MNIST(Dataset):
         else:
             self.data, self.targets = self._load_data("test")
 
+    @abstractmethod
+    def _download(self) -> None: ...
+
+    @abstractmethod
+    def _load_data(self, *args, **kwargs) -> Tuple[Tensor, ...]: ...
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+
+class MNIST(_DatasetBase):
+
+    OPENML_ID: ClassVar[int] = 554
+
     def _download(self) -> None:
         try:
-            dataset = openml.datasets.get_dataset(554)
+            dataset = openml.datasets.get_dataset(self.OPENML_ID)
             df, _, _, _ = dataset.get_data(dataset_format="dataframe")
             df.to_csv(self.root / "MNIST.csv", index=False)
 
@@ -57,7 +75,8 @@ class MNIST(Dataset):
         csv_path = self.root / "MNIST.csv"
         if not csv_path.exists():
             raise RuntimeError(
-                f"MNIST dataset CSV file not found at {csv_path}. Use `download=True`."
+                f"MNIST dataset CSV file not found at {csv_path}. "
+                + "Use `download=True`."
             )
 
         df = pd.read_csv(csv_path)
@@ -88,5 +107,53 @@ class MNIST(Dataset):
 
         return image, label
 
-    def __len__(self) -> int:
-        return len(self.data)
+
+class FashionMNIST(_DatasetBase):
+
+    OPENML_ID: ClassVar[int] = 40996
+
+    def _download(self) -> None:
+        try:
+            dataset = openml.datasets.get_dataset(self.OPENML_ID)
+            df, _, _, _ = dataset.get_data(dataset_format="dataframe")
+            df.to_csv(self.root / "FashionMNIST.csv", index=False)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to download the FashionMNIST dataset. Error: {e}"
+            )
+
+    def _load_data(self, split: str) -> Tuple[Tensor, Tensor]:
+        csv_path = self.root / "FashionMNIST.csv"
+        if not csv_path.exists():
+            raise RuntimeError(
+                f"FashionMNIST dataset CSV file not found at {csv_path}. "
+                + "Use `download=True`."
+            )
+
+        df = pd.read_csv(csv_path)
+        labels = df["class"].values.astype(np.int64)
+        images = df.drop(columns=["class"]).values.astype(np.float32)
+        images = images.reshape(-1, 1, 28, 28)
+
+        train_size = int(math.floor(len(images) * (1 - self.test_size)))
+        if split == "train":
+            images, labels = images[:train_size], labels[:train_size]
+        else:
+            images, labels = images[train_size:], labels[train_size:]
+
+        if self.to_tensor:
+            images = lucid.to_tensor(images, dtype=np.float32)
+            labels = lucid.to_tensor(labels, dtype=np.int64)
+
+        return images, labels
+
+    def __getitem__(self, index: SupportsIndex) -> Tuple[Tensor, Tensor]:
+        image = self.data[index].reshape(-1, 1, 28, 28)
+        label = self.targets[index]
+
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+
+        return image, label

@@ -1,3 +1,4 @@
+from typing import Type
 import lucid.nn as nn
 
 from lucid import register_model
@@ -13,12 +14,13 @@ class LeNet(nn.Module):
         conv_layers: list[dict],
         clf_layers: list[int],
         clf_in_features: int,
+        _base_activation: Type[nn.Module] = nn.Tanh,
     ) -> None:
         super().__init__()
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(1, conv_layers[0]["out_channels"], kernel_size=5),
-            nn.Tanh(),
+            _base_activation(),
             nn.AvgPool2d(2, 2),
         )
         self.conv2 = nn.Sequential(
@@ -27,14 +29,14 @@ class LeNet(nn.Module):
                 conv_layers[1]["out_channels"],
                 kernel_size=5,
             ),
-            nn.Tanh(),
+            _base_activation(),
             nn.AvgPool2d(2, 2),
         )
 
         in_features = clf_in_features
         for idx, units in enumerate(clf_layers, start=1):
             self.add_module(f"fc{idx}", nn.Linear(in_features, units))
-            self.add_module(f"tanh{idx + 2}", nn.Tanh())
+            self.add_module(f"tanh{idx + 2}", _base_activation())
             in_features = units
 
     def forward(self, x: Tensor) -> Tensor:
