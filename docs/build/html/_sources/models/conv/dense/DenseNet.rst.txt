@@ -18,6 +18,11 @@ featuring dense connections, bottleneck layers, and transition layers.
 This class serves as the base for various DenseNet variants such as DenseNet-121, 
 DenseNet-169, etc.
 
+.. image:: dense.png
+    :width: 600
+    :alt: DenseNet architecture
+    :align: center
+
 Class Signature
 ---------------
 

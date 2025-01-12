@@ -17,6 +17,11 @@ The `SKNet` class extends the `ResNet` architecture by incorporating Selective K
 which dynamically adjust receptive fields via attention mechanisms. This enables the network to
 adaptively fuse multi-scale features, improving performance on tasks involving objects of varying scales.
 
+.. image:: sknet.png
+    :width: 600
+    :alt: SKNet architecture
+    :align: center
+
 Class Signature
 ---------------
 

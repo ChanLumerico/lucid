@@ -13,6 +13,11 @@ The `ZFNet` module in `lucid.nn` implements the Zeiler and Fergus Net,
 an improvement over AlexNet with smaller convolutional filters and enhanced 
 visualization techniques for understanding feature learning.
 
+.. image:: zfnet.png
+    :width: 600
+    :alt: ZFNet architecture
+    :align: center
+
 Class Signature
 ---------------
 

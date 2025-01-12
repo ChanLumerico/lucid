@@ -19,6 +19,11 @@ allowing for an increase in model capacity while maintaining computational effic
 This is achieved through the use of cardinality, a hyperparameter that specifies the number 
 of groups in convolutions.
 
+.. image:: resnext.png
+    :width: 600
+    :alt: ResNeXt architecture
+    :align: center
+
 Class Signature
 ---------------
 

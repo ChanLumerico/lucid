@@ -20,6 +20,11 @@ various versions of the Inception architecture, including Inception v1, v3, and 
 It facilitates the configuration of the feature extraction and classification components 
 through arguments, making it adaptable for different versions of the Inception series.
 
+.. image:: inception.png
+    :width: 600
+    :alt: Inception-v4 architecture
+    :align: center
+
 Class Signature
 ---------------
 

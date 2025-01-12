@@ -17,6 +17,11 @@ VGG network variants (e.g., VGG-11, VGG-13, VGG-16, VGG-19).
 It provides a flexible architecture defined by a configurable list of convolutional 
 and pooling layers.
 
+.. image:: vgg.png
+    :width: 600
+    :alt: VGGNet architecture
+    :align: center
+
 Class Signature
 ---------------
 

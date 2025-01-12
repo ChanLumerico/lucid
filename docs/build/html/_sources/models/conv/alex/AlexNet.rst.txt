@@ -14,6 +14,11 @@ a convolutional neural network designed for image classification tasks.
 It consists of multiple convolutional and fully connected layers with ReLU 
 activations and dropout for regularization.
 
+.. image:: alex.png
+    :width: 600
+    :alt: AlexNet architecture
+    :align: center
+
 Class Signature
 ---------------
 

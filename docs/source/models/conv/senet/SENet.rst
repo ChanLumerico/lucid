@@ -21,6 +21,11 @@ SENet
 The `SENet` class serves as a foundational implementation for creating Squeeze-and-Excitation 
 Network architectures.
 
+.. image:: senet.png
+    :width: 600
+    :alt: SENet architecture
+    :align: center
+
 Class Signature
 ---------------
 

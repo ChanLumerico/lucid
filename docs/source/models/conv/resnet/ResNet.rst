@@ -23,6 +23,11 @@ The `ResNet` class provides an implementation of the ResNet architecture. It all
 in specifying custom block types, layer configurations, and hyperparameters, making it suitable
 for a wide range of tasks in computer vision.
 
+.. image:: resnet.png
+    :width: 600
+    :alt: ResNet architecture
+    :align: center
+
 Class Signature
 ---------------
 

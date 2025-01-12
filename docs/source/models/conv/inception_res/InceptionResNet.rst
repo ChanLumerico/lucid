@@ -22,6 +22,11 @@ This class serves as a foundation for specific versions like Inception-ResNet v1
 by providing essential components such as a stem network, convolutional layers, and
 fully connected layers.
 
+.. image:: inception_resnet.png
+    :width: 600
+    :alt: Inception-ResNet-v2 architecture
+    :align: center
+
 Class Signature
 ---------------
 
