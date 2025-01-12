@@ -9,6 +9,9 @@ __all__ = [
     "ConvBNReLU1d",
     "ConvBNReLU2d",
     "ConvBNReLU3d",
+    "DepthwiseSeparableConv1d",
+    "DepthwiseSeparableConv2d",
+    "DepthwiseSeparableConv3d",
     "SEModule",
     "SelectiveKernel",
 ]
@@ -158,6 +161,19 @@ class ConvBNReLU3d(_ConvBNReLU):
             track_running_stats,
             D=3,
         )
+
+
+# TODO: Need to be implemented in 1.11.0
+class _DepthwiseSeparableConv(nn.Module): ...
+
+
+class DepthwiseSeparableConv1d(_DepthwiseSeparableConv): ...
+
+
+class DepthwiseSeparableConv2d(_DepthwiseSeparableConv): ...
+
+
+class DepthwiseSeparableConv3d(_DepthwiseSeparableConv): ...
 
 
 class SEModule(nn.Module):
