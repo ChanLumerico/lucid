@@ -9,9 +9,9 @@ __all__ = [
     "ConvBNReLU1d",
     "ConvBNReLU2d",
     "ConvBNReLU3d",
-    "DepthwiseSeparableConv1d",
-    "DepthwiseSeparableConv2d",
-    "DepthwiseSeparableConv3d",
+    "DepthSeparableConv1d",
+    "DepthSeparableConv2d",
+    "DepthSeparableConv3d",
     "SEModule",
     "SelectiveKernel",
 ]
@@ -76,7 +76,7 @@ class ConvBNReLU3d(_ConvBNReLU):
     D: ClassVar[int] = 3
 
 
-class _DepthwiseSeparableConv(nn.Module):
+class _DepthSeparableConv(nn.Module):
     D: ClassVar[int | None] = None
 
     def __init__(
@@ -122,15 +122,15 @@ class _DepthwiseSeparableConv(nn.Module):
             return self.pointwise(self.act(self.depthwise(input_)))
 
 
-class DepthwiseSeparableConv1d(_DepthwiseSeparableConv):
+class DepthSeparableConv1d(_DepthSeparableConv):
     D: ClassVar[int] = 1
 
 
-class DepthwiseSeparableConv2d(_DepthwiseSeparableConv):
+class DepthSeparableConv2d(_DepthSeparableConv):
     D: ClassVar[int] = 2
 
 
-class DepthwiseSeparableConv3d(_DepthwiseSeparableConv):
+class DepthSeparableConv3d(_DepthSeparableConv):
     D: ClassVar[int] = 3
 
 

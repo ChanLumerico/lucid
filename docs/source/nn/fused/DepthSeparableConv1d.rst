@@ -1,9 +1,9 @@
-nn.DepthwiseSeparableConv3d
-===========================
+nn.DepthSeparableConv1d
+=======================
 
-.. autoclass:: lucid.nn.DepthwiseSeparableConv3d
+.. autoclass:: lucid.nn.DepthSeparableConv1d
 
-The `DepthwiseSeparableConv3d` module implements a 3D depthwise separable convolution layer, 
+The `DepthSeparableConv1d` module implements a 1D depthwise separable convolution layer, 
 which is an efficient variation of the standard convolution. This layer performs a depthwise 
 convolution followed by a pointwise convolution, reducing the number of parameters and computational cost.
 
@@ -12,7 +12,7 @@ Class Signature
 
 .. code-block:: python
 
-    class lucid.nn.DepthwiseSeparableConv3d(
+    class lucid.nn.DepthSeparableConv1d(
         in_channels: int,
         out_channels: int,
         kernel_size: int | tuple[int, ...],
@@ -62,10 +62,10 @@ Parameters
 
 Attributes
 ----------
-- **depthwise** (*nn.Conv3d*):
+- **depthwise** (*nn.Conv1d*):
     The depthwise convolution layer.
 
-- **pointwise** (*nn.Conv3d*):
+- **pointwise** (*nn.Conv1d*):
     The pointwise convolution layer.
 
 - **act** (*nn.Module*):
@@ -73,7 +73,7 @@ Attributes
 
 Forward Calculation
 --------------------
-The `DepthwiseSeparableConv3d` performs the following operations:
+The `DepthSeparableConv1d` performs the following operations:
 
 1. If `reversed` is `False`:
     .. math::
@@ -93,8 +93,8 @@ Examples
 .. code-block:: python
 
     >>> import lucid.nn as nn
-    >>> input_tensor = lucid.random.randn(1, 1, 4, 4, 4)
-    >>> depthwise_separable = nn.DepthwiseSeparableConv3d(
+    >>> input_tensor = lucid.random.randn(1, 1, 4)
+    >>> depthwise_separable = nn.DepthSeparableConv1d(
     ...     in_channels=1,
     ...     out_channels=2,
     ...     kernel_size=3,
@@ -109,7 +109,7 @@ Examples
 
 .. code-block:: python
 
-    >>> depthwise_separable = nn.DepthwiseSeparableConv3d(
+    >>> depthwise_separable = nn.DepthSeparableConv1d(
     ...     in_channels=1,
     ...     out_channels=2,
     ...     kernel_size=3,
@@ -124,7 +124,7 @@ Examples
 
 .. code-block:: python
 
-    >>> depthwise_separable = nn.DepthwiseSeparableConv3d(
+    >>> depthwise_separable = nn.DepthSeparableConv1d(
     ...     in_channels=1,
     ...     out_channels=2,
     ...     kernel_size=3,

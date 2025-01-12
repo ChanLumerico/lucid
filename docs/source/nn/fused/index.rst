@@ -13,9 +13,9 @@ Fused Layers
     :maxdepth: 1
     :caption: Depthwise Separable Convolution
 
-    DepthwiseSeparableConv1d.rst
-    DepthwiseSeparableConv2d.rst
-    DepthwiseSeparableConv3d.rst
+    DepthSeparableConv1d.rst
+    DepthSeparableConv2d.rst
+    DepthSeparableConv3d.rst
 
 .. toctree::
     :maxdepth: 1
