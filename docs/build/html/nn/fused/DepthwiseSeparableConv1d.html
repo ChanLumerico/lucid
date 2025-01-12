@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="nn.ConvBNReLU1d" href="ConvBNReLU1d.html" /><link rel="prev" title="nn.HuberLoss" href="../modules/loss/HuberLoss.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/fused/index.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="nn.DepthwiseSeparableConv2d" href="DepthwiseSeparableConv2d.html" /><link rel="prev" title="nn.ConvBNReLU3d" href="ConvBNReLU3d.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/fused/DepthwiseSeparableConv1d.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>Fused Layers - Lucid 1.10.0 documentation</title>
+        <title>nn.DepthwiseSeparableConv1d - Lucid 1.10.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -179,7 +179,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -442,11 +442,11 @@
 </li>
 </ul>
 </li>
-<li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">Fused Modules</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-23" name="toctree-checkbox-23" role="switch" type="checkbox"/><label for="toctree-checkbox-23"><div class="visually-hidden">Toggle navigation of Fused Modules</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Fused Modules</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-23" name="toctree-checkbox-23" role="switch" type="checkbox"/><label for="toctree-checkbox-23"><div class="visually-hidden">Toggle navigation of Fused Modules</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="ConvBNReLU1d.html">nn.ConvBNReLU1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ConvBNReLU2d.html">nn.ConvBNReLU2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ConvBNReLU3d.html">nn.ConvBNReLU3d</a></li>
-<li class="toctree-l2"><a class="reference internal" href="DepthwiseSeparableConv1d.html">nn.DepthwiseSeparableConv1d</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">nn.DepthwiseSeparableConv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="DepthwiseSeparableConv2d.html">nn.DepthwiseSeparableConv2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="DepthwiseSeparableConv3d.html">nn.DepthwiseSeparableConv3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="SEModule.html">nn.SEModule</a></li>
@@ -629,7 +629,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/nn/fused/index.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/nn/fused/DepthwiseSeparableConv1d.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -643,42 +643,163 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="fused-layers">
-<h1>Fused Layers<a class="headerlink" href="#fused-layers" title="Link to this heading">¶</a></h1>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Conv-BatchNorm-ReLU</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="ConvBNReLU1d.html">nn.ConvBNReLU1d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ConvBNReLU2d.html">nn.ConvBNReLU2d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ConvBNReLU3d.html">nn.ConvBNReLU3d</a></li>
+          <section id="nn-depthwiseseparableconv1d">
+<h1>nn.DepthwiseSeparableConv1d<a class="headerlink" href="#nn-depthwiseseparableconv1d" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lucid.nn.DepthwiseSeparableConv1d">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">DepthwiseSeparableConv1d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">in_channels:</span> <span class="pre">int,</span> <span class="pre">out_channels:</span> <span class="pre">int,</span> <span class="pre">kernel_size:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">tuple[int,</span> <span class="pre">...],</span> <span class="pre">stride:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">tuple[int,</span> <span class="pre">...]</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">padding:</span> <span class="pre">~typing.Literal['same',</span> <span class="pre">'valid']</span> <span class="pre">|</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">tuple[int,</span> <span class="pre">...]</span> <span class="pre">=</span> <span class="pre">0,</span> <span class="pre">dilation:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">tuple[int,</span> <span class="pre">...]</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">base_act:</span> <span class="pre">~typing.Type[~lucid.nn.module.Module]</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'lucid.nn.modules.activation.ReLU'&gt;,</span> <span class="pre">do_act:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False,</span> <span class="pre">reversed:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False,</span> <span class="pre">bias:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.DepthwiseSeparableConv1d" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The <cite>DepthwiseSeparableConv1d</cite> module implements a 1D depthwise separable convolution layer,
+which is an efficient variation of the standard convolution. This layer performs a depthwise
+convolution followed by a pointwise convolution, reducing the number of parameters and computational cost.</p>
+<section id="class-signature">
+<h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">DepthwiseSeparableConv1d</span><span class="p">(</span>
+    <span class="n">in_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">kernel_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+    <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">padding</span><span class="p">:</span> <span class="n">_PaddingStr</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">dilation</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">base_act</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span>
+    <span class="n">do_act</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="nb">reversed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</pre></div>
+</div>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>in_channels</strong> (<em>int</em>):
+Number of input channels.</p></li>
+<li><p><strong>out_channels</strong> (<em>int</em>):
+Number of output channels.</p></li>
+<li><p><strong>kernel_size</strong> (<em>int | tuple[int, …]</em>):
+Size of the convolution kernel.</p></li>
+<li><p><strong>stride</strong> (<em>int | tuple[int, …]</em>, optional):
+Stride of the convolution. Default is <cite>1</cite>.</p></li>
+<li><p><strong>padding</strong> (<em>_PaddingStr | int | tuple[int, …]</em>, optional):
+Amount of padding. Default is <cite>0</cite>.</p></li>
+<li><p><strong>dilation</strong> (<em>int | tuple[int, …]</em>, optional):
+Spacing between kernel elements. Default is <cite>1</cite>.</p></li>
+<li><p><strong>base_act</strong> (<em>Type[nn.Module]</em>, optional):
+The activation module to use between the convolutions,
+applied only if <cite>do_act</cite> is <cite>True</cite>. Default is <cite>nn.ReLU</cite>.</p></li>
+<li><p><strong>do_act</strong> (<em>bool</em>, optional):
+If <cite>True</cite>, applies the <cite>base_act</cite> activation function between the
+depthwise and pointwise convolutions. Default is <cite>False</cite>.</p></li>
+<li><p><strong>reversed</strong> (<em>bool</em>, optional):
+If <cite>True</cite>, reverses the order of the convolutions,
+performing pointwise convolution before depthwise convolution. Default is <cite>False</cite>.</p></li>
+<li><p><strong>bias</strong> (<em>bool</em>, optional):
+If <cite>True</cite>, includes a bias term in the convolution. Default is <cite>True</cite>.</p></li>
+</ul>
+</section>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><dl class="simple">
+<dt><strong>depthwise</strong> (<em>nn.Conv1d</em>):</dt><dd><p>The depthwise convolution layer.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>pointwise</strong> (<em>nn.Conv1d</em>):</dt><dd><p>The pointwise convolution layer.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>act</strong> (<em>nn.Module</em>):</dt><dd><p>The activation layer if <cite>do_act</cite> is <cite>True</cite>, otherwise <cite>nn.Identity</cite>.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="forward-calculation">
+<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
+<p>The <cite>DepthwiseSeparableConv1d</cite> performs the following operations:</p>
+<ol class="arabic">
+<li><dl>
+<dt>If <cite>reversed</cite> is <cite>False</cite>:</dt><dd><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathbf{y} = \text{pointwise}\big(\text{depthwise}(\mathbf{x})\big)\]</div>
+</div>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>If <cite>reversed</cite> is <cite>True</cite>:</dt><dd><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathbf{y} = \text{depthwise}\big(\text{pointwise}(\mathbf{x})\big)\]</div>
+</div>
+</dd>
+</dl>
+</li>
+<li><p>If <cite>do_act</cite> is <cite>True</cite>, applies the activation function between the convolutions.</p></li>
+</ol>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p><strong>Basic Usage</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">depthwise_separable</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">DepthwiseSeparableConv1d</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">out_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">padding</span><span class="o">=</span><span class="mi">1</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">depthwise_separable</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+<span class="go">Tensor([...], grad=None)</span>
+</pre></div>
+</div>
+<p><strong>Using Activation Between Convolutions</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">depthwise_separable</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">DepthwiseSeparableConv1d</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">out_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">do_act</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">depthwise_separable</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Reversed Convolution Order</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">depthwise_separable</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">DepthwiseSeparableConv1d</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">in_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">out_channels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="nb">reversed</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">depthwise_separable</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>Depthwise separable convolutions are more efficient than standard convolutions,
+particularly for large inputs.</p></li>
+<li><p>When using <cite>reversed=True</cite>, ensure that the input size is compatible with the
+pointwise convolution first.</p></li>
 </ul>
 </div>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Depthwise Separable Convolution</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="DepthwiseSeparableConv1d.html">nn.DepthwiseSeparableConv1d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="DepthwiseSeparableConv2d.html">nn.DepthwiseSeparableConv2d</a></li>
-<li class="toctree-l1"><a class="reference internal" href="DepthwiseSeparableConv3d.html">nn.DepthwiseSeparableConv3d</a></li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Squeeze-and-Excitation</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="SEModule.html">nn.SEModule</a></li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Selective Kernel</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="SelectiveKernel.html">nn.SelectiveKernel</a></li>
-</ul>
-</div>
+</section>
 </section>
 
         </article>
@@ -686,23 +807,23 @@
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="ConvBNReLU1d.html">
+          <a class="next-page" href="DepthwiseSeparableConv2d.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.ConvBNReLU1d</div>
+                <div class="title">nn.DepthwiseSeparableConv2d</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../modules/loss/HuberLoss.html">
+          <a class="prev-page" href="ConvBNReLU3d.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">nn.HuberLoss</div>
+                <div class="title">nn.ConvBNReLU3d</div>
                 
               </div>
             </a>
@@ -724,8 +845,32 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">nn.DepthwiseSeparableConv1d</a><ul>
+<li><a class="reference internal" href="#lucid.nn.DepthwiseSeparableConv1d"><code class="docutils literal notranslate"><span class="pre">DepthwiseSeparableConv1d</span></code></a></li>
+<li><a class="reference internal" href="#class-signature">Class Signature</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#attributes">Attributes</a></li>
+<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
+<li><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>

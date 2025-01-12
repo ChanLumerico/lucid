@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, ClassVar, Type
 
 import lucid
 import lucid.nn as nn
@@ -24,6 +24,8 @@ _BN = [nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d]
 
 
 class _ConvBNReLU(nn.Module):
+    D: ClassVar[int | None] = None
+
     def __init__(
         self,
         in_channels: int,
@@ -38,14 +40,12 @@ class _ConvBNReLU(nn.Module):
         momentum: float | None = 0.1,
         bn_affine: bool = True,
         track_running_stats: bool = True,
-        /,
-        D: int | None = None,
     ) -> None:
         super().__init__()
-        if D is None:
+        if self.D is None:
             raise ValueError("Must specify 'D' value.")
 
-        self.conv: nn.Module = _Conv[D - 1](
+        self.conv: nn.Module = _Conv[self.D - 1](
             in_channels,
             out_channels,
             kernel_size,
@@ -55,7 +55,7 @@ class _ConvBNReLU(nn.Module):
             groups,
             conv_bias,
         )
-        self.bn: nn.Module = _BN[D - 1](
+        self.bn: nn.Module = _BN[self.D - 1](
             out_channels, eps, momentum, bn_affine, track_running_stats
         )
         self.relu = nn.ReLU()
@@ -65,115 +65,73 @@ class _ConvBNReLU(nn.Module):
 
 
 class ConvBNReLU1d(_ConvBNReLU):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: int | tuple[int],
-        stride: int | tuple[int] = 1,
-        padding: _PaddingStr | int | tuple[int] = 0,
-        dilation: int | tuple[int] = 1,
-        groups: int = 1,
-        conv_bias: bool = True,
-        eps: float = 1e-5,
-        momentum: float | None = 0.1,
-        bn_affine: bool = True,
-        track_running_stats: bool = True,
-    ) -> None:
-        super().__init__(
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            dilation,
-            groups,
-            conv_bias,
-            eps,
-            momentum,
-            bn_affine,
-            track_running_stats,
-            D=1,
-        )
+    D: ClassVar[int] = 1
 
 
 class ConvBNReLU2d(_ConvBNReLU):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: int | tuple[int, int],
-        stride: int | tuple[int, int] = 1,
-        padding: _PaddingStr | int | tuple[int, int] = 0,
-        dilation: int | tuple[int, int] = 1,
-        groups: int = 1,
-        conv_bias: bool = True,
-        eps: float = 1e-5,
-        momentum: float | None = 0.1,
-        bn_affine: bool = True,
-        track_running_stats: bool = True,
-    ) -> None:
-        super().__init__(
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            dilation,
-            groups,
-            conv_bias,
-            eps,
-            momentum,
-            bn_affine,
-            track_running_stats,
-            D=2,
-        )
+    D: ClassVar[int] = 2
 
 
 class ConvBNReLU3d(_ConvBNReLU):
+    D: ClassVar[int] = 3
+
+
+class _DepthwiseSeparableConv(nn.Module):
+    D: ClassVar[int | None] = None
+
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: int | tuple[int, int, int],
-        stride: int | tuple[int, int, int] = 1,
-        padding: _PaddingStr | int | tuple[int, int, int] = 0,
-        dilation: int | tuple[int, int, int] = 1,
-        groups: int = 1,
-        conv_bias: bool = True,
-        eps: float = 1e-5,
-        momentum: float | None = 0.1,
-        bn_affine: bool = True,
-        track_running_stats: bool = True,
+        kernel_size: int | tuple[int, ...],
+        stride: int | tuple[int, ...] = 1,
+        padding: _PaddingStr | int | tuple[int, ...] = 0,
+        dilation: int | tuple[int, ...] = 1,
+        base_act: Type[nn.Module] = nn.ReLU,
+        do_act: bool = False,
+        reversed: bool = False,
+        bias: bool = True,
     ) -> None:
-        super().__init__(
+        super().__init__()
+        if self.D is None:
+            raise ValueError("Must specify 'D' value.")
+
+        self.depthwise = _Conv[self.D - 1](
             in_channels,
             out_channels,
             kernel_size,
             stride,
             padding,
             dilation,
-            groups,
-            conv_bias,
-            eps,
-            momentum,
-            bn_affine,
-            track_running_stats,
-            D=3,
+            groups=in_channels,
+            bias=bias,
         )
+        self.pointwise = _Conv[self.D - 1](
+            in_channels,
+            out_channels,
+            kernel_size=1,
+            bias=bias,
+        )
+        self.act = base_act() if do_act else nn.Identity()
+        self.reversed = reversed
+
+    def forward(self, input_: Tensor) -> Tensor:
+        if self.reversed:
+            return self.depthwise(self.act(self.pointwise(input_)))
+        else:
+            return self.pointwise(self.act(self.depthwise(input_)))
 
 
-# TODO: Need to be implemented in 1.11.0
-class _DepthwiseSeparableConv(nn.Module): ...
+class DepthwiseSeparableConv1d(_DepthwiseSeparableConv):
+    D: ClassVar[int] = 1
 
 
-class DepthwiseSeparableConv1d(_DepthwiseSeparableConv): ...
+class DepthwiseSeparableConv2d(_DepthwiseSeparableConv):
+    D: ClassVar[int] = 2
 
 
-class DepthwiseSeparableConv2d(_DepthwiseSeparableConv): ...
-
-
-class DepthwiseSeparableConv3d(_DepthwiseSeparableConv): ...
+class DepthwiseSeparableConv3d(_DepthwiseSeparableConv):
+    D: ClassVar[int] = 3
 
 
 class SEModule(nn.Module):

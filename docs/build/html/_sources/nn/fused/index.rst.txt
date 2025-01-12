@@ -11,6 +11,14 @@ Fused Layers
 
 .. toctree::
     :maxdepth: 1
+    :caption: Depthwise Separable Convolution
+
+    DepthwiseSeparableConv1d.rst
+    DepthwiseSeparableConv2d.rst
+    DepthwiseSeparableConv3d.rst
+
+.. toctree::
+    :maxdepth: 1
     :caption: Squeeze-and-Excitation
 
     SEModule.rst
