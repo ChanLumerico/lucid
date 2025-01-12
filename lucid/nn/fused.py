@@ -87,9 +87,6 @@ class _DepthSeparableConv(nn.Module):
         stride: int | tuple[int, ...] = 1,
         padding: _PaddingStr | int | tuple[int, ...] = 0,
         dilation: int | tuple[int, ...] = 1,
-        base_act: Type[nn.Module] = nn.ReLU,
-        do_act: bool = False,
-        reversed: bool = False,
         bias: bool = True,
     ) -> None:
         super().__init__()
@@ -98,7 +95,7 @@ class _DepthSeparableConv(nn.Module):
 
         self.depthwise = _Conv[self.D - 1](
             in_channels,
-            out_channels,
+            in_channels,
             kernel_size,
             stride,
             padding,
@@ -112,14 +109,10 @@ class _DepthSeparableConv(nn.Module):
             kernel_size=1,
             bias=bias,
         )
-        self.act = base_act() if do_act else nn.Identity()
         self.reversed = reversed
 
     def forward(self, input_: Tensor) -> Tensor:
-        if self.reversed:
-            return self.depthwise(self.act(self.pointwise(input_)))
-        else:
-            return self.pointwise(self.act(self.depthwise(input_)))
+        return self.pointwise(self.depthwise(input_))
 
 
 class DepthSeparableConv1d(_DepthSeparableConv):
