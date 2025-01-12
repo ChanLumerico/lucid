@@ -280,5 +280,11 @@
         "family": "DenseNet",
         "param_size": 33337704,
         "arch": "conv"
+    },
+    "xception": {
+        "name": "xception",
+        "family": "Xception",
+        "param_size": 22862096,
+        "arch": "conv"
     }
 }

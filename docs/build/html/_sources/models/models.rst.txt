@@ -553,4 +553,31 @@ of parameters, and improves the efficiency of gradient propagation during traini
       - 33,337,704
       - ✅
 
+.. rubric:: Xception
+
+A deep learning architecture that introduces depthwise separable convolutions 
+to enhance efficiency and accuracy in convolutional neural networks. It builds 
+on the idea that spatial and channel-wise information can be decoupled, significantly 
+reducing computational cost while maintaining performance.
+
+ Chollet, F. (2017). "Xception: Deep Learning with Depthwise Separable Convolutions." 
+ *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, 
+ 2017, pp. 1251-1258.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - Xception
+      - `xception <conv/xception/xception>`_
+      - :math:`(N,3,224,224)`
+      - 22,862,096
+      - ✅
+
 *To be implemented...🔮*

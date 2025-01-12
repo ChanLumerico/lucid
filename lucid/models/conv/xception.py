@@ -121,3 +121,8 @@ class Xception(nn.Module):
         x = self.fc(x)
 
         return x
+
+
+@register_model
+def xception(num_classes: int = 1000, **kwargs) -> Xception:
+    return Xception(num_classes, **kwargs)
