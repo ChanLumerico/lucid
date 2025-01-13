@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/models.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.models - Lucid 1.11.0 documentation</title>
+        <title>lucid.models - Lucid 1.11.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Lucid 1.11.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">Lucid 1.11.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 1.11.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.11.1 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -393,6 +393,7 @@
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../nn/modules/activation/index.html">Activation Layers</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" role="switch" type="checkbox"/><label for="toctree-checkbox-18"><div class="visually-hidden">Toggle navigation of Activation Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../nn/modules/activation/ReLU.html">nn.ReLU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/modules/activation/ReLU6.html">nn.ReLU6</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/modules/activation/LeakyReLU.html">nn.LeakyReLU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/modules/activation/ELU.html">nn.ELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/modules/activation/SELU.html">nn.SELU</a></li>
@@ -586,6 +587,10 @@
 <li class="toctree-l3"><a class="reference internal" href="conv/xception/xception.html">xception</a></li>
 </ul>
 </li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="conv/mobile/MobileNet.html">MobileNet</a><input class="toctree-checkbox" id="toctree-checkbox-40" name="toctree-checkbox-40" role="switch" type="checkbox"/><label for="toctree-checkbox-40"><div class="visually-hidden">Toggle navigation of MobileNet</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="conv/mobile/mobilenet.html">mobilenet</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -594,7 +599,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-40" name="toctree-checkbox-40" role="switch" type="checkbox"/><label for="toctree-checkbox-40"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-41" name="toctree-checkbox-41" role="switch" type="checkbox"/><label for="toctree-checkbox-41"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -1279,6 +1284,69 @@ reducing computational cost while maintaining performance.</p>
 </tbody>
 </table>
 </div>
+<p class="rubric">MobileNet</p>
+<p>A deep learning architecture that introduces depthwise separable convolutions
+to enhance efficiency and accuracy in convolutional neural networks. It builds
+on the idea that spatial and channel-wise information can be decoupled, significantly
+reducing computational cost while maintaining performance.</p>
+<blockquote>
+<div><p><em>MobileNet</em></p>
+<p>Howard, A. G., Zhu, M., Chen, B., Kalenichenko, D., Wang, W., Weyand, T., Andreetto, M.,
+&amp; Adam, H. (2017). “MobileNets: Efficient Convolutional Neural Networks for Mobile
+Vision Applications.” <em>arXiv preprint arXiv:1704.04861.</em></p>
+<p><em>MobileNet-v2</em></p>
+<p>Sandler, M., Howard, A., Zhu, M., Zhmoginov, A., &amp; Chen, L.-C. (2018).
+“MobileNetV2: Inverted Residuals and Linear Bottlenecks.” <em>Proceedings of the IEEE
+Conference on Computer Vision and Pattern Recognition (CVPR)</em>, pp. 4510-4520.</p>
+<p><em>MobileNet-v3</em></p>
+<p>Howard, A., Sandler, M., Chu, G., Chen, L.-C., Chen, B., Tan, M., Wang, W., Zhu, Y.,
+Pang, R., Vasudevan, V., Le, Q., &amp; Adam, H. (2019). “Searching for MobileNetV3.”
+<em>Proceedings of the IEEE International Conference on Computer Vision (ICCV)</em>, pp. 1314-1324.</p>
+</div></blockquote>
+<div class="table-wrapper docutils container">
+<table class="docutils align-left">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Model</p></th>
+<th class="head"><p>Input Shape</p></th>
+<th class="head"><p>Parameter Count</p></th>
+<th class="head"><p>Implemented</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>MobileNet</p></td>
+<td><p><a class="reference external" href="conv/mobile/mobilenet">mobilenet</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>4,232,008</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p>MobileNet-v2</p></td>
+<td><p><cite>not-implemented</cite></p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td><p>❌</p></td>
+</tr>
+<tr class="row-even"><td><p>MobileNet-v3</p></td>
+<td><p><cite>not-implemented</cite></p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td><p>❌</p></td>
+</tr>
+</tbody>
+</table>
+</div>
 <p><em>To be implemented…🔮</em></p>
 </section>
 </section>
@@ -1351,7 +1419,7 @@ reducing computational cost while maintaining performance.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=6cf1fb80"></script>
+</div><script src="../_static/documentation_options.js?v=c8897f99"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>

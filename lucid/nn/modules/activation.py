@@ -5,7 +5,17 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 
-__all__ = ["ReLU", "LeakyReLU", "ELU", "SELU", "GELU", "Sigmoid", "Tanh", "Softmax"]
+__all__ = [
+    "ReLU",
+    "ReLU6",
+    "LeakyReLU",
+    "ELU",
+    "SELU",
+    "GELU",
+    "Sigmoid",
+    "Tanh",
+    "Softmax",
+]
 
 
 class ReLU(nn.Module):
@@ -14,6 +24,14 @@ class ReLU(nn.Module):
 
     def forward(self, input_: Tensor) -> Tensor:
         return F.relu(input_)
+
+
+class ReLU6(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.relu(lucid.clip(input_, 0, 6))
 
 
 class LeakyReLU(nn.Module):

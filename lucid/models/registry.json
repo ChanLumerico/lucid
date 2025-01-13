@@ -286,5 +286,11 @@
         "family": "Xception",
         "param_size": 22862096,
         "arch": "conv"
+    },
+    "mobilenet": {
+        "name": "mobilenet",
+        "family": "MobileNet",
+        "param_size": 4232008,
+        "arch": "conv"
     }
 }

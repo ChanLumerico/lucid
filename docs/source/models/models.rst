@@ -580,4 +580,57 @@ reducing computational cost while maintaining performance.
       - 22,862,096
       - ✅
 
+.. rubric:: MobileNet
+
+A deep learning architecture that introduces depthwise separable convolutions 
+to enhance efficiency and accuracy in convolutional neural networks. It builds 
+on the idea that spatial and channel-wise information can be decoupled, significantly 
+reducing computational cost while maintaining performance.
+
+ *MobileNet*
+
+ Howard, A. G., Zhu, M., Chen, B., Kalenichenko, D., Wang, W., Weyand, T., Andreetto, M., 
+ & Adam, H. (2017). "MobileNets: Efficient Convolutional Neural Networks for Mobile 
+ Vision Applications." *arXiv preprint arXiv:1704.04861.*
+
+ *MobileNet-v2*
+ 
+ Sandler, M., Howard, A., Zhu, M., Zhmoginov, A., & Chen, L.-C. (2018). 
+ "MobileNetV2: Inverted Residuals and Linear Bottlenecks." *Proceedings of the IEEE 
+ Conference on Computer Vision and Pattern Recognition (CVPR)*, pp. 4510-4520.
+
+ *MobileNet-v3*
+
+ Howard, A., Sandler, M., Chu, G., Chen, L.-C., Chen, B., Tan, M., Wang, W., Zhu, Y., 
+ Pang, R., Vasudevan, V., Le, Q., & Adam, H. (2019). "Searching for MobileNetV3." 
+ *Proceedings of the IEEE International Conference on Computer Vision (ICCV)*, pp. 1314-1324.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - MobileNet
+      - `mobilenet <conv/mobile/mobilenet>`_
+      - :math:`(N,3,224,224)`
+      - 4,232,008
+      - ✅
+    
+    * - MobileNet-v2
+      - `not-implemented`
+      - -
+      - -
+      - ❌
+    
+    * - MobileNet-v3
+      - `not-implemented`
+      - -
+      - -
+      - ❌
+
 *To be implemented...🔮*

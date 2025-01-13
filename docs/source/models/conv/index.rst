@@ -16,3 +16,4 @@ ConvNets
     SKNet <sknet/SKNet.rst>
     DenseNet <dense/DenseNet.rst>
     Xception <xception/Xception.rst>
+    MobileNet <mobile/MobileNet.rst>

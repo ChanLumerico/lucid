@@ -34,7 +34,7 @@ enabling efficient optimization of model parameters.
   similar to arrays in `NumPy` but with additional features such as automatic gradient tracking.
 
 - **Autodiff**: Lucid computes gradients automatically using reverse-mode differentiation, 
-  making it possible to train models through backpropagation.
+  making it possible to train models through backpropagation. ([Autodiff explanation](autodiff.md))
 
 - **Modularity**: Lucid is designed with modularity in mind, allowing users to build and 
   customize layers, models, and operations with ease.

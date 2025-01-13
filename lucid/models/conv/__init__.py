@@ -10,3 +10,4 @@ from .senet import *
 from .sknet import *
 from .dense import *
 from .xception import *
+from .mobile import *

@@ -15,8 +15,8 @@ def summarize(
     truncate_from: int | None = None,
     test_backward: bool = False,
 ) -> None:
-    PIPELINE: str = r"│  "
-    BRANCH: str = r"├─ "
+    PIPELINE: str = r"│   "
+    BRANCH: str = r"├── "
 
     def _register_hook(module: nn.Module, depth: int) -> None:
 

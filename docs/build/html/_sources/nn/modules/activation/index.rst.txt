@@ -5,6 +5,7 @@ Activation Layers
     :maxdepth: 1
 
     ReLU.rst
+    ReLU6.rst
     LeakyReLU.rst
     ELU.rst
     SELU.rst
