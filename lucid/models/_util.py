@@ -31,8 +31,8 @@ def summarize(
                 layer_name = BRANCH + layer_name
             elif depth > 1:
                 layer_name = PIPELINE * (depth - 2) + BRANCH + layer_name
-            if len(layer_name) > 30:
-                layer_name = layer_name[:26] + "..."
+            if len(layer_name) > 36:
+                layer_name = layer_name[:32] + "..."
 
             summary_ = dict(
                 layer_name=layer_name,
@@ -69,8 +69,8 @@ def summarize(
 
     print(f"{title:^95}")
     print("=" * 95)
-    print(f"{"Layer":<30}{"Input Shape":<25}", end="")
-    print(f"{"Output Shape":<25}{"Parameter Size":<12}")
+    print(f"{"Layer":<36}{"Input Shape":<22}", end="")
+    print(f"{"Output Shape":<22}{"Parameter Size":<12}")
     print("=" * 95)
 
     total_layers = sum(layer["layer_count"] for layer in module_summary)
@@ -83,8 +83,8 @@ def summarize(
 
     for layer in module_summary:
         print(
-            f"{layer['layer_name']:<30}{str(layer['input_shape']):<25}",
-            f"{str(layer['output_shape']):<25}",
+            f"{layer['layer_name']:<36}{str(layer['input_shape']):<22}",
+            f"{str(layer['output_shape']):<22}",
             sep="",
             end="",
         )

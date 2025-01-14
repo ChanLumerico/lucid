@@ -622,15 +622,9 @@ reducing computational cost while maintaining performance.
       - ✅
     
     * - MobileNet-v2
-      - `not-implemented`
-      - -
-      - -
-      - ❌
-    
-    * - MobileNet-v3
-      - `not-implemented`
-      - -
-      - -
-      - ❌
+      - `mobilenet_v2 <conv/mobile/mobilenet_v2>`_
+      - :math:`(N,3,224,224)`
+      - 3,504,872
+      - ✅
 
 *To be implemented...🔮*

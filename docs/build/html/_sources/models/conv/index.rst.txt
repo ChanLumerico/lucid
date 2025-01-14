@@ -17,3 +17,4 @@ ConvNets
     DenseNet <dense/DenseNet.rst>
     Xception <xception/Xception.rst>
     MobileNet <mobile/MobileNet.rst>
+    MobileNet-v2 <mobile/MobileNet_V2.rst>

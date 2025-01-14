@@ -66,7 +66,7 @@ def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> C
 
                 if result.requires_grad:
                     result._backward_op = _backward_op
-                    result._prev = tensors
+                    result._prev = list(tensors)
 
             return results if n_ret > 1 else results[0]
 
