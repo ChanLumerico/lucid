@@ -11,5 +11,8 @@ Activation Layers
     SELU.rst
     GELU.rst
     Sigmoid.rst
+    HardSigmoid.rst
     Tanh.rst
     Softmax.rst
+    Swish.rst
+    HardSwish.rst

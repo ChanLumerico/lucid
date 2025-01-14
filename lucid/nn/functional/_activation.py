@@ -36,7 +36,7 @@ def gelu(input_: Tensor) -> Tensor:
 
 
 def sigmoid(input_: Tensor) -> Tensor:
-    return 1 / (1 + lucid.exp(input_))
+    return 1 / (1 + lucid.exp(-input_))
 
 
 def tanh(input_: Tensor) -> Tensor:

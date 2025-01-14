@@ -4,7 +4,15 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["MobileNet", "MobileNet_V2", "mobilenet", "mobilenet_v2"]
+__all__ = [
+    "MobileNet",
+    "MobileNet_V2",
+    "MobileNet_V3",
+    "mobilenet",
+    "mobilenet_v2",
+    "mobilenet_v3_small",
+    "mobilenet_v3_large",
+]
 
 
 class _Depthwise(nn.Module):
@@ -180,6 +188,16 @@ class MobileNet_V2(nn.Module):
         return x
 
 
+class _SEBlock(nn.Module): ...
+
+
+class _InvertedBottleneck_V3(nn.Module): ...
+
+
+class MobileNet_V3(nn.Module):
+    NotImplemented
+
+
 @register_model
 def mobilenet(
     width_multiplier: float = 1.0, num_classes: int = 1000, **kwargs
@@ -190,3 +208,11 @@ def mobilenet(
 @register_model
 def mobilenet_v2(num_classes: int = 1000, **kwargs) -> MobileNet_V2:
     return MobileNet_V2(num_classes, **kwargs)
+
+
+def mobilenet_v3_small():
+    NotImplemented
+
+
+def mobilenet_v3_large():
+    NotImplemented

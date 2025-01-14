@@ -13,8 +13,11 @@ __all__ = [
     "SELU",
     "GELU",
     "Sigmoid",
+    "HardSigmoid",
     "Tanh",
     "Softmax",
+    "Swish",
+    "HardSwish",
 ]
 
 
@@ -76,6 +79,14 @@ class Sigmoid(nn.Module):
         return F.sigmoid(input_)
 
 
+class HardSigmoid(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return ((input_ / 6.0) + 0.5).clip(0, 1)
+
+
 class Tanh(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -91,3 +102,20 @@ class Softmax(nn.Module):
 
     def forward(self, input_: Tensor) -> Tensor:
         return F.softmax(input_, self.axis)
+
+
+class Swish(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return input_ * F.sigmoid(input_)
+
+
+class HardSwish(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, input_: Tensor) -> Tensor:
+        hard_sigmoid = ((input_ / 6.0) + 0.5).clip(0, 1)
+        return input_ * hard_sigmoid
