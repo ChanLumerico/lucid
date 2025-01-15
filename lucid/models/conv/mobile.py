@@ -188,14 +188,149 @@ class MobileNet_V2(nn.Module):
         return x
 
 
-class _SEBlock(nn.Module): ...
+class _SEBlock(nn.Module):
+    def __init__(self, in_channels: int, reduction: int = 4) -> None:
+        super().__init__()
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+        self.fc1 = nn.Linear(in_channels, in_channels // reduction)
+        self.fc2 = nn.Linear(in_channels // reduction, in_channels)
+
+        self.relu = nn.ReLU()
+        self.hsigmoid = nn.HardSigmoid()
+
+    def forward(self, x: Tensor) -> Tensor:
+        y = self.avgpool(x).squeeze(axis=(-1, -2))
+        y = self.relu(self.fc1(y))
+        y = self.hsigmoid(self.fc2(y))
+
+        y = y.unsqueeze(axis=(-1, -2))
+        out = x * y
+        return out
 
 
-class _InvertedBottleneck_V3(nn.Module): ...
+class _InvertedBottleneck_V3(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        mid_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int,
+        use_se: bool,
+        use_hswish: bool,
+    ) -> None:
+        super().__init__()
+        self.do_skip = stride == 1 and in_channels == out_channels
+
+        expand = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(mid_channels, momentum=0.99),
+            nn.HardSwish() if use_hswish else nn.ReLU(),
+        )
+
+        depthwise = nn.Sequential(
+            nn.Conv2d(
+                mid_channels,
+                mid_channels,
+                kernel_size,
+                stride,
+                padding="same",
+                groups=mid_channels,
+                bias=False,
+            ),
+            nn.BatchNorm2d(mid_channels, momentum=0.99),
+            nn.HardSwish() if use_hswish else nn.ReLU(),
+        )
+
+        se_block = _SEBlock(mid_channels) if use_se else None
+
+        pointwise = nn.Sequential(
+            nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_channels, momentum=0.99),
+        )
+
+        layers = []
+        if in_channels < mid_channels:
+            layers.append(expand)
+        layers.append(depthwise)
+
+        if se_block is not None:
+            layers.append(se_block)
+        layers.append(pointwise)
+
+        self.residual = nn.Sequential(*layers)
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.do_skip:
+            out = self.residual(x) + x
+        else:
+            out = self.residual(x)
+        return out
 
 
 class MobileNet_V3(nn.Module):
-    NotImplemented
+    def __init__(
+        self, bottleneck_cfg: list, last_channels: int, num_classes: int = 1000
+    ) -> None:
+        super().__init__()
+
+        self.conv_first = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(16),
+            nn.HardSwish(),
+        )
+
+        in_channels = 16
+        bottleneck_layers = []
+        for (
+            kernel_size,
+            mid_channels,
+            out_channels,
+            use_se,
+            use_hswish,
+            stride,
+        ) in bottleneck_cfg:
+            bottleneck_layers.append(
+                _InvertedBottleneck_V3(
+                    in_channels,
+                    mid_channels,
+                    out_channels,
+                    kernel_size,
+                    stride,
+                    use_se,
+                    use_hswish,
+                )
+            )
+            in_channels = out_channels
+        self.bottlenecks = nn.Sequential(*bottleneck_layers)
+
+        self.conv_last = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.HardSwish(),
+        )
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc1 = nn.Sequential(
+            nn.Linear(mid_channels, last_channels),
+            nn.HardSwish(),
+        )
+        self.fc2 = nn.Sequential(
+            nn.Dropout(p=0.2), nn.Linear(last_channels, num_classes)
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv_first(x)
+        x = self.bottlenecks(x)
+        x = self.conv_last(x)
+
+        x = self.avgpool(x)
+        x = x.reshape(x.shape[0], -1)
+        x = self.fc1(x)
+        x = self.fc2(x)
+
+        return x
 
 
 @register_model
@@ -210,9 +345,45 @@ def mobilenet_v2(num_classes: int = 1000, **kwargs) -> MobileNet_V2:
     return MobileNet_V2(num_classes, **kwargs)
 
 
-def mobilenet_v3_small():
-    NotImplemented
+@register_model
+def mobilenet_v3_small(num_classes: int = 1000, **kwargs) -> MobileNet_V3:
+    cfg = [
+        [3, 16, 16, True, False, 2],
+        [3, 72, 24, False, False, 2],
+        [3, 88, 24, False, False, 1],
+        [5, 96, 40, True, True, 2],
+        [5, 240, 40, True, True, 1],
+        [5, 240, 40, True, True, 1],
+        [5, 120, 48, True, True, 1],
+        [5, 144, 48, True, True, 1],
+        [5, 288, 96, True, True, 2],
+        [5, 576, 96, True, True, 1],
+        [5, 576, 96, True, True, 1],
+    ]
+    return MobileNet_V3(
+        bottleneck_cfg=cfg, last_channels=1024, num_classes=num_classes, **kwargs
+    )
 
 
-def mobilenet_v3_large():
-    NotImplemented
+@register_model
+def mobilenet_v3_large(num_classes: int = 1000, **kwargs) -> MobileNet_V3:
+    cfg = [
+        [3, 16, 16, False, False, 1],
+        [3, 64, 24, False, False, 2],
+        [3, 72, 24, False, False, 1],
+        [5, 72, 40, True, False, 2],
+        [5, 120, 40, True, False, 1],
+        [5, 120, 40, True, False, 1],
+        [3, 240, 80, False, True, 2],
+        [3, 200, 80, False, True, 1],
+        [3, 184, 80, False, True, 1],
+        [3, 184, 80, False, True, 1],
+        [3, 480, 112, True, True, 1],
+        [3, 672, 112, True, True, 1],
+        [5, 672, 160, True, True, 2],
+        [5, 960, 160, True, True, 1],
+        [5, 960, 160, True, True, 1],
+    ]
+    return MobileNet_V3(
+        bottleneck_cfg=cfg, last_channels=1280, num_classes=num_classes, **kwargs
+    )

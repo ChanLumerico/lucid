@@ -298,5 +298,17 @@
         "family": "MobileNet_V2",
         "param_size": 3504872,
         "arch": "conv"
+    },
+    "mobilenet_v3_small": {
+        "name": "mobilenet_v3_small",
+        "family": "MobileNet_V3",
+        "param_size": 2537238,
+        "arch": "conv"
+    },
+    "mobilenet_v3_large": {
+        "name": "mobilenet_v3_large",
+        "family": "MobileNet_V3",
+        "param_size": 5481198,
+        "arch": "conv"
     }
 }
