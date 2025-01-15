@@ -639,4 +639,6 @@ reducing computational cost while maintaining performance.
       - 5,481,198
       - ✅
 
+.. rubric:: EfficientNet
+
 *To be implemented...🔮*

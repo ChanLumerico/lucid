@@ -3,7 +3,7 @@ from typing import overload
 import lucid
 from lucid.random import _func
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _Scalar
+from lucid.types import _ShapeLike, _Scalar, _ArrayOrScalar
 
 
 def seed(seed: int) -> None:
@@ -64,3 +64,8 @@ def uniform(
     keep_grad: bool = False,
 ) -> Tensor:
     return _func.uniform(low, high, size, requires_grad, keep_grad)
+
+
+def bernoulli(
+    probs: _ArrayOrScalar | Tensor, requires_grad: bool = False, keep_grad: bool = False
+) -> Tensor: ...  # TODO: begin from here
