@@ -7,10 +7,9 @@ from lucid import models
 from lucid import datasets, transforms
 from lucid.data import DataLoader
 
-transform = transforms.Resize((32, 32))
 
-mnist_train = datasets.MNIST(root="./_data/mnist", train=True, transform=transform)
-mnist_test = datasets.MNIST(root="./_data/mnist", train=False, transform=transform)
+mnist_train = datasets.CIFAR10(root="./_data/cifar", train=True)
+mnist_test = datasets.CIFAR10(root="./_data/cifar", train=False)
 
 train_loader = DataLoader(mnist_train, batch_size=64, shuffle=True)
 test_loader = DataLoader(mnist_test, batch_size=64, shuffle=False)
@@ -36,7 +35,7 @@ def train(model, optimizer, epoch):
 
         loss_arr.append(loss.item())
 
-        if i % 50 == 0:
+        if i % 10 == 0:
             print(f"[{type(optimizer).__name__}]", end=" ")
             print(f"Epoch {epoch} - Batch {i}, Loss {loss.item()}")
 
@@ -78,7 +77,7 @@ lr = 0.001
 plt.figure(figsize=(10, 5))
 
 for optimizer in optimizers_list:
-    model_ = models.lenet_5(_base_activation=nn.ReLU)
+    model_ = models.mobilenet_v3_small(num_classes=10)
     optim_ = optimizer(
         model_.parameters(), lr=lr if optimizer is not optim.Adadelta else 1.0
     )
@@ -88,7 +87,7 @@ for optimizer in optimizers_list:
 
 plt.xlabel("Batches")
 plt.ylabel("Cross-Entropy Loss")
-plt.title(f"LeNet-5 on Lucid for MNIST")
+plt.title(f"MobileNet-v3-Small on Lucid for CIFAR-10")
 plt.grid(alpha=0.2)
 plt.legend()
 plt.tight_layout()

@@ -6,3 +6,5 @@ Image Datasets
 
     MNIST.rst
     FashionMNIST.rst
+    CIFAR10.rst
+    CIFAR100.rst

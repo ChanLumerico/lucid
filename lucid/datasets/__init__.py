@@ -1,1 +1,2 @@
-from lucid.datasets.mnist import *
+from .mnist import *
+from .cifar import *
