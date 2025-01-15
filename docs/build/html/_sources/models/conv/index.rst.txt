@@ -18,3 +18,4 @@ ConvNets
     Xception <xception/Xception.rst>
     MobileNet <mobile/MobileNet.rst>
     MobileNet-v2 <mobile/MobileNet_V2.rst>
+    MobileNet-v3 <mobile/MobileNet_V3.rst>
