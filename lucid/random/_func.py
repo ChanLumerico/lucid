@@ -40,7 +40,7 @@ def uniform(
     return Tensor(np.random.uniform(low, high, size), requires_grad, keep_grad)
 
 
-def bernoulli(  # beta
+def bernoulli(
     probs: _ArrayOrScalar | Tensor,
     requires_grad: bool = False,
     keep_grad: bool = False,

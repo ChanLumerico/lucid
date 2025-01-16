@@ -67,5 +67,8 @@ def uniform(
 
 
 def bernoulli(
-    probs: _ArrayOrScalar | Tensor, requires_grad: bool = False, keep_grad: bool = False
-) -> Tensor: ...  # TODO: begin from here
+    probs: _ArrayOrScalar | Tensor,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor:
+    return _func.bernoulli(probs, requires_grad, keep_grad)

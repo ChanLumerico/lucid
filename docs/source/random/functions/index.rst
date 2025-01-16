@@ -9,3 +9,4 @@ Random Number Generations
     randint.rst
     randn.rst
     uniform.rst
+    bernoulli.rst
