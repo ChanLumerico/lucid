@@ -25,9 +25,9 @@ class _SEBlock(nn.Module):
         super().__init__()
         self.squeeze = nn.AdaptiveAvgPool2d((1, 1))
         self.excite = nn.Sequential(
-            nn.Linear(in_channels, in_channels * reduction),
+            nn.Linear(in_channels, in_channels // reduction),
             nn.Swish(),
-            nn.Linear(in_channels * reduction, in_channels),
+            nn.Linear(in_channels // reduction, in_channels),
             nn.Sigmoid(),
         )
 
@@ -129,6 +129,8 @@ class _SepConv(_MBConv):
 
 
 class EfficientNet(nn.Module):
+    # TODO: Adopt `_make_divisible()` function to correctly adjust the channel sizes
+    
     def __init__(
         self,
         num_classes: int = 1000,
@@ -159,14 +161,36 @@ class EfficientNet(nn.Module):
             self.p = 1.0
             self.step = 0.0
 
-        self.upsample = ...  # NOTE: need to implement `Upsample`
+        self.upsample = nn.Upsample(
+            scale_factor=scale, mode="bilinear", align_corners=False
+        )
 
         self.stage1 = nn.Sequential(
             nn.Conv2d(3, channels[0], kernel_size=3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(channels[0], momentum=0.99, eps=1e-3),
         )
 
-        # TODO: Make remaining stages using `_make_block()`
+        for i in range(7):
+            block = self._make_block(
+                _SepConv if not i else _MBConv,
+                repeats[i],
+                channels[i],
+                channels[i + 1],
+                kernel_sizes[i],
+                strides[i],
+                se_scale,
+            )
+            self.add_module(f"stage{i + 2}", block)
+
+        self.stage9 = nn.Sequential(
+            nn.Conv2d(channels[7], channels[8], kernel_size=1, bias=False),
+            nn.BatchNorm2d(channels[8], momentum=0.99, eps=1e-3),
+            nn.Swish(),
+        )
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=dropout)
+        self.fc = nn.Linear(channels[8], num_classes)
 
     def _make_block(
         self,
@@ -190,36 +214,109 @@ class EfficientNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x: Tensor) -> Tensor:
-        NotImplemented
+        x = self.upsample(x)
+        for i in range(1, 10):
+            x = getattr(self, f"stage{i}")(x)
+
+        x = self.avgpool(x)
+        x = x.reshape(x.shape[0], -1)
+        x = self.dropout(x)
+        x = self.fc(x)
+
+        return x
 
 
 @register_model
-def efficientnet_b0(num_classes: int = 1000, **kwargs) -> EfficientNet: ...
+def efficientnet_b0(num_classes: int = 1000, **kwargs) -> EfficientNet:
+    return EfficientNet(
+        num_classes,
+        width_coef=1.0,
+        depth_coef=1.0,
+        scale=224 / 224,
+        dropout=0.2,
+        **kwargs,
+    )
 
 
 @register_model
-def efficientnet_b1(num_classes: int = 1000, **kwargs) -> EfficientNet: ...
+def efficientnet_b1(num_classes: int = 1000, **kwargs) -> EfficientNet:
+    return EfficientNet(
+        num_classes,
+        width_coef=1.0,
+        depth_coef=1.1,
+        scale=240 / 224,
+        dropout=0.2,
+        **kwargs,
+    )
 
 
 @register_model
-def efficientnet_b2(num_classes: int = 1000, **kwargs) -> EfficientNet: ...
+def efficientnet_b2(num_classes: int = 1000, **kwargs) -> EfficientNet:
+    return EfficientNet(
+        num_classes,
+        width_coef=1.1,
+        depth_coef=1.2,
+        scale=260 / 224,
+        dropout=0.3,
+        **kwargs,
+    )
 
 
 @register_model
-def efficientnet_b3(num_classes: int = 1000, **kwargs) -> EfficientNet: ...
+def efficientnet_b3(num_classes: int = 1000, **kwargs) -> EfficientNet:
+    return EfficientNet(
+        num_classes,
+        width_coef=1.2,
+        depth_coef=1.4,
+        scale=300 / 224,
+        dropout=0.3,
+        **kwargs,
+    )
 
 
 @register_model
-def efficientnet_b4(num_classes: int = 1000, **kwargs) -> EfficientNet: ...
+def efficientnet_b4(num_classes: int = 1000, **kwargs) -> EfficientNet:
+    return EfficientNet(
+        num_classes,
+        width_coef=1.4,
+        depth_coef=1.8,
+        scale=380 / 224,
+        dropout=0.4,
+        **kwargs,
+    )
 
 
 @register_model
-def efficientnet_b5(num_classes: int = 1000, **kwargs) -> EfficientNet: ...
+def efficientnet_b5(num_classes: int = 1000, **kwargs) -> EfficientNet:
+    return EfficientNet(
+        num_classes,
+        width_coef=1.6,
+        depth_coef=2.2,
+        scale=456 / 224,
+        dropout=0.4,
+        **kwargs,
+    )
 
 
 @register_model
-def efficientnet_b6(num_classes: int = 1000, **kwargs) -> EfficientNet: ...
+def efficientnet_b6(num_classes: int = 1000, **kwargs) -> EfficientNet:
+    return EfficientNet(
+        num_classes,
+        width_coef=1.8,
+        depth_coef=2.6,
+        scale=528 / 224,
+        dropout=0.5,
+        **kwargs,
+    )
 
 
 @register_model
-def efficientnet_b7(num_classes: int = 1000, **kwargs) -> EfficientNet: ...
+def efficientnet_b7(num_classes: int = 1000, **kwargs) -> EfficientNet:
+    return EfficientNet(
+        num_classes,
+        width_coef=2.0,
+        depth_coef=3.1,
+        scale=600 / 224,
+        dropout=0.5,
+        **kwargs,
+    )
