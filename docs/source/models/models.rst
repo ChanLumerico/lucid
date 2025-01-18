@@ -641,4 +641,79 @@ reducing computational cost while maintaining performance.
 
 .. rubric:: EfficientNet
 
+EfficientNet is a family of convolutional neural networks optimized for 
+scalability and performance by systematically balancing network depth, width, 
+and resolution. It achieves state-of-the-art accuracy with fewer parameters and 
+computational resources compared to previous architectures.
+
+ *EfficientNet*
+
+ Tan, Mingxing, and Quoc V. Le. "EfficientNet: Rethinking Model Scaling for 
+ Convolutional Neural Networks." *Proceedings of the 36th International Conference 
+ on Machine Learning*, 2019, pp. 6105-6114.
+
+ *EfficientNet-v2*
+
+ Tan, Mingxing, and Quoc V. Le. "EfficientNetV2: Smaller Models and Faster Training." 
+ *Proceedings of the 38th International Conference on Machine Learning*, 2021, 
+ pp. 10096-10106.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - EfficientNet-B0
+      - `efficientnet_b0 <conv/efficient/efficientnet_b0>`_
+      - :math:`(N,3,224,224)`
+      - 5,289,636
+      - ✅
+    
+    * - EfficientNet-B1
+      - `efficientnet_b1 <conv/efficient/efficientnet_b1>`_
+      - :math:`(N,3,224,224)`
+      - 7,795,560
+      - ✅
+    
+    * - EfficientNet-B2
+      - `efficientnet_b2 <conv/efficient/efficientnet_b2>`_
+      - :math:`(N,3,224,224)`
+      - 9,111,370
+      - ✅
+    
+    * - EfficientNet-B3
+      - `efficientnet_b3 <conv/efficient/efficientnet_b3>`_
+      - :math:`(N,3,224,224)`
+      - 12,235,536
+      - ✅
+    
+    * - EfficientNet-B4
+      - `efficientnet_b4 <conv/efficient/efficientnet_b4>`_
+      - :math:`(N,3,224,224)`
+      - 19,344,640
+      - ✅
+    
+    * - EfficientNet-B5
+      - `efficientnet_b5 <conv/efficient/efficientnet_b5>`_
+      - :math:`(N,3,224,224)`
+      - 30,393,432
+      - ✅
+    
+    * - EfficientNet-B6
+      - `efficientnet_b6 <conv/efficient/efficientnet_b6>`_
+      - :math:`(N,3,224,224)`
+      - 43,046,128
+      - ✅
+    
+    * - EfficientNet-B7
+      - `efficientnet_b7 <conv/efficient/efficientnet_b7>`_
+      - :math:`(N,3,224,224)`
+      - 66,355,448
+      - ✅
+
 *To be implemented...🔮*

@@ -310,5 +310,53 @@
         "family": "MobileNet_V3",
         "param_size": 5481198,
         "arch": "conv"
+    },
+    "efficientnet_b0": {
+        "name": "efficientnet_b0",
+        "family": "EfficientNet",
+        "param_size": 5289636,
+        "arch": "conv"
+    },
+    "efficientnet_b1": {
+        "name": "efficientnet_b1",
+        "family": "EfficientNet",
+        "param_size": 7795560,
+        "arch": "conv"
+    },
+    "efficientnet_b2": {
+        "name": "efficientnet_b2",
+        "family": "EfficientNet",
+        "param_size": 9111370,
+        "arch": "conv"
+    },
+    "efficientnet_b3": {
+        "name": "efficientnet_b3",
+        "family": "EfficientNet",
+        "param_size": 12235536,
+        "arch": "conv"
+    },
+    "efficientnet_b4": {
+        "name": "efficientnet_b4",
+        "family": "EfficientNet",
+        "param_size": 19344640,
+        "arch": "conv"
+    },
+    "efficientnet_b5": {
+        "name": "efficientnet_b5",
+        "family": "EfficientNet",
+        "param_size": 30393432,
+        "arch": "conv"
+    },
+    "efficientnet_b6": {
+        "name": "efficientnet_b6",
+        "family": "EfficientNet",
+        "param_size": 43046128,
+        "arch": "conv"
+    },
+    "efficientnet_b7": {
+        "name": "efficientnet_b7",
+        "family": "EfficientNet",
+        "param_size": 66355448,
+        "arch": "conv"
     }
 }

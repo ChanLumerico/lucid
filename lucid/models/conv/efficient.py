@@ -1,6 +1,7 @@
-from typing import ClassVar, Type
+from typing import Type
 
 import lucid.nn as nn
+import math
 
 import lucid
 from lucid import register_model
@@ -20,14 +21,25 @@ __all__ = [
 ]
 
 
+def _make_divisible(v: int, divisor: int, min_value: int | None = None) -> int:
+    if min_value is None:
+        min_value = divisor
+    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
+
+    if new_v < 0.9 * v:
+        new_v += divisor
+
+    return int(new_v)
+
+
 class _SEBlock(nn.Module):
-    def __init__(self, in_channels: int, reduction: int = 4) -> None:
+    def __init__(self, in_channels: int, mid_channels: int) -> None:
         super().__init__()
         self.squeeze = nn.AdaptiveAvgPool2d((1, 1))
         self.excite = nn.Sequential(
-            nn.Linear(in_channels, in_channels // reduction),
+            nn.Linear(in_channels, mid_channels),
             nn.Swish(),
-            nn.Linear(in_channels // reduction, in_channels),
+            nn.Linear(mid_channels, in_channels),
             nn.Sigmoid(),
         )
 
@@ -38,8 +50,6 @@ class _SEBlock(nn.Module):
 
 
 class _MBConv(nn.Module):
-    expansion: ClassVar[int] = 6
-
     def __init__(
         self,
         in_channels: int,
@@ -47,40 +57,42 @@ class _MBConv(nn.Module):
         kernel_size: int,
         stride: int = 1,
         se_scale: int = 4,
+        expansion: int = 6,
         p: float = 0.5,
     ) -> None:
         super().__init__()
         self.p = p if in_channels == out_channels else 1.0
         self.shortcut = stride == 1 and in_channels == out_channels
+        self.expansion = expansion
 
-        self.residual = nn.Sequential(
+        self.expand = nn.Sequential(
             nn.Conv2d(
                 in_channels,
-                in_channels * self.expansion,
+                in_channels * expansion,
                 kernel_size=1,
                 stride=stride,
                 bias=False,
             ),
-            nn.BatchNorm2d(in_channels * self.expansion, momentum=0.99, eps=1e-3),
+            nn.BatchNorm2d(in_channels * expansion, eps=1e-3),
             nn.Swish(),
+        )
+        self.residual = nn.Sequential(
             nn.Conv2d(
-                in_channels * self.expansion,
-                in_channels * self.expansion,
+                in_channels * expansion,
+                in_channels * expansion,
                 kernel_size=kernel_size,
                 padding="same",
-                groups=in_channels * self.expansion,
+                groups=in_channels * expansion,
                 bias=False,
             ),
-            nn.BatchNorm2d(in_channels * self.expansion, momentum=0.99, eps=1e-3),
+            nn.BatchNorm2d(in_channels * expansion, eps=1e-3),
             nn.Swish(),
         )
 
-        self.se = _SEBlock(in_channels * self.expansion, reduction=se_scale)
+        self.se = _SEBlock(in_channels * expansion, max(1, int(in_channels / se_scale)))
         self.project = nn.Sequential(
-            nn.Conv2d(
-                in_channels * self.expansion, out_channels, kernel_size=1, bias=False
-            ),
-            nn.BatchNorm2d(out_channels, momentum=0.99, eps=1e-3),
+            nn.Conv2d(in_channels * expansion, out_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_channels, eps=1e-3),
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -89,7 +101,8 @@ class _MBConv(nn.Module):
                 return x
 
         x_shortcut = x
-        x_residual = self.residual(x)
+        x_residual = self.expand(x) if self.expansion != 1 else x
+        x_residual = self.residual(x_residual)
         x_se = self.se(x_residual)
 
         x = x_se * x_residual
@@ -100,37 +113,7 @@ class _MBConv(nn.Module):
         return x
 
 
-class _SepConv(_MBConv):
-    expansion: ClassVar[int] = 1
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: int,
-        stride: int = 1,
-        se_scale: int = 4,
-        p: float = 0.5,
-    ) -> None:
-        super().__init__(in_channels, out_channels, kernel_size, stride, se_scale, p)
-
-        self.residual = nn.Sequential(
-            nn.Conv2d(
-                in_channels * self.expansion,
-                in_channels * self.expansion,
-                kernel_size=kernel_size,
-                padding="same",
-                groups=in_channels * self.expansion,
-                bias=False,
-            ),
-            nn.BatchNorm2d(in_channels * self.expansion, momentum=0.99, eps=1e-3),
-            nn.Swish(),
-        )
-
-
 class EfficientNet(nn.Module):
-    # TODO: Adopt `_make_divisible()` function to correctly adjust the channel sizes
-    
     def __init__(
         self,
         num_classes: int = 1000,
@@ -147,12 +130,13 @@ class EfficientNet(nn.Module):
         repeats = [1, 2, 2, 3, 3, 4, 1]
         strides = [1, 2, 2, 2, 1, 2, 1]
         kernel_sizes = [3, 3, 5, 3, 5, 5, 3]
+        expands = [1, 6, 6, 6, 6, 6, 6]
 
         depth = depth_coef
         width = width_coef
 
-        channels = [int(ch * width) for ch in channels]
-        repeats = [int(rep * depth) for rep in repeats]
+        channels = [_make_divisible(ch * width, 8) for ch in channels]
+        repeats = [math.ceil(rep * depth) for rep in repeats]
 
         if stochastic_depth:
             self.p = p
@@ -167,24 +151,25 @@ class EfficientNet(nn.Module):
 
         self.stage1 = nn.Sequential(
             nn.Conv2d(3, channels[0], kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(channels[0], momentum=0.99, eps=1e-3),
+            nn.BatchNorm2d(channels[0], eps=1e-3),
         )
 
         for i in range(7):
             block = self._make_block(
-                _SepConv if not i else _MBConv,
+                _MBConv,
                 repeats[i],
                 channels[i],
                 channels[i + 1],
                 kernel_sizes[i],
                 strides[i],
+                expands[i],
                 se_scale,
             )
             self.add_module(f"stage{i + 2}", block)
 
         self.stage9 = nn.Sequential(
             nn.Conv2d(channels[7], channels[8], kernel_size=1, bias=False),
-            nn.BatchNorm2d(channels[8], momentum=0.99, eps=1e-3),
+            nn.BatchNorm2d(channels[8], eps=1e-3),
             nn.Swish(),
         )
 
@@ -200,13 +185,22 @@ class EfficientNet(nn.Module):
         out_channels: int,
         kernel_size: int,
         stride: int,
+        expansion: int,
         se_scale: int,
     ) -> nn.Sequential:
         strides = [stride] + [1] * (repeats - 1)
         layers = []
         for stride in strides:
             layers.append(
-                block(in_channels, out_channels, kernel_size, stride, se_scale, self.p)
+                block(
+                    in_channels,
+                    out_channels,
+                    kernel_size,
+                    stride,
+                    se_scale,
+                    expansion,
+                    self.p,
+                )
             )
             in_channels = out_channels
             self.p -= self.step
