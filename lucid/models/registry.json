@@ -376,5 +376,11 @@
         "family": "EfficientNet_V2",
         "param_size": 120617032,
         "arch": "conv"
+    },
+    "efficientnet_v2_xl": {
+        "name": "efficientnet_v2_xl",
+        "family": "EfficientNet_V2",
+        "param_size": 210221568,
+        "arch": "conv"
     }
 }

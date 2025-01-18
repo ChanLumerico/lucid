@@ -22,6 +22,7 @@ __all__ = [
     "efficientnet_v2_s",
     "efficientnet_v2_m",
     "efficientnet_v2_l",
+    "efficientnet_v2_xl",
 ]
 
 
@@ -493,3 +494,17 @@ def efficientnet_v2_l(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
         [False, 640, 3, 1, 6, 7, 4],
     ]
     return EfficientNet_V2(cfg, num_classes, dropout=0.4, drop_path_rate=0.3, **kwargs)
+
+
+@register_model
+def efficientnet_v2_xl(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
+    cfg = [
+        [True, 32, 3, 2, 1, 4, 0],
+        [True, 64, 3, 2, 4, 8, 0],
+        [True, 96, 3, 2, 4, 8, 0],
+        [False, 192, 3, 2, 4, 16, 4],
+        [False, 256, 3, 1, 6, 24, 4],
+        [False, 512, 3, 2, 6, 32, 4],
+        [False, 640, 3, 1, 6, 8, 4],
+    ]
+    return EfficientNet_V2(cfg, num_classes, dropout=0.5, drop_path_rate=0.4, **kwargs)
