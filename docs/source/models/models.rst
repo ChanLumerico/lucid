@@ -716,4 +716,38 @@ computational resources compared to previous architectures.
       - 66,355,448
       - ✅
 
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - EfficientNet-v2-S
+      - `efficientnet_v2_s <conv/efficient/efficientnet_v2_s>`_
+      - :math:`(N,3,224,224)`
+      - 21,136,440
+      - ✅
+    
+    * - EfficientNet-v2-M
+      - `efficientnet_v2_m <conv/efficient/efficientnet_v2_m>`_
+      - :math:`(N,3,224,224)`
+      - 55,302,108
+      - ✅
+    
+    * - EfficientNet-v2-L
+      - `efficientnet_v2_l <conv/efficient/efficientnet_v2_l>`_
+      - :math:`(N,3,224,224)`
+      - 120,617,032
+      - ✅
+    
+    * - EfficientNet-v2-XL
+      - `efficientnet_v2_xl <conv/efficient/efficientnet_v2_xl>`_
+      - :math:`(N,3,224,224)`
+      - 210,221,568
+      - ✅
+
 *To be implemented...🔮*
