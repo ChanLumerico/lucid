@@ -6,6 +6,7 @@ from .inception import *
 from .inception_res import *
 from .resnet import *
 from .resnext import *
+from .resnest import *
 from .senet import *
 from .sknet import *
 from .dense import *

@@ -89,7 +89,9 @@ class ResNet(nn.Module):
         if stride != 1 or self.in_channels != out_channels * block.expansion:
             if self.avg_down:
                 downsample = nn.Sequential(
-                    nn.AvgPool2d(kernel_size=2, stride=stride),
+                    nn.AvgPool2d(
+                        kernel_size=3, stride=stride, padding=1
+                    ),  # NOTE: Need inspection
                     nn.Conv2d(
                         self.in_channels,
                         out_channels * block.expansion,
