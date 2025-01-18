@@ -10,6 +10,7 @@ from lucid._tensor import Tensor
 
 __all__ = [
     "EfficientNet",
+    "EfficientNet_V2",
     "efficientnet_b0",
     "efficientnet_b1",
     "efficientnet_b2",
@@ -18,6 +19,9 @@ __all__ = [
     "efficientnet_b5",
     "efficientnet_b6",
     "efficientnet_b7",
+    "efficientnet_v2_s",
+    "efficientnet_v2_m",
+    "efficientnet_v2_l",
 ]
 
 
@@ -220,6 +224,140 @@ class EfficientNet(nn.Module):
         return x
 
 
+class _FusedMBConv(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        se_scale: int = 0,
+        expansion: int = 4,
+        drop_prob: float = 0.2,
+    ) -> None:
+        super().__init__()
+        self.drop_prob = drop_prob
+        self.has_shortcut = stride == 1 and in_channels == out_channels
+
+        mid_channels = in_channels * expansion
+        layers = []
+
+        if expansion != 1:
+            layers.append(
+                nn.Conv2d(
+                    in_channels,
+                    mid_channels,
+                    kernel_size,
+                    stride,
+                    padding="same",
+                    bias=False,
+                )
+            )
+            layers.append(nn.BatchNorm2d(mid_channels, eps=1e-3))
+            layers.append(nn.Swish())
+
+            layers.append(
+                nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False)
+            )
+            layers.append(nn.BatchNorm2d(out_channels, eps=1e-3))
+
+        else:
+            layers.append(
+                nn.Conv2d(
+                    in_channels,
+                    out_channels,
+                    kernel_size,
+                    stride,
+                    padding="same",
+                    bias=False,
+                )
+            )
+            layers.append(nn.BatchNorm2d(out_channels, eps=1e-3))
+            layers.append(nn.Swish())
+
+        self.fused_conv = nn.Sequential(*layers)
+        if se_scale > 0:
+            self.se = _SEBlock(out_channels, max(1, in_channels // se_scale))
+        else:
+            self.se = nn.Identity()
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.training:
+            if not lucid.random.bernoulli(self.drop_prob).item():
+                return x
+
+        out = self.fused_conv(x)
+        out = self.se(out)
+        if self.has_shortcut:
+            out += x
+
+        return out
+
+
+class EfficientNet_V2(nn.Module):
+    def __init__(
+        self,
+        block_cfg: list,
+        num_classes: int = 1000,
+        dropout: float = 0.2,
+        drop_path_rate: float = 0.2,
+    ) -> None:
+        super().__init__()
+        stem_out = block_cfg[0][1]
+        self.stem = nn.Sequential(
+            nn.Conv2d(3, stem_out, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(stem_out, eps=1e-3),
+            nn.Swish(),
+        )
+
+        block_layers = []
+        total_repeats = sum(cfg[5] for cfg in block_cfg)
+        dp_index = 0
+
+        in_channels = stem_out
+        for fused, cout, k, s, e, r, se_scale in block_cfg:
+            for i in range(r):
+                drop_prob = 1.0 - (dp_index / total_repeats) * drop_path_rate
+                dp_index += 1
+
+                if fused:
+                    block = _FusedMBConv(
+                        in_channels, cout, k, s if i == 0 else 1, se_scale, e, drop_prob
+                    )
+                else:
+                    block = _MBConv(
+                        in_channels, cout, k, s if i == 0 else 1, se_scale, e, drop_prob
+                    )
+
+                block_layers.append(block)
+                in_channels = cout
+
+        self.features = nn.Sequential(*block_layers)
+
+        head_ch = in_channels * 4
+        self.head = nn.Sequential(
+            nn.Conv2d(in_channels, head_ch, kernel_size=1, bias=False),
+            nn.BatchNorm2d(head_ch, eps=1e-3),
+            nn.Swish(),
+        )
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=dropout)
+        self.fc = nn.Linear(head_ch, num_classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.stem(x)
+        x = self.features(x)
+        x = self.head(x)
+        x = self.avgpool(x)
+
+        x = x.reshape(x.shape[0], -1)
+        x = self.dropout(x)
+        x = self.fc(x)
+
+        return x
+
+
 @register_model
 def efficientnet_b0(num_classes: int = 1000, **kwargs) -> EfficientNet:
     return EfficientNet(
@@ -314,3 +452,44 @@ def efficientnet_b7(num_classes: int = 1000, **kwargs) -> EfficientNet:
         dropout=0.5,
         **kwargs,
     )
+
+
+@register_model
+def efficientnet_v2_s(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
+    cfg = [
+        [True, 24, 3, 2, 1, 2, 0],
+        [True, 48, 3, 2, 4, 4, 0],
+        [True, 64, 3, 2, 4, 4, 0],
+        [False, 128, 3, 2, 4, 6, 4],
+        [False, 160, 3, 1, 6, 9, 4],
+        [False, 256, 3, 2, 6, 15, 4],
+    ]
+    return EfficientNet_V2(cfg, num_classes, dropout=0.2, drop_path_rate=0.2, **kwargs)
+
+
+@register_model
+def efficientnet_v2_m(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
+    cfg = [
+        [True, 24, 3, 2, 1, 3, 0],
+        [True, 48, 3, 2, 4, 5, 0],
+        [True, 80, 3, 2, 4, 5, 0],
+        [False, 160, 3, 2, 4, 7, 4],
+        [False, 176, 3, 1, 6, 14, 4],
+        [False, 304, 3, 2, 6, 18, 4],
+        [False, 512, 3, 1, 6, 5, 4],
+    ]
+    return EfficientNet_V2(cfg, num_classes, dropout=0.3, drop_path_rate=0.2, **kwargs)
+
+
+@register_model
+def efficientnet_v2_l(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
+    cfg = [
+        [True, 32, 3, 2, 1, 4, 0],
+        [True, 64, 3, 2, 4, 7, 0],
+        [True, 96, 3, 2, 4, 7, 0],
+        [False, 192, 3, 2, 4, 10, 4],
+        [False, 224, 3, 1, 6, 19, 4],
+        [False, 384, 3, 2, 6, 25, 4],
+        [False, 640, 3, 1, 6, 7, 4],
+    ]
+    return EfficientNet_V2(cfg, num_classes, dropout=0.4, drop_path_rate=0.3, **kwargs)

@@ -676,43 +676,43 @@ computational resources compared to previous architectures.
     
     * - EfficientNet-B1
       - `efficientnet_b1 <conv/efficient/efficientnet_b1>`_
-      - :math:`(N,3,224,224)`
+      - :math:`(N,3,240,240)`
       - 7,795,560
       - ✅
     
     * - EfficientNet-B2
       - `efficientnet_b2 <conv/efficient/efficientnet_b2>`_
-      - :math:`(N,3,224,224)`
+      - :math:`(N,3,260,260)`
       - 9,111,370
       - ✅
     
     * - EfficientNet-B3
       - `efficientnet_b3 <conv/efficient/efficientnet_b3>`_
-      - :math:`(N,3,224,224)`
+      - :math:`(N,3,300,300)`
       - 12,235,536
       - ✅
     
     * - EfficientNet-B4
       - `efficientnet_b4 <conv/efficient/efficientnet_b4>`_
-      - :math:`(N,3,224,224)`
+      - :math:`(N,3,380,380)`
       - 19,344,640
       - ✅
     
     * - EfficientNet-B5
       - `efficientnet_b5 <conv/efficient/efficientnet_b5>`_
-      - :math:`(N,3,224,224)`
+      - :math:`(N,3,456,456)`
       - 30,393,432
       - ✅
     
     * - EfficientNet-B6
       - `efficientnet_b6 <conv/efficient/efficientnet_b6>`_
-      - :math:`(N,3,224,224)`
+      - :math:`(N,3,528,528)`
       - 43,046,128
       - ✅
     
     * - EfficientNet-B7
       - `efficientnet_b7 <conv/efficient/efficientnet_b7>`_
-      - :math:`(N,3,224,224)`
+      - :math:`(N,3,600,600)`
       - 66,355,448
       - ✅
 

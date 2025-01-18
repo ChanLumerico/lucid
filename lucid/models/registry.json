@@ -358,5 +358,23 @@
         "family": "EfficientNet",
         "param_size": 66355448,
         "arch": "conv"
+    },
+    "efficientnet_v2_s": {
+        "name": "efficientnet_v2_s",
+        "family": "EfficientNet_V2",
+        "param_size": 21136440,
+        "arch": "conv"
+    },
+    "efficientnet_v2_m": {
+        "name": "efficientnet_v2_m",
+        "family": "EfficientNet_V2",
+        "param_size": 55302108,
+        "arch": "conv"
+    },
+    "efficientnet_v2_l": {
+        "name": "efficientnet_v2_l",
+        "family": "EfficientNet_V2",
+        "param_size": 120617032,
+        "arch": "conv"
     }
 }
