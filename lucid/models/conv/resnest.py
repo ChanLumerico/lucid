@@ -9,7 +9,17 @@ from lucid._tensor import Tensor
 from .resnet import ResNet
 
 
-__all__ = ["resnest_14"]
+__all__ = [
+    "ResNeSt",
+    "resnest_14",
+    "resnest_26",
+    "resnest_50",
+    "resnest_101",
+    "resnest_200",
+    "resnest_269",
+    "resnest_50_4s2x40d",
+    "resnest_50_1s4x24d",
+]
 
 
 class _RadixSoftmax(nn.Module):
@@ -159,13 +169,92 @@ class _ResNeStBottleneck(nn.Module):
         return out
 
 
-# beta
-def resnest_14() -> ResNet:
-    return ResNet(
+class ResNeSt(ResNet):
+    def __init__(
+        self,
+        block,
+        layers,
+        num_classes=1000,
+        base_width: int = 64,
+        stem_width: int = 32,
+        cardinality: int = 1,
+        radix: int = 2,
+        avd: bool = True,
+    ) -> None:
+        block_args = dict(
+            base_width=base_width, cardinality=cardinality, radix=radix, avd=avd
+        )
+        super().__init__(
+            block,
+            layers,
+            num_classes,
+            stem_width=stem_width,
+            stem_type="deep",
+            block_args=block_args,
+        )
+
+
+@register_model
+def resnest_14(num_classes: int = 1000, **kwargs) -> ResNeSt:
+    layers = [1, 1, 1, 1]
+    return ResNeSt(_ResNeStBottleneck, layers, num_classes, **kwargs)
+
+
+@register_model
+def resnest_26(num_classes: int = 1000, **kwargs) -> ResNeSt:
+    layers = [2, 2, 2, 2]
+    return ResNeSt(_ResNeStBottleneck, layers, num_classes, **kwargs)
+
+
+@register_model
+def resnest_50(num_classes: int = 1000, **kwargs) -> ResNeSt:
+    layers = [3, 4, 6, 3]
+    return ResNeSt(_ResNeStBottleneck, layers, num_classes, **kwargs)
+
+
+@register_model
+def resnest_101(num_classes: int = 1000, **kwargs) -> ResNeSt:
+    layers = [3, 4, 23, 3]
+    return ResNeSt(_ResNeStBottleneck, layers, num_classes, stem_width=64, **kwargs)
+
+
+@register_model
+def resnest_200(num_classes: int = 1000, **kwargs) -> ResNeSt:
+    layers = [3, 24, 36, 3]
+    return ResNeSt(_ResNeStBottleneck, layers, num_classes, stem_width=64, **kwargs)
+
+
+@register_model
+def resnest_269(num_classes: int = 1000, **kwargs) -> ResNeSt:
+    layers = [3, 30, 48, 8]
+    return ResNeSt(_ResNeStBottleneck, layers, num_classes, stem_width=64, **kwargs)
+
+
+@register_model
+def resnest_50_4s2x40d(num_classes: int = 1000, **kwargs) -> ResNeSt:
+    layers = [3, 4, 6, 3]
+    return ResNeSt(
         _ResNeStBottleneck,
-        layers=[1, 1, 1, 1],
-        stem_type="deep",
+        layers,
+        num_classes,
+        base_width=40,
         stem_width=32,
-        avg_down=True,
-        block_args=dict(base_width=64, cardinality=1, radix=2, avd=True),
+        cardinality=2,
+        radix=4,
+        **kwargs
+    )
+
+
+@register_model
+def resnest_50_1s4x24d(num_classes: int = 1000, **kwargs) -> ResNeSt:
+    layers = [3, 4, 6, 3]
+    return ResNeSt(
+        _ResNeStBottleneck,
+        layers,
+        num_classes,
+        base_width=24,
+        stem_width=32,
+        cardinality=4,
+        radix=1,
+        **kwargs
     )

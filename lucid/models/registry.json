@@ -382,5 +382,53 @@
         "family": "EfficientNet_V2",
         "param_size": 210221568,
         "arch": "conv"
+    },
+    "resnest_14": {
+        "name": "resnest_14",
+        "family": "ResNeSt",
+        "param_size": 10611560,
+        "arch": "conv"
+    },
+    "resnest_26": {
+        "name": "resnest_26",
+        "family": "ResNeSt",
+        "param_size": 17069320,
+        "arch": "conv"
+    },
+    "resnest_50": {
+        "name": "resnest_50",
+        "family": "ResNeSt",
+        "param_size": 27483112,
+        "arch": "conv"
+    },
+    "resnest_101": {
+        "name": "resnest_101",
+        "family": "ResNeSt",
+        "param_size": 48274760,
+        "arch": "conv"
+    },
+    "resnest_200": {
+        "name": "resnest_200",
+        "family": "ResNeSt",
+        "param_size": 70201288,
+        "arch": "conv"
+    },
+    "resnest_269": {
+        "name": "resnest_269",
+        "family": "ResNeSt",
+        "param_size": 110929224,
+        "arch": "conv"
+    },
+    "resnest_50_4s2x40d": {
+        "name": "resnest_50_4s2x40d",
+        "family": "ResNeSt",
+        "param_size": 30417464,
+        "arch": "conv"
+    },
+    "resnest_50_1s4x24d": {
+        "name": "resnest_50_1s4x24d",
+        "family": "ResNeSt",
+        "param_size": 25676872,
+        "arch": "conv"
     }
 }
