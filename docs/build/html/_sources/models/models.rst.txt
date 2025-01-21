@@ -750,4 +750,72 @@ computational resources compared to previous architectures.
       - 210,221,568
       - ✅
 
+.. rubric:: ResNeSt
+
+ResNeSt introduces Split Attention Blocks, which divide feature maps into groups, 
+compute attention for each group, and reassemble them to enhance representational power. 
+It extends ResNet by integrating these blocks, achieving improved performance in image 
+recognition tasks with minimal computational overhead.
+
+ Zhang, Hang, et al. "ResNeSt: Split-Attention Networks." arXiv preprint 
+ arXiv:2004.08955, 2020.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - ResNeSt-14
+      - `resnest_14 <conv/resnest/resnest_14>`_
+      - :math:`(N,3,224,224)`
+      - 10,611,560
+      - ✅
+    
+    * - ResNeSt-26
+      - `resnest_26 <conv/resnest/resnest_26>`_
+      - :math:`(N,3,224,224)`
+      - 17,069,320
+      - ✅
+    
+    * - ResNeSt-50
+      - `resnest_50 <conv/resnest/resnest_50>`_
+      - :math:`(N,3,224,224)`
+      - 27,483,112
+      - ✅
+    
+    * - ResNeSt-101
+      - `resnest_101 <conv/resnest/resnest_101>`_
+      - :math:`(N,3,224,224)`
+      - 48,274,760
+      - ✅
+    
+    * - ResNeSt-200
+      - `resnest_200 <conv/resnest/resnest_200>`_
+      - :math:`(N,3,224,224)`
+      - 70,201,288
+      - ✅
+    
+    * - ResNeSt-269
+      - `resnest_269 <conv/resnest/resnest_269>`_
+      - :math:`(N,3,224,224)`
+      - 110,929,224
+      - ✅
+    
+    * - ResNeSt-50-4s2x40d
+      - `resnest_50_4s2x40d <conv/resnest/resnest_50_4s2x40d>`_
+      - :math:`(N,3,224,224)`
+      - 30,417,464
+      - ✅
+    
+    * - ResNeSt-50_1s4x24d
+      - `resnest_50_1s4x24d <conv/resnest/resnest_50_1s4x24d>`_
+      - :math:`(N,3,224,224)`
+      - 25,676,872
+      - ✅
+
 *To be implemented...🔮*

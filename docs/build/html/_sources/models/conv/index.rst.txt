@@ -12,6 +12,7 @@ ConvNets
     Inception-ResNet <inception_res/InceptionResNet.rst>
     ResNet <resnet/ResNet.rst>
     ResNeXt <resnext/ResNeXt.rst>
+    ResNeSt <resnest/ResNeSt.rst>
     SENet <senet/SENet.rst>
     SKNet <sknet/SKNet.rst>
     DenseNet <dense/DenseNet.rst>
