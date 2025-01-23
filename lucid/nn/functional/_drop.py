@@ -69,3 +69,17 @@ def drop_block(
 
     block_mask = 1 - block_mask
     return input_ * block_mask / (1 - p)
+
+
+def drop_path(input_: Tensor, p: float = 0.0, scale_by_keep: bool = True) -> Tensor:
+    if p == 0.0:
+        return input_
+
+    keep_prob = 1 - p
+    shape = (input_.shape[0],) + (1,) * (input_.ndim - 1)
+
+    random_tensor = lucid.random.bernoulli(keep_prob * lucid.ones(shape))
+    if keep_prob > 0.0 and scale_by_keep:
+        random_tensor /= keep_prob
+
+    return input_ * random_tensor

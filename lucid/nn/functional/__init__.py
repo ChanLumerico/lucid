@@ -194,8 +194,13 @@ def drop_block(
     input_: Tensor, block_size: int, p: float = 0.1, eps: float = 1e-7
 ) -> Tensor:
     if input_.ndim != 4:
-        raise ValueError("Only supports 4D tensors.")
+        raise ValueError("Only supports 4D tensors; Shape of '(N, C, H, W)'.")
     return _drop.drop_block(input_, block_size, p, eps)
+
+
+# NOTE: Undocumented
+def drop_path(input_: Tensor, p: float = 0.1, scale_by_keep: bool = True) -> Tensor:
+    return _drop.drop_path(input_, p, scale_by_keep)
 
 
 def batch_norm(

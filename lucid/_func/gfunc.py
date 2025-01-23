@@ -102,3 +102,14 @@ def empty_like(
     if isinstance(a, Tensor):
         a = a.data
     return Tensor(np.empty_like(a), requires_grad, keep_grad, dtype)
+
+
+def linspace(
+    start: _Scalar,
+    stop: _Scalar,
+    num: int = 50,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor:
+    return Tensor(np.linspace(start, stop, num), requires_grad, keep_grad, dtype)

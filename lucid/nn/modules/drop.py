@@ -14,6 +14,7 @@ __all__ = [
     "Dropout3d",
     "AlphaDropout",
     "DropBlock",
+    "DropPath",
 ]
 
 
@@ -67,3 +68,14 @@ class DropBlock(nn.Module):
             return input_
 
         return F.drop_block(input_, self.block_size, self.p, self.eps)
+
+
+# NOTE: Undocumented
+class DropPath(nn.Module):
+    def __init__(self, drop_prob: float = 0.1, scale_by_keep: bool = True) -> None:
+        super().__init__()
+        self.drop_prob = drop_prob
+        self.scale_by_keep = scale_by_keep
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.drop_path(input_, self.drop_prob, self.scale_by_keep)

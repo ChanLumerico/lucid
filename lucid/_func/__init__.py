@@ -342,6 +342,17 @@ def empty_like(
     return gfunc.empty_like(a, dtype, requires_grad, keep_grad)
 
 
+def linspace(  # NOTE: Undocumented
+    start: _Scalar,
+    stop: _Scalar,
+    num: int = 50,
+    dtype: type = _base_dtype,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+) -> Tensor:
+    return gfunc.linspace(start, stop, num, requires_grad, keep_grad, dtype)
+
+
 Tensor.__add__ = bfunc._add
 Tensor.__radd__ = bfunc._radd
 Tensor.__sub__ = bfunc._sub
