@@ -43,3 +43,29 @@ def alpha_dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tens
     dropped = input_ * mask * scale
     noise = (1 - mask) * _alpha * _lambda
     return dropped + noise
+
+
+def drop_block(
+    input_: Tensor, block_size: int, p: float = 0.1, eps: float = 1e-7
+) -> Tensor:
+    _, _, h, w = input_.shape
+    gamma = (
+        p
+        * (h * w)
+        / (block_size**2)
+        / ((h - block_size + 1) * (w - block_size + 1) + eps)
+    )
+    mask = (lucid.random.rand(*input_.shape) < gamma).astype(float)
+
+    pad = block_size // 2
+    padded_mask = lucid.pad(mask, ((0, 0), (0, 0), (pad, pad), (pad, pad)))
+    block_mask = lucid.zeros_like(mask)
+
+    for i in range(block_size):
+        for j in range(block_size):
+            block_mask = lucid.maximum(
+                block_mask, padded_mask[:, :, i : i + h, j : j + w]
+            )
+
+    block_mask = 1 - block_mask
+    return input_ * block_mask / (1 - p)

@@ -13,6 +13,7 @@ __all__ = [
     "Dropout2d",
     "Dropout3d",
     "AlphaDropout",
+    "DropBlock",
 ]
 
 
@@ -52,3 +53,17 @@ class Dropout3d(_DropoutNd):
 class AlphaDropout(_DropoutNd):
     def forward(self, input_: Tensor) -> Tensor:
         return F.alpha_dropout(input_, self.p, self.training)
+
+
+class DropBlock(nn.Module):
+    def __init__(self, block_size: int, p: float = 0.1, eps: float = 1e-7) -> None:
+        super().__init__()
+        self.block_size = block_size
+        self.p = p
+        self.eps = eps
+
+    def forward(self, input_: Tensor) -> Tensor:
+        if not self.training or self.p == 0.0:
+            return input_
+
+        return F.drop_block(input_, self.block_size, self.p, self.eps)

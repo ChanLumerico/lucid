@@ -190,6 +190,14 @@ def alpha_dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tens
     return _drop.alpha_dropout(input_, p, training)
 
 
+def drop_block(
+    input_: Tensor, block_size: int, p: float = 0.1, eps: float = 1e-7
+) -> Tensor:
+    if input_.ndim != 4:
+        raise ValueError("Only supports 4D tensors.")
+    return _drop.drop_block(input_, block_size, p, eps)
+
+
 def batch_norm(
     input_: Tensor,
     running_mean: Tensor | None = None,

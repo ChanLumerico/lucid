@@ -9,3 +9,4 @@ Dropout Functions
     dropout2d.rst
     dropout3d.rst
     alpha_dropout.rst
+    drop_block.rst

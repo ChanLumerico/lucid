@@ -818,4 +818,6 @@ recognition tasks with minimal computational overhead.
       - 25,676,872
       - ✅
 
+.. rubric:: ConvNeXt
+
 *To be implemented...🔮*
