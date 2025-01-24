@@ -79,7 +79,6 @@ class ConvNeXt(nn.Module):
         dims: list[int] = [96, 192, 384, 768],
         drop_path: float = 0.0,
         layer_scale_init: float = 1e-6,
-        head_init_scale: float = 1.0,
     ) -> None:
         super().__init__()
 
@@ -101,7 +100,20 @@ class ConvNeXt(nn.Module):
         dp_rates = [x.item() for x in lucid.linspace(0, drop_path, sum(depths))]
         cur = 0
         for i in range(4):
-            stage = nn.Sequential(...)
+            stage = nn.Sequential(
+                *[
+                    _Block(dims[i], dp_rates[cur + j], layer_scale_init)
+                    for j in range(depths[i])
+                ]
+            )
+            self.stages.append(stage)
+            cur += depths[i]
 
-            # Begin from here
-            # NOTE: refer to Meta's authentic ConvNeXt imeplementation;
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.norm = nn.LayerNorm(dims[-1])
+        self.head = nn.linear(dims[-1], num_classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        for i in range(4):
+            x = self.downsample_layers[i](x)
+            ...
