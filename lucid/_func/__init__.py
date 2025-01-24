@@ -342,7 +342,7 @@ def empty_like(
     return gfunc.empty_like(a, dtype, requires_grad, keep_grad)
 
 
-def linspace(  # NOTE: Undocumented
+def linspace(
     start: _Scalar,
     stop: _Scalar,
     num: int = 50,

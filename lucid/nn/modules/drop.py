@@ -70,7 +70,6 @@ class DropBlock(nn.Module):
         return F.drop_block(input_, self.block_size, self.p, self.eps)
 
 
-# NOTE: Undocumented
 class DropPath(nn.Module):
     def __init__(self, drop_prob: float = 0.1, scale_by_keep: bool = True) -> None:
         super().__init__()

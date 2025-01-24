@@ -60,3 +60,4 @@ Tensor Operations
    gfunc/arange.rst
    gfunc/empty.rst
    gfunc/empty_like.rst
+   gfunc/linspace.rst

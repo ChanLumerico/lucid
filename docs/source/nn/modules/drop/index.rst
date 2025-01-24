@@ -10,3 +10,4 @@ Dropout Layers
     Dropout3d.rst
     AlphaDropout.rst
     DropBlock.rst
+    DropPath.rst

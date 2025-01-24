@@ -198,7 +198,6 @@ def drop_block(
     return _drop.drop_block(input_, block_size, p, eps)
 
 
-# NOTE: Undocumented
 def drop_path(input_: Tensor, p: float = 0.1, scale_by_keep: bool = True) -> Tensor:
     return _drop.drop_path(input_, p, scale_by_keep)
 
