@@ -7,7 +7,14 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["ConvNeXt", "convnext_tiny"]
+__all__ = [
+    "ConvNeXt",
+    "convnext_tiny",
+    "convnext_small",
+    "convnext_base",
+    "convnext_large",
+    "convnext_xlarge",
+]
 
 
 class _Block(nn.Module):
@@ -130,4 +137,32 @@ class ConvNeXt(nn.Module):
 def convnext_tiny(num_classes: int = 1000, **kwargs) -> ConvNeXt:
     depths = [3, 3, 9, 3]
     dims = [96, 192, 384, 768]
+    return ConvNeXt(num_classes, depths, dims, **kwargs)
+
+
+@register_model
+def convnext_small(num_classes: int = 1000, **kwargs) -> ConvNeXt:
+    depths = [3, 3, 27, 3]
+    dims = [96, 192, 364, 768]
+    return ConvNeXt(num_classes, depths, dims, **kwargs)
+
+
+@register_model
+def convnext_base(num_classes: int = 1000, **kwargs) -> ConvNeXt:
+    depths = [3, 3, 27, 3]
+    dims = [128, 256, 512, 1024]
+    return ConvNeXt(num_classes, depths, dims, **kwargs)
+
+
+@register_model
+def convnext_large(num_classes: int = 1000, **kwargs) -> ConvNeXt:
+    depths = [3, 3, 27, 3]
+    dims = [192, 384, 768, 1536]
+    return ConvNeXt(num_classes, depths, dims, **kwargs)
+
+
+@register_model
+def convnext_xlarge(num_classes: int = 1000, **kwargs) -> ConvNeXt:
+    depths = [3, 3, 27, 3]
+    dims = [256, 512, 1024, 2048]
     return ConvNeXt(num_classes, depths, dims, **kwargs)

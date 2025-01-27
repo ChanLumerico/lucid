@@ -436,5 +436,29 @@
         "family": "ConvNeXt",
         "param_size": 28589128,
         "arch": "conv"
+    },
+    "convnext_small": {
+        "name": "convnext_small",
+        "family": "ConvNeXt",
+        "param_size": 46884148,
+        "arch": "conv"
+    },
+    "convnext_base": {
+        "name": "convnext_base",
+        "family": "ConvNeXt",
+        "param_size": 88591464,
+        "arch": "conv"
+    },
+    "convnext_large": {
+        "name": "convnext_large",
+        "family": "ConvNeXt",
+        "param_size": 197767336,
+        "arch": "conv"
+    },
+    "convnext_xlarge": {
+        "name": "convnext_xlarge",
+        "family": "ConvNeXt",
+        "param_size": 350196968,
+        "arch": "conv"
     }
 }
