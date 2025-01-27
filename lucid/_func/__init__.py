@@ -350,7 +350,7 @@ def linspace(
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
-    return gfunc.linspace(start, stop, num, requires_grad, keep_grad, dtype)
+    return gfunc.linspace(start, stop, num, dtype, requires_grad, keep_grad)
 
 
 Tensor.__add__ = bfunc._add

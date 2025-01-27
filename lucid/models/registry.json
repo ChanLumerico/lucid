@@ -430,5 +430,11 @@
         "family": "ResNeSt",
         "param_size": 25676872,
         "arch": "conv"
+    },
+    "convnext_tiny": {
+        "name": "convnext_tiny",
+        "family": "ConvNeXt",
+        "param_size": 28589128,
+        "arch": "conv"
     }
 }

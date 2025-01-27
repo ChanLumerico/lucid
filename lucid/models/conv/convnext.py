@@ -7,7 +7,7 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["ConvNeXt"]
+__all__ = ["ConvNeXt", "convnext_tiny"]
 
 
 class _Block(nn.Module):
@@ -73,7 +73,6 @@ class _ChannelsFisrtLayerNorm(nn.LayerNorm):
 class ConvNeXt(nn.Module):
     def __init__(
         self,
-        in_channels: int = 3,
         num_classes: int = 1000,
         depths: list[int] = [3, 3, 9, 3],
         dims: list[int] = [96, 192, 384, 768],
@@ -84,7 +83,7 @@ class ConvNeXt(nn.Module):
 
         self.downsample_layers = nn.ModuleList()
         stem = nn.Sequential(
-            nn.Conv2d(in_channels, dims[0], kernel_size=4, stride=4),
+            nn.Conv2d(3, dims[0], kernel_size=4, stride=4),
             _ChannelsFisrtLayerNorm(dims[0]),
         )
         self.downsample_layers.append(stem)
@@ -111,9 +110,24 @@ class ConvNeXt(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.norm = nn.LayerNorm(dims[-1])
-        self.head = nn.linear(dims[-1], num_classes)
+        self.head = nn.Linear(dims[-1], num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
         for i in range(4):
             x = self.downsample_layers[i](x)
-            ...
+            x = self.stages[i](x)
+
+        x = self.avgpool(x)
+        x = x.reshape(x.shape[0], -1)
+
+        x = self.norm(x)
+        x = self.head(x)
+
+        return x
+
+
+@register_model
+def convnext_tiny(num_classes: int = 1000, **kwargs) -> ConvNeXt:
+    depths = [3, 3, 9, 3]
+    dims = [96, 192, 384, 768]
+    return ConvNeXt(num_classes, depths, dims, **kwargs)
