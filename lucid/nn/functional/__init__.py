@@ -242,6 +242,12 @@ def instance_norm(
     )
 
 
+def global_response_norm(
+    input_: Tensor, gamma: Tensor, beta: Tensor, eps: float = 1e-6
+) -> Tensor:
+    return _norm.global_response_norm(input_, gamma, beta, eps)
+
+
 _ReductionType = Literal["mean", "sum"]
 
 

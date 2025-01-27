@@ -18,8 +18,13 @@ def cholesky(a: Tensor) -> Tensor:
     return _func.cholesky(a)
 
 
-def norm(a: Tensor, ord: int = 2) -> Tensor:
-    return _func.norm(a, ord)
+def norm(
+    a: Tensor,
+    ord: int = 2,
+    axis: tuple[int, ...] | int | None = None,
+    keepdims: bool = False,
+) -> Tensor:
+    return _func.norm(a, ord, axis, keepdims)
 
 
 def eig(a: Tensor) -> tuple[Tensor, Tensor]:

@@ -55,31 +55,52 @@ def cholesky(self: Tensor) -> _FuncOpReturnType:
 
 
 @create_ufunc_op()
-def norm(self: Tensor, ord: int = 2) -> _FuncOpReturnType:
+def norm(
+    self: Tensor,
+    ord: int = 2,
+    axis: tuple[int, ...] | int | None = None,
+    keepdims: bool = False,
+) -> _FuncOpReturnType:
     if not isinstance(ord, int):
         raise NotImplementedError("Only integer p-norms are supported.")
 
-    result = Tensor(np.linalg.norm(self.data, ord=ord))
+    result_data = np.linalg.norm(self.data, ord=ord, axis=axis, keepdims=keepdims)
+    result = Tensor(result_data)
 
     def compute_grad() -> _ArrayOrScalar:
         if ord == 2:
+            denominator = result.data
+            if not keepdims and axis is not None:
+                denominator = np.expand_dims(result.data, axis=axis)
+
             grad = (
-                self.data / result.data
-                if result.data != 0
+                self.data / denominator
+                if np.all(result.data != 0)
                 else np.zeros_like(self.data)
             )
         elif ord == 1:
             grad = np.sign(self.data)
         else:
+            denominator = result.data
+            if not keepdims and axis is not None:
+                denominator = np.expand_dims(result.data, axis=axis)
+
             grad = (
                 (np.abs(self.data) ** (ord - 1))
                 * np.sign(self.data)
-                / (result.data ** (ord - 1))
-                if result.data != 0
+                / (denominator ** (ord - 1))
+                if np.all(result.data != 0)
                 else np.zeros_like(self.data)
             )
 
-        return grad * result.grad
+        if axis is not None:
+            result_grad = (
+                np.expand_dims(result.grad, axis=axis) if not keepdims else result.grad
+            )
+        else:
+            result_grad = result.grad
+
+        return grad * result_grad
 
     return result, compute_grad
 

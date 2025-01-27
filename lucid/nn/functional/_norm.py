@@ -137,3 +137,11 @@ def instance_norm(
         normalized += bias
 
     return normalized
+
+
+def global_response_norm(
+    input_: Tensor, gamma: Tensor, beta: Tensor, eps: float = 1e-6
+) -> Tensor:
+    Gx: Tensor = ...  # TODO: Need to add `axis=, keepdims=` args to `lucid.linalg.norm`
+    Nx = Gx / (Gx.mean(axis=-1, keepdims=True) + eps)
+    return gamma * (input_ * Nx) + beta * input_
