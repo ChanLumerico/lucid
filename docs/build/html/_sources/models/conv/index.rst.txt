@@ -22,3 +22,4 @@ ConvNets
     MobileNet-v3 <mobile/MobileNet_V3.rst>
     EfficientNet <efficient/EfficientNet.rst>
     EfficientNet-v2 <efficient/EfficientNet_V2.rst>
+    ConvNeXt <convnext/ConvNeXt.rst>

@@ -820,4 +820,51 @@ recognition tasks with minimal computational overhead.
 
 .. rubric:: ConvNeXt
 
+ConvNeXt reimagines CNNs using principles inspired by vision transformers, 
+streamlining architectural design while preserving the efficiency of traditional CNNs. 
+It introduces design elements like simplified stem stages, inverted bottlenecks, 
+and expanded kernel sizes to enhance feature extraction.
+
+ Liu, Zhuang, et al. "A ConvNet for the 2020s." arXiv preprint arXiv:2201.03545, 2022.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - ConvNeXt-Tiny
+      - `convnext_tiny <conv/convnext/convnext_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 28,589,128
+      - ✅
+    
+    * - ConvNeXt-Small
+      - `convnext_small <conv/convnext/convnext_small>`_
+      - :math:`(N,3,224,224)`
+      - 46,884,148
+      - ✅
+    
+    * - ConvNeXt-Base
+      - `convnext_base <conv/convnext/convnext_base>`_
+      - :math:`(N,3,224,224)`
+      - 88,591,464
+      - ✅
+    
+    * - ConvNeXt-Large
+      - `convnext_large <conv/convnext/convnext_large>`_
+      - :math:`(N,3,224,224)`
+      - 197,767,336
+      - ✅
+    
+    * - ConvNeXt-XLarge
+      - `convnext_xlarge <conv/convnext/convnext_xlarge>`_
+      - :math:`(N,3,224,224)`
+      - 350,196,968
+      - ✅
+
 *To be implemented...🔮*

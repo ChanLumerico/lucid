@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/models.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.models - Lucid 1.14.1 documentation</title>
+        <title>lucid.models - Lucid 1.15.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Lucid 1.14.1 documentation</div></a>
+      <a href="../index.html"><div class="brand">Lucid 1.15.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 1.14.1 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.15.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -644,6 +644,14 @@
 <li class="toctree-l3"><a class="reference internal" href="conv/efficient/efficientnet_v2_xl.html">efficientnet_v2_xl</a></li>
 </ul>
 </li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="conv/convnext/ConvNeXt.html">ConvNeXt</a><input class="toctree-checkbox" id="toctree-checkbox-47" name="toctree-checkbox-47" role="switch" type="checkbox"/><label for="toctree-checkbox-47"><div class="visually-hidden">Toggle navigation of ConvNeXt</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="conv/convnext/convnext_tiny.html">convnext_tiny</a></li>
+<li class="toctree-l3"><a class="reference internal" href="conv/convnext/convnext_small.html">convnext_small</a></li>
+<li class="toctree-l3"><a class="reference internal" href="conv/convnext/convnext_base.html">convnext_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="conv/convnext/convnext_large.html">convnext_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="conv/convnext/convnext_xlarge.html">convnext_xlarge</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -652,7 +660,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-47" name="toctree-checkbox-47" role="switch" type="checkbox"/><label for="toctree-checkbox-47"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-48" name="toctree-checkbox-48" role="switch" type="checkbox"/><label for="toctree-checkbox-48"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -1581,6 +1589,57 @@ arXiv:2004.08955, 2020.</p>
 </table>
 </div>
 <p class="rubric">ConvNeXt</p>
+<p>ConvNeXt reimagines CNNs using principles inspired by vision transformers,
+streamlining architectural design while preserving the efficiency of traditional CNNs.
+It introduces design elements like simplified stem stages, inverted bottlenecks,
+and expanded kernel sizes to enhance feature extraction.</p>
+<blockquote>
+<div><p>Liu, Zhuang, et al. “A ConvNet for the 2020s.” arXiv preprint arXiv:2201.03545, 2022.</p>
+</div></blockquote>
+<div class="table-wrapper docutils container">
+<table class="docutils align-left">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Model</p></th>
+<th class="head"><p>Input Shape</p></th>
+<th class="head"><p>Parameter Count</p></th>
+<th class="head"><p>Implemented</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>ConvNeXt-Tiny</p></td>
+<td><p><a class="reference external" href="conv/convnext/convnext_tiny">convnext_tiny</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>28,589,128</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p>ConvNeXt-Small</p></td>
+<td><p><a class="reference external" href="conv/convnext/convnext_small">convnext_small</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>46,884,148</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-even"><td><p>ConvNeXt-Base</p></td>
+<td><p><a class="reference external" href="conv/convnext/convnext_base">convnext_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>88,591,464</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p>ConvNeXt-Large</p></td>
+<td><p><a class="reference external" href="conv/convnext/convnext_large">convnext_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>197,767,336</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-even"><td><p>ConvNeXt-XLarge</p></td>
+<td><p><a class="reference external" href="conv/convnext/convnext_xlarge">convnext_xlarge</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>350,196,968</p></td>
+<td><p>✅</p></td>
+</tr>
+</tbody>
+</table>
+</div>
 <p><em>To be implemented…🔮</em></p>
 </section>
 </section>
@@ -1653,7 +1712,7 @@ arXiv:2004.08955, 2020.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=a5781ae5"></script>
+</div><script src="../_static/documentation_options.js?v=70d5d4a5"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
