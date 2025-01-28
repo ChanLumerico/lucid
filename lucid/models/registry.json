@@ -460,5 +460,53 @@
         "family": "ConvNeXt",
         "param_size": 350196968,
         "arch": "conv"
+    },
+    "convnext_v2_atto": {
+        "name": "convnext_v2_atto",
+        "family": "ConvNeXt_V2",
+        "param_size": 3708400,
+        "arch": "conv"
+    },
+    "convnext_v2_femto": {
+        "name": "convnext_v2_femto",
+        "family": "ConvNeXt_V2",
+        "param_size": 5233240,
+        "arch": "conv"
+    },
+    "convnext_v2_pico": {
+        "name": "convnext_v2_pico",
+        "family": "ConvNeXt_V2",
+        "param_size": 9066280,
+        "arch": "conv"
+    },
+    "convnext_v2_nano": {
+        "name": "convnext_v2_nano",
+        "family": "ConvNeXt_V2",
+        "param_size": 15623800,
+        "arch": "conv"
+    },
+    "convnext_v2_tiny": {
+        "name": "convnext_v2_tiny",
+        "family": "ConvNeXt_V2",
+        "param_size": 28635496,
+        "arch": "conv"
+    },
+    "convnext_v2_base": {
+        "name": "convnext_v2_base",
+        "family": "ConvNeXt_V2",
+        "param_size": 88717800,
+        "arch": "conv"
+    },
+    "convnext_v2_large": {
+        "name": "convnext_v2_large",
+        "family": "ConvNeXt_V2",
+        "param_size": 197956840,
+        "arch": "conv"
+    },
+    "convnext_v2_huge": {
+        "name": "convnext_v2_huge",
+        "family": "ConvNeXt_V2",
+        "param_size": 660289640,
+        "arch": "conv"
     }
 }
