@@ -142,6 +142,6 @@ def instance_norm(
 def global_response_norm(
     input_: Tensor, gamma: Tensor, beta: Tensor, eps: float = 1e-6
 ) -> Tensor:
-    Gx: Tensor = ...  # TODO: Need to add `axis=, keepdims=` args to `lucid.linalg.norm`
+    Gx: Tensor = lucid.linalg.norm(input_, ord=2, axis=(-1, -2), keepdims=True)
     Nx = Gx / (Gx.mean(axis=-1, keepdims=True) + eps)
     return gamma * (input_ * Nx) + beta * input_

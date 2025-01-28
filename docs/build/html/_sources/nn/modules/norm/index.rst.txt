@@ -11,3 +11,4 @@ Normalization Layers
     InstanceNorm2d.rst
     InstanceNorm3d.rst
     LayerNorm.rst
+    GlobalResponseNorm.rst

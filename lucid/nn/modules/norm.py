@@ -14,6 +14,7 @@ __all__ = [
     "InstanceNorm2d",
     "InstanceNorm3d",
     "LayerNorm",
+    "GlobalResponseNorm",
 ]
 
 
@@ -182,3 +183,14 @@ class LayerNorm(nn.Module):
         return F.layer_norm(
             input_, self.normalized_shape, self.weight, self.bias, self.eps
         )
+
+
+class GlobalResponseNorm(nn.Module):
+    def __init__(self, channels: int, eps: float = 1e-6) -> None:
+        super().__init__()
+        self.gamma = nn.Parameter(lucid.zeros(1, channels, 1, 1))
+        self.beta = nn.Parameter(lucid.zeros(1, channels, 1, 1))
+        self.eps = eps
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.global_response_norm(input_, self.gamma, self.beta, self.eps)

@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.leaky_relu" href="leaky_relu.html" /><link rel="prev" title="Activation Functions" href="index.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/activation/relu.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="Loss Functions" href="../loss/index.html" /><link rel="prev" title="nn.functional.instance_norm" href="instance_norm.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/norm/global_response_norm.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.functional.relu - Lucid 1.15.0 documentation</title>
+        <title>nn.functional.global_response_norm - Lucid 1.15.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -311,15 +311,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../linear/bilinear.html">nn.functional.bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Activation Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.functional.relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="leaky_relu.html">nn.functional.leaky_relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="elu.html">nn.functional.elu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="selu.html">nn.functional.selu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="gelu.html">nn.functional.gelu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sigmoid.html">nn.functional.sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="tanh.html">nn.functional.tanh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="softmax.html">nn.functional.softmax</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../activation/index.html">Activation Functions</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../activation/relu.html">nn.functional.relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/leaky_relu.html">nn.functional.leaky_relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/elu.html">nn.functional.elu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/selu.html">nn.functional.selu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/gelu.html">nn.functional.gelu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/sigmoid.html">nn.functional.sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/softmax.html">nn.functional.softmax</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -351,11 +351,11 @@
 <li class="toctree-l3"><a class="reference internal" href="../drop/drop_path.html">nn.functional.drop_path</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../norm/index.html">Normalization Functions</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle navigation of Normalization Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../norm/batch_norm.html">nn.functional.batch_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/layer_norm.html">nn.functional.layer_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/instance_norm.html">nn.functional.instance_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/global_response_norm.html">nn.functional.global_response_norm</a></li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Normalization Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle navigation of Normalization Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="batch_norm.html">nn.functional.batch_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="layer_norm.html">nn.functional.layer_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="instance_norm.html">nn.functional.instance_norm</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.functional.global_response_norm</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../loss/index.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><div class="visually-hidden">Toggle navigation of Loss Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -701,7 +701,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/nn/functions/activation/relu.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/nn/functions/norm/global_response_norm.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -721,80 +721,81 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-functional-relu">
-<h1>nn.functional.relu<a class="headerlink" href="#nn-functional-relu" title="Link to this heading">¶</a></h1>
+          <section id="nn-functional-global-response-norm">
+<h1>nn.functional.global_response_norm<a class="headerlink" href="#nn-functional-global-response-norm" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.functional.relu">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">relu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.relu" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.nn.functional.global_response_norm">
+<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">global_response_norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-06</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.global_response_norm" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>relu</cite> function applies the Rectified Linear Unit activation function element-wise
-to the input tensor. This non-linear activation function is widely used in neural networks
-to introduce non-linearity, allowing the network to learn complex patterns.</p>
+<p>The <cite>global_response_norm</cite> function applies global response normalization to the
+input tensor, normalizing the values across spatial dimensions and scaling/shifting
+with learnable parameters.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">relu</span><span class="p">(</span><span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">global_response_norm</span><span class="p">(</span>
+    <span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">gamma</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">beta</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">eps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of any shape.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>input_</strong> (<em>Tensor</em>):
+The input tensor of shape (N, C, H, W) where:
+- N: Batch size
+- C: Number of channels
+- H: Height of the feature map
+- W: Width of the feature map</p></li>
+<li><p><strong>gamma</strong> (<em>Tensor</em>):
+The learnable scaling parameter of shape (C,).</p></li>
+<li><p><strong>beta</strong> (<em>Tensor</em>):
+The learnable shift parameter of shape (C,).</p></li>
+<li><p><strong>eps</strong> (<em>float</em>, optional):
+A small constant added to the denominator for numerical stability. Default: 1e-6.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> where each element is the result of applying the ReLU function
-to the corresponding element in <cite>input_</cite>. If <cite>input_</cite> requires gradients,
-the resulting tensor will also require gradients.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>Tensor</strong>:
+The normalized tensor of the same shape as <cite>input_</cite>,
+with values scaled and shifted using <cite>gamma</cite> and <cite>beta</cite>.</p></li>
 </ul>
 </section>
-<section id="forward-calculation">
-<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward calculation for the <cite>relu</cite> operation is:</p>
+<section id="mathematical-expression">
+<h2>Mathematical Expression<a class="headerlink" href="#mathematical-expression" title="Link to this heading">¶</a></h2>
+<p>The global response normalization is computed as:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{out} = \max(0, \mathbf{input\_})\]</div>
+\[y_{n, c, h, w} = \gamma_c \cdot \frac{x_{n, c, h, w}}
+{\sqrt{\frac{1}{H \cdot W} \sum_{h=1}^H \sum_{w=1}^W x_{n, c, h, w}^2 + \epsilon}} +
+\beta_c\]</div>
 </div>
-</section>
-<section id="backward-gradient-calculation">
-<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For the tensor <strong>input_</strong> involved in the <cite>relu</cite> operation, the gradient with respect
-to the output (<strong>out</strong>) is computed as follows:</p>
-<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{input\_}\)</span>:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}\frac{\partial \mathbf{out}}{\partial \mathbf{input\_}} =
-\begin{cases}
-    1 &amp; \text{if } \mathbf{input\_} &gt; 0 \\
-    0 &amp; \text{otherwise}
-\end{cases}\end{split}\]</div>
-</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(x_{n, c, h, w}\)</span> is the input value at batch index <span class="math notranslate nohighlight">\(n\)</span>, channel <span class="math notranslate nohighlight">\(c\)</span>,
+height <span class="math notranslate nohighlight">\(h\)</span>, and width <span class="math notranslate nohighlight">\(w\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\gamma_c\)</span> and <span class="math notranslate nohighlight">\(\beta_c\)</span> are the scaling and shifting parameters for
+channel <span class="math notranslate nohighlight">\(c\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(H\)</span> and <span class="math notranslate nohighlight">\(W\)</span> are the height and width of the feature map.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\epsilon\)</span> is a small constant for numerical stability.</p></li>
+</ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Using <cite>relu</cite> on a tensor:</p>
+<p>Performing global response normalization:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">input_</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]]]])</span>  <span class="c1"># Shape: (1, 1, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gamma</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">])</span>  <span class="c1"># Shape: (1,)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">beta</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">0.0</span><span class="p">])</span>   <span class="c1"># Shape: (1,)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">global_response_norm</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([0.0, 0.0, 2.0], grad=None)</span>
-</pre></div>
-</div>
-<p>Backpropagation computes gradients for <cite>input_</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[0.0, 0.0, 1.0]</span>
+<span class="go">Tensor(...)  # Normalized values</span>
 </pre></div>
 </div>
 </section>
@@ -805,23 +806,23 @@ to the output (<strong>out</strong>) is computed as follows:</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="leaky_relu.html">
+          <a class="next-page" href="../loss/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.functional.leaky_relu</div>
+                <div class="title">Loss Functions</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="index.html">
+          <a class="prev-page" href="instance_norm.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Activation Functions</div>
+                <div class="title">nn.functional.instance_norm</div>
                 
               </div>
             </a>
@@ -855,13 +856,12 @@ to the output (<strong>out</strong>) is computed as follows:</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">nn.functional.relu</a><ul>
-<li><a class="reference internal" href="#lucid.nn.functional.relu"><code class="docutils literal notranslate"><span class="pre">relu()</span></code></a></li>
+<li><a class="reference internal" href="#">nn.functional.global_response_norm</a><ul>
+<li><a class="reference internal" href="#lucid.nn.functional.global_response_norm"><code class="docutils literal notranslate"><span class="pre">global_response_norm()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
-<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li><a class="reference internal" href="#mathematical-expression">Mathematical Expression</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>

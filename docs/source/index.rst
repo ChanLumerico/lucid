@@ -115,6 +115,7 @@
 
 Lucid
 =====
+
 **Lucid** is an educational deep learning framework developed to help users understand 
 the underlying mechanics of machine learning models and tensor operations. 
 

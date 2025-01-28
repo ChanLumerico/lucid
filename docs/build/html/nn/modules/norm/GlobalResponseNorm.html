@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.leaky_relu" href="leaky_relu.html" /><link rel="prev" title="Activation Functions" href="index.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/activation/relu.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="Dropout Layers" href="../drop/index.html" /><link rel="prev" title="nn.LayerNorm" href="LayerNorm.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/norm/GlobalResponseNorm.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>nn.functional.relu - Lucid 1.15.0 documentation</title>
+        <title>nn.GlobalResponseNorm - Lucid 1.15.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -305,70 +305,70 @@
 <li class="toctree-l1"><a class="reference internal" href="../../Parameter.html">nn.Parameter</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../Buffer.html">nn.Buffer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../Module.html">nn.Module</a></li>
-<li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Neural Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Neural Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2 has-children"><a class="reference internal" href="../linear/index.html">Linear Functions</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle navigation of Linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../linear/linear.html">nn.functional.linear</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../linear/bilinear.html">nn.functional.bilinear</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../functions/index.html">Neural Functions</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Neural Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/linear/index.html">Linear Functions</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle navigation of Linear Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/linear/linear.html">nn.functional.linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/linear/bilinear.html">nn.functional.bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Activation Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.functional.relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="leaky_relu.html">nn.functional.leaky_relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="elu.html">nn.functional.elu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="selu.html">nn.functional.selu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="gelu.html">nn.functional.gelu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sigmoid.html">nn.functional.sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="tanh.html">nn.functional.tanh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="softmax.html">nn.functional.softmax</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/activation/index.html">Activation Functions</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of Activation Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/relu.html">nn.functional.relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/leaky_relu.html">nn.functional.leaky_relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/elu.html">nn.functional.elu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/selu.html">nn.functional.selu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/gelu.html">nn.functional.gelu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/sigmoid.html">nn.functional.sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/softmax.html">nn.functional.softmax</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../conv/unfold.html">nn.functional.unfold</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv1d.html">nn.functional.conv1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv2d.html">nn.functional.conv2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv3d.html">nn.functional.conv3d</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/conv/index.html">Convolution Functions</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of Convolution Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/unfold.html">nn.functional.unfold</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv1d.html">nn.functional.conv1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv2d.html">nn.functional.conv2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv3d.html">nn.functional.conv3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../pool/index.html">Pooling Functions</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><div class="visually-hidden">Toggle navigation of Pooling Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool1d.html">nn.functional.avg_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool2d.html">nn.functional.avg_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool3d.html">nn.functional.avg_pool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool1d.html">nn.functional.max_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool2d.html">nn.functional.max_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool3d.html">nn.functional.max_pool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_avg_pool1d.html">nn.functional.adaptive_avg_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_avg_pool2d.html">nn.functional.adaptive_avg_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_avg_pool3d.html">nn.functional.adaptive_avg_pool3d</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/pool/index.html">Pooling Functions</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><div class="visually-hidden">Toggle navigation of Pooling Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool1d.html">nn.functional.avg_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool2d.html">nn.functional.avg_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool3d.html">nn.functional.avg_pool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool1d.html">nn.functional.max_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool2d.html">nn.functional.max_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool3d.html">nn.functional.max_pool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_avg_pool1d.html">nn.functional.adaptive_avg_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_avg_pool2d.html">nn.functional.adaptive_avg_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_avg_pool3d.html">nn.functional.adaptive_avg_pool3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../drop/index.html">Dropout Functions</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><div class="visually-hidden">Toggle navigation of Dropout Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout.html">nn.functional.dropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout1d.html">nn.functional.dropout1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout2d.html">nn.functional.dropout2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout3d.html">nn.functional.dropout3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/alpha_dropout.html">nn.functional.alpha_dropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/drop_block.html">nn.functional.drop_block</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/drop_path.html">nn.functional.drop_path</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/drop/index.html">Dropout Functions</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><div class="visually-hidden">Toggle navigation of Dropout Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout.html">nn.functional.dropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout1d.html">nn.functional.dropout1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout2d.html">nn.functional.dropout2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout3d.html">nn.functional.dropout3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/alpha_dropout.html">nn.functional.alpha_dropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/drop_block.html">nn.functional.drop_block</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/drop_path.html">nn.functional.drop_path</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../norm/index.html">Normalization Functions</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle navigation of Normalization Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../norm/batch_norm.html">nn.functional.batch_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/layer_norm.html">nn.functional.layer_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/instance_norm.html">nn.functional.instance_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/global_response_norm.html">nn.functional.global_response_norm</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/norm/index.html">Normalization Functions</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle navigation of Normalization Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/batch_norm.html">nn.functional.batch_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/layer_norm.html">nn.functional.layer_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/instance_norm.html">nn.functional.instance_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/global_response_norm.html">nn.functional.global_response_norm</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../loss/index.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><div class="visually-hidden">Toggle navigation of Loss Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../loss/mse_loss.html">nn.functional.mse_loss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/binary_cross_entropy.html">nn.functional.binary_cross_entropy</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/cross_entropy.html">nn.functional.cross_entropy</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/nll_loss.html">nn.functional.nll_loss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/huber_loss.html">nn.functional.huber_loss</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/loss/index.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><div class="visually-hidden">Toggle navigation of Loss Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/mse_loss.html">nn.functional.mse_loss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/binary_cross_entropy.html">nn.functional.binary_cross_entropy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/cross_entropy.html">nn.functional.cross_entropy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/nll_loss.html">nn.functional.nll_loss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/huber_loss.html">nn.functional.huber_loss</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../util/index.html">Utility Functions</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of Utility Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../util/interpolate.html">nn.functional.interpolate</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../util/rotate.html">nn.functional.rotate</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../functions/util/index.html">Utility Functions</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of Utility Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/util/interpolate.html">nn.functional.interpolate</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/util/rotate.html">nn.functional.rotate</a></li>
 </ul>
 </li>
 </ul>
@@ -383,77 +383,77 @@
 <li class="toctree-l2"><a class="reference internal" href="../../init/kaiming_normal.html">nn.init.kaiming_normal</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../modules/index.html">Modules</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><div class="visually-hidden">Toggle navigation of Modules</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../modules/linear/index.html">Linear Layers</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><div class="visually-hidden">Toggle navigation of Linear Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/linear/Identity.html">nn.Identity</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/linear/Linear.html">nn.Linear</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/linear/Bilinear.html">nn.Bilinear</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Modules</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><div class="visually-hidden">Toggle navigation of Modules</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2 has-children"><a class="reference internal" href="../linear/index.html">Linear Layers</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><div class="visually-hidden">Toggle navigation of Linear Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../linear/Identity.html">nn.Identity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../linear/Linear.html">nn.Linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../linear/Bilinear.html">nn.Bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../modules/conv/index.html">Convolution Layers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><div class="visually-hidden">Toggle navigation of Convolution Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/Conv1d.html">nn.Conv1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/Conv2d.html">nn.Conv2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/Conv3d.html">nn.Conv3d</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../conv/index.html">Convolution Layers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><div class="visually-hidden">Toggle navigation of Convolution Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv1d.html">nn.Conv1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv2d.html">nn.Conv2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv3d.html">nn.Conv3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../modules/activation/index.html">Activation Layers</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" role="switch" type="checkbox"/><label for="toctree-checkbox-18"><div class="visually-hidden">Toggle navigation of Activation Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/ReLU.html">nn.ReLU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/ReLU6.html">nn.ReLU6</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/LeakyReLU.html">nn.LeakyReLU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/ELU.html">nn.ELU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/SELU.html">nn.SELU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/GELU.html">nn.GELU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Sigmoid.html">nn.Sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/HardSigmoid.html">nn.HardSigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Tanh.html">nn.Tanh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Softmax.html">nn.Softmax</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Swish.html">nn.Swish</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/HardSwish.html">nn.HardSwish</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../activation/index.html">Activation Layers</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" role="switch" type="checkbox"/><label for="toctree-checkbox-18"><div class="visually-hidden">Toggle navigation of Activation Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../activation/ReLU.html">nn.ReLU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/ReLU6.html">nn.ReLU6</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/LeakyReLU.html">nn.LeakyReLU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/ELU.html">nn.ELU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/SELU.html">nn.SELU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/GELU.html">nn.GELU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Sigmoid.html">nn.Sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/HardSigmoid.html">nn.HardSigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Tanh.html">nn.Tanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Softmax.html">nn.Softmax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Swish.html">nn.Swish</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/HardSwish.html">nn.HardSwish</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../modules/pool/index.html">Pooling Layers</a><input class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" role="switch" type="checkbox"/><label for="toctree-checkbox-19"><div class="visually-hidden">Toggle navigation of Pooling Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AvgPool1d.html">nn.AvgPool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AvgPool2d.html">nn.AvgPool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AvgPool3d.html">nn.AvgPool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/MaxPool1d.html">nn.MaxPool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/MaxPool2d.html">nn.MaxPool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/MaxPool3d.html">nn.MaxPool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveAvgPool1d.html">nn.AdaptiveAvgPool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveAvgPool2d.html">nn.AdaptiveAvgPool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveAvgPool3d.html">nn.AdaptiveAvgPool3d</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../pool/index.html">Pooling Layers</a><input class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" role="switch" type="checkbox"/><label for="toctree-checkbox-19"><div class="visually-hidden">Toggle navigation of Pooling Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool1d.html">nn.AvgPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool2d.html">nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool3d.html">nn.AvgPool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool1d.html">nn.MaxPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool2d.html">nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool3d.html">nn.MaxPool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveAvgPool1d.html">nn.AdaptiveAvgPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveAvgPool2d.html">nn.AdaptiveAvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveAvgPool3d.html">nn.AdaptiveAvgPool3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../modules/norm/index.html">Normalization Layers</a><input class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" role="switch" type="checkbox"/><label for="toctree-checkbox-20"><div class="visually-hidden">Toggle navigation of Normalization Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/BatchNorm1d.html">nn.BatchNorm1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/BatchNorm2d.html">nn.BatchNorm2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/BatchNorm3d.html">nn.BatchNorm3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/InstanceNorm1d.html">nn.InstanceNorm1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/InstanceNorm2d.html">nn.InstanceNorm2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/InstanceNorm3d.html">nn.InstanceNorm3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/LayerNorm.html">nn.LayerNorm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/GlobalResponseNorm.html">nn.GlobalResponseNorm</a></li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="index.html">Normalization Layers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" role="switch" type="checkbox"/><label for="toctree-checkbox-20"><div class="visually-hidden">Toggle navigation of Normalization Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="BatchNorm1d.html">nn.BatchNorm1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="BatchNorm2d.html">nn.BatchNorm2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="BatchNorm3d.html">nn.BatchNorm3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="InstanceNorm1d.html">nn.InstanceNorm1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="InstanceNorm2d.html">nn.InstanceNorm2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="InstanceNorm3d.html">nn.InstanceNorm3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="LayerNorm.html">nn.LayerNorm</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">nn.GlobalResponseNorm</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../modules/drop/index.html">Dropout Layers</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" role="switch" type="checkbox"/><label for="toctree-checkbox-21"><div class="visually-hidden">Toggle navigation of Dropout Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/Dropout.html">nn.Dropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/Dropout1d.html">nn.Dropout1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/Dropout2d.html">nn.Dropout2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/Dropout3d.html">nn.Dropout3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/AlphaDropout.html">nn.AlphaDropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/DropBlock.html">nn.DropBlock</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/DropPath.html">nn.DropPath</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../drop/index.html">Dropout Layers</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" role="switch" type="checkbox"/><label for="toctree-checkbox-21"><div class="visually-hidden">Toggle navigation of Dropout Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../drop/Dropout.html">nn.Dropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/Dropout1d.html">nn.Dropout1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/Dropout2d.html">nn.Dropout2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/Dropout3d.html">nn.Dropout3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/AlphaDropout.html">nn.AlphaDropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/DropBlock.html">nn.DropBlock</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/DropPath.html">nn.DropPath</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../modules/loss/index.html">Loss Layers</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" role="switch" type="checkbox"/><label for="toctree-checkbox-22"><div class="visually-hidden">Toggle navigation of Loss Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/MSELoss.html">nn.MSELoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/BCELoss.html">nn.BCELoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/CrossEntropyLoss.html">nn.CrossEntropyLoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/NLLLoss.html">nn.NLLLoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/HuberLoss.html">nn.HuberLoss</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../loss/index.html">Loss Layers</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" role="switch" type="checkbox"/><label for="toctree-checkbox-22"><div class="visually-hidden">Toggle navigation of Loss Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../loss/MSELoss.html">nn.MSELoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/BCELoss.html">nn.BCELoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/CrossEntropyLoss.html">nn.CrossEntropyLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/NLLLoss.html">nn.NLLLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/HuberLoss.html">nn.HuberLoss</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../modules/vision/index.html">Vision Layers</a><input class="toctree-checkbox" id="toctree-checkbox-23" name="toctree-checkbox-23" role="switch" type="checkbox"/><label for="toctree-checkbox-23"><div class="visually-hidden">Toggle navigation of Vision Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/vision/Upsample.html">nn.Upsample</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../vision/index.html">Vision Layers</a><input class="toctree-checkbox" id="toctree-checkbox-23" name="toctree-checkbox-23" role="switch" type="checkbox"/><label for="toctree-checkbox-23"><div class="visually-hidden">Toggle navigation of Vision Layers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../vision/Upsample.html">nn.Upsample</a></li>
 </ul>
 </li>
 </ul>
@@ -701,7 +701,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../../_sources/nn/functions/activation/relu.rst.txt" title="View this page">
+  <a class="muted-link" href="../../../_sources/nn/modules/norm/GlobalResponseNorm.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -721,80 +721,59 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="nn-functional-relu">
-<h1>nn.functional.relu<a class="headerlink" href="#nn-functional-relu" title="Link to this heading">¶</a></h1>
-<dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.functional.relu">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">relu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.relu" title="Link to this definition">¶</a></dt>
+          <section id="nn-globalresponsenorm">
+<h1>nn.GlobalResponseNorm<a class="headerlink" href="#nn-globalresponsenorm" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lucid.nn.GlobalResponseNorm">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">GlobalResponseNorm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-06</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.GlobalResponseNorm" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>relu</cite> function applies the Rectified Linear Unit activation function element-wise
-to the input tensor. This non-linear activation function is widely used in neural networks
-to introduce non-linearity, allowing the network to learn complex patterns.</p>
-<section id="function-signature">
-<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">relu</span><span class="p">(</span><span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<p>The <cite>GlobalResponseNorm</cite> class implements global response normalization as a
+neural network module, with learnable scaling and shifting parameters for each channel.</p>
+<section id="class-signature">
+<h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">GlobalResponseNorm</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">eps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of any shape.</p>
-</dd>
-</dl>
-</li>
-</ul>
-</section>
-<section id="returns">
-<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> where each element is the result of applying the ReLU function
-to the corresponding element in <cite>input_</cite>. If <cite>input_</cite> requires gradients,
-the resulting tensor will also require gradients.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>channels</strong> (<em>int</em>):
+The number of channels in the input tensor.
+Used to initialize learnable parameters <cite>gamma</cite> and <cite>beta</cite>.</p></li>
+<li><p><strong>eps</strong> (<em>float</em>, optional):
+A small constant added to the denominator for numerical stability during normalization.
+Default: 1e-6.</p></li>
 </ul>
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward calculation for the <cite>relu</cite> operation is:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{out} = \max(0, \mathbf{input\_})\]</div>
+\[y_{n, c, h, w} = \gamma_c \cdot \frac{x_{n, c, h, w}}
+{\sqrt{\frac{1}{H \cdot W} \sum_{h=1}^H \sum_{w=1}^W x_{n, c, h, w}^2 + \epsilon}} +
+\beta_c\]</div>
 </div>
-</section>
-<section id="backward-gradient-calculation">
-<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For the tensor <strong>input_</strong> involved in the <cite>relu</cite> operation, the gradient with respect
-to the output (<strong>out</strong>) is computed as follows:</p>
-<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{input\_}\)</span>:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}\frac{\partial \mathbf{out}}{\partial \mathbf{input\_}} =
-\begin{cases}
-    1 &amp; \text{if } \mathbf{input\_} &gt; 0 \\
-    0 &amp; \text{otherwise}
-\end{cases}\end{split}\]</div>
-</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(x_{n, c, h, w}\)</span> is the input value at batch index <span class="math notranslate nohighlight">\(n\)</span>,
+channel <span class="math notranslate nohighlight">\(c\)</span>, height <span class="math notranslate nohighlight">\(h\)</span>, and width <span class="math notranslate nohighlight">\(w\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\gamma_c\)</span> and <span class="math notranslate nohighlight">\(\beta_c\)</span> are the learnable scaling and shifting parameters.</p></li>
+<li><p><span class="math notranslate nohighlight">\(H\)</span> and <span class="math notranslate nohighlight">\(W\)</span> are the height and width of the feature map.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\epsilon\)</span> is a small constant for numerical stability.</p></li>
+</ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Using <cite>relu</cite> on a tensor:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">input_</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([0.0, 0.0, 2.0], grad=None)</span>
-</pre></div>
-</div>
-<p>Backpropagation computes gradients for <cite>input_</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[0.0, 0.0, 1.0]</span>
+<p>Using the <cite>GlobalResponseNorm</cite> module:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]]]])</span>  <span class="c1"># Shape: (1, 1, 2, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">grn</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GlobalResponseNorm</span><span class="p">(</span><span class="n">channels</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">grn</span><span class="p">(</span><span class="n">input_</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+<span class="go">Tensor(...)  # Normalized values</span>
 </pre></div>
 </div>
 </section>
@@ -805,23 +784,23 @@ to the output (<strong>out</strong>) is computed as follows:</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="leaky_relu.html">
+          <a class="next-page" href="../drop/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">nn.functional.leaky_relu</div>
+                <div class="title">Dropout Layers</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="index.html">
+          <a class="prev-page" href="LayerNorm.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Activation Functions</div>
+                <div class="title">nn.LayerNorm</div>
                 
               </div>
             </a>
@@ -855,13 +834,11 @@ to the output (<strong>out</strong>) is computed as follows:</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">nn.functional.relu</a><ul>
-<li><a class="reference internal" href="#lucid.nn.functional.relu"><code class="docutils literal notranslate"><span class="pre">relu()</span></code></a></li>
-<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
+<li><a class="reference internal" href="#">nn.GlobalResponseNorm</a><ul>
+<li><a class="reference internal" href="#lucid.nn.GlobalResponseNorm"><code class="docutils literal notranslate"><span class="pre">GlobalResponseNorm</span></code></a></li>
+<li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
-<li><a class="reference internal" href="#returns">Returns</a></li>
 <li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
-<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>
