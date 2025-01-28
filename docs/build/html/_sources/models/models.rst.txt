@@ -825,7 +825,14 @@ streamlining architectural design while preserving the efficiency of traditional
 It introduces design elements like simplified stem stages, inverted bottlenecks, 
 and expanded kernel sizes to enhance feature extraction.
 
- Liu, Zhuang, et al. "A ConvNet for the 2020s." arXiv preprint arXiv:2201.03545, 2022.
+ *ConvNeXt*
+
+ Liu, Zhuang, et al. "A ConvNet for the 2020s." *arXiv preprint arXiv:2201.03545*, 2022.
+
+ *ConvNeXt-v2*
+
+ Liu, Ze, et al. "ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders." 
+ *arXiv preprint arXiv:2301.00808*, 2023.
 
 .. list-table::
     :header-rows: 1
@@ -865,6 +872,64 @@ and expanded kernel sizes to enhance feature extraction.
       - `convnext_xlarge <conv/convnext/convnext_xlarge>`_
       - :math:`(N,3,224,224)`
       - 350,196,968
+      - ✅
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - ConvNeXt-v2-Atto
+      - `convnext_v2_atto <conv/convnext/convnext_v2_atto>`_
+      - :math:`(N,3,224,224)`
+      - 3,708,400
+      - ✅
+    
+    * - ConvNeXt-v2-Femto
+      - `convnext_v2_femto <conv/convnext/convnext_v2_femto>`_
+      - :math:`(N,3,224,224)`
+      - 5,233,240
+      - ✅
+    
+    * - ConvNeXt-v2-Pico
+      - `convnext_v2_pico <conv/convnext/convnext_v2_pico>`_
+      - :math:`(N,3,224,224)`
+      - 9,066,280
+      - ✅
+    
+    * - ConvNeXt-v2-Nano
+      - `convnext_v2_nano <conv/convnext/convnext_v2_nano>`_
+      - :math:`(N,3,224,224)`
+      - 15,623,800
+      - ✅
+    
+    * - ConvNeXt-v2-Tiny
+      - `convnext_v2_tiny <conv/convnext/convnext_v2_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 28,635,496
+      - ✅
+    
+    * - ConvNeXt-v2-Base
+      - `convnext_v2_base <conv/convnext/convnext_v2_base>`_
+      - :math:`(N,3,224,224)`
+      - 88,717,800
+      - ✅
+    
+    * - ConvNeXt-v2-Large
+      - `convnext_v2_large <conv/convnext/convnext_v2_large>`_
+      - :math:`(N,3,224,224)`
+      - 197,956,840
+      - ✅
+    
+    * - ConvNeXt-v2-Huge
+      - `convnext_v2_huge <conv/convnext/convnext_v2_huge>`_
+      - :math:`(N,3,224,224)`
+      - 660,289,640
       - ✅
 
 *To be implemented...🔮*
