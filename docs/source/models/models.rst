@@ -932,4 +932,50 @@ and expanded kernel sizes to enhance feature extraction.
       - 660,289,640
       - ✅
 
+.. rubric:: InceptionNeXt
+
+InceptionNeXt extends the Inception architecture by incorporating modern design 
+principles inspired by vision transformers. It refines multi-scale feature extraction 
+through dynamic kernel selection, depthwise convolutions, and enhanced normalization 
+techniques, preserving computational efficiency while improving performance across 
+diverse vision tasks.
+
+ Yu, Weihao, et al. "InceptionNeXt: When Inception Meets ConvNeXt." 
+ *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition*, 
+ 2024, pp. 5672-5683.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - InceptionNeXt-Atto
+      - `inception_next_atto <conv/inception_next/inception_next_atto>`_
+      - :math:`(N,3,224,224)`
+      - 4,156,520
+      - ✅
+    
+    * - InceptionNeXt-Tiny
+      - `inception_next_tiny <conv/inception_next/inception_next_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 28,083,832
+      - ✅
+    
+    * - InceptionNeXt-Small
+      - `inception_next_small <conv/inception_next/inception_next_small>`_
+      - :math:`(N,3,224,224)`
+      - 49,431,544
+      - ✅
+    
+    * - InceptionNeXt-Base
+      - `inception_next_base <conv/inception_next/inception_next_base>`_
+      - :math:`(N,3,224,224)`
+      - 86,748,840
+      - ✅
+
 *To be implemented...🔮*

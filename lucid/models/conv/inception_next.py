@@ -262,7 +262,7 @@ def inception_next_atto(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
         num_classes,
         depths=[2, 2, 6, 2],
         dims=[40, 80, 160, 320],
-        token_mixers=partial(_InceptionDWConv2d, band_kernel_size=9, branch_ratio=0.25),
+        token_mixers=partial(_InceptionDWConv2d, band_kernel_size=9),
         **kwargs
     )
 

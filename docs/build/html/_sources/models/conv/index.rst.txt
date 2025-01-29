@@ -24,3 +24,4 @@ ConvNets
     EfficientNet-v2 <efficient/EfficientNet_V2.rst>
     ConvNeXt <convnext/ConvNeXt.rst>
     ConvNeXt-v2 <convnext/ConvNeXt_V2.rst>
+    InceptionNeXt <inception_next/InceptionNeXt.rst>
