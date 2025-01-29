@@ -12,7 +12,9 @@ _ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
 _FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
 
 
-def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> Callable:
+def create_func_op(
+    n_in: int | None, n_ret: int | None, has_gradient: bool = True
+) -> Callable:
 
     def decorator(func: Callable[..., _FuncOpReturnType]) -> Callable:
         @functools.wraps(func)
@@ -39,7 +41,16 @@ def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> C
 
             func_return_pairs = func(*new_args, **kwargs)
 
-            if n_ret == 1:
+            if n_ret is None:
+                if not isinstance(func_return_pairs, tuple):
+                    raise ValueError(
+                        f"{func.__name__} should return multiple '_ReturnGradFuncPair'."
+                    )
+                num_returns = len(func_return_pairs)
+            else:
+                num_returns = n_ret
+
+            if num_returns == 1:
                 func_return_pairs = (func_return_pairs,)
 
             results: Tuple[Tensor, ...] = tuple()
@@ -68,7 +79,7 @@ def create_func_op(n_in: int | None, n_ret: int, has_gradient: bool = True) -> C
                     result._backward_op = _backward_op
                     result._prev = list(tensors)
 
-            return results if n_ret > 1 else results[0]
+            return results if num_returns > 1 else results[0]
 
         return wrapper
 

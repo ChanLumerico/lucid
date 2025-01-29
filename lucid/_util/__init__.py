@@ -54,9 +54,15 @@ def flatten(a: Tensor) -> Tensor:
 
 
 def meshgrid(
-    self: Tensor, other: Tensor, indexing: Literal["xy", "ij"] = "xy"
+    a: Tensor, b: Tensor, indexing: Literal["xy", "ij"] = "xy"
 ) -> tuple[Tensor, Tensor]:
-    return func.meshgrid(self, other, indexing)
+    return func.meshgrid(a, b, indexing)
+
+
+def split(
+    a: Tensor, size_or_sections: int | list[int] | tuple[int], axis: int = 0
+) -> tuple[Tensor, ...]:
+    return func.split(a, size_or_sections, axis)
 
 
 Tensor.reshape = func._reshape_inplace
@@ -67,3 +73,4 @@ Tensor.pad = func.pad
 Tensor.repeat = func.repeat
 Tensor.tile = func.tile
 Tensor.flatten = func.flatten
+Tensor.split = func.split

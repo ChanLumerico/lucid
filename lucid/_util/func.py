@@ -1,5 +1,6 @@
 from typing import Literal, Sequence
 import numpy as np
+import math
 
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _NumPyArray, _ArrayLikeInt
@@ -307,3 +308,29 @@ def meshgrid(
         return grad_x, grad_y
 
     return (X, compute_grad), (Y, compute_grad)
+
+
+def split(
+    self: Tensor, size_or_sections: int | list[int] | tuple[int], axis: int = 0
+) -> tuple[Tensor, ...]:
+    returns = []
+    if axis < 0:
+        axis = self.ndim + axis
+
+    axis_len = self.shape[axis]
+    if isinstance(size_or_sections, int):
+        size_or_sections = (size_or_sections,) * int(
+            math.ceil(axis_len / size_or_sections)
+        )
+
+    cur_idx = 0
+    for size in size_or_sections:
+        slices = []
+        for _ in range(axis):
+            slices.append(slice(None, None, None))
+
+        slices.append(slice(cur_idx, cur_idx + size, None))
+        returns.append(self[*slices])
+        cur_idx += size
+
+    return tuple(returns)

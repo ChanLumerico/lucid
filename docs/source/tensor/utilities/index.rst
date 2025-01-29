@@ -17,3 +17,4 @@ Tensor Utilites
    tile.rst
    flatten.rst
    meshgrid.rst
+   split.rst
