@@ -8,7 +8,13 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["InceptionNeXt", "inception_next_atto"]
+__all__ = [
+    "InceptionNeXt",
+    "inception_next_atto",
+    "inception_next_tiny",
+    "inception_next_small",
+    "inception_next_base",
+]
 
 
 class _InceptionDWConv2d(nn.Module):
@@ -88,11 +94,14 @@ class _MLPHead(nn.Module):
         self.act = act_layer()
         self.norm = norm_layer(hidden_features)
 
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.drop = nn.Dropout(drop)
         self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias)
 
     def forward(self, x: Tensor) -> Tensor:
-        x = x.mean(axis=(-1, -2))
+        x = self.avgpool(x)
+        x = x.reshape(x.shape[0], -1)
+
         x = self.norm(self.act(self.fc1(x)))
         x = self.fc2(self.drop(x))
 
@@ -145,7 +154,7 @@ class _IncepNeXtStage(nn.Module):
         ls_init_value: float = 0.0,
         token_mixer: Type[nn.Module] = nn.Identity,
         act_layer: Type[nn.Module] = nn.GELU,
-        norm_layer: Type[nn.Module] | None = None,
+        norm_layer: Type[nn.Module] = nn.BatchNorm2d,
         mlp_ratio: int = 4,
     ) -> None:
         super().__init__()
@@ -247,12 +256,45 @@ class InceptionNeXt(nn.Module):
         return x
 
 
-@register_model  # NOTE: beta; need to fix backward process
+@register_model
 def inception_next_atto(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
     return InceptionNeXt(
         num_classes,
         depths=[2, 2, 6, 2],
         dims=[40, 80, 160, 320],
         token_mixers=partial(_InceptionDWConv2d, band_kernel_size=9, branch_ratio=0.25),
+        **kwargs
+    )
+
+
+@register_model
+def inception_next_tiny(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
+    return InceptionNeXt(
+        num_classes,
+        depths=[3, 3, 9, 3],
+        dims=[96, 192, 384, 768],
+        token_mixers=_InceptionDWConv2d,
+        **kwargs
+    )
+
+
+@register_model
+def inception_next_small(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
+    return InceptionNeXt(
+        num_classes,
+        depths=[3, 3, 27, 3],
+        dims=[96, 192, 384, 768],
+        token_mixers=_InceptionDWConv2d,
+        **kwargs
+    )
+
+
+@register_model
+def inception_next_base(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
+    return InceptionNeXt(
+        num_classes,
+        depths=[3, 3, 27, 3],
+        dims=[128, 256, 512, 1024],
+        token_mixers=_InceptionDWConv2d,
         **kwargs
     )

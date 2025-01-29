@@ -514,5 +514,17 @@
         "family": "InceptionNeXt",
         "param_size": 4156520,
         "arch": "conv"
+    },
+    "inception_next_small": {
+        "name": "inception_next_small",
+        "family": "InceptionNeXt",
+        "param_size": 49431544,
+        "arch": "conv"
+    },
+    "inception_next_base": {
+        "name": "inception_next_base",
+        "family": "InceptionNeXt",
+        "param_size": 86748840,
+        "arch": "conv"
     }
 }
