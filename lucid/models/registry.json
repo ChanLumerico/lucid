@@ -508,5 +508,11 @@
         "family": "ConvNeXt_V2",
         "param_size": 660289640,
         "arch": "conv"
+    },
+    "inception_next_atto": {
+        "name": "inception_next_atto",
+        "family": "InceptionNeXt",
+        "param_size": 4156520,
+        "arch": "conv"
     }
 }

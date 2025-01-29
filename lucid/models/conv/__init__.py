@@ -14,3 +14,4 @@ from .xception import *
 from .mobile import *
 from .efficient import *
 from .convnext import *
+from .inception_next import *
