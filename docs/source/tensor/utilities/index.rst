@@ -20,3 +20,4 @@ Tensor Utilites
    split.rst
    tril.rst
    triu.rst
+   broadcast_to.rst

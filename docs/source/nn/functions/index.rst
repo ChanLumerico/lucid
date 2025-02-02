@@ -9,9 +9,15 @@ lucid.nn.functional
 
 .. toctree::
     :maxdepth: 2
-    :caption: activation Functions
+    :caption: Activation Functions
 
     Activation Functions <activation/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Attention Functions
+
+    Attention Functions <attention/index.rst>
 
 .. toctree::
     :maxdepth: 2
