@@ -73,6 +73,10 @@ def triu(a: Tensor, diagonal: int = 0) -> Tensor:
     return func.triu(a, diagonal)
 
 
+def broadcast_to(a: Tensor, shape: _ShapeLike) -> Tensor:
+    return func.broadcast_to(a, shape)
+
+
 Tensor.reshape = func._reshape_inplace
 Tensor.squeeze = func.squeeze
 Tensor.unsqueeze = func.unsqueeze
@@ -84,3 +88,4 @@ Tensor.flatten = func.flatten
 Tensor.split = func.split
 Tensor.tril = func.tril
 Tensor.triu = func.triu
+Tensor.broadcast_to = func.broadcast_to
