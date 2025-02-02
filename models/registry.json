@@ -1,0 +1,8 @@
+{
+    "convnext_v2_base": {
+        "name": "convnext_v2_base",
+        "family": "ConvNeXt_V2",
+        "param_size": 88717800,
+        "arch": "conv"
+    }
+}

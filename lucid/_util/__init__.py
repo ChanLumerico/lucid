@@ -65,6 +65,14 @@ def split(
     return func.split(a, size_or_sections, axis)
 
 
+def tril(a: Tensor, diagonal: int = 0) -> Tensor:
+    return func.tril(a, diagonal)
+
+
+def triu(a: Tensor, diagonal: int = 0) -> Tensor:
+    return func.triu(a, diagonal)
+
+
 Tensor.reshape = func._reshape_inplace
 Tensor.squeeze = func.squeeze
 Tensor.unsqueeze = func.unsqueeze
@@ -74,3 +82,5 @@ Tensor.repeat = func.repeat
 Tensor.tile = func.tile
 Tensor.flatten = func.flatten
 Tensor.split = func.split
+Tensor.tril = func.tril
+Tensor.triu = func.triu

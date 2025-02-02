@@ -5,8 +5,8 @@ ConvNets
     :maxdepth: 1
     
     LeNet <lenet/LeNet.rst>
-    AlexNet <alex/AlexNet.rst>
-    ZFNet <zfnet/ZFNet.rst>
+    AlexNet <alex/AlexNet_.rst>
+    ZFNet <zfnet/ZFNet_.rst>
     VGGNet <vgg/VGGNet.rst>
     Inception <inception/Inception.rst>
     Inception-ResNet <inception_res/InceptionResNet.rst>
@@ -16,9 +16,9 @@ ConvNets
     SENet <senet/SENet.rst>
     SKNet <sknet/SKNet.rst>
     DenseNet <dense/DenseNet.rst>
-    Xception <xception/Xception.rst>
-    MobileNet <mobile/MobileNet.rst>
-    MobileNet-v2 <mobile/MobileNet_V2.rst>
+    Xception <xception/Xception_.rst>
+    MobileNet <mobile/MobileNet_.rst>
+    MobileNet-v2 <mobile/MobileNet_V2_.rst>
     MobileNet-v3 <mobile/MobileNet_V3.rst>
     EfficientNet <efficient/EfficientNet.rst>
     EfficientNet-v2 <efficient/EfficientNet_V2.rst>

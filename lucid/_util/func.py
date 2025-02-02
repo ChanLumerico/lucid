@@ -334,3 +334,23 @@ def split(
         cur_idx += size
 
     return tuple(returns)
+
+
+@create_ufunc_op()
+def tril(input_: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
+    result = Tensor(np.tril(input_.data, k=diagonal))
+
+    def compute_grad() -> _NumPyArray:
+        return np.tril(result.grad, k=diagonal)
+
+    return result, compute_grad
+
+
+@create_ufunc_op
+def triu(input_: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
+    result = Tensor(np.triu(input_.data, k=diagonal))
+
+    def compute_grad() -> _NumPyArray:
+        return np.triu(result.grad, k=diagonal)
+
+    return result, compute_grad
