@@ -9,7 +9,7 @@ from lucid.types import _Scalar
 __all__ = ["ScaledDotProductAttention", "MultiHeadAttention"]
 
 
-class ScaledDotProductAttention(nn.Module):  # NOTE: Undocumented
+class ScaledDotProductAttention(nn.Module):
     def __init__(
         self,
         attn_mask: Tensor | None = None,

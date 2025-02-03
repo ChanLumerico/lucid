@@ -48,3 +48,10 @@ Modules
     :caption: Vision Layers
 
     Vision Layers <vision/index.rst>
+
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Attention Layers
+
+    Attention Layers <attention/index.rst>
