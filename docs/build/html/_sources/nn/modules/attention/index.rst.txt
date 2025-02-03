@@ -5,3 +5,4 @@ Attention Layers
     :maxdepth: 1
 
     ScaledDotProductAttention.rst
+    MultiHeadAttention.rst

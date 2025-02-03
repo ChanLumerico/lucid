@@ -58,7 +58,11 @@ class Tensor(_TensorOps):
                     stack.append(parent)
 
         for tensor in reversed(topo_order):
-            tensor._backward_op()
+            try:
+                tensor._backward_op()
+            except Exception as e:
+                raise RuntimeError(f"{e} for tensor of shape {tensor.shape}")
+
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
 
