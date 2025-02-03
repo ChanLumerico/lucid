@@ -532,5 +532,17 @@
         "family": "InceptionNeXt",
         "param_size": 86748840,
         "arch": "conv"
+    },
+    "mobilenet_v4_conv_small": {
+        "name": "mobilenet_v4_conv_small",
+        "family": "MobileNet_V4",
+        "param_size": 3774024,
+        "arch": "conv"
+    },
+    "mobilenet_v4_conv_medium": {
+        "name": "mobilenet_v4_conv_medium",
+        "family": "MobileNet_V4",
+        "param_size": 9715512,
+        "arch": "conv"
     }
 }
