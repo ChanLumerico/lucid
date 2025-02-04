@@ -20,6 +20,9 @@ __all__ = [
     "mobilenet_v3_large",
     "mobilenet_v4_conv_small",
     "mobilenet_v4_conv_medium",
+    "mobilenet_v4_conv_large",
+    "mobilenet_v4_hybrid_medium",
+    "mobilenet_v4_hybrid_large",
 ]
 
 
@@ -586,7 +589,7 @@ class _MultiQueryAttention(nn.Module):
         attn_score = F.softmax(attn_score, axis=-1)
 
         context = attn_score @ v
-        context = context.shape(N, self.num_heads * self.key_dim, px, px)
+        context = context.reshape(N, self.num_heads * self.key_dim, px, px)
 
         out = self.output_proj(context)
         return out
@@ -693,7 +696,7 @@ def build_v4_blocks(layer_spec: dict) -> nn.Sequential:
             if mha:
                 mha_schema = [
                     "in_channels",
-                    "num_headas",
+                    "num_heads",
                     "key_dim",
                     "value_dim",
                     "query_h_stride",
@@ -703,7 +706,7 @@ def build_v4_blocks(layer_spec: dict) -> nn.Sequential:
                     "use_multi_query",
                     "use_residual",
                 ]
-                args = dict(zip(mha_schema, [args["out_channels"]] + (mha)))
+                args = dict(zip(mha_schema, [args["out_channels"]] + mha))
                 layers.add_module(f"mha_{i}", _MultiHeadSelfAttention(**args))
 
     elif block_names == "fused_ib":
@@ -910,12 +913,202 @@ def mobilenet_v4_conv_medium(num_classes: int = 1000, **kwargs) -> MobileNet_V4:
 
 
 @register_model
-def mobilenet_v4_conv_large(num_classes: int = 1000, **kwargs) -> MobileNet_V4: ...
+def mobilenet_v4_conv_large(num_classes: int = 1000, **kwargs) -> MobileNet_V4:
+    cfg = dict(
+        conv0={
+            "block_name": "convbn",
+            "num_blocks": 1,
+            "block_specs": [[3, 24, 3, 2]],
+        },
+        layer1={
+            "block_name": "fused_ib",
+            "num_blocks": 1,
+            "block_specs": [[24, 48, 2, 4.0, True]],
+        },
+        layer2={
+            "block_name": "uib",
+            "num_blocks": 2,
+            "block_specs": [[48, 96, 3, 5, True, 2, 4], [96, 96, 3, 3, True, 1, 4]],
+        },
+        layer3={
+            "block_name": "uib",
+            "num_blocks": 11,
+            "block_specs": [
+                [96, 192, 3, 5, True, 2, 4],
+                [192, 192, 3, 3, True, 1, 4],
+                [192, 192, 3, 3, True, 1, 4],
+                [192, 192, 3, 3, True, 1, 4],
+                [192, 192, 3, 5, True, 1, 4],
+                [192, 192, 5, 3, True, 1, 4],
+                [192, 192, 5, 3, True, 1, 4],
+                [192, 192, 5, 3, True, 1, 4],
+                [192, 192, 5, 3, True, 1, 4],
+                [192, 192, 5, 3, True, 1, 4],
+                [192, 192, 3, 0, True, 1, 4],
+            ],
+        },
+        layer4={
+            "block_name": "uib",
+            "num_blocks": 13,
+            "block_specs": [
+                [192, 512, 5, 5, True, 2, 4],
+                [512, 512, 5, 5, True, 1, 4],
+                [512, 512, 5, 5, True, 1, 4],
+                [512, 512, 5, 5, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+                [512, 512, 5, 3, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+                [512, 512, 5, 3, True, 1, 4],
+                [512, 512, 5, 5, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+            ],
+        },
+        layer5={
+            "block_name": "convbn",
+            "num_blocks": 2,
+            "block_specs": [[512, 960, 1, 1], [960, 1280, 1, 1]],
+        },
+    )
+    return MobileNet_V4(cfg, num_classes, **kwargs)
+
+
+def _mha_specs(num_heads: int, key_dim: int, value_dim: int, px: int) -> list[int]:
+    if px == 24:
+        kv_stride = 2
+    elif px == 12:
+        kv_stride = 1
+    query_h_stride = query_w_stride = 1
+    use_layer_scale = use_multi_query = use_residual = True
+    return [
+        num_heads,
+        key_dim,
+        value_dim,
+        query_h_stride,
+        query_w_stride,
+        kv_stride,
+        use_layer_scale,
+        use_multi_query,
+        use_residual,
+    ]
 
 
 @register_model
-def mobilenet_v4_hybrid_medium(num_classes: int = 1000, **kwargs) -> MobileNet_V4: ...
+def mobilenet_v4_hybrid_medium(num_classes: int = 1000, **kwargs) -> MobileNet_V4:
+    cfg = dict(
+        conv0={
+            "block_name": "convbn",
+            "num_blocks": 1,
+            "block_specs": [[3, 32, 3, 2]],
+        },
+        layer1={
+            "block_name": "fused_ib",
+            "num_blocks": 1,
+            "block_specs": [[32, 48, 2, 4.0, True]],
+        },
+        layer2={
+            "block_name": "uib",
+            "num_blocks": 2,
+            "block_specs": [[48, 80, 3, 5, True, 2, 4], [80, 80, 3, 3, True, 1, 2]],
+        },
+        layer3={
+            "block_name": "uib",
+            "num_blocks": 8,
+            "block_specs": [
+                [80, 160, 3, 5, True, 2, 6],
+                [160, 160, 0, 0, True, 1, 2],
+                [160, 160, 3, 3, True, 1, 4],
+                [160, 160, 3, 5, True, 1, 4, _mha_specs(4, 64, 64, 24)],
+                [160, 160, 3, 3, True, 1, 4, _mha_specs(4, 64, 64, 24)],
+                [160, 160, 3, 0, True, 1, 4, _mha_specs(4, 64, 64, 24)],
+                [160, 160, 3, 3, True, 1, 4, _mha_specs(4, 64, 64, 24)],
+                [160, 160, 3, 0, True, 1, 4],
+            ],
+        },
+        layer4={
+            "block_name": "uib",
+            "num_blocks": 12,
+            "block_specs": [
+                [160, 256, 5, 5, True, 2, 6],
+                [256, 256, 5, 5, True, 1, 4],
+                [256, 256, 3, 5, True, 1, 4],
+                [256, 256, 3, 5, True, 1, 4],
+                [256, 256, 0, 0, True, 1, 2],
+                [256, 256, 3, 5, True, 1, 2],
+                [256, 256, 0, 0, True, 1, 2],
+                [256, 256, 0, 0, True, 1, 4, _mha_specs(4, 64, 64, 12)],
+                [256, 256, 3, 0, True, 1, 4, _mha_specs(4, 64, 64, 12)],
+                [256, 256, 5, 5, True, 1, 4, _mha_specs(4, 64, 64, 12)],
+                [256, 256, 5, 0, True, 1, 4, _mha_specs(4, 64, 64, 12)],
+                [256, 256, 5, 0, True, 1, 4],
+            ],
+        },
+        layer5={
+            "block_name": "convbn",
+            "num_blocks": 2,
+            "block_specs": [[256, 960, 1, 1], [960, 1280, 1, 1]],
+        },
+    )
+    return MobileNet_V4(cfg, num_classes, **kwargs)
 
 
 @register_model
-def mobilenet_v4_hybrid_large(num_classes: int = 1000, **kwargs) -> MobileNet_V4: ...
+def mobilenet_v4_hybrid_large(num_classes: int = 1000, **kwargs) -> MobileNet_V4:
+    cfg = dict(
+        conv0={"block_name": "convbn", "num_blocks": 1, "block_specs": [[3, 24, 3, 2]]},
+        layer1={
+            "block_name": "fused_ib",
+            "num_blocks": 1,
+            "block_specs": [[24, 48, 2, 4.0, True]],
+        },
+        layer2={
+            "block_name": "uib",
+            "num_blocks": 2,
+            "block_specs": [[48, 96, 3, 5, True, 2, 4], [96, 96, 3, 3, True, 1, 4]],
+        },
+        layer3={
+            "block_name": "uib",
+            "num_blocks": 11,
+            "block_specs": [
+                [96, 192, 3, 5, True, 2, 4],
+                [192, 192, 3, 3, True, 1, 4],
+                [192, 192, 3, 3, True, 1, 4],
+                [192, 192, 3, 3, True, 1, 4],
+                [192, 192, 3, 5, True, 1, 4],
+                [192, 192, 5, 3, True, 1, 4],
+                [192, 192, 5, 3, True, 1, 4, _mha_specs(8, 48, 48, 24)],
+                [192, 192, 5, 3, True, 1, 4, _mha_specs(8, 48, 48, 24)],
+                [192, 192, 5, 3, True, 1, 4, _mha_specs(8, 48, 48, 24)],
+                [192, 192, 5, 3, True, 1, 4, _mha_specs(8, 48, 48, 24)],
+                [192, 192, 3, 0, True, 1, 4],
+            ],
+        },
+        layer4={
+            "block_name": "uib",
+            "num_blocks": 14,
+            "block_specs": [
+                [192, 512, 5, 5, True, 2, 4],
+                [512, 512, 5, 5, True, 1, 4],
+                [512, 512, 5, 5, True, 1, 4],
+                [512, 512, 5, 5, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+                [512, 512, 5, 3, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+                [512, 512, 5, 0, True, 1, 4],
+                [512, 512, 5, 3, True, 1, 4],
+                [512, 512, 5, 5, True, 1, 4, _mha_specs(8, 64, 64, 12)],
+                [512, 512, 5, 0, True, 1, 4, _mha_specs(8, 64, 64, 12)],
+                [512, 512, 5, 0, True, 1, 4, _mha_specs(8, 64, 64, 12)],
+                [512, 512, 5, 0, True, 1, 4, _mha_specs(8, 64, 64, 12)],
+                [512, 512, 5, 0, True, 1, 4],
+            ],
+        },
+        layer5={
+            "block_name": "convbn",
+            "num_blocks": 2,
+            "block_specs": [[512, 960, 1, 1], [960, 1280, 1, 1]],
+        },
+    )
+    return MobileNet_V4(cfg, num_classes, **kwargs)

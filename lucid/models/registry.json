@@ -544,5 +544,23 @@
         "family": "MobileNet_V4",
         "param_size": 9715512,
         "arch": "conv"
+    },
+    "mobilenet_v4_conv_large": {
+        "name": "mobilenet_v4_conv_large",
+        "family": "MobileNet_V4",
+        "param_size": 32590864,
+        "arch": "conv"
+    },
+    "mobilenet_v4_hybrid_medium": {
+        "name": "mobilenet_v4_hybrid_medium",
+        "family": "MobileNet_V4",
+        "param_size": 11070136,
+        "arch": "conv"
+    },
+    "mobilenet_v4_hybrid_large": {
+        "name": "mobilenet_v4_hybrid_large",
+        "family": "MobileNet_V4",
+        "param_size": 37755152,
+        "arch": "conv"
     }
 }

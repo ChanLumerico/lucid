@@ -6,7 +6,7 @@ import lucid.models as models
 from lucid._tensor.tensor import Tensor
 
 
-model = models.mobilenet_v4_conv_medium()
+model = models.mobilenet_v4_hybrid_large()
 models.summarize(
     model,
     input_shape=(1, 3, 224, 224),
