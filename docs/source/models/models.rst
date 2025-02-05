@@ -658,31 +658,31 @@ reducing computational cost while maintaining performance.
     * - MobileNet-v4-Conv-Small
       - `mobilenet_v4_conv_small <conv/mobile/mobilenet_v4_conv_small>`_
       - :math:`(N,3,224,224)`
-      - ...
+      - 3,774,024
       - ✅
     
     * - MobileNet-v4-Conv-Medium
       - `mobilenet_v4_conv_medium <conv/mobile/mobilenet_v4_conv_medium>`_
       - :math:`(N,3,224,224)`
-      - ...
+      - 9,715,512
       - ✅
     
     * - MobileNet-v4-Conv-Large
       - `mobilenet_v4_conv_large <conv/mobile/mobilenet_v4_conv_large>`_
       - :math:`(N,3,224,224)`
-      - ...
+      - 32,590,864
       - ✅
     
     * - MobileNet-v4-Hybrid-Medium
       - `mobilenet_v4_hybrid_medium <conv/mobile/mobilenet_v4_hybrid_medium>`_
       - :math:`(N,3,224,224)`
-      - ...
+      - 11,070,136
       - ✅
     
     * - MobileNet-v4-Hybrid-Large
       - `mobilenet_v4_hybrid_large <conv/mobile/mobilenet_v4_hybrid_large>`_
       - :math:`(N,3,224,224)`
-      - ...
+      - 37,755,152
       - ✅
 
 .. rubric:: EfficientNet
