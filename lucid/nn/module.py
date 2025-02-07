@@ -344,7 +344,7 @@ class ModuleList(Module):
         if idx < 0 or idx >= len(keys):
             raise IndexError("Index out of range.")
 
-        items = list(self._modeuls.items())
+        items = list(self._modules.items())
         self._modules.clear()
         for i, (_, m) in enumerate(items):
             self._modules[str(i)] = m
