@@ -11,6 +11,14 @@ with ample computational resources.
 
 **Total Parameters**: 32,590,864
 
+Function Signature
+------------------
+
+.. code-block:: python
+
+    @register_model
+    def mobilenet_v4_conv_large(num_classes: int = 1000, **kwargs) -> MobileNet_V4
+
 Parameters
 ----------
 - **num_classes** (*int*, optional):  

@@ -77,7 +77,13 @@ class MultiHeadAttention(nn.Module):
         self.scale: _Scalar = self.head_dim**-0.5
 
     def forward(
-        self, query: Tensor, key: Tensor, value: Tensor, attn_mask: Tensor | None = None
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        key_padding_mask: Tensor | None = None,
+        attn_mask: Tensor | None = None,
+        is_causal: bool = False,
     ) -> Tensor:
         N, q_len = query.shape[:2]
         k_len, v_len = key.shape[1], value.shape[1]
@@ -111,8 +117,16 @@ class MultiHeadAttention(nn.Module):
             if attn_mask is not None:
                 attn_mask = lucid.pad(attn_mask, (0, 1))
 
+        if key_padding_mask is not None:
+            key_padding_mask = key_padding_mask[:, None, None, :]
+            attn_mask = (
+                key_padding_mask * -1e12
+                if attn_mask is None
+                else attn_mask + key_padding_mask * -1e12
+            )
+
         attn_output = F.scaled_dot_product_attention(
-            q, k, v, attn_mask, self.dropout, is_causal=False, scale=self.scale
+            q, k, v, attn_mask, self.dropout, is_causal=is_causal, scale=self.scale
         )
         attn_output = attn_output.reshape(N, q_len, self.embed_dim)
 

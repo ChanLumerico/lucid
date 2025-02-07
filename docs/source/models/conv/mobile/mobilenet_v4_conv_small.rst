@@ -12,6 +12,15 @@ classification tasks.
 
 **Total Parameters**: 3,774,024
 
+Function Signature
+------------------
+
+.. code-block:: python
+
+    @register_model
+    def mobilenet_v4_conv_small(num_classes: int = 1000, **kwargs) -> MobileNet_V4
+
+
 Parameters
 ----------
 - **num_classes** (*int*, optional):

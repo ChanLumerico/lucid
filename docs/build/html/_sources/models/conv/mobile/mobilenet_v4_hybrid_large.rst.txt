@@ -12,6 +12,14 @@ enhancements.
 
 **Total Parameters**: 37,755,152
 
+Function Signature
+------------------
+
+.. code-block:: python
+
+    @register_model
+    def mobilenet_v4_hybrid_large(num_classes: int = 1000, **kwargs) -> MobileNet_V4
+
 Parameters
 ----------
 - **num_classes** (*int*, optional):  

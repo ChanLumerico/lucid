@@ -12,6 +12,14 @@ applications.
 
 **Total Parameters**: 11,070,136
 
+Function Signature
+------------------
+
+.. code-block:: python
+
+    @register_model
+    def mobilenet_v4_hybrid_medium(num_classes: int = 1000, **kwargs) -> MobileNet_V4
+
 Parameters
 ----------
 - **num_classes** (*int*, optional):  

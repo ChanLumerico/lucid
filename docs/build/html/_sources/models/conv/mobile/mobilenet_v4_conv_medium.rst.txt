@@ -11,6 +11,15 @@ efficiency and performance, making it well-suited for devices with moderate reso
 
 **Total Parameters**: 9,715,512
 
+Function Signature
+------------------
+
+.. code-block:: python
+
+    @register_model
+    def mobilenet_v4_conv_medium(num_classes: int = 1000, **kwargs) -> MobileNet_V4
+
+
 Parameters
 ----------
 - **num_classes** (*int*, optional):  
