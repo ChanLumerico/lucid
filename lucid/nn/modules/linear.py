@@ -28,7 +28,7 @@ class Linear(nn.Module):
         self.weight = nn.Parameter(weight_)
 
         if bias:
-            bias_ = lucid.empty(1, out_features)
+            bias_ = lucid.empty(out_features)
             self.bias = nn.Parameter(bias_)
         else:
             self.register_parameter("bias", None)
@@ -60,7 +60,7 @@ class Bilinear(nn.Module):
         self.weight = nn.Parameter(weight_)
 
         if bias:
-            bias_ = lucid.empty(1, out_features)
+            bias_ = lucid.empty(out_features)
             self.bias = nn.Parameter(bias_)
         else:
             self.register_parameter("bias", None)

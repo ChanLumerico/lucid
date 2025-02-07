@@ -18,3 +18,6 @@ Tensor Utilites
    flatten.rst
    meshgrid.rst
    split.rst
+   tril.rst
+   triu.rst
+   broadcast_to.rst

@@ -1,13 +1,13 @@
 """
 # `Lucid `
 
-**Lucid** is an educational deep learning framework developed to help users understand 
-the underlying mechanics of deep learning models and tensor operations. 
+**Lucid** is an educational deep learning framework developed to help users understand
+the underlying mechanics of deep learning models and tensor operations.
 
-It is designed to provide a simple yet powerful environment to experiment with neural networks, 
-optimization, and backpropagation using only `NumPy`. 
+It is designed to provide a simple yet powerful environment to experiment with neural networks,
+optimization, and backpropagation using only `NumPy`.
 
-Lucid is ideal for those who want to learn about the inner workings of deep learning 
+Lucid is ideal for those who want to learn about the inner workings of deep learning
 algorithms and operations without the complexity of high-level frameworks.
 
 [📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
@@ -95,6 +95,8 @@ def _set_tensor_grad(
         if tensor.grad is None:
             tensor.grad = grad
         else:
+            if not tensor.grad.flags.writeable:
+                tensor.grad = tensor.grad.copy()
             tensor.grad[at] = tensor.grad[at] + grad
 
 
@@ -105,37 +107,48 @@ def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
 
 
 def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
-    if data.shape == grad.shape:
-        return grad
-    if data.ndim == 0:
-        return grad.sum()
+    target = data.shape
+    nd_target = len(target)
 
-    matched_grad = grad
-    if data.ndim > grad.ndim:
-        matched_grad = grad.reshape(data.shape)
+    if grad.ndim < nd_target:
+        grad = grad.reshape((1,) * (nd_target - grad.ndim) + grad.shape)
 
-    elif data.ndim < grad.ndim:
-        squeezed = grad.squeeze()
-        matched_grad = squeezed.reshape(data.shape)
-
-    else:
-        if data.size == grad.size:
-            matched_grad = grad
-        elif data.size < grad.size:
-            axis = []
-            if data.ndim == 0:
-                axis.extend(range(grad.ndim))
-            else:
-                for ax in range(data.ndim):
-                    if data.shape[ax] != grad.shape[ax] and data.shape[ax] == 1:
-                        axis.append(ax)
-
-            matched_grad = np.sum(grad, axis=tuple(axis)).reshape(data.shape)
+    elif grad.ndim > nd_target:
+        extra = grad.ndim - nd_target
+        extra_dims = grad.shape[:extra]
+        if any(dim != 1 for dim in extra_dims):
+            grad = grad.sum(axis=tuple(range(extra)))
         else:
-            if data.size % grad.size == 0:
-                matched_grad = np.broadcast_to(grad, data.shape)
+            grad = grad.reshape(grad.shape[extra:])
 
-    return matched_grad
+    for i in range(nd_target):
+        g_dim = grad.shape[i]
+        t_dim = target[i]
+        if g_dim == t_dim:
+            continue
+        elif g_dim > t_dim:
+            if t_dim == 1:
+                grad = grad.sum(axis=i, keepdims=True)
+            else:
+                if g_dim % t_dim == 0:
+                    grad = grad.sum(axis=i, keepdims=True)
+                else:
+                    raise ValueError(
+                        f"Cannot match grad shape on axis {i}: "
+                        + f"grad has {g_dim} while data has {t_dim}"
+                    )
+
+        elif g_dim < t_dim:
+            if g_dim == 1:
+                continue
+            else:
+                raise ValueError(
+                    f"Cannot match grad shape on axis {i}: "
+                    + f"grad has {g_dim} while data has {t_dim}"
+                )
+
+    grad = np.broadcast_to(grad, target)
+    return grad
 
 
 def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:

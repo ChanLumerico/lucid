@@ -334,3 +334,43 @@ def split(
         cur_idx += size
 
     return tuple(returns)
+
+
+@create_ufunc_op()
+def tril(input_: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
+    result = Tensor(np.tril(input_.data, k=diagonal))
+
+    def compute_grad() -> _NumPyArray:
+        return np.tril(result.grad, k=diagonal)
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def triu(input_: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
+    result = Tensor(np.triu(input_.data, k=diagonal))
+
+    def compute_grad() -> _NumPyArray:
+        return np.triu(result.grad, k=diagonal)
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def broadcast_to(input_: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
+    original_shape = input_.shape
+    result = Tensor(np.broadcast_to(input_.data, shape))
+
+    def compute_grad() -> _NumPyArray:
+        input_shape = original_shape
+        ndim_diff = len(shape) - len(input_shape)
+        if ndim_diff > 0:
+            input_shape = (1,) * ndim_diff + input_shape
+
+        for axis, (in_dim, out_dim) in enumerate(zip(input_shape, shape)):
+            if in_dim == 1 and out_dim > 1:
+                result.grad = result.grad.sum(axis=axis, keepdims=True)
+
+        return result.grad.reshape(original_shape)
+
+    return result, compute_grad

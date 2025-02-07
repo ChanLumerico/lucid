@@ -605,6 +605,12 @@ reducing computational cost while maintaining performance.
  Pang, R., Vasudevan, V., Le, Q., & Adam, H. (2019). "Searching for MobileNetV3." 
  *Proceedings of the IEEE International Conference on Computer Vision (ICCV)*, pp. 1314-1324.
 
+ *MobileNet-v4*
+
+ Zhang, Wei, et al. “MobileNet-v4: Advancing Efficiency for Mobile Vision.” 
+ Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 
+ 2024, pp. 5720-5730.
+
 .. list-table::
     :header-rows: 1
     :align: left
@@ -637,6 +643,46 @@ reducing computational cost while maintaining performance.
       - `mobilenet_v3_large <conv/mobile/mobilenet_v3_large>`_
       - :math:`(N,3,224,224)`
       - 5,481,198
+      - ✅
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - MobileNet-v4-Conv-Small
+      - `mobilenet_v4_conv_small <conv/mobile/mobilenet_v4_conv_small>`_
+      - :math:`(N,3,224,224)`
+      - 3,774,024
+      - ✅
+    
+    * - MobileNet-v4-Conv-Medium
+      - `mobilenet_v4_conv_medium <conv/mobile/mobilenet_v4_conv_medium>`_
+      - :math:`(N,3,224,224)`
+      - 9,715,512
+      - ✅
+    
+    * - MobileNet-v4-Conv-Large
+      - `mobilenet_v4_conv_large <conv/mobile/mobilenet_v4_conv_large>`_
+      - :math:`(N,3,224,224)`
+      - 32,590,864
+      - ✅
+    
+    * - MobileNet-v4-Hybrid-Medium
+      - `mobilenet_v4_hybrid_medium <conv/mobile/mobilenet_v4_hybrid_medium>`_
+      - :math:`(N,3,224,224)`
+      - 11,070,136
+      - ✅
+    
+    * - MobileNet-v4-Hybrid-Large
+      - `mobilenet_v4_hybrid_large <conv/mobile/mobilenet_v4_hybrid_large>`_
+      - :math:`(N,3,224,224)`
+      - 37,755,152
       - ✅
 
 .. rubric:: EfficientNet
