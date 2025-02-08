@@ -322,6 +322,16 @@ def rotate(
     return _util.rotate(input_, angle, center)
 
 
+def embedding(
+    input_: Tensor,
+    weight: Tensor,
+    padding_idx: int | None = None,
+    max_norm: float | None = None,
+    norm_type: float = 2.0,
+) -> Tensor:
+    return _util.embedding(input_, weight, padding_idx, max_norm, norm_type)
+
+
 def scaled_dot_product_attention(
     query: Tensor,
     key: Tensor,

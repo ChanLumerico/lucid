@@ -49,6 +49,11 @@ Modules
 
     Vision Layers <vision/index.rst>
 
+.. toctree::
+    :maxdepth: 2
+    :caption: Sparse Layers
+
+    Sparse Layers <sparse/index.rst>
 
 .. toctree::
     :maxdepth: 2

@@ -119,3 +119,24 @@ def rotate(
             rotated_img[n, c] = input_[n, c, new_y, new_x]
 
     return rotated_img
+
+
+def embedding(
+    input_: Tensor,
+    weight: Tensor,
+    padding_idx: int | None = None,
+    max_norm: float | None = None,
+    norm_type: float = 2.0,
+) -> Tensor:
+    output = weight[input_.data]
+
+    if padding_idx is not None:
+        mask = input_.data == padding_idx
+        output *= 1 - mask[..., None]
+
+    if max_norm is not None:
+        norm = (output**norm_type).sum(axis=-1, keepdims=True) ** (1 / norm_type)
+        scaling = max_norm / (norm + (norm == 0))
+        output *= scaling
+
+    return output
