@@ -31,6 +31,7 @@ from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike
 
 import lucid.linalg as linalg
 import lucid.random as random
+import lucid.einops as einops
 import lucid.nn as nn
 
 _grad_enabled: bool = True

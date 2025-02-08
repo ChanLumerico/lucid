@@ -16,6 +16,8 @@ _StateDict = Dict[str, Any]
 
 _OptimClosure = Callable[[], Any]
 
+_EinopsPattern = str
+
 
 def _change_base_dtype(dtype: type) -> None:
     _base_dtype = dtype
