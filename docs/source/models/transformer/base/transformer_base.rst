@@ -1,5 +1,5 @@
-models.transformer_base
-=======================
+transformer_base
+================
 
 .. autofunction:: lucid.models.transformer_base
 

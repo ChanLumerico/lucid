@@ -1,5 +1,5 @@
-models.transformer_big
-======================
+transformer_big
+===============
 
 .. autofunction:: lucid.models.transformer_big
 
