@@ -11,6 +11,11 @@ processing tasks such as machine translation, text generation, and more. The mod
 follows the standard transformer architecture introduced in 
 *Attention Is All You Need* by Vaswani et al. (2017).
 
+.. image:: transformer.png
+    :width: 600
+    :alt: Transformer architecture
+    :align: center
+
 Class Signature
 ---------------
 .. code-block:: python
