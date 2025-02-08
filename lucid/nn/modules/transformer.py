@@ -327,5 +327,31 @@ class Transformer(nn.Module):
         else:
             self.decoder = custom_decoder
 
-    def forward(self, *args, **kwargs):
-        NotImplemented
+    def forward(
+        self,
+        src: Tensor,
+        tgt: Tensor,
+        src_mask: Tensor | None = None,
+        tgt_mask: Tensor | None = None,
+        mem_mask: Tensor | None = None,
+        src_key_padding_mask: Tensor | None = None,
+        tgt_key_padding_mask: Tensor | None = None,
+        mem_key_padding_mask: Tensor | None = None,
+    ) -> Tensor:
+        memory = self.encoder(
+            src,
+            src_mask=src_mask,
+            src_key_padding_mask=src_key_padding_mask,
+            is_causal=False,
+        )
+        output = self.decoder(
+            tgt,
+            memory,
+            tgt_mask=tgt_mask,
+            mem_mask=mem_mask,
+            tgt_key_padding_mask=tgt_key_padding_mask,
+            mem_key_padding_mask=mem_key_padding_mask,
+            tgt_is_causal=False,
+            mem_is_causal=False,
+        )
+        return output

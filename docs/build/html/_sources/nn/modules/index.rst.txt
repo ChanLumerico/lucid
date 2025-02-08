@@ -55,3 +55,9 @@ Modules
     :caption: Attention Layers
 
     Attention Layers <attention/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Transformer Layers
+
+    Transformer Layers <transformer/index.rst>
