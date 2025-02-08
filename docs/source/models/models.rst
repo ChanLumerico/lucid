@@ -6,6 +6,8 @@ architectures that are ready to use for various tasks, such as image classificat
 and feature extraction. These models are designed to demonstrate key deep learning 
 concepts while leveraging the modular and educational nature of the `lucid` framework.
 
+----
+
 ConvNets
 --------
 
@@ -1022,6 +1024,43 @@ diverse vision tasks.
       - `inception_next_base <conv/inception_next/inception_next_base>`_
       - :math:`(N,3,224,224)`
       - 86,748,840
+      - ✅
+
+----
+
+Transformers
+------------
+
+.. rubric:: Transformer
+
+The Transformer is a deep learning architecture introduced by Vaswani et al. in 2017, 
+designed for handling sequential data with self-attention mechanisms. It replaces 
+traditional recurrent layers with attention-based mechanisms, enabling highly 
+parallelized training and capturing long-range dependencies effectively.
+
+ Vaswani, Ashish, et al. "Attention Is All You Need." 
+ *Advances in Neural Information Processing Systems*, 2017, pp. 5998-6008.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - Transformer-Base
+      - `transformer_base <transformer/base/transformer_base>`_
+      - :math:`(N, L_{src})`, :math:`(N, L_{tgt})`
+      - 62,584,544
+      - ✅
+    
+    * - Transformer-Big
+      - `transformer_big <transformer/base/transformer_big>`_
+      - :math:`(N, L_{src})`, :math:`(N, L_{tgt})`
+      - 213,237,472
       - ✅
 
 *To be implemented...🔮*

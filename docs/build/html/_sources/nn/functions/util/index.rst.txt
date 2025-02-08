@@ -6,3 +6,4 @@ Utility Functions
 
     interpolate.rst
     rotate.rst
+    embedding.rst

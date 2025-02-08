@@ -95,8 +95,32 @@ class Transformer(nn.Module):
 
 
 @register_model
-def transformer_base(src_vocab_size: int, tgt_vocab_size: int) -> Transformer: ...
+def transformer_base(
+    src_vocab_size: int = 12000, tgt_vocab_size: int = 12000
+) -> Transformer:
+    return Transformer(
+        src_vocab_size,
+        tgt_vocab_size,
+        d_model=512,
+        num_heads=8,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
+        dim_feedforward=2048,
+        dropout=0.1,
+    )
 
 
 @register_model
-def transformer_big(src_vocab_size: int, tgt_vocab_size: int) -> Transformer: ...
+def transformer_big(
+    src_vocab_size: int = 12000, tgt_vocab_size: int = 12000
+) -> Transformer:
+    return Transformer(
+        src_vocab_size,
+        tgt_vocab_size,
+        d_model=1024,
+        num_heads=16,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
+        dim_feedforward=4096,
+        dropout=0.3,
+    )

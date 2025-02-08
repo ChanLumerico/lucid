@@ -86,6 +86,7 @@
     models/summarize.rst
 
     ConvNets <models/conv/index.rst>
+    Transformers <models/transformer/index.rst>
 
 .. toctree::
     :maxdepth: 2

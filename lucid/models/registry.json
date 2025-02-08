@@ -562,5 +562,17 @@
         "family": "MobileNet_V4",
         "param_size": 37755152,
         "arch": "conv"
+    },
+    "transformer_base": {
+        "name": "transformer_base",
+        "family": "Transformer",
+        "param_size": 62584544,
+        "arch": "transformer"
+    },
+    "transformer_big": {
+        "name": "transformer_big",
+        "family": "Transformer",
+        "param_size": 213237472,
+        "arch": "transformer"
     }
 }
