@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Iterator, Literal
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -7,11 +7,10 @@ from lucid.types import _ShapeLike, _EinopsPattern, _NumPyArray
 
 
 def _parse_pattern(pattern: _EinopsPattern, shape: _ShapeLike, shapes: dict) -> dict:
-    in_pattern, out_pattern = (
-        pattern.replace("(", " ( ").replace(")", " ) ").split("->")
-    )
+    in_pattern, out_pattern = map(str.strip, pattern.split("->"))
+
     in_axes = in_pattern.split()
-    out_axes = out_pattern.split()
+    tokens = out_pattern.replace("(", " ( ").replace(")", " ) ").split()
 
     shape_dict = {name: dim for name, dim in zip(in_axes, shape)}
     shape_dict.update(shapes)
@@ -21,42 +20,72 @@ def _parse_pattern(pattern: _EinopsPattern, shape: _ShapeLike, shapes: dict) -> 
     in_order = []
     expanded_axes = {}
 
-    iterator = iter(range(len(out_axes)))
-    for i in iterator:
-        axis = out_axes[i]
-        if axis == "(":
-            merged_axis = []
-            while (i := next(iterator, None)) is not None and out_axes[i] != ")":
-                merged_axis.append(out_axes[i])
+    def _consume_group(indices_iter: Iterator) -> list:
+        group_tokens = []
+        for j in indices_iter:
+            if tokens[j] == ")":
+                return group_tokens
+            group_tokens.append(tokens[j])
 
-            merged_size = int(np.prod([shape_dict[a] for a in merged_axis]))
+        raise ValueError("Unmatched '(' in pattern.")
+
+    it = iter(range(len(tokens)))
+    for i in it:
+        token = tokens[i]
+        if token == "(":
+            merged_tokens = _consume_group(it)
+            if not all(t in in_axes or t in shapes for t in merged_tokens):
+                missing = [
+                    t for t in merged_tokens if t not in in_axes and t not in shapes
+                ]
+                raise ValueError(
+                    f"Tokens {missing} not found in input and "
+                    + "not provided as repeat factors."
+                )
+
+            input_tokens = [t for t in merged_tokens if t in in_axes]
+            repeat_tokens = [
+                t for t in merged_tokens if t not in in_axes and t in shapes
+            ]
+
+            merged_input = (
+                np.prod([shape_dict[t] for t in input_tokens]) if input_tokens else 1
+            )
+            merged_repeat = (
+                np.prod([shape_dict[t] for t in repeat_tokens]) if repeat_tokens else 1
+            )
+
+            merged_size = int(merged_input * merged_repeat)
             out_shape.append(merged_size)
 
-            reverse_shape.append(tuple(shape_dict[a] for a in merged_axis))
-            in_order.extend([in_axes.index(a) for a in merged_axis])
-
-        elif axis not in shape_dict:
-            expanded_axes[len(out_shape)] = shapes[axis]
-            in_order.append(in_axes.index(axis))
-
-            reverse_shape.append((shapes[axis],))
-            out_shape.append(shapes[axis])
+            group_tuple = tuple(
+                [shape_dict[t] for t in input_tokens]
+                + [shape_dict[t] for t in repeat_tokens]
+            )
+            reverse_shape.append(group_tuple)
+            in_order.extend([in_axes.index(t) for t in input_tokens])
 
         else:
-            out_shape.append(shape_dict[axis])
-            in_order.append(in_axes.index(axis))
+            if token not in in_axes:
+                raise ValueError(
+                    f"Token '{token}' is not in input and "
+                    + "expansions are not supported here."
+                )
 
-            reverse_shape.append((shape_dict[axis],))
+            out_shape.append(shape_dict[token])
+            in_order.append(in_axes.index(token))
+            reverse_shape.append((shape_dict[token],))
 
-    reduced_axes = [i for i, axis in enumerate(in_axes) if axis not in out_axes]
+    used_tokens = {in_axes[i] for i in in_order}
+    reduced_axes = [i for i, token in enumerate(in_axes) if token not in used_tokens]
 
-    return dict(
-        out_shape=tuple(out_shape),
-        in_order=tuple(in_order),
-        reverse_shape=reverse_shape,
-        reduced_axes=reduced_axes,
-        expanded_axes=expanded_axes,
-    )
+    return {
+        "out_shape": tuple(out_shape),
+        "in_order": tuple(in_order),
+        "reverse_shape": reverse_shape,
+        "reduced_axes": reduced_axes,
+        "expanded_axes": expanded_axes,
+    }
 
 
 @create_ufunc_op()
@@ -146,8 +175,3 @@ def reduce(
         return grad_final
 
     return result, compute_grad
-
-
-@create_ufunc_op
-def repeat(self: Tensor, pattern: _EinopsPattern, **shapes: int) -> _FuncOpReturnType:
-    NotImplemented

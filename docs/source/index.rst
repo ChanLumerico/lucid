@@ -33,6 +33,14 @@
    RNG Functions <random/functions/index.rst>
 
 .. toctree::
+    :maxdepth: 2
+    :caption: Einstein Operations
+
+    einops/einops.rst
+
+    Einops Functions <einops/functions/index.rst>
+
+.. toctree::
    :maxdepth: 3
    :caption: Neural Networks
    :hidden:
