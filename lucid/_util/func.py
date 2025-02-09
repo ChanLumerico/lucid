@@ -374,3 +374,9 @@ def broadcast_to(input_: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
         return result.grad.reshape(original_shape)
 
     return result, compute_grad
+
+
+@create_func_op(n_in=1, n_ret=None)
+def chunk(input_: Tensor, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
+    # TODO: Must implement this to work on CoAtNets.
+    NotImplemented

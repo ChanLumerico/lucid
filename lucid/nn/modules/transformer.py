@@ -212,7 +212,7 @@ class TransformerEncoder(nn.Module):
         self,
         src: Tensor,
         src_mask: Tensor | None = None,
-        src_key_padding: Tensor | None = None,
+        src_key_padding_mask: Tensor | None = None,
         is_causal: bool = False,
     ) -> Tensor:
         output = src
@@ -220,7 +220,7 @@ class TransformerEncoder(nn.Module):
             output = layer(
                 output,
                 src_mask=src_mask,
-                src_key_padding=src_key_padding,
+                src_key_padding_mask=src_key_padding_mask,
                 is_causal=is_causal,
             )
         if self.norm is not None:

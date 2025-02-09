@@ -77,6 +77,10 @@ def broadcast_to(a: Tensor, shape: _ShapeLike) -> Tensor:
     return func.broadcast_to(a, shape)
 
 
+def chunk(input_: Tensor, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
+    NotImplemented
+
+
 Tensor.reshape = func._reshape_inplace
 Tensor.squeeze = func.squeeze
 Tensor.unsqueeze = func.unsqueeze

@@ -128,8 +128,7 @@ def embedding(
     max_norm: float | None = None,
     norm_type: float = 2.0,
 ) -> Tensor:
-    output = weight[input_.data]
-
+    output = weight[input_.data.astype(int)]
     if padding_idx is not None:
         mask = input_.data == padding_idx
         output *= 1 - mask[..., None]

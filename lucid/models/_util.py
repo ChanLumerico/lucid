@@ -10,10 +10,11 @@ from lucid.types import _ShapeLike
 
 def summarize(
     model: nn.Module,
-    input_shape: _ShapeLike,
+    input_shape: _ShapeLike | list[_ShapeLike],
     recurse: bool = True,
     truncate_from: int | None = None,
     test_backward: bool = False,
+    **model_kwargs,
 ) -> None:
     PIPELINE: str = r"│   "
     BRANCH: str = r"├── "
@@ -56,10 +57,20 @@ def summarize(
 
     _recursive_register(module=model)
 
-    dummy_input = lucid.zeros(input_shape)
-    out = model(dummy_input)
+    dummy_inputs = []
+    if isinstance(input_shape, list):
+        for in_shape in input_shape:
+            dummy_inputs.append(lucid.zeros(in_shape))
+    else:
+        dummy_inputs.append(lucid.zeros(input_shape))
+
+    outputs = model(*dummy_inputs, **model_kwargs)
     if test_backward:
-        out.backward()
+        if isinstance(outputs, tuple):
+            for out in outputs:
+                out.backward()
+        else:
+            outputs.backward()
 
     module_summary.reverse()
 
