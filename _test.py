@@ -6,7 +6,7 @@ import lucid.models as models
 from lucid._tensor.tensor import Tensor
 
 
-# model = models.transformer_big()
+# model = models.transformer_base()
 # models.summarize(
 #     model,
 #     input_shape=(1, 3, 224, 224),

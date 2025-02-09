@@ -804,6 +804,7 @@ traditional reshaping, providing:</p>
 <ul class="simple">
 <li><p><strong>Rearrange</strong>: Change the order of dimensions in a flexible manner.</p></li>
 <li><p><strong>Reduce</strong>: Aggregate tensor values along specified axes using various reduction methods.</p></li>
+<li><p><strong>Repeat</strong>: Expand tensor elements along specified dimensions.</p></li>
 </ul>
 <p>These operations make it easy to manipulate tensor shapes for neural networks,
 enabling compatibility with various architectures and optimizing computational efficiency.</p>
@@ -869,6 +870,36 @@ such as summation, mean, or max pooling.</p>
 aligns with your intended data aggregation.</p>
 </div>
 </section>
+<section id="repeat">
+<h3><cite>repeat</cite><a class="headerlink" href="#repeat" title="Link to this heading">¶</a></h3>
+<p>The <cite>repeat</cite> function enables element-wise expansion along specified dimensions,
+allowing for controlled duplication of tensor elements.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">repeat</span><span class="p">(</span><span class="n">tensor</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">pattern</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">dimensions</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>tensor</strong> (<em>Tensor</em>): Input tensor.</p></li>
+<li><p><strong>pattern</strong> (<em>str</em>): A string defining the repetition pattern.</p></li>
+<li><p><strong>dimensions</strong> (<em>dict</em>): Optional named dimensions specifying expansion sizes.</p></li>
+</ul>
+<div class="admonition-example admonition">
+<p class="admonition-title">Example</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.einops</span> <span class="k">as</span> <span class="nn">einops</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">einops</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="s1">&#39;i -&gt; i j&#39;</span><span class="p">,</span> <span class="n">j</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="go">Tensor([[1, 1],</span>
+<span class="go">        [2, 2],</span>
+<span class="go">        [3, 3]])</span>
+</pre></div>
+</div>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Ensure that the total number of elements before and after repetition matches.
+Mismatched sizes will result in an error.</p>
+</div>
+</section>
 </section>
 <section id="advantages">
 <h2>Advantages<a class="headerlink" href="#advantages" title="Link to this heading">¶</a></h2>
@@ -879,7 +910,7 @@ aligns with your intended data aggregation.</p>
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
-<p>Use <cite>rearrange</cite> and <cite>reduce</cite> to make neural network architectures
+<p>Use <cite>rearrange</cite>, <cite>reduce</cite>, and <cite>repeat</cite> to make neural network architectures
 more adaptable and efficient!</p>
 </div>
 <div class="admonition caution">
@@ -960,6 +991,7 @@ interpretable steps before applying complex transformations.</p>
 <li><a class="reference internal" href="#overview">Overview</a><ul>
 <li><a class="reference internal" href="#rearrange"><cite>rearrange</cite></a></li>
 <li><a class="reference internal" href="#reduce"><cite>reduce</cite></a></li>
+<li><a class="reference internal" href="#repeat"><cite>repeat</cite></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#advantages">Advantages</a></li>
