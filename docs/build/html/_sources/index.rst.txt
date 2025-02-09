@@ -35,6 +35,7 @@
 .. toctree::
     :maxdepth: 2
     :caption: Einstein Operations
+    :hidden:
 
     einops/einops.rst
 

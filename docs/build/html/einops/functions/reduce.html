@@ -811,17 +811,20 @@ facilitating various tensor transformations for deep learning applications.</p>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
-<ul class="simple">
+<ul>
 <li><p><strong>a</strong> (<em>Tensor</em>):
 The input tensor to be reduced.</p></li>
 <li><p><strong>pattern</strong> (<em>_EinopsPattern</em>):
 A string representing the transformation pattern, specifying dimension
 reduction using Einstein notation-like syntax.</p></li>
 <li><p><strong>reduction</strong> (<em>_ReduceStr</em>, optional):
-The reduction operation to apply, which can be:
-- <strong>“sum”</strong>: Computes the sum along specified dimensions.
-- <strong>“mean”</strong>: Computes the mean along specified dimensions.
-Default is <strong>“sum”</strong>.</p></li>
+The reduction operation to apply, which can be:</p>
+<ul class="simple">
+<li><p><strong>“sum”</strong>: Computes the sum along specified dimensions.</p></li>
+<li><p><strong>“mean”</strong>: Computes the mean along specified dimensions.</p></li>
+</ul>
+<p>Default is <strong>“sum”</strong>.</p>
+</li>
 <li><p><strong>shapes</strong> (<em>dict[str, int]</em>, optional):
 Named dimension sizes that resolve symbolic axes in the pattern.</p></li>
 </ul>

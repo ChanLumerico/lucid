@@ -29,8 +29,10 @@ Parameters
 
 - **reduction** (*_ReduceStr*, optional):
   The reduction operation to apply, which can be:
+
   - **"sum"**: Computes the sum along specified dimensions.
   - **"mean"**: Computes the mean along specified dimensions.
+  
   Default is **"sum"**.
 
 - **shapes** (*dict[str, int]*, optional):
