@@ -16,3 +16,7 @@ def reduce(
     a: Tensor, pattern: _EinopsPattern, reduction: _ReduceStr = "sum", **shapes: int
 ) -> Tensor:
     return _func.reduce(a, pattern, reduction, **shapes)
+
+
+def repeat(a: Tensor, pattern: _EinopsPattern, **shapes: int) -> Tensor:
+    return _func.repeat(a, pattern, **shapes)
