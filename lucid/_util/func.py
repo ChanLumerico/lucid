@@ -377,6 +377,31 @@ def broadcast_to(input_: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
 
 
 @create_func_op(n_in=1, n_ret=None)
-def chunk(input_: Tensor, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
-    # TODO: Must implement this to work on CoAtNets.
-    NotImplemented
+def chunk(input_: Tensor, chunks: int, axis: int = 0) -> _FuncOpReturnType:
+    if chunks <= 0:
+        raise ValueError("chunks must be greater than 0.")
+
+    dim_size = input_.shape[axis]
+    chunk_size = (dim_size + chunks - 1) // chunks
+
+    split_indices = list(range(chunk_size, dim_size, chunk_size))
+    chunked_arrays = np.split(input_.data, split_indices, axis=axis)
+
+    results = []
+    start_idx = 0
+    for arr in chunked_arrays:
+        chunk_t = Tensor(arr)
+
+        def compute_grad(_tensor: Tensor = chunk_t, _idx=start_idx) -> _NumPyArray:
+            slices = [slice(None)] * input_.ndim
+            slices[axis] = slice(_idx, _idx + _tensor.shape[axis])
+
+            grad = np.zeros_like(input_.data)
+            grad[tuple(slices)] = _tensor.grad
+
+            return grad
+
+        results.append((chunk_t, compute_grad))
+        start_idx += chunk_t.shape[axis]
+
+    return tuple(results)

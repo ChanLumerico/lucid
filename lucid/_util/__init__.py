@@ -78,7 +78,7 @@ def broadcast_to(a: Tensor, shape: _ShapeLike) -> Tensor:
 
 
 def chunk(input_: Tensor, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
-    NotImplemented
+    return func.chunk(input_, chunks, axis)
 
 
 Tensor.reshape = func._reshape_inplace
@@ -93,3 +93,4 @@ Tensor.split = func.split
 Tensor.tril = func.tril
 Tensor.triu = func.triu
 Tensor.broadcast_to = func.broadcast_to
+Tensor.chunk = func.chunk

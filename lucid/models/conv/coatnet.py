@@ -7,6 +7,9 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
+__all__ = ["CoAtNet"]
+
+
 def conv_3x3_bn(
     in_channels: int, out_channels: int, downsample: bool = False
 ) -> nn.Sequential:
@@ -170,6 +173,7 @@ class _Attention(nn.Module):
         relative_coords = lucid.einops.rearrange(relative_coords, "c h w -> h w c")
         relative_index = relative_coords.sum(axis=-1).flatten().unsqueeze(axis=1)
 
+        self.relative_index: nn.Buffer
         self.register_buffer("relative_index", relative_index)
 
         self.attend = nn.Softmax(axis=-1)
@@ -182,4 +186,86 @@ class _Attention(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        qkv = self.to_qkv(x)  # NOTE: need to implement `lucid.Tensor.chunk`
+        qkv = self.to_qkv(x).chunk(3, axis=-1)
+        q, k, v = map(
+            lambda tensor: lucid.einops.rearrange(
+                tensor,
+                "b n (h d) -> b h n d",
+                h=self.num_heads,
+                d=tensor.shape[-1] // self.num_heads,
+            ),
+            qkv,
+        )
+        dots = (q @ k.mT) * self.scale
+
+        rel_idx = self.relative_index.repeat(self.num_heads, axis=1)
+        col_indices = (
+            lucid.arange(self.relative_bias_table.shape[1])
+            .unsqueeze(axis=0)
+            .broadcast_to(rel_idx.shape)
+        ).astype(int)
+
+        relative_bias = self.relative_bias_table[rel_idx, col_indices]
+        relative_bias = lucid.einops.rearrange(
+            relative_bias, "(h w) c -> c h w", h=self.ih * self.iw, w=self.ih * self.iw
+        ).unsqueeze(axis=0)
+
+        dots += relative_bias
+
+        attn = self.attend(dots)
+        out = attn @ v
+        out = lucid.einops.rearrange(out, "b h n d -> b n (h d)")
+        out = self.to_out(out)
+
+        return out
+
+
+class Transformer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        img_size: tuple[int, int],
+        num_heads: int = 8,
+        dim_head: int = 32,
+        downsample: bool = False,
+        dropout: float = 0.0,
+    ) -> None:
+        super().__init__()
+        hidden_dim = int(in_channels * 4)
+
+        self.ih, self.iw = img_size
+        self.downsample = downsample
+
+        if self.downsample:
+            self.pool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            self.pool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            self.proj = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+
+        attn = _Attention(
+            in_channels, out_channels, img_size, num_heads, dim_head, dropout
+        )
+        ff = _FeedForward(out_channels, hidden_dim, dropout)
+
+        self.attn = nn.Sequential(
+            nn.Rearrange("b c ih iw -> b (ih iw) c"),
+            _PreNorm(in_channels, attn, nn.LayerNorm),
+            nn.Rearrange("b (ih, iw) c -> b c ih iw", ih=self.ih, iw=self.iw),
+        )
+        self.ff = nn.Sequential(
+            nn.Rearrange("b c ih iw -> b (ih iw) c"),
+            _PreNorm(in_channels, ff, nn.LayerNorm),
+            nn.Rearrange("b (ih, iw) c -> b c ih iw", ih=self.ih, iw=self.iw),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.downsample:
+            x = self.proj(self.pool1(x)) + self.attn(self.pool2(x))
+        else:
+            x += self.attn(x)
+        x += self.ff(x)
+        return x
+
+
+class CoAtNet(nn.Module):  # TODO: Continue from here
+    NotImplemented

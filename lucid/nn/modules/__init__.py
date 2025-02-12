@@ -9,3 +9,4 @@ from .vision import *
 from .attention import *
 from .transformer import *
 from .sparse import *
+from .einops import *
