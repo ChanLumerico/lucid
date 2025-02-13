@@ -7,11 +7,11 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["CoAtNet"]
+__all__ = ["CoAtNet", "coatnet_0"]
 
 
 def conv_3x3_bn(
-    in_channels: int, out_channels: int, downsample: bool = False
+    in_channels: int, out_channels: int, downsample: bool = False, **kwargs
 ) -> nn.Sequential:
     stride = 1 if not downsample else 2
     return nn.Sequential(
@@ -47,7 +47,7 @@ class _SEBlock(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(out_channels, int(in_channels * reduction), bias=False),
             nn.GELU(),
-            nn.Linear(int(in_channels, reduction), out_channels, bias=False),
+            nn.Linear(int(in_channels * reduction), out_channels, bias=False),
             nn.Sigmoid(),
         )
 
@@ -81,6 +81,7 @@ class _MBConv(nn.Module):
         out_channels: int,
         downsample: bool = False,
         expansion: int = 4,
+        **kwargs
     ) -> None:
         super().__init__()
         self.downsample = downsample
@@ -92,7 +93,7 @@ class _MBConv(nn.Module):
             self.proj = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
 
         if expansion == 1:
-            self.conv = nn.Sequential(
+            conv = nn.Sequential(
                 nn.Conv2d(
                     hidden_dim,
                     hidden_dim,
@@ -108,7 +109,7 @@ class _MBConv(nn.Module):
                 nn.BatchNorm2d(out_channels),
             )
         else:
-            self.conv = nn.Sequential(
+            conv = nn.Sequential(
                 nn.Conv2d(
                     in_channels, hidden_dim, kernel_size=1, stride=stride, bias=False
                 ),
@@ -117,7 +118,7 @@ class _MBConv(nn.Module):
                 nn.Conv2d(
                     hidden_dim,
                     hidden_dim,
-                    kernel_size=1,
+                    kernel_size=3,
                     padding=1,
                     groups=hidden_dim,
                     bias=False,
@@ -125,11 +126,11 @@ class _MBConv(nn.Module):
                 nn.BatchNorm2d(hidden_dim),
                 nn.GELU(),
                 _SEBlock(in_channels, hidden_dim),
-                nn.Conv2d(hidden_dim, out_channels, bias=False),
+                nn.Conv2d(hidden_dim, out_channels, kernel_size=1, bias=False),
                 nn.BatchNorm2d(out_channels),
             )
 
-        self.conv = _PreNorm(in_channels, self.conv, nn.BatchNorm2d)
+        self.conv = _PreNorm(in_channels, conv, nn.BatchNorm2d)
 
     def forward(self, x: Tensor) -> Tensor:
         if self.downsample:
@@ -205,7 +206,9 @@ class _Attention(nn.Module):
             .broadcast_to(rel_idx.shape)
         ).astype(int)
 
-        relative_bias = self.relative_bias_table[rel_idx, col_indices]
+        relative_bias = self.relative_bias_table[
+            rel_idx.astype(int), col_indices.astype(int)
+        ]
         relative_bias = lucid.einops.rearrange(
             relative_bias, "(h w) c -> c h w", h=self.ih * self.iw, w=self.ih * self.iw
         ).unsqueeze(axis=0)
@@ -250,12 +253,12 @@ class Transformer(nn.Module):
         self.attn = nn.Sequential(
             nn.Rearrange("b c ih iw -> b (ih iw) c"),
             _PreNorm(in_channels, attn, nn.LayerNorm),
-            nn.Rearrange("b (ih, iw) c -> b c ih iw", ih=self.ih, iw=self.iw),
+            nn.Rearrange("b (ih iw) c -> b c ih iw", ih=self.ih, iw=self.iw),
         )
         self.ff = nn.Sequential(
             nn.Rearrange("b c ih iw -> b (ih iw) c"),
-            _PreNorm(in_channels, ff, nn.LayerNorm),
-            nn.Rearrange("b (ih, iw) c -> b c ih iw", ih=self.ih, iw=self.iw),
+            _PreNorm(out_channels, ff, nn.LayerNorm),
+            nn.Rearrange("b (ih iw) c -> b c ih iw", ih=self.ih, iw=self.iw),
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -267,5 +270,74 @@ class Transformer(nn.Module):
         return x
 
 
-class CoAtNet(nn.Module):  # TODO: Continue from here
-    NotImplemented
+class CoAtNet(nn.Module):
+    def __init__(
+        self,
+        img_size: tuple[int, int],
+        in_channels: int,
+        num_blocks: list[int],
+        channels: list[int],
+        num_classes: int = 1000,
+        block_types: list[str] = ["C", "C", "T", "T"],
+    ) -> None:
+        super().__init__()
+        ih, iw = img_size
+        block = {"C": _MBConv, "T": Transformer}
+        get_block = lambda i: block[block_types[i]]
+
+        self.s0 = self._make_layer(
+            conv_3x3_bn, in_channels, channels[0], num_blocks[0], (ih // 2, iw // 2)
+        )
+        self.s1 = self._make_layer(
+            get_block(0), channels[0], channels[1], num_blocks[1], (ih // 4, iw // 4)
+        )
+        self.s2 = self._make_layer(
+            get_block(1), channels[1], channels[2], num_blocks[2], (ih // 8, iw // 8)
+        )
+        self.s3 = self._make_layer(
+            get_block(2), channels[2], channels[3], num_blocks[3], (ih // 16, iw // 16)
+        )
+        self.s4 = self._make_layer(
+            get_block(3), channels[3], channels[4], num_blocks[4], (ih // 32, iw // 32)
+        )
+
+        self.pool = nn.AvgPool2d(kernel_size=ih // 32)
+        self.fc = nn.Linear(channels[-1], num_classes, bias=False)
+
+    def _make_layer(
+        self,
+        block: Type[nn.Module],
+        in_channels: int,
+        out_channels: int,
+        depth: int,
+        img_size: tuple[int, int],
+    ) -> nn.Sequential:
+        layers = nn.ModuleList()
+        for i in range(depth):
+            if i == 0:
+                layers.append(
+                    block(in_channels, out_channels, img_size=img_size, downsample=True)
+                )
+            else:
+                layers.append(block(out_channels, out_channels, img_size=img_size))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.s0(x)
+        x = self.s1(x)
+        x = self.s2(x)
+        x = self.s3(x)
+        x = self.s4(x)
+
+        x = self.pool(x).reshape(-1, x.shape[1])
+        x = self.fc(x)
+
+        return x
+
+
+# @register_model
+def coatnet_0(num_classes: int = 1000, **kwargs) -> CoAtNet:
+    num_blocks = [2, 2, 3, 5, 2]
+    channels = [64, 96, 192, 384, 768]
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)

@@ -61,7 +61,7 @@ class Tensor(_TensorOps):
             try:
                 tensor._backward_op()
             except Exception as e:
-                raise RuntimeError(f"{e} for tensor of shape {tensor.shape}")
+                raise RuntimeError(f"{e} for tensor of shape {tensor.shape}") from e
 
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
