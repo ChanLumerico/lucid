@@ -107,6 +107,7 @@ def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
     return any
 
 
+# NOTE: This function needs to be re-build
 def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
     target = data.shape
     nd_target = len(target)
