@@ -14,6 +14,8 @@ __all__ = [
     "coatnet_2",
     "coatnet_3",
     "coatnet_4",
+    "coatnet_5",
+    "coatnet_6",
 ]
 
 
@@ -230,7 +232,7 @@ class _Attention(nn.Module):
         return out
 
 
-class Transformer(nn.Module):
+class _Transformer(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -285,12 +287,21 @@ class CoAtNet(nn.Module):
         num_blocks: list[int],
         channels: list[int],
         num_classes: int = 1000,
+        num_heads: int = 32,
         block_types: list[str] = ["C", "C", "T", "T"],
+        _scaled_num_blocks: list[int] | None = None,
+        _scaled_channels: list[int] | None = None,
     ) -> None:
         super().__init__()
         ih, iw = img_size
-        block = {"C": _MBConv, "T": Transformer}
+        block = {"C": _MBConv, "T": _Transformer}
         get_block = lambda i: block[block_types[i]]
+
+        self.ih, self.iw = ih, iw
+        self.channels = channels
+        self.num_heads = num_heads
+
+        self._do_scale = _scaled_num_blocks is not None and _scaled_channels is not None
 
         self.s0 = self._make_layer(
             conv_3x3_bn, in_channels, channels[0], num_blocks[0], (ih // 2, iw // 2)
@@ -311,6 +322,10 @@ class CoAtNet(nn.Module):
         self.pool = nn.AvgPool2d(kernel_size=ih // 32)
         self.fc = nn.Linear(channels[-1], num_classes, bias=False)
 
+        if self._do_scale:
+            del self.s3
+            self._scale_s3(_scaled_num_blocks, _scaled_channels)
+
     def _make_layer(
         self,
         block: Type[nn.Module],
@@ -319,16 +334,39 @@ class CoAtNet(nn.Module):
         depth: int,
         img_size: tuple[int, int],
     ) -> nn.Sequential:
+        if self._do_scale:
+            return nn.Identity()
+
         layers = nn.ModuleList()
         for i in range(depth):
-            if i == 0:
-                layers.append(
-                    block(in_channels, out_channels, img_size=img_size, downsample=True)
-                )
-            else:
-                layers.append(block(out_channels, out_channels, img_size=img_size))
+            new_block = block(
+                in_channels if i == 0 else out_channels,
+                out_channels,
+                img_size=img_size,
+                num_heads=self.num_heads,
+                downsample=True if i == 0 else False,
+            )
+            layers.append(new_block)
 
         return nn.Sequential(*layers)
+
+    def _scale_s3(self, depths: list[int, int], channels: list[int, int]) -> None:
+        self.s3 = nn.Sequential(
+            self._make_layer(
+                _MBConv,
+                self.channels[2],
+                channels[0],
+                depths[0],
+                (self.ih // 16, self.iw // 16),
+            ),
+            self._make_layer(
+                _Transformer,
+                channels[0],
+                channels[1],
+                depths[1],
+                (self.ih // 16, self.iw // 16),
+            ),
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.s0(x)
@@ -378,4 +416,44 @@ def coatnet_4(num_classes: int = 1000, **kwargs) -> CoAtNet:
     return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
 
 
-# TODO: Add `coatnet_5, 6, and 7`
+@register_model
+def coatnet_5(num_classes: int = 1000, **kwargs) -> CoAtNet:
+    num_blocks = [2, 2, 12, 28, 2]
+    channels = [192, 256, 512, 1280, 2048]
+    return CoAtNet(
+        (224, 224), 3, num_blocks, channels, num_classes, num_heads=64, **kwargs
+    )
+
+
+@register_model
+def coatnet_6(num_classes: int = 1000, **kwargs) -> CoAtNet:
+    num_blocks = [2, 2, 4, 8, 2]
+    channels = [192, 192, 384, 768, 2048]
+    return CoAtNet(
+        (224, 224),
+        3,
+        num_blocks,
+        channels,
+        num_classes,
+        num_heads=128,
+        _scaled_num_blocks=[8, 42],
+        _scaled_channels=[768, 1536],
+        **kwargs
+    )
+
+
+@register_model
+def coatnet_7(num_classes: int = 1000, **kwargs) -> CoAtNet:
+    num_blocks = [2, 2, 4, 8, 2]
+    channels = [192, 256, 512, 1024, 3072]
+    return CoAtNet(
+        (224, 224),
+        3,
+        num_blocks,
+        channels,
+        num_classes,
+        num_heads=128,
+        _scaled_num_blocks=[8, 42],
+        _scaled_channels=[1024, 2048],
+        **kwargs
+    )

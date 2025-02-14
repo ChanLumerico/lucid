@@ -578,31 +578,37 @@
     "coatnet_0": {
         "name": "coatnet_0",
         "family": "CoAtNet",
-        "param_size": 17789624,
+        "param_size": 27174944,
         "arch": "conv"
     },
     "coatnet_1": {
         "name": "coatnet_1",
         "family": "CoAtNet",
-        "param_size": 33170624,
+        "param_size": 53330240,
         "arch": "conv"
     },
     "coatnet_2": {
         "name": "coatnet_2",
         "family": "CoAtNet",
-        "param_size": 55720960,
+        "param_size": 82516096,
         "arch": "conv"
     },
     "coatnet_3": {
         "name": "coatnet_3",
         "family": "CoAtNet",
-        "param_size": 117724480,
+        "param_size": 157790656,
         "arch": "conv"
     },
     "coatnet_4": {
         "name": "coatnet_4",
         "family": "CoAtNet",
-        "param_size": 203960368,
+        "param_size": 277301632,
+        "arch": "conv"
+    },
+    "coatnet_5": {
+        "name": "coatnet_5",
+        "family": "CoAtNet",
+        "param_size": 770124608,
         "arch": "conv"
     }
 }
