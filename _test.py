@@ -7,7 +7,7 @@ import lucid.models as models
 from lucid._tensor.tensor import Tensor
 
 
-model = models.coatnet_6()
+model = models.coatnet_7()
 # models.summarize(
 #     model,
 #     input_shape=(1, 3, 224, 224),

@@ -1028,6 +1028,74 @@ diverse vision tasks.
 
 .. rubric:: CoAtNet
 
+CoAtNet extends the hybrid architecture paradigm by integrating convolutional 
+and transformer-based designs. It enhances representation learning through 
+hierarchical feature extraction, leveraging early-stage depthwise convolutions 
+for locality and later-stage self-attention for global context. With relative 
+position encoding, pre-normalization, and an optimized scaling strategy, 
+CoAtNet achieves superior efficiency and performance across various vision tasks.
+
+ Dai, Zihang, et al. "CoAtNet: Marrying Convolution and Attention for All Data Sizes." 
+ *Advances in Neural Information Processing Systems*, 2021, pp. 3965-3977.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - CoAtNet-0
+      - `coatnet_0 <conv/coatnet/coatnet_0>`_
+      - :math:`(N,3,224,224)`
+      - 27,174,944
+      - ✅
+    
+    * - CoAtNet-1
+      - `coatnet_1 <conv/coatnet/coatnet_1>`_
+      - :math:`(N,3,224,224)`
+      - 53,330,240
+      - ✅
+    
+    * - CoAtNet-2
+      - `coatnet_2 <conv/coatnet/coatnet_2>`_
+      - :math:`(N,3,224,224)`
+      - 82,516,096
+      - ✅
+    
+    * - CoAtNet-3
+      - `coatnet_3 <conv/coatnet/coatnet_3>`_
+      - :math:`(N,3,224,224)`
+      - 157,790,656
+      - ✅
+    
+    * - CoAtNet-4
+      - `coatnet_4 <conv/coatnet/coatnet_4>`_
+      - :math:`(N,3,224,224)`
+      - 277,301,632
+      - ✅
+    
+    * - CoAtNet-5
+      - `coatnet_5 <conv/coatnet/coatnet_5>`_
+      - :math:`(N,3,224,224)`
+      - 770,124,608
+      - ✅
+    
+    * - CoAtNet-6
+      - `coatnet_6 <conv/coatnet/coatnet_6>`_
+      - :math:`(N,3,224,224)`
+      - 2,011,558,336
+      - ✅
+    
+    * - CoAtNet-7
+      - `coatnet_7 <conv/coatnet/coatnet_7>`_
+      - :math:`(N,3,224,224)`
+      - 3,107,978,688
+      - ✅
+
 *To be implemented...🔮*
 
 ----
@@ -1066,5 +1134,7 @@ parallelized training and capturing long-range dependencies effectively.
       - :math:`(N, L_{src})`, :math:`(N, L_{tgt})`
       - 213,237,472
       - ✅
+
+.. rubric:: Visual Transformer (ViT)
 
 *To be implemented...🔮*

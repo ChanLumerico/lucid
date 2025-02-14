@@ -610,5 +610,17 @@
         "family": "CoAtNet",
         "param_size": 770124608,
         "arch": "conv"
+    },
+    "coatnet_6": {
+        "name": "coatnet_6",
+        "family": "CoAtNet",
+        "param_size": 2011558336,
+        "arch": "conv"
+    },
+    "coatnet_7": {
+        "name": "coatnet_7",
+        "family": "CoAtNet",
+        "param_size": 3107978688,
+        "arch": "conv"
     }
 }

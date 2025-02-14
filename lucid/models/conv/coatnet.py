@@ -16,6 +16,7 @@ __all__ = [
     "coatnet_4",
     "coatnet_5",
     "coatnet_6",
+    "coatnet_7",
 ]
 
 
@@ -293,49 +294,52 @@ class CoAtNet(nn.Module):
         _scaled_channels: list[int] | None = None,
     ) -> None:
         super().__init__()
-        ih, iw = img_size
         block = {"C": _MBConv, "T": _Transformer}
         get_block = lambda i: block[block_types[i]]
 
-        self.ih, self.iw = ih, iw
+        self.ih, self.iw = img_size
         self.channels = channels
         self.num_heads = num_heads
 
         self._do_scale = _scaled_num_blocks is not None and _scaled_channels is not None
 
         self.s0 = self._make_layer(
-            conv_3x3_bn, in_channels, channels[0], num_blocks[0], (ih // 2, iw // 2)
+            0, conv_3x3_bn, in_channels, channels[0], num_blocks[0]
         )
         self.s1 = self._make_layer(
-            get_block(0), channels[0], channels[1], num_blocks[1], (ih // 4, iw // 4)
+            1, get_block(0), channels[0], channels[1], num_blocks[1]
         )
         self.s2 = self._make_layer(
-            get_block(1), channels[1], channels[2], num_blocks[2], (ih // 8, iw // 8)
+            2, get_block(1), channels[1], channels[2], num_blocks[2]
         )
-        self.s3 = self._make_layer(
-            get_block(2), channels[2], channels[3], num_blocks[3], (ih // 16, iw // 16)
+        self.s3 = (
+            self._make_layer(3, get_block(2), channels[2], channels[3], num_blocks[3])
+            if not self._do_scale
+            else nn.Identity()
         )
         self.s4 = self._make_layer(
-            get_block(3), channels[3], channels[4], num_blocks[4], (ih // 32, iw // 32)
+            4,
+            get_block(3),
+            channels[3] if not self._do_scale else _scaled_channels[1],
+            channels[4],
+            num_blocks[4],
         )
 
-        self.pool = nn.AvgPool2d(kernel_size=ih // 32)
+        self.pool = nn.AvgPool2d(kernel_size=self.ih // 32)
         self.fc = nn.Linear(channels[-1], num_classes, bias=False)
 
         if self._do_scale:
-            del self.s3
             self._scale_s3(_scaled_num_blocks, _scaled_channels)
 
     def _make_layer(
         self,
+        i: int,
         block: Type[nn.Module],
         in_channels: int,
         out_channels: int,
         depth: int,
-        img_size: tuple[int, int],
     ) -> nn.Sequential:
-        if self._do_scale:
-            return nn.Identity()
+        img_size = (self.ih // (2 ** (i + 1)), self.iw // (2 ** (i + 1)))
 
         layers = nn.ModuleList()
         for i in range(depth):
@@ -351,28 +355,16 @@ class CoAtNet(nn.Module):
         return nn.Sequential(*layers)
 
     def _scale_s3(self, depths: list[int, int], channels: list[int, int]) -> None:
-        self.s3 = nn.Sequential(
-            self._make_layer(
-                _MBConv,
-                self.channels[2],
-                channels[0],
-                depths[0],
-                (self.ih // 16, self.iw // 16),
-            ),
-            self._make_layer(
-                _Transformer,
-                channels[0],
-                channels[1],
-                depths[1],
-                (self.ih // 16, self.iw // 16),
-            ),
+        self.s3_tandem = nn.Sequential(
+            self._make_layer(3, _MBConv, self.channels[2], channels[0], depths[0]),
+            self._make_layer(3, _Transformer, channels[0], channels[1], depths[1]),
         )
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.s0(x)
         x = self.s1(x)
         x = self.s2(x)
-        x = self.s3(x)
+        x = self.s3(x) if not self._do_scale else self.s3_tandem(x)
         x = self.s4(x)
 
         x = self.pool(x).reshape(-1, x.shape[1])
