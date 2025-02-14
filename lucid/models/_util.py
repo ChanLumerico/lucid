@@ -60,9 +60,9 @@ def summarize(
     dummy_inputs = []
     if isinstance(input_shape, list):
         for in_shape in input_shape:
-            dummy_inputs.append(lucid.zeros(in_shape))
+            dummy_inputs.append(lucid.random.rand(in_shape))
     else:
-        dummy_inputs.append(lucid.zeros(input_shape))
+        dummy_inputs.append(lucid.random.rand(input_shape))
 
     outputs = model(*dummy_inputs, **model_kwargs)
     if test_backward:

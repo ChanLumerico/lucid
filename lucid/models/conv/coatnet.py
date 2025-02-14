@@ -7,7 +7,14 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["CoAtNet", "coatnet_0"]
+__all__ = [
+    "CoAtNet",
+    "coatnet_0",
+    "coatnet_1",
+    "coatnet_2",
+    "coatnet_3",
+    "coatnet_4",
+]
 
 
 def conv_3x3_bn(
@@ -336,8 +343,39 @@ class CoAtNet(nn.Module):
         return x
 
 
-# @register_model
+@register_model
 def coatnet_0(num_classes: int = 1000, **kwargs) -> CoAtNet:
     num_blocks = [2, 2, 3, 5, 2]
     channels = [64, 96, 192, 384, 768]
     return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+
+
+@register_model
+def coatnet_1(num_classes: int = 1000, **kwargs) -> CoAtNet:
+    num_blocks = [2, 2, 6, 14, 2]
+    channels = [64, 96, 192, 384, 768]
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+
+
+@register_model
+def coatnet_2(num_classes: int = 1000, **kwargs) -> CoAtNet:
+    num_blocks = [2, 2, 6, 14, 2]
+    channels = [128, 128, 256, 512, 1024]
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+
+
+@register_model
+def coatnet_3(num_classes: int = 1000, **kwargs) -> CoAtNet:
+    num_blocks = [2, 2, 6, 14, 2]
+    channels = [192, 192, 384, 768, 1536]
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+
+
+@register_model
+def coatnet_4(num_classes: int = 1000, **kwargs) -> CoAtNet:
+    num_blocks = [2, 2, 12, 28, 2]
+    channels = [192, 192, 384, 768, 1536]
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+
+
+# TODO: Add `coatnet_5, 6, and 7`

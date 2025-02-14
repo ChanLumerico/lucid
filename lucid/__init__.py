@@ -107,50 +107,46 @@ def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
     return any
 
 
-# NOTE: This function needs to be re-build
 def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
-    target = data.shape
-    nd_target = len(target)
+    if data.shape == grad.shape:
+        return grad
+    if data.ndim == 0:
+        return np.sum(grad)
+    if grad.ndim == 0:
+        return np.broadcast_to(grad, data.shape)
 
-    if grad.ndim < nd_target:
-        grad = grad.reshape((1,) * (nd_target - grad.ndim) + grad.shape)
+    if data.size == grad.size:
+        return grad.reshape(data.shape)
 
-    elif grad.ndim > nd_target:
-        extra = grad.ndim - nd_target
-        extra_dims = grad.shape[:extra]
-        if any(dim != 1 for dim in extra_dims):
-            grad = grad.sum(axis=tuple(range(extra)))
-        else:
-            grad = grad.reshape(grad.shape[extra:])
+    elif data.size > grad.size:
+        grad_squeeze = grad.flatten()
+        expand_factor = data.size / grad.size
+        if expand_factor % 1 != 0:
+            raise ValueError(
+                f"Cannot broadcast grad of {grad.shape} to data of {data.shape}."
+            )
 
-    for i in range(nd_target):
-        g_dim = grad.shape[i]
-        t_dim = target[i]
-        if g_dim == t_dim:
-            continue
-        elif g_dim > t_dim:
-            if t_dim == 1:
-                grad = grad.sum(axis=i, keepdims=True)
-            else:
-                if g_dim % t_dim == 0:
-                    grad = grad.sum(axis=i, keepdims=True)
-                else:
-                    raise ValueError(
-                        f"Cannot match grad shape on axis {i}: "
-                        + f"grad has {g_dim} while data has {t_dim}"
-                    )
+        grad_expand = grad_squeeze[..., None].repeat(int(expand_factor), axis=-1)
+        return grad_expand.reshape(data.shape)
 
-        elif g_dim < t_dim:
-            if g_dim == 1:
-                continue
-            else:
-                raise ValueError(
-                    f"Cannot match grad shape on axis {i}: "
-                    + f"grad has {g_dim} while data has {t_dim}"
-                )
+    elif data.size < grad.size:
+        if grad.size % data.size != 0:
+            raise ValueError(
+                f"Cannot collapse grad of {grad.shape} to data of {data.shape}."
+            )
+        new_shape = tuple()
+        remain_size = grad.size
 
-    grad = np.broadcast_to(grad, target)
-    return grad
+        for d_dim in data.shape:
+            fac = remain_size // d_dim
+            new_shape += (d_dim,)
+            remain_size = fac
+
+        new_shape += (fac,)
+        return grad.reshape(new_shape).sum(axis=-1)
+
+    else:
+        raise ValueError("Unknown error occurred.")
 
 
 def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:

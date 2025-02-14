@@ -66,3 +66,9 @@ Modules
     :caption: Transformer Layers
 
     Transformer Layers <transformer/index.rst>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Einops Layers
+
+    Einops Layers <einops/index.rst>

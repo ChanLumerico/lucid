@@ -574,5 +574,35 @@
         "family": "Transformer",
         "param_size": 213237472,
         "arch": "transformer"
+    },
+    "coatnet_0": {
+        "name": "coatnet_0",
+        "family": "CoAtNet",
+        "param_size": 17789624,
+        "arch": "conv"
+    },
+    "coatnet_1": {
+        "name": "coatnet_1",
+        "family": "CoAtNet",
+        "param_size": 33170624,
+        "arch": "conv"
+    },
+    "coatnet_2": {
+        "name": "coatnet_2",
+        "family": "CoAtNet",
+        "param_size": 55720960,
+        "arch": "conv"
+    },
+    "coatnet_3": {
+        "name": "coatnet_3",
+        "family": "CoAtNet",
+        "param_size": 117724480,
+        "arch": "conv"
+    },
+    "coatnet_4": {
+        "name": "coatnet_4",
+        "family": "CoAtNet",
+        "param_size": 203960368,
+        "arch": "conv"
     }
 }

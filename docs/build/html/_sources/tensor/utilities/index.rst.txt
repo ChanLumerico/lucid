@@ -21,3 +21,4 @@ Tensor Utilites
    tril.rst
    triu.rst
    broadcast_to.rst
+   chunk.rst

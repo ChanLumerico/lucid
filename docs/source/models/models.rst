@@ -1026,6 +1026,10 @@ diverse vision tasks.
       - 86,748,840
       - ✅
 
+.. rubric:: CoAtNet
+
+*To be implemented...🔮*
+
 ----
 
 Transformers
