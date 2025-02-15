@@ -160,6 +160,10 @@ def max(
     return ufunc._min_or_max(a, "max", axis, keepdims)
 
 
+def swapaxes(a: Tensor, axis1: int, axis2: int) -> Tensor:
+    return ufunc.swapaxes(a, axis1, axis2)
+
+
 @overload
 def zeros(
     *shape: int,
@@ -381,4 +385,5 @@ Tensor.matmul = bfunc._matmul
 Tensor.sum = ufunc.sum
 Tensor.mean = ufunc.mean
 Tensor.var = ufunc.var
-Tensor.clip = clip
+Tensor.clip = ufunc.clip
+Tensor.swapaxes = ufunc.swapaxes

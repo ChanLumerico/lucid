@@ -373,3 +373,13 @@ def _min_or_max(
         return mask * grad / counts
 
     return result, compute_grad
+
+
+@create_ufunc_op()
+def swapaxes(self: Tensor, axis1: int, axis2: int) -> Tensor:
+    result = Tensor(self.data.swapaxes(axis1, axis2))
+
+    def compute_grad() -> _NumPyArray:
+        return result.grad.swapaxes(axis1, axis2)
+
+    return result, compute_grad

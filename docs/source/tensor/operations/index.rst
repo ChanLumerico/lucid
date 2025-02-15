@@ -30,6 +30,7 @@ Tensor Operations
    ufunc/var.rst
    ufunc/min.rst
    ufunc/max.rst
+   ufunc/swapaxes.rst
 
 .. toctree::
    :maxdepth: 1

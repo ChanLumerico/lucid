@@ -7,7 +7,7 @@ import lucid.models as models
 from lucid._tensor.tensor import Tensor
 
 
-model = models.coatnet_7()
+# model = models.coatnet_0()
 # models.summarize(
 #     model,
 #     input_shape=(1, 3, 224, 224),
@@ -15,5 +15,8 @@ model = models.coatnet_7()
 #     test_backward=True,
 # )
 
-model_arr = models.get_model_names()
-print(f"\nTotal Models: {len(model_arr)}")
+# model_arr = models.get_model_names()
+# print(f"\nTotal Models: {len(model_arr)}")
+
+
+x = lucid.ones(1, 2, 3, 4, requires_grad=True)
