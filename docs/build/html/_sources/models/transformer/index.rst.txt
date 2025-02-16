@@ -5,3 +5,4 @@ Transformers
     :maxdepth: 1
 
     Transformer <base/Transformer.rst>
+    ViT <vit/ViT.rst>

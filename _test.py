@@ -7,16 +7,13 @@ import lucid.models as models
 from lucid._tensor.tensor import Tensor
 
 
-# model = models.coatnet_0()
-# models.summarize(
-#     model,
-#     input_shape=(1, 3, 224, 224),
-#     truncate_from=100,
-#     test_backward=True,
-# )
+model = models.vit_tiny()
+models.summarize(
+    model,
+    input_shape=(1, 3, 224, 224),
+    truncate_from=100,
+    test_backward=True,
+)
 
-# model_arr = models.get_model_names()
-# print(f"\nTotal Models: {len(model_arr)}")
-
-
-x = lucid.ones(1, 2, 3, 4, requires_grad=True)
+model_arr = models.get_model_names()
+print(f"\nTotal Models: {len(model_arr)}")

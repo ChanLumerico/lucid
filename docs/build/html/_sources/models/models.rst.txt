@@ -1137,4 +1137,54 @@ parallelized training and capturing long-range dependencies effectively.
 
 .. rubric:: Visual Transformer (ViT)
 
+The Vision Transformer (ViT) is a deep learning architecture introduced by 
+Dosovitskiy et al. in 2020, designed for image recognition tasks using self-attention 
+mechanisms. Unlike traditional convolutional neural networks (CNNs), ViT splits an 
+image into fixed-size patches, processes them as a sequence, and applies Transformer 
+layers to capture global dependencies.
+
+ Dosovitskiy, Alexey, et al. "An Image is Worth 16x16 Words: Transformers for 
+ Image Recognition at Scale." *International Conference on Learning Representations* 
+ (ICLR), 2020.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - ViT-Ti
+      - `vit_tiny <transformer/vit/vit_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 5,717,416
+      - ✅
+    
+    * - ViT-S
+      - `vit_small <transformer/vit/vit_small>`_
+      - :math:`(N,3,224,224)`
+      - 22,050,664
+      - ✅
+    
+    * - ViT-B
+      - `vit_base <transformer/vit/vit_base>`_
+      - :math:`(N,3,224,224)`
+      - 86,567,656
+      - ✅
+    
+    * - ViT-L
+      - `vit_large <transformer/vit/vit_large>`_
+      - :math:`(N,3,224,224)`
+      - 304,326,632
+      - ✅
+    
+    * - ViT-H
+      - `vit_huge <transformer/vit/vit_huge>`_
+      - :math:`(N,3,224,224)`
+      - 632,199,400
+      - ✅
+
 *To be implemented...🔮*

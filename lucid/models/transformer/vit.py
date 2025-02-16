@@ -6,7 +6,7 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["ViT", "vit-s", "vit_b", "vit_l", "vit_h", "vit-g"]
+__all__ = ["ViT", "vit_tiny", "vit_small", "vit_base", "vit_large", "vit_huge"]
 
 
 class ViT(nn.Module):
@@ -23,7 +23,7 @@ class ViT(nn.Module):
         dropout_rate: float = 0.1,
     ) -> None:
         super().__init__()
-        if image_size % patch_size == 0:
+        if image_size % patch_size != 0:
             raise ValueError("image_size must be divisible by the patch_size.")
 
         self.embedding_dim = embedding_dim
@@ -73,25 +73,40 @@ class ViT(nn.Module):
 
 
 @register_model
-def vit_s(patch_size: int = 16, num_classes: int = 1000, **kwargs) -> ViT:
-    NotImplemented
+def vit_tiny(
+    image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, **kwargs
+) -> ViT:
+    config = {"embedding_dim": 192, "depth": 12, "num_heads": 3, "mlp_dim": 768}
+    return ViT(image_size, patch_size, num_classes=num_classes, **config, **kwargs)
 
 
 @register_model
-def vit_b(patch_size: int = 16, num_classes: int = 1000, **kwargs) -> ViT:
-    NotImplemented
+def vit_small(
+    image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, **kwargs
+) -> ViT:
+    config = {"embedding_dim": 384, "depth": 12, "num_heads": 6, "mlp_dim": 1536}
+    return ViT(image_size, patch_size, num_classes=num_classes, **config, **kwargs)
 
 
 @register_model
-def vit_l(patch_size: int = 16, num_classes: int = 1000, **kwargs) -> ViT:
-    NotImplemented
+def vit_base(
+    image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, **kwargs
+) -> ViT:
+    config = {"embedding_dim": 768, "depth": 12, "num_heads": 12, "mlp_dim": 3072}
+    return ViT(image_size, patch_size, num_classes=num_classes, **config, **kwargs)
 
 
 @register_model
-def vit_h(patch_size: int = 16, num_classes: int = 1000, **kwargs) -> ViT:
-    NotImplemented
+def vit_large(
+    image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, **kwargs
+) -> ViT:
+    config = {"embedding_dim": 1024, "depth": 24, "num_heads": 16, "mlp_dim": 4096}
+    return ViT(image_size, patch_size, num_classes=num_classes, **config, **kwargs)
 
 
 @register_model
-def vit_g(patch_size: int = 16, num_classes: int = 1000, **kwargs) -> ViT:
-    NotImplemented
+def vit_huge(
+    image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, **kwargs
+) -> ViT:
+    config = {"embedding_dim": 1280, "depth": 32, "num_heads": 16, "mlp_dim": 5120}
+    return ViT(image_size, patch_size, num_classes=num_classes, **config, **kwargs)

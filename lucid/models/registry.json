@@ -622,5 +622,35 @@
         "family": "CoAtNet",
         "param_size": 3107978688,
         "arch": "conv"
+    },
+    "vit_tiny": {
+        "name": "vit_tiny",
+        "family": "ViT",
+        "param_size": 5717416,
+        "arch": "transformer"
+    },
+    "vit_small": {
+        "name": "vit_small",
+        "family": "ViT",
+        "param_size": 22050664,
+        "arch": "transformer"
+    },
+    "vit_base": {
+        "name": "vit_base",
+        "family": "ViT",
+        "param_size": 86567656,
+        "arch": "transformer"
+    },
+    "vit_large": {
+        "name": "vit_large",
+        "family": "ViT",
+        "param_size": 304326632,
+        "arch": "transformer"
+    },
+    "vit_huge": {
+        "name": "vit_huge",
+        "family": "ViT",
+        "param_size": 632199400,
+        "arch": "transformer"
     }
 }
