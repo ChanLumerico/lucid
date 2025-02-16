@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Self, Any
 import random
-
-import lucid
+import math
 
 
 class Dataset(ABC):
@@ -86,3 +85,6 @@ class DataLoader:
 
         self.current_index = end
         return batch
+
+    def __len__(self) -> int:
+        return int(math.ceil(len(self.dataset) / self.batch_size))

@@ -30,7 +30,7 @@ class _WeightedLoss(nn.Module):
         self, weight: Tensor | None = None, reduction: _ReductionType | None = "mean"
     ) -> None:
         super().__init__()
-        if reduction not in {"mean", "sum"}:
+        if reduction not in {"mean", "sum", None}:
             raise ValueError(f"Got an unexpected reduction type: {reduction}.")
         self.reduction = reduction
 

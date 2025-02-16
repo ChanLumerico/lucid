@@ -100,7 +100,7 @@ class Tensor(_TensorOps):
         self.data = np.zeros_like(self.data)
 
     def zero_grad(self) -> None:
-        self.grad = np.zeros_like(self.grad)
+        self.grad = None
 
     def astype(self, dtype: type) -> Self:
         self.data = self.data.astype(dtype)
