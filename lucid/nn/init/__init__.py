@@ -1,6 +1,5 @@
 from typing import Any, Literal
 
-import lucid
 from lucid._tensor import Tensor
 from lucid.nn.init import _dist
 from lucid.types import _Scalar

@@ -54,7 +54,7 @@ def flatten(a: Tensor) -> Tensor:
 
 
 def meshgrid(
-    a: Tensor, b: Tensor, indexing: Literal["xy", "ij"] = "xy"
+    a: Tensor, b: Tensor, indexing: Literal["xy", "ij"] = "ij"
 ) -> tuple[Tensor, Tensor]:
     return func.meshgrid(a, b, indexing)
 

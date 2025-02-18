@@ -1187,4 +1187,6 @@ layers to capture global dependencies.
       - 632,199,400
       - ✅
 
+.. rubric:: Swin Transformer (SwinT)
+
 *To be implemented...🔮*
