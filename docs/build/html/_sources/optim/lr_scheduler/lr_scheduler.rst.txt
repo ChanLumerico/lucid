@@ -6,7 +6,12 @@ optims.lr_scheduler
     :hidden:
 
     LRScheduler.rst
+    LambdaLR.rst
     StepLR.rst
+    MultiStepLR.rst
+    ExponentialLR.rst
+    CosineAnnealingLR.rst
+    ReduceLROnPlateau.rst
 
 The `optims.lr_scheduler` module provides tools for dynamically 
 adjusting learning rates during model training. Learning rate scheduling 
@@ -18,12 +23,6 @@ Overview
 Learning rate scheduling modifies the optimizer's learning rate over time 
 based on predefined strategies. This allows models to start with a relatively 
 high learning rate for faster convergence and gradually reduce it to refine optimization. 
-
-The module supports various schedulers, including:
-
-- **StepLR**: Decreases learning rate at fixed step intervals.
-- **ExponentialLR**: Decays learning rate exponentially.
-- **CosineAnnealingLR**: Uses a cosine function to adjust the learning rate over time.
 
 .. note::
 
@@ -60,15 +59,6 @@ Example using `StepLR`:
     
     Always call `scheduler.step()` after `optimizer.step()` in each training epoch 
     to update the learning rate properly.
-
-Supported Schedulers
---------------------
-Each scheduler implements a different learning rate decay policy:
-
-- **StepLR**: Reduces learning rate every `step_size` epochs by multiplying by `gamma`.
-- **ExponentialLR**: Applies an exponential decay to the learning rate at every step.
-- **CosineAnnealingLR**: Anneals the learning rate following a cosine function, 
-  resetting at `T_max` epochs.
 
 Example using `ExponentialLR`:
 

@@ -49,7 +49,7 @@ Where:
 - :math:`\lfloor \cdot \rfloor` represents the floor function.
 
 .. image:: _img/step_lr.png
-    :width: 400
+    :width: 300
     :align: center
 
 Methods

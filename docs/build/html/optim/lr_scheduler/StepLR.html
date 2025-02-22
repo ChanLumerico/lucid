@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.data" href="../../data/data.html" /><link rel="prev" title="lr_scheduler.LRScheduler" href="LRScheduler.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lr_scheduler.MultiStepLR" href="MultiStepLR.html" /><link rel="prev" title="lr_scheduler.LambdaLR" href="LambdaLR.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/optim/lr_scheduler/StepLR.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lr_scheduler.StepLR - Lucid 1.19.8 documentation</title>
+        <title>lr_scheduler.StepLR - Lucid 1.20.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">Lucid 1.19.8 documentation</div></a>
+      <a href="../../index.html"><div class="brand">Lucid 1.20.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 1.19.8 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.20.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -540,7 +540,12 @@
 </li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="lr_scheduler.html">LR Schedulers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-33" name="toctree-checkbox-33" role="switch" type="checkbox"/><label for="toctree-checkbox-33"><div class="visually-hidden">Toggle navigation of LR Schedulers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="LRScheduler.html">lr_scheduler.LRScheduler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LambdaLR.html">lr_scheduler.LambdaLR</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lr_scheduler.StepLR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MultiStepLR.html">lr_scheduler.MultiStepLR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ExponentialLR.html">lr_scheduler.ExponentialLR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CosineAnnealingLR.html">lr_scheduler.CosineAnnealingLR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ReduceLROnPlateau.html">lr_scheduler.ReduceLROnPlateau</a></li>
 </ul>
 </li>
 </ul>
@@ -871,7 +876,7 @@ If <cite>True</cite>, logs learning rate updates at each step. Default: <cite>Fa
 - <span class="math notranslate nohighlight">\(\eta_0\)</span> is the initial learning rate.
 - <span class="math notranslate nohighlight">\(\gamma\)</span> is the decay factor.
 - <span class="math notranslate nohighlight">\(\lfloor \cdot \rfloor\)</span> represents the floor function.</p>
-<a class="reference internal image-reference" href="../../_images/step_lr.png"><img alt="../../_images/step_lr.png" class="align-center" src="../../_images/step_lr.png" style="width: 400px;" />
+<a class="reference internal image-reference" href="../../_images/step_lr.png"><img alt="../../_images/step_lr.png" class="align-center" src="../../_images/step_lr.png" style="width: 300px;" />
 </a>
 </section>
 <section id="methods">
@@ -910,23 +915,23 @@ is preferred over continuous decay.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="../../data/data.html">
+          <a class="next-page" href="MultiStepLR.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.data</div>
+                <div class="title">lr_scheduler.MultiStepLR</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="LRScheduler.html">
+          <a class="prev-page" href="LambdaLR.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lr_scheduler.LRScheduler</div>
+                <div class="title">lr_scheduler.LambdaLR</div>
                 
               </div>
             </a>
@@ -978,7 +983,7 @@ is preferred over continuous decay.</p>
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=772a96c5"></script>
+</div><script src="../../_static/documentation_options.js?v=2a6ef5f7"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>

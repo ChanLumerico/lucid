@@ -1,10 +1,41 @@
 import math
+from typing import Callable, Literal
 
 from lucid.optim import Optimizer
 from lucid.optim.lr_scheduler import LRScheduler
 
 
-__all__ = ["StepLR", "ExponentialLR", "CosineAnnealingLR"]
+__all__ = [
+    "LambdaLR",
+    "StepLR",
+    "MultiStepLR",
+    "ExponentialLR",
+    "CosineAnnealingLR",
+    "ReduceLROnPlateau",
+    "CyclicLR",
+]
+
+
+class LambdaLR(LRScheduler):
+    def __init__(
+        self,
+        lr_lambda: Callable[[int], float],
+        optimizer: Optimizer,
+        last_epoch: int = -1,
+        verbose: bool = False,
+    ) -> None:
+        if not callable(lr_lambda):
+            raise TypeError(
+                "lr_lambda must be a callable function "
+                + "that takes an epoch index and returns a scaling factor."
+            )
+
+        self.lr_lambda = lr_lambda
+        super().__init__(optimizer, last_epoch, verbose)
+
+    def get_lr(self) -> list[float]:
+        factor = self.lr_lambda(self.last_epoch)
+        return [base_lr * factor for base_lr in self.base_lrs]
 
 
 class StepLR(LRScheduler):
@@ -25,6 +56,29 @@ class StepLR(LRScheduler):
 
     def get_lr(self) -> list[float]:
         factor = self.gamma ** (self.last_epoch // self.step_size)
+        return [base_lr * factor for base_lr in self.base_lrs]
+
+
+class MultiStepLR(LRScheduler):
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        milestones: list[int],
+        gamma: float = 0.1,
+        last_epoch: int = -1,
+        verbose: bool = False,
+    ) -> None:
+        if not milestones:
+            raise ValueError("milestones must contain at least one epoch index.")
+        if sorted(milestones) != milestones:
+            raise ValueError("milestones must be a sorted list of increasing integers.")
+
+        self.milestones = milestones
+        self.gamma = gamma
+        super().__init__(optimizer, last_epoch, verbose)
+
+    def get_lr(self) -> list[float]:
+        factor = self.gamma ** sum(self.last_epoch >= m for m in self.milestones)
         return [base_lr * factor for base_lr in self.base_lrs]
 
 
@@ -71,3 +125,95 @@ class CosineAnnealingLR(LRScheduler):
             / 2
             for base_lr in self.base_lrs
         ]
+
+
+class ReduceLROnPlateau(LRScheduler):
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        mode: Literal["min", "max"],
+        factor: float = 0.1,
+        patience: int = 10,
+        threshold: float = 1e-4,
+        threshold_mode: Literal["rel", "abs"] = "rel",
+        cooldown: int = 0,
+        min_lr: float = 0.0,
+        eps: float = 1e-8,
+        verbose: bool = False,
+    ) -> None:
+        if factor >= 1.0:
+            raise ValueError("factor should be < 1.0.")
+        if mode not in {"min", "max"}:
+            raise ValueError("mode should be in 'min' or 'max'.")
+        if threshold_mode not in {"rel", "abs"}:
+            raise ValueError("threshold_mode must be 'rel' or 'abs'.")
+
+        self.mode = mode
+        self.factor = factor
+        self.patience = patience
+        self.threshold = threshold
+        self.threshold_mode = threshold_mode
+        self.cooldown = cooldown
+        self.min_lr = min_lr
+        self.eps = eps
+        self.verbose = verbose
+
+        self.best = float("inf") if mode == "min" else float("-inf")
+        self.num_bad_epochs = 0
+        self.cooldown_counter = 0
+        super().__init__(optimizer, last_epoch=-1, verbose=verbose)
+
+    def get_lr(self) -> list[float]:
+        return self._last_lr
+
+    def step(self, metrics: float, epoch: int | None = None) -> None:
+        if epoch is not None:
+            self.last_epoch = epoch
+
+        if self.is_better(metrics):
+            self.best = metrics
+            self.num_bad_epochs = 0
+        else:
+            self.num_bad_epochs += 1
+
+        if self.num_bad_epochs > self.patience:
+            self._reduce_lr()
+            self.num_bad_epochs = 0
+            self.cooldown_counter = self.cooldown
+
+        if self.cooldown_counter > 0:
+            self.cooldown_counter -= 1
+
+    def is_better(self, metrics: float) -> bool:
+        if self.threshold_mode == "rel":
+            threshold_val = (
+                self.best * (1 - self.threshold)
+                if self.mode == "min"
+                else self.best * (1 + self.threshold)
+            )
+        else:
+            threshold_val = (
+                self.best - self.threshold
+                if self.mode == "min"
+                else self.best + self.threshold
+            )
+        return (
+            metrics < threshold_val if self.mode == "min" else metrics > threshold_val
+        )
+
+    def _reduce_lr(self) -> None:
+        new_lrs = []
+        for param_group in self.optimizer.param_groups:
+            new_lr = max(param_group["lr"] * self.factor, self.min_lr)
+            if param_group["lr"] - new_lr > self.eps:
+                param_group["lr"] = new_lr
+
+            new_lrs.append(new_lr)
+
+        self._last_lr = new_lrs
+        if self.verbose:
+            print(f"Reducing learning rate to {new_lrs}.")
+
+
+class CyclicLR(LRScheduler):
+    NotImplemented
