@@ -1,6 +1,6 @@
 from typing import Literal, Sequence
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLikeInt
+from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar
 
 from lucid._util import func
 
@@ -81,6 +81,18 @@ def chunk(input_: Tensor, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
     return func.chunk(input_, chunks, axis)
 
 
+def masked_fill(input_: Tensor, mask: Tensor, value: _Scalar) -> Tensor:
+    return func.masked_fill(input_, mask, value)
+
+
+def roll(
+    input_: Tensor,
+    shifts: int | tuple[int, ...],
+    axis: int | tuple[int, ...] | None = None,
+) -> Tensor:
+    return func.roll(input_, shifts, axis)
+
+
 Tensor.reshape = func._reshape_inplace
 Tensor.squeeze = func.squeeze
 Tensor.unsqueeze = func.unsqueeze
@@ -94,3 +106,4 @@ Tensor.tril = func.tril
 Tensor.triu = func.triu
 Tensor.broadcast_to = func.broadcast_to
 Tensor.chunk = func.chunk
+Tensor.masked_fill = func.masked_fill

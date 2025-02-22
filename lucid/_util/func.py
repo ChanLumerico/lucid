@@ -3,7 +3,7 @@ import numpy as np
 import math
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _NumPyArray, _ArrayLikeInt
+from lucid.types import _ShapeLike, _NumPyArray, _ArrayLikeInt, _Scalar
 
 from lucid._backend import (
     create_func_op,
@@ -337,8 +337,8 @@ def split(
 
 
 @create_ufunc_op()
-def tril(input_: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
-    result = Tensor(np.tril(input_.data, k=diagonal))
+def tril(self: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
+    result = Tensor(np.tril(self.data, k=diagonal))
 
     def compute_grad() -> _NumPyArray:
         return np.tril(result.grad, k=diagonal)
@@ -347,8 +347,8 @@ def tril(input_: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
 
 
 @create_ufunc_op()
-def triu(input_: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
-    result = Tensor(np.triu(input_.data, k=diagonal))
+def triu(self: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
+    result = Tensor(np.triu(self.data, k=diagonal))
 
     def compute_grad() -> _NumPyArray:
         return np.triu(result.grad, k=diagonal)
@@ -357,9 +357,9 @@ def triu(input_: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
 
 
 @create_ufunc_op()
-def broadcast_to(input_: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
-    original_shape = input_.shape
-    result = Tensor(np.broadcast_to(input_.data, shape))
+def broadcast_to(self: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
+    original_shape = self.shape
+    result = Tensor(np.broadcast_to(self.data, shape))
 
     def compute_grad() -> _NumPyArray:
         input_shape = original_shape
@@ -377,15 +377,15 @@ def broadcast_to(input_: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
 
 
 @create_func_op(n_in=1, n_ret=None)
-def chunk(input_: Tensor, chunks: int, axis: int = 0) -> _FuncOpReturnType:
+def chunk(self: Tensor, chunks: int, axis: int = 0) -> _FuncOpReturnType:
     if chunks <= 0:
         raise ValueError("chunks must be greater than 0.")
 
-    dim_size = input_.shape[axis]
+    dim_size = self.shape[axis]
     chunk_size = (dim_size + chunks - 1) // chunks
 
     split_indices = list(range(chunk_size, dim_size, chunk_size))
-    chunked_arrays = np.split(input_.data, split_indices, axis=axis)
+    chunked_arrays = np.split(self.data, split_indices, axis=axis)
 
     results = []
     start_idx = 0
@@ -393,10 +393,10 @@ def chunk(input_: Tensor, chunks: int, axis: int = 0) -> _FuncOpReturnType:
         chunk_t = Tensor(arr)
 
         def compute_grad(_tensor: Tensor = chunk_t, _idx=start_idx) -> _NumPyArray:
-            slices = [slice(None)] * input_.ndim
+            slices = [slice(None)] * self.ndim
             slices[axis] = slice(_idx, _idx + _tensor.shape[axis])
 
-            grad = np.zeros_like(input_.data)
+            grad = np.zeros_like(self.data)
             grad[tuple(slices)] = _tensor.grad
 
             return grad
@@ -405,3 +405,30 @@ def chunk(input_: Tensor, chunks: int, axis: int = 0) -> _FuncOpReturnType:
         start_idx += chunk_t.shape[axis]
 
     return tuple(results)
+
+
+@create_ufunc_op()
+def masked_fill(self: Tensor, mask: Tensor, value: _Scalar) -> _FuncOpReturnType:
+    mask = mask.astype(bool)
+    result = Tensor(np.where(mask.data, value, self.data))
+
+    def compute_grad() -> _NumPyArray:
+        grad = result.grad.copy()
+        grad[mask.data] = 0
+        return grad
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
+def roll(
+    self: Tensor,
+    shifts: int | tuple[int, ...],
+    axis: int | tuple[int, ...] | None = None,
+) -> _FuncOpReturnType:
+    result = Tensor(np.roll(self.data, shift=shifts, axis=axis))
+
+    def compute_grad() -> _NumPyArray:
+        return np.roll(result.grad, shift=-shifts, axis=axis)
+
+    return result, compute_grad

@@ -20,8 +20,6 @@ class LRScheduler(ABC):
         self._step_count = 0
         self._last_lr = [group["lr"] for group in optimizer.param_groups]
 
-        self.step()
-
     @abstractmethod
     def get_lr(self) -> list[float]:
         raise NotImplementedError("get_lr must be implemented in subclasses.")

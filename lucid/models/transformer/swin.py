@@ -8,6 +8,10 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
+def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
+    return (val, val)
+
+
 def window_partition(x: Tensor, window_size: int) -> Tensor:
     B, H, W, C = x.shape
     x = x.reshape(B, H // window_size, window_size, W // window_size, window_size, C)
@@ -140,4 +144,136 @@ class _WindowAttention(nn.Module):
 
 
 class _SwinTransformerBlock(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        input_res: tuple[int],
+        num_heads: int,
+        window_size: int = 7,
+        shift_size: int = 0,
+        mlp_ratio: int = 4,
+        qkv_bias: bool = True,
+        qk_scale: float | None = None,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float = 0.0,
+        act_layer: Type[nn.Module] = nn.GELU,
+        norm_layer: Type[nn.Module] = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        self.dim = dim
+        self.input_res = input_res
+        self.num_heads = num_heads
+        self.window_size = window_size
+        self.shift_size = shift_size
+        self.mlp_ratio = mlp_ratio
+
+        if min(self.input_res) <= self.window_size:
+            self.shift_size = 0
+            self.window_size = min(self.input_res)
+
+        if not (0 <= self.shift_size < self.window_size):
+            raise ValueError("shift_size must be in [0, window_size).")
+
+        self.norm1 = norm_layer(dim)
+        self.attn = _WindowAttention(
+            dim,
+            window_size=_to_2tuple(self.window_size),
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            qk_scale=qk_scale,
+            attn_drop=attn_drop,
+            proj_drop=drop,
+        )
+
+        self.drop_path = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+        self.norm2 = norm_layer(dim)
+
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = _MLP(dim, mlp_hidden_dim, act_layer=act_layer, drop=drop)
+
+        if self.shift_size > 0:
+            H, W = self.input_res
+            img_mask = lucid.zeros(1, H, W, 1)
+            h_slices = (
+                slice(0, -self.window_size),
+                slice(-self.window_size, -self.shift_size),
+                slice(-self.shift_size, None),
+            )
+            w_slices = (
+                slice(0, -self.window_size),
+                slice(-self.window_size, -self.shift_size),
+                slice(-self.shift_size, None),
+            )
+
+            cnt = 0
+            for h in h_slices:
+                for w in w_slices:
+                    img_mask[:, h, w, :] = cnt
+                    cnt += 1
+
+            mask_windows = window_partition(img_mask, self.window_size)
+            mask_windows = mask_windows.reshape(-1, self.window_size * self.window_size)
+
+            attn_mask = mask_windows.unsqueeze(axis=1) - mask_windows.unsqueeze(axis=2)
+            attn_mask = attn_mask.masked_fill(attn_mask != 0, -100.0).masked_fill(
+                attn_mask == 0, 0.0
+            )
+        else:
+            attn_mask = None
+
+        self.register_buffer("attn_mask", attn_mask)
+
+    def forward(self, x: Tensor) -> Tensor:
+        H, W = self.input_res
+        B, L, C = x.shape
+        assert L == H * W, "wrong input feature size."
+
+        shortcut = x
+        x = self.norm1(x)
+        x = x.reshape(B, H, W, C)
+
+        if self.shift_size > 0:
+            shifted_x = lucid.roll(
+                x, shifts=(-self.shift_size, -self.shift_size), axis=(1, 2)
+            )
+            x_windows = window_partition(shifted_x, self.window_size)
+        else:
+            shifted_x = x
+            x_windows = window_partition(shifted_x, self.window_size)
+
+        x_windows = x_windows.reshape(-1, self.window_size * self.window_size, C)
+
+        attn_windows = self.attn(x_windows, mask=self.attn_mask)
+        attn_windows = attn_windows.reshape(-1, self.window_size, self.window_size, C)
+
+        if self.shift_size > 0:
+            shifted_x = window_reverse(attn_windows, self.window_size, H, W)
+            x = lucid.roll(
+                shifted_x, shifts=(self.shift_size, self.shift_size), axis=(1, 2)
+            )
+        else:
+            shifted_x = window_reverse(attn_windows, self.window_size, H, W)
+            x = shifted_x
+
+        x = x.reshape(B, H * W, C)
+        x = shortcut + self.drop_path(x)
+        x += self.drop_path(self.mlp(self.norm2(x)))
+
+        return x
+
+
+class _PatchMerging(nn.Module):
+    NotImplemented
+
+
+class _BaseLayer(nn.Module):
+    NotImplemented
+
+
+class _PatchEmbed(nn.Module):
+    NotImplemented
+
+
+class SwinTransformer(nn.Module):
     NotImplemented
