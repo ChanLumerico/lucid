@@ -66,6 +66,7 @@
     optim/Optimizer.rst
 
     Optimizers <optim/optimizers/index.rst>
+    LR Schedulers <optim/lr_scheduler/lr_scheduler.rst>
 
 .. toctree::
     :maxdepth: 2
