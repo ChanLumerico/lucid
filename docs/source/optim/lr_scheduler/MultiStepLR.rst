@@ -48,7 +48,7 @@ Where:
 - The summation counts the number of milestones reached by epoch :math:`t`.
 
 .. image:: _img/multistep_lr.png
-    :width: 300
+    :width: 400
     :align: center
 
 Methods

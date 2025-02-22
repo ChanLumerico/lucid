@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lr_scheduler.LRScheduler" href="LRScheduler.html" /><link rel="prev" title="optim.Adadelta" href="../optimizers/Adadelta.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/optim/lr_scheduler/lr_scheduler.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.data" href="../../data/data.html" /><link rel="prev" title="lr_scheduler.ReduceLROnPlateau" href="ReduceLROnPlateau.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/optim/lr_scheduler/CyclicLR.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>optims.lr_scheduler - Lucid 1.20.0 documentation</title>
+        <title>lr_scheduler.CyclicLR - Lucid 1.20.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">Lucid 1.20.0 documentation</div></a>
+      <a href="../../index.html"><div class="brand">Lucid 1.20.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 1.20.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.20.1 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -524,6 +524,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../optim.html">lucid.optim</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../Optimizer.html">optim.Optimizer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../lr_scheduler.html">optim.lr_scheduler</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../optimizers/index.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-32" name="toctree-checkbox-32" role="switch" type="checkbox"/><label for="toctree-checkbox-32"><div class="visually-hidden">Toggle navigation of Optimizers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../optimizers/SGD.html">optim.SGD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../optimizers/ASGD.html">optim.ASGD</a></li>
@@ -538,7 +539,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../optimizers/Adadelta.html">optim.Adadelta</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">LR Schedulers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-33" name="toctree-checkbox-33" role="switch" type="checkbox"/><label for="toctree-checkbox-33"><div class="visually-hidden">Toggle navigation of LR Schedulers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">LR Schedulers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-33" name="toctree-checkbox-33" role="switch" type="checkbox"/><label for="toctree-checkbox-33"><div class="visually-hidden">Toggle navigation of LR Schedulers</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="LRScheduler.html">lr_scheduler.LRScheduler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LambdaLR.html">lr_scheduler.LambdaLR</a></li>
 <li class="toctree-l2"><a class="reference internal" href="StepLR.html">lr_scheduler.StepLR</a></li>
@@ -546,6 +547,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ExponentialLR.html">lr_scheduler.ExponentialLR</a></li>
 <li class="toctree-l2"><a class="reference internal" href="CosineAnnealingLR.html">lr_scheduler.CosineAnnealingLR</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ReduceLROnPlateau.html">lr_scheduler.ReduceLROnPlateau</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lr_scheduler.CyclicLR</a></li>
 </ul>
 </li>
 </ul>
@@ -806,7 +808,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../../_sources/optim/lr_scheduler/lr_scheduler.rst.txt" title="View this page">
+  <a class="muted-link" href="../../_sources/optim/lr_scheduler/CyclicLR.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -826,75 +828,106 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="optims-lr-scheduler">
-<h1>optims.lr_scheduler<a class="headerlink" href="#optims-lr-scheduler" title="Link to this heading">¶</a></h1>
-<div class="toctree-wrapper compound">
+          <section id="lr-scheduler-cycliclr">
+<h1>lr_scheduler.CyclicLR<a class="headerlink" href="#lr-scheduler-cycliclr" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lucid.optim.lr_scheduler.CyclicLR">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.optim.lr_scheduler.</span></span><span class="sig-name descname"><span class="pre">CyclicLR</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">optimizer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Optimizer.html#lucid.optim.Optimizer" title="lucid.optim.base.Optimizer"><span class="pre">Optimizer</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_lr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_lr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_size_up</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_size_down</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'triangular'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'triangular2'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'exp_range'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'triangular'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cycle_momentum</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">last_epoch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.optim.lr_scheduler.CyclicLR" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The <cite>CyclicLR</cite> learning rate scheduler varies the learning rate cyclically
+between a minimum (<cite>base_lr</cite>) and a maximum (<cite>max_lr</cite>) over a specified number of steps.
+This helps in escaping sharp local minima and improving convergence.</p>
+<section id="class-signature">
+<h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">CyclicLR</span><span class="p">(</span>
+    <span class="n">optimizer</span><span class="p">:</span> <span class="n">Optimizer</span><span class="p">,</span>
+    <span class="n">base_lr</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">max_lr</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">step_size_up</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">step_size_down</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;triangular&quot;</span><span class="p">,</span> <span class="s2">&quot;triangular2&quot;</span><span class="p">,</span> <span class="s2">&quot;exp_range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;triangular&quot;</span><span class="p">,</span>
+    <span class="n">gamma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">scale_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">cycle_momentum</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">last_epoch</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
 </div>
-<p>The <cite>optims.lr_scheduler</cite> module provides tools for dynamically
-adjusting learning rates during model training. Learning rate scheduling
-is crucial in deep learning as it helps improve convergence, prevent overshooting,
-and optimize model performance efficiently.</p>
-<section id="overview">
-<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
-<p>Learning rate scheduling modifies the optimizer’s learning rate over time
-based on predefined strategies. This allows models to start with a relatively
-high learning rate for faster convergence and gradually reduce it to refine optimization.</p>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>optimizer</strong> (<em>Optimizer</em>):
+The optimizer whose learning rate needs to be scheduled.</p></li>
+<li><p><strong>base_lr</strong> (<em>float</em>):
+Lower bound of the learning rate cycle.</p></li>
+<li><p><strong>max_lr</strong> (<em>float</em>):
+Upper bound of the learning rate cycle.</p></li>
+<li><p><strong>step_size_up</strong> (<em>int</em>):
+Number of iterations in the increasing half of the cycle.</p></li>
+<li><p><strong>step_size_down</strong> (<em>int</em>, optional):
+Number of iterations in the decreasing half of the cycle. Defaults to <cite>step_size_up</cite>.</p></li>
+<li><p><strong>mode</strong> (<em>str</em>, optional):
+Defines the shape of the cycle. Options are “triangular”, “triangular2”, and “exp_range”.
+Default: “triangular”.</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>, optional):
+Scaling factor for “exp_range” mode. Default: <cite>1.0</cite>.</p></li>
+<li><p><strong>scale_fn</strong> (<em>Callable[[int], float]</em>, optional):
+Custom function for scaling LR per cycle.</p></li>
+<li><p><strong>cycle_momentum</strong> (<em>bool</em>, optional):
+If <cite>True</cite>, momentum is cycled inversely with the learning rate. Default: <cite>True</cite>.</p></li>
+<li><p><strong>last_epoch</strong> (<em>int</em>, optional):
+The index of the last epoch when resuming training. Default: <cite>-1</cite>.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>, optional):
+If <cite>True</cite>, logs learning rate updates at each step. Default: <cite>False</cite>.</p></li>
+</ul>
+</section>
+<section id="mathematical-formula">
+<h2>Mathematical Formula<a class="headerlink" href="#mathematical-formula" title="Link to this heading">¶</a></h2>
+<p>The learning rate at step <span class="math notranslate nohighlight">\(t\)</span> follows the formula:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\eta_t = \eta_{\min} + (\eta_{\max} - \eta_{\min}) \cdot
+\max(0, 1 - |t / \text{step_size} - 2c - 1|) \cdot s(c)\]</div>
+</div>
+<p>Where:
+- <span class="math notranslate nohighlight">\(\eta_t\)</span> is the learning rate at step <span class="math notranslate nohighlight">\(t\)</span>.
+- <span class="math notranslate nohighlight">\(\eta_{\min}\)</span> and <span class="math notranslate nohighlight">\(\eta_{\max}\)</span> are <cite>base_lr</cite> and <cite>max_lr</cite> respectively.
+- <span class="math notranslate nohighlight">\(c\)</span> is the cycle index.
+- <span class="math notranslate nohighlight">\(s(c)\)</span> is the scaling factor, determined by the selected mode.</p>
+<a class="reference internal image-reference" href="../../_images/cyclic_lr.png"><img alt="../../_images/cyclic_lr.png" class="align-center" src="../../_images/cyclic_lr.png" style="width: 800px;" />
+</a>
+</section>
+<section id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>get_lr() -&gt; list[float]</strong>:
+Computes the updated learning rate(s) for the current step.</p></li>
+<li><p><strong>step(epoch: Optional[int] = None) -&gt; None</strong>:
+Updates the learning rate based on the current iteration.</p></li>
+</ul>
+</section>
+<section id="usage-example">
+<h2>Usage Example<a class="headerlink" href="#usage-example" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.optim</span> <span class="k">as</span> <span class="nn">optim</span>
+<span class="kn">from</span> <span class="nn">lucid.optim.lr_scheduler</span> <span class="kn">import</span> <span class="n">CyclicLR</span>
+
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+<span class="n">scheduler</span> <span class="o">=</span> <span class="n">CyclicLR</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">base_lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">max_lr</span><span class="o">=</span><span class="mf">0.006</span><span class="p">,</span> <span class="n">step_size_up</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;triangular&#39;</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">30</span><span class="p">):</span>
+    <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+    <span class="n">scheduler</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Epoch </span><span class="si">{</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">, Learning Rate: </span><span class="si">{</span><span class="n">scheduler</span><span class="o">.</span><span class="n">last_lr</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Learning rate schedulers do not modify the optimizer itself but adjust the
-<cite>lr</cite> attribute in the optimizer’s parameter groups.</p>
+<p><cite>CyclicLR</cite> is effective for scenarios where fluctuating the learning rate
+helps avoid sharp local minima and accelerates convergence.</p>
 </div>
-</section>
-<section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
-<p>To use a learning rate scheduler, first, define an optimizer and then wrap
-it with the desired scheduler.</p>
-<p>Example using <cite>StepLR</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="kn">import</span> <span class="nn">lucid.optims</span> <span class="k">as</span> <span class="nn">optim</span>
-<span class="kn">from</span> <span class="nn">lucid.optims.lr_scheduler</span> <span class="kn">import</span> <span class="n">StepLR</span>
-
-<span class="c1"># Define model and optimizer</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
-
-<span class="c1"># Define scheduler</span>
-<span class="n">scheduler</span> <span class="o">=</span> <span class="n">StepLR</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">step_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
-
-<span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">20</span><span class="p">):</span>
-    <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-    <span class="n">scheduler</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Epoch </span><span class="si">{</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">, Learning Rate: </span><span class="si">{</span><span class="n">scheduler</span><span class="o">.</span><span class="n">last_lr</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</pre></div>
-</div>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p>Always call <cite>scheduler.step()</cite> after <cite>optimizer.step()</cite> in each training epoch
-to update the learning rate properly.</p>
-</div>
-<p>Example using <cite>ExponentialLR</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">lucid.optims.lr_scheduler</span> <span class="kn">import</span> <span class="n">ExponentialLR</span>
-
-<span class="n">scheduler</span> <span class="o">=</span> <span class="n">ExponentialLR</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">0.9</span><span class="p">)</span>
-
-<span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
-    <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-    <span class="n">scheduler</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Epoch </span><span class="si">{</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">, Learning Rate: </span><span class="si">{</span><span class="n">scheduler</span><span class="o">.</span><span class="n">last_lr</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</pre></div>
-</div>
-<div class="admonition caution">
-<p class="admonition-title">Caution</p>
-<p>Ensure that the decay factor (<cite>gamma</cite>) is chosen carefully.
-A too-small value may cause the learning rate to diminish too quickly.</p>
-</div>
-</section>
-<section id="conclusion">
-<h2>Conclusion<a class="headerlink" href="#conclusion" title="Link to this heading">¶</a></h2>
-<p>Learning rate scheduling is a powerful technique to improve model convergence and stability.
-The <cite>optims.lr_scheduler</cite> module provides multiple strategies to suit different
-training needs, ensuring effective model optimization.</p>
 </section>
 </section>
 
@@ -903,23 +936,23 @@ training needs, ensuring effective model optimization.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="LRScheduler.html">
+          <a class="next-page" href="../../data/data.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lr_scheduler.LRScheduler</div>
+                <div class="title">lucid.data</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../optimizers/Adadelta.html">
+          <a class="prev-page" href="ReduceLROnPlateau.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">optim.Adadelta</div>
+                <div class="title">lr_scheduler.ReduceLROnPlateau</div>
                 
               </div>
             </a>
@@ -953,10 +986,13 @@ training needs, ensuring effective model optimization.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">optims.lr_scheduler</a><ul>
-<li><a class="reference internal" href="#overview">Overview</a></li>
-<li><a class="reference internal" href="#usage">Usage</a></li>
-<li><a class="reference internal" href="#conclusion">Conclusion</a></li>
+<li><a class="reference internal" href="#">lr_scheduler.CyclicLR</a><ul>
+<li><a class="reference internal" href="#lucid.optim.lr_scheduler.CyclicLR"><code class="docutils literal notranslate"><span class="pre">CyclicLR</span></code></a></li>
+<li><a class="reference internal" href="#class-signature">Class Signature</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#mathematical-formula">Mathematical Formula</a></li>
+<li><a class="reference internal" href="#methods">Methods</a></li>
+<li><a class="reference internal" href="#usage-example">Usage Example</a></li>
 </ul>
 </li>
 </ul>
@@ -968,7 +1004,7 @@ training needs, ensuring effective model optimization.</p>
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=2a6ef5f7"></script>
+</div><script src="../../_static/documentation_options.js?v=8e1671ee"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>

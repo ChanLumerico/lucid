@@ -44,7 +44,7 @@ Where:
 - :math:`\gamma` is the decay factor.
 
 .. image:: _img/exponential_lr.png
-    :width: 300
+    :width: 400
     :align: center
 
 Methods

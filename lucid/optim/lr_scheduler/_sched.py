@@ -216,4 +216,52 @@ class ReduceLROnPlateau(LRScheduler):
 
 
 class CyclicLR(LRScheduler):
-    NotImplemented
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        base_lr: float,
+        max_lr: float,
+        step_size_up: int,
+        step_size_down: int | None = None,
+        mode: Literal["triangular", "triangular2", "exp_range"] = "triangular",
+        gamma: float = 1.0,
+        scale_fn: Callable[[int], float] | None = None,
+        cycle_momentum: bool = True,
+        last_epoch: int = -1,
+        verbose: bool = False,
+    ) -> None:
+        if base_lr >= max_lr:
+            raise ValueError("base_lr must be less than max_lr.")
+        if mode not in {"triangular", "triangular2", "exp_range"}:
+            raise ValueError("Invalid mode.")
+
+        self.base_lr = base_lr
+        self.max_lr = max_lr
+        self.step_size_up = step_size_up
+        self.step_size_down = step_size_down or step_size_up
+        self.mode = mode
+        self.gamma = gamma
+        self.scale_fn = scale_fn
+        self.cycle_momentum = cycle_momentum
+
+        self.total_size = self.step_size_up + self.step_size_down
+        super().__init__(optimizer, last_epoch, verbose)
+
+    def get_lr(self) -> list[float]:
+        cycle = self.last_epoch // self.total_size
+        x = abs(self.last_epoch / self.step_size_up - 2 * cycle - 1)
+
+        if self.mode == "triangular":
+            scale_factor = 1.0
+        elif self.mode == "triangular2":
+            scale_factor = 1 / (2**cycle)
+        elif self.mode == "exp_range":
+            scale_factor = self.gamma**self.last_epoch
+        else:
+            scale_factor = self.scale_fn(cycle) if self.scale_fn else 1.0
+
+        new_lrs = [
+            self.base_lr + (self.max_lr - self.base_lr) * max(0, 1 - x) * scale_factor
+            for _ in self.base_lrs
+        ]
+        return new_lrs

@@ -66,7 +66,7 @@ Where:
 - :math:`\text{min_lr}` is the minimum allowable LR.
 
 .. image:: _img/reduce_lr_on_plateau.png
-    :width: 300
+    :width: 400
     :align: center
 
 Methods

@@ -50,7 +50,7 @@ Where:
 - :math:`T_{\max}` is the maximum epoch count before resetting.
 
 .. image:: _img/cosine_annealing_lr.png
-    :width: 300
+    :width: 400
     :align: center
 
 Methods

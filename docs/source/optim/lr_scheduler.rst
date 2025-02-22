@@ -1,19 +1,7 @@
-optims.lr_scheduler
+optim.lr_scheduler
 ===================
 
-.. toctree::
-    :maxdepth: 1
-    :hidden:
-
-    LRScheduler.rst
-    LambdaLR.rst
-    StepLR.rst
-    MultiStepLR.rst
-    ExponentialLR.rst
-    CosineAnnealingLR.rst
-    ReduceLROnPlateau.rst
-
-The `optims.lr_scheduler` module provides tools for dynamically 
+The `optim.lr_scheduler` module provides tools for dynamically 
 adjusting learning rates during model training. Learning rate scheduling 
 is crucial in deep learning as it helps improve convergence, prevent overshooting, 
 and optimize model performance efficiently.
@@ -40,8 +28,8 @@ Example using `StepLR`:
 
     import lucid
     import lucid.nn as nn
-    import lucid.optims as optim
-    from lucid.optims.lr_scheduler import StepLR
+    import lucid.optim as optim
+    from lucid.optim.lr_scheduler import StepLR
 
     # Define model and optimizer
     model = nn.Linear(10, 1)
@@ -64,7 +52,7 @@ Example using `ExponentialLR`:
 
 .. code-block:: python
 
-    from lucid.optims.lr_scheduler import ExponentialLR
+    from lucid.optim.lr_scheduler import ExponentialLR
     
     scheduler = ExponentialLR(optimizer, gamma=0.9)
     
@@ -81,5 +69,5 @@ Example using `ExponentialLR`:
 Conclusion
 ----------
 Learning rate scheduling is a powerful technique to improve model convergence and stability. 
-The `optims.lr_scheduler` module provides multiple strategies to suit different 
+The `optim.lr_scheduler` module provides multiple strategies to suit different 
 training needs, ensuring effective model optimization.
