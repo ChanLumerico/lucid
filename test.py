@@ -19,10 +19,10 @@ test_set = MNIST(
     root="./.data/mnist/test", train=False, download=False, transform=transform
 )
 
-learning_rate = 1e-4
+learning_rate = 1e-3
 num_epochs = 3
 batch_size = 16
-weight_decay = 0.001
+weight_decay = 1e-4
 
 train_loader = DataLoader(train_set, batch_size, shuffle=True)
 test_loader = DataLoader(test_set, batch_size)

@@ -429,6 +429,11 @@ def roll(
     result = Tensor(np.roll(self.data, shift=shifts, axis=axis))
 
     def compute_grad() -> _NumPyArray:
-        return np.roll(result.grad, shift=-shifts, axis=axis)
+        if isinstance(shifts, int):
+            neg_shifts = -shifts
+        elif isinstance(shifts, tuple):
+            neg_shifts = tuple(-s for s in shifts)
+            
+        return np.roll(result.grad, shift=neg_shifts, axis=axis)
 
     return result, compute_grad

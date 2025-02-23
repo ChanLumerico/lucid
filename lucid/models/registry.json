@@ -652,5 +652,29 @@
         "family": "ViT",
         "param_size": 632199400,
         "arch": "transformer"
+    },
+    "swin_tiny": {
+        "name": "swin_tiny",
+        "family": "SwinTransformer",
+        "param_size": 28288354,
+        "arch": "transformer"
+    },
+    "swin_small": {
+        "name": "swin_small",
+        "family": "SwinTransformer",
+        "param_size": 49606258,
+        "arch": "transformer"
+    },
+    "swin_base": {
+        "name": "swin_base",
+        "family": "SwinTransformer",
+        "param_size": 87768224,
+        "arch": "transformer"
+    },
+    "swin_large": {
+        "name": "swin_large",
+        "family": "SwinTransformer",
+        "param_size": 196532476,
+        "arch": "transformer"
     }
 }

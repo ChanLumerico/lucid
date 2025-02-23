@@ -1,4 +1,0 @@
-[Epoch 1/3 - Batch 1158/3500]
-Loss: 3.0885
-Avg. Loss: 4.2135
-Accuracy: 0.1035

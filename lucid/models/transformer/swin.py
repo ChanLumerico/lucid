@@ -2,10 +2,12 @@ from typing import Type
 
 import lucid
 import lucid.nn as nn
-import lucid.nn.functional as F
 
 from lucid import register_model
 from lucid._tensor import Tensor
+
+
+__all__ = ["SwinTransformer", "swin_tiny", "swin_small", "swin_base", "swin_large"]
 
 
 def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
@@ -298,7 +300,7 @@ class _PatchMerging(nn.Module):
         return x
 
 
-class _BaseLayer(nn.Module):
+class _BasicLayer(nn.Module):
     def __init__(
         self,
         dim: int,
@@ -332,7 +334,7 @@ class _BaseLayer(nn.Module):
                 qk_scale=qk_scale,
                 drop=drop,
                 attn_drop=attn_drop,
-                drop_path=drop_path[i] if isinstance(drop_path, list) else drop,
+                drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                 norm_layer=norm_layer,
             )
             for i in range(depth)
@@ -377,8 +379,193 @@ class _PatchEmbed(nn.Module):
         self.in_channels = in_channels
         self.embed_dim = embed_dim
 
-        ...
+        self.proj = nn.Conv2d(
+            in_channels, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
+        if norm_layer is not None:
+            self.norm = norm_layer(embed_dim)
+        else:
+            self.norm = None
+
+    def forward(self, x: Tensor) -> Tensor:
+        _, _, H, W = x.shape
+        assert H == self.img_size[0] and W == self.img_size[1], (
+            f"Input image size ({H}*{W}) doesn't match model "
+            + f"({self.img_size[0]}*{self.img_size[1]})."
+        )
+        x = self.proj(x)
+        x = x.reshape(*x.shape[:2], -1).swapaxes(1, 2)
+
+        if self.norm is not None:
+            x = self.norm(x)
+
+        return x
 
 
 class SwinTransformer(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        img_size: int = 224,
+        patch_size: int = 4,
+        in_channels: int = 3,
+        num_classes: int = 1000,
+        embed_dim: int = 96,
+        depths: list[int] = [2, 2, 6, 2],
+        num_heads: list[int] = [3, 6, 12, 24],
+        windows_size: int = 7,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = True,
+        qk_scale: float | None = None,
+        drop_rate: float = 0.0,
+        attn_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.1,
+        norm_layer: Type[nn.Module] = nn.LayerNorm,
+        abs_pos_emb: bool = False,
+        patch_norm: bool = True,
+    ) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        self.num_layers = len(depths)
+        self.embed_dim = embed_dim
+        self.abs_pos_emb = abs_pos_emb
+        self.patch_norm = patch_norm
+        self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
+        self.mlp_ratio = mlp_ratio
+
+        self.patch_embed = _PatchEmbed(
+            img_size,
+            patch_size,
+            in_channels,
+            embed_dim,
+            norm_layer=norm_layer if self.patch_norm else None,
+        )
+        num_patches = self.patch_embed.num_patches
+        patches_res = self.patch_embed.patches_res
+        self.patches_res = patches_res
+
+        if self.abs_pos_emb:
+            self.absolute_pos_emb = nn.Parameter(lucid.zeros(1, num_patches, embed_dim))
+            nn.init.normal(self.absolute_pos_emb, std=0.02)
+
+        self.pos_drop = nn.Dropout(drop_rate)
+        dpr = [x.item() for x in lucid.linspace(0, drop_path_rate, sum(depths))]
+
+        self.layers = nn.ModuleList()
+        for i in range(self.num_layers):
+            layer = _BasicLayer(
+                dim=int(embed_dim * 2**i),
+                input_res=(patches_res[0] // (2**i), patches_res[1] // (2**i)),
+                depth=depths[i],
+                num_heads=num_heads[i],
+                window_size=windows_size,
+                mlp_ratio=self.mlp_ratio,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                drop=drop_rate,
+                attn_drop=attn_drop_rate,
+                drop_path=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
+                norm_layer=norm_layer,
+                downsample=_PatchMerging if i < self.num_layers - 1 else None,
+            )
+            self.layers.append(layer)
+
+        self.norm = norm_layer(self.num_features)
+        self.avgpool = nn.AdaptiveAvgPool1d(1)
+        self.head = (
+            nn.Linear(self.num_features, num_classes)
+            if num_classes > 0
+            else nn.Identity()
+        )
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module: nn.Module) -> None:
+        if isinstance(module, nn.Linear):
+            nn.init.normal(module.weight, std=0.02)
+            if module.bias is not None:
+                nn.init.constant(module.bias, 0)
+
+        elif isinstance(module, nn.LayerNorm):
+            nn.init.constant(module.bias, 0)
+            nn.init.constant(module.weight, 1.0)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.patch_embed(x)
+        if self.abs_pos_emb:
+            x += self.absolute_pos_emb
+        x = self.pos_drop(x)
+
+        for layer in self.layers:
+            x = layer(x)
+
+        x = self.norm(x)
+        x = self.avgpool(x.swapaxes(1, 2))
+
+        x = x.reshape(x.shape[0], -1)
+        x = self.head(x)
+
+        return x
+
+
+@register_model
+def swin_tiny(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer:
+    depths = [2, 2, 6, 2]
+    num_heads = [3, 6, 12, 24]
+    return SwinTransformer(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=96,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
+
+
+@register_model
+def swin_small(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer:
+    depths = [2, 2, 18, 2]
+    num_heads = [3, 6, 12, 24]
+    return SwinTransformer(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=96,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
+
+
+@register_model
+def swin_base(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer:
+    depths = [2, 2, 18, 2]
+    num_heads = [4, 8, 16, 32]
+    return SwinTransformer(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=128,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
+
+
+@register_model
+def swin_large(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer:
+    depths = [2, 2, 18, 2]
+    num_heads = [6, 12, 24, 48]
+    return SwinTransformer(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=192,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
