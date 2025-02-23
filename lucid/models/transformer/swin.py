@@ -264,15 +264,120 @@ class _SwinTransformerBlock(nn.Module):
 
 
 class _PatchMerging(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        input_res: tuple[int, int],
+        dim: int,
+        norm_layer: Type[nn.Module] = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        self.input_res = input_res
+        self.dim = dim
+
+        self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False)
+        self.norm = norm_layer(4 * dim)
+
+    def forward(self, x: Tensor) -> Tensor:
+        H, W = self.input_res
+        B, L, C = x.shape
+        assert L == H * W, "wrong input feature size."
+        assert H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even."
+
+        x = x.reshape(B, H, W, C)
+        x0 = x[:, 0::2, 0::2, :]
+        x1 = x[:, 1::2, 0::2, :]
+        x2 = x[:, 0::2, 1::2, :]
+        x3 = x[:, 1::2, 1::2, :]
+
+        x = lucid.concatenate([x0, x1, x2, x3], axis=-1)
+        x = x.reshape(B, -1, 4 * C)
+
+        x = self.norm(x)
+        x = self.reduction(x)
+
+        return x
 
 
 class _BaseLayer(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        dim: int,
+        input_res: tuple[int, int],
+        depth: int,
+        num_heads: int,
+        window_size: int,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = True,
+        qk_scale: float | None = None,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float | list[float] = 0.0,
+        norm_layer: Type[nn.Module] = nn.LayerNorm,
+        downsample: nn.Module | None = None,
+    ) -> None:
+        super().__init__()
+        self.dim = dim
+        self.input_res = input_res
+        self.depth = depth
+
+        blocks = [
+            _SwinTransformerBlock(
+                dim,
+                input_res,
+                num_heads,
+                window_size,
+                shift_size=0 if (i % 2 == 0) else window_size // 2,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                drop=drop,
+                attn_drop=attn_drop,
+                drop_path=drop_path[i] if isinstance(drop_path, list) else drop,
+                norm_layer=norm_layer,
+            )
+            for i in range(depth)
+        ]
+        self.blocks = nn.ModuleList(blocks)
+
+        self.downsample: nn.Module | None
+        if downsample is not None:
+            self.downsample = downsample(input_res, dim=dim, norm_layer=norm_layer)
+        else:
+            self.downsample = None
+
+    def forward(self, x: Tensor) -> Tensor:
+        for block in self.blocks:
+            x = block(x)
+
+        if self.downsample is not None:
+            x = self.downsample(x)
+
+        return x
 
 
 class _PatchEmbed(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        img_size: int = 224,
+        patch_size: int = 4,
+        in_channels: int = 3,
+        embed_dim: int = 96,
+        norm_layer: Type[nn.Module] | None = None,
+    ) -> None:
+        super().__init__()
+        img_size = _to_2tuple(img_size)
+        patch_size = _to_2tuple(patch_size)
+        patches_res = [img_size[0] // patch_size[0], img_size[1] // patch_size[1]]
+
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.patches_res = patches_res
+        self.num_patches = patches_res[0] * patches_res[1]
+
+        self.in_channels = in_channels
+        self.embed_dim = embed_dim
+
+        ...
 
 
 class SwinTransformer(nn.Module):
