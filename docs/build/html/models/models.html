@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/models.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.models - Lucid 1.20.1 documentation</title>
+        <title>lucid.models - Lucid 1.20.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Lucid 1.20.1 documentation</div></a>
+      <a href="../index.html"><div class="brand">Lucid 1.20.5 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 1.20.1 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.20.5 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -272,6 +272,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../tensor/utilities/triu.html">lucid.triu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../tensor/utilities/broadcast_to.html">lucid.broadcast_to</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../tensor/utilities/chunk.html">lucid.chunk</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tensor/utilities/masked_fill.html">lucid.masked_fill</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tensor/utilities/roll.html">lucid.roll</a></li>
 </ul>
 </li>
 </ul>
@@ -761,6 +763,13 @@
 <li class="toctree-l3"><a class="reference internal" href="transformer/vit/vit_huge.html">vit_huge</a></li>
 </ul>
 </li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="transformer/swin/SwinTransformer.html">Swin</a><input class="toctree-checkbox" id="toctree-checkbox-62" name="toctree-checkbox-62" role="switch" type="checkbox"/><label for="toctree-checkbox-62"><div class="visually-hidden">Toggle navigation of Swin</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="transformer/swin/swin_tiny.html">swin_tiny</a></li>
+<li class="toctree-l3"><a class="reference internal" href="transformer/swin/swin_small.html">swin_small</a></li>
+<li class="toctree-l3"><a class="reference internal" href="transformer/swin/swin_base.html">swin_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="transformer/swin/swin_large.html">swin_large</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -769,7 +778,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-62" name="toctree-checkbox-62" role="switch" type="checkbox"/><label for="toctree-checkbox-62"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-63" name="toctree-checkbox-63" role="switch" type="checkbox"/><label for="toctree-checkbox-63"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -2082,6 +2091,54 @@ Image Recognition at Scale.” <em>International Conference on Learning Represen
 </table>
 </div>
 <p class="rubric">Swin Transformer (SwinT)</p>
+<p>The Swin Transformer is a hierarchical vision transformer introduced by
+Liu et al. in 2021, designed for image recognition and dense prediction
+tasks using self-attention mechanisms within shifted local windows.
+Unlike traditional convolutional neural networks (CNNs) and the original
+Vision Transformer (ViT)—which splits an image into fixed-size patches
+and processes them as a flat sequence—the Swin Transformer divides the
+image into non-overlapping local windows and computes self-attention
+within each window.</p>
+<p>Liu, Ze, et al. “Swin Transformer: Hierarchical Vision Transformer using
+Shifted Windows.” arXiv preprint arXiv:2103.14030 (2021).</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-left">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Model</p></th>
+<th class="head"><p>Input Shape</p></th>
+<th class="head"><p>Parameter Count</p></th>
+<th class="head"><p>Implemented</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Swin-T</p></td>
+<td><p><a class="reference external" href="transformer/swin/swin_tiny">Swin-T</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>28,288,354</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p>Swin-S</p></td>
+<td><p><a class="reference external" href="transformer/swin/swin_small">Swin-S</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>49,606,258</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-even"><td><p>Swin-B</p></td>
+<td><p><a class="reference external" href="transformer/swin/swin_base">Swin-Base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>87,768,224</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p>Swin-L</p></td>
+<td><p><a class="reference external" href="transformer/swin/swin_large">Swin-L</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>196,532,476</p></td>
+<td><p>✅</p></td>
+</tr>
+</tbody>
+</table>
+</div>
 <p><em>To be implemented…🔮</em></p>
 </section>
 </section>
@@ -2155,7 +2212,7 @@ Image Recognition at Scale.” <em>International Conference on Learning Represen
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=8e1671ee"></script>
+</div><script src="../_static/documentation_options.js?v=72676b49"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>

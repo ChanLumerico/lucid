@@ -22,3 +22,5 @@ Tensor Utilites
    triu.rst
    broadcast_to.rst
    chunk.rst
+   masked_fill.rst
+   roll.rst

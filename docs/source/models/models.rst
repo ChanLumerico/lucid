@@ -1189,4 +1189,50 @@ layers to capture global dependencies.
 
 .. rubric:: Swin Transformer (SwinT)
 
+The Swin Transformer is a hierarchical vision transformer introduced by 
+Liu et al. in 2021, designed for image recognition and dense prediction 
+tasks using self-attention mechanisms within shifted local windows. 
+Unlike traditional convolutional neural networks (CNNs) and the original 
+Vision Transformer (ViT)—which splits an image into fixed-size patches 
+and processes them as a flat sequence—the Swin Transformer divides the 
+image into non-overlapping local windows and computes self-attention 
+within each window.
+
+Liu, Ze, et al. "Swin Transformer: Hierarchical Vision Transformer using 
+Shifted Windows." arXiv preprint arXiv:2103.14030 (2021).
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - Swin-T
+      - `Swin-T <transformer/swin/swin_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 28,288,354
+      - ✅
+    
+    * - Swin-S
+      - `Swin-S <transformer/swin/swin_small>`_
+      - :math:`(N,3,224,224)`
+      - 49,606,258
+      - ✅
+    
+    * - Swin-B
+      - `Swin-Base <transformer/swin/swin_base>`_
+      - :math:`(N,3,224,224)`
+      - 87,768,224
+      - ✅
+    
+    * - Swin-L
+      - `Swin-L <transformer/swin/swin_large>`_
+      - :math:`(N,3,224,224)`
+      - 196,532,476
+      - ✅
+
 *To be implemented...🔮*
