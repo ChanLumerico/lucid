@@ -1198,8 +1198,14 @@ and processes them as a flat sequence—the Swin Transformer divides the
 image into non-overlapping local windows and computes self-attention 
 within each window.
 
-Liu, Ze, et al. "Swin Transformer: Hierarchical Vision Transformer using 
-Shifted Windows." arXiv preprint arXiv:2103.14030 (2021).
+ *Swin Transformer*
+
+ Liu, Ze, et al. "Swin Transformer: Hierarchical Vision Transformer using 
+ Shifted Windows." arXiv preprint arXiv:2103.14030 (2021).
+
+ *Swin Transformer-v2*
+
+ (Not yet ...)
 
 .. list-table::
     :header-rows: 1
@@ -1224,7 +1230,7 @@ Shifted Windows." arXiv preprint arXiv:2103.14030 (2021).
       - ✅
     
     * - Swin-B
-      - `Swin-Base <transformer/swin/swin_base>`_
+      - `Swin-B <transformer/swin/swin_base>`_
       - :math:`(N,3,224,224)`
       - 87,768,224
       - ✅

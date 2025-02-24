@@ -11,9 +11,6 @@ SwinTransformer
     swin_large.rst
 
 .. autoclass:: lucid.models.SwinTransformer
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 The `SwinTransformer` class implements a hierarchical vision transformer with shifted
 windows, designed for image recognition and dense prediction tasks. Unlike the original

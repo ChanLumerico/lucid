@@ -6,4 +6,4 @@ Transformers
 
     Transformer <base/Transformer.rst>
     ViT <vit/ViT.rst>
-    Swin <swin/SwinTransformer.rst>
+    Swin Transformer <swin/SwinTransformer.rst>
