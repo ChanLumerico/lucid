@@ -7,6 +7,7 @@ Tensor Operations
 
    ufunc/exp.rst
    ufunc/log.rst
+   ufunc/log2.rst
    ufunc/sqrt.rst
    ufunc/sin.rst
    ufunc/cos.rst

@@ -5,6 +5,15 @@ from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
 
 
+def normalize(
+    input_: Tensor, ord: int = 2, axis: int = 1, eps: float = 1e-12
+) -> Tensor:
+    norm = lucid.sum(lucid.abs(input_) ** ord, axis=axis, keepdims=True) ** (1 / ord)
+    norm = lucid.maximum(norm, lucid.tensor(eps))
+
+    return input_ / norm
+
+
 def batch_norm(
     input_: Tensor,
     running_mean: Tensor | None,

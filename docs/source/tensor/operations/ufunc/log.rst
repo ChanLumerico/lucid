@@ -4,7 +4,7 @@ lucid.log
 .. autofunction:: lucid.log
 
 The `log` function computes the natural logarithm (base e) 
-of each element in the input tensor, similar to NumPy’s `np.log`.
+of each element in the input tensor.
 
 Function Signature
 ------------------

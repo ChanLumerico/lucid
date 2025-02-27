@@ -1187,7 +1187,7 @@ layers to capture global dependencies.
       - 632,199,400
       - ✅
 
-.. rubric:: Swin Transformer (SwinT)
+.. rubric:: Swin Transformer
 
 The Swin Transformer is a hierarchical vision transformer introduced by 
 Liu et al. in 2021, designed for image recognition and dense prediction 

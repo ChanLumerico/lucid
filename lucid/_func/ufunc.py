@@ -47,6 +47,16 @@ def log(self: Tensor) -> _FuncOpReturnType:
 
 
 @create_ufunc_op()
+def log2(self: Tensor) -> _FuncOpReturnType:
+    result = Tensor(np.log2(self.data))
+
+    def compute_grad() -> _NumPyArray:
+        return (1 / (self.data * np.log(2))) * result.grad
+
+    return result, compute_grad
+
+
+@create_ufunc_op()
 def sqrt(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.sqrt(self.data))
 
@@ -147,7 +157,7 @@ def tanh(self: Tensor) -> _FuncOpReturnType:
 
 
 @create_ufunc_op()
-def clip(self: Tensor, min_value: float, max_value: float) -> _FuncOpReturnType:
+def clip(self: Tensor, min_value: float | None, max_value: float) -> _FuncOpReturnType:
     result = Tensor(np.clip(self.data, min_value, max_value))
 
     def compute_grad() -> _NumPyArray:

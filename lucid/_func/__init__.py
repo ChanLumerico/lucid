@@ -58,6 +58,10 @@ def log(a: Tensor) -> Tensor:
     return ufunc.log(a)
 
 
+def log2(a: Tensor) -> Tensor:
+    return ufunc.log2(a)
+
+
 def sqrt(a: Tensor) -> Tensor:
     return ufunc.sqrt(a)
 
@@ -98,7 +102,12 @@ def tanh(a: Tensor) -> Tensor:
     return ufunc.tanh(a)
 
 
-def clip(a: Tensor, min_value: _Scalar, max_value: _Scalar) -> Tensor:
+def clip(a: Tensor, min_value: _Scalar | None, max_value: _Scalar | None) -> Tensor:
+    if min_value is None:
+        min_value = lucid.min(a).item()
+    if max_value is None:
+        max_value = lucid.max(a).item()
+
     return ufunc.clip(a, min_value, max_value)
 
 

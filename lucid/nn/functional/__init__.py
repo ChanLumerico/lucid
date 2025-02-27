@@ -203,6 +203,12 @@ def drop_path(input_: Tensor, p: float = 0.1, scale_by_keep: bool = True) -> Ten
     return _drop.drop_path(input_, p, scale_by_keep)
 
 
+def normalize(
+    input_: Tensor, ord: int = 2, axis: int = 1, eps: float = 1e-12
+) -> Tensor:
+    return _norm.normalize(input_, ord, axis, eps)
+
+
 def batch_norm(
     input_: Tensor,
     running_mean: Tensor | None = None,
