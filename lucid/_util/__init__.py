@@ -107,3 +107,4 @@ Tensor.triu = func.triu
 Tensor.broadcast_to = func.broadcast_to
 Tensor.chunk = func.chunk
 Tensor.masked_fill = func.masked_fill
+Tensor.roll = func.roll

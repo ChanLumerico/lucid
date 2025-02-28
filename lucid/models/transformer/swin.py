@@ -1,4 +1,4 @@
-from typing import Type
+from typing import ClassVar, Literal, Type, override
 
 import lucid
 import lucid.nn as nn
@@ -8,7 +8,20 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["SwinTransformer", "swin_tiny", "swin_small", "swin_base", "swin_large"]
+__all__ = [
+    "SwinTransformer",
+    "SwinTransformer_V2",
+    "swin_tiny",
+    "swin_small",
+    "swin_base",
+    "swin_large",
+    "swin_v2_tiny",
+    "swin_v2_small",
+    "swin_v2_base",
+    "swin_v2_large",
+    "swin_v2_huge",
+    "swin_v2_giant",
+]
 
 
 def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
@@ -225,6 +238,7 @@ class _SwinTransformerBlock(nn.Module):
         else:
             attn_mask = None
 
+        self.attn_mask: nn.Buffer
         self.register_buffer("attn_mask", attn_mask)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -317,14 +331,16 @@ class _BasicLayer(nn.Module):
         drop_path: float | list[float] = 0.0,
         norm_layer: Type[nn.Module] = nn.LayerNorm,
         downsample: nn.Module | None = None,
+        _version: Literal["v1", "v2"] = "v1",
     ) -> None:
         super().__init__()
         self.dim = dim
         self.input_res = input_res
         self.depth = depth
 
+        swin_block_dict = {"v1": _SwinTransformerBlock, "v2": _SwinTransformerBlock_V2}
         blocks = [
-            _SwinTransformerBlock(
+            swin_block_dict[_version](
                 dim,
                 input_res,
                 num_heads,
@@ -356,6 +372,14 @@ class _BasicLayer(nn.Module):
             x = self.downsample(x)
 
         return x
+
+    def _init_res_post_norm(self) -> None:
+        for block in self.blocks:
+            nn.init.constant(block.norm1.bias, 0)
+            nn.init.constant(block.norm1.weight, 0)
+
+            nn.init.constant(block.norm2.bias, 0)
+            nn.init.constant(block.norm2.weight, 0)
 
 
 class _PatchEmbed(nn.Module):
@@ -404,6 +428,8 @@ class _PatchEmbed(nn.Module):
 
 
 class SwinTransformer(nn.Module):
+    _version: ClassVar[str] = "v1"
+
     def __init__(
         self,
         img_size: int = 224,
@@ -467,6 +493,7 @@ class SwinTransformer(nn.Module):
                 drop_path=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
                 downsample=_PatchMerging if i < self.num_layers - 1 else None,
+                _version=self._version,
             )
             self.layers.append(layer)
 
@@ -593,9 +620,7 @@ class _WindowAttention_V2(nn.Module):
             q, k, v = qkv[0], qkv[1], qkv[2]
 
             attn = F.normalize(q, axis=-1) @ F.normalize(k, axis=-1).mT
-            logit_scale = lucid.clip(
-                self.logit_scale, max_value=lucid.log(100.0).item()
-            )
+            logit_scale = lucid.clip(self.logit_scale, None, lucid.log(100.0).item())
             attn *= lucid.exp(logit_scale)
 
             rel_pos_bias_table = self.cpb_mlp(self.rel_coords_table).reshape(
@@ -617,7 +642,7 @@ class _WindowAttention_V2(nn.Module):
                 nW = mask.shape[0]
                 attn = attn.reshape(
                     B_ // nW, nW, self.num_heads, N, N
-                ) + mask.unsqueeze(axis=(0, 1))
+                ) + mask.unsqueeze(axis=1).unsqueeze(axis=0)
 
                 attn = attn.reshape(-1, self.num_heads, N, N)
                 attn = self.softmax(attn)
@@ -631,6 +656,125 @@ class _WindowAttention_V2(nn.Module):
             x = self.proj_drop(x)
 
             return x
+
+
+class _SwinTransformerBlock_V2(_SwinTransformerBlock):
+    def __init__(
+        self,
+        dim: int,
+        input_res: tuple[int, int],
+        num_heads: int,
+        window_size: int = 7,
+        shift_size: int = 0,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = True,
+        qk_scale: float | None = None,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float = 0.0,
+        act_layer: Type[nn.Module] = nn.GELU,
+        norm_layer: Type[nn.Module] = nn.LayerNorm,
+    ) -> None:
+        super().__init__(
+            dim,
+            input_res,
+            num_heads,
+            window_size,
+            shift_size,
+            mlp_ratio,
+            qkv_bias,
+            qk_scale,
+            drop,
+            attn_drop,
+            drop_path,
+            act_layer,
+            norm_layer,
+        )
+        self.attn = _WindowAttention_V2(
+            dim,
+            window_size=_to_2tuple(self.window_size),
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=drop,
+        )
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:
+        H, W = self.input_res
+        B, L, C = x.shape
+        assert L == H * W, "wrong input feature size."
+
+        shortcut = x
+        x = x.reshape(B, H, W, C)
+
+        if self.shift_size > 0:
+            shifted_x = x.roll((-self.shift_size, -self.shift_size), axis=(1, 2))
+        else:
+            shifted_x = x
+
+        x_windows = window_partition(shifted_x, self.window_size)
+        x_windows = x_windows.reshape(-1, self.window_size * self.window_size, C)
+
+        attn_windows = self.attn(x_windows, mask=self.attn_mask)
+        shifted_x = window_reverse(attn_windows, self.window_size, H, W)
+
+        if self.shift_size > 0:
+            x = shifted_x.roll((self.shift_size, self.shift_size), axis=(1, 2))
+        else:
+            x = shifted_x
+
+        x = x.reshape(B, H * W, C)
+        x = shortcut + self.drop_path(self.norm1(x))
+        x += self.drop_path(self.norm2(self.mlp(x)))
+
+        return x
+
+
+class SwinTransformer_V2(SwinTransformer):
+    _version: ClassVar[str] = "v2"
+
+    def __init__(
+        self,
+        img_size: int = 224,
+        patch_size: int = 4,
+        in_channels: int = 3,
+        num_classes: int = 1000,
+        embed_dim: int = 96,
+        depths: list[int] = [2, 2, 6, 2],
+        num_heads: list[int] = [3, 6, 12, 24],
+        windows_size: int = 7,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = True,
+        qk_scale: float | None = None,
+        drop_rate: float = 0.0,
+        attn_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.1,
+        norm_layer: Type[nn.Module] = nn.LayerNorm,
+        abs_pos_emb: bool = False,
+        patch_norm: bool = True,
+    ) -> None:
+        super().__init__(
+            img_size,
+            patch_size,
+            in_channels,
+            num_classes,
+            embed_dim,
+            depths,
+            num_heads,
+            windows_size,
+            mlp_ratio,
+            qkv_bias,
+            qk_scale,
+            drop_rate,
+            attn_drop_rate,
+            drop_path_rate,
+            norm_layer,
+            abs_pos_emb,
+            patch_norm,
+        )
+        for layer in self.layers:
+            layer._init_res_post_norm()
 
 
 @register_model
@@ -695,3 +839,73 @@ def swin_large(
         num_heads=num_heads,
         **kwargs,
     )
+
+
+@register_model
+def swin_v2_tiny(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer_V2:
+    depths = [2, 2, 6, 2]
+    num_heads = [3, 6, 12, 24]
+    return SwinTransformer_V2(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=96,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
+
+
+@register_model
+def swin_v2_small(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer_V2:
+    depths = [2, 2, 18, 2]
+    num_heads = [3, 6, 12, 24]
+    return SwinTransformer_V2(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=96,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
+
+
+@register_model
+def swin_v2_base(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer_V2:
+    depths = [2, 2, 18, 2]
+    num_heads = [4, 8, 16, 32]
+    return SwinTransformer_V2(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=128,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
+
+
+@register_model
+def swin_v2_large(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer_V2:
+    depths = [2, 2, 18, 2]
+    num_heads = [6, 12, 24, 48]
+    return SwinTransformer_V2(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=192,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
+
+
+def swin_v2_huge(): ...
+
+
+def swin_v2_giant(): ...

@@ -676,5 +676,29 @@
         "family": "SwinTransformer",
         "param_size": 196532476,
         "arch": "transformer"
+    },
+    "swin_v2_tiny": {
+        "name": "swin_v2_tiny",
+        "family": "SwinTransformer_V2",
+        "param_size": 28349842,
+        "arch": "transformer"
+    },
+    "swin_v2_small": {
+        "name": "swin_v2_small",
+        "family": "SwinTransformer_V2",
+        "param_size": 49731106,
+        "arch": "transformer"
+    },
+    "swin_v2_base": {
+        "name": "swin_v2_base",
+        "family": "SwinTransformer_V2",
+        "param_size": 87922400,
+        "arch": "transformer"
+    },
+    "swin_v2_large": {
+        "name": "swin_v2_large",
+        "family": "SwinTransformer_V2",
+        "param_size": 196745308,
+        "arch": "transformer"
     }
 }
