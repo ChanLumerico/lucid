@@ -1288,4 +1288,6 @@ within each window.
       - 3,000,869,564
       - ✅
 
+.. rubric:: Convolutional Transformer (CvT)
+
 *To be implemented...🔮*
