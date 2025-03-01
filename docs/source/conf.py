@@ -15,7 +15,7 @@ os.environ["SPHINX_BUILD"] = "1"
 project = "Lucid"
 copyright = "2025, ChanLumerico"
 author = "ChanLumerico"
-release = "1.20.5"
+release = "1.20.11"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

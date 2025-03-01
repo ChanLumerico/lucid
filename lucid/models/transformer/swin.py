@@ -905,7 +905,33 @@ def swin_v2_large(
     )
 
 
-def swin_v2_huge(): ...
+@register_model
+def swin_v2_huge(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer_V2:
+    depths = [2, 2, 18, 2]
+    num_heads = [6, 12, 24, 48]
+    return SwinTransformer_V2(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=352,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
 
 
-def swin_v2_giant(): ...
+@register_model
+def swin_v2_giant(
+    img_size: int = 224, num_classes: int = 1000, **kwargs
+) -> SwinTransformer_V2:
+    depths = [2, 2, 42, 4]
+    num_heads = [6, 12, 24, 48]
+    return SwinTransformer_V2(
+        img_size,
+        num_classes=num_classes,
+        embed_dim=512,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )

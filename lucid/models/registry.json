@@ -700,5 +700,17 @@
         "family": "SwinTransformer_V2",
         "param_size": 196745308,
         "arch": "transformer"
+    },
+    "swin_v2_huge": {
+        "name": "swin_v2_huge",
+        "family": "SwinTransformer_V2",
+        "param_size": 657796668,
+        "arch": "transformer"
+    },
+    "swin_v2_giant": {
+        "name": "swin_v2_giant",
+        "family": "SwinTransformer_V2",
+        "param_size": 3000869564,
+        "arch": "transformer"
     }
 }

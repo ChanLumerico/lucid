@@ -1187,7 +1187,7 @@ layers to capture global dependencies.
       - 632,199,400
       - ✅
 
-.. rubric:: Swin Transformer (SwinT)
+.. rubric:: Swin Transformer
 
 The Swin Transformer is a hierarchical vision transformer introduced by 
 Liu et al. in 2021, designed for image recognition and dense prediction 
@@ -1205,7 +1205,8 @@ within each window.
 
  *Swin Transformer-v2*
 
- (Not yet ...)
+ Liu, Ze, et al. "Swin Transformer V2: Scaling Up Capacity and Resolution." 
+ arXiv preprint arXiv:2111.09883 (2021).
 
 .. list-table::
     :header-rows: 1
@@ -1218,27 +1219,73 @@ within each window.
       - Implemented
     
     * - Swin-T
-      - `Swin-T <transformer/swin/swin_tiny>`_
+      - `swin_tiny <transformer/swin/swin_tiny>`_
       - :math:`(N,3,224,224)`
       - 28,288,354
       - ✅
     
     * - Swin-S
-      - `Swin-S <transformer/swin/swin_small>`_
+      - `swin_small <transformer/swin/swin_small>`_
       - :math:`(N,3,224,224)`
       - 49,606,258
       - ✅
     
     * - Swin-B
-      - `Swin-B <transformer/swin/swin_base>`_
+      - `swin_base <transformer/swin/swin_base>`_
       - :math:`(N,3,224,224)`
       - 87,768,224
       - ✅
     
     * - Swin-L
-      - `Swin-L <transformer/swin/swin_large>`_
+      - `swin_large <transformer/swin/swin_large>`_
       - :math:`(N,3,224,224)`
       - 196,532,476
+      - ✅
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - Swin-v2-T
+      - `swin_v2_tiny <transformer/swin/swin_v2_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 28,349,842
+      - ✅
+    
+    * - Swin-v2-S
+      - `swin_v2_small <transformer/swin/swin_v2_small>`_
+      - :math:`(N,3,224,224)`
+      - 49,731,106
+      - ✅
+    
+    * - Swin-v2-B
+      - `swin_v2_base <transformer/swin/swin_v2_base>`_
+      - :math:`(N,3,224,224)`
+      - 87,922,400
+      - ✅
+    
+    * - Swin-v2-L
+      - `swin_v2_large <transformer/swin/swin_v2_large>`_
+      - :math:`(N,3,224,224)`
+      - 196,745,308
+      - ✅
+    
+    * - Swin-v2-H
+      - `swin_v2_huge <transformer/swin/swin_v2_huge>`_
+      - :math:`(N,3,224,224)`
+      - 657,796,668
+      - ✅
+    
+    * - Swin-v2-G
+      - `swin_v2_giant <transformer/swin/swin_v2_giant>`_
+      - :math:`(N,3,224,224)`
+      - 3,000,869,564
       - ✅
 
 *To be implemented...🔮*
