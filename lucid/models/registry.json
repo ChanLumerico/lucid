@@ -712,5 +712,17 @@
         "family": "SwinTransformer_V2",
         "param_size": 3000869564,
         "arch": "transformer"
+    },
+    "cvt_13": {
+        "name": "cvt_13",
+        "family": "CvT",
+        "param_size": 19997480,
+        "arch": "transformer"
+    },
+    "cvt_21": {
+        "name": "cvt_21",
+        "family": "CvT",
+        "param_size": 31622696,
+        "arch": "transformer"
     }
 }
