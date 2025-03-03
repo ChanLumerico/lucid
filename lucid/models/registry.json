@@ -724,5 +724,11 @@
         "family": "CvT",
         "param_size": 31622696,
         "arch": "transformer"
+    },
+    "cvt_w24": {
+        "name": "cvt_w24",
+        "family": "CvT",
+        "param_size": 277196392,
+        "arch": "transformer"
     }
 }

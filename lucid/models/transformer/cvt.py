@@ -499,4 +499,22 @@ def cvt_21(num_classes: int = 1000, **kwargs) -> CvT:
 
 
 @register_model
-def cvt_w24(num_classes: int = 1000, **kwargs) -> CvT: ...
+def cvt_w24(num_classes: int = 1000, **kwargs) -> CvT:
+    spec = CvTSpec(
+        num_stages=3,
+        patch_size=[7, 3, 3],
+        patch_stride=[4, 2, 2],
+        patch_padding=[2, 1, 1],
+        dim_embed=[192, 768, 1024],
+        num_heads=[3, 12, 16],
+        depth=[2, 2, 20],
+        drop_path_rate=[0.0, 0.0, 0.3],
+        **kwargs,
+    )
+    return CvT(
+        in_channels=3,
+        num_classes=num_classes,
+        act_layer=_QuickGELU,
+        norm_layer=partial(nn.LayerNorm, eps=1e-5),
+        spec=spec,
+    )
