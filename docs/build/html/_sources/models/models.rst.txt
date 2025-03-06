@@ -1328,4 +1328,6 @@ dense prediction tasks.
       - 277,196,392
       - ✅
 
+.. rubric:: Pyramid Vision Transformer (PVT)
+
 *To be implemented...🔮*
