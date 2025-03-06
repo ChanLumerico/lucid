@@ -1290,4 +1290,42 @@ within each window.
 
 .. rubric:: Convolutional Transformer (CvT)
 
+CvT (Convolutional Vision Transformer) combines self-attention with depthwise 
+convolutions to improve local feature extraction and computational efficiency. 
+This hybrid design retains the global modeling capabilities of Vision Transformers 
+while enhancing inductive biases, making it effective for image classification and 
+dense prediction tasks.
+
+ Wu, Haiping, et al. "CvT: Introducing Convolutions to Vision Transformers." 
+ *Proceedings of the IEEE/CVF International Conference on Computer Vision*, 
+ 2021, pp. 22-31.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - CvT-13
+      - `cvt_13 <transformer/cvt/cvt_13>`_
+      - :math:`(N,3,224,224)`
+      - 19,997,480
+      - ✅
+    
+    * - CvT-21
+      - `cvt_21 <transformer/cvt/cvt_21>`_
+      - :math:`(N,3,224,224)`
+      - 31,622,696
+      - ✅
+    
+    * - CvT-W24
+      - `cvt_w24 <transformer/cvt/cvt_w24>`_
+      - :math:`(N,3,384,384)`
+      - 277,196,392
+      - ✅
+
 *To be implemented...🔮*
