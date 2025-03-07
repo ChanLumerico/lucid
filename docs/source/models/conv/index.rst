@@ -29,7 +29,8 @@ ConvNets
     InceptionNeXt <inception_next/InceptionNeXt.rst>
     CoAtNet <coatnet/CoAtNet.rst>
 
-.. rubric:: LeNet
+LeNet
+-----
 
 LeNet is a pioneering CNN by Yann LeCun for digit recognition, 
 combining convolutional, pooling, and fully connected layers. 
@@ -68,7 +69,8 @@ shaping modern CNNs.
       - 61,706
       - ✅
 
-.. rubric:: AlexNet
+AlexNet
+-------
 
 AlexNet is a pioneering convolutional neural network introduced in 2012, 
 known for its deep architecture and use of ReLU activations, dropout, and GPU acceleration. 
@@ -94,7 +96,8 @@ Challenge (ILSVRC) in 2012, popularizing deep learning for computer vision.
       - 61,100,840
       - ✅
 
-.. rubric:: ZFNet
+ZFNet
+-----
 
 ZFNet (Zeiler and Fergus Net) is a convolutional neural network that improved upon 
 AlexNet by using smaller convolutional filters and visualizing learned features to 
@@ -121,7 +124,8 @@ recognition and provided insights into deep learning interpretability.
       - 62,357,608
       - ✅
 
-.. rubric:: VGGNet
+VGGNet
+------
 
 VGGNet is a deep convolutional neural network known for its simplicity and use of 
 small 3x3 convolutional filters, which significantly improved object recognition accuracy.
@@ -163,7 +167,8 @@ small 3x3 convolutional filters, which significantly improved object recognition
       - 143,667,240
       - ✅
 
-.. rubric:: Inception
+Inception
+---------
 
 The Inception architecture, introduced in the GoogLeNet model, is a deep convolutional 
 neural network designed for efficient feature extraction using parallel convolutional and 
@@ -202,7 +207,8 @@ tasks.
       - 40,586,984
       - ✅
 
-.. rubric:: Inception-ResNet
+Inception-ResNet
+----------------
 
 The Inception-ResNet architecture builds upon the Inception model by integrating 
 residual connections, which improve gradient flow and training stability in very 
@@ -236,7 +242,8 @@ for a wide range of image classification tasks.
       - 35,847,512
       - ✅
 
-.. rubric:: ResNet
+ResNet
+------
 
 ResNets (Residual Networks) are deep neural network architectures that use skip 
 connections (residual connections) to alleviate the vanishing gradient problem, 
@@ -331,7 +338,8 @@ accuracy in tasks like image classification and object detection.
       - 126,886,696
       - ✅
 
-.. rubric:: ResNeXt
+ResNeXt
+-------
 
 ResNeXt is an extension of the ResNet architecture that introduces a cardinality dimension 
 to the model, improving its performance and efficiency by allowing flexible aggregation of 
@@ -388,7 +396,8 @@ enabling parallel pathways for feature learning.
       - 83,455,272
       - ✅
 
-.. rubric:: SENet
+SENet
+-----
 
 SENets (Squeeze-and-Excitation Networks) are deep neural network architectures that enhance t
 he representational power of models by explicitly modeling channel interdependencies. 
@@ -472,7 +481,8 @@ feature responses.
       - 88,232,984
       - ✅
 
-.. rubric:: SKNet
+SKNet
+-----
 
 SKNet (Selective Kernel Networks) is a deep learning architecture that enhances the 
 representational capacity of neural networks by enabling dynamic selection of kernel sizes 
@@ -527,7 +537,8 @@ each spatial location in an image, improving its ability to capture multi-scale 
       - 29,274,760
       - ✅
 
-.. rubric:: DenseNet
+DenseNet
+--------
 
 A deep learning architecture designed to improve the flow of information and gradients 
 in neural networks by introducing dense connectivity between layers. It leverages the 
@@ -573,7 +584,8 @@ of parameters, and improves the efficiency of gradient propagation during traini
       - 33,337,704
       - ✅
 
-.. rubric:: Xception
+Xception
+--------
 
 A deep learning architecture that introduces depthwise separable convolutions 
 to enhance efficiency and accuracy in convolutional neural networks. It builds 
@@ -600,7 +612,8 @@ reducing computational cost while maintaining performance.
       - 22,862,096
       - ✅
 
-.. rubric:: MobileNet
+MobileNet
+---------
 
 A deep learning architecture that introduces depthwise separable convolutions 
 to enhance efficiency and accuracy in convolutional neural networks. It builds 
@@ -705,7 +718,8 @@ reducing computational cost while maintaining performance.
       - 37,755,152
       - ✅
 
-.. rubric:: EfficientNet
+EfficientNet
+------------
 
 EfficientNet is a family of convolutional neural networks optimized for 
 scalability and performance by systematically balancing network depth, width, 
@@ -816,7 +830,8 @@ computational resources compared to previous architectures.
       - 210,221,568
       - ✅
 
-.. rubric:: ResNeSt
+ResNeSt
+-------
 
 ResNeSt introduces Split Attention Blocks, which divide feature maps into groups, 
 compute attention for each group, and reassemble them to enhance representational power. 
@@ -884,7 +899,8 @@ recognition tasks with minimal computational overhead.
       - 25,676,872
       - ✅
 
-.. rubric:: ConvNeXt
+ConvNeXt
+--------
 
 ConvNeXt reimagines CNNs using principles inspired by vision transformers, 
 streamlining architectural design while preserving the efficiency of traditional CNNs. 
@@ -998,7 +1014,8 @@ and expanded kernel sizes to enhance feature extraction.
       - 660,289,640
       - ✅
 
-.. rubric:: InceptionNeXt
+InceptionNeXt
+-------------
 
 InceptionNeXt extends the Inception architecture by incorporating modern design 
 principles inspired by vision transformers. It refines multi-scale feature extraction 
@@ -1044,7 +1061,8 @@ diverse vision tasks.
       - 86,748,840
       - ✅
 
-.. rubric:: CoAtNet
+CoAtNet
+-------
 
 CoAtNet extends the hybrid architecture paradigm by integrating convolutional 
 and transformer-based designs. It enhances representation learning through 

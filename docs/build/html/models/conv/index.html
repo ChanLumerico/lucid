@@ -179,7 +179,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -848,7 +848,7 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
@@ -858,7 +858,8 @@
 <h1>ConvNets<a class="headerlink" href="#convnets" title="Link to this heading">¶</a></h1>
 <div class="toctree-wrapper compound">
 </div>
-<p class="rubric">LeNet</p>
+<section id="lenet">
+<h2>LeNet<a class="headerlink" href="#lenet" title="Link to this heading">¶</a></h2>
 <p>LeNet is a pioneering CNN by Yann LeCun for digit recognition,
 combining convolutional, pooling, and fully connected layers.
 It introduced concepts like weight sharing and local receptive fields,
@@ -900,7 +901,9 @@ doi:10.1109/5.726791.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">AlexNet</p>
+</section>
+<section id="alexnet">
+<h2>AlexNet<a class="headerlink" href="#alexnet" title="Link to this heading">¶</a></h2>
 <p>AlexNet is a pioneering convolutional neural network introduced in 2012,
 known for its deep architecture and use of ReLU activations, dropout, and GPU acceleration.
 It achieved groundbreaking performance in the ImageNet Large Scale Visual Recognition
@@ -929,7 +932,9 @@ Challenge (ILSVRC) in 2012, popularizing deep learning for computer vision.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">ZFNet</p>
+</section>
+<section id="zfnet">
+<h2>ZFNet<a class="headerlink" href="#zfnet" title="Link to this heading">¶</a></h2>
 <p>ZFNet (Zeiler and Fergus Net) is a convolutional neural network that improved upon
 AlexNet by using smaller convolutional filters and visualizing learned features to
 better understand network behavior. It achieved state-of-the-art results in object
@@ -959,7 +964,9 @@ doi:10.1007/978-3-319-10590-1_53.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">VGGNet</p>
+</section>
+<section id="vggnet">
+<h2>VGGNet<a class="headerlink" href="#vggnet" title="Link to this heading">¶</a></h2>
 <p>VGGNet is a deep convolutional neural network known for its simplicity and use of
 small 3x3 convolutional filters, which significantly improved object recognition accuracy.</p>
 <blockquote>
@@ -1004,7 +1011,9 @@ Large-Scale Image Recognition.” <em>arXiv preprint arXiv:1409.1556</em>, 2014.
 </tbody>
 </table>
 </div>
-<p class="rubric">Inception</p>
+</section>
+<section id="inception">
+<h2>Inception<a class="headerlink" href="#inception" title="Link to this heading">¶</a></h2>
 <p>The Inception architecture, introduced in the GoogLeNet model, is a deep convolutional
 neural network designed for efficient feature extraction using parallel convolutional and
 pooling branches, reducing computational cost. It achieves this by combining multi-scale
@@ -1046,7 +1055,9 @@ Conference on Computer Vision and Pattern Recognition (CVPR)</em>, 2015, pp. 1-9
 </tbody>
 </table>
 </div>
-<p class="rubric">Inception-ResNet</p>
+</section>
+<section id="inception-resnet">
+<h2>Inception-ResNet<a class="headerlink" href="#inception-resnet" title="Link to this heading">¶</a></h2>
 <p>The Inception-ResNet architecture builds upon the Inception model by integrating
 residual connections, which improve gradient flow and training stability in very
 deep networks. This combination of Inception’s multi-scale feature processing with
@@ -1083,7 +1094,9 @@ Connections on Learning.” <em>Proceedings of the AAAI Conference on Artificial
 </tbody>
 </table>
 </div>
-<p class="rubric">ResNet</p>
+</section>
+<section id="resnet">
+<h2>ResNet<a class="headerlink" href="#resnet" title="Link to this heading">¶</a></h2>
 <p>ResNets (Residual Networks) are deep neural network architectures that use skip
 connections (residual connections) to alleviate the vanishing gradient problem,
 enabling the training of extremely deep models. They revolutionized deep learning
@@ -1184,7 +1197,9 @@ accuracy in tasks like image classification and object detection.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">ResNeXt</p>
+</section>
+<section id="resnext">
+<h2>ResNeXt<a class="headerlink" href="#resnext" title="Link to this heading">¶</a></h2>
 <p>ResNeXt is an extension of the ResNet architecture that introduces a cardinality dimension
 to the model, improving its performance and efficiency by allowing flexible aggregation of
 transformations. ResNeXt builds on residual blocks by incorporating grouped convolutions,
@@ -1244,7 +1259,9 @@ enabling parallel pathways for feature learning.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">SENet</p>
+</section>
+<section id="senet">
+<h2>SENet<a class="headerlink" href="#senet" title="Link to this heading">¶</a></h2>
 <p>SENets (Squeeze-and-Excitation Networks) are deep neural network architectures that enhance t
 he representational power of models by explicitly modeling channel interdependencies.
 They introduce a novel “squeeze-and-excitation” block, which adaptively recalibrates channel-wise
@@ -1335,7 +1352,9 @@ Computer Vision and Pattern Recognition (CVPR)</em>, 2018, pp. 7132-7141.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">SKNet</p>
+</section>
+<section id="sknet">
+<h2>SKNet<a class="headerlink" href="#sknet" title="Link to this heading">¶</a></h2>
 <p>SKNet (Selective Kernel Networks) is a deep learning architecture that enhances the
 representational capacity of neural networks by enabling dynamic selection of kernel sizes
 in convolutional layers. It introduces the concept of a “selective kernel” module,
@@ -1397,7 +1416,9 @@ IEEE International Conference on Computer Vision (ICCV), 2019, pp. 510-519.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">DenseNet</p>
+</section>
+<section id="densenet">
+<h2>DenseNet<a class="headerlink" href="#densenet" title="Link to this heading">¶</a></h2>
 <p>A deep learning architecture designed to improve the flow of information and gradients
 in neural networks by introducing dense connectivity between layers. It leverages the
 concept of “dense blocks,” where each layer is directly connected to all preceding layers
@@ -1446,7 +1467,9 @@ Computer Vision and Pattern Recognition (CVPR)</em>, 2017, pp. 4700-4708.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">Xception</p>
+</section>
+<section id="xception">
+<h2>Xception<a class="headerlink" href="#xception" title="Link to this heading">¶</a></h2>
 <p>A deep learning architecture that introduces depthwise separable convolutions
 to enhance efficiency and accuracy in convolutional neural networks. It builds
 on the idea that spatial and channel-wise information can be decoupled, significantly
@@ -1476,7 +1499,9 @@ reducing computational cost while maintaining performance.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">MobileNet</p>
+</section>
+<section id="mobilenet">
+<h2>MobileNet<a class="headerlink" href="#mobilenet" title="Link to this heading">¶</a></h2>
 <p>A deep learning architecture that introduces depthwise separable convolutions
 to enhance efficiency and accuracy in convolutional neural networks. It builds
 on the idea that spatial and channel-wise information can be decoupled, significantly
@@ -1581,7 +1606,9 @@ Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognitio
 </tbody>
 </table>
 </div>
-<p class="rubric">EfficientNet</p>
+</section>
+<section id="efficientnet">
+<h2>EfficientNet<a class="headerlink" href="#efficientnet" title="Link to this heading">¶</a></h2>
 <p>EfficientNet is a family of convolutional neural networks optimized for
 scalability and performance by systematically balancing network depth, width,
 and resolution. It achieves state-of-the-art accuracy with fewer parameters and
@@ -1696,7 +1723,9 @@ pp. 10096-10106.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">ResNeSt</p>
+</section>
+<section id="resnest">
+<h2>ResNeSt<a class="headerlink" href="#resnest" title="Link to this heading">¶</a></h2>
 <p>ResNeSt introduces Split Attention Blocks, which divide feature maps into groups,
 compute attention for each group, and reassemble them to enhance representational power.
 It extends ResNet by integrating these blocks, achieving improved performance in image
@@ -1767,7 +1796,9 @@ arXiv:2004.08955, 2020.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">ConvNeXt</p>
+</section>
+<section id="convnext">
+<h2>ConvNeXt<a class="headerlink" href="#convnext" title="Link to this heading">¶</a></h2>
 <p>ConvNeXt reimagines CNNs using principles inspired by vision transformers,
 streamlining architectural design while preserving the efficiency of traditional CNNs.
 It introduces design elements like simplified stem stages, inverted bottlenecks,
@@ -1885,7 +1916,9 @@ and expanded kernel sizes to enhance feature extraction.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">InceptionNeXt</p>
+</section>
+<section id="inceptionnext">
+<h2>InceptionNeXt<a class="headerlink" href="#inceptionnext" title="Link to this heading">¶</a></h2>
 <p>InceptionNeXt extends the Inception architecture by incorporating modern design
 principles inspired by vision transformers. It refines multi-scale feature extraction
 through dynamic kernel selection, depthwise convolutions, and enhanced normalization
@@ -1934,7 +1967,9 @@ diverse vision tasks.</p>
 </tbody>
 </table>
 </div>
-<p class="rubric">CoAtNet</p>
+</section>
+<section id="coatnet">
+<h2>CoAtNet<a class="headerlink" href="#coatnet" title="Link to this heading">¶</a></h2>
 <p>CoAtNet extends the hybrid architecture paradigm by integrating convolutional
 and transformer-based designs. It enhances representation learning through
 hierarchical feature extraction, leveraging early-stage depthwise convolutions
@@ -2009,6 +2044,7 @@ CoAtNet achieves superior efficiency and performance across various vision tasks
 </div>
 <p><em>To be implemented…🔮</em></p>
 </section>
+</section>
 
         </article>
       </div>
@@ -2053,8 +2089,44 @@ CoAtNet achieves superior efficiency and performance across various vision tasks
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">ConvNets</a><ul>
+<li><a class="reference internal" href="#lenet">LeNet</a></li>
+<li><a class="reference internal" href="#alexnet">AlexNet</a></li>
+<li><a class="reference internal" href="#zfnet">ZFNet</a></li>
+<li><a class="reference internal" href="#vggnet">VGGNet</a></li>
+<li><a class="reference internal" href="#inception">Inception</a></li>
+<li><a class="reference internal" href="#inception-resnet">Inception-ResNet</a></li>
+<li><a class="reference internal" href="#resnet">ResNet</a></li>
+<li><a class="reference internal" href="#resnext">ResNeXt</a></li>
+<li><a class="reference internal" href="#senet">SENet</a></li>
+<li><a class="reference internal" href="#sknet">SKNet</a></li>
+<li><a class="reference internal" href="#densenet">DenseNet</a></li>
+<li><a class="reference internal" href="#xception">Xception</a></li>
+<li><a class="reference internal" href="#mobilenet">MobileNet</a></li>
+<li><a class="reference internal" href="#efficientnet">EfficientNet</a></li>
+<li><a class="reference internal" href="#resnest">ResNeSt</a></li>
+<li><a class="reference internal" href="#convnext">ConvNeXt</a></li>
+<li><a class="reference internal" href="#inceptionnext">InceptionNeXt</a></li>
+<li><a class="reference internal" href="#coatnet">CoAtNet</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
