@@ -730,5 +730,35 @@
         "family": "CvT",
         "param_size": 277196392,
         "arch": "transformer"
+    },
+    "pvt_tiny": {
+        "name": "pvt_tiny",
+        "family": "PVT",
+        "param_size": 12457192,
+        "arch": "transformer"
+    },
+    "pvt_small": {
+        "name": "pvt_small",
+        "family": "PVT",
+        "param_size": 23003048,
+        "arch": "transformer"
+    },
+    "pvt_medium": {
+        "name": "pvt_medium",
+        "family": "PVT",
+        "param_size": 41492648,
+        "arch": "transformer"
+    },
+    "pvt_large": {
+        "name": "pvt_large",
+        "family": "PVT",
+        "param_size": 55359848,
+        "arch": "transformer"
+    },
+    "pvt_huge": {
+        "name": "pvt_huge",
+        "family": "PVT",
+        "param_size": 286706920,
+        "arch": "transformer"
     }
 }
