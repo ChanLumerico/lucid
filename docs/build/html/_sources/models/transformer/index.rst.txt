@@ -10,6 +10,7 @@ Transformers
     Swin Transformer <swin/SwinTransformer.rst>
     Swin Transformer-v2 <swin/SwinTransformer_V2.rst>
     CvT <cvt/CvT.rst>
+    PVT <pvt/PVT.rst>
 
 Transformer
 -----------
@@ -242,5 +243,53 @@ dense prediction tasks.
 
 Pyramid Vision Transformer (PVT)
 --------------------------------
+
+The **Pyramid Vision Transformer (PVT)** combines CNN-like pyramidal structures 
+with Transformer attention, capturing multi-scale features efficiently. It reduces 
+spatial resolution progressively and uses **spatial-reduction attention (SRA)** 
+to enhance performance in dense prediction tasks like detection and segmentation.
+
+ Wang, Wenhai, et al. Pyramid Vision Transformer: A Versatile Backbone for Dense 
+ Prediction without Convolutions. arXiv, 2021, arXiv:2102.12122.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - PVT-Tiny
+      - `pvt_tiny <pvt/pvt_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 12,457,192
+      - ✅
+    
+    * - PVT-Small
+      - `pvt_small <pvt/pvt_small>`_
+      - :math:`(N,3,224,224)`
+      - 23,003,048
+      - ✅
+    
+    * - PVT-Medium
+      - `pvt_medium <pvt/pvt_medium>`_
+      - :math:`(N,3,224,224)`
+      - 41,492,648
+      - ✅
+    
+    * - PVT-Large
+      - `pvt_large <pvt/pvt_large>`_
+      - :math:`(N,3,224,224)`
+      - 55,359,848
+      - ✅
+    
+    * - PVT-Huge
+      - `pvt_huge <pvt/pvt_huge>`_
+      - :math:`(N,3,224,224)`
+      - 286,706,920
+      - ✅
 
 *To be implemented...🔮*

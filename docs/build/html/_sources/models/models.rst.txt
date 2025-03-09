@@ -24,4 +24,4 @@ concepts while leveraging the modular and educational nature of the `lucid` fram
       - Transformers are deep learning models that use self-attention mechanisms to 
         process sequential data in parallel, enabling efficient learning of long-range 
         dependencies.
-      - `Transformers <transformers/index>`_
+      - `Transformers <transformer/index>`_
