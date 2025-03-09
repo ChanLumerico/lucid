@@ -6,8 +6,8 @@
 <link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="densenet_121" href="densenet_121.html" /><link rel="prev" title="sk_resnext_50_32x4d" href="../sknet/sk_resnext_50_32x4d.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/conv/dense/DenseNet.html" />
 
-    <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>DenseNet - Lucid 1.21.3 documentation</title>
+    <!-- Generated with Sphinx 8.2.3 and Furo 2024.08.06 -->
+        <title>DenseNet - Lucid 1.22.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 1.21.3 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 1.22.5 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 1.21.3 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.22.5 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -787,6 +787,14 @@
 <li class="toctree-l3"><a class="reference internal" href="../../transformer/cvt/cvt_w24.html">cvt_w24</a></li>
 </ul>
 </li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../transformer/pvt/PVT.html">PVT</a><input class="toctree-checkbox" id="toctree-checkbox-65" name="toctree-checkbox-65" role="switch" type="checkbox"/><label for="toctree-checkbox-65"><div class="visually-hidden">Toggle navigation of PVT</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../transformer/pvt/pvt_tiny.html">pvt_tiny</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../transformer/pvt/pvt_small.html">pvt_small</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../transformer/pvt/pvt_medium.html">pvt_medium</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../transformer/pvt/pvt_large.html">pvt_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../transformer/pvt/pvt_huge.html">pvt_huge</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -795,7 +803,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-65" name="toctree-checkbox-65" role="switch" type="checkbox"/><label for="toctree-checkbox-65"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-66" name="toctree-checkbox-66" role="switch" type="checkbox"/><label for="toctree-checkbox-66"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -860,7 +868,7 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="lucid.models.DenseNet">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">DenseNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">block_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">growth_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_init_features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.DenseNet" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">DenseNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">block_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">growth_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_init_features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.DenseNet" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>DenseNet</cite> class implements the Dense Convolutional Network (DenseNet),
@@ -998,7 +1006,7 @@ Consider optimizing for memory usage in large-scale applications.</p>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=6c4335c4"></script>
+</div><script src="../../../_static/documentation_options.js?v=91cdfffb"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
