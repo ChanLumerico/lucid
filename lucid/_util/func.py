@@ -5,7 +5,7 @@ import math
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _NumPyArray, _ArrayLikeInt, _Scalar
 
-from lucid._backend import (
+from lucid._backend.core import (
     create_func_op,
     create_ufunc_op,
     create_mfunc_op,

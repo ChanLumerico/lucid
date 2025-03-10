@@ -2,7 +2,7 @@ from typing import Literal, Optional
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid._backend import create_ufunc_op, _FuncOpReturnType
+from lucid._backend.core import create_ufunc_op, _FuncOpReturnType
 from lucid.types import _NumPyArray, _Scalar
 
 

@@ -1,6 +1,6 @@
 import numpy as np
 
-from lucid._backend import (
+from lucid._backend.core import (
     create_func_op,
     create_bfunc_op,
     create_ufunc_op,

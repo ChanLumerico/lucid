@@ -2,8 +2,10 @@ from typing import Callable, Iterator, Optional, Self, SupportsIndex
 import numpy as np
 
 import lucid
+from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _DeviceType, _base_dtype
+
 from lucid._tensor.tensor_ops import _TensorOps
-from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _base_dtype
+from lucid._backend.metal import mx
 
 
 _HookType = Callable[["Tensor", _NumPyArray], None]
@@ -16,6 +18,7 @@ class Tensor(_TensorOps):
         requires_grad: bool = False,
         keep_grad: bool = False,
         dtype: type = _base_dtype,
+        device: _DeviceType = "cpu",  # NOTE: Implement `device` mechanism
     ) -> None:
         if not isinstance(data, _NumPyArray):
             self.data = np.array(data, dtype=dtype)

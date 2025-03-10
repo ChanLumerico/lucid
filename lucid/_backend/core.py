@@ -1,11 +1,10 @@
 import functools
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any
 
 import lucid
 from lucid._tensor import Tensor
-from lucid.types import _NumPyArray
 
-_GradFuncType = Callable[[None], _NumPyArray | Tuple[_NumPyArray, ...]]
+_GradFuncType = Callable[[None], Any]
 
 _ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
 

@@ -4,7 +4,7 @@ import numpy as np
 from typing import Literal
 
 from lucid._tensor import Tensor
-from lucid._backend import create_ufunc_op, _FuncOpReturnType
+from lucid._backend.core import create_ufunc_op, _FuncOpReturnType
 from lucid.types import _EinopsPattern, _NumPyArray
 
 _ReduceStr = Literal["sum", "mean"]

@@ -1,7 +1,9 @@
-from typing import Any, Callable, Dict, Sequence
+from typing import Any, Callable, Dict, Sequence, Literal
 import numpy as np
 
 _base_dtype: np.floating = np.float32
+
+_DeviceType = Literal["cpu", "gpu"]
 
 _Scalar = int | float
 _NumPyArray = np.ndarray
