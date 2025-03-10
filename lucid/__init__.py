@@ -27,6 +27,8 @@ from lucid._tensor import Tensor
 from lucid._func import *
 from lucid._util import *
 
+from lucid._backend.metal import mx, _MLXArray
+
 from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike
 
 import lucid.linalg as linalg
@@ -77,7 +79,7 @@ def grad_enabled() -> bool:
     return _grad_enabled
 
 
-def shape(a: Tensor | _NumPyArray) -> _ShapeLike:
+def shape(a: Tensor | _NumPyArray | _MLXArray) -> _ShapeLike:
     if hasattr(a, "shape"):
         return a.shape
 
@@ -90,30 +92,38 @@ def _check_input_dim(tensor: Tensor, dim: int) -> None:
 
 
 def _set_tensor_grad(
-    tensor: Tensor, grad: _NumPyArray, at: SupportsIndex = ...
+    tensor: Tensor, grad: _NumPyArray | _MLXArray, at: SupportsIndex = ...
 ) -> None:
     if tensor.requires_grad:
         if tensor.grad is None:
             tensor.grad = grad
         else:
-            if not tensor.grad.flags.writeable:
+            if isinstance(tensor.grad, _NumPyArray) and not tensor.grad.flags.writeable:
                 tensor.grad = tensor.grad.copy()
+            # NOTE: might cause issue on _MLXArray?
             tensor.grad[at] = tensor.grad[at] + grad
 
 
 def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
+    # TODO: need to resolve `scalar-driven(cpu-based) Tensor [op] gpu-Tensor`.
     if not isinstance(any, Tensor):
         return Tensor(any)
     return any
 
 
-def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
+def _match_grad_shape(
+    data: _NumPyArray | _MLXArray, grad: _NumPyArray | _MLXArray
+) -> _NumPyArray | _MLXArray:
     if data.shape == grad.shape:
         return grad
     if data.ndim == 0:
-        return np.sum(grad)
+        return grad.sum()
     if grad.ndim == 0:
-        return np.broadcast_to(grad, data.shape)
+        return (
+            np.broadcast_to(grad, data.shape)
+            if isinstance(grad, _NumPyArray)
+            else mx.broadcast_to(grad, data.shape)
+        )
 
     if data.size == grad.size:
         return grad.reshape(data.shape)

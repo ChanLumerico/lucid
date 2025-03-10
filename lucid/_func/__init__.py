@@ -366,7 +366,7 @@ def linspace(
     return gfunc.linspace(start, stop, num, dtype, requires_grad, keep_grad)
 
 
-Tensor.__add__ = bfunc._add
+Tensor.__add__ = add  # mlx integration test on `add()`
 Tensor.__radd__ = bfunc._radd
 Tensor.__sub__ = bfunc._sub
 Tensor.__rsub__ = bfunc._rsub
