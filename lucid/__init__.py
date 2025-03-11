@@ -29,7 +29,7 @@ from lucid._util import *
 
 from lucid._backend.metal import mx, _MLXArray
 
-from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike
+from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike, _DeviceType
 
 import lucid.linalg as linalg
 import lucid.random as random
@@ -98,21 +98,25 @@ def _set_tensor_grad(
         if tensor.grad is None:
             tensor.grad = grad
         else:
-            if isinstance(tensor.grad, _NumPyArray) and not tensor.grad.flags.writeable:
+            if tensor.is_cpu() and not tensor.grad.flags.writeable:
                 tensor.grad = tensor.grad.copy()
-            # NOTE: might cause issue on _MLXArray?
             tensor.grad[at] = tensor.grad[at] + grad
+            # NOTE: Following bug caused for mlx:
+            # "ValueError: Cannot index mlx array using the given type."
 
 
-def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
-    # TODO: need to resolve `scalar-driven(cpu-based) Tensor [op] gpu-Tensor`.
+def _check_is_tensor(
+    any: Tensor | _ArrayOrScalar, device: _DeviceType = "cpu"
+) -> Tensor:
     if not isinstance(any, Tensor):
-        return Tensor(any)
+        return Tensor(any, device=device)
     return any
 
 
 def _match_grad_shape(
-    data: _NumPyArray | _MLXArray, grad: _NumPyArray | _MLXArray
+    data: _NumPyArray | _MLXArray,
+    grad: _NumPyArray | _MLXArray,
+    device: _DeviceType = "cpu",
 ) -> _NumPyArray | _MLXArray:
     if data.shape == grad.shape:
         return grad
@@ -121,7 +125,7 @@ def _match_grad_shape(
     if grad.ndim == 0:
         return (
             np.broadcast_to(grad, data.shape)
-            if isinstance(grad, _NumPyArray)
+            if device == "cpu"
             else mx.broadcast_to(grad, data.shape)
         )
 
@@ -136,7 +140,11 @@ def _match_grad_shape(
                 f"Cannot broadcast grad of {grad.shape} to data of {data.shape}."
             )
 
-        grad_expand = grad_squeeze[..., None].repeat(int(expand_factor), axis=-1)
+        grad_expand = (
+            grad_squeeze[..., None].repeat(int(expand_factor), axis=-1)
+            if device == "cpu"
+            else mx.repeat(grad_squeeze[..., None], int(expand_factor), axis=1)
+        )
         return grad_expand.reshape(data.shape)
 
     elif data.size < grad.size:

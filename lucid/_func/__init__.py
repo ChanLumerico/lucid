@@ -1,13 +1,17 @@
 from typing import overload
 
 import lucid
-from lucid._func import bfunc, gfunc, ufunc
-from lucid._tensor import Tensor
 from lucid.types import _Scalar, _ShapeLike, _ArrayLike, _base_dtype
 
+from lucid._func import metal
+from lucid._func import bfunc, gfunc, ufunc
 
-def add(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._add(a, b)
+from lucid._tensor import Tensor
+from lucid._backend.metal import is_cpu_op
+
+
+def add(a: Tensor, b: Tensor) -> Tensor:  # Beta
+    return bfunc._add(a, b) if is_cpu_op(a, b) else metal.bfunc._add(a, b)
 
 
 def sub(a: Tensor, b: Tensor) -> Tensor:

@@ -23,7 +23,7 @@ class Tensor(_TensorOps):
         if not isinstance(data, (_NumPyArray, _MLXArray)):
             self.data = np.array(data, dtype=dtype)
         else:
-            if data.dtype != dtype:
+            if dtype is not None and data.dtype != dtype:
                 data = data.astype(dtype)
             self.data = data
 
@@ -50,7 +50,10 @@ class Tensor(_TensorOps):
 
     def backward(self, keep_grad: bool = False) -> None:
         if self.grad is None:
-            self.grad = np.ones_like(self.data)
+            if self.is_cpu():
+                self.grad = np.ones_like(self.data)
+            else:
+                self.grad = mx.ones_like(self.data)
 
         visited = set()
         topo_order: list[Self] = []
@@ -108,7 +111,10 @@ class Tensor(_TensorOps):
             return float(item)
 
     def zero(self) -> None:
-        self.data = np.zeros_like(self.data)
+        if self.is_cpu():
+            self.data = np.zeros_like(self.data)
+        else:
+            self.data = mx.zeros_like(self.data)
 
     def zero_grad(self) -> None:
         self.grad = None
@@ -124,8 +130,14 @@ class Tensor(_TensorOps):
 
         if device == "cpu":
             self.data = np.array(self.data)
+            if self.grad is not None:
+                self.grad = np.array(self.grad)
+
         elif device == "gpu":
             self.data = mx.array(self.data)
+            if self.grad is not None:
+                self.grad = mx.array(self.grad)
+
         else:
             raise ValueError(
                 f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
@@ -165,7 +177,9 @@ class Tensor(_TensorOps):
                     else mx.zeros_like(self.data)
                 )
 
-            new_grad = lucid._match_grad_shape(self.data[new_idx], new_tensor.grad)
+            new_grad = lucid._match_grad_shape(
+                self.data[new_idx], new_tensor.grad, device=self.device
+            )
             lucid._set_tensor_grad(self, new_grad, at=new_idx)
 
         if self.requires_grad:

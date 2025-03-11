@@ -2,6 +2,7 @@ import functools
 from typing import Callable, Tuple, Any
 
 import lucid
+from lucid.types import _DeviceType
 from lucid._tensor import Tensor
 
 _GradFuncType = Callable[[None], Any]
@@ -12,7 +13,10 @@ _FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
 
 
 def create_func_op(
-    n_in: int | None, n_ret: int | None, has_gradient: bool = True
+    n_in: int | None,
+    n_ret: int | None,
+    has_gradient: bool = True,
+    device: _DeviceType = "cpu",
 ) -> Callable:
 
     def decorator(func: Callable[..., _FuncOpReturnType]) -> Callable:
@@ -31,7 +35,7 @@ def create_func_op(
                 tensor_args = args[:n_in]
 
             for arg in tensor_args:
-                tensor = lucid._check_is_tensor(arg)
+                tensor = lucid._check_is_tensor(arg, device=device)
                 tensors += (tensor,)
                 requires_grad = requires_grad or tensor.requires_grad
 
@@ -68,7 +72,9 @@ def create_func_op(
                         )
 
                     for tensor, grad in zip(tensors, grads):
-                        new_grad = lucid._match_grad_shape(tensor.data, grad)
+                        new_grad = lucid._match_grad_shape(
+                            tensor.data, grad, device=device
+                        )
                         lucid._set_tensor_grad(tensor, new_grad)
 
                 if not lucid.grad_enabled():
@@ -85,13 +91,13 @@ def create_func_op(
     return decorator
 
 
-def create_bfunc_op(has_gradient: bool = True) -> Callable:
-    return create_func_op(n_in=2, n_ret=1, has_gradient=has_gradient)
+def create_bfunc_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
+    return create_func_op(2, 1, has_gradient=has_gradient, device=device)
 
 
-def create_ufunc_op(has_gradient: bool = True) -> Callable:
-    return create_func_op(n_in=1, n_ret=1, has_gradient=has_gradient)
+def create_ufunc_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
+    return create_func_op(1, 1, has_gradient=has_gradient, device=device)
 
 
-def create_mfunc_op(has_gradient: bool = True) -> Callable:
-    return create_func_op(n_in=None, n_ret=1, has_gradient=has_gradient)
+def create_mfunc_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
+    return create_func_op(None, 1, has_gradient=has_gradient, device=device)
