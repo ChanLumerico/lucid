@@ -1,32 +1,33 @@
-from typing import overload
+from typing import overload, Callable
 
 import lucid
 from lucid.types import _Scalar, _ShapeLike, _ArrayLike, _base_dtype
 
-from lucid._func import metal
+from lucid._tensor import Tensor
+from lucid._backend.metal import _is_cpu_op
+
 from lucid._func import bfunc, gfunc, ufunc
 
-from lucid._tensor import Tensor
-from lucid._backend.metal import is_cpu_op
+from . import metal
 
 
-def add(a: Tensor, b: Tensor) -> Tensor:  # Beta
-    return bfunc._add(a, b) if is_cpu_op(a, b) else metal.bfunc._add(a, b)
+def add(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._add(a, b) if _is_cpu_op(a, b) else metal.bfunc._add(a, b)
 
 
 def sub(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._sub(a, b)
+    return bfunc._sub(a, b) if _is_cpu_op(a, b) else metal.bfunc._sub(a, b)
 
 
 def mul(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._mul(a, b)
+    return bfunc._mul(a, b) if _is_cpu_op(a, b) else metal.bfunc._mul(a, b)
 
 
 def div(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._truediv(a, b)
+    return bfunc._truediv(a, b) if _is_cpu_op(a, b) else metal.bfunc._truediv(a, b)
 
 
-def minimum(a: Tensor, b: Tensor) -> Tensor:
+def minimum(a: Tensor, b: Tensor) -> Tensor:  # Begin from here
     return bfunc.minimum(a, b)
 
 
@@ -52,6 +53,12 @@ def outer(a: Tensor, b: Tensor) -> Tensor:
 
 def matmul(a: Tensor, b: Tensor) -> Tensor:
     return bfunc.matmul(a, b)
+
+
+_radd: Callable = lambda self, other: add(self, other)
+_rsub: Callable = lambda self, other: sub(other, self)
+_rmul: Callable = lambda self, other: mul(self, other)
+_rtruediv: Callable = lambda self, other: div(other, self)
 
 
 def exp(a: Tensor) -> Tensor:
@@ -370,14 +377,14 @@ def linspace(
     return gfunc.linspace(start, stop, num, dtype, requires_grad, keep_grad)
 
 
-Tensor.__add__ = add  # mlx integration test on `add()`
-Tensor.__radd__ = bfunc._radd
-Tensor.__sub__ = bfunc._sub
-Tensor.__rsub__ = bfunc._rsub
-Tensor.__mul__ = bfunc._mul
-Tensor.__rmul__ = bfunc._rmul
-Tensor.__truediv__ = bfunc._truediv
-Tensor.__rtruediv__ = bfunc._rtruediv
+Tensor.__add__ = add
+Tensor.__radd__ = _radd
+Tensor.__sub__ = sub
+Tensor.__rsub__ = _rsub
+Tensor.__mul__ = mul
+Tensor.__rmul__ = _rmul
+Tensor.__truediv__ = div
+Tensor.__rtruediv__ = _rtruediv
 Tensor.__matmul__ = bfunc._matmul
 
 Tensor.__eq__ = bfunc._equal

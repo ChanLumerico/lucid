@@ -8,9 +8,9 @@ except ModuleNotFoundError as e:
 _MLXArray = mx.array
 
 
-def is_cpu_op(*tensor_or_any) -> bool:
-    return not is_gpu_op(*tensor_or_any)
+def _is_cpu_op(*tensor_or_any) -> bool:
+    return not _is_gpu_op(*tensor_or_any)
 
 
-def is_gpu_op(*tensor_or_any) -> bool:
+def _is_gpu_op(*tensor_or_any) -> bool:
     return any([getattr(t, "device", None) == "gpu" for t in tensor_or_any])

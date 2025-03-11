@@ -103,7 +103,7 @@ def _set_tensor_grad(
             tensor.grad = tensor.grad.copy()
 
         if tensor.is_gpu():
-            if at == Ellipsis:  # Temporary solution
+            if at == Ellipsis:
                 at = slice(None, None, None)
 
         tensor.grad[at] = tensor.grad[at] + grad
