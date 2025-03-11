@@ -94,15 +94,19 @@ def _check_input_dim(tensor: Tensor, dim: int) -> None:
 def _set_tensor_grad(
     tensor: Tensor, grad: _NumPyArray | _MLXArray, at: SupportsIndex = ...
 ) -> None:
-    if tensor.requires_grad:
-        if tensor.grad is None:
-            tensor.grad = grad
-        else:
-            if tensor.is_cpu() and not tensor.grad.flags.writeable:
-                tensor.grad = tensor.grad.copy()
-            tensor.grad[at] = tensor.grad[at] + grad
-            # NOTE: Following bug caused for mlx:
-            # "ValueError: Cannot index mlx array using the given type."
+    if not tensor.requires_grad:
+        return
+    if tensor.grad is None:
+        tensor.grad = grad
+    else:
+        if tensor.is_cpu() and not tensor.grad.flags.writeable:
+            tensor.grad = tensor.grad.copy()
+
+        if tensor.is_gpu():
+            if at == Ellipsis:  # Temporary solution
+                at = slice(None, None, None)
+
+        tensor.grad[at] = tensor.grad[at] + grad
 
 
 def _check_is_tensor(
