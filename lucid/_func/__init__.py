@@ -8,150 +8,168 @@ from lucid._backend.metal import _is_cpu_op
 
 from lucid._func import bfunc, gfunc, ufunc
 
-from . import metal
-
 
 # fmt: off
-__all__ = [
+__all_ = [
     "add", "sub", "div", "minimum", "maximum", "power", "dot", "inner", "outer",
-    "matmul",
+    "matmul", 
+    
+    "exp", "log", "log2", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", 
+    "sinh", "cosh", "tanh", "clip", "abs", "sign", "reciprocal", "square", "cube",
+    "transpose", "sum", "trace", "mean", "var"
 ]
 # fmt: on
 
 
 def add(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._add(a, b) if _is_cpu_op(a, b) else metal.bfunc._add(a, b)
+    return bfunc._add(a, b) if _is_cpu_op(a, b) else bfunc._add_gpu(a, b)
 
 
 def sub(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._sub(a, b) if _is_cpu_op(a, b) else metal.bfunc._sub(a, b)
+    return bfunc._sub(a, b) if _is_cpu_op(a, b) else bfunc._sub_gpu(a, b)
 
 
 def mul(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._mul(a, b) if _is_cpu_op(a, b) else metal.bfunc._mul(a, b)
+    return bfunc._mul(a, b) if _is_cpu_op(a, b) else bfunc._mul_gpu(a, b)
 
 
 def div(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._truediv(a, b) if _is_cpu_op(a, b) else metal.bfunc._truediv(a, b)
+    return bfunc._truediv(a, b) if _is_cpu_op(a, b) else bfunc._truediv_gpu(a, b)
 
 
 def _equal(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._equal(a, b) if _is_cpu_op(a, b) else metal.bfunc._equal(a, b)
+    return bfunc._equal(a, b) if _is_cpu_op(a, b) else bfunc._equal_gpu(a, b)
 
 
 def _not_equal(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._not_equal(a, b) if _is_cpu_op(a, b) else metal.bfunc._not_equal(a, b)
+    return bfunc._not_equal(a, b) if _is_cpu_op(a, b) else bfunc._not_equal_gpu(a, b)
 
 
 def _greater(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._greater(a, b) if _is_cpu_op(a, b) else metal.bfunc._greater(a, b)
+    return bfunc._greater(a, b) if _is_cpu_op(a, b) else bfunc._greater_gpu(a, b)
 
 
 def _greater_or_equal(a: Tensor, b: Tensor) -> Tensor:
     return (
         bfunc._greater_or_equal(a, b)
         if _is_cpu_op(a, b)
-        else metal.bfunc._greater_or_equal(a, b)
+        else bfunc._greater_or_equal_gpu(a, b)
     )
 
 
 def _less(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._less(a, b) if _is_cpu_op(a, b) else metal.bfunc._less(a, b)
+    return bfunc._less(a, b) if _is_cpu_op(a, b) else bfunc._less_gpu(a, b)
 
 
 def _less_or_equal(a: Tensor, b: Tensor) -> Tensor:
     return (
         bfunc._less_or_equal(a, b)
         if _is_cpu_op(a, b)
-        else metal.bfunc._less_or_equal(a, b)
+        else bfunc._less_or_equal_gpu(a, b)
     )
 
 
 def minimum(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.minimum(a, b) if _is_cpu_op(a, b) else metal.bfunc.minimum(a, b)
+    return bfunc.minimum(a, b) if _is_cpu_op(a, b) else bfunc.minimum_gpu(a, b)
 
 
 def maximum(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.maximum(a, b) if _is_cpu_op(a, b) else metal.bfunc.maximum(a, b)
+    return bfunc.maximum(a, b) if _is_cpu_op(a, b) else bfunc.maximum_gpu(a, b)
 
 
 def power(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.power(a, b) if _is_cpu_op(a, b) else metal.bfunc.power(a, b)
+    return bfunc.power(a, b) if _is_cpu_op(a, b) else bfunc.power_gpu(a, b)
 
 
 def dot(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.dot(a, b) if _is_cpu_op(a, b) else metal.bfunc.dot(a, b)
+    return bfunc.dot(a, b) if _is_cpu_op(a, b) else bfunc.dot_gpu(a, b)
 
 
 def inner(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.inner(a, b) if _is_cpu_op(a, b) else metal.bfunc.inner(a, b)
+    return bfunc.inner(a, b) if _is_cpu_op(a, b) else bfunc.inner_gpu(a, b)
 
 
 def outer(a: Tensor, b: Tensor) -> Tensor:
     a, b = a.ravel(), b.ravel()
-    return bfunc.outer(a, b) if _is_cpu_op(a, b) else metal.bfunc.outer(a, b)
+    return bfunc.outer(a, b) if _is_cpu_op(a, b) else bfunc.outer_gpu(a, b)
 
 
 def matmul(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._matmul(a, b) if _is_cpu_op(a, b) else metal.bfunc._matmul(a, b)
+    return bfunc._matmul(a, b) if _is_cpu_op(a, b) else bfunc._matmul_gpu(a, b)
 
 
-_radd: Callable = lambda self, other: add(self, other)
-_rsub: Callable = lambda self, other: sub(other, self)
-_rmul: Callable = lambda self, other: mul(self, other)
-_rtruediv: Callable = lambda self, other: div(other, self)
+_radd: Callable[[Tensor, Tensor], Tensor] = lambda a, b: (
+    bfunc._add(a, b) if _is_cpu_op(a, b) else bfunc._add_gpu(a, b)
+)
+_rsub: Callable[[Tensor, Tensor], Tensor] = lambda a, b: (
+    bfunc._sub(b, a) if _is_cpu_op(b, a) else bfunc._sub_gpu(b, a)
+)
+_rmul: Callable[[Tensor, Tensor], Tensor] = lambda a, b: (
+    bfunc._mul(a, b) if _is_cpu_op(a, b) else bfunc._mul_gpu(a, b)
+)
+_rtruediv: Callable[[Tensor, Tensor], Tensor] = lambda a, b: (
+    bfunc._truediv(b, a) if _is_cpu_op(b, a) else bfunc._truediv_gpu(b, a)
+)
+
+
+def _pow(a: Tensor, exp: _Scalar) -> Tensor:
+    return ufunc._pow(a, exp) if _is_cpu_op(a) else ufunc._pow_gpu(a, exp)
+
+
+def _neg(a: Tensor) -> Tensor:
+    return ufunc._neg(a) if _is_cpu_op(a) else ufunc._neg_gpu(a)
 
 
 def exp(a: Tensor) -> Tensor:
-    return ufunc.exp(a)
+    return ufunc.exp(a) if _is_cpu_op(a) else ufunc.exp_gpu(a)
 
 
 def log(a: Tensor) -> Tensor:
-    return ufunc.log(a)
+    return ufunc.log(a) if _is_cpu_op(a) else ufunc.log_gpu(a)
 
 
 def log2(a: Tensor) -> Tensor:
-    return ufunc.log2(a)
+    return ufunc.log2(a) if _is_cpu_op(a) else ufunc.log2_gpu(a)
 
 
 def sqrt(a: Tensor) -> Tensor:
-    return ufunc.sqrt(a)
+    return ufunc.sqrt(a) if _is_cpu_op(a) else ufunc.sqrt_gpu(a)
 
 
 def sin(a: Tensor) -> Tensor:
-    return ufunc.sin(a)
+    return ufunc.sin(a) if _is_cpu_op(a) else ufunc.sin_gpu(a)
 
 
 def cos(a: Tensor) -> Tensor:
-    return ufunc.cos(a)
+    return ufunc.cos(a) if _is_cpu_op(a) else ufunc.cos_gpu(a)
 
 
 def tan(a: Tensor) -> Tensor:
-    return ufunc.tan(a)
+    return ufunc.tan(a) if _is_cpu_op(a) else ufunc.tan_gpu(a)
 
 
 def arcsin(a: Tensor) -> Tensor:
-    return ufunc.arcsin(a)
+    return ufunc.arcsin(a) if _is_cpu_op(a) else ufunc.arcsin_gpu(a)
 
 
 def arccos(a: Tensor) -> Tensor:
-    return ufunc.arccos(a)
+    return ufunc.arccos(a) if _is_cpu_op(a) else ufunc.arccos_gpu(a)
 
 
 def arctan(a: Tensor) -> Tensor:
-    return ufunc.arctan(a)
+    return ufunc.arctan(a) if _is_cpu_op(a) else ufunc.arctan_gpu(a)
 
 
 def sinh(a: Tensor) -> Tensor:
-    return ufunc.sinh(a)
+    return ufunc.sinh(a) if _is_cpu_op(a) else ufunc.sinh_gpu(a)
 
 
 def cosh(a: Tensor) -> Tensor:
-    return ufunc.cosh(a)
+    return ufunc.cosh(a) if _is_cpu_op(a) else ufunc.cosh_gpu(a)
 
 
 def tanh(a: Tensor) -> Tensor:
-    return ufunc.tanh(a)
+    return ufunc.tanh(a) if _is_cpu_op(a) else ufunc.tanh_gpu(a)
 
 
 def clip(a: Tensor, min_value: _Scalar | None, max_value: _Scalar | None) -> Tensor:
@@ -160,53 +178,79 @@ def clip(a: Tensor, min_value: _Scalar | None, max_value: _Scalar | None) -> Ten
     if max_value is None:
         max_value = lucid.max(a).item()
 
-    return ufunc.clip(a, min_value, max_value)
+    return (
+        ufunc.clip(a, min_value, max_value)
+        if _is_cpu_op(a)
+        else ufunc.clip_gpu(a, min_value, max_value)
+    )
 
 
 def abs(a: Tensor) -> Tensor:
-    return ufunc.abs(a)
+    return ufunc.abs(a) if _is_cpu_op(a) else ufunc.abs_gpu(a)
 
 
 def sign(a: Tensor) -> Tensor:
-    return ufunc.sign(a)
+    return ufunc.sign(a) if _is_cpu_op(a) else ufunc.sign_gpu(a)
 
 
 def reciprocal(a: Tensor) -> Tensor:
-    return ufunc.reciprocal(a)
+    return ufunc.reciprocal(a) if _is_cpu_op(a) else ufunc.reciprocal_gpu(a)
 
 
 def square(a: Tensor) -> Tensor:
-    return ufunc.square(a)
+    return ufunc.square(a) if _is_cpu_op(a) else ufunc.square_gpu(a)
 
 
 def cube(a: Tensor) -> Tensor:
-    return ufunc.cube(a)
+    return ufunc.cube(a) if _is_cpu_op(a) else ufunc.cube_gpu(a)
+
+
+@property
+def _T(a: Tensor) -> Tensor:
+    return ufunc._T(a) if _is_cpu_op(a) else ufunc._T_gpu(a)
+
+
+@property
+def _mT(a: Tensor) -> Tensor:
+    return ufunc._mT(a) if _is_cpu_op(a) else ufunc._mT_gpu(a)
 
 
 def transpose(a: Tensor, axes: list[int] | None = None) -> Tensor:
-    return ufunc.transpose(a, axes)
+    return ufunc.transpose(a, axes) if _is_cpu_op(a) else ufunc.transpose_gpu(a, axes)
 
 
 def sum(
     a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> Tensor:
-    return ufunc.sum(a, axis, keepdims)
+    return (
+        ufunc.sum(a, axis, keepdims)
+        if _is_cpu_op(a)
+        else ufunc.sum_gpu(a, axis, keepdims)
+    )
 
 
 def trace(a: Tensor) -> Tensor:
-    return ufunc.trace(a)
+    return ufunc.trace(a) if _is_cpu_op(a) else ufunc.trace_gpu(a)
 
 
 def mean(
     a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> Tensor:
-    return ufunc.mean(a, axis, keepdims)
+    return (
+        ufunc.mean(a, axis, keepdims)
+        if _is_cpu_op(a)
+        else ufunc.mean_gpu(a, axis, keepdims)
+    )
 
 
 def var(
     a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> Tensor:
-    return ufunc.var(a, axis, keepdims)
+    return (
+        ufunc.var(a, axis, keepdims)
+        if _is_cpu_op(a)
+        else ufunc.var_gpu(a, axis, keepdims)
+    )
 
 
 def min(
@@ -435,16 +479,16 @@ Tensor.__ge__ = _greater_or_equal
 Tensor.__lt__ = _less
 Tensor.__le__ = _less_or_equal
 
-Tensor.__pow__ = ufunc._pow
-Tensor.__neg__ = ufunc._neg
+Tensor.__pow__ = _pow
+Tensor.__neg__ = _neg
 
-Tensor.T = ufunc._T
-Tensor.mT = ufunc._mT
-Tensor.transpose = ufunc.transpose
-Tensor.dot = bfunc.dot
-Tensor.matmul = bfunc._matmul
-Tensor.sum = ufunc.sum
-Tensor.mean = ufunc.mean
-Tensor.var = ufunc.var
-Tensor.clip = ufunc.clip
+Tensor.T = _T
+Tensor.mT = _mT
+Tensor.transpose = transpose
+Tensor.dot = dot
+Tensor.matmul = matmul
+Tensor.sum = sum
+Tensor.mean = mean
+Tensor.var = var
+Tensor.clip = clip
 Tensor.swapaxes = ufunc.swapaxes

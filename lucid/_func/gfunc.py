@@ -1,12 +1,12 @@
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLike, _Scalar, _base_dtype
+from lucid.types import _ShapeLike, _ArrayLike, _Scalar
 
 
 def zeros(
     shape: _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -28,7 +28,7 @@ def zeros_like(
 
 def ones(
     shape: _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -52,7 +52,7 @@ def eye(
     N: int,
     M: int | None = None,
     k: int = 0,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -62,7 +62,7 @@ def eye(
 def diag(
     v: Tensor | _ArrayLike,
     k: int = 0,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -75,7 +75,7 @@ def arange(
     start: _Scalar,
     stop: _Scalar,
     step: _Scalar,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -84,7 +84,7 @@ def arange(
 
 def empty(
     shape: int | _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:
@@ -108,7 +108,7 @@ def linspace(
     start: _Scalar,
     stop: _Scalar,
     num: int = 50,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
 ) -> Tensor:

@@ -22,6 +22,7 @@ class Tensor(_TensorOps):
     ) -> None:
         if not isinstance(data, (_NumPyArray, _MLXArray)):
             self.data = np.array(data, dtype=dtype)
+            self.dtype = self.data.dtype
         else:
             if dtype is not None and data.dtype != dtype:
                 data = data.astype(dtype)

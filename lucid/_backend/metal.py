@@ -9,7 +9,7 @@ _MLXArray = mx.array
 
 
 def _is_cpu_op(*tensor_or_any) -> bool:
-    return not _is_gpu_op(*tensor_or_any)
+    return any([getattr(t, "device", None) == "cpu" for t in tensor_or_any])
 
 
 def _is_gpu_op(*tensor_or_any) -> bool:
