@@ -11,6 +11,14 @@ from lucid._func import bfunc, gfunc, ufunc
 from . import metal
 
 
+# fmt: off
+__all__ = [
+    "add", "sub", "div", "minimum", "maximum", "power", "dot", "inner", "outer",
+    "matmul",
+]
+# fmt: on
+
+
 def add(a: Tensor, b: Tensor) -> Tensor:
     return bfunc._add(a, b) if _is_cpu_op(a, b) else metal.bfunc._add(a, b)
 
@@ -27,32 +35,65 @@ def div(a: Tensor, b: Tensor) -> Tensor:
     return bfunc._truediv(a, b) if _is_cpu_op(a, b) else metal.bfunc._truediv(a, b)
 
 
-def minimum(a: Tensor, b: Tensor) -> Tensor:  # Begin from here
-    return bfunc.minimum(a, b)
+def _equal(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._equal(a, b) if _is_cpu_op(a, b) else metal.bfunc._equal(a, b)
+
+
+def _not_equal(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._not_equal(a, b) if _is_cpu_op(a, b) else metal.bfunc._not_equal(a, b)
+
+
+def _greater(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._greater(a, b) if _is_cpu_op(a, b) else metal.bfunc._greater(a, b)
+
+
+def _greater_or_equal(a: Tensor, b: Tensor) -> Tensor:
+    return (
+        bfunc._greater_or_equal(a, b)
+        if _is_cpu_op(a, b)
+        else metal.bfunc._greater_or_equal(a, b)
+    )
+
+
+def _less(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc._less(a, b) if _is_cpu_op(a, b) else metal.bfunc._less(a, b)
+
+
+def _less_or_equal(a: Tensor, b: Tensor) -> Tensor:
+    return (
+        bfunc._less_or_equal(a, b)
+        if _is_cpu_op(a, b)
+        else metal.bfunc._less_or_equal(a, b)
+    )
+
+
+def minimum(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc.minimum(a, b) if _is_cpu_op(a, b) else metal.bfunc.minimum(a, b)
 
 
 def maximum(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.maximum(a, b)
+    return bfunc.maximum(a, b) if _is_cpu_op(a, b) else metal.bfunc.maximum(a, b)
 
 
 def power(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.power(a, b)
+    return bfunc.power(a, b) if _is_cpu_op(a, b) else metal.bfunc.power(a, b)
 
 
 def dot(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.dot(a, b)
+    return bfunc.dot(a, b) if _is_cpu_op(a, b) else metal.bfunc.dot(a, b)
 
 
 def inner(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.inner(a, b)
+    return bfunc.inner(a, b) if _is_cpu_op(a, b) else metal.bfunc.inner(a, b)
 
 
 def outer(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.outer(a.ravel(), b.ravel())
+    a, b = a.ravel(), b.ravel()
+    return bfunc.outer(a, b) if _is_cpu_op(a, b) else metal.bfunc.outer(a, b)
 
 
 def matmul(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.matmul(a, b)
+    return bfunc._matmul(a, b) if _is_cpu_op(a, b) else metal.bfunc._matmul(a, b)
 
 
 _radd: Callable = lambda self, other: add(self, other)
@@ -385,14 +426,14 @@ Tensor.__mul__ = mul
 Tensor.__rmul__ = _rmul
 Tensor.__truediv__ = div
 Tensor.__rtruediv__ = _rtruediv
-Tensor.__matmul__ = bfunc._matmul
+Tensor.__matmul__ = matmul
 
-Tensor.__eq__ = bfunc._equal
-Tensor.__ne__ = bfunc._not_equal
-Tensor.__gt__ = bfunc._greater
-Tensor.__ge__ = bfunc._greater_or_equal
-Tensor.__lt__ = bfunc._less
-Tensor.__le__ = bfunc._less_or_equal
+Tensor.__eq__ = _equal
+Tensor.__ne__ = _not_equal
+Tensor.__gt__ = _greater
+Tensor.__ge__ = _greater_or_equal
+Tensor.__lt__ = _less
+Tensor.__le__ = _less_or_equal
 
 Tensor.__pow__ = ufunc._pow
 Tensor.__neg__ = ufunc._neg

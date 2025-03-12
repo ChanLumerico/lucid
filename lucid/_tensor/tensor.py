@@ -119,7 +119,7 @@ class Tensor(_TensorOps):
     def zero_grad(self) -> None:
         self.grad = None
 
-    def astype(self, dtype: type) -> Self:
+    def astype(self, dtype: type) -> Self:  # TODO: Need to modify this.
         self.data = self.data.astype(dtype)
         self.dtype = self.data.dtype
         return self

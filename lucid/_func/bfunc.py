@@ -115,6 +115,7 @@ def minimum(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
         self_grad = (self.data <= other.data).astype(self.dtype)
         other_grad = (self.data > other.data).astype(other.dtype)
+
         return self_grad * result.grad, other_grad * result.grad
 
     return result, compute_grad
@@ -127,6 +128,7 @@ def maximum(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
         self_grad = (self.data >= other.data).astype(self.dtype)
         other_grad = (other.data > self.data).astype(other.dtype)
+
         return self_grad * result.grad, other_grad * result.grad
 
     return result, compute_grad
@@ -139,6 +141,7 @@ def power(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
         self_grad = other.data * np.power(self.data, other.data - 1)
         other_grad = np.power(self.data, other.data) * np.log(self.data)
+
         return self_grad * result.grad, other_grad * result.grad
 
     return result, compute_grad
