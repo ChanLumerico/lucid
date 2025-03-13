@@ -41,6 +41,8 @@ class Tensor(_TensorOps):
         self.device = device
 
         self.grad: Optional[_NumPyArray | _MLXArray] = None
+
+        self._op: type | None = None
         self._backward_op: Callable = lambda: None
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
@@ -76,7 +78,10 @@ class Tensor(_TensorOps):
             try:
                 tensor._backward_op()
             except Exception as e:
-                raise RuntimeError(f"{e} for tensor of shape {tensor.shape}") from e
+                raise RuntimeError(
+                    f"Exception above occurred for tensor "
+                    + f"of shape {tensor.shape} on operation {self._op}."
+                ) from e
 
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)

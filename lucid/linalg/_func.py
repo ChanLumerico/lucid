@@ -1,16 +1,16 @@
 import numpy as np
 
 from lucid._backend.core import (
-    create_func_op,
-    create_bfunc_op,
-    create_ufunc_op,
+    func_op,
+    binary_func_op,
+    unary_func_op,
     _FuncOpReturnType,
 )
 from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar
 
 
-@create_ufunc_op()
+@unary_func_op()
 def inv(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.linalg.inv(self.data))
 
@@ -20,7 +20,7 @@ def inv(self: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def det(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.linalg.det(self.data))
 
@@ -30,7 +30,7 @@ def det(self: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_bfunc_op()
+@binary_func_op()
 def solve(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.linalg.solve(self.data, other.data))
 
@@ -44,7 +44,7 @@ def solve(self: Tensor, other: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def cholesky(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.linalg.cholesky(self.data))
 
@@ -54,7 +54,7 @@ def cholesky(self: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def norm(
     self: Tensor,
     ord: int = 2,
@@ -105,7 +105,7 @@ def norm(
     return result, compute_grad
 
 
-@create_func_op(n_in=1, n_ret=2)
+@func_op(n_in=1, n_ret=2)
 def eig(self: Tensor) -> _FuncOpReturnType:
     eigvals, eigvecs = np.linalg.eig(self.data)
     ndim = self.shape[-2]
@@ -139,7 +139,7 @@ def eig(self: Tensor) -> _FuncOpReturnType:
     )
 
 
-@create_func_op(n_in=1, n_ret=2)
+@func_op(n_in=1, n_ret=2)
 def qr(self: Tensor) -> _FuncOpReturnType:
     Q, R = np.linalg.qr(self.data)
 
@@ -162,7 +162,7 @@ def qr(self: Tensor) -> _FuncOpReturnType:
     return (result_q, compute_grad_q), (result_r, compute_grad_r)
 
 
-@create_func_op(n_in=1, n_ret=3)
+@func_op(n_in=1, n_ret=3)
 def svd(self: Tensor, full_matrices: bool = True) -> _FuncOpReturnType:
     U, S, VT = np.linalg.svd(self.data, full_matrices=full_matrices)
 
@@ -186,7 +186,7 @@ def svd(self: Tensor, full_matrices: bool = True) -> _FuncOpReturnType:
     )
 
 
-@create_ufunc_op()
+@unary_func_op()
 def matrix_power(self: Tensor, n: int) -> _FuncOpReturnType:
     result = Tensor(np.linalg.matrix_power(self.data, n))
 
@@ -211,7 +211,7 @@ def matrix_power(self: Tensor, n: int) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def pinv(self: Tensor) -> _FuncOpReturnType:
     result = Tensor(np.linalg.pinv(self.data))
 

@@ -16,17 +16,19 @@ __all_ = [
     
     "exp", "log", "log2", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", 
     "sinh", "cosh", "tanh", "clip", "abs", "sign", "reciprocal", "square", "cube",
-    "transpose", "sum", "trace", "mean", "var"
+    "transpose", "sum", "trace", "mean", "var", "min", "max", "swapaxes"
 ]
 # fmt: on
 
 
 def add(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._add(a, b) if _is_cpu_op(a, b) else bfunc._add_gpu(a, b)
+    op = bfunc._add()
+    return op.cpu(a, b) if _is_cpu_op(a, b) else op.gpu(a, b)
 
 
 def sub(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._sub(a, b) if _is_cpu_op(a, b) else bfunc._sub_gpu(a, b)
+    op = bfunc._sub()
+    return op.cpu(a, b) if _is_cpu_op(a, b) else op.gpu(a, b)
 
 
 def mul(a: Tensor, b: Tensor) -> Tensor:
@@ -256,17 +258,29 @@ def var(
 def min(
     a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> Tensor:
-    return ufunc._min_or_max(a, "min", axis, keepdims)
+    return (
+        ufunc._min_or_max(a, "min", axis, keepdims)
+        if _is_cpu_op(a)
+        else ufunc._min_or_max_gpu(a, "min", axis, keepdims)
+    )
 
 
 def max(
     a: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
 ) -> Tensor:
-    return ufunc._min_or_max(a, "max", axis, keepdims)
+    return (
+        ufunc._min_or_max(a, "max", axis, keepdims)
+        if _is_cpu_op(a)
+        else ufunc._min_or_max_gpu(a, "max", axis, keepdims)
+    )
 
 
 def swapaxes(a: Tensor, axis1: int, axis2: int) -> Tensor:
-    return ufunc.swapaxes(a, axis1, axis2)
+    return (
+        ufunc.swapaxes(a, axis1, axis2)
+        if _is_cpu_op(a)
+        else ufunc.swapaxes_gpu(a, axis1, axis2)
+    )
 
 
 @overload
@@ -491,4 +505,4 @@ Tensor.sum = sum
 Tensor.mean = mean
 Tensor.var = var
 Tensor.clip = clip
-Tensor.swapaxes = ufunc.swapaxes
+Tensor.swapaxes = swapaxes

@@ -4,7 +4,7 @@ import numpy as np
 from typing import Literal
 
 from lucid._tensor import Tensor
-from lucid._backend.core import create_ufunc_op, _FuncOpReturnType
+from lucid._backend.core import unary_func_op, _FuncOpReturnType
 from lucid.types import _EinopsPattern, _NumPyArray
 
 _ReduceStr = Literal["sum", "mean"]
@@ -65,7 +65,7 @@ def _build_intermediate(
     return inter_tokens, inter_shape
 
 
-@create_ufunc_op()
+@unary_func_op()
 def rearrange(
     self: Tensor, pattern: _EinopsPattern, **shapes: int
 ) -> _FuncOpReturnType:
@@ -145,7 +145,7 @@ def rearrange(
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def reduce(
     self: Tensor, pattern: _EinopsPattern, reduction: _ReduceStr = "sum", **shapes: int
 ) -> _FuncOpReturnType:
@@ -253,7 +253,7 @@ def reduce(
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def repeat(self: Tensor, pattern: _EinopsPattern, **shapes: int) -> _FuncOpReturnType:
     try:
         in_pat, out_pat = map(str.strip, pattern.split("->"))

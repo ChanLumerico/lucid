@@ -6,14 +6,14 @@ from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _NumPyArray, _ArrayLikeInt, _Scalar
 
 from lucid._backend.core import (
-    create_func_op,
-    create_ufunc_op,
-    create_mfunc_op,
+    func_op,
+    unary_func_op,
+    poly_func_op,
     _FuncOpReturnType,
 )
 
 
-@create_ufunc_op()
+@unary_func_op()
 def _reshape(self: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
     original_shape = self.shape
     result = Tensor(self.data.reshape(shape))
@@ -24,7 +24,7 @@ def _reshape(self: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def _reshape_inplace(self: Tensor, *shape: int) -> _FuncOpReturnType:
     original_shape = self.shape
     result = Tensor(self.data.reshape(*shape))
@@ -35,7 +35,7 @@ def _reshape_inplace(self: Tensor, *shape: int) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def squeeze(self: Tensor, axis: _ShapeLike | None = None) -> _FuncOpReturnType:
     original_shape = self.shape
     result = Tensor(self.data.squeeze(axis=axis))
@@ -46,7 +46,7 @@ def squeeze(self: Tensor, axis: _ShapeLike | None = None) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def unsqueeze(self: Tensor, axis: _ShapeLike) -> _FuncOpReturnType:
     result = Tensor(np.expand_dims(self.data, axis=axis))
 
@@ -56,7 +56,7 @@ def unsqueeze(self: Tensor, axis: _ShapeLike) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def ravel(self: Tensor) -> _FuncOpReturnType:
     original_shape = self.shape
     result = Tensor(self.data.ravel())
@@ -67,7 +67,7 @@ def ravel(self: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_mfunc_op()
+@poly_func_op()
 def stack(*tensors: Tensor, axis: int = 0) -> _FuncOpReturnType:
     data_arr = [tensor.data for tensor in tensors]
     result = Tensor(np.stack(data_arr, axis=axis))
@@ -79,7 +79,7 @@ def stack(*tensors: Tensor, axis: int = 0) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_mfunc_op()
+@poly_func_op()
 def concatenate(*tensors: Tensor, axis: int = 0) -> _FuncOpReturnType:
     data_arr = [tensor.data for tensor in tensors]
     result = Tensor(np.concatenate(data_arr, axis=axis))
@@ -94,7 +94,7 @@ def concatenate(*tensors: Tensor, axis: int = 0) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_mfunc_op()
+@poly_func_op()
 def hstack(*tensors: Tensor) -> _FuncOpReturnType:
     data_arr = [tensor.data for tensor in tensors]
     result = Tensor(np.hstack(data_arr))
@@ -116,7 +116,7 @@ def hstack(*tensors: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_mfunc_op()
+@poly_func_op()
 def vstack(*tensors: Tensor) -> _FuncOpReturnType:
     data_arr = [tensor.data for tensor in tensors]
     result = Tensor(np.vstack(data_arr))
@@ -131,7 +131,7 @@ def vstack(*tensors: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def pad(self: Tensor, pad_width: _ArrayLikeInt) -> _FuncOpReturnType:
     result = Tensor(np.pad(self.data, pad_width))
 
@@ -176,7 +176,7 @@ def pad(self: Tensor, pad_width: _ArrayLikeInt) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def repeat(
     self: Tensor, repeats: int | Sequence[int], axis: int | None = None
 ) -> _FuncOpReturnType:
@@ -232,7 +232,7 @@ def repeat(
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def tile(self: Tensor, reps: int | Sequence[int]) -> _FuncOpReturnType:
     result = Tensor(np.tile(self.data, reps))
 
@@ -275,7 +275,7 @@ def tile(self: Tensor, reps: int | Sequence[int]) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def flatten(self: Tensor) -> _FuncOpReturnType:
     original_shape = self.shape
     result = Tensor(self.data.reshape(-1))
@@ -286,7 +286,7 @@ def flatten(self: Tensor) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_func_op(n_in=2, n_ret=2)
+@func_op(n_in=2, n_ret=2)
 def meshgrid(
     self: Tensor, other: Tensor, indexing: Literal["xy", "ij"]
 ) -> _FuncOpReturnType:
@@ -336,7 +336,7 @@ def split(
     return tuple(returns)
 
 
-@create_ufunc_op()
+@unary_func_op()
 def tril(self: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
     result = Tensor(np.tril(self.data, k=diagonal))
 
@@ -346,7 +346,7 @@ def tril(self: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def triu(self: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
     result = Tensor(np.triu(self.data, k=diagonal))
 
@@ -356,7 +356,7 @@ def triu(self: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def broadcast_to(self: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
     original_shape = self.shape
     result = Tensor(np.broadcast_to(self.data, shape))
@@ -376,7 +376,7 @@ def broadcast_to(self: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
     return result, compute_grad
 
 
-@create_func_op(n_in=1, n_ret=None)
+@func_op(n_in=1, n_ret=None)
 def chunk(self: Tensor, chunks: int, axis: int = 0) -> _FuncOpReturnType:
     if chunks <= 0:
         raise ValueError("chunks must be greater than 0.")
@@ -407,7 +407,7 @@ def chunk(self: Tensor, chunks: int, axis: int = 0) -> _FuncOpReturnType:
     return tuple(results)
 
 
-@create_ufunc_op()
+@unary_func_op()
 def masked_fill(self: Tensor, mask: Tensor, value: _Scalar) -> _FuncOpReturnType:
     mask = mask.astype(bool)
     result = Tensor(np.where(mask.data, value, self.data))
@@ -420,7 +420,7 @@ def masked_fill(self: Tensor, mask: Tensor, value: _Scalar) -> _FuncOpReturnType
     return result, compute_grad
 
 
-@create_ufunc_op()
+@unary_func_op()
 def roll(
     self: Tensor,
     shifts: int | tuple[int, ...],
