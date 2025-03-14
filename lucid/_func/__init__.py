@@ -11,8 +11,8 @@ from lucid._func import bfunc, gfunc, ufunc
 
 # fmt: off
 __all_ = [
-    "add", "sub", "div", "minimum", "maximum", "power", "dot", "inner", "outer",
-    "matmul", 
+    "add", "sub", "multiply", "div", "minimum", "maximum", "power", "dot", "inner", 
+    "outer", "matmul", 
     
     "exp", "log", "log2", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", 
     "sinh", "cosh", "tanh", "clip", "abs", "sign", "reciprocal", "square", "cube",
@@ -22,57 +22,47 @@ __all_ = [
 
 
 def add(a: Tensor, b: Tensor) -> Tensor:
-    op = bfunc._add()
-    return op.cpu(a, b) if _is_cpu_op(a, b) else op.gpu(a, b)
+    return bfunc.add()(a, b)
 
 
 def sub(a: Tensor, b: Tensor) -> Tensor:
-    op = bfunc._sub()
-    return op.cpu(a, b) if _is_cpu_op(a, b) else op.gpu(a, b)
+    return bfunc.sub()(a, b)
 
 
-def mul(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._mul(a, b) if _is_cpu_op(a, b) else bfunc._mul_gpu(a, b)
+def multiply(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc.multiply()(a, b)
 
 
 def div(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._truediv(a, b) if _is_cpu_op(a, b) else bfunc._truediv_gpu(a, b)
+    return bfunc.truediv()(a, b)
 
 
 def _equal(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._equal(a, b) if _is_cpu_op(a, b) else bfunc._equal_gpu(a, b)
+    return bfunc._equal()(a, b)
 
 
 def _not_equal(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._not_equal(a, b) if _is_cpu_op(a, b) else bfunc._not_equal_gpu(a, b)
+    return bfunc._not_equal()(a, b)
 
 
 def _greater(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._greater(a, b) if _is_cpu_op(a, b) else bfunc._greater_gpu(a, b)
+    return bfunc._greater()(a, b)
 
 
 def _greater_or_equal(a: Tensor, b: Tensor) -> Tensor:
-    return (
-        bfunc._greater_or_equal(a, b)
-        if _is_cpu_op(a, b)
-        else bfunc._greater_or_equal_gpu(a, b)
-    )
+    return bfunc._greater_or_equal()(a, b)
 
 
 def _less(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._less(a, b) if _is_cpu_op(a, b) else bfunc._less_gpu(a, b)
+    return bfunc._less()(a, b)
 
 
 def _less_or_equal(a: Tensor, b: Tensor) -> Tensor:
-    return (
-        bfunc._less_or_equal(a, b)
-        if _is_cpu_op(a, b)
-        else bfunc._less_or_equal_gpu(a, b)
-    )
+    return bfunc._less_or_equal()(a, b)
 
 
 def minimum(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.minimum(a, b) if _is_cpu_op(a, b) else bfunc.minimum_gpu(a, b)
+    return bfunc.minimum()(a, b)
 
 
 def maximum(a: Tensor, b: Tensor) -> Tensor:
@@ -100,18 +90,10 @@ def matmul(a: Tensor, b: Tensor) -> Tensor:
     return bfunc._matmul(a, b) if _is_cpu_op(a, b) else bfunc._matmul_gpu(a, b)
 
 
-_radd: Callable[[Tensor, Tensor], Tensor] = lambda a, b: (
-    bfunc._add(a, b) if _is_cpu_op(a, b) else bfunc._add_gpu(a, b)
-)
-_rsub: Callable[[Tensor, Tensor], Tensor] = lambda a, b: (
-    bfunc._sub(b, a) if _is_cpu_op(b, a) else bfunc._sub_gpu(b, a)
-)
-_rmul: Callable[[Tensor, Tensor], Tensor] = lambda a, b: (
-    bfunc._mul(a, b) if _is_cpu_op(a, b) else bfunc._mul_gpu(a, b)
-)
-_rtruediv: Callable[[Tensor, Tensor], Tensor] = lambda a, b: (
-    bfunc._truediv(b, a) if _is_cpu_op(b, a) else bfunc._truediv_gpu(b, a)
-)
+_radd: Callable[[Tensor, Tensor], Tensor] = lambda a, b: add(a, b)
+_rsub: Callable[[Tensor, Tensor], Tensor] = lambda a, b: sub(b, a)
+_rmul: Callable[[Tensor, Tensor], Tensor] = lambda a, b: multiply(a, b)
+_rtruediv: Callable[[Tensor, Tensor], Tensor] = lambda a, b: div(b, a)
 
 
 def _pow(a: Tensor, exp: _Scalar) -> Tensor:
@@ -480,7 +462,7 @@ Tensor.__add__ = add
 Tensor.__radd__ = _radd
 Tensor.__sub__ = sub
 Tensor.__rsub__ = _rsub
-Tensor.__mul__ = mul
+Tensor.__mul__ = multiply
 Tensor.__rmul__ = _rmul
 Tensor.__truediv__ = div
 Tensor.__rtruediv__ = _rtruediv

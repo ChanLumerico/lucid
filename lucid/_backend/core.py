@@ -5,7 +5,7 @@ from typing import Callable, Tuple, Any
 import lucid
 from lucid.types import _DeviceType, _NumPyArray
 from lucid._tensor import Tensor
-from lucid._backend.metal import _MLXArray
+from lucid._backend.metal import _MLXArray, _is_cpu_op
 
 
 _GradFuncType = Callable[
@@ -15,19 +15,6 @@ _GradFuncType = Callable[
 _ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
 
 _FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
-
-
-class operation(ABC):
-    def __init__(self) -> None:
-        self.result: Tensor | None = None
-
-    @abstractmethod
-    def cpu(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]: ...
-
-    @abstractmethod
-    def gpu(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]: ...
-
-    def compute_grad(self) -> _GradFuncType: ...
 
 
 def func_op(
@@ -124,3 +111,27 @@ def binary_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Ca
 
 def poly_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
     return func_op(None, 1, has_gradient=has_gradient, device=device)
+
+
+class operation(ABC):
+    def __init__(self) -> None:
+        self.result: Tensor | None = None
+
+    @abstractmethod
+    def cpu(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]: ...
+
+    @abstractmethod
+    def gpu(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]: ...
+
+    def compute_grad(self, *args, **kwargs) -> _GradFuncType: ...
+
+    def compute_grad_cpu(self, *args, **kwargs) -> _GradFuncType: ...
+
+    def compute_grad_gpu(self, *args, **kwargs) -> _GradFuncType: ...
+
+    def __call__(self, *tensors, **kwargs) -> Tensor | tuple[Tensor, ...]:
+        return (
+            self.cpu(*tensors, **kwargs)
+            if _is_cpu_op(*tensors)
+            else self.gpu(*tensors, **kwargs)
+        )

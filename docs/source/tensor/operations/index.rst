@@ -39,7 +39,7 @@ Tensor Operations
 
    bfunc/add.rst
    bfunc/sub.rst
-   bfunc/mul.rst
+   bfunc/multiply.rst
    bfunc/div.rst
    bfunc/minimum.rst
    bfunc/maximum.rst

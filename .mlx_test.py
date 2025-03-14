@@ -3,15 +3,15 @@ import time
 
 t0 = time.time_ns()
 
-x = lucid.ones(200, 200, requires_grad=True)
-y = lucid.ones(200, 200, requires_grad=True)
+x = lucid.ones(4, 4, requires_grad=True) * 2
+y = lucid.ones(4, 4, requires_grad=True) * 3
 
 x.to("gpu")
 y.to("gpu")
 
-z = x - y
-z.backward()
-print(x.grad.shape)
+z = x / y
+z.backward(keep_grad=True)
+print(x.grad)
 
 t1 = time.time_ns()
 

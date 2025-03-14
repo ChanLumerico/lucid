@@ -1,9 +1,9 @@
-lucid.mul
-=========
+lucid.multiply
+==============
 
-.. autofunction:: lucid.mul
+.. autofunction:: lucid.multiply
 
-The `mul` function performs element-wise multiplication between two `Tensor` objects. 
+The `multiply` function performs element-wise multiplication between two `Tensor` objects. 
 It returns a new `Tensor` representing the product, with gradient support for backpropagation.
 
 Function Signature
@@ -51,14 +51,14 @@ the gradient with respect to the output (`out`) is computed as follows:
 Examples
 --------
 
-Using `mul` to multiply two tensors:
+Using `multiply` to multiply two tensors:
 
 .. code-block:: python
 
     >>> import lucid
     >>> a = Tensor([1.0, 2.0, 3.0], requires_grad=True)
     >>> b = Tensor([4.0, 5.0, 6.0], requires_grad=True)
-    >>> out = lucid.mul(a, b)
+    >>> out = lucid.multiply(a, b)
     >>> print(out)
     Tensor([4.0, 10.0, 18.0], grad=None)
 
