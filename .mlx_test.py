@@ -4,12 +4,12 @@ import time
 t0 = time.time_ns()
 
 x = lucid.ones(4, 4, requires_grad=True) * 2
-y = lucid.ones(4, 4, requires_grad=True) * 3
+y = lucid.ones(4, 4, requires_grad=True) * 1
 
 x.to("gpu")
 y.to("gpu")
 
-z = x / y
+z = (x + y) ** 0.5 @ y
 z.backward(keep_grad=True)
 print(x.grad)
 

@@ -66,28 +66,28 @@ def minimum(a: Tensor, b: Tensor) -> Tensor:
 
 
 def maximum(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.maximum(a, b) if _is_cpu_op(a, b) else bfunc.maximum_gpu(a, b)
+    return bfunc.maximum()(a, b)
 
 
 def power(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.power(a, b) if _is_cpu_op(a, b) else bfunc.power_gpu(a, b)
+    return bfunc.power()(a, b)
 
 
 def dot(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.dot(a, b) if _is_cpu_op(a, b) else bfunc.dot_gpu(a, b)
+    return bfunc.dot()(a, b)
 
 
 def inner(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc.inner(a, b) if _is_cpu_op(a, b) else bfunc.inner_gpu(a, b)
+    return bfunc.inner()(a, b)
 
 
 def outer(a: Tensor, b: Tensor) -> Tensor:
     a, b = a.ravel(), b.ravel()
-    return bfunc.outer(a, b) if _is_cpu_op(a, b) else bfunc.outer_gpu(a, b)
+    return bfunc.outer()(a, b)
 
 
 def matmul(a: Tensor, b: Tensor) -> Tensor:
-    return bfunc._matmul(a, b) if _is_cpu_op(a, b) else bfunc._matmul_gpu(a, b)
+    return bfunc.matmul()(a, b)
 
 
 _radd: Callable[[Tensor, Tensor], Tensor] = lambda a, b: add(a, b)
@@ -97,11 +97,11 @@ _rtruediv: Callable[[Tensor, Tensor], Tensor] = lambda a, b: div(b, a)
 
 
 def _pow(a: Tensor, exp: _Scalar) -> Tensor:
-    return ufunc._pow(a, exp) if _is_cpu_op(a) else ufunc._pow_gpu(a, exp)
+    return ufunc._pow(exp)(a)
 
 
 def _neg(a: Tensor) -> Tensor:
-    return ufunc._neg(a) if _is_cpu_op(a) else ufunc._neg_gpu(a)
+    return ufunc._neg()(a)
 
 
 def exp(a: Tensor) -> Tensor:
