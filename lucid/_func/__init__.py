@@ -105,55 +105,55 @@ def _neg(a: Tensor) -> Tensor:
 
 
 def exp(a: Tensor) -> Tensor:
-    return ufunc.exp(a) if _is_cpu_op(a) else ufunc.exp_gpu(a)
+    return ufunc.exp()(a)
 
 
 def log(a: Tensor) -> Tensor:
-    return ufunc.log(a) if _is_cpu_op(a) else ufunc.log_gpu(a)
+    return ufunc.log()(a)
 
 
 def log2(a: Tensor) -> Tensor:
-    return ufunc.log2(a) if _is_cpu_op(a) else ufunc.log2_gpu(a)
+    return ufunc.log2()(a)
 
 
 def sqrt(a: Tensor) -> Tensor:
-    return ufunc.sqrt(a) if _is_cpu_op(a) else ufunc.sqrt_gpu(a)
+    return ufunc.sqrt()(a)
 
 
 def sin(a: Tensor) -> Tensor:
-    return ufunc.sin(a) if _is_cpu_op(a) else ufunc.sin_gpu(a)
+    return ufunc.sin()(a)
 
 
 def cos(a: Tensor) -> Tensor:
-    return ufunc.cos(a) if _is_cpu_op(a) else ufunc.cos_gpu(a)
+    return ufunc.cos()(a)
 
 
 def tan(a: Tensor) -> Tensor:
-    return ufunc.tan(a) if _is_cpu_op(a) else ufunc.tan_gpu(a)
+    return ufunc.tan()(a)
 
 
 def arcsin(a: Tensor) -> Tensor:
-    return ufunc.arcsin(a) if _is_cpu_op(a) else ufunc.arcsin_gpu(a)
+    return ufunc.arcsin()(a)
 
 
 def arccos(a: Tensor) -> Tensor:
-    return ufunc.arccos(a) if _is_cpu_op(a) else ufunc.arccos_gpu(a)
+    return ufunc.arccos()(a)
 
 
 def arctan(a: Tensor) -> Tensor:
-    return ufunc.arctan(a) if _is_cpu_op(a) else ufunc.arctan_gpu(a)
+    return ufunc.arctan()(a)
 
 
 def sinh(a: Tensor) -> Tensor:
-    return ufunc.sinh(a) if _is_cpu_op(a) else ufunc.sinh_gpu(a)
+    return ufunc.sinh()(a)
 
 
 def cosh(a: Tensor) -> Tensor:
-    return ufunc.cosh(a) if _is_cpu_op(a) else ufunc.cosh_gpu(a)
+    return ufunc.cosh()(a)
 
 
 def tanh(a: Tensor) -> Tensor:
-    return ufunc.tanh(a) if _is_cpu_op(a) else ufunc.tanh_gpu(a)
+    return ufunc.tanh()(a)
 
 
 def clip(a: Tensor, min_value: _Scalar | None, max_value: _Scalar | None) -> Tensor:

@@ -1,6 +1,6 @@
 import functools
 from abc import ABC, abstractmethod
-from typing import Callable, Tuple, Any
+from typing import Callable, Tuple
 
 import lucid
 from lucid.types import _DeviceType, _NumPyArray
@@ -26,12 +26,10 @@ def func_op(
 
     def decorator(func: Callable[..., _FuncOpReturnType]) -> Callable:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Tuple[Tensor, ...]:
+        def wrapper(op_self, *args, **kwargs) -> Tuple[Tensor, ...]:
             tensors: Tuple[Tensor, ...] = tuple()
             requires_grad = False
 
-            op_self = args[0]
-            args = args[1:]
             if n_in is None:
                 tensor_args = args
             else:

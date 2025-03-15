@@ -106,7 +106,10 @@ def _set_tensor_grad(
             if at == Ellipsis:
                 at = slice(None, None, None)
 
-        tensor.grad[at] = tensor.grad[at] + grad
+        if tensor.grad.ndim == 0:
+            tensor.grad += grad
+        else:
+            tensor.grad[at] = tensor.grad[at] + grad
 
 
 def _check_is_tensor(

@@ -236,237 +236,221 @@ class arctan(operation):
         return (1 / (1 + a.data**2)) * self.result.grad
 
 
+class sinh(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.sinh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.sinh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return lib_.cosh(a.data) * self.result.grad
+
+
+class cosh(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.cosh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.cosh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return lib_.sinh(a.data) * self.result.grad
+
+
+class tanh(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.tanh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.tanh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return (1 - lib_.tanh(a.data) ** 2) * self.result.grad
+
+
+class clip(operation):
+    def __init__(self, min_value: float | None, max_value: float) -> None:
+        super().__init__()
+        self.min_value = min_value
+        self.max_value = max_value
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.clip(a.data, self.min_value, self.max_value))
+        return self.result, partial(self.compute_grad_cpu, a=a)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.clip(a.data, self.min_value, self.max_value))
+        return self.result, partial(self.compute_grad_gpu, a=a)
+
+    def compute_grad_cpu(self, a: Tensor) -> _GradFuncType:
+        grad = np.ones_like(a.data)
+        grad[a.data < self.min_value] = 0
+        grad[a.data > self.max_value] = 0
+
+        return grad * self.result.grad
+
+    def compute_grad_gpu(self, a: Tensor) -> _GradFuncType:
+        grad = mx.ones_like(a.data)
+        grad = mx.where(a.data < self.min_value, 0, grad)
+        grad = mx.where(a.data > self.max_value, 0, grad)
+
+        return grad * self.result.grad
+
+
+class abs(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.abs(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.abs(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return lib_.where(a.data >= 0, 1, -1) * self.result.grad
+
+
+class sign(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.sign(a.data))
+        return self.result, partial(self.compute_grad, lib_=np)
+
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.sign(a.data))
+        return self.result, partial(self.compute_grad, lib_=mx)
+
+    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
+
+
+class reciprocal(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(1 / a.data)
+        return self.result, partial(self.compute_grad, a=a)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(1 / a.data)
+        return self.result, partial(self.compute_grad, a=a)
+
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return (-1 / (a.data**2)) * self.result.grad
+
+
+class square(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.square(a.data))
+        return self.result, partial(self.compute_grad, a=a)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.square(a.data))
+        return self.result, partial(self.compute_grad, a=a)
+
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return 2 * a.data * self.result.grad
+
+
+class cube(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data**3)
+        return self.result, partial(self.compute_grad, a=a)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data**3)
+        return self.result, partial(self.compute_grad, a=a)
+
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return 3 * a.data**2 * self.result.grad
+
+
+class _T(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data.T)
+        return self.result, self.compute_grad
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data.T)
+        return self.result, self.compute_grad
+
+    def compute_grad(self) -> _GradFuncType:
+        return self.result.grad
+
+
+class _mT(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data.mT)
+        return self.result, self.compute_grad_cpu
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.swapaxes(a.data, -1, -2))
+        return self.result, self.compute_grad_gpu
+
+    def compute_grad_cpu(self) -> _GradFuncType:
+        return self.result.grad.mT
+
+    def compute_grad_gpu(self) -> _GradFuncType:
+        return mx.swapaxes(self.result.grad, -1, -2)
+
+
 # TODO: Continue from here
-
-
-@unary_func_op()
-def sinh(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.sinh(self.data))
-
-    def compute_grad() -> _NumPyArray:
-        return np.cosh(self.data) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def sinh_gpu(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(mx.sinh(self.data))
-
-    def compute_grad() -> _MLXArray:
-        return mx.cosh(self.data) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def cosh(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.cosh(self.data))
-
-    def compute_grad() -> _NumPyArray:
-        return np.sinh(self.data) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def cosh_gpu(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(mx.cosh(self.data))
-
-    def compute_grad() -> _MLXArray:
-        return mx.sinh(self.data) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def tanh(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.tanh(self.data))
-
-    def compute_grad() -> _NumPyArray:
-        return (1 - np.tanh(self.data) ** 2) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def tanh_gpu(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(mx.tanh(self.data))
-
-    def compute_grad() -> _MLXArray:
-        return (1 - mx.tanh(self.data) ** 2) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def clip(self: Tensor, min_value: float | None, max_value: float) -> _FuncOpReturnType:
-    result = Tensor(np.clip(self.data, min_value, max_value))
-
-    def compute_grad() -> _NumPyArray:
-        grad = np.ones_like(self.data)
-        grad[self.data < min_value] = 0
-        grad[self.data > max_value] = 0
-
-        return grad * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def clip_gpu(
-    self: Tensor, min_value: float | None, max_value: float
-) -> _FuncOpReturnType:
-    result = Tensor(mx.clip(self.data, min_value, max_value))
-
-    def compute_grad() -> _MLXArray:
-        grad = mx.ones_like(self.data)
-        grad = mx.where(self.data < min_value, 0, grad)
-        grad = mx.where(self.data > max_value, 0, grad)
-
-        return grad * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def abs(self: Tensor) -> Tensor:
-    result = Tensor(np.abs(self.data))
-
-    def compute_grad() -> _NumPyArray:
-        return np.where(self.data >= 0, 1, -1) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def abs_gpu(self: Tensor) -> Tensor:
-    result = Tensor(mx.abs(self.data))
-
-    def compute_grad() -> _MLXArray:
-        return mx.where(self.data >= 0, 1, -1) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(has_gradient=False)
-def sign(self: Tensor) -> Tensor:
-    result = Tensor(np.sign(self.data))
-
-    def compute_grad() -> _NumPyArray:
-        return np.array(0.0)
-
-    return result, compute_grad
-
-
-@unary_func_op(has_gradient=False, device="gpu")
-def sign_gpu(self: Tensor) -> Tensor:
-    result = Tensor(mx.sign(self.data))
-
-    def compute_grad() -> _MLXArray:
-        return mx.array(0.0)
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def reciprocal(self: Tensor) -> Tensor:
-    result = Tensor(1 / self.data)
-
-    def compute_grad() -> _NumPyArray:
-        return (-1 / (self.data**2)) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def reciprocal_gpu(self: Tensor) -> Tensor:
-    result = Tensor(1 / self.data)
-
-    def compute_grad() -> _MLXArray:
-        return (-1 / (self.data**2)) * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def square(self: Tensor) -> Tensor:
-    result = Tensor(np.square(self.data))
-
-    def compute_grad() -> _NumPyArray:
-        return 2 * self.data * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def square_gpu(self: Tensor) -> Tensor:
-    result = Tensor(mx.square(self.data))
-
-    def compute_grad() -> _MLXArray:
-        return 2 * self.data * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def cube(self: Tensor) -> Tensor:
-    result = Tensor(self.data**3)
-
-    def compute_grad() -> _NumPyArray:
-        return 3 * self.data**2 * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def cube_gpu(self: Tensor) -> Tensor:
-    result = Tensor(self.data**3)
-
-    def compute_grad() -> _MLXArray:
-        return 3 * self.data**2 * result.grad
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def _T(self: Tensor) -> Tensor:
-    result = Tensor(self.data.T)
-
-    def compute_grad() -> _NumPyArray:
-        return result.grad.T
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def _T_gpu(self: Tensor) -> Tensor:
-    result = Tensor(self.data.T)
-
-    def compute_grad() -> _MLXArray:
-        return result.grad.T
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def _mT(self: Tensor) -> Tensor:
-    result = Tensor(self.data.mT)
-
-    def compute_grad() -> _NumPyArray:
-        return result.grad.mT
-
-    return result, compute_grad
-
-
-@unary_func_op(device="gpu")
-def _mT_gpu(self: Tensor) -> Tensor:
-    result = Tensor(mx.swapaxes(self.data, -1, -2))
-
-    def compute_grad() -> _MLXArray:
-        return mx.swapaxes(result.grad, -1, -2)
-
-    return result, compute_grad
 
 
 def _get_transpose_axes(axes: Optional[list[int]], ndim: int) -> list:
