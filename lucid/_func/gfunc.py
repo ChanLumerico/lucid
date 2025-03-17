@@ -1,7 +1,9 @@
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLike, _Scalar
+from lucid.types import _ShapeLike, _ArrayLike, _Scalar, _DeviceType
+
+from lucid._backend.metal import mx
 
 
 def zeros(
@@ -9,8 +11,9 @@ def zeros(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return Tensor(np.zeros(shape), requires_grad, keep_grad, dtype)
+    return Tensor(np.zeros(shape), requires_grad, keep_grad, dtype, device)
 
 
 def zeros_like(
@@ -18,12 +21,15 @@ def zeros_like(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType | None = None,
 ) -> Tensor:
     if dtype is None and hasattr(a, "dtype"):
         dtype = a.dtype
+    if device is None:
+        device = a.device if hasattr(a, "device") else "cpu"
     if isinstance(a, Tensor):
         a = a.data
-    return Tensor(np.zeros_like(a), requires_grad, keep_grad, dtype)
+    return Tensor(np.zeros_like(a), requires_grad, keep_grad, dtype, device)
 
 
 def ones(
@@ -31,8 +37,9 @@ def ones(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return Tensor(np.ones(shape), requires_grad, keep_grad, dtype)
+    return Tensor(np.ones(shape), requires_grad, keep_grad, dtype, device)
 
 
 def ones_like(
@@ -40,12 +47,15 @@ def ones_like(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType | None = None,
 ) -> Tensor:
     if dtype is None and hasattr(a, "dtype"):
         dtype = a.dtype
+    if device is None:
+        device = a.device if hasattr(a, "device") else "cpu"
     if isinstance(a, Tensor):
         a = a.data
-    return Tensor(np.ones_like(a), requires_grad, keep_grad, dtype)
+    return Tensor(np.ones_like(a), requires_grad, keep_grad, dtype, device)
 
 
 def eye(
@@ -55,8 +65,9 @@ def eye(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return Tensor(np.eye(N, M, k), requires_grad, keep_grad, dtype)
+    return Tensor(np.eye(N, M, k), requires_grad, keep_grad, dtype, device)
 
 
 def diag(
@@ -65,10 +76,22 @@ def diag(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType | None = None,
 ) -> Tensor:
+    if dtype is None and hasattr(v, "dtype"):
+        dtype = v.dtype
+    if device is None:
+        device = v.device if hasattr(v, "device") else "cpu"
     if not isinstance(v, Tensor):
-        v = Tensor(v, requires_grad, keep_grad, dtype)
-    return Tensor(np.diag(v.data, k), v.requires_grad, v.keep_grad)
+        v = Tensor(v)
+
+    if device == "cpu":
+        return Tensor(np.diag(v.data, k=k), requires_grad, keep_grad, dtype, device)
+    else:
+        return Tensor(mx.diag(v.data, k=k), requires_grad, keep_grad, dtype, device)
+
+
+# TODO: Continue from here
 
 
 def arange(
@@ -78,8 +101,9 @@ def arange(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return Tensor(np.arange(start, stop, step), requires_grad, keep_grad, dtype)
+    return Tensor(np.arange(start, stop, step), requires_grad, keep_grad, dtype, device)
 
 
 def empty(
@@ -87,8 +111,9 @@ def empty(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return Tensor(np.empty(shape), requires_grad, keep_grad, dtype)
+    return Tensor(np.empty(shape), requires_grad, keep_grad, dtype, device)
 
 
 def empty_like(
@@ -96,12 +121,13 @@ def empty_like(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
     if dtype is None and hasattr(a, "dtype"):
         dtype = a.dtype
     if isinstance(a, Tensor):
         a = a.data
-    return Tensor(np.empty_like(a), requires_grad, keep_grad, dtype)
+    return Tensor(np.empty_like(a), requires_grad, keep_grad, dtype, device)
 
 
 def linspace(
@@ -111,5 +137,8 @@ def linspace(
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return Tensor(np.linspace(start, stop, num), requires_grad, keep_grad, dtype)
+    return Tensor(
+        np.linspace(start, stop, num), requires_grad, keep_grad, dtype, device
+    )

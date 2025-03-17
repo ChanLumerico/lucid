@@ -10,6 +10,7 @@ x.to("gpu")
 y.to("gpu")
 
 z = (x + y) ** 0.5 @ y
+z += z.var(axis=1, keepdims=True)
 z.backward(keep_grad=True)
 print(x.grad)
 
