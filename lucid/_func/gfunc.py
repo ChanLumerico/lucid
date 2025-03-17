@@ -3,8 +3,6 @@ import numpy as np
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _ArrayLike, _Scalar, _DeviceType
 
-from lucid._backend.metal import mx
-
 
 def zeros(
     shape: _ShapeLike,
@@ -29,6 +27,7 @@ def zeros_like(
         device = a.device if hasattr(a, "device") else "cpu"
     if isinstance(a, Tensor):
         a = a.data
+
     return Tensor(np.zeros_like(a), requires_grad, keep_grad, dtype, device)
 
 
@@ -55,6 +54,7 @@ def ones_like(
         device = a.device if hasattr(a, "device") else "cpu"
     if isinstance(a, Tensor):
         a = a.data
+
     return Tensor(np.ones_like(a), requires_grad, keep_grad, dtype, device)
 
 
@@ -85,13 +85,7 @@ def diag(
     if not isinstance(v, Tensor):
         v = Tensor(v)
 
-    if device == "cpu":
-        return Tensor(np.diag(v.data, k=k), requires_grad, keep_grad, dtype, device)
-    else:
-        return Tensor(mx.diag(v.data, k=k), requires_grad, keep_grad, dtype, device)
-
-
-# TODO: Continue from here
+    return Tensor(np.diag(v.data, k=k), requires_grad, keep_grad, dtype, device)
 
 
 def arange(
@@ -127,6 +121,9 @@ def empty_like(
         dtype = a.dtype
     if isinstance(a, Tensor):
         a = a.data
+    if device is None:
+        device = a.device if hasattr(a, "device") else "cpu"
+
     return Tensor(np.empty_like(a), requires_grad, keep_grad, dtype, device)
 
 

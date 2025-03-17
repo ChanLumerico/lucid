@@ -1,8 +1,6 @@
 from typing import Any, Callable, Dict, Sequence, Literal
 import numpy as np
 
-_base_dtype: np.floating = np.float32
-
 _DeviceType = Literal["cpu", "gpu"]
 
 _Scalar = int | float
@@ -19,7 +17,3 @@ _StateDict = Dict[str, Any]
 _OptimClosure = Callable[[], Any]
 
 _EinopsPattern = str
-
-
-def _change_base_dtype(dtype: type) -> None:
-    _base_dtype = dtype

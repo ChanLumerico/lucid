@@ -5,7 +5,7 @@ import lucid
 from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _DeviceType
 
 from lucid._tensor.tensor_ops import _TensorOps
-from lucid._backend.metal import mx, _MLXArray
+from lucid._backend.metal import mx, _MLXArray, parse_mlx_indexing
 
 
 _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
@@ -32,7 +32,7 @@ class Tensor(_TensorOps):
             raise ValueError(
                 f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
             )
-        if device == "gpu":
+        if device == "gpu" and isinstance(self.data, _NumPyArray):
             self.data = mx.array(self.data)
 
         self.requires_grad = requires_grad and lucid.grad_enabled()
@@ -169,6 +169,9 @@ class Tensor(_TensorOps):
                 if isinstance(id, Tensor):
                     id = id.data
                 new_idx += (id,)
+
+        if self.is_gpu():
+            new_idx = parse_mlx_indexing(new_idx)
 
         sliced_data = self.data[new_idx]
         new_tensor = Tensor(

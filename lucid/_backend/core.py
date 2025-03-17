@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 import lucid
 from lucid.types import _DeviceType, _NumPyArray
 from lucid._tensor import Tensor
-from lucid._backend.metal import _MLXArray, _is_cpu_op
+from lucid._backend.metal import _MLXArray, is_cpu_op
 
 
 _GradFuncType = Callable[
@@ -43,6 +43,12 @@ def func_op(
                 tensor = lucid._check_is_tensor(arg, device=device)
                 tensors += (tensor,)
                 requires_grad = requires_grad or tensor.requires_grad
+
+                if tensor.device != device:
+                    raise RuntimeError(
+                        f"{tensor.device} tensor of shape {tensor.shape} "
+                        + f"passed for {device} operation('{type(op_self).__name__}')."
+                    )
 
             non_tensor_args = args[n_in:] if n_in is not None else ()
             new_args = (*tensors, *non_tensor_args)
@@ -130,6 +136,6 @@ class operation(ABC):
     def __call__(self, *tensors, **kwargs) -> Tensor | tuple[Tensor, ...]:
         return (
             self.cpu(*tensors, **kwargs)
-            if _is_cpu_op(*tensors)
+            if is_cpu_op(*tensors)
             else self.gpu(*tensors, **kwargs)
         )

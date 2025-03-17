@@ -1,20 +1,23 @@
 from typing import overload, Callable
 
 import lucid
-from lucid.types import _Scalar, _ShapeLike, _ArrayLike, _base_dtype
+from lucid.types import _Scalar, _ShapeLike, _ArrayLike, _DeviceType
 
 from lucid._tensor import Tensor
 from lucid._func import bfunc, gfunc, ufunc
 
 
 # fmt: off
-__all_ = [
+__all__ = [
     "add", "sub", "multiply", "div", "minimum", "maximum", "power", "dot", "inner", 
     "outer", "matmul", 
     
     "exp", "log", "log2", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", 
     "sinh", "cosh", "tanh", "clip", "abs", "sign", "reciprocal", "square", "cube",
-    "transpose", "sum", "trace", "mean", "var", "min", "max", "swapaxes"
+    "transpose", "sum", "trace", "mean", "var", "min", "max", "swapaxes",
+
+    "zeros", "zeros_like", "ones", "ones_like", "eye", "diag", "arange", "empty",
+    "empty_like", "linspace",
 ]
 # fmt: on
 
@@ -238,29 +241,32 @@ def swapaxes(a: Tensor, /, axis1: int, axis2: int) -> Tensor:
 @overload
 def zeros(
     *shape: int,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
 @overload
 def zeros(
     shape: _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
 def zeros(
     *args: int | _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
     shape = lucid._get_overloaded_shape(args)
-    return gfunc.zeros(shape, dtype, requires_grad, keep_grad)
+    return gfunc.zeros(shape, dtype, requires_grad, keep_grad, device)
 
 
 def zeros_like(
@@ -268,75 +274,86 @@ def zeros_like(
     dtype: type = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return gfunc.zeros_like(a, dtype, requires_grad, keep_grad)
+    return gfunc.zeros_like(a, dtype, requires_grad, keep_grad, device)
 
 
 @overload
 def ones(
     *shape: int,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
 @overload
 def ones(
     shape: _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
 def ones(
     *args: int | _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
     shape = lucid._get_overloaded_shape(args)
-    return gfunc.ones(shape, dtype, requires_grad, keep_grad)
+    return gfunc.ones(shape, dtype, requires_grad, keep_grad, device)
 
 
 def ones_like(
     a: Tensor | _ArrayLike,
+    /,
     dtype: type = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return gfunc.ones_like(a, dtype, requires_grad, keep_grad)
+    return gfunc.ones_like(a, dtype, requires_grad, keep_grad, device)
 
 
 def eye(
     N: int,
     M: int | None = None,
     k: int = 0,
-    dtype: type = _base_dtype,
+    /,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return gfunc.eye(N, M, k, dtype, requires_grad, keep_grad)
+    return gfunc.eye(N, M, k, dtype, requires_grad, keep_grad, device)
 
 
 def diag(
     v: Tensor | _ArrayLike,
     k: int = 0,
-    dtype: type = _base_dtype,
+    /,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return gfunc.diag(v, k, dtype, requires_grad, keep_grad)
+    return gfunc.diag(v, k, dtype, requires_grad, keep_grad, device)
 
 
 @overload
 def arange(
     stop: _Scalar,
     *,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
@@ -345,9 +362,10 @@ def arange(
     start: _Scalar,
     stop: _Scalar,
     *,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
@@ -356,17 +374,19 @@ def arange(
     start: _Scalar,
     stop: _Scalar,
     step: _Scalar,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
 def arange(
     *args,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
     if len(args) == 1:
         arange_args = (0.0, *args, 1.0)
@@ -377,55 +397,62 @@ def arange(
     else:
         raise ValueError(f"Expected <=3 arguments got {len(args)} arguments.")
 
-    return gfunc.arange(*arange_args, dtype, requires_grad, keep_grad)
+    return gfunc.arange(*arange_args, dtype, requires_grad, keep_grad, device)
 
 
 @overload
 def empty(
     *shape: int,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
 @overload
 def empty(
     shape: _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor: ...
 
 
 def empty(
     *args: int | _ShapeLike,
-    dtype: type = _base_dtype,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
     shape = lucid._get_overloaded_shape(args)
-    return gfunc.empty(shape, dtype, requires_grad, keep_grad)
+    return gfunc.empty(shape, dtype, requires_grad, keep_grad, device)
 
 
 def empty_like(
     a: Tensor | _ArrayLike,
+    /,
     dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return gfunc.empty_like(a, dtype, requires_grad, keep_grad)
+    return gfunc.empty_like(a, dtype, requires_grad, keep_grad, device)
 
 
 def linspace(
     start: _Scalar,
     stop: _Scalar,
     num: int = 50,
-    dtype: type = _base_dtype,
+    /,
+    dtype: type | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return gfunc.linspace(start, stop, num, dtype, requires_grad, keep_grad)
+    return gfunc.linspace(start, stop, num, dtype, requires_grad, keep_grad, device)
 
 
 Tensor.__add__ = add
