@@ -2,7 +2,7 @@ from typing import Callable, Iterator, Optional, Self, SupportsIndex
 import numpy as np
 
 import lucid
-from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _DeviceType
+from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _DeviceType, Numeric
 
 from lucid._tensor.tensor_ops import _TensorOps
 from lucid._backend.metal import mx, _MLXArray, parse_mlx_indexing
@@ -125,8 +125,14 @@ class Tensor(_TensorOps):
     def zero_grad(self) -> None:
         self.grad = None
 
-    def astype(self, dtype: type) -> Self:  # TODO: Need to modify this.
-        self.data = self.data.astype(dtype)
+    def astype(self, dtype: type | Numeric) -> Self:
+        new_dtype = dtype
+        if isinstance(dtype, Numeric):
+            new_dtype = dtype.parse(tensor_dtype=self.dtype, device=self.device)
+            if new_dtype is None:
+                raise RuntimeError(f"Failed type parsing to '{type(dtype).__name__}'.")
+
+        self.data = self.data.astype(new_dtype)
         self.dtype = self.data.dtype
         return self
 
@@ -159,7 +165,7 @@ class Tensor(_TensorOps):
     def is_gpu(self) -> bool:
         return self.device == "gpu"
 
-    def __getitem__(self, idx: SupportsIndex) -> Self:
+    def __getitem__(self, idx: SupportsIndex | Self) -> Self:
         new_idx = idx
         if isinstance(idx, Tensor):
             new_idx = idx.data
@@ -197,16 +203,33 @@ class Tensor(_TensorOps):
 
         return new_tensor
 
-    def __setitem__(self, idx: SupportsIndex, value: Self | _ArrayOrScalar) -> None:
+    def __setitem__(
+        self, idx: SupportsIndex | Self, value: Self | _ArrayOrScalar
+    ) -> None:
         if self.requires_grad:
             raise RuntimeError(
                 "Cannot perform in-place item setting on a "
                 + "Tensor that requires gradients. "
             )
+        if isinstance(value, Tensor) and self.device != value.device:
+            raise RuntimeError(
+                f"Devices does not match for the tensor and the value.",
+            )
 
-        if not isinstance(value, Tensor):
-            value = Tensor(value)
-        self.data[idx] = value.data
+        new_idx = idx
+        if isinstance(idx, Tensor):
+            new_idx = idx.data
+        if isinstance(idx, tuple):
+            new_idx = tuple()
+            for id in idx:
+                if isinstance(id, Tensor):
+                    id = id.data
+                new_idx += (id,)
+
+        if self.is_gpu():
+            new_idx = parse_mlx_indexing(new_idx)
+
+        self.data[new_idx] = value.data
 
     def __len__(self) -> int:
         if self.ndim == 0:

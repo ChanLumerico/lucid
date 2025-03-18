@@ -21,6 +21,7 @@ from pathlib import Path
 import os
 import sys
 import json
+import math
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -29,7 +30,14 @@ from lucid._util import *
 
 from lucid._backend.metal import mx, _MLXArray
 
-from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike, _DeviceType
+from lucid.types import (
+    _ArrayOrScalar,
+    _NumPyArray,
+    _ArrayLike,
+    _ShapeLike,
+    _DeviceType,
+    Numeric,
+)
 
 import lucid.linalg as linalg
 import lucid.random as random
@@ -40,8 +48,11 @@ _grad_enabled: bool = True
 
 newaxis = np.newaxis
 
-pi = np.pi
-inf = np.inf
+pi = math.pi
+inf = math.inf
+
+Int = Numeric(int)
+Float = Numeric(float)
 
 
 def tensor(

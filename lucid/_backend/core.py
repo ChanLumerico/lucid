@@ -1,11 +1,12 @@
-import functools
 from abc import ABC, abstractmethod
 from typing import Callable, Tuple
+import functools
 
 import lucid
 from lucid.types import _DeviceType, _NumPyArray
+
 from lucid._tensor import Tensor
-from lucid._backend.metal import _MLXArray, is_cpu_op
+from lucid._backend.metal import mx, _MLXArray, is_cpu_op
 
 
 _GradFuncType = Callable[
