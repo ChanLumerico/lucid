@@ -170,44 +170,70 @@ class hstack(operation):
         return tuple(split_grads)
 
 
-# TODO: Continue from here.
+class vstack(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
+    @poly_func_op()
+    def cpu(self, *arr: Tensor) -> _FuncOpReturnType:
+        data_arr = [t.data for t in arr]
+        self.result = Tensor(np.vstack(data_arr))
 
-@poly_func_op()
-def vstack(*tensors: Tensor) -> _FuncOpReturnType:
-    data_arr = [tensor.data for tensor in tensors]
-    result = Tensor(np.vstack(data_arr))
+        return self.result, partial(self.compute_grad, arr=arr, lib_=np)
 
-    def compute_grad() -> tuple[_NumPyArray, ...]:
-        split_sizes = [tensor.shape[0] for tensor in tensors]
-        split_indices = np.cumsum(split_sizes)[:-1]
-        split_grads = np.split(result.grad, split_indices, axis=0)
+    @poly_func_op(device="gpu")
+    def gpu(self, *arr: Tensor) -> _FuncOpReturnType:
+        data_arr = [t.data for t in arr]
+        self.result = Tensor(mx.concatenate(data_arr, axis=0))
 
+        return self.result, partial(self.compute_grad, arr=arr, lib_=mx)
+
+    def compute_grad(self, arr: tuple[Tensor], lib_: ModuleType) -> _GradFuncType:
+        split_sizes = [a.shape[1] if self.result.ndim > 1 else a.shape[0] for a in arr]
+        split_indices = lib_.cumsum(lib_.array(split_sizes))[:-1]
+
+        split_grads = (
+            lib_.split(self.result.grad, split_indices, axis=0)
+            if self.result.ndim > 1
+            else lib_.split(self.result.grad, len(arr))
+        )
         return tuple(split_grads)
 
-    return result, compute_grad
+
+class concatenate(operation):
+    def __init__(self, axis: int) -> None:
+        super().__init__()
+        self.axis = axis
+
+    @poly_func_op()
+    def cpu(self, *arr: Tensor) -> _FuncOpReturnType:
+        data_arr = [a.data for a in arr]
+        self.result = Tensor(np.concatenate(data_arr, axis=self.axis))
+        return self.result, partial(self.compute_grad, arr=arr, lib_=np)
+
+    @poly_func_op(device="gpu")
+    def gpu(self, *arr: Tensor) -> _FuncOpReturnType:
+        data_arr = [a.data for a in arr]
+        self.result = Tensor(mx.concatenate(data_arr, axis=self.axis))
+        return self.result, partial(self.compute_grad, arr=arr, lib_=mx)
+
+    def compute_grad(self, *arr: Tensor, lib_: ModuleType) -> _GradFuncType:
+        split_sizes = [a.shape[self.axis] for a in arr]
+        split_indices = lib_.cumsum(split_sizes)[:-1]
+
+        split_grad = lib_.split(self.result.grad, split_indices, axis=self.axis)
+        return tuple(split_grad)
 
 
-@poly_func_op()
-def concatenate(*tensors: Tensor, axis: int = 0) -> _FuncOpReturnType:
-    data_arr = [tensor.data for tensor in tensors]
-    result = Tensor(np.concatenate(data_arr, axis=axis))
+class pad(operation):
+    def __init__(self, pad_width: _ArrayLikeInt, ndim: int) -> None:
+        super().__init__()
+        self.pad_width = pad_width
+        self.pad_with_norm = self._normalize_pad_width(pad_width, ndim)
 
-    def compute_grad() -> tuple[_NumPyArray, ...]:
-        split_sizes = [tensor.shape[axis] for tensor in tensors]
-        split_indices = np.cumsum(split_sizes)[:-1]
-        split_grads = np.split(result.grad, split_indices, axis=axis)
-
-        return tuple(split_grads)
-
-    return result, compute_grad
-
-
-@unary_func_op()
-def pad(self: Tensor, pad_width: _ArrayLikeInt) -> _FuncOpReturnType:
-    result = Tensor(np.pad(self.data, pad_width))
-
-    def _normalize_pad_width(pad_width: _ArrayLikeInt, ndim: int) -> _ArrayLikeInt:
+    def _normalize_pad_width(
+        self, pad_width: _ArrayLikeInt, ndim: int
+    ) -> _ArrayLikeInt:
         if isinstance(pad_width, int):
             return ((pad_width, pad_width),) * ndim
 
@@ -231,21 +257,46 @@ def pad(self: Tensor, pad_width: _ArrayLikeInt) -> _FuncOpReturnType:
 
         raise ValueError(f"Invalid pad_width format: '{pad_width}'.")
 
-    pad_width_norm = _normalize_pad_width(pad_width, self.ndim)
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.pad(a.data, self.pad_width))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    def compute_grad() -> _NumPyArray:
-        grad_input = np.zeros_like(self.data)
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.pad(a.data, self.pad_width))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        grad_input = lib_.zeros_like(a.data)
         slices = []
-        for pw in pad_width_norm:
+        for pw in self.pad_with_norm:
             before, after = pw
             start = before
             end = -after if after != 0 else None
             slices.append(slice(start, end))
 
-        grad_input = result.grad[tuple(slices)]
+        grad_input = self.result.grad[tuple(slices)]
         return grad_input
 
-    return result, compute_grad
+
+class repeat(operation):
+    def __init__(self, repeats: int | Sequence[int], axis: int | None) -> None:
+        super().__init__()
+        self.repeats = repeats
+        self.axis = axis
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.repeat(a.data, self.repeats, axis=self.axis))
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.repeat(a.data, self.repeats, axis=self.axis))
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        # TODO: Finish this
+        ...
 
 
 @unary_func_op()

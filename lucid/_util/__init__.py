@@ -4,9 +4,11 @@ from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar
 
 from lucid._util import func
 
+
 # fmt: off
 __all__ = [
-    "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack"
+    "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
+    "vstack", "concatenate", "pad",
 ]
 # fmt: on
 
@@ -44,15 +46,15 @@ def hstack(arr: tuple[Tensor, ...]) -> Tensor:
 
 
 def vstack(arr: tuple[Tensor, ...]) -> Tensor:
-    return func.vstack(*arr)
+    return func.vstack()(*arr)
 
 
 def concatenate(arr: tuple[Tensor, ...], axis: int = 0) -> Tensor:
-    return func.concatenate(*arr, axis=axis)
+    return func.concatenate(axis)(*arr)
 
 
 def pad(a: Tensor, pad_width: _ArrayLikeInt) -> Tensor:
-    return func.pad(a, pad_width)
+    return func.pad(pad_width, ndim=a.ndim)(a)
 
 
 def repeat(a: Tensor, repeats: int | Sequence[int], axis: int | None = None) -> Tensor:
