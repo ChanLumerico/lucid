@@ -294,9 +294,13 @@ class repeat(operation):
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.repeat(a.data, self.repeats, axis=self.axis))
 
-    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
-        # TODO: Finish this
-        ...
+    # TODO: Continue from here
+
+    def compute_grad_cpu(self, *args, **kwargs):
+        return super().compute_grad_cpu(*args, **kwargs)
+
+    def compute_grad_gpu(self, *args, **kwargs):
+        return super().compute_grad_gpu(*args, **kwargs)
 
 
 @unary_func_op()
