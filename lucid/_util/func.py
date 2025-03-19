@@ -140,64 +140,42 @@ class stack(operation):
         return tuple(split_grads)
 
 
-class hstack(operation):
+class hstack(stack):
     def __init__(self) -> None:
-        super().__init__()
+        super().__init__(axis=1)
 
     @poly_func_op()
     def cpu(self, *arr: Tensor) -> _FuncOpReturnType:
-        data_arr = [t.data for t in arr]
+        data_arr = [a.data if a.ndim > 1 else a.data.reshape(-1, 1) for a in arr]
         self.result = Tensor(np.hstack(data_arr))
 
         return self.result, partial(self.compute_grad, arr=arr, lib_=np)
 
     @poly_func_op(device="gpu")
     def gpu(self, *arr: Tensor) -> _FuncOpReturnType:
-        data_arr = [t.data for t in arr]
+        data_arr = [t.data if t.ndim > 1 else t.data.reshape(-1, 1) for t in arr]
         self.result = Tensor(mx.concatenate(data_arr, axis=1))
 
         return self.result, partial(self.compute_grad, arr=arr, lib_=mx)
 
-    def compute_grad(self, arr: tuple[Tensor], lib_: ModuleType) -> _GradFuncType:
-        split_sizes = [a.shape[1] if self.result.ndim > 1 else a.shape[0] for a in arr]
-        split_indices = lib_.cumsum(lib_.array(split_sizes))[:-1]
 
-        split_grads = (
-            lib_.split(self.result.grad, split_indices, axis=1)
-            if self.result.ndim > 1
-            else lib_.split(self.result.grad, len(arr))
-        )
-        return tuple(split_grads)
-
-
-class vstack(operation):
+class vstack(stack):
     def __init__(self) -> None:
-        super().__init__()
+        super().__init__(axis=0)
 
     @poly_func_op()
     def cpu(self, *arr: Tensor) -> _FuncOpReturnType:
-        data_arr = [t.data for t in arr]
+        data_arr = [a.data if a.ndim > 1 else a.data.reshape(1, -1) for a in arr]
         self.result = Tensor(np.vstack(data_arr))
 
         return self.result, partial(self.compute_grad, arr=arr, lib_=np)
 
     @poly_func_op(device="gpu")
     def gpu(self, *arr: Tensor) -> _FuncOpReturnType:
-        data_arr = [t.data for t in arr]
+        data_arr = [t.data if t.ndim > 1 else t.data.reshape(1, -1) for t in arr]
         self.result = Tensor(mx.concatenate(data_arr, axis=0))
 
         return self.result, partial(self.compute_grad, arr=arr, lib_=mx)
-
-    def compute_grad(self, arr: tuple[Tensor], lib_: ModuleType) -> _GradFuncType:
-        split_sizes = [a.shape[1] if self.result.ndim > 1 else a.shape[0] for a in arr]
-        split_indices = lib_.cumsum(lib_.array(split_sizes))[:-1]
-
-        split_grads = (
-            lib_.split(self.result.grad, split_indices, axis=0)
-            if self.result.ndim > 1
-            else lib_.split(self.result.grad, len(arr))
-        )
-        return tuple(split_grads)
 
 
 class concatenate(operation):
@@ -217,9 +195,9 @@ class concatenate(operation):
         self.result = Tensor(mx.concatenate(data_arr, axis=self.axis))
         return self.result, partial(self.compute_grad, arr=arr, lib_=mx)
 
-    def compute_grad(self, *arr: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def compute_grad(self, arr: Tensor, lib_: ModuleType) -> _GradFuncType:
         split_sizes = [a.shape[self.axis] for a in arr]
-        split_indices = lib_.cumsum(split_sizes)[:-1]
+        split_indices = lib_.cumsum(lib_.array(split_sizes))[:-1]
 
         split_grad = lib_.split(self.result.grad, split_indices, axis=self.axis)
         return tuple(split_grad)
@@ -289,106 +267,135 @@ class repeat(operation):
     @unary_func_op()
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.repeat(a.data, self.repeats, axis=self.axis))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.repeat(a.data, self.repeats, axis=self.axis))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-    # TODO: Continue from here
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        grad_input = lib_.zeros_like(a.data)
+        repeats_arr = lib_.array(self.repeats)
 
-    def compute_grad_cpu(self, *args, **kwargs):
-        return super().compute_grad_cpu(*args, **kwargs)
-
-    def compute_grad_gpu(self, *args, **kwargs):
-        return super().compute_grad_gpu(*args, **kwargs)
-
-
-@unary_func_op()
-def repeat(
-    self: Tensor, repeats: int | Sequence[int], axis: int | None = None
-) -> _FuncOpReturnType:
-    result = Tensor(np.repeat(self.data, repeats, axis=axis))
-
-    def compute_grad() -> _NumPyArray:
-        grad_input = np.zeros_like(self.data)
-        repeats_arr = np.asarray(repeats)
-
-        if axis is None:
-            input_flat = self.data.flatten()
+        if self.axis is None:
+            input_flat = a.data.flatten()
             grad_input_flat = grad_input.flatten()
-            grad_output_flat = result.grad.flatten()
+            grad_output_flat = self.result.grad.flatten()
 
             input_size = input_flat.size
 
             if repeats_arr.size == 1:
-                repeats_arr = np.full(input_size, repeats_arr)
+                repeats_arr = lib_.full(input_size, repeats_arr)
             elif repeats_arr.size != input_size:
                 raise ValueError(
                     "repeats must be an integer or a "
                     + "sequence of the same length as input."
                 )
 
-            input_indices = np.arange(input_size)
-            output_indices = np.repeat(input_indices, repeats_arr)
+            input_indices = lib_.arange(input_size)
+            if lib_ is np:
+                output_indices = np.repeat(input_indices, repeats_arr)
+                np.add.at(grad_input_flat, output_indices, grad_output_flat)
+            else:
+                output_indices = mx.concatenate(
+                    [
+                        mx.full((r,), idx)
+                        for idx, r in zip(input_indices.tolist(), repeats_arr)
+                    ]
+                )
+                grad_input_flat = grad_input_flat.at[output_indices].add(
+                    grad_output_flat
+                )
 
-            np.add.at(grad_input_flat, output_indices, grad_output_flat)
-            grad_input = grad_input_flat.reshape(self.shape)
+            grad_input = grad_input_flat.reshape(a.shape)
 
         else:
+            axis_ = self.axis % a.ndim
             if repeats_arr.size == 1:
-                repeats_arr = np.full(self.shape[axis], repeats_arr)
-            elif repeats_arr.size != self.shape[axis]:
+                repeats_arr = lib_.full(a.shape[self.axis], repeats_arr)
+            elif repeats_arr.size != a.shape[self.axis]:
                 raise ValueError(
                     "repeats must be an integer or a "
                     + "sequence of the same length as the axis dimension."
                 )
 
-            expand_dims = [1] * self.ndim
-            expand_dims[axis] = -1
+            expand_dims = [1] * a.ndim
+            expand_dims[axis_] = -1
 
-            input_indices_axis = np.arange(self.shape[axis]).reshape(expand_dims)
-            output_indices_axis = np.repeat(input_indices_axis, repeats_arr, axis=axis)
+            input_indices_axis = lib_.arange(a.shape[axis_]).reshape(expand_dims)
+            if lib_ is np:
+                output_indices_axis = np.repeat(
+                    input_indices_axis, repeats_arr, axis=axis_
+                )
+            else:
+                moved_input_ = mx.moveaxis(input_indices_axis, axis_, 0)
+                input_shape_ = input_indices_axis.shape
+                slices = [
+                    mx.full(
+                        (*input_shape_[:axis_], r, *input_shape_[axis_ + 1 :]),
+                        mx.expand_dims(slice_, axis_),
+                    )
+                    for slice_, r in zip(moved_input_, repeats_arr)
+                ]
+                output_indices_axis = mx.concatenate(slices, axis=axis_)
 
-            idx = np.indices(result.grad.shape)
-            idx[axis] = output_indices_axis
+            idx = lib_.stack(
+                lib_.meshgrid(
+                    *[lib_.arange(s) for s in self.result.grad.shape], indexing="ij"
+                )
+            )
+            idx[axis_] = output_indices_axis
 
-            np.add.at(grad_input, tuple(idx), result.grad)
+            if lib_ is np:
+                np.add.at(grad_input, tuple(idx), self.result.grad)
+            else:
+                grad_input = grad_input.at[tuple(idx)].add(self.result.grad)
 
         return grad_input
 
-    return result, compute_grad
 
+class tile(operation):
+    def __init__(self, reps: int | Sequence[int]) -> None:
+        super().__init__()
+        self.reps = reps
 
-@unary_func_op()
-def tile(self: Tensor, reps: int | Sequence[int]) -> _FuncOpReturnType:
-    result = Tensor(np.tile(self.data, reps))
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.tile(a.data, self.reps))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    def compute_grad() -> _NumPyArray:
-        if self.ndim == 0:
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.tile(a.data, self.reps))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        if a.ndim == 0:
             input_shape = (1,)
-            if isinstance(reps, int):
-                reps_list = (reps,)
+            if isinstance(self.reps, int):
+                reps_list = (self.reps,)
             else:
-                reps_list = tuple(reps)
+                reps_list = tuple(self.reps)
                 if len(reps_list) == 0:
                     reps_list = (1,)
         else:
-            input_shape = np.array(self.shape)
-            if isinstance(reps, int):
-                reps_list = (1,) * (self.ndim - 1) + (reps,)
+            input_shape = lib_.array(a.shape)
+            if isinstance(self.reps, int):
+                reps_list = (1,) * (a.ndim - 1) + (self.reps,)
             else:
-                reps_list = tuple(reps)
+                reps_list = tuple(self.reps)
                 if len(reps_list) < self.ndim:
-                    reps_list = (1,) * (self.ndim - len(reps_list)) + reps_list
+                    reps_list = (1,) * (a.ndim - len(reps_list)) + reps_list
 
-        reps_array = np.array(reps_list)
+        reps_array = lib_.array(reps_list)
 
         reshape_dims = []
         for dim_size, rep in zip(input_shape, reps_array):
             reshape_dims.extend([rep, dim_size])
 
-        grad_output = result.grad
-        if grad_output.size != np.prod(reshape_dims):
+        grad_output = self.result.grad
+        if grad_output.size != lib_.prod(lib_.array(reshape_dims)):
             raise ValueError(
                 f"Cannot reshape array of size {grad_output.size} "
                 + f"into shape {reshape_dims}"
@@ -399,18 +406,29 @@ def tile(self: Tensor, reps: int | Sequence[int]) -> _FuncOpReturnType:
 
         return grad_output_reshape.sum(axis=axes_to_sum)
 
-    return result, compute_grad
+
+class flatten(operation):
+    def __init__(self, axis: int) -> None:
+        super().__init__()
+        self.axis = axis
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.original_shape = a.shape
+        self.result = Tensor(a.data.reshape(*a.shape[: self.axis], -1))
+        return self.result, self.compute_grad
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.original_shape = a.shape
+        self.result = Tensor(a.data.reshape(*a.shape[: self.axis], -1))
+        return self.result, self.compute_grad
+
+    def compute_grad(self) -> _GradFuncType:
+        return self.result.grad.reshape(self.original_shape)
 
 
-@unary_func_op()
-def flatten(self: Tensor) -> _FuncOpReturnType:
-    original_shape = self.shape
-    result = Tensor(self.data.reshape(-1))
-
-    def compute_grad() -> _NumPyArray:
-        return result.grad.reshape(*original_shape)
-
-    return result, compute_grad
+# TODO: Continue from here
 
 
 @func_op(n_in=2, n_ret=2)
@@ -444,10 +462,10 @@ def split(
     if axis < 0:
         axis = self.ndim + axis
 
-    axis_len = self.shape[axis]
+    self.axislen = self.shape[axis]
     if isinstance(size_or_sections, int):
         size_or_sections = (size_or_sections,) * int(
-            math.ceil(axis_len / size_or_sections)
+            math.ceil(self.axislen / size_or_sections)
         )
 
     cur_idx = 0

@@ -8,7 +8,7 @@ from lucid._util import func
 # fmt: off
 __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
-    "vstack", "concatenate", "pad",
+    "vstack", "concatenate", "pad", "repeat", "tile", "flatten"
 ]
 # fmt: on
 
@@ -41,32 +41,34 @@ def stack(arr: tuple[Tensor, ...], /, axis: int = 0) -> Tensor:
     return func.stack(axis)(*arr)
 
 
-def hstack(arr: tuple[Tensor, ...]) -> Tensor:
+def hstack(arr: tuple[Tensor, ...], /) -> Tensor:
     return func.hstack()(*arr)
 
 
-def vstack(arr: tuple[Tensor, ...]) -> Tensor:
+def vstack(arr: tuple[Tensor, ...], /) -> Tensor:
     return func.vstack()(*arr)
 
 
-def concatenate(arr: tuple[Tensor, ...], axis: int = 0) -> Tensor:
+def concatenate(arr: tuple[Tensor, ...], /, axis: int = 0) -> Tensor:
     return func.concatenate(axis)(*arr)
 
 
-def pad(a: Tensor, pad_width: _ArrayLikeInt) -> Tensor:
+def pad(a: Tensor, /, pad_width: _ArrayLikeInt) -> Tensor:
     return func.pad(pad_width, ndim=a.ndim)(a)
 
 
-def repeat(a: Tensor, repeats: int | Sequence[int], axis: int | None = None) -> Tensor:
-    return func.repeat(a, repeats, axis=axis)
+def repeat(
+    a: Tensor, /, repeats: int | Sequence[int], axis: int | None = None
+) -> Tensor:
+    return func.repeat(repeats, axis)(a)
 
 
-def tile(a: Tensor, reps: int | Sequence[int]) -> Tensor:
-    return func.tile(a, reps)
+def tile(a: Tensor, /, reps: int | Sequence[int]) -> Tensor:
+    return func.tile(reps)(a)
 
 
-def flatten(a: Tensor) -> Tensor:
-    return func.flatten(a)
+def flatten(a: Tensor, /, axis: int = 0) -> Tensor:
+    return func.flatten(axis)(a)
 
 
 def meshgrid(
