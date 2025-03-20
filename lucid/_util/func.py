@@ -428,31 +428,46 @@ class flatten(operation):
         return self.result.grad.reshape(self.original_shape)
 
 
-# TODO: Continue from here
+class meshgrid(operation):
+    def __init__(self, indexing: Literal["xy", "ij"]) -> None:
+        super().__init__()
+        if indexing not in {"xy", "ij"}:
+            raise ValueError("indexing must be either 'xy' or 'ij'")
+        self.indexing = indexing
 
+    def _unified(self, a: Tensor, b: Tensor, lib_: ModuleType) -> tuple[Tensor, Tensor]:
+        if a.ndim != 1 or a.ndim != 1:
+            raise ValueError(f"Input tensors must be 1D tensors.")
 
-@func_op(n_in=2, n_ret=2)
-def meshgrid(
-    self: Tensor, other: Tensor, indexing: Literal["xy", "ij"]
-) -> _FuncOpReturnType:
-    if self.ndim != 1 or other.ndim != 1:
-        raise ValueError("Inputs must be 1D tensors.")
+        X = lib_.repeat(a.data.reshape(1, -1), b.data.shape[0], axis=0)
+        Y = lib_.repeat(b.data.reshape(-1, 1), a.data.shape[0], axis=1)
 
-    if indexing not in {"xy", "ij"}:
-        raise ValueError("indexing must be either 'xy' or 'ij'")
+        if self.indexing == "xy":
+            X, Y = Y, X
 
-    X = self.reshape(1, -1).repeat(other.shape[0], axis=0)
-    Y = other.reshape(-1, 1).repeat(self.shape[0], axis=1)
+        return Tensor(X), Tensor(Y)
 
-    if indexing == "xy":
-        X, Y = Y, X
+    @func_op(n_in=2, n_ret=2)
+    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        self.X, self.Y = self._unified(a, b, lib_=np)
+        self.result = (self.X, self.Y)
 
-    def compute_grad() -> tuple[_NumPyArray, _NumPyArray]:
-        grad_x = np.sum(X.grad, axis=0)
-        grad_y = np.sum(Y.grad, axis=1)
+        compute_grad = partial(self.compute_grad, lib_=np)
+        return (self.X, compute_grad), (self.Y, compute_grad)
+
+    @func_op(n_in=2, n_ret=2, device="gpu")
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        self.X, self.Y = self._unified(a, b, lib_=mx)
+        self.result = (self.X, self.Y)
+
+        compute_grad = partial(self.compute_grad, lib_=mx)
+        return (self.X, compute_grad), (self.Y, compute_grad)
+
+    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+        grad_x = lib_.sum(self.X.grad, axis=0)
+        grad_y = lib_.sum(self.Y.grad, axis=1)
+
         return grad_x, grad_y
-
-    return (X, compute_grad), (Y, compute_grad)
 
 
 def split(

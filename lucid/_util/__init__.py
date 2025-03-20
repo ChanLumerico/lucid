@@ -8,7 +8,7 @@ from lucid._util import func
 # fmt: off
 __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
-    "vstack", "concatenate", "pad", "repeat", "tile", "flatten"
+    "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid"
 ]
 # fmt: on
 
@@ -72,9 +72,9 @@ def flatten(a: Tensor, /, axis: int = 0) -> Tensor:
 
 
 def meshgrid(
-    a: Tensor, b: Tensor, indexing: Literal["xy", "ij"] = "ij"
+    a: Tensor, b: Tensor, /, indexing: Literal["xy", "ij"] = "ij"
 ) -> tuple[Tensor, Tensor]:
-    return func.meshgrid(a, b, indexing)
+    return func.meshgrid(indexing)(a, b)
 
 
 def split(

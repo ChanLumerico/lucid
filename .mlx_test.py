@@ -3,11 +3,9 @@ import numpy as np
 import mlx.core as mx
 
 
-x = lucid.ones((4, 4), requires_grad=True, device="gpu").astype(lucid.Int)
+x = lucid.Tensor([1, 2, 3, 4], requires_grad=True, device="cpu")
 
-y = lucid.repeat(x, 3, axis=0).flatten()
+y, z = lucid.meshgrid(x, x)
 
-print("y-shape:", y.shape)
-y.backward()
-
-print(x.grad)
+w = y + z
+w.backward()
