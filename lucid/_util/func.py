@@ -1,4 +1,4 @@
-from typing import Literal, Sequence
+from typing import Literal, Sequence, override
 from types import ModuleType
 from functools import partial
 
@@ -468,6 +468,39 @@ class meshgrid(operation):
         grad_y = lib_.sum(self.Y.grad, axis=1)
 
         return grad_x, grad_y
+
+
+class split(operation):
+    def __init__(
+        self, size_or_sections: int | list[int] | tuple[int], axis: int
+    ) -> None:
+        super().__init__()
+        self.size_or_sections = size_or_sections
+        self.axis = axis
+
+    @override
+    def __call__(self, a: Tensor) -> tuple[Tensor, ...]:
+        returns = []
+        if self.axis < 0:
+            self.axis = a.ndim + self.axis
+
+        self.axislen = a.shape[self.axis]
+        if isinstance(size_or_sections, int):
+            size_or_sections = (size_or_sections,) * int(
+                math.ceil(self.axislen / size_or_sections)
+            )
+
+        cur_idx = 0
+        for size in size_or_sections:
+            slices = []
+            for _ in range(self.axis):
+                slices.append(slice(None, None, None))
+
+            slices.append(slice(cur_idx, cur_idx + size, None))
+            returns.append(a[*slices])
+            cur_idx += size
+
+        return tuple(returns)
 
 
 def split(
