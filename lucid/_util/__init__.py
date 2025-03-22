@@ -9,7 +9,7 @@ from lucid._util import func
 __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
-    "split", "tril", "triu", "broadcast_to", "chunk"
+    "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll"
 ]
 # fmt: on
 
@@ -100,16 +100,17 @@ def chunk(a: Tensor, /, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
     return func.chunk(chunks, axis)(a)
 
 
-def masked_fill(a: Tensor, mask: Tensor, value: _Scalar) -> Tensor:
-    return func.masked_fill(a, mask, value)
+def masked_fill(a: Tensor, /, mask: Tensor, value: _Scalar) -> Tensor:
+    return func.masked_fill(mask, value)(a)
 
 
 def roll(
     a: Tensor,
-    shifts: int | tuple[int, ...],
+    /,
+    shift: int | tuple[int, ...],
     axis: int | tuple[int, ...] | None = None,
 ) -> Tensor:
-    return func.roll(a, shifts, axis)
+    return func.roll(shift, axis)(a)
 
 
 Tensor.reshape = _reshape_immediate

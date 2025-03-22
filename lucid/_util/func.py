@@ -6,7 +6,7 @@ import numpy as np
 import math
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _NumPyArray, _ArrayLikeInt, _Scalar
+from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar
 
 from lucid._backend.core import (
     operation,
@@ -637,39 +637,46 @@ class masked_fill(operation):
     @unary_func_op()
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.where(self.mask.data.astype(bool), self.value, a.data))
+        return self.result, self.compute_grad_cpu
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        self.result = Tensor(...)
+        self.result = Tensor(mx.where(self.mask.data.astype(bool), self.value, a.data))
+        return self.result, self.compute_grad_gpu
 
-
-@unary_func_op()
-def masked_fill(self: Tensor, mask: Tensor, value: _Scalar) -> _FuncOpReturnType:
-    mask = mask.astype(bool)
-    result = Tensor(np.where(mask.data, value, self.data))
-
-    def compute_grad() -> _NumPyArray:
-        grad = result.grad.copy()
-        grad[mask.data] = 0
+    def compute_grad_cpu(self) -> _GradFuncType:
+        grad = self.result.grad.copy()
+        grad[self.mask.data] = 0
         return grad
 
-    return result, compute_grad
+    def compute_grad_gpu(self) -> _GradFuncType:
+        grad = mx.array(self.result.grad)
+        grad = mx.where(self.mask.data.astype(bool), 0, grad)
+        return grad
 
 
-@unary_func_op()
-def roll(
-    self: Tensor,
-    shifts: int | tuple[int, ...],
-    axis: int | tuple[int, ...] | None = None,
-) -> _FuncOpReturnType:
-    result = Tensor(np.roll(self.data, shift=shifts, axis=axis))
+class roll(operation):
+    def __init__(
+        self, shift: int | tuple[int, ...], axis: int | tuple[int, ...] | None
+    ) -> None:
+        super().__init__()
+        self.shift = shift
+        self.axis = axis
 
-    def compute_grad() -> _NumPyArray:
-        if isinstance(shifts, int):
-            neg_shifts = -shifts
-        elif isinstance(shifts, tuple):
-            neg_shifts = tuple(-s for s in shifts)
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.roll(a.data, shift=self.shift, axis=self.axis))
+        return self.result, partial(self.compute_grad, lib_=np)
 
-        return np.roll(result.grad, shift=neg_shifts, axis=axis)
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.roll(a.data, shift=self.shift, axis=self.axis))
+        return self.result, partial(self.compute_grad, lib_=mx)
 
-    return result, compute_grad
+    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+        if isinstance(self.shift, int):
+            neg_shift = -self.shift
+        elif isinstance(self.shift, tuple):
+            neg_shift = tuple(-s for s in self.shift)
+
+        return lib_.roll(self.result.grad, shift=neg_shift, axis=self.axis)

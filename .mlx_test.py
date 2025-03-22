@@ -3,12 +3,15 @@ import numpy as np
 import mlx.core as mx
 
 
-x = lucid.ones((4, 3), requires_grad=True, device="gpu")
+# fmt: off
+x = lucid.Tensor(
+    [[1, 2, 3],
+     [4, 5, 6],
+     [7, 8, 9]], requires_grad=True, device="gpu"
+)
 
-y, z = lucid.chunk(x, 2)
+y = x.roll(1)
+y.backward()
 
-print(y.shape, z.shape)
-# y.backward()
-z.backward()
-
+print(y)
 print(x.grad)
