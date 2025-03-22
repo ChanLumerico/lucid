@@ -3,9 +3,12 @@ import numpy as np
 import mlx.core as mx
 
 
-x = lucid.Tensor([1, 2, 3, 4], requires_grad=True, device="cpu")
+x = lucid.ones((4, 3), requires_grad=True, device="gpu")
 
-y, z = lucid.meshgrid(x, x)
+y, z = lucid.chunk(x, 2)
 
-w = y + z
-w.backward()
+print(y.shape, z.shape)
+# y.backward()
+z.backward()
+
+print(x.grad)

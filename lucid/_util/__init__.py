@@ -8,7 +8,8 @@ from lucid._util import func
 # fmt: off
 __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
-    "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid"
+    "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
+    "split", "tril", "triu", "broadcast_to", "chunk"
 ]
 # fmt: on
 
@@ -78,37 +79,37 @@ def meshgrid(
 
 
 def split(
-    a: Tensor, size_or_sections: int | list[int] | tuple[int], axis: int = 0
+    a: Tensor, /, size_or_sections: int | list[int] | tuple[int], axis: int = 0
 ) -> tuple[Tensor, ...]:
-    return func.split(a, size_or_sections, axis)
+    return func.split(size_or_sections, axis)(a)
 
 
-def tril(a: Tensor, diagonal: int = 0) -> Tensor:
-    return func.tril(a, diagonal)
+def tril(a: Tensor, /, diagonal: int = 0) -> Tensor:
+    return func.tril(diagonal)(a)
 
 
-def triu(a: Tensor, diagonal: int = 0) -> Tensor:
-    return func.triu(a, diagonal)
+def triu(a: Tensor, /, diagonal: int = 0) -> Tensor:
+    return func.triu(diagonal)(a)
 
 
-def broadcast_to(a: Tensor, shape: _ShapeLike) -> Tensor:
-    return func.broadcast_to(a, shape)
+def broadcast_to(a: Tensor, /, shape: _ShapeLike) -> Tensor:
+    return func.broadcast_to(shape)(a)
 
 
-def chunk(input_: Tensor, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
-    return func.chunk(input_, chunks, axis)
+def chunk(a: Tensor, /, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
+    return func.chunk(chunks, axis)(a)
 
 
-def masked_fill(input_: Tensor, mask: Tensor, value: _Scalar) -> Tensor:
-    return func.masked_fill(input_, mask, value)
+def masked_fill(a: Tensor, mask: Tensor, value: _Scalar) -> Tensor:
+    return func.masked_fill(a, mask, value)
 
 
 def roll(
-    input_: Tensor,
+    a: Tensor,
     shifts: int | tuple[int, ...],
     axis: int | tuple[int, ...] | None = None,
 ) -> Tensor:
-    return func.roll(input_, shifts, axis)
+    return func.roll(a, shifts, axis)
 
 
 Tensor.reshape = _reshape_immediate

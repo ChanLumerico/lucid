@@ -9,13 +9,11 @@ from lucid._tensor import Tensor
 from lucid._backend.metal import mx, _MLXArray, is_cpu_op
 
 
-_GradFuncType = Callable[
-    [None], _NumPyArray | _MLXArray | tuple[_NumPyArray | _MLXArray, ...]
-]
+_GradFuncType = Callable[[None], Tuple[_NumPyArray | _MLXArray, ...]]
 
 _ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
 
-_FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
+_FuncOpReturnType = Tuple[_ReturnGradFuncPair, ...]
 
 
 def func_op(
@@ -120,13 +118,13 @@ def poly_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Call
 
 class operation(ABC):
     def __init__(self) -> None:
-        self.result: Tensor | None = None
+        self.result: Tensor | tuple[Tensor, ...] | None = None
 
     @abstractmethod
-    def cpu(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]: ...
+    def cpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
 
     @abstractmethod
-    def gpu(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]: ...
+    def gpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
 
     def compute_grad(self, *args, **kwargs) -> _GradFuncType: ...
 

@@ -144,6 +144,7 @@ class hstack(stack):
     def __init__(self) -> None:
         super().__init__(axis=1)
 
+    @override
     @poly_func_op()
     def cpu(self, *arr: Tensor) -> _FuncOpReturnType:
         data_arr = [a.data if a.ndim > 1 else a.data.reshape(-1, 1) for a in arr]
@@ -151,6 +152,7 @@ class hstack(stack):
 
         return self.result, partial(self.compute_grad, arr=arr, lib_=np)
 
+    @override
     @poly_func_op(device="gpu")
     def gpu(self, *arr: Tensor) -> _FuncOpReturnType:
         data_arr = [t.data if t.ndim > 1 else t.data.reshape(-1, 1) for t in arr]
@@ -163,6 +165,7 @@ class vstack(stack):
     def __init__(self) -> None:
         super().__init__(axis=0)
 
+    @override
     @poly_func_op()
     def cpu(self, *arr: Tensor) -> _FuncOpReturnType:
         data_arr = [a.data if a.ndim > 1 else a.data.reshape(1, -1) for a in arr]
@@ -170,6 +173,7 @@ class vstack(stack):
 
         return self.result, partial(self.compute_grad, arr=arr, lib_=np)
 
+    @override
     @poly_func_op(device="gpu")
     def gpu(self, *arr: Tensor) -> _FuncOpReturnType:
         data_arr = [t.data if t.ndim > 1 else t.data.reshape(1, -1) for t in arr]
@@ -478,6 +482,12 @@ class split(operation):
         self.size_or_sections = size_or_sections
         self.axis = axis
 
+    def cpu(self, *args, **kwargs) -> _FuncOpReturnType:
+        return super().cpu(*args, **kwargs)
+
+    def gpu(self, *args, **kwargs) -> _FuncOpReturnType:
+        return super().gpu(*args, **kwargs)
+
     @override
     def __call__(self, a: Tensor) -> tuple[Tensor, ...]:
         returns = []
@@ -485,13 +495,13 @@ class split(operation):
             self.axis = a.ndim + self.axis
 
         self.axislen = a.shape[self.axis]
-        if isinstance(size_or_sections, int):
-            size_or_sections = (size_or_sections,) * int(
-                math.ceil(self.axislen / size_or_sections)
+        if isinstance(self.size_or_sections, int):
+            self.size_or_sections = (self.size_or_sections,) * int(
+                math.ceil(self.axislen / self.size_or_sections)
             )
 
         cur_idx = 0
-        for size in size_or_sections:
+        for size in self.size_or_sections:
             slices = []
             for _ in range(self.axis):
                 slices.append(slice(None, None, None))
@@ -500,104 +510,137 @@ class split(operation):
             returns.append(a[*slices])
             cur_idx += size
 
-        return tuple(returns)
+        self.result = tuple(returns)
+        return self.result
 
 
-def split(
-    self: Tensor, size_or_sections: int | list[int] | tuple[int], axis: int = 0
-) -> tuple[Tensor, ...]:
-    returns = []
-    if axis < 0:
-        axis = self.ndim + axis
+class tril(operation):
+    def __init__(self, diagonal: int) -> None:
+        super().__init__()
+        self.diagonal = diagonal
 
-    self.axislen = self.shape[axis]
-    if isinstance(size_or_sections, int):
-        size_or_sections = (size_or_sections,) * int(
-            math.ceil(self.axislen / size_or_sections)
-        )
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.tril(a.data, k=self.diagonal))
+        return self.result, partial(self.compute_grad, lib_=np)
 
-    cur_idx = 0
-    for size in size_or_sections:
-        slices = []
-        for _ in range(axis):
-            slices.append(slice(None, None, None))
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.tril(a.data, k=self.diagonal))
+        return self.result, partial(self.compute_grad, lib_=mx)
 
-        slices.append(slice(cur_idx, cur_idx + size, None))
-        returns.append(self[*slices])
-        cur_idx += size
-
-    return tuple(returns)
+    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.tril(self.result.grad, k=self.diagonal)
 
 
-@unary_func_op()
-def tril(self: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
-    result = Tensor(np.tril(self.data, k=diagonal))
+class triu(operation):
+    def __init__(self, diagonal: int) -> None:
+        super().__init__()
+        self.diagonal = diagonal
 
-    def compute_grad() -> _NumPyArray:
-        return np.tril(result.grad, k=diagonal)
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.triu(a.data, k=self.diagonal))
+        return self.result, partial(self.compute_grad, lib_=np)
 
-    return result, compute_grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.triu(a.data, k=self.diagonal))
+        return self.result, partial(self.compute_grad, lib_=mx)
 
-
-@unary_func_op()
-def triu(self: Tensor, diagonal: int = 0) -> _FuncOpReturnType:
-    result = Tensor(np.triu(self.data, k=diagonal))
-
-    def compute_grad() -> _NumPyArray:
-        return np.triu(result.grad, k=diagonal)
-
-    return result, compute_grad
+    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.triu(self.result.grad, k=self.diagonal)
 
 
-@unary_func_op()
-def broadcast_to(self: Tensor, shape: _ShapeLike) -> _FuncOpReturnType:
-    original_shape = self.shape
-    result = Tensor(np.broadcast_to(self.data, shape))
+class broadcast_to(operation):
+    def __init__(self, shape: _ShapeLike) -> None:
+        super().__init__()
+        self.shape = shape
 
-    def compute_grad() -> _NumPyArray:
-        input_shape = original_shape
-        ndim_diff = len(shape) - len(input_shape)
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.original_shape = a.shape
+        self.result = Tensor(np.broadcast_to(a.data, self.shape))
+
+        return self.result, self.compute_grad
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.original_shape = a.shape
+        self.result = Tensor(mx.broadcast_to(a.data, self.shape))
+
+        return self.result, self.compute_grad
+
+    def compute_grad(self) -> _GradFuncType:
+        input_shape = self.original_shape
+        ndim_diff = len(self.shape) - len(input_shape)
         if ndim_diff > 0:
             input_shape = (1,) * ndim_diff + input_shape
 
-        for axis, (in_dim, out_dim) in enumerate(zip(input_shape, shape)):
+        for axis, (in_dim, out_dim) in enumerate(zip(input_shape, self.shape)):
             if in_dim == 1 and out_dim > 1:
-                result.grad = result.grad.sum(axis=axis, keepdims=True)
+                self.result.grad = self.result.grad.sum(axis=axis, keepdims=True)
 
-        return result.grad.reshape(original_shape)
-
-    return result, compute_grad
+        return self.result.grad.reshape(self.original_shape)
 
 
-@func_op(n_in=1, n_ret=None)
-def chunk(self: Tensor, chunks: int, axis: int = 0) -> _FuncOpReturnType:
-    if chunks <= 0:
-        raise ValueError("chunks must be greater than 0.")
+class chunk(operation):
+    def __init__(self, chunks: int, axis: int) -> None:
+        super().__init__()
+        self.chunks = chunks
+        self.axis = axis
 
-    dim_size = self.shape[axis]
-    chunk_size = (dim_size + chunks - 1) // chunks
+    def _unified(self, a: Tensor, lib_: ModuleType) -> _FuncOpReturnType:
+        if self.chunks <= 0:
+            raise ValueError("chunks must be greater than 0.")
 
-    split_indices = list(range(chunk_size, dim_size, chunk_size))
-    chunked_arrays = np.split(self.data, split_indices, axis=axis)
+        dim_size = a.shape[self.axis]
+        chunk_size = (dim_size + self.chunks - 1) // self.chunks
 
-    results = []
-    start_idx = 0
-    for arr in chunked_arrays:
-        chunk_t = Tensor(arr)
+        split_indices = list(range(chunk_size, dim_size, chunk_size))
+        chunked_arrays = lib_.split(a.data, split_indices, axis=self.axis)
 
-        def compute_grad(_tensor: Tensor = chunk_t, _idx=start_idx) -> _NumPyArray:
-            slices = [slice(None)] * self.ndim
-            slices[axis] = slice(_idx, _idx + _tensor.shape[axis])
+        results = []
+        start_idx = 0
+        for arr in chunked_arrays:
+            chunk_t = Tensor(arr)
 
-            grad = np.zeros_like(self.data)
-            grad[tuple(slices)] = _tensor.grad
+            def compute_grad(_a: Tensor = chunk_t, _idx=start_idx) -> _GradFuncType:
+                slices = [slice(None)] * a.ndim
+                slices[self.axis] = slice(_idx, _idx + _a.shape[self.axis])
 
-            return grad
+                grad = lib_.zeros_like(a.data)
+                grad[tuple(slices)] = _a.grad
 
-        results.append((chunk_t, compute_grad))
-        start_idx += chunk_t.shape[axis]
+                return grad
 
-    return tuple(results)
+            results.append((chunk_t, compute_grad))
+            start_idx += chunk_t.shape[self.axis]
+
+        return tuple(results)
+
+    @func_op(n_in=1, n_ret=None)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        return self._unified(a, lib_=np)
+
+    @func_op(n_in=1, n_ret=None, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        return self._unified(a, lib_=mx)
+
+
+class masked_fill(operation):
+    def __init__(self, mask: Tensor, value: _Scalar) -> None:
+        super().__init__()
+        self.mask = mask
+        self.value = value
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.where(self.mask.data.astype(bool), self.value, a.data))
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(...)
 
 
 @unary_func_op()
