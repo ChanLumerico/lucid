@@ -1,11 +1,12 @@
 import lucid
-import numpy as np
-import mlx.core as mx
+
+lucid.random.seed(42)
 
 
-x = lucid.random.bernoulli([0.3, 0.4, 0.3], device="gpu")
+x = lucid.random.randn(3, 3, requires_grad=True, device="cpu")
 
-a = lucid.random.randn(3, requires_grad=True, device="gpu")
+u, v = lucid.linalg.eig(x)
+u.backward()
 
-print(x)
-print(a[x])
+print(u)
+print(v)

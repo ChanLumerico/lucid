@@ -6,6 +6,13 @@ from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _Scalar, _ArrayOrScalar, _DeviceType
 
 
+# fmt: off
+__all__ = [
+    "seed", "rand", "randint", "randn", "uniform", "bernoulli"
+]
+# fmt: on
+
+
 def seed(seed: int) -> None:
     return _func.seed(seed)
 

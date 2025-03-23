@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Tuple
+from typing import Callable, Tuple, ClassVar
 import functools
 
 import lucid
@@ -117,6 +117,8 @@ def poly_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Call
 
 
 class operation(ABC):
+    __fallback__: ClassVar[bool] = False
+
     def __init__(self) -> None:
         self.result: Tensor | tuple[Tensor, ...] | None = None
 
@@ -138,3 +140,8 @@ class operation(ABC):
             if is_cpu_op(*tensors)
             else self.gpu(*tensors, **kwargs)
         )
+
+
+def fallback(cls: type[operation]) -> type[operation]:
+    cls.__fallback__ = True
+    return cls
