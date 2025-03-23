@@ -178,6 +178,9 @@ class Tensor(_TensorOps):
 
         if self.is_gpu():
             new_idx = parse_mlx_indexing(new_idx)
+        else:
+            if isinstance(idx, Tensor) and isinstance(idx.data, _MLXArray):
+                raise RuntimeError(f"Attempted GPU tensor indexing to CPU tensor.")
 
         sliced_data = self.data[new_idx]
         new_tensor = Tensor(
