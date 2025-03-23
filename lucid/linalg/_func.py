@@ -220,24 +220,29 @@ class eig(operation):
         self.eps = eps
 
     def _unified(self, a: Tensor) -> tuple[_NumPyArray, _NumPyArray]:
+        self.ndim = a.shape[-2]
         eigvals, eigvecs = np.linalg.eig(a.data)
         eigvecs = eigvecs / np.linalg.norm(eigvecs, axis=-2, keepdims=True)
+
         return eigvals, eigvecs
 
     @func_op(n_in=1, n_ret=2)
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
-        eigvals, eigvecs = self._unified(a)
-        self.result = (Tensor(eigvals), Tensor(eigvecs))
+        self._eigvals, self._eigvecs = self._unified(a)
+        self.result = (Tensor(self._eigvals), Tensor(self._eigvecs))
 
         return (
             (self.result[0], self.compute_grad_eigvals),
-            (self.result[1], partial(self.compute_grad_eigvecs, a=a)),
+            (self.result[1], self.compute_grad_eigvecs),
         )
 
     @func_op(n_in=1, n_ret=2, device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        eigvals, eigvecs = self._unified(a)
-        self.result = (Tensor(eigvals, device="gpu"), Tensor(eigvecs, device="gpu"))
+        self._eigvals, self._eigvecs = self._unified(a)
+        self.result = (
+            Tensor(self._eigvals, device="gpu"),
+            Tensor(self._eigvecs, device="gpu"),
+        )
 
         return (
             (self.result[0], partial(self.compute_grad_eigvals, _fallback=True)),
@@ -245,21 +250,21 @@ class eig(operation):
         )
 
     def compute_grad_eigvals(self, _fallback: bool = False) -> _GradFuncType:
-        eigvals, eigvecs = self.result
-        if _fallback:
-            eigvals, eigvecs = np.array(eigvals), np.array(eigvecs)
-
-        grad = np.einsum("...k,...ki,...kj->...ij", eigvals.grad, eigvecs, eigvecs)
+        eigvals = self.result[0]
+        grad = np.einsum(
+            "...k,...ki,...kj->...ij",
+            np.array(eigvals.grad),
+            self._eigvecs,
+            self._eigvecs,
+        )
         return grad if not _fallback else mx.array(grad)
 
     def compute_grad_eigvecs(self, _fallback: bool = False) -> _GradFuncType:
-        eigvals, eigvecs = self.result
-        if _fallback:
-            eigvals, eigvecs = np.array(eigvals), np.array(eigvecs)
+        eigvals, eigvecs = self._eigvals, self._eigvecs
+        eigvecs_t = self.result[1]
 
         eigval_diffs = eigvals[..., :, np.newaxis] - eigvals[..., np.newaxis, :]
-        ndim = eigvals.shape[-1]
-        eigval_diffs += np.eye(ndim)[..., :, :] * self.eps
+        eigval_diffs += np.eye(self.ndim)[..., :, :] * self.eps
 
         inv_eigval_diffs = 1.0 / eigval_diffs
         for index in np.ndindex(inv_eigval_diffs.shape[:-2]):
@@ -268,8 +273,13 @@ class eig(operation):
         outer_prods = np.einsum("...ip,...jq->...pqij", eigvecs, eigvecs)
         S = np.einsum("...kp,...pqij->...pij", inv_eigval_diffs, outer_prods)
 
-        grad = np.einsum("...pk,...pij,...ki->...ij", eigvecs.grad, S, eigvecs)
+        grad = np.einsum(
+            "...pk,...pij,...ki->...ij", np.array(eigvecs_t.grad), S, eigvecs
+        )
         return grad if not _fallback else mx.array(grad)
+
+
+# TODO: Continue from here
 
 
 @func_op(n_in=1, n_ret=2)
