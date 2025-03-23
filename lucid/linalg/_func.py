@@ -128,7 +128,7 @@ class cholesky(operation):
         return L_inv.T @ (sym @ L_inv)
 
 
-@fallback
+@fallback  # Does this actually need to fallback?
 class norm(operation):
     def __init__(
         self,
