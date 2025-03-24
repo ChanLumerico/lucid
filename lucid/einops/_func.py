@@ -4,8 +4,15 @@ import numpy as np
 from typing import Literal
 
 from lucid._tensor import Tensor
-from lucid._backend.core import unary_func_op, _FuncOpReturnType
 from lucid.types import _EinopsPattern, _NumPyArray
+
+from lucid._backend.core import (
+    operation,
+    unary_func_op,
+    _FuncOpReturnType,
+    _GradFuncType,
+)
+from lucid._backend.metal import mx
 
 _ReduceStr = Literal["sum", "mean"]
 
@@ -63,6 +70,83 @@ def _build_intermediate(
             inter_shape.append(dim)
 
     return inter_tokens, inter_shape
+
+
+class rearrange(operation):
+    def __init__(self, pattern: _EinopsPattern, t_shape: int, **shapes: int) -> None:
+        super().__init__()
+        try:
+            in_pat, out_pat = map(str.strip, pattern.split("->"))
+        except Exception as e:
+            raise ValueError(
+                "Pattern must contain '->' separating input and output patterns."
+            ) from e
+
+        input_tokens = _parse_pattern(in_pat)
+        output_tokens = _parse_pattern(out_pat)
+
+        if len(input_tokens) != len(t_shape):
+            raise ValueError(
+                f"Input pattern has {len(input_tokens)} tokens, "
+                + f"but tensor has {len(t_shape)} dimensions."
+            )
+
+        self.inter_tokens, self.inter_shape = _build_intermediate(
+            input_tokens, t_shape, shapes
+        )
+
+        self.perm: list[int] = []
+        group_splits: list[tuple[int, ...]] = []
+        used = set()
+
+        for token in output_tokens:
+            if isinstance(token, tuple):
+                group_perm, group_dims = [], []
+                for t in token:
+                    found = None
+                    for i, it in enumerate(self.inter_tokens):
+                        if it == t and i not in used:
+                            found = i
+                            break
+                    if found is None:
+                        raise ValueError(
+                            f"Token '{t}' in output group {token} not found in input."
+                        )
+                    group_perm.append(found)
+                    group_dims.append(self.inter_shape[found])
+                    used.add(found)
+
+                group_splits.append(tuple(group_dims))
+                self.perm.extend(group_perm)
+
+            else:
+                found = None
+                for i, it in enumerate(self.inter_tokens):
+                    if it == token and i not in used:
+                        found = i
+                        break
+                if found is None:
+                    raise ValueError(
+                        f"Token '{token}' from output pattern not found in input."
+                    )
+
+                self.perm.append(found)
+                group_splits.append((self.inter_shape[found],))
+                used.add(found)
+
+        self.final_shape = tuple(np.prod(group).item() for group in group_splits)
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        inter = a.data.reshape(tuple(self.inter_shape))
+        transposed = np.transpose(inter, axes=self.perm)
+
+        self.result = Tensor(transposed.reshape(self.final_shape))
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType: ...
+
+    # TODO: Finish this
 
 
 @unary_func_op()
