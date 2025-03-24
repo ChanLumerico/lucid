@@ -4,11 +4,8 @@ lucid.random.seed(42)
 
 
 x = lucid.random.randn(3, 3, requires_grad=True, device="gpu")
+y = lucid.linalg.norm(x, axis=(-1, -2))
 
-u, v = lucid.linalg.eig(x)
-print(u.shape, v.shape)
+y.backward()
 
-u.backward()
-v.backward()
-
-print(x.grad.shape)
+print(x.grad)

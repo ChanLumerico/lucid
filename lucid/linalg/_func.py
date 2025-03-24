@@ -128,7 +128,7 @@ class cholesky(operation):
         return L_inv.T @ (sym @ L_inv)
 
 
-@fallback  # Does this actually need to fallback?
+@fallback
 class norm(operation):
     def __init__(
         self,
@@ -154,34 +154,26 @@ class norm(operation):
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        global_matrix_norm = self.axis is None or (
+        fallback_ = self.axis is None or (
             isinstance(self.axis, (tuple, list)) and a.ndim > 1
         )
-
-        if global_matrix_norm:
+        if fallback_:
             result_data = np.linalg.norm(
                 a.data, ord=self.ord, axis=self.axis, keepdims=self.keepdims
             )
             self.result = Tensor(result_data, device="gpu")
-            return self.result, partial(self.compute_grad, a=a, lib_=np, _fallback=True)
+        else:
+            result_data = mx.linalg.norm(
+                a.data, ord=self.ord, axis=self.axis, keepdims=self.keepdims
+            )
+            self.result = Tensor(result_data)
 
-        result_data = mx.linalg.norm(
-            a.data, ord=self.ord, axis=self.axis, keepdims=self.keepdims
-        )
-        self.result = Tensor(result_data)
         return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-    def compute_grad(
-        self, a: Tensor, lib_: ModuleType, _fallback: bool = False
-    ) -> _GradFuncType:
-        if _fallback:
-            x = np.array(a.data)
-            r = np.array(self.result.data)
-            grad_output = np.array(self.result.grad)
-        else:
-            x = a.data
-            r = self.result.data
-            grad_output = self.result.grad
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        x = a.data
+        r = self.result.data
+        grad_output = self.result.grad
 
         ord = self.ord
         axis = self.axis
@@ -209,8 +201,7 @@ class norm(operation):
         if axis is not None and not keepdims:
             grad_output = lib_.expand_dims(grad_output, axis=axis)
 
-        grad_final = grad * grad_output
-        return grad_final if not _fallback else mx.array(grad_final)
+        return grad * grad_output
 
 
 @fallback
@@ -249,6 +240,7 @@ class eig(operation):
             (self.result[1], partial(self.compute_grad_eigvecs, _fallback=True)),
         )
 
+    # Try generalize with `lib_`
     def compute_grad_eigvals(self, _fallback: bool = False) -> _GradFuncType:
         eigvals = self.result[0]
         grad = np.einsum(
@@ -279,7 +271,24 @@ class eig(operation):
         return grad if not _fallback else mx.array(grad)
 
 
-# TODO: Continue from here
+# WIP
+class qr(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @func_op(n_in=1, n_ret=2)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.Q, self.R = np.linalg.qr(a.data)
+        self.result = (Tensor(self.Q), Tensor(self.R))
+
+    @func_op(n_in=1, n_ret=2, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.Q, self.R = mx.linalg.qr(a.data)
+        self.result = (Tensor(self.Q), Tensor(self.R))
+
+    def compute_grad_q(self, lib_: ModuleType) -> _GradFuncType: ...
+
+    def compute_grad_r(self, lib_: ModuleType) -> _GradFuncType: ...
 
 
 @func_op(n_in=1, n_ret=2)
