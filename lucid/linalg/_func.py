@@ -2,7 +2,7 @@ from types import ModuleType
 from functools import partial
 import numpy as np
 
-from lucid.types import _ArrayOrScalar, _NumPyArray
+from lucid.types import _NumPyArray
 from lucid._tensor import Tensor
 
 from lucid._backend.core import (
@@ -14,7 +14,7 @@ from lucid._backend.core import (
     _GradFuncType,
     _FuncOpReturnType,
 )
-from lucid._backend.metal import mx
+from lucid._backend.metal import mx, _MLXArray
 
 
 class inv(operation):
@@ -240,7 +240,6 @@ class eig(operation):
             (self.result[1], partial(self.compute_grad_eigvecs, _fallback=True)),
         )
 
-    # Try generalize with `lib_`
     def compute_grad_eigvals(self, _fallback: bool = False) -> _GradFuncType:
         eigvals = self.result[0]
         grad = np.einsum(
@@ -271,7 +270,6 @@ class eig(operation):
         return grad if not _fallback else mx.array(grad)
 
 
-# WIP
 class qr(operation):
     def __init__(self) -> None:
         super().__init__()
@@ -281,111 +279,190 @@ class qr(operation):
         self.Q, self.R = np.linalg.qr(a.data)
         self.result = (Tensor(self.Q), Tensor(self.R))
 
+        return (
+            (self.result[0], partial(self.compute_grad_q, lib_=np)),
+            (self.result[1], partial(self.compute_grad_r, lib_=np)),
+        )
+
     @func_op(n_in=1, n_ret=2, device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         self.Q, self.R = mx.linalg.qr(a.data)
         self.result = (Tensor(self.Q), Tensor(self.R))
 
-    def compute_grad_q(self, lib_: ModuleType) -> _GradFuncType: ...
-
-    def compute_grad_r(self, lib_: ModuleType) -> _GradFuncType: ...
-
-
-@func_op(n_in=1, n_ret=2)
-def qr(self: Tensor) -> _FuncOpReturnType:
-    Q, R = np.linalg.qr(self.data)
-
-    result_q = Tensor(Q)
-    result_r = Tensor(R)
-
-    def compute_grad_q() -> _ArrayOrScalar:
-        grad_q = result_q.grad
-        qt_grad_q = np.einsum("...ik,...kj->...ij", Q.mT, grad_q)
-        qt_grad_q_r = np.einsum("...ij,...jk->...ik", qt_grad_q, R)
-
-        return np.einsum("...ij,...jk->...ik", grad_q, R) - np.einsum(
-            "...ij,...jk->...ik", Q, qt_grad_q_r
+        return (
+            (self.result[0], partial(self.compute_grad_q, lib_=mx)),
+            (self.result[1], partial(self.compute_grad_r, lib_=mx)),
         )
 
-    def compute_grad_r() -> _ArrayOrScalar:
-        grad_r = result_r.grad
-        return np.einsum("...ij,...jk->...ik", Q, grad_r)
+    def compute_grad_q(self, lib_: ModuleType) -> _GradFuncType:
+        grad_q = self.result[0].grad
+        qt_grad_q = lib_.einsum("...ik,...kj->...ij", self.Q.swapaxes(-1, -2), grad_q)
+        qt_grad_q_r = lib_.einsum("...ij,...jk->...ik", qt_grad_q, self.R)
 
-    return (result_q, compute_grad_q), (result_r, compute_grad_r)
+        return lib_.einsum("...ij,...jk->...ik", grad_q, self.R) - lib_.einsum(
+            "...ij,...jk->...ik", self.Q, qt_grad_q_r
+        )
 
-
-@func_op(n_in=1, n_ret=3)
-def svd(self: Tensor, full_matrices: bool = True) -> _FuncOpReturnType:
-    U, S, VT = np.linalg.svd(self.data, full_matrices=full_matrices)
-
-    result_u = Tensor(U)
-    result_s = Tensor(S)
-    result_vt = Tensor(VT)
-
-    def compute_grad_u() -> _ArrayOrScalar:
-        return np.einsum("...ik,...k,...jk->...ij", result_u.grad, S, VT.mT)
-
-    def compute_grad_s() -> _ArrayOrScalar:
-        return np.einsum("...ik,...k,...jk->...ij", U, result_s.grad, VT.mT)
-
-    def compute_grad_vt() -> _ArrayOrScalar:
-        return np.einsum("...ik,...k,...jk->...ij", U, S, result_vt.grad.mT)
-
-    return (
-        (result_u, compute_grad_u),
-        (result_s, compute_grad_s),
-        (result_vt, compute_grad_vt),
-    )
+    def compute_grad_r(self, lib_: ModuleType) -> _GradFuncType:
+        grad_r = self.result[1].grad
+        return lib_.einsum("...ij,...jk->...ik", self.Q, grad_r)
 
 
-@unary_func_op()
-def matrix_power(self: Tensor, n: int) -> _FuncOpReturnType:
-    result = Tensor(np.linalg.matrix_power(self.data, n))
+@fallback
+class svd(operation):
+    def __init__(self, full_matrices: bool) -> None:
+        super().__init__()
+        self.full_matrices = full_matrices
 
-    def compute_grad() -> _ArrayOrScalar:
-        grad = np.zeros_like(self.data)
+    @func_op(n_in=1, n_ret=3)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.U, self.S, self.VT = np.linalg.svd(a.data, self.full_matrices)
+        self.result = (Tensor(self.U), Tensor(self.S), Tensor(self.VT))
+
+        return (
+            (self.result[0], partial(self.compute_grad_u, lib_=np)),
+            (self.result[1], partial(self.compute_grad_s, lib_=np)),
+            (self.result[2], partial(self.compute_grad_vt, lib_=np)),
+        )
+
+    @func_op(n_in=1, n_ret=3, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        if self.full_matrices:
+            U, S, VT = np.linalg.svd(np.array(a.data), full_matrices=True)
+            self.U, self.S, self.VT = mx.array(U), mx.array(S), mx.array(VT)
+        else:
+            self.U, self.S, self.VT = mx.linalg.svd(a.data)
+
+        self.result = (Tensor(self.U), Tensor(self.S), Tensor(self.VT))
+
+        return (
+            (self.result[0], partial(self.compute_grad_u, lib_=mx)),
+            (self.result[1], partial(self.compute_grad_s, lib_=mx)),
+            (self.result[2], partial(self.compute_grad_vt, lib_=mx)),
+        )
+
+    def compute_grad_u(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.einsum(
+            "...ik,...k,...jk->...ij",
+            self.result[0].grad,
+            self.S,
+            self.VT.swapaxes(-1, -2),
+        )
+
+    def compute_grad_s(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.einsum(
+            "...ik,...k,...jk->...ij",
+            self.U,
+            self.result[1].grad,
+            self.VT.swapaxes(-1, -2),
+        )
+
+    def compute_grad_vt(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.einsum(
+            "...ik,...k,...jk->...ij",
+            self.U,
+            self.S,
+            self.result[2].grad.swapaxes(-1, -2),
+        )
+
+
+class matrix_power(operation):
+    def __init__(self, n: int) -> None:
+        super().__init__()
+        self.n = n
+
+    def _gpu_matrix_pow(self, arr: _MLXArray, n: int) -> _MLXArray:
         if n == 0:
+            return mx.eye(arr.shape[0], dtype=arr.dtype)
+        elif n < 0:
+            arr = mx.linalg.inv(arr)
+            n = -n
+
+        result = arr
+        for _ in range(n - 1):
+            result = result @ arr
+        return result
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.linalg.matrix_power(a.data, n=self.n))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(self._gpu_matrix_pow(a.data, n=self.n))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        grad = lib_.zeros_like(a.data)
+        if self.n == 0:
             return grad
         else:
-            for k in range(abs(n)):
-                left_exp = n - np.sign(n) * k - np.sign(n)
-                right_exp = np.sign(n) * k
+            for k in range(abs(self.n)):
+                left_exp = self.n - lib_.sign(self.n) * k - lib_.sign(self.n)
+                right_exp = lib_.sign(self.n) * k
 
-                left = np.linalg.matrix_power(self.data, left_exp)
-                right = np.linalg.matrix_power(self.data, right_exp)
+                left = (
+                    np.linalg.matrix_power(a.data, left_exp)
+                    if lib_ is np
+                    else self._gpu_matrix_pow(a.data, left_exp.item())
+                )
+                right = (
+                    np.linalg.matrix_power(a.data, right_exp)
+                    if lib_ is np
+                    else self._gpu_matrix_pow(a.data, right_exp.item())
+                )
 
-                grad += left @ result.grad @ right
-            if n < 0:
+                grad += left @ self.result.grad @ right
+            if self.n < 0:
                 grad = -grad
 
         return grad
 
-    return result, compute_grad
 
+class pinv(operation):
+    def __init__(self, rcond: float) -> None:
+        super().__init__()
+        self.rcond = rcond
 
-@unary_func_op()
-def pinv(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.linalg.pinv(self.data))
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.linalg.pinv(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    def compute_grad() -> _ArrayOrScalar:
-        U, S, Vh = np.linalg.svd(self.data, full_matrices=False)
-        S_inv_squared = np.diag(1 / (S**2))
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        U, S, VT = mx.linalg.svd(a.data)
+        S_inv = mx.where(S > self.rcond, 1.0 / S, 0.0)
+        S_inv_mat = mx.diag(S_inv)
 
+        self.result = Tensor(VT.T @ S_inv_mat @ U.T)
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        U, S, Vh = (
+            np.linalg.svd(a.data, full_matrices=False)
+            if lib_ is np
+            else mx.linalg.svd(a.data)
+        )
+        S_inv_squared = lib_.diag(1 / (S**2))
         term_1 = (
             Vh.T
             @ S_inv_squared
             @ U.T
-            @ result.grad.T
-            @ (np.eye(self.shape[0]) - self.data @ result.data)
+            @ self.result.grad.T
+            @ (lib_.eye(a.shape[0]) - a.data @ self.result.data)
         )
         term_2 = (
-            (np.eye(self.shape[1]) - result.data @ self.data)
-            @ result.grad.T
+            (lib_.eye(a.shape[1]) - self.result.data @ a.data)
+            @ self.result.grad.T
             @ U
             @ S_inv_squared
             @ Vh
         )
-        grad = -result.data.T @ result.grad.T @ result.data.T + term_1 + term_2
-        return grad.T
-
-    return result, compute_grad
+        grad = (
+            -self.result.data.T @ self.result.grad.T @ self.result.data.T
+            + term_1
+            + term_2
+        ).T
+        return grad

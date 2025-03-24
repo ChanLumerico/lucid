@@ -4,7 +4,7 @@ from lucid.linalg import _func
 
 # fmt: off
 __all__ = [
-    "inv", "det", "solve", "cholesky", "norm"
+    "inv", "det", "solve", "cholesky", "norm", "qr", "svd", "matrix_power", "pinv"
 ]
 # fmt: on
 
@@ -35,21 +35,21 @@ def norm(
     return _func.norm(ord, axis, keepdims)(a)
 
 
-def eig(a: Tensor, eps: float = 1e-12) -> tuple[Tensor, Tensor]:
+def eig(a: Tensor, /, eps: float = 1e-12) -> tuple[Tensor, Tensor]:
     return _func.eig(eps)(a)
 
 
-def qr(a: Tensor) -> tuple[Tensor, Tensor]:
-    return _func.qr(a)
+def qr(a: Tensor, /) -> tuple[Tensor, Tensor]:
+    return _func.qr()(a)
 
 
-def svd(a: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
-    return _func.svd(a, full_matrices)
+def svd(a: Tensor, /, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
+    return _func.svd(full_matrices)(a)
 
 
-def matrix_power(a: Tensor, n: int) -> Tensor:
-    return _func.matrix_power(a, n)
+def matrix_power(a: Tensor, /, n: int) -> Tensor:
+    return _func.matrix_power(n)(a)
 
 
-def pinv(a: Tensor) -> Tensor:
-    return _func.pinv(a)
+def pinv(a: Tensor, /, rcond: float = 1e-12) -> Tensor:
+    return _func.pinv(rcond)(a)

@@ -24,6 +24,8 @@ class Tensor(_TensorOps):
             self.data = np.array(data, dtype=dtype)
             self.dtype = self.data.dtype
         else:
+            if isinstance(data, _MLXArray):
+                self.device = "gpu"
             if dtype is not None and data.dtype != dtype:
                 data = data.astype(dtype)
             self.data = data
