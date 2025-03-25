@@ -6,7 +6,7 @@ from types import ModuleType
 from typing import Literal
 
 from lucid._tensor import Tensor
-from lucid.types import _EinopsPattern, _NumPyArray
+from lucid.types import _EinopsPattern, _NumPyArray, _ShapeLike
 
 from lucid._backend.core import (
     operation,
@@ -14,7 +14,7 @@ from lucid._backend.core import (
     _FuncOpReturnType,
     _GradFuncType,
 )
-from lucid._backend.metal import mx
+from lucid._backend.metal import mx, _MLXArray
 
 
 _ReduceStr = Literal["sum", "mean"]
@@ -76,7 +76,9 @@ def _build_intermediate(
 
 
 class rearrange(operation):
-    def __init__(self, pattern: _EinopsPattern, t_shape: int, **shapes: int) -> None:
+    def __init__(
+        self, pattern: _EinopsPattern, t_shape: _ShapeLike, **shapes: int
+    ) -> None:
         super().__init__()
         try:
             in_pat, out_pat = map(str.strip, pattern.split("->"))
@@ -165,230 +167,262 @@ class rearrange(operation):
         return grad_interm.reshape(a.shape)
 
 
-# TODO: Continue from here
+class reduce(operation):
+    def __init__(
+        self,
+        pattern: _EinopsPattern,
+        reduction: _ReduceStr,
+        t_shape: _ShapeLike,
+        **shapes: int,
+    ) -> None:
+        super().__init__()
+        self.reduction = reduction
+        try:
+            in_pat, out_pat = map(str.strip, pattern.split("->"))
+        except Exception as e:
+            raise ValueError(
+                "Pattern must contain '->' separating input and output patterns."
+            ) from e
 
+        input_tokens = _parse_pattern(in_pat)
+        output_tokens = _parse_pattern(out_pat)
 
-@unary_func_op()
-def reduce(
-    self: Tensor, pattern: _EinopsPattern, reduction: _ReduceStr = "sum", **shapes: int
-) -> _FuncOpReturnType:
-    try:
-        in_pat, out_pat = map(str.strip, pattern.split("->"))
-    except Exception as e:
-        raise ValueError(
-            "Pattern must contain '->' separating input and output patterns."
-        ) from e
+        if len(input_tokens) != len(t_shape):
+            raise ValueError(
+                f"Input pattern has {len(input_tokens)} tokens, "
+                + f"but tensor has {len(t_shape)} dimensions."
+            )
 
-    input_tokens = _parse_pattern(in_pat)
-    output_tokens = _parse_pattern(out_pat)
-
-    if len(input_tokens) != len(self.shape):
-        raise ValueError(
-            f"Input pattern has {len(input_tokens)} tokens, "
-            + f"but tensor has {len(self.shape)} dimensions."
+        self.inter_tokens, self.inter_shape = _build_intermediate(
+            input_tokens, t_shape, shapes
         )
+        kept_indices: list[int] = []
+        kept_groups: list[tuple[int, ...]] = []
+        used = set()
 
-    inter_tokens, inter_shape = _build_intermediate(input_tokens, self.shape, shapes)
-    kept_indices: list[int] = []
-    kept_groups: list[tuple[int, ...]] = []
-    used = set()
+        for token in output_tokens:
+            if isinstance(token, tuple):
+                group_inds, group_dims = [], []
+                for t in token:
+                    found = None
+                    for i, it in enumerate(self.inter_tokens):
+                        if it == t and i not in used:
+                            found = i
+                            break
+                    if found is None:
+                        raise ValueError(
+                            f"Token '{t}' in output group {token} not found in input."
+                        )
 
-    for token in output_tokens:
-        if isinstance(token, tuple):
-            group_inds, group_dims = [], []
-            for t in token:
+                    group_inds.append(found)
+                    group_dims.append(self.inter_shape[found])
+                    used.add(found)
+
+                kept_indices.extend(group_inds)
+                kept_groups.append(tuple(group_dims))
+
+            else:
                 found = None
-                for i, it in enumerate(inter_tokens):
-                    if it == t and i not in used:
+                for i, it in enumerate(self.inter_tokens):
+                    if it == token and i not in used:
                         found = i
                         break
                 if found is None:
                     raise ValueError(
-                        f"Token '{t}' in output group {token} not found in input."
+                        f"Token '{token}' from output pattern not found in input."
                     )
 
-                group_inds.append(found)
-                group_dims.append(inter_shape[found])
+                kept_indices.append(found)
+                kept_groups.append((self.inter_shape[found],))
                 used.add(found)
 
-            kept_indices.extend(group_inds)
-            kept_groups.append(tuple(group_dims))
+        all_indices = set(range(len(self.inter_tokens)))
+        reduced_indices = sorted(list(all_indices - used))
 
+        self.perm = kept_indices + reduced_indices
+
+        self.kept_flat_shape = tuple(self.inter_shape[i] for i in kept_indices)
+        self.reduced_shape = tuple(self.inter_shape[i] for i in reduced_indices)
+        self.final_shape = tuple(np.prod(group) for group in kept_groups)
+
+    def _unified(self, arr: _NumPyArray | _MLXArray) -> _NumPyArray | _MLXArray:
+        intermediate = arr.reshape(tuple(self.inter_shape))
+        transposed = intermediate.transpose(*self.perm)
+
+        reduce_axes = tuple(
+            range(
+                len(self.kept_flat_shape),
+                len(self.kept_flat_shape) + len(self.reduced_shape),
+            )
+        )
+        if self.reduction == "sum":
+            reduced_data = transposed.sum(axis=reduce_axes)
+        elif self.reduction == "mean":
+            reduced_data = transposed.mean(axis=reduce_axes)
         else:
-            found = None
-            for i, it in enumerate(inter_tokens):
-                if it == token and i not in used:
-                    found = i
-                    break
-            if found is None:
-                raise ValueError(
-                    f"Token '{token}' from output pattern not found in input."
-                )
+            raise ValueError(f"Unsupported reduction method: {self.reduction}")
 
-            kept_indices.append(found)
-            kept_groups.append((inter_shape[found],))
-            used.add(found)
+        return reduced_data.reshape(self.final_shape)
 
-    all_indices = set(range(len(inter_tokens)))
-    reduced_indices = sorted(list(all_indices - used))
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(self._unified(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    perm = kept_indices + reduced_indices
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(self._unified(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-    kept_flat_shape = tuple(inter_shape[i] for i in kept_indices)
-    reduced_shape = tuple(inter_shape[i] for i in reduced_indices)
-    final_shape = tuple(np.prod(group) for group in kept_groups)
-
-    intermediate = self.data.reshape(tuple(inter_shape))
-    transposed = np.transpose(intermediate, axes=perm)
-
-    reduce_axes = tuple(
-        range(len(kept_flat_shape), len(kept_flat_shape) + len(reduced_shape))
-    )
-
-    if reduction == "sum":
-        reduced_data = np.sum(transposed, axis=reduce_axes)
-    elif reduction == "mean":
-        reduced_data = np.mean(transposed, axis=reduce_axes)
-    else:
-        raise ValueError(f"Unsupported reduction method: {reduction}")
-
-    result_data = reduced_data.reshape(final_shape)
-    result = Tensor(result_data)
-
-    def compute_grad() -> _NumPyArray:
-        grad_kept = result.grad.reshape(kept_flat_shape)
-        new_shape = kept_flat_shape + (1,) * len(reduced_shape)
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        grad_kept = self.result.grad.reshape(self.kept_flat_shape)
+        new_shape = self.kept_flat_shape + (1,) * len(self.reduced_shape)
 
         grad_expanded = grad_kept.reshape(new_shape)
-        grad_broadcast = np.broadcast_to(
-            grad_expanded, kept_flat_shape + tuple(reduced_shape)
+        grad_broadcast = lib_.broadcast_to(
+            grad_expanded, self.kept_flat_shape + tuple(self.reduced_shape)
         )
 
-        if reduction == "mean":
-            factor = np.prod(reduced_shape) if reduced_shape else 1
+        if self.reduction == "mean":
+            factor = (
+                lib_.prod(lib_.array(self.reduced_shape)) if self.reduced_shape else 1
+            )
             grad_broadcast = grad_broadcast / factor
 
-        inv_perm = np.argsort(perm)
-        grad_intermediate = np.transpose(grad_broadcast, axes=inv_perm)
+        inv_perm = lib_.argsort(lib_.array(self.perm))
+        grad_intermediate = lib_.transpose(grad_broadcast, axes=inv_perm)
 
-        return grad_intermediate.reshape(self.shape)
-
-    return result, compute_grad
+        return grad_intermediate.reshape(a.shape)
 
 
-@unary_func_op()
-def repeat(self: Tensor, pattern: _EinopsPattern, **shapes: int) -> _FuncOpReturnType:
-    try:
-        in_pat, out_pat = map(str.strip, pattern.split("->"))
-    except Exception as e:
-        raise ValueError(
-            "Pattern must contain '->' separating input and output patterns."
-        ) from e
+class repeat(operation):
+    def __init__(
+        self, pattern: _EinopsPattern, t_shape: _ShapeLike, **shapes: int
+    ) -> None:
+        super().__init__()
+        try:
+            in_pat, out_pat = map(str.strip, pattern.split("->"))
+        except Exception as e:
+            raise ValueError(
+                "Pattern must contain '->' separating input and output patterns."
+            ) from e
 
-    input_tokens = _parse_pattern(in_pat)
-    output_tokens = _parse_pattern(out_pat)
+        input_tokens = _parse_pattern(in_pat)
+        output_tokens = _parse_pattern(out_pat)
 
-    if len(input_tokens) != len(self.shape):
-        raise ValueError(
-            f"Input pattern has {len(input_tokens)} tokens, "
-            + f"but tensor has {len(self.shape)} dimensions."
+        if len(input_tokens) != len(t_shape):
+            raise ValueError(
+                f"Input pattern has {len(input_tokens)} tokens, "
+                + f"but tensor has {len(t_shape)} dimensions."
+            )
+
+        intermediate_tokens, self.intermediate_shape = _build_intermediate(
+            input_tokens, t_shape, shapes
         )
 
-    intermediate_tokens, intermediate_shape = _build_intermediate(
-        input_tokens, self.shape, shapes
-    )
+        used_indices = set()
+        group_splits: list[tuple[int, ...]] = []
+        perm: list[int] = []
 
-    used_indices = set()
-    group_splits: list[tuple[int, ...]] = []
-    perm: list[int] = []
+        for token in output_tokens:
+            if isinstance(token, tuple):
+                group_perm, group_dims = [], []
+                for t in token:
+                    found = None
+                    for i, it in enumerate(intermediate_tokens):
+                        if it == t and i not in used_indices:
+                            found = i
+                            break
 
-    for token in output_tokens:
-        if isinstance(token, tuple):
-            group_perm, group_dims = [], []
-            for t in token:
+                    if found is None:
+                        group_perm.append(-1)
+                        group_dims.append(1)
+                    else:
+                        group_perm.append(found)
+                        group_dims.append(self.intermediate_shape[found])
+                        used_indices.add(found)
+
+                group_splits.append(tuple(group_dims))
+                perm.extend(group_perm)
+
+            else:
                 found = None
                 for i, it in enumerate(intermediate_tokens):
-                    if it == t and i not in used_indices:
+                    if it == token and i not in used_indices:
                         found = i
                         break
 
                 if found is None:
-                    group_perm.append(-1)
-                    group_dims.append(1)
+                    perm.append(-1)
+                    group_splits.append((1,))
                 else:
-                    group_perm.append(found)
-                    group_dims.append(intermediate_shape[found])
+                    perm.append(found)
+                    group_splits.append((self.intermediate_shape[found],))
                     used_indices.add(found)
 
-            group_splits.append(tuple(group_dims))
-            perm.extend(group_perm)
+        self.base_shape = tuple(dim for group in group_splits for dim in group)
+        out_shape_list = []
+        idx = 0
 
-        else:
-            found = None
-            for i, it in enumerate(intermediate_tokens):
-                if it == token and i not in used_indices:
-                    found = i
-                    break
+        for token in output_tokens:
+            if isinstance(token, tuple):
+                n = len(token)
+                group_perm = perm[idx : idx + n]
 
-            if found is None:
-                perm.append(-1)
-                group_splits.append((1,))
+                if all(p == -1 for p in group_perm):
+                    prod_val = 1
+                    for t in token:
+                        if t not in shapes:
+                            raise ValueError(
+                                f"Size for expansion token '{t}' must be provided."
+                            )
+                        prod_val *= shapes[t]
+                    out_shape_list.append(prod_val)
+
+                else:
+                    prod_val = np.prod(self.base_shape[idx : idx + n])
+                    out_shape_list.append(prod_val)
+
+                idx += n
             else:
-                perm.append(found)
-                group_splits.append((intermediate_shape[found],))
-                used_indices.add(found)
+                if perm[idx] == -1:
+                    out_shape_list.append(shapes[token])
+                else:
+                    out_shape_list.append(self.base_shape[idx])
+                idx += 1
 
-    base_shape = tuple(dim for group in group_splits for dim in group)
-    out_shape_list = []
-    idx = 0
+        self.out_shape = tuple(out_shape_list)
+        self.kept_order = [p for p in perm if p != -1]
 
-    for token in output_tokens:
-        if isinstance(token, tuple):
-            n = len(token)
-            group_perm = perm[idx : idx + n]
+    def _unified(
+        self, arr: _NumPyArray | _MLXArray, lib_: ModuleType
+    ) -> _NumPyArray | _MLXArray:
+        intermediate = arr.reshape(tuple(self.intermediate_shape))
+        transposed = (
+            lib_.transpose(intermediate, axes=self.kept_order)
+            if self.kept_order
+            else intermediate
+        )
+        base = transposed.reshape(self.base_shape)
+        tile_multiples = tuple(o // b for b, o in zip(self.base_shape, self.out_shape))
 
-            if all(p == -1 for p in group_perm):
-                prod_val = 1
-                for t in token:
-                    if t not in shapes:
-                        raise ValueError(
-                            f"Size for expansion token '{t}' must be provided."
-                        )
-                    prod_val *= shapes[t]
-                out_shape_list.append(prod_val)
+        result_data = lib_.tile(base, tile_multiples)
+        return result_data
 
-            else:
-                prod_val = np.prod(base_shape[idx : idx + n])
-                out_shape_list.append(prod_val)
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(self._unified(a.data, lib_=np))
+        return self.result, partial(self.compute_grad, a=a)
 
-            idx += n
-        else:
-            if perm[idx] == -1:
-                out_shape_list.append(shapes[token])
-            else:
-                out_shape_list.append(base_shape[idx])
-            idx += 1
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(self._unified(a.data, lib_=mx))
+        return self.result, partial(self.compute_grad, a=a)
 
-    out_shape = tuple(out_shape_list)
-    kept_order = [p for p in perm if p != -1]
-
-    intermediate = self.data.reshape(tuple(intermediate_shape))
-    transposed = (
-        np.transpose(intermediate, axes=kept_order) if kept_order else intermediate
-    )
-    base = transposed.reshape(base_shape)
-    tile_multiples = tuple(o // b for b, o in zip(base_shape, out_shape))
-
-    result_data = np.tile(base, tile_multiples)
-    result = Tensor(result_data)
-
-    def compute_grad() -> _NumPyArray:
-        grad = result.grad
-        for i, (b, o) in enumerate(zip(base_shape, out_shape)):
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        grad = self.result.grad
+        for i, (b, o) in enumerate(zip(self.base_shape, self.out_shape)):
             if b == 1 and o != 1:
-                grad = np.sum(grad, axis=i, keepdims=True)
+                grad = grad.sum(axis=i, keepdims=True)
 
-        grad = grad.reshape(base_shape)
-        return grad.reshape(self.shape)
-
-    return result, compute_grad
+        return grad.reshape(self.base_shape).reshape(a.shape)
