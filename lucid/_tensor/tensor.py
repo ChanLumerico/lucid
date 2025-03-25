@@ -20,6 +20,7 @@ class Tensor(_TensorOps):
         dtype: type | None = None,
         device: _DeviceType = "cpu",
     ) -> None:
+        self.device = device
         if not isinstance(data, (_NumPyArray, _MLXArray)):
             self.data = np.array(data, dtype=dtype)
             self.dtype = self.data.dtype
@@ -40,7 +41,6 @@ class Tensor(_TensorOps):
         self.requires_grad = requires_grad and lucid.grad_enabled()
         self.keep_grad = keep_grad
         self.dtype = self.data.dtype
-        self.device = device
 
         self.grad: Optional[_NumPyArray | _MLXArray] = None
 
