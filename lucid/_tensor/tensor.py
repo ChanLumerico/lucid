@@ -44,6 +44,7 @@ class Tensor(_TensorOps):
 
         self.grad: Optional[_NumPyArray | _MLXArray] = None
 
+        self._is_free: bool = False
         self._op: type | None = None
         self._backward_op: Callable = lambda: None
         self._prev: list[Tensor] = []
@@ -52,6 +53,14 @@ class Tensor(_TensorOps):
     @property
     def is_leaf(self) -> bool:
         return self.requires_grad and len(self._prev) == 0
+
+    @property
+    def is_free(self) -> bool:
+        return self._is_free
+
+    def free(self) -> Self:
+        self._is_free = True
+        return self
 
     def backward(self, keep_grad: bool = False) -> None:
         if self.grad is None:

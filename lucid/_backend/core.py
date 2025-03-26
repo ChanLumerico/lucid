@@ -6,7 +6,7 @@ import lucid
 from lucid.types import _DeviceType, _NumPyArray
 
 from lucid._tensor import Tensor
-from lucid._backend.metal import mx, _MLXArray, is_cpu_op
+from lucid._backend.metal import _MLXArray, is_gpu_op
 
 
 _GradFuncType = Callable[[None], Tuple[_NumPyArray | _MLXArray, ...]]
@@ -43,11 +43,15 @@ def func_op(
                 tensors += (tensor,)
                 requires_grad = requires_grad or tensor.requires_grad
 
-                if tensor.device != device:
-                    raise RuntimeError(
-                        f"{tensor.device} tensor of shape {tensor.shape} "
-                        + f"passed for {device} operation('{type(op_self).__name__}')."
-                    )
+                if tensor.is_free:
+                    tensor.to(device)
+                else:
+                    if tensor.device != device:
+                        raise RuntimeError(
+                            f"{tensor.device} tensor of shape {tensor.shape} "
+                            + f"passed for {device} operation"
+                            + f"('{type(op_self).__name__}')."
+                        )
 
             non_tensor_args = args[n_in:] if n_in is not None else ()
             new_args = (*tensors, *non_tensor_args)
@@ -135,11 +139,9 @@ class operation(ABC):
     def compute_grad_gpu(self, *args, **kwargs) -> _GradFuncType: ...
 
     def __call__(self, *tensors, **kwargs) -> Tensor | tuple[Tensor, ...]:
-        return (
-            self.cpu(*tensors, **kwargs)
-            if is_cpu_op(*tensors)
-            else self.gpu(*tensors, **kwargs)
-        )
+        if is_gpu_op(*tensors):
+            return self.gpu(*tensors, **kwargs)
+        return self.cpu(*tensors, **kwargs)
 
 
 def fallback(cls: type[operation]) -> type[operation]:

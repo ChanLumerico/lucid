@@ -133,7 +133,7 @@ class _greater(operation):
         return self.result, partial(self.compute_grad, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
-    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data > b.data).astype(a.dtype))
         return self.result, partial(self.compute_grad, lib=np)
 
@@ -151,7 +151,7 @@ class _greater_or_equal(operation):
         return self.result, partial(self.compute_grad, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
-    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data >= b.data).astype(a.dtype))
         return self.result, partial(self.compute_grad, lib=np)
 
@@ -169,7 +169,7 @@ class _less(operation):
         return self.result, partial(self.compute_grad, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
-    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data < b.data).astype(a.dtype))
         return self.result, partial(self.compute_grad, lib=np)
 
@@ -187,7 +187,7 @@ class _less_or_equal(operation):
         return self.result, partial(self.compute_grad, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
-    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data <= b.data).astype(a.dtype))
         return self.result, partial(self.compute_grad, lib=np)
 

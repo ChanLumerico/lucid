@@ -12,11 +12,11 @@ _MLXArray = mx.array
 
 
 def is_cpu_op(*tensor_or_any) -> bool:
-    return any([getattr(t, "device", None) == "cpu" for t in tensor_or_any])
+    return any([t.device == "cpu" for t in tensor_or_any if hasattr(t, "device")])
 
 
 def is_gpu_op(*tensor_or_any) -> bool:
-    return any([getattr(t, "device", None) == "gpu" for t in tensor_or_any])
+    return any([t.device == "gpu" for t in tensor_or_any if hasattr(t, "device")])
 
 
 def parse_mlx_indexing(index: Any) -> Any:

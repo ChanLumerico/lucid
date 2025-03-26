@@ -39,7 +39,7 @@ class reshape(operation):
 
 
 class _reshape_immediate(operation):
-    def __init__(self, *shape: int) -> None:
+    def __init__(self, shape: _ShapeLike) -> None:
         super().__init__()
         self.shape = shape
 

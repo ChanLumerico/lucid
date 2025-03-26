@@ -1,4 +1,5 @@
-from typing import Literal, Sequence
+from typing import Literal, Sequence, overload
+
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar
 
@@ -18,8 +19,14 @@ def reshape(a: Tensor, /, shape: _ShapeLike) -> Tensor:
     return func.reshape(shape)(a)
 
 
-def _reshape_immediate(a: Tensor, /, *shape: int) -> Tensor:
-    return func._reshape_immediate(*shape)(a)
+@overload
+def reshape_immediate(a: Tensor, /, shape: _ShapeLike) -> Tensor: ...
+
+
+def _reshape_immediate(a: Tensor, /, *shape: int | _ShapeLike) -> Tensor:
+    if isinstance(shape[0], (tuple, list)):
+        shape = shape[0]
+    return func._reshape_immediate(shape)(a)
 
 
 def squeeze(a: Tensor, /, axis: _ShapeLike | None = None) -> Tensor:

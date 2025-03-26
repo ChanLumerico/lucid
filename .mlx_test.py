@@ -1,12 +1,12 @@
 import lucid
+import lucid.nn as nn
+import lucid.nn.functional as F
+import lucid.models as models
 
 lucid.random.seed(42)
 
 
-x = lucid.random.randn(4, 4, requires_grad=True, device="gpu")
+x = lucid.random.randn(2, 2, requires_grad=True, device="gpu")
 
-y = lucid.einops.repeat(x, "i j -> i j k", k=2)
-y.backward()
-
-print(y.shape)
-print(x.grad.shape)
+y = F.softmax(x)
+print(y)
