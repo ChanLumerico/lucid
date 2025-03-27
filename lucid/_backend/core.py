@@ -55,6 +55,7 @@ def func_op(
 
             non_tensor_args = args[n_in:] if n_in is not None else ()
             new_args = (*tensors, *non_tensor_args)
+            is_all_free = Tensor.is_all_free(*tensors)
 
             func_return_pairs = func(op_self, *new_args, **kwargs)
 
@@ -75,6 +76,8 @@ def func_op(
                 result.requires_grad = requires_grad and has_gradient
                 result.to(device)
                 result._op = type(op_self)
+                if is_all_free:
+                    result.free()
 
                 results += (result,)
 

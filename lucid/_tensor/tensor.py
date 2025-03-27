@@ -21,9 +21,12 @@ class Tensor(_TensorOps):
         device: _DeviceType = "cpu",
     ) -> None:
         self.device = device
+        self._is_free = False
+
         if not isinstance(data, (_NumPyArray, _MLXArray)):
             self.data = np.array(data, dtype=dtype)
-            self.dtype = self.data.dtype
+            # Need to handle when `dtype` is mlx-type
+            self._is_free = True
         else:
             if isinstance(data, _MLXArray):
                 self.device = "gpu"
@@ -38,17 +41,16 @@ class Tensor(_TensorOps):
         if device == "gpu" and isinstance(self.data, _NumPyArray):
             self.data = mx.array(self.data)
 
-        self.requires_grad = requires_grad and lucid.grad_enabled()
-        self.keep_grad = keep_grad
-        self.dtype = self.data.dtype
-
-        self.grad: Optional[_NumPyArray | _MLXArray] = None
-
-        self._is_free: bool = False
         self._op: type | None = None
         self._backward_op: Callable = lambda: None
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
+
+        self.grad: Optional[_NumPyArray | _MLXArray] = None
+
+        self.requires_grad = requires_grad and lucid.grad_enabled()
+        self.keep_grad = keep_grad
+        self.dtype = self.data.dtype
 
     @property
     def is_leaf(self) -> bool:
@@ -57,6 +59,10 @@ class Tensor(_TensorOps):
     @property
     def is_free(self) -> bool:
         return self._is_free
+
+    @classmethod
+    def is_all_free(cls, *tensors: Self) -> bool:
+        return all(t.is_free for t in tensors)
 
     def free(self) -> Self:
         self._is_free = True
@@ -214,6 +220,9 @@ class Tensor(_TensorOps):
         if self.requires_grad:
             new_tensor._backward_op = _backward_op
             new_tensor._prev = [self]
+
+        if self.is_free:
+            new_tensor.free()
 
         return new_tensor
 
