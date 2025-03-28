@@ -1,7 +1,9 @@
 from typing import Callable, Iterator, Optional, Self, SupportsIndex
+import warnings
 import numpy as np
 
 import lucid
+import lucid.types as types
 from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _DeviceType, Numeric
 
 from lucid._tensor.tensor_ops import _TensorOps
@@ -17,19 +19,32 @@ class Tensor(_TensorOps):
         data: _ArrayOrScalar,
         requires_grad: bool = False,
         keep_grad: bool = False,
-        dtype: type | None = None,
+        dtype: type | Numeric | None = None,
         device: _DeviceType = "cpu",
     ) -> None:
         self.device = device
         self._is_free = False
 
+        if isinstance(dtype, Numeric):
+            dtype = dtype.parse(device=device)
+        elif dtype in {int, float, complex}:
+            warnings.warn(
+                f"Direct use of builtin numeric types('{dtype.__name__}') "
+                + "are not recommended. Use `lucid.types.Numeric` instances instead."
+            )
+
+        # TODO: finish `dtype` assignment
         if not isinstance(data, (_NumPyArray, _MLXArray)):
             self.data = np.array(data, dtype=dtype)
-            # Need to handle when `dtype` is mlx-type
             self._is_free = True
+
+            if not isinstance(dtype, Numeric):
+                numeric_dtype = types.to_numeric_type(self.data.dtype)
+
         else:
             if isinstance(data, _MLXArray):
                 self.device = "gpu"
+
             if dtype is not None and data.dtype != dtype:
                 data = data.astype(dtype)
             self.data = data
@@ -50,7 +65,7 @@ class Tensor(_TensorOps):
 
         self.requires_grad = requires_grad and lucid.grad_enabled()
         self.keep_grad = keep_grad
-        self.dtype = self.data.dtype
+        self.dtype = numeric_dtype
 
     @property
     def is_leaf(self) -> bool:
@@ -145,12 +160,13 @@ class Tensor(_TensorOps):
     def astype(self, dtype: type | Numeric) -> Self:
         new_dtype = dtype
         if isinstance(dtype, Numeric):
-            new_dtype = dtype.parse(tensor_dtype=self.dtype, device=self.device)
-            if new_dtype is None:
-                raise RuntimeError(f"Failed type parsing to '{type(dtype).__name__}'.")
+            if dtype.is_bit_free:
+                new_dtype = dtype.parse(device=self.device)
+            else:
+                new_dtype = dtype.auto_parse(self.data.dtype, device=self.device)
 
         self.data = self.data.astype(new_dtype)
-        self.dtype = self.data.dtype
+        self.dtype = types.to_numeric_type(self.data.dtype)
         return self
 
     def to(self, device: _DeviceType) -> Self:

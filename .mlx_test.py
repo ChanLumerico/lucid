@@ -11,3 +11,5 @@ lucid.random.seed(42)
 # y = F.scaled_dot_product_attention(x, x, x)
 # y.backward()
 # print(y.shape)
+
+x = lucid.Tensor(1.0, dtype=lucid.Int8)

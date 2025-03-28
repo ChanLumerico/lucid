@@ -30,19 +30,14 @@ from lucid._util import *
 
 from lucid._backend.metal import mx, _MLXArray
 
-from lucid.types import (
-    _ArrayOrScalar,
-    _NumPyArray,
-    _ArrayLike,
-    _ShapeLike,
-    _DeviceType,
-    Numeric,
-)
+from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike, _DeviceType
 
 import lucid.linalg as linalg
 import lucid.random as random
 import lucid.einops as einops
 import lucid.nn as nn
+import lucid.types as types
+
 
 _grad_enabled: bool = True
 
@@ -51,8 +46,14 @@ newaxis = np.newaxis
 pi = math.pi
 inf = math.inf
 
-Int = Numeric(int)
-Float = Numeric(float)
+Int = types.Int
+Int8, Int16, Int32, Int64 = (types.Int8, types.Int16, types.Int32, types.Int64)
+
+Float = types.Float
+Float16, Float32, Float64 = (types.Float16, types.Float32, types.Float64)
+
+Complex = types.Complex
+Complex64 = types.Complex64
 
 
 def tensor(

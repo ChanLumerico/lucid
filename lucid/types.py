@@ -1,6 +1,7 @@
 from typing import Any, Callable, Dict, Sequence, Literal
+import re
 
-# NOTE: This module remains dependency-free.
+# NOTE: This module remains module independency.
 import numpy as np
 import mlx.core as mx
 
@@ -24,8 +25,43 @@ _EinopsPattern = str
 
 
 class Numeric:
-    def __init__(self, base_dtype: type[_Scalar]) -> None:
+    def __init__(
+        self, base_dtype: type[int | float | complex], bits: int | None
+    ) -> None:
         self.base_dtype = base_dtype
+        self.base_str = base_dtype.__name__
+        self.bits = bits
+
+        self._np_dtype: type | None = None
+        self._mlx_dtype: type | None = None
+
+        if bits is not None:
+            self._np_dtype = getattr(np, self.base_str + str(bits))
+            self._mlx_dtype = getattr(mx, self.base_str + str(bits))
+
+    @property
+    def cpu(self) -> type | None:
+        return self._np_dtype
+
+    @property
+    def gpu(self) -> type | None:
+        return self._mlx_dtype
+
+    @property
+    def is_bit_free(self) -> bool:
+        return self.bits is None
+
+    def parse(self, device: _DeviceType) -> type | None:
+        if device == "cpu":
+            return self.cpu
+        else:
+            return self.gpu
+
+    def auto_parse(self, data_dtype: type, device: _DeviceType) -> type | None:
+        bits = self._dtype_bits(data_dtype)
+        new_dtype = self.base_dtype.__name__ + str(bits)
+
+        return getattr(np if device == "cpu" else mx, new_dtype, None)
 
     def _dtype_bits(self, dtype: type) -> int:
         if isinstance(dtype, (np.dtype, type)) and hasattr(dtype, "itemsize"):
@@ -42,8 +78,34 @@ class Numeric:
 
         raise TypeError(f"Unsupported dtype: {dtype}")
 
-    def parse(self, tensor_dtype: type, device: _DeviceType) -> type | None:
-        bits = self._dtype_bits(tensor_dtype)
-        new_dtype = self.base_dtype.__name__ + str(bits)
 
-        return getattr(np if device == "cpu" else mx, new_dtype, None)
+# TODO: turn these into subclasses with `partial`
+
+Int = Numeric(int, None)
+Int8 = Numeric(int, bits=8)
+Int16 = Numeric(int, bits=16)
+Int32 = Numeric(int, bits=32)
+Int64 = Numeric(int, bits=64)
+
+Float = Numeric(float, None)
+Float16 = Numeric(float, bits=16)
+Float32 = Numeric(float, bits=32)
+Float64 = Numeric(float, bits=64)
+
+Complex = Numeric(complex, None)
+Complex64 = Numeric(complex, bits=64)
+
+numeric_dict = {
+    "int": {"8": Int8, "16": Int16, "32": Int32, "64": Int64},
+    "float": {"16": Float16, "32": Float32, "64": Float64},
+    "complex": {"64": Complex64},
+}
+
+
+def to_numeric_type(data_dtype: type) -> Numeric:
+    str_dtype = str(data_dtype).split(".")[-1]
+
+    name = re.findall(r"[a-z]+", str_dtype)[0]
+    bits = re.findall(r"\d+", str_dtype)[0]
+
+    return numeric_dict[name][bits]
