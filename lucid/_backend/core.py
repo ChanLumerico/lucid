@@ -3,10 +3,10 @@ from typing import Callable, Tuple, ClassVar
 import functools
 
 import lucid
-from lucid.types import _DeviceType, _NumPyArray
+from lucid.types import _DeviceType, _NumPyArray, _MLXArray
 
 from lucid._tensor import Tensor
-from lucid._backend.metal import _MLXArray, is_gpu_op
+from lucid._backend.metal import is_gpu_op
 
 
 _GradFuncType = Callable[[None], Tuple[_NumPyArray | _MLXArray, ...]]

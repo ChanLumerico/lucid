@@ -1,14 +1,10 @@
 from typing import Any
 import numpy as np
 
-from lucid.types import _NumPyArray
-
 try:
     import mlx.core as mx
 except ModuleNotFoundError as e:
     print(f"mlx library not installed. Try 'pip install mlx'.")
-
-_MLXArray = mx.array
 
 
 def is_cpu_op(*tensor_or_any) -> bool:
@@ -20,7 +16,7 @@ def is_gpu_op(*tensor_or_any) -> bool:
 
 
 def parse_mlx_indexing(index: Any) -> Any:
-    if isinstance(index, _NumPyArray):
+    if isinstance(index, np.ndarray):
         raise TypeError(
             "GPU tensors do not support CPU tensor or NumPy array indexing. "
             + "Convert to GPU tensors."
@@ -32,7 +28,7 @@ def parse_mlx_indexing(index: Any) -> Any:
             if isinstance(idx, bool):
                 parsed.append(1 if idx else 0)
 
-            elif isinstance(idx, _MLXArray) and idx.dtype == mx.bool_:
+            elif isinstance(idx, mx.array) and idx.dtype == mx.bool_:
                 parsed.append(mx.array(np.flatnonzero(idx.tolist()), dtype=mx.int32))
 
             elif isinstance(idx, list) and all(isinstance(i, bool) for i in idx):
@@ -50,7 +46,7 @@ def parse_mlx_indexing(index: Any) -> Any:
     elif isinstance(index, bool):
         return 1 if index else 0
 
-    elif isinstance(index, _MLXArray) and index.dtype == mx.bool_:
+    elif isinstance(index, mx.array) and index.dtype == mx.bool_:
         return mx.array(np.flatnonzero(index.tolist()), dtype=mx.int32)
 
     elif isinstance(index, list) and all(isinstance(i, bool) for i in index):

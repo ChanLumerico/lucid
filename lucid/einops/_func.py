@@ -6,7 +6,7 @@ from types import ModuleType
 from typing import Literal
 
 from lucid._tensor import Tensor
-from lucid.types import _EinopsPattern, _NumPyArray, _ShapeLike
+from lucid.types import _EinopsPattern, _NumPyArray, _MLXArray, _ShapeLike
 
 from lucid._backend.core import (
     operation,
@@ -14,7 +14,7 @@ from lucid._backend.core import (
     _FuncOpReturnType,
     _GradFuncType,
 )
-from lucid._backend.metal import mx, _MLXArray
+from lucid._backend.metal import mx
 
 
 _ReduceStr = Literal["sum", "mean"]

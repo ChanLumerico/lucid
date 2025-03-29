@@ -4,10 +4,18 @@ import numpy as np
 
 import lucid
 import lucid.types as types
-from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _DeviceType, Numeric
+from lucid.types import (
+    _ArrayOrScalar,
+    _NumPyArray,
+    _MLXArray,
+    _Scalar,
+    _DeviceType,
+    _BuiltinType,
+    Numeric,
+)
 
 from lucid._tensor.tensor_ops import _TensorOps
-from lucid._backend.metal import mx, _MLXArray, parse_mlx_indexing
+from lucid._backend.metal import mx, parse_mlx_indexing
 
 
 _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
@@ -18,14 +26,18 @@ _dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
 class Tensor(_TensorOps):
     def __init__(
         self,
-        data: _ArrayOrScalar,
+        data: _ArrayOrScalar | _MLXArray,
         requires_grad: bool = False,
         keep_grad: bool = False,
-        dtype: type | Numeric | None = None,
+        dtype: _BuiltinType | Numeric | None = None,
         device: _DeviceType = "cpu",
     ) -> None:
-        self.device = device
         self._is_free = False
+        self._is_bool_tensor = False
+
+        if dtype is bool:
+            self._is_bool_tensor = True
+            dtype = None
 
         if dtype in {int, float, complex}:
             dtype = _dtype_map[dtype]
@@ -33,34 +45,33 @@ class Tensor(_TensorOps):
         dtype: Numeric | None
         assert isinstance(dtype, (Numeric, NoneType))
 
-        if getattr(dtype, "cpu", None) is None or getattr(dtype, "gpu", None) is None:
-            # TODO: add exception for implicit type (i.e. lucid.Int)
-            raise TypeError(...)
-
-        if not isinstance(data, (_NumPyArray, _MLXArray)):
-            self.data = np.array(
-                data, dtype=dtype.cpu if isinstance(dtype, Numeric) else dtype
-            )
-            self._is_free = True
-            if dtype is None:
-                dtype = types.to_numeric_type(self.data.dtype)
-
-        elif isinstance(data, _NumPyArray):
-            if dtype is not None and data.dtype != dtype.cpu:
-                self.data = data.astype(dtype.cpu)
-
         if device not in {"cpu", "gpu"}:
             raise ValueError(
                 f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
             )
 
+        if not isinstance(data, (_NumPyArray, _MLXArray)):
+            self.data = np.array(data, dtype=dtype.cpu if dtype is not None else dtype)
+
+            if isinstance(data, (_Scalar, list, tuple)):
+                self._is_free = True
+
+        elif isinstance(data, _NumPyArray):
+            self.data = data
+            if dtype is not None and data.dtype != dtype.cpu:
+                self.data = data.astype(dtype.cpu)
+
+        elif isinstance(data, _MLXArray):
+            device = "gpu"
+            self.data = data
+            if dtype is not None and data.dtype != dtype.gpu:
+                self.data = data.astype(dtype.gpu)
+
         if device == "gpu" and isinstance(self.data, _NumPyArray):
             self.data = mx.array(self.data)
-            # TODO: revise this part
-            #
-            # if dtype is not None and data.dtype != dtype.gpu:
-            #     self.data = data.astype(dtype.gpu)
-            #
+
+        if self._is_bool_tensor:
+            self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
 
         self._op: type | None = None
         self._backward_op: Callable = lambda: None
@@ -69,11 +80,17 @@ class Tensor(_TensorOps):
 
         self.grad: Optional[_NumPyArray | _MLXArray] = None
 
+        self.device = device
         self.requires_grad = requires_grad and lucid.grad_enabled()
         self.keep_grad = keep_grad
-        self.dtype = (
-            dtype if dtype is not None else types.to_numeric_type(self.data.dtype)
-        )
+
+        self.dtype: Numeric | bool
+        if self._is_bool_tensor:
+            self.dtype = bool
+        else:
+            self.dtype = (
+                dtype if dtype is not None else types.to_numeric_type(self.data.dtype)
+            )
 
     @property
     def is_leaf(self) -> bool:
@@ -169,12 +186,21 @@ class Tensor(_TensorOps):
         new_dtype = dtype
         if isinstance(dtype, Numeric):
             if dtype.is_bit_free:
-                new_dtype = dtype.parse(device=self.device)
-            else:
                 new_dtype = dtype.auto_parse(self.data.dtype, device=self.device)
+            else:
+                new_dtype = dtype.parse(device=self.device)
+
+        elif dtype is bool:
+            self._is_bool_tensor = True
+            if self.is_gpu():
+                new_dtype = mx.bool_
 
         self.data = self.data.astype(new_dtype)
-        self.dtype = types.to_numeric_type(self.data.dtype)
+        if self._is_bool_tensor:
+            self.dtype = bool
+        else:
+            self.dtype = types.to_numeric_type(self.data.dtype)
+
         return self
 
     def to(self, device: _DeviceType) -> Self:

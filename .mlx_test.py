@@ -3,6 +3,9 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 import lucid.models as models
 
+import numpy as np
+import mlx.core as mx
+
 lucid.random.seed(42)
 
 
@@ -12,8 +15,8 @@ lucid.random.seed(42)
 # y.backward()
 # print(y.shape)
 
-x = lucid.Tensor(1.0, dtype=lucid.Float64, device="gpu")
+x = lucid.Tensor([1, 0], dtype=bool, device="cpu")
 
 print(x)
 print(x.data.dtype)
-print(x.dtype.__repr__())
+print(x.dtype)

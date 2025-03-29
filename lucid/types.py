@@ -8,9 +8,13 @@ import mlx.core as mx
 
 _DeviceType = Literal["cpu", "gpu"]
 
-_Scalar = int | float
+_Scalar = int | float | complex
 _NumPyArray = np.ndarray
-_ArrayOrScalar = _Scalar | list[_Scalar] | _NumPyArray
+_MLXArray = mx.array
+
+_ArrayOrScalar = _Scalar | list[_Scalar] | _NumPyArray | _MLXArray
+
+_BuiltinType = type[bool | int | float | complex]
 
 _ShapeLike = list[int] | tuple[int]
 
@@ -109,7 +113,10 @@ numeric_dict = {
 }
 
 
-def to_numeric_type(data_dtype: type) -> Numeric:
+def to_numeric_type(data_dtype: type) -> Numeric | bool:
+    if data_dtype is bool:
+        return bool
+
     str_dtype = str(data_dtype).split(".")[-1]
 
     name = re.findall(r"[a-z]+", str_dtype)[0]

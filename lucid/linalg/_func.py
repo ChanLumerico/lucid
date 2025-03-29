@@ -2,7 +2,7 @@ from types import ModuleType
 from functools import partial
 import numpy as np
 
-from lucid.types import _NumPyArray
+from lucid.types import _NumPyArray, _MLXArray
 from lucid._tensor import Tensor
 
 from lucid._backend.core import (
@@ -14,7 +14,7 @@ from lucid._backend.core import (
     _GradFuncType,
     _FuncOpReturnType,
 )
-from lucid._backend.metal import mx, _MLXArray
+from lucid._backend.metal import mx
 
 
 class inv(operation):

@@ -28,9 +28,16 @@ from lucid._tensor import Tensor
 from lucid._func import *
 from lucid._util import *
 
-from lucid._backend.metal import mx, _MLXArray
+from lucid._backend.metal import mx
 
-from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike, _DeviceType
+from lucid.types import (
+    _ArrayOrScalar,
+    _NumPyArray,
+    _MLXArray,
+    _ArrayLike,
+    _ShapeLike,
+    _DeviceType,
+)
 
 import lucid.linalg as linalg
 import lucid.random as random
