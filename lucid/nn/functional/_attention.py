@@ -16,7 +16,7 @@ def scaled_dot_product_attention(
 ) -> Tensor:
     L, S = query.shape[-2], key.shape[-2]
     scale_factor = 1 / math.sqrt(query.shape[-1]) if scale is None else scale
-    attn_bias = lucid.zeros(L, S, dtype=query.dtype)
+    attn_bias = lucid.zeros(L, S, dtype=query.dtype).free()
 
     if is_causal:
         assert attn_mask is None

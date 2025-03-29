@@ -1,5 +1,6 @@
 import numpy as np
 
+import lucid
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _Scalar, _ArrayOrScalar, _DeviceType
 
@@ -70,7 +71,7 @@ def bernoulli(
         raise ValueError("probs must be in the range [0, 1].")
 
     return Tensor(
-        np.random.rand(*probs_data.shape) < probs_data,
+        (np.random.rand(*probs_data.shape) < probs_data).astype(int),
         requires_grad,
         keep_grad,
         device=device,

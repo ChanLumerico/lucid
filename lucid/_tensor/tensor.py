@@ -38,13 +38,16 @@ class Tensor(_TensorOps):
         if dtype is bool:
             self._is_bool_tensor = True
             dtype = None
-
         if dtype in {int, float, complex}:
             dtype = _dtype_map[dtype]
 
         dtype: Numeric | None
         assert isinstance(dtype, (Numeric, NoneType))
 
+        if dtype is not None and dtype.is_bit_free:
+            raise TypeError(
+                f"Implicit dtypes is not supported for Tensor instantiation."
+            )
         if device not in {"cpu", "gpu"}:
             raise ValueError(
                 f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
@@ -185,6 +188,7 @@ class Tensor(_TensorOps):
     def astype(self, dtype: type | Numeric) -> Self:
         new_dtype = dtype
         if isinstance(dtype, Numeric):
+            self._is_bool_tensor = False
             if dtype.is_bit_free:
                 new_dtype = dtype.auto_parse(self.data.dtype, device=self.device)
             else:

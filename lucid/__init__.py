@@ -48,7 +48,7 @@ import lucid.types as types
 
 _grad_enabled: bool = True
 
-newaxis = np.newaxis
+newaxis = None
 
 pi = math.pi
 inf = math.inf

@@ -3,6 +3,7 @@ from typing import Callable, Tuple, ClassVar
 import functools
 
 import lucid
+import lucid.types as types
 from lucid.types import _DeviceType, _NumPyArray, _MLXArray
 
 from lucid._tensor import Tensor
@@ -74,7 +75,9 @@ def func_op(
             results: Tuple[Tensor, ...] = tuple()
             for result, compute_grad in func_return_pairs:
                 result.requires_grad = requires_grad and has_gradient
+
                 result.to(device)
+                result.dtype = types.to_numeric_type(result.data.dtype)
                 result._op = type(op_self)
                 if is_all_free:
                     result.free()

@@ -25,6 +25,9 @@ def parse_mlx_indexing(index: Any) -> Any:
     if isinstance(index, tuple):
         parsed = []
         for idx in index:
+            if isinstance(idx, np.ndarray):
+                raise Exception(...)  # NOTE: Need to make dedicated exception
+
             if isinstance(idx, bool):
                 parsed.append(1 if idx else 0)
 
