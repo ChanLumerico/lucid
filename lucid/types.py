@@ -78,8 +78,15 @@ class Numeric:
 
         raise TypeError(f"Unsupported dtype: {dtype}")
 
+    def __str__(self) -> str:
+        return self.base_dtype.__name__ + str(self.bits)
 
-# TODO: turn these into subclasses with `partial`
+    def __repr__(self) -> str:
+        return (
+            f"(base_dtype={self.base_dtype.__name__}, bits={self.bits},"
+            + f" _np_dtype={self.cpu}, _mlx_dtype={self.gpu})",
+        )[0]
+
 
 Int = Numeric(int, None)
 Int8 = Numeric(int, bits=8)

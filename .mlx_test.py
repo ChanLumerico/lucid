@@ -12,4 +12,8 @@ lucid.random.seed(42)
 # y.backward()
 # print(y.shape)
 
-x = lucid.Tensor(1.0, dtype=lucid.Int8)
+x = lucid.Tensor(1.0, dtype=lucid.Float64, device="gpu")
+
+print(x)
+print(x.data.dtype)
+print(x.dtype.__repr__())

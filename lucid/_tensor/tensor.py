@@ -1,5 +1,5 @@
 from typing import Callable, Iterator, Optional, Self, SupportsIndex
-import warnings
+from types import NoneType
 import numpy as np
 
 import lucid
@@ -11,6 +11,8 @@ from lucid._backend.metal import mx, _MLXArray, parse_mlx_indexing
 
 
 _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
+
+_dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
 
 
 class Tensor(_TensorOps):
@@ -25,36 +27,40 @@ class Tensor(_TensorOps):
         self.device = device
         self._is_free = False
 
-        if isinstance(dtype, Numeric):
-            dtype = dtype.parse(device=device)
-        elif dtype in {int, float, complex}:
-            warnings.warn(
-                f"Direct use of builtin numeric types('{dtype.__name__}') "
-                + "are not recommended. Use `lucid.types.Numeric` instances instead."
-            )
+        if dtype in {int, float, complex}:
+            dtype = _dtype_map[dtype]
 
-        # TODO: finish `dtype` assignment
+        dtype: Numeric | None
+        assert isinstance(dtype, (Numeric, NoneType))
+
+        if getattr(dtype, "cpu", None) is None or getattr(dtype, "gpu", None) is None:
+            # TODO: add exception for implicit type (i.e. lucid.Int)
+            raise TypeError(...)
+
         if not isinstance(data, (_NumPyArray, _MLXArray)):
-            self.data = np.array(data, dtype=dtype)
+            self.data = np.array(
+                data, dtype=dtype.cpu if isinstance(dtype, Numeric) else dtype
+            )
             self._is_free = True
+            if dtype is None:
+                dtype = types.to_numeric_type(self.data.dtype)
 
-            if not isinstance(dtype, Numeric):
-                numeric_dtype = types.to_numeric_type(self.data.dtype)
-
-        else:
-            if isinstance(data, _MLXArray):
-                self.device = "gpu"
-
-            if dtype is not None and data.dtype != dtype:
-                data = data.astype(dtype)
-            self.data = data
+        elif isinstance(data, _NumPyArray):
+            if dtype is not None and data.dtype != dtype.cpu:
+                self.data = data.astype(dtype.cpu)
 
         if device not in {"cpu", "gpu"}:
             raise ValueError(
                 f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
             )
+
         if device == "gpu" and isinstance(self.data, _NumPyArray):
             self.data = mx.array(self.data)
+            # TODO: revise this part
+            #
+            # if dtype is not None and data.dtype != dtype.gpu:
+            #     self.data = data.astype(dtype.gpu)
+            #
 
         self._op: type | None = None
         self._backward_op: Callable = lambda: None
@@ -65,7 +71,9 @@ class Tensor(_TensorOps):
 
         self.requires_grad = requires_grad and lucid.grad_enabled()
         self.keep_grad = keep_grad
-        self.dtype = numeric_dtype
+        self.dtype = (
+            dtype if dtype is not None else types.to_numeric_type(self.data.dtype)
+        )
 
     @property
     def is_leaf(self) -> bool:
