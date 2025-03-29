@@ -113,10 +113,7 @@ numeric_dict = {
 }
 
 
-def to_numeric_type(data_dtype: type) -> Numeric | bool:
-    if data_dtype is bool:
-        return bool
-
+def to_numeric_type(data_dtype: type) -> Numeric:
     str_dtype = str(data_dtype).split(".")[-1]
 
     name = re.findall(r"[a-z]+", str_dtype)[0]
