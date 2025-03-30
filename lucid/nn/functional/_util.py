@@ -14,8 +14,8 @@ def _interpolate_bilinear(
     scale_h = (H - 1) / (out_h - 1) if align_corners else H / out_h
     scale_w = (W - 1) / (out_w - 1) if align_corners else W / out_w
 
-    indices_h = lucid.arange(out_h) * scale_h
-    indices_w = lucid.arange(out_w) * scale_w
+    indices_h = lucid.arange(out_h).to(input_.device) * scale_h
+    indices_w = lucid.arange(out_w).to(input_.device) * scale_w
 
     if not align_corners:
         indices_h += 0.5 * scale_h
@@ -24,10 +24,10 @@ def _interpolate_bilinear(
     indices_h = indices_h.clip(0, H - 1)
     indices_w = indices_w.clip(0, W - 1)
 
-    top_indices = indices_h.astype(int)
-    bot_indices = (top_indices + 1).clip(0, H - 1).astype(int)
-    left_indices = indices_w.astype(int)
-    right_indices = (left_indices + 1).clip(0, W - 1).astype(int)
+    top_indices = indices_h.astype(lucid.Int)
+    bot_indices = (top_indices + 1).clip(0, H - 1).astype(lucid.Int)
+    left_indices = indices_w.astype(lucid.Int)
+    right_indices = (left_indices + 1).clip(0, W - 1).astype(lucid.Int)
 
     h_lerp = indices_h - top_indices
     w_lerp = indices_w - left_indices
@@ -106,14 +106,14 @@ def rotate(
     ones = lucid.ones_like(x_flat)
     homogen_coords = lucid.stack([x_flat, y_flat, ones])
 
-    new_coords = rot_mat @ homogen_coords
+    new_coords = (rot_mat @ homogen_coords).free()
     new_x = new_coords[0].reshape(H, W)
     new_y = new_coords[1].reshape(H, W)
 
-    new_x = new_x.clip(0, W - 1).astype(int)
-    new_y = new_y.clip(0, H - 1).astype(int)
+    new_x = new_x.clip(0, W - 1).astype(lucid.Int)
+    new_y = new_y.clip(0, H - 1).astype(lucid.Int)
 
-    rotated_img = lucid.zeros_like(input_)
+    rotated_img = lucid.zeros_like(input_, device=input_.device)
     for n in range(N):
         for c in range(C):
             rotated_img[n, c] = input_[n, c, new_y, new_x]
@@ -128,7 +128,7 @@ def embedding(
     max_norm: float | None = None,
     norm_type: float = 2.0,
 ) -> Tensor:
-    output = weight[input_.data.astype(int)]
+    output = weight[input_.astype(lucid.Int)]
     if padding_idx is not None:
         mask = input_.data == padding_idx
         output *= 1 - mask[..., None]

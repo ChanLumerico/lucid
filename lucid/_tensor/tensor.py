@@ -240,11 +240,17 @@ class Tensor(_TensorOps):
         new_idx = idx
         if isinstance(idx, Tensor):
             new_idx = idx.data
+            if self.is_gpu() and idx.is_free:
+                new_idx = mx.array(idx.data)
+
         if isinstance(idx, tuple):
             new_idx = tuple()
             for id in idx:
                 if isinstance(id, Tensor):
-                    id = id.data
+                    if self.is_gpu() and id.is_free:
+                        id = mx.array(id.data)
+                    else:
+                        id = id.data
                 new_idx += (id,)
 
         if self.is_gpu():

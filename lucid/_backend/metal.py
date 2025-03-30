@@ -8,7 +8,7 @@ except ModuleNotFoundError as e:
 
 
 def is_cpu_op(*tensor_or_any) -> bool:
-    return any([t.device == "cpu" for t in tensor_or_any if hasattr(t, "device")])
+    return all([t.device == "cpu" for t in tensor_or_any if hasattr(t, "device")])
 
 
 def is_gpu_op(*tensor_or_any) -> bool:
@@ -24,9 +24,9 @@ def parse_mlx_indexing(index: Any) -> Any:
 
     if isinstance(index, tuple):
         parsed = []
-        for idx in index:
+        for i, idx in enumerate(index):
             if isinstance(idx, np.ndarray):
-                raise Exception(...)  # NOTE: Need to make dedicated exception
+                raise ValueError(f"NumPy array indexing found at {i}-th index.")
 
             if isinstance(idx, bool):
                 parsed.append(1 if idx else 0)

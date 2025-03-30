@@ -37,6 +37,8 @@ from lucid.types import (
     _ArrayLike,
     _ShapeLike,
     _DeviceType,
+    _BuiltinType,
+    Numeric,
 )
 
 import lucid.linalg as linalg
@@ -67,7 +69,7 @@ def tensor(
     data: Tensor | _ArrayOrScalar,
     requires_grad: bool = False,
     keep_grad: bool = False,
-    dtype: Any = np.float32,
+    dtype: _BuiltinType | Numeric | None = None,
 ) -> Tensor:
     if isinstance(data, Tensor):
         data = data.data
@@ -78,7 +80,7 @@ def to_tensor(
     a: _ArrayLike,
     requires_grad: bool = False,
     keep_grad: bool = False,
-    dtype: Any = np.float32,
+    dtype: _BuiltinType | Numeric | None = None,
 ) -> Tensor:
     return tensor(a, requires_grad, keep_grad, dtype)
 

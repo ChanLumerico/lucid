@@ -13,27 +13,15 @@ lucid.random.seed(42)
 device = "gpu"
 
 
-x = lucid.random.randn(100, 3, 224, 224, requires_grad=True, device=device)
+x = lucid.random.randn(10, 64, requires_grad=True, device=device)
+w = lucid.random.randn(64, 128, requires_grad=True, device=device)
 
-conv = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3)
-conv.to(device)
-
-t0 = time.time_ns()
-
-y = conv(x)
+y = F.embedding(x, w)
 y.backward()
 
-t1 = time.time_ns()
+print(y.shape)
+print(y.dtype.__repr__())
+print(y.data.dtype)
+print(y.device)
 
-print(f"{(t1 - t0) / 1e6} ms")
-
-# NOTE
-# CPU: 749.361278 ms
-# GPU:   2.361677 ms
-
-# print(y.shape)
-# print(y.dtype.__repr__())
-# print(y.data.dtype)
-# print(y.device)
-
-# print(x.grad.shape)
+print(w.grad.shape if w.grad is not None else None)
