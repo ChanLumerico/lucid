@@ -3,7 +3,6 @@ from typing import Any, Iterable
 from abc import ABC, abstractmethod
 import copy
 
-import lucid
 import lucid.nn as nn
 
 from lucid.types import _StateDict, _OptimClosure

@@ -195,6 +195,19 @@ def _match_grad_shape(
         raise ValueError("Unknown error occurred.")
 
 
+def data_copy(data: _NumPyArray | _MLXArray) -> _NumPyArray | _MLXArray:
+    if isinstance(data, _NumPyArray):
+        return data.copy()
+    elif isinstance(data, _MLXArray):
+        return mx.array(data)
+    else:
+        raise RuntimeError(f"Unexpected type: '{type(data).__name__}'")
+
+
+def grad_copy(grad: _NumPyArray | _MLXArray) -> _NumPyArray | _MLXArray:
+    return data_copy(data=grad)
+
+
 def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:
     if len(args) == 1 and isinstance(args[0], (tuple, list)):
         shape = tuple(args[0])
