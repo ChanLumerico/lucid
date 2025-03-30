@@ -1,395 +1,669 @@
-from typing import Literal, Optional
+from functools import partial
+from types import ModuleType
+from typing import Literal
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid._backend import create_ufunc_op, _FuncOpReturnType
-from lucid.types import _NumPyArray, _Scalar
+from lucid.types import _Scalar
 
+from lucid._backend.core import (
+    operation,
+    unary_func_op,
+    _FuncOpReturnType,
+    _GradFuncType,
+)
+from lucid._backend.metal import mx
 
-@create_ufunc_op()
-def _pow(self: Tensor, exp: _Scalar) -> _FuncOpReturnType:
-    result = Tensor(self.data**exp)
 
-    def compute_grad() -> _NumPyArray:
-        return (exp * self.data ** (exp - 1)) * result.grad
+class _pow(operation):
+    def __init__(self, exp: _Scalar) -> None:
+        self.exp = exp
+        super().__init__()
 
-    return result, compute_grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data**self.exp)
+        return self.result, partial(self.compute_grad, a=a)
 
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data**self.exp)
+        return self.result, partial(self.compute_grad, a=a)
 
-@create_ufunc_op()
-def _neg(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(-self.data)
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return (self.exp * a.data ** (self.exp - 1)) * self.result.grad
 
-    def compute_grad() -> _NumPyArray:
-        return -result.grad
 
-    return result, compute_grad
+class _neg(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(-a.data)
+        return self.result, self.compute_grad
 
-@create_ufunc_op()
-def exp(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.exp(self.data))
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(-a.data)
+        return self.result, self.compute_grad
 
-    def compute_grad() -> _NumPyArray:
-        return result.data * result.grad
+    def compute_grad(self) -> _GradFuncType:
+        return -self.result.grad
 
-    return result, compute_grad
 
+class exp(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-@create_ufunc_op()
-def log(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.log(self.data))
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.exp(a.data))
+        return self.result, self.compute_grad
 
-    def compute_grad() -> _NumPyArray:
-        return (1 / self.data) * result.grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.exp(a.data))
+        return self.result, self.compute_grad
 
-    return result, compute_grad
+    def compute_grad(self) -> _GradFuncType:
+        return self.result.data * self.result.grad
 
 
-@create_ufunc_op()
-def log2(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.log2(self.data))
+class log(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-    def compute_grad() -> _NumPyArray:
-        return (1 / (self.data * np.log(2))) * result.grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.log(a.data))
+        return self.result, partial(self.compute_grad, a=a)
 
-    return result, compute_grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.log(a.data))
+        return self.result, partial(self.compute_grad, a=a)
 
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return (1 / a.data) * self.result.grad
 
-@create_ufunc_op()
-def sqrt(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.sqrt(self.data))
 
-    def compute_grad() -> _NumPyArray:
-        return (0.5 / result.data) * result.grad
+class log2(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-    return result, compute_grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.log2(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.log2(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-@create_ufunc_op()
-def sin(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.sin(self.data))
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return (1 / (a.data * lib_.log(2))) * self.result.grad
 
-    def compute_grad() -> _NumPyArray:
-        return np.cos(self.data) * result.grad
 
-    return result, compute_grad
+class sqrt(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.sqrt(a.data))
+        return self.result, self.compute_grad
 
-@create_ufunc_op()
-def cos(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.cos(self.data))
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.sqrt(a.data))
+        return self.result, self.compute_grad
 
-    def compute_grad() -> _NumPyArray:
-        return -np.sin(self.data) * result.grad
+    def compute_grad(self) -> _GradFuncType:
+        return (0.5 / self.result.data) * self.result.grad
 
-    return result, compute_grad
 
+class sin(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-@create_ufunc_op()
-def tan(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.tan(self.data))
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.sin(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    def compute_grad() -> _NumPyArray:
-        return (1 / (np.cos(self.data) ** 2)) * result.grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.sin(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-    return result, compute_grad
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return lib_.cos(a.data) * self.result.grad
 
 
-@create_ufunc_op()
-def arcsin(self: Tensor) -> Tensor:
-    result = Tensor(np.arcsin(self.data))
+class cos(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-    def compute_grad() -> _NumPyArray:
-        return (1 / np.sqrt(1 - self.data**2)) * result.grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.cos(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    return result, compute_grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.cos(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return -lib_.sin(a.data) * self.result.grad
 
-@create_ufunc_op()
-def arccos(self: Tensor) -> Tensor:
-    result = Tensor(np.arccos(self.data))
 
-    def compute_grad() -> _NumPyArray:
-        return (-1 / np.sqrt(1 - self.data**2)) * result.grad
+class tan(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-    return result, compute_grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.tan(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.tan(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-@create_ufunc_op()
-def arctan(self: Tensor) -> Tensor:
-    result = Tensor(np.arctan(self.data))
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return (1 / (lib_.cos(a.data) ** 2)) * self.result.grad
 
-    def compute_grad() -> _NumPyArray:
-        return (1 / (1 + self.data**2)) * result.grad
 
-    return result, compute_grad
+class arcsin(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.arcsin(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-@create_ufunc_op()
-def sinh(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.sinh(self.data))
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.arcsin(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-    def compute_grad() -> _NumPyArray:
-        return np.cosh(self.data) * result.grad
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return (1 / lib_.sqrt(1 - a.data**2)) * self.result.grad
 
-    return result, compute_grad
 
+class arccos(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-@create_ufunc_op()
-def cosh(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.cosh(self.data))
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.arccos(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    def compute_grad() -> _NumPyArray:
-        return np.sinh(self.data) * result.grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.arccos(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-    return result, compute_grad
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return (-1 / lib_.sqrt(1 - a.data**2)) * self.result.grad
 
 
-@create_ufunc_op()
-def tanh(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.tanh(self.data))
+class arctan(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-    def compute_grad() -> _NumPyArray:
-        return (1 - np.tanh(self.data) ** 2) * result.grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.arctan(a.data))
+        return self.result, partial(self.compute_grad, a=a)
 
-    return result, compute_grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.arctan(a.data))
+        return self.result, partial(self.compute_grad, a=a)
 
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return (1 / (1 + a.data**2)) * self.result.grad
 
-@create_ufunc_op()
-def clip(self: Tensor, min_value: float | None, max_value: float) -> _FuncOpReturnType:
-    result = Tensor(np.clip(self.data, min_value, max_value))
 
-    def compute_grad() -> _NumPyArray:
-        grad = np.ones_like(self.data)
-        grad[self.data < min_value] = 0
-        grad[self.data > max_value] = 0
-        return grad * result.grad
+class sinh(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-    return result, compute_grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.sinh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.sinh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-@create_ufunc_op()
-def abs(self: Tensor) -> Tensor:
-    result = Tensor(np.abs(self.data))
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return lib_.cosh(a.data) * self.result.grad
 
-    def compute_grad() -> _NumPyArray:
-        return np.where(self.data >= 0, 1, -1) * result.grad
 
-    return result, compute_grad
+class cosh(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.cosh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-@create_ufunc_op(has_gradient=False)
-def sign(self: Tensor) -> Tensor:
-    result = Tensor(np.sign(self.data))
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.cosh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-    def compute_grad() -> _NumPyArray:
-        return np.array(0.0)
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return lib_.sinh(a.data) * self.result.grad
 
-    return result, compute_grad
 
+class tanh(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-@create_ufunc_op()
-def reciprocal(self: Tensor) -> Tensor:
-    result = Tensor(1 / self.data)
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.tanh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    def compute_grad() -> _NumPyArray:
-        return (-1 / (self.data**2)) * result.grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.tanh(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-    return result, compute_grad
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return (1 - lib_.tanh(a.data) ** 2) * self.result.grad
 
 
-@create_ufunc_op()
-def square(self: Tensor) -> Tensor:
-    result = Tensor(np.square(self.data))
+class clip(operation):
+    def __init__(self, min_value: float | None, max_value: float) -> None:
+        super().__init__()
+        self.min_value = min_value
+        self.max_value = max_value
 
-    def compute_grad() -> _NumPyArray:
-        return 2 * self.data * result.grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.clip(a.data, self.min_value, self.max_value))
+        return self.result, partial(self.compute_grad_cpu, a=a)
 
-    return result, compute_grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.clip(a.data, self.min_value, self.max_value))
+        return self.result, partial(self.compute_grad_gpu, a=a)
 
+    def compute_grad_cpu(self, a: Tensor) -> _GradFuncType:
+        grad = np.ones_like(a.data)
+        grad[a.data < self.min_value] = 0
+        grad[a.data > self.max_value] = 0
 
-@create_ufunc_op()
-def cube(self: Tensor) -> Tensor:
-    result = Tensor(self.data**3)
+        return grad * self.result.grad
 
-    def compute_grad() -> _NumPyArray:
-        return 3 * self.data**2 * result.grad
+    def compute_grad_gpu(self, a: Tensor) -> _GradFuncType:
+        grad = mx.ones_like(a.data)
+        grad = mx.where(a.data < self.min_value, 0, grad)
+        grad = mx.where(a.data > self.max_value, 0, grad)
 
-    return result, compute_grad
+        return grad * self.result.grad
 
 
-@property
-@create_ufunc_op()
-def _T(self: Tensor) -> Tensor:
-    result = Tensor(self.data.T)
+class abs(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-    def compute_grad() -> _NumPyArray:
-        return result.grad.T
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.abs(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    return result, compute_grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.abs(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        return lib_.where(a.data >= 0, 1, -1) * self.result.grad
 
-@property
-@create_ufunc_op()
-def _mT(self: Tensor) -> Tensor:
-    result = Tensor(self.data.mT)
 
-    def compute_grad() -> _NumPyArray:
-        return result.grad.mT
+class sign(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
-    return result, compute_grad
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.sign(a.data))
+        return self.result, partial(self.compute_grad, lib_=np)
 
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.sign(a.data))
+        return self.result, partial(self.compute_grad, lib_=mx)
 
-@create_ufunc_op()
-def transpose(self: Tensor, axes: Optional[list[int]] = None) -> _FuncOpReturnType:
-    if axes is None:
-        axes = list(reversed(range(self.ndim)))
-    result = Tensor(np.transpose(self.data, axes))
+    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
 
-    def compute_grad() -> _NumPyArray:
-        return np.transpose(result.grad, np.argsort(axes))
 
-    return result, compute_grad
+class reciprocal(operation):
+    def __init__(self) -> None:
+        super().__init__()
 
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(1 / a.data)
+        return self.result, partial(self.compute_grad, a=a)
 
-@create_ufunc_op()
-def sum(
-    self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
-) -> _FuncOpReturnType:
-    result = Tensor(np.sum(self.data, axis=axis, keepdims=keepdims))
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(1 / a.data)
+        return self.result, partial(self.compute_grad, a=a)
 
-    def compute_grad() -> _NumPyArray:
-        if axis is None:
-            grad = np.ones_like(self.data) * result.grad
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return (-1 / (a.data**2)) * self.result.grad
+
+
+class square(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.square(a.data))
+        return self.result, partial(self.compute_grad, a=a)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.square(a.data))
+        return self.result, partial(self.compute_grad, a=a)
+
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return 2 * a.data * self.result.grad
+
+
+class cube(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data**3)
+        return self.result, partial(self.compute_grad, a=a)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data**3)
+        return self.result, partial(self.compute_grad, a=a)
+
+    def compute_grad(self, a: Tensor) -> _GradFuncType:
+        return 3 * a.data**2 * self.result.grad
+
+
+class _T(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data.T)
+        return self.result, self.compute_grad
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data.T)
+        return self.result, self.compute_grad
+
+    def compute_grad(self) -> _GradFuncType:
+        return self.result.grad
+
+
+class _mT(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data.mT)
+        return self.result, self.compute_grad_cpu
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.swapaxes(a.data, -1, -2))
+        return self.result, self.compute_grad_gpu
+
+    def compute_grad_cpu(self) -> _GradFuncType:
+        return self.result.grad.mT
+
+    def compute_grad_gpu(self) -> _GradFuncType:
+        return mx.swapaxes(self.result.grad, -1, -2)
+
+
+class transpose(operation):
+    def __init__(self, axes: list[int] | None, ndim: int) -> None:
+        super().__init__()
+        self.axes = self._transpose_axes(axes, ndim)
+
+    def _transpose_axes(self, axes: list[int] | None, ndim: int) -> list:
+        if axes is None:
+            axes = list(reversed(range(ndim)))
+        return axes
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.transpose(a.data, self.axes))
+        return self.result, partial(self.compute_grad, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.transpose(a.data, self.axes))
+        return self.result, partial(self.compute_grad, lib_=mx)
+
+    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.transpose(self.result.grad, lib_.argsort(lib_.array(self.axes)))
+
+
+class sum(operation):
+    def __init__(self, axis: int | tuple[int] | None, keepdims: bool) -> None:
+        super().__init__()
+        self.axis = axis
+        self.keepdims = keepdims
+
+    @unary_func_op()
+    def cpu(self, a: Tensor):
+        self.result = Tensor(np.sum(a.data, axis=self.axis, keepdims=self.keepdims))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor):
+        self.result = Tensor(mx.sum(a.data, axis=self.axis, keepdims=self.keepdims))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def _grad_shape(self, shape: tuple[int]) -> tuple[int]:
+        grad_shape = list(shape)
+        if not self.keepdims:
+            axis_tuple = self.axis if isinstance(self.axis, tuple) else (self.axis,)
+            for ax in axis_tuple:
+                grad_shape.insert(ax, 1)
+
+        return tuple(grad_shape)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        if self.axis is None:
+            grad = lib_.ones_like(a.data) * self.result.grad
         else:
-            grad_shape = list(result.grad.shape)
-            if not keepdims:
-                axis_tuple = axis if isinstance(axis, tuple) else (axis,)
-                for ax in axis_tuple:
-                    grad_shape.insert(ax, 1)
-
-            grad = np.reshape(result.grad, grad_shape)
+            grad_shpe = self._grad_shape(self.result.grad.shape)
+            grad = lib_.reshape(self.result.grad, grad_shpe)
 
         return grad
 
-    return result, compute_grad
+
+class trace(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.trace(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.trace(a.data))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        grad = lib_.eye(a.data.shape[0], dtype=a.data.dtype)
+        return grad * self.result.grad
 
 
-@create_ufunc_op()
-def trace(self: Tensor) -> _FuncOpReturnType:
-    result = Tensor(np.trace(self.data))
+class mean(operation):
+    def __init__(self, axis: int | tuple[int] | None, keepdims: bool) -> None:
+        super().__init__()
+        self.axis = axis
+        self.keepdims = keepdims
 
-    def compute_grad() -> _NumPyArray:
-        grad = np.zeros_like(self.data)
-        np.fill_diagonal(grad, 1)
-        return grad * result.grad
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.mean(a.data, axis=self.axis, keepdims=self.keepdims))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    return result, compute_grad
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.mean(a.data, axis=self.axis, keepdims=self.keepdims))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
 
-
-@create_ufunc_op()
-def mean(
-    self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
-) -> _FuncOpReturnType:
-    result = Tensor(np.mean(self.data, axis=axis, keepdims=keepdims))
-
-    def compute_grad() -> _NumPyArray:
-        if axis is None:
-            count = self.data.size
-            grad = np.ones_like(self.data) * result.grad
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        if self.axis is None:
+            count = a.data.size
+            grad = lib_.ones_like(a.data) * self.result.grad
         else:
-            axis_tuple = axis if isinstance(axis, tuple) else (axis,)
-            count = np.prod([self.shape[ax] for ax in axis_tuple])
+            axis_tuple = self.axis if isinstance(self.axis, tuple) else (self.axis,)
+            count = lib_.prod(lib_.array([a.data.shape[ax] for ax in axis_tuple]))
 
-            grad_shape = list(result.grad.shape)
-            if not keepdims:
+            grad_shape = list(self.result.grad.shape)
+            if not self.keepdims:
                 for ax in sorted(axis_tuple):
                     grad_shape.insert(ax, 1)
 
-            grad = np.reshape(result.grad, grad_shape)
+            grad = lib_.reshape(self.result.grad, grad_shape)
 
         return grad / count
 
-    return result, compute_grad
 
+class var(operation):
+    def __init__(self, axis: int | tuple[int] | None, keepdims: bool) -> None:
+        super().__init__()
+        self.axis = axis
+        self.keepdims = keepdims
 
-@create_ufunc_op()
-def var(
-    self: Tensor, axis: int | tuple[int] | None = None, keepdims: bool = False
-) -> _FuncOpReturnType:
-    result = Tensor(np.var(self.data, axis=axis, keepdims=keepdims))
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.var(a.data, axis=self.axis, keepdims=self.keepdims))
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    def compute_grad() -> _NumPyArray:
-        if axis is None:
-            count = self.data.size
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.var(a.data, axis=self.axis, keepdims=self.keepdims))
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        if self.axis is None:
+            count = a.data.size
         else:
-            axis_tuple = axis if isinstance(axis, tuple) else (axis,)
-            count = np.prod([self.data.shape[ax] for ax in axis_tuple])
+            axis_tuple = self.axis if isinstance(self.axis, tuple) else (self.axis,)
+            count = lib_.prod(lib_.array([a.data.shape[ax] for ax in axis_tuple]))
 
-        mean_val = np.mean(self.data, axis=axis, keepdims=True)
-        grad = (2 / count) * (self.data - mean_val) * result.grad
+        mean_val = lib_.mean(a.data, axis=self.axis, keepdims=True)
+        grad = (2 / count) * (a.data - mean_val) * self.result.grad
 
-        if axis is not None and not keepdims:
-            grad_shape = list(result.grad.shape)
+        if self.axis is not None and not self.keepdims:
+            grad_shape = list(self.result.grad.shape)
             for ax in sorted(axis_tuple):
                 grad_shape.insert(ax, 1)
-            grad = np.reshape(grad, grad_shape)
+            grad = lib_.reshape(grad, grad_shape)
 
         return grad
 
-    return result, compute_grad
 
+class _min_or_max(operation):
+    def __init__(
+        self, mode: Literal["min", "max"], axis: int | tuple[int] | None, keepdims: bool
+    ) -> None:
+        super().__init__()
+        self.mode = mode
+        self.axis = axis
+        self.keepdims = keepdims
 
-@create_ufunc_op()
-def _min_or_max(
-    self: Tensor,
-    mode: Literal["min", "max"],
-    axis: int | tuple[int] | None = None,
-    keepdims: bool = False,
-) -> Tensor:
-    if mode == "max":
-        data = np.max(self.data, axis=axis, keepdims=keepdims)
-    else:
-        data = np.min(self.data, axis=axis, keepdims=keepdims)
-    result = Tensor(data)
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = (
+            Tensor(np.min(a.data, axis=self.axis, keepdims=self.keepdims))
+            if self.mode == "min"
+            else Tensor(np.max(a.data, axis=self.axis, keepdims=self.keepdims))
+        )
+        return self.result, partial(self.compute_grad, a=a, lib_=np)
 
-    def compute_grad() -> _NumPyArray:
-        grad = result.grad
-        if not keepdims and axis is not None:
-            if isinstance(axis, tuple):
-                for ax in sorted(axis):
-                    grad = np.expand_dims(grad, axis=ax)
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = (
+            Tensor(mx.min(a.data, axis=self.axis, keepdims=self.keepdims))
+            if self.mode == "min"
+            else Tensor(mx.max(a.data, axis=self.axis, keepdims=self.keepdims))
+        )
+        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+
+    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        grad = self.result.grad
+        if not self.keepdims and self.axis is not None:
+            if isinstance(self.axis, tuple):
+                for ax in sorted(self.axis):
+                    grad = lib_.expand_dims(grad, axis=ax)
             else:
-                grad = np.expand_dims(grad, axis=axis)
+                grad = lib_.expand_dims(grad, axis=self.axis)
 
-        if keepdims:
-            result_expanded = result.data
+        if self.keepdims:
+            result_expanded = self.result.data
         else:
-            if axis is None:
-                result_expanded = result.data.reshape((1,) * self.data.ndim)
+            if self.axis is None:
+                result_expanded = self.result.data.reshape((1,) * a.data.ndim)
             else:
-                if isinstance(axis, tuple):
-                    result_expanded = result.data
-                    for ax in sorted(axis):
-                        result_expanded = np.expand_dims(result_expanded, axis=ax)
+                if isinstance(self.axis, tuple):
+                    result_expanded = self.result.data
+                    for ax in sorted(self.axis):
+                        result_expanded = lib_.expand_dims(result_expanded, axis=ax)
                 else:
-                    result_expanded = np.expand_dims(result.data, axis=axis)
+                    result_expanded = lib_.expand_dims(self.result.data, axis=self.axis)
 
-        mask = self.data == result_expanded
-        counts = np.sum(mask, axis=axis, keepdims=True)
-        counts = np.where(counts == 0, 1, counts)
+        mask = a.data == result_expanded
+        counts = lib_.sum(mask, axis=self.axis, keepdims=True)
+        counts = lib_.where(counts == 0, 1, counts)
 
         return mask * grad / counts
 
-    return result, compute_grad
 
+class swapaxes(operation):
+    def __init__(self, axis1: int, axis2: int) -> None:
+        super().__init__()
+        self.axis1 = axis1
+        self.axis2 = axis2
 
-@create_ufunc_op()
-def swapaxes(self: Tensor, axis1: int, axis2: int) -> Tensor:
-    result = Tensor(self.data.swapaxes(axis1, axis2))
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.swapaxes(a.data, self.axis1, self.axis2))
+        return self.result, partial(self.compute_grad, lib_=np)
 
-    def compute_grad() -> _NumPyArray:
-        return result.grad.swapaxes(axis1, axis2)
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.swapaxes(a.data, self.axis1, self.axis2))
+        return self.result, partial(self.compute_grad, lib_=mx)
 
-    return result, compute_grad
+    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.swapaxes(self.result.grad, self.axis1, self.axis2)

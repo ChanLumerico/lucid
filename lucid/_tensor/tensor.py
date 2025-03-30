@@ -1,45 +1,122 @@
 from typing import Callable, Iterator, Optional, Self, SupportsIndex
+from types import NoneType
 import numpy as np
 
 import lucid
+import lucid.types as types
+from lucid.types import (
+    _ArrayOrScalar,
+    _NumPyArray,
+    _MLXArray,
+    _Scalar,
+    _DeviceType,
+    _BuiltinType,
+    Numeric,
+)
+
 from lucid._tensor.tensor_ops import _TensorOps
-from lucid.types import _ArrayOrScalar, _NumPyArray, _Scalar, _base_dtype
+from lucid._backend.metal import mx, parse_mlx_indexing
 
 
-_HookType = Callable[["Tensor", _NumPyArray], None]
+_HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
+
+_dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
 
 
 class Tensor(_TensorOps):
     def __init__(
         self,
-        data: _ArrayOrScalar,
+        data: _ArrayOrScalar | _MLXArray,
         requires_grad: bool = False,
         keep_grad: bool = False,
-        dtype: type = _base_dtype,
+        dtype: _BuiltinType | Numeric | None = None,
+        device: _DeviceType = "cpu",
     ) -> None:
-        if not isinstance(data, _NumPyArray):
-            self.data = np.array(data, dtype=dtype)
-        else:
-            if data.dtype != dtype:
-                data = data.astype(dtype)
+        self._is_free = False
+        self._is_bool_tensor = False
+
+        if dtype is bool:
+            self._is_bool_tensor = True
+            dtype = None
+        if dtype in {int, float, complex}:
+            dtype = _dtype_map[dtype]
+
+        dtype: Numeric | None
+        assert isinstance(dtype, (Numeric, NoneType))
+
+        if dtype is not None and dtype.is_bit_free:
+            raise TypeError(
+                f"Implicit dtypes is not supported for Tensor instantiation."
+            )
+        if device not in {"cpu", "gpu"}:
+            raise ValueError(
+                f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
+            )
+
+        if not isinstance(data, (_NumPyArray, _MLXArray)):
+            self.data = np.array(data, dtype=dtype.cpu if dtype is not None else dtype)
+
+            if isinstance(data, (_Scalar, list, tuple)):
+                self._is_free = True
+
+        elif isinstance(data, _NumPyArray):
             self.data = data
+            if dtype is not None and data.dtype != dtype.cpu:
+                self.data = data.astype(dtype.cpu)
 
-        self.requires_grad = requires_grad and lucid.grad_enabled()
-        self.keep_grad = keep_grad
-        self.dtype = self.data.dtype
+        elif isinstance(data, _MLXArray):
+            device = "gpu"
+            self.data = data
+            if dtype is not None and data.dtype != dtype.gpu:
+                self.data = data.astype(dtype.gpu)
 
-        self.grad: Optional[_NumPyArray] = None
+        if device == "gpu" and isinstance(self.data, _NumPyArray):
+            self.data = mx.array(self.data)
+
+        if self._is_bool_tensor:
+            self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
+
+        self._op: type | None = None
         self._backward_op: Callable = lambda: None
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
+
+        self.grad: Optional[_NumPyArray | _MLXArray] = None
+
+        self.device = device
+        self.requires_grad = requires_grad and lucid.grad_enabled()
+        self.keep_grad = keep_grad
+
+        self.dtype: Numeric | bool
+        if self._is_bool_tensor:
+            self.dtype = bool
+        else:
+            self.dtype = (
+                dtype if dtype is not None else types.to_numeric_type(self.data.dtype)
+            )
 
     @property
     def is_leaf(self) -> bool:
         return self.requires_grad and len(self._prev) == 0
 
+    @property
+    def is_free(self) -> bool:
+        return self._is_free
+
+    @classmethod
+    def is_all_free(cls, *tensors: Self) -> bool:
+        return all(t.is_free for t in tensors)
+
+    def free(self) -> Self:
+        self._is_free = True
+        return self
+
     def backward(self, keep_grad: bool = False) -> None:
         if self.grad is None:
-            self.grad = np.ones_like(self.data)
+            if self.is_cpu():
+                self.grad = np.ones_like(self.data)
+            else:
+                self.grad = mx.ones_like(self.data)
 
         visited = set()
         topo_order: list[Self] = []
@@ -61,7 +138,10 @@ class Tensor(_TensorOps):
             try:
                 tensor._backward_op()
             except Exception as e:
-                raise RuntimeError(f"{e} for tensor of shape {tensor.shape}") from e
+                raise RuntimeError(
+                    f"Exception above occurred for tensor "
+                    + f"of shape {tensor.shape} on operation {self._op}."
+                ) from e
 
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
@@ -97,17 +177,66 @@ class Tensor(_TensorOps):
             return float(item)
 
     def zero(self) -> None:
-        self.data = np.zeros_like(self.data)
+        if self.is_cpu():
+            self.data = np.zeros_like(self.data)
+        else:
+            self.data = mx.zeros_like(self.data)
 
     def zero_grad(self) -> None:
         self.grad = None
 
-    def astype(self, dtype: type) -> Self:
-        self.data = self.data.astype(dtype)
-        self.dtype = self.data.dtype
+    def astype(self, dtype: type | Numeric) -> Self:
+        new_dtype = dtype
+        if isinstance(dtype, Numeric):
+            self._is_bool_tensor = False
+            if dtype.is_bit_free:
+                new_dtype = dtype.auto_parse(self.data.dtype, device=self.device)
+            else:
+                new_dtype = dtype.parse(device=self.device)
+
+        elif dtype is bool:
+            self._is_bool_tensor = True
+            if self.is_gpu():
+                new_dtype = mx.bool_
+
+        self.data = self.data.astype(new_dtype)
+        if self._is_bool_tensor:
+            self.dtype = bool
+        else:
+            self.dtype = types.to_numeric_type(self.data.dtype)
+
         return self
 
-    def __getitem__(self, idx: SupportsIndex) -> Self:
+    def to(self, device: _DeviceType) -> Self:
+        if self.device == device:
+            return self
+
+        if device == "cpu":
+            self.data = np.array(self.data)
+            if self.grad is not None:
+                self.grad = np.array(self.grad)
+
+        elif device == "gpu":
+            self.data = mx.array(self.data)
+            if self.grad is not None:
+                self.grad = mx.array(self.grad)
+
+        else:
+            raise ValueError(
+                f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
+            )
+
+        self.dtype = self.data.dtype
+        self.device = device
+        return self
+
+    def is_cpu(self) -> bool:
+        return self.device == "cpu"
+
+    def is_gpu(self) -> bool:
+        return self.device == "gpu"
+
+    def __getitem__(self, idx: SupportsIndex | Self) -> Self:
         new_idx = idx
         if isinstance(idx, Tensor):
             new_idx = idx.data
@@ -118,32 +247,66 @@ class Tensor(_TensorOps):
                     id = id.data
                 new_idx += (id,)
 
+        if self.is_gpu():
+            new_idx = parse_mlx_indexing(new_idx)
+        else:
+            if isinstance(idx, Tensor) and isinstance(idx.data, _MLXArray):
+                raise RuntimeError(f"Attempted GPU tensor indexing to CPU tensor.")
+
         sliced_data = self.data[new_idx]
-        new_tensor = Tensor(sliced_data, self.requires_grad, self.keep_grad, self.dtype)
+        new_tensor = Tensor(
+            sliced_data, self.requires_grad, self.keep_grad, self.dtype, self.device
+        )
 
         def _backward_op() -> None:
             if self.grad is None:
-                self.grad = np.zeros_like(self.data)
+                self.grad = (
+                    np.zeros_like(self.data)
+                    if self.is_cpu()
+                    else mx.zeros_like(self.data)
+                )
 
-            new_grad = lucid._match_grad_shape(self.data[new_idx], new_tensor.grad)
+            new_grad = lucid._match_grad_shape(
+                self.data[new_idx], new_tensor.grad, device=self.device
+            )
             lucid._set_tensor_grad(self, new_grad, at=new_idx)
 
         if self.requires_grad:
             new_tensor._backward_op = _backward_op
             new_tensor._prev = [self]
 
+        if self.is_free:
+            new_tensor.free()
+
         return new_tensor
 
-    def __setitem__(self, idx: SupportsIndex, value: Self | _ArrayOrScalar) -> None:
+    def __setitem__(
+        self, idx: SupportsIndex | Self, value: Self | _ArrayOrScalar
+    ) -> None:
         if self.requires_grad:
             raise RuntimeError(
                 "Cannot perform in-place item setting on a "
                 + "Tensor that requires gradients. "
             )
+        if isinstance(value, Tensor) and self.device != value.device:
+            raise RuntimeError(
+                f"Devices does not match for the tensor and the value.",
+            )
 
-        if not isinstance(value, Tensor):
-            value = Tensor(value)
-        self.data[idx] = value.data
+        new_idx = idx
+        if isinstance(idx, Tensor):
+            new_idx = idx.data
+        if isinstance(idx, tuple):
+            new_idx = tuple()
+            for id in idx:
+                if isinstance(id, Tensor):
+                    id = id.data
+                new_idx += (id,)
+
+        if self.is_gpu():
+            new_idx = parse_mlx_indexing(new_idx)
+
+        self.data[new_idx] = value.data
 
     def __len__(self) -> int:
         if self.ndim == 0:
@@ -156,7 +319,7 @@ class Tensor(_TensorOps):
             yield self[i]
 
     def __repr__(self) -> str:
-        return f"Tensor({self.data}, grad={self.grad})"
+        return f"Tensor({self.data}, grad={self.grad}, device={self.device})"
 
     def __str__(self) -> str:
         return str(self.data)

@@ -23,6 +23,7 @@ setuptools.setup(
         "numpy",
         "pandas",
         "openml",
+        "mlx",
     ],
     include_package_data=True,
 )

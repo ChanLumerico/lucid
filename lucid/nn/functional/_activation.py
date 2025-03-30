@@ -31,7 +31,7 @@ def selu(input_: Tensor) -> Tensor:
 
 
 def gelu(input_: Tensor) -> Tensor:
-    c = lucid.sqrt(2 / lucid.pi)
+    c = lucid.sqrt(2 / lucid.pi).free()
     return 0.5 * input_ * (1 + lucid.tanh(c * (input_ + 0.044715 * input_**3)))
 
 

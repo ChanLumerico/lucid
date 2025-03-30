@@ -10,10 +10,9 @@ from typing import (
     overload,
 )
 from collections import OrderedDict
-import numpy as np
 
 from lucid._tensor import Tensor
-from lucid.types import _ArrayOrScalar, _StateDict, _NumPyArray
+from lucid.types import _ArrayOrScalar, _StateDict, _NumPyArray, _DeviceType
 
 import lucid.nn as nn
 
@@ -45,6 +44,8 @@ class Module:
         object.__setattr__(self, "_modules", OrderedDict())
 
         self.training = True
+        self.device: _DeviceType = "cpu"
+
         self._forward_hooks: list[_ForwardHookType] = []
         self._backward_hooks: list[_BackwardHookType] = []
 
@@ -89,11 +90,11 @@ class Module:
         self,
         name: str,
         buffer: nn.Buffer | _ArrayOrScalar | None,
-        dtype: Any = np.float32,
+        dtype: type | None = None,
     ) -> None:
         if buffer is not None:
             if not isinstance(buffer, nn.Buffer):
-                buffer = nn.Buffer(buffer, dtype=dtype)
+                buffer = nn.Buffer(buffer, dtype=dtype, device=self.device)
 
         self.__setattr__(name, buffer)
 
@@ -122,6 +123,22 @@ class Module:
 
     def eval(self) -> Self:
         return self.train(mode=False)
+
+    def to(self, device: _DeviceType) -> Self:
+        if device == self.device:
+            return self
+        self.device = device
+
+        for param in self.parameters(recurse=False):
+            param.to(device)
+
+        for buffer in self.buffers(recurse=False):
+            buffer.to(device)
+
+        for module in self.modules():
+            module.to(device)
+
+        return self
 
     def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]:
         for _, param in self._parameters.items():

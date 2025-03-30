@@ -13,7 +13,7 @@ def dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     if not training:
         return input_
 
-    mask = lucid.random.rand(*input_.shape) > p
+    mask = (lucid.random.rand(*input_.shape) > p).free()
     scale = 1.0 / (1 - p)
     return input_ * mask * scale
 
@@ -24,7 +24,7 @@ def dropoutnd(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
         return input_
 
     spatial_dim = input_.ndim - 2
-    mask = lucid.random.rand(*input_.shape[:2], *(1,) * spatial_dim) > p
+    mask = (lucid.random.rand(*input_.shape[:2], *(1,) * spatial_dim) > p).free()
     scale = 1.0 / (1 - p)
     return input_ * mask * scale
 
@@ -37,7 +37,7 @@ def alpha_dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tens
     _alpha = -1.7580993408473766
     _lambda = 1.0507009873554805
 
-    mask = lucid.random.rand(*input_.shape) > p
+    mask = (lucid.random.rand(*input_.shape) > p).free()
     scale = 1.0 / (1 - p)
 
     dropped = input_ * mask * scale
@@ -67,7 +67,7 @@ def drop_block(
                 block_mask, padded_mask[:, :, i : i + h, j : j + w]
             )
 
-    block_mask = 1 - block_mask
+    block_mask = (1 - block_mask).free()
     return input_ * block_mask / (1 - p)
 
 
@@ -78,7 +78,7 @@ def drop_path(input_: Tensor, p: float = 0.0, scale_by_keep: bool = True) -> Ten
     keep_prob = 1 - p
     shape = (input_.shape[0],) + (1,) * (input_.ndim - 1)
 
-    random_tensor = lucid.random.bernoulli(keep_prob * lucid.ones(shape))
+    random_tensor = lucid.random.bernoulli(keep_prob * lucid.ones(shape)).free()
     if keep_prob > 0.0 and scale_by_keep:
         random_tensor /= keep_prob
 

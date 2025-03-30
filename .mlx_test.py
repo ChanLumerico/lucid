@@ -1,69 +1,39 @@
+import lucid
+import lucid.nn as nn
+import lucid.nn.functional as F
+import lucid.models as models
+
 import numpy as np
 import mlx.core as mx
 
+import time
 
-class Tensor:
-    def __init__(self, data, requires_grad=False, device="cpu") -> None:
-        if isinstance(data, np.ndarray):
-            self.data = mx.array(data) if device == "gpu" else data
-        elif isinstance(data, mx.array):
-            self.data = data
-        
-        self.requires_grad = requires_grad
-        self.device = device
-        self.grad = None
+lucid.random.seed(42)
 
-        self._prev = []
-        self._backward_op = lambda: None
-    
-    def to(self, device):
-        if self.device == device:
-            return self
-        
-        if device == "cpu":
-            self.data = np.array(self.data)
-        elif device == "gpu":
-            self.data = mx.array(self.data)
-        
-        self.device = device
-        return self
-    
-    # Test temporary operation
-    def add(self, other):
-        if self.device != other.device:
-            raise ValueError(f"Device mismatch: {self.device} vs {other.device}")
-        
-        if self.device == "gpu":
-            result_data = mx.add(self.data, other.data)
-        else:
-            result_data = self.data + other.data
-        
-        result = Tensor(result_data, device=self.device)
-
-        def compute_grad():
-            grad = result.grad
-            if result.device == "gpu":
-                grad = mx.array(grad)
-            
-            self.grad = grad
-            other.grad = grad
-        
-        result._backward_op = compute_grad
-        return result
+device = "gpu"
 
 
-a = Tensor(np.diag([1, 2, 3]), device="cpu")
-b = Tensor(np.ones((3, 3)), device="cpu")
+x = lucid.random.randn(100, 3, 224, 224, requires_grad=True, device=device)
 
-a.to("gpu")
-b.to("gpu")
+conv = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3)
+conv.to(device)
 
-c = a.add(b)
-c.grad = np.ones_like(c.data) if c.device == "cpu" else mx.ones_like(c.data)
+t0 = time.time_ns()
 
-print(a.grad, b.grad)
+y = conv(x)
+y.backward()
 
-c._backward_op()
+t1 = time.time_ns()
 
-print(a.grad, b.grad)
-print(type(a.grad), type(b.grad))
+print(f"{(t1 - t0) / 1e6} ms")
+
+# NOTE
+# CPU: 749.361278 ms
+# GPU:   2.361677 ms
+
+# print(y.shape)
+# print(y.dtype.__repr__())
+# print(y.data.dtype)
+# print(y.device)
+
+# print(x.grad.shape)

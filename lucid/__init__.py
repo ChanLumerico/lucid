@@ -21,25 +21,46 @@ from pathlib import Path
 import os
 import sys
 import json
+import math
 import numpy as np
 
 from lucid._tensor import Tensor
 from lucid._func import *
 from lucid._util import *
 
-from lucid.types import _ArrayOrScalar, _NumPyArray, _ArrayLike, _ShapeLike
+from lucid._backend.metal import mx
+
+from lucid.types import (
+    _ArrayOrScalar,
+    _NumPyArray,
+    _MLXArray,
+    _ArrayLike,
+    _ShapeLike,
+    _DeviceType,
+)
 
 import lucid.linalg as linalg
 import lucid.random as random
 import lucid.einops as einops
 import lucid.nn as nn
+import lucid.types as types
+
 
 _grad_enabled: bool = True
 
-newaxis = np.newaxis
+newaxis = None
 
-pi = np.pi
-inf = np.inf
+pi = math.pi
+inf = math.inf
+
+Int = types.Int
+Int8, Int16, Int32, Int64 = (types.Int8, types.Int16, types.Int32, types.Int64)
+
+Float = types.Float
+Float16, Float32, Float64 = (types.Float16, types.Float32, types.Float64)
+
+Complex = types.Complex
+Complex64 = types.Complex64
 
 
 def tensor(
@@ -77,7 +98,7 @@ def grad_enabled() -> bool:
     return _grad_enabled
 
 
-def shape(a: Tensor | _NumPyArray) -> _ShapeLike:
+def shape(a: Tensor | _NumPyArray | _MLXArray) -> _ShapeLike:
     if hasattr(a, "shape"):
         return a.shape
 
@@ -90,30 +111,49 @@ def _check_input_dim(tensor: Tensor, dim: int) -> None:
 
 
 def _set_tensor_grad(
-    tensor: Tensor, grad: _NumPyArray, at: SupportsIndex = ...
+    tensor: Tensor, grad: _NumPyArray | _MLXArray, at: SupportsIndex = ...
 ) -> None:
-    if tensor.requires_grad:
-        if tensor.grad is None:
-            tensor.grad = grad
+    if not tensor.requires_grad:
+        return
+    if tensor.grad is None:
+        tensor.grad = grad
+    else:
+        if tensor.is_cpu() and not tensor.grad.flags.writeable:
+            tensor.grad = tensor.grad.copy()
+
+        if tensor.is_gpu():
+            if at == Ellipsis:
+                at = slice(None, None, None)
+
+        if tensor.grad.ndim == 0:
+            tensor.grad += grad
         else:
-            if not tensor.grad.flags.writeable:
-                tensor.grad = tensor.grad.copy()
             tensor.grad[at] = tensor.grad[at] + grad
 
 
-def _check_is_tensor(any: Tensor | _ArrayOrScalar) -> Tensor:
+def _check_is_tensor(
+    any: Tensor | _ArrayOrScalar, device: _DeviceType = "cpu"
+) -> Tensor:
     if not isinstance(any, Tensor):
-        return Tensor(any)
+        return Tensor(any, device=device)
     return any
 
 
-def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
+def _match_grad_shape(
+    data: _NumPyArray | _MLXArray,
+    grad: _NumPyArray | _MLXArray,
+    device: _DeviceType = "cpu",
+) -> _NumPyArray | _MLXArray:
     if data.shape == grad.shape:
         return grad
     if data.ndim == 0:
-        return np.sum(grad)
+        return grad.sum()
     if grad.ndim == 0:
-        return np.broadcast_to(grad, data.shape)
+        return (
+            np.broadcast_to(grad, data.shape)
+            if device == "cpu"
+            else mx.broadcast_to(grad, data.shape)
+        )
 
     if data.size == grad.size:
         return grad.reshape(data.shape)
@@ -126,7 +166,11 @@ def _match_grad_shape(data: _NumPyArray, grad: _NumPyArray) -> _NumPyArray:
                 f"Cannot broadcast grad of {grad.shape} to data of {data.shape}."
             )
 
-        grad_expand = grad_squeeze[..., None].repeat(int(expand_factor), axis=-1)
+        grad_expand = (
+            grad_squeeze[..., None].repeat(int(expand_factor), axis=-1)
+            if device == "cpu"
+            else mx.repeat(grad_squeeze[..., None], int(expand_factor), axis=1)
+        )
         return grad_expand.reshape(data.shape)
 
     elif data.size < grad.size:
