@@ -11,7 +11,7 @@ import time
 
 lucid.random.seed(42)
 
-device = "cpu"
+device = "gpu"
 
 
 class MyModule(nn.Module):
@@ -47,7 +47,7 @@ optimizer = optim.ASGD(module.parameters())
 criterion = nn.MSELoss()
 
 
-x = lucid.random.randn(100, 3, 48, 48).to(device)
+x = lucid.random.randn(100, 3, 64, 64).to(device)
 y = lucid.random.randn(100, 1).to(device)
 
 t0 = time.time_ns()
@@ -57,7 +57,7 @@ out.backward()
 
 optimizer.step()
 
-print(out.shape)
+print(out[:10])
 
 t1 = time.time_ns()
 

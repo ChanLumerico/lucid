@@ -107,6 +107,19 @@ class Tensor(_TensorOps):
     def is_all_free(cls, *tensors: Self) -> bool:
         return all(t.is_free for t in tensors)
 
+    @classmethod
+    def copy_data(cls, data: _NumPyArray | _MLXArray) -> _NumPyArray | _MLXArray:
+        if isinstance(data, _NumPyArray):
+            return data.copy()
+        elif isinstance(data, _MLXArray):
+            return mx.array(data)
+        else:
+            raise RuntimeError(f"Unexpected type: '{type(data).__name__}'")
+
+    @classmethod
+    def copy_grad(cls, grad: _NumPyArray | _MLXArray) -> _NumPyArray | _MLXArray:
+        return cls.copy_data(data=grad)
+
     def free(self) -> Self:
         self._is_free = True
         return self

@@ -5,9 +5,10 @@ import lucid.nn as nn
 import lucid.optim as optim
 
 from lucid.types import _OptimClosure, _Scalar
+from lucid._tensor import Tensor
 
 
-__all__ = ["RMSprop", "Rprop"]
+__all__ = ["RMSprop", "Rprop"]  # TODO: continue from here
 
 
 class RMSprop(optim.Optimizer):

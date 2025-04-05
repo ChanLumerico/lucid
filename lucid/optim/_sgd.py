@@ -4,7 +4,7 @@ from typing import Any, Iterable
 import lucid.nn as nn
 import lucid.optim as optim
 
-from lucid import data_copy, grad_copy
+from lucid._tensor import Tensor
 from lucid.types import _OptimClosure
 
 
@@ -36,14 +36,16 @@ class SGD(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = grad_copy(param.grad)
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0:
                     grad = grad + weight_decay * param.data
 
                 if momentum != 0:
                     param_state = self.state[param]
                     if "momentum_buffer" not in param_state:
-                        buf = param_state["momentum_buffer"] = grad_copy(param.grad)
+                        buf = param_state["momentum_buffer"] = Tensor.copy_grad(
+                            param.grad
+                        )
                     else:
                         buf = param_state["momentum_buffer"]
                         buf = momentum * buf + grad
@@ -94,7 +96,7 @@ class ASGD(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = grad_copy(param.grad)
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0:
                     grad = grad + weight_decay * param.data
                 state = self.state[param]
@@ -102,8 +104,8 @@ class ASGD(optim.Optimizer):
                 if len(state) == 0:
                     state["step"] = 0
                     if momentum != 0:
-                        state["momentum_buffer"] = grad_copy(grad)
-                    state["ax"] = data_copy(param.data)
+                        state["momentum_buffer"] = Tensor.copy_grad(grad)
+                    state["ax"] = Tensor.copy_data(param.data)
 
                 state["step"] += 1
                 if momentum != 0:

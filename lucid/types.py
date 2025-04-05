@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Sequence, Literal
+from typing import Any, Callable, Dict, Sequence, Literal, TypeAlias
 import re
 
 # NOTE: This module remains module independency.
@@ -9,8 +9,8 @@ import mlx.core as mx
 _DeviceType = Literal["cpu", "gpu"]
 
 _Scalar = int | float | complex
-_NumPyArray = np.ndarray
-_MLXArray = mx.array
+_NumPyArray: TypeAlias = np.ndarray
+_MLXArray: TypeAlias = mx.array
 
 _ArrayOrScalar = _Scalar | list[_Scalar] | _NumPyArray | _MLXArray
 
