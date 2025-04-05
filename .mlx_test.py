@@ -43,7 +43,7 @@ class MyModule(nn.Module):
 module = MyModule()
 module.to(device)
 
-optimizer = optim.ASGD(module.parameters())
+optimizer = optim.RMSprop(module.parameters())
 criterion = nn.MSELoss()
 
 
@@ -54,10 +54,12 @@ t0 = time.time_ns()
 
 out = module(x)
 out.backward()
+# loss = criterion(out, y)
+# loss.backward()
 
 optimizer.step()
 
-print(out[:10])
+print(module.fc2.bias)
 
 t1 = time.time_ns()
 

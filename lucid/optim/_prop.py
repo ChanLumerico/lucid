@@ -8,7 +8,7 @@ from lucid.types import _OptimClosure, _Scalar
 from lucid._tensor import Tensor
 
 
-__all__ = ["RMSprop", "Rprop"]  # TODO: continue from here
+__all__ = ["RMSprop", "Rprop"]
 
 
 class RMSprop(optim.Optimizer):
@@ -46,10 +46,11 @@ class RMSprop(optim.Optimizer):
             centered = group.get("centered", self.defaults["centered"])
 
             for param in group["params"]:
+                device = param.device  # TODO: Continue from here
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0.0:
                     grad += weight_decay * param.data
 

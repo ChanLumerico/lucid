@@ -239,7 +239,7 @@ class Tensor(_TensorOps):
                 f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
             )
 
-        self.dtype = self.data.dtype
+        self.dtype = types.to_numeric_type(self.data.dtype)
         self.device = device
         return self
 
