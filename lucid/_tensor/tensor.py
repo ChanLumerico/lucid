@@ -15,7 +15,7 @@ from lucid.types import (
 )
 
 from lucid._tensor.tensor_ops import _TensorOps
-from lucid._backend.metal import mx, parse_mlx_indexing
+from lucid._backend.metal import mx, parse_mlx_indexing, is_metal_available
 
 
 _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
@@ -66,12 +66,14 @@ class Tensor(_TensorOps):
                 self.data = data.astype(dtype.cpu)
 
         elif isinstance(data, _MLXArray):
+            is_metal_available()
             device = "gpu"
             self.data = data
             if dtype is not None and data.dtype != dtype.gpu:
                 self.data = data.astype(dtype.gpu)
 
         if device == "gpu" and isinstance(self.data, _NumPyArray):
+            is_metal_available()
             self.data = mx.array(self.data)
 
         if self._is_bool_tensor:
@@ -236,6 +238,7 @@ class Tensor(_TensorOps):
                 self.grad = np.array(self.grad)
 
         elif device == "gpu":
+            is_metal_available()
             self.data = mx.array(self.data)
             if self.grad is not None:
                 self.grad = mx.array(self.grad)

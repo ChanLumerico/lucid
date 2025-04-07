@@ -43,7 +43,7 @@ class MyModule(nn.Module):
 module = MyModule()
 module.to(device)
 
-optimizer = optim.Rprop(module.parameters())
+optimizer = optim.RMSprop(module.parameters())
 criterion = nn.MSELoss()
 
 
@@ -52,18 +52,19 @@ y = lucid.random.randn(10, 1).to(device)
 
 t0 = time.time_ns()
 
-for _ in range(10):
+for i in range(5):
     out = module(x)
-    out.backward()
-    # loss = criterion(out, y)
-    # loss.backward()
+    # out.backward()
+
+    loss = criterion(out, y).eval()
+    loss.backward()
 
     optimizer.step()
     optimizer.zero_grad()
 
-t1 = time.time_ns()
+    print(f"[{i + 1}] {loss.item()}")
 
-print(module.fc2.bias)
+t1 = time.time_ns()
 
 print(out.device, out.shape)
 print(f"{(t1 - t0) / 1e6} ms")

@@ -5,6 +5,7 @@ import lucid.nn as nn
 import lucid.optim as optim
 
 from lucid.types import _OptimClosure, _Scalar
+from lucid._tensor import Tensor
 
 
 __all__ = ["Adamax", "Adagrad", "Adadelta"]
@@ -42,7 +43,7 @@ class Adamax(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0.0:
                     grad += weight_decay * param.data
 
@@ -103,7 +104,7 @@ class Adagrad(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0.0:
                     grad += weight_decay * param.data
 
@@ -151,7 +152,7 @@ class Adadelta(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0.0:
                     grad += weight_decay * param.data
 

@@ -1,4 +1,5 @@
 from typing import Iterable
+import numpy as np
 
 import lucid
 import lucid.nn as nn
@@ -6,6 +7,7 @@ import lucid.optim as optim
 
 from lucid.types import _OptimClosure, _Scalar
 from lucid._tensor import Tensor
+from lucid._backend.metal import mx
 
 
 __all__ = ["RMSprop", "Rprop"]
@@ -128,12 +130,13 @@ class Rprop(optim.Optimizer):
 
                 sign_change = grad * prev_grad
 
-                # NOTE: Need to resolve bool-indices when `gpu`
-                step_size[sign_change > 0] *= etaplus
-                step_size[sign_change < 0] *= etaminus
+                lib_ = np if param.is_cpu() else mx
+                step_size = lib_.where(sign_change > 0, step_size * etaplus, step_size)
+                step_size = lib_.where(sign_change < 0, step_size * etaminus, step_size)
+
                 step_size[:] = lucid.clip(step_size, step_min, step_max).data
 
-                grad[sign_change < 0] = 0
+                grad = lib_.where(sign_change < 0, 0, grad)
                 state["prev_grad"] = Tensor.copy_grad(grad)
 
                 param.data -= lucid.sign(grad).data * step_size

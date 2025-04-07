@@ -5,6 +5,7 @@ import lucid.nn as nn
 import lucid.optim as optim
 
 from lucid.types import _OptimClosure, _Scalar
+from lucid._tensor import Tensor
 
 
 __all__ = ["Adam", "AdamW", "NAdam", "RAdam"]
@@ -45,7 +46,7 @@ class Adam(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0.0:
                     grad += weight_decay * param.data
 
@@ -117,7 +118,7 @@ class AdamW(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0.0:
                     param.data -= lr * weight_decay * param.data
 
@@ -191,7 +192,7 @@ class NAdam(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0.0:
                     grad += weight_decay * param.data
 
@@ -260,7 +261,7 @@ class RAdam(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 if weight_decay != 0.0:
                     grad += weight_decay * param.data
 

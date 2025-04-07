@@ -2,11 +2,10 @@
 
 ![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-20.1k-yellow)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-21.3k-yellow)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 ![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&label=Lines%20of%20Code&color=purple)
-
 
 **Lucid** is an educational deep learning framework developed to help users understand 
 the underlying mechanics of deep learning models and tensor operations. 
@@ -18,6 +17,8 @@ Lucid is ideal for those who want to learn about the inner workings of deep lear
 algorithms and operations without the complexity of high-level frameworks.
 
 [📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
+
+>💡 *Lucid 1.23* currently serves as a pre-version of ***Lucid 2.0***.
 
 ## Overview
 

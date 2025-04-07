@@ -4,7 +4,7 @@ import lucid
 import lucid.nn as nn
 
 from lucid._tensor import Tensor
-from lucid.types import _base_dtype
+from lucid.types import _BuiltinNumeric, Numeric
 
 
 class Compose:
@@ -33,7 +33,7 @@ class ToTensor(nn.Module):
         self,
         requires_grad: bool = False,
         keep_grad: bool = False,
-        dtype: type | None = None,
+        dtype: _BuiltinNumeric | Numeric | None = None,
     ) -> None:
         super().__init__()
         self.requires_grad = requires_grad
@@ -45,6 +45,6 @@ class ToTensor(nn.Module):
             if hasattr(x, "dtype"):
                 self.dtype = x.dtype
             else:
-                self.dtype = _base_dtype
+                self.dtype = None
 
         return lucid.to_tensor(x, self.requires_grad, self.keep_grad, self.dtype)

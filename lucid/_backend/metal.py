@@ -1,10 +1,41 @@
-from typing import Any
+from typing import Any, ClassVar
+import warnings
+import platform
 import numpy as np
 
 try:
     import mlx.core as mx
 except ModuleNotFoundError as e:
     print(f"mlx library not installed. Try 'pip install mlx'.")
+
+
+class MetalNotSupportedWarning(UserWarning):
+    _has_warned: ClassVar[bool] = False
+
+    def __init__(self, message=None):
+        system = platform.system()
+        machine = platform.machine()
+        arch = platform.processor() or machine
+
+        default_message = (
+            f"Metal GPU acceleration is not supported on this system "
+            f"({system}, {arch}). Falling back to CPU, which may be slower "
+            f"than native CPU due to lazy execution overhead."
+        )
+        super().__init__(message or default_message)
+
+
+def is_metal_available() -> bool:
+    if MetalNotSupportedWarning._has_warned:
+        return False
+    try:
+        mx.default_device(mx.gpu)
+    except Exception:
+        MetalNotSupportedWarning._has_warned = True
+        warnings.warn(MetalNotSupportedWarning(), stacklevel=2)
+        return False
+
+    return True
 
 
 def is_cpu_op(*tensor_or_any) -> bool:
