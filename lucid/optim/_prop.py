@@ -113,7 +113,7 @@ class Rprop(optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                grad = param.grad.copy()
+                grad = Tensor.copy_grad(param.grad)
                 state = self.state[param]
 
                 if len(state) == 0:
@@ -128,12 +128,13 @@ class Rprop(optim.Optimizer):
 
                 sign_change = grad * prev_grad
 
+                # NOTE: Need to resolve bool-indices when `gpu`
                 step_size[sign_change > 0] *= etaplus
                 step_size[sign_change < 0] *= etaminus
                 step_size[:] = lucid.clip(step_size, step_min, step_max).data
 
                 grad[sign_change < 0] = 0
-                state["prev_grad"] = grad.copy()
+                state["prev_grad"] = Tensor.copy_grad(grad)
 
                 param.data -= lucid.sign(grad).data * step_size
 

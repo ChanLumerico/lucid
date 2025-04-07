@@ -125,6 +125,11 @@ class Tensor(_TensorOps):
         self._is_free = True
         return self
 
+    def eval(self) -> Self:
+        if self.is_gpu():
+            mx.eval(self.data)
+        return self
+
     def backward(self, keep_grad: bool = False) -> None:
         if self.grad is None:
             if self.is_cpu():
