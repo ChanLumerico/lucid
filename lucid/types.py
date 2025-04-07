@@ -14,11 +14,11 @@ _MLXArray: TypeAlias = mx.array
 
 _ArrayOrScalar = _Scalar | list[_Scalar] | _NumPyArray | _MLXArray
 
-_BuiltinType = type[bool | int | float | complex]
+_BuiltinNumeric = type[bool | int | float | complex]
 
 _ShapeLike = list[int] | tuple[int]
 
-_ArrayLike = list | _NumPyArray
+_ArrayLike = list | _NumPyArray | _MLXArray
 _ArrayLikeInt = int | Sequence[int | tuple[int, int]]
 
 _StateDict = Dict[str, Any]

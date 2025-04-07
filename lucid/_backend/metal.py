@@ -8,11 +8,27 @@ except ModuleNotFoundError as e:
 
 
 def is_cpu_op(*tensor_or_any) -> bool:
-    return all([t.device == "cpu" for t in tensor_or_any if hasattr(t, "device")])
+    for t in tensor_or_any:
+        device = getattr(t, "device", None)
+        if device is None:
+            if isinstance(t, mx.array):
+                return False
+        else:
+            if device == "gpu":
+                return False
+    return True
 
 
 def is_gpu_op(*tensor_or_any) -> bool:
-    return any([t.device == "gpu" for t in tensor_or_any if hasattr(t, "device")])
+    for t in tensor_or_any:
+        device = getattr(t, "device", None)
+        if device is None:
+            if isinstance(t, mx.array):
+                return True
+        else:
+            if device == "gpu":
+                return True
+    return False
 
 
 def parse_mlx_indexing(index: Any) -> Any:

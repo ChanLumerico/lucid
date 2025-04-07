@@ -1,12 +1,44 @@
 import numpy as np
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLike, _Scalar, _DeviceType
+from lucid import types
+from lucid.types import (
+    _ShapeLike,
+    _ArrayLike,
+    _Scalar,
+    _DeviceType,
+    _NumPyArray,
+    _MLXArray,
+    _BuiltinNumeric,
+    Numeric,
+)
+
+
+def _get_tensor_specs(
+    a: Tensor | _ArrayLike,
+    dtype: _BuiltinNumeric | Numeric | None,
+    device: _DeviceType | None,
+) -> tuple[_ArrayLike, type, _DeviceType]:
+    if isinstance(a, Tensor):
+        data = a.data
+        dtype = a.dtype if dtype is None else dtype
+        device = a.device if device is None else device
+    else:
+        data = a
+        dtype = types.to_numeric_type(a.dtype)
+        if isinstance(a, _NumPyArray):
+            device = "cpu" if device is None else device
+        elif isinstance(a, _MLXArray):
+            device = "gpu" if device is None else device
+        else:
+            raise ValueError(f"Unknown input: '{type(a).__name__}'")
+
+    return data, dtype, device
 
 
 def zeros(
     shape: _ShapeLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -16,24 +48,18 @@ def zeros(
 
 def zeros_like(
     a: Tensor | _ArrayLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType | None = None,
 ) -> Tensor:
-    if dtype is None and hasattr(a, "dtype"):
-        dtype = a.dtype
-    if device is None:
-        device = a.device if hasattr(a, "device") else "cpu"
-    if isinstance(a, Tensor):
-        a = a.data
-
-    return Tensor(np.zeros_like(a), requires_grad, keep_grad, dtype, device)
+    data, dtype, device = _get_tensor_specs(a, dtype, device)
+    return Tensor(np.zeros_like(data), requires_grad, keep_grad, dtype, device)
 
 
 def ones(
     shape: _ShapeLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -43,26 +69,20 @@ def ones(
 
 def ones_like(
     a: Tensor | _ArrayLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType | None = None,
 ) -> Tensor:
-    if dtype is None and hasattr(a, "dtype"):
-        dtype = a.dtype
-    if device is None:
-        device = a.device if hasattr(a, "device") else "cpu"
-    if isinstance(a, Tensor):
-        a = a.data
-
-    return Tensor(np.ones_like(a), requires_grad, keep_grad, dtype, device)
+    data, dtype, device = _get_tensor_specs(a, dtype, device)
+    return Tensor(np.ones_like(data), requires_grad, keep_grad, dtype, device)
 
 
 def eye(
     N: int,
     M: int | None = None,
     k: int = 0,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -73,26 +93,20 @@ def eye(
 def diag(
     v: Tensor | _ArrayLike,
     k: int = 0,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType | None = None,
 ) -> Tensor:
-    if dtype is None and hasattr(v, "dtype"):
-        dtype = v.dtype
-    if device is None:
-        device = v.device if hasattr(v, "device") else "cpu"
-    if not isinstance(v, Tensor):
-        v = Tensor(v)
-
-    return Tensor(np.diag(v.data, k=k), requires_grad, keep_grad, dtype, device)
+    data, dtype, device = _get_tensor_specs(v, dtype, device)
+    return Tensor(np.diag(data, k=k), requires_grad, keep_grad, dtype, device)
 
 
 def arange(
     start: _Scalar,
     stop: _Scalar,
     step: _Scalar,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -102,7 +116,7 @@ def arange(
 
 def empty(
     shape: int | _ShapeLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -112,26 +126,20 @@ def empty(
 
 def empty_like(
     a: Tensor | _ArrayLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
 ) -> Tensor:
-    if dtype is None and hasattr(a, "dtype"):
-        dtype = a.dtype
-    if isinstance(a, Tensor):
-        a = a.data
-    if device is None:
-        device = a.device if hasattr(a, "device") else "cpu"
-
-    return Tensor(np.empty_like(a), requires_grad, keep_grad, dtype, device)
+    data, dtype, device = _get_tensor_specs(a, dtype, device)
+    return Tensor(np.empty_like(data), requires_grad, keep_grad, dtype, device)
 
 
 def linspace(
     start: _Scalar,
     stop: _Scalar,
     num: int = 50,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",

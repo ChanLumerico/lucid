@@ -46,7 +46,6 @@ class RMSprop(optim.Optimizer):
             centered = group.get("centered", self.defaults["centered"])
 
             for param in group["params"]:
-                device = param.device  # TODO: Continue from here
                 if param.grad is None:
                     continue
 

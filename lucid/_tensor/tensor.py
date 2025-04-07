@@ -10,7 +10,7 @@ from lucid.types import (
     _MLXArray,
     _Scalar,
     _DeviceType,
-    _BuiltinType,
+    _BuiltinNumeric,
     Numeric,
 )
 
@@ -29,7 +29,7 @@ class Tensor(_TensorOps):
         data: _ArrayOrScalar | _MLXArray,
         requires_grad: bool = False,
         keep_grad: bool = False,
-        dtype: _BuiltinType | Numeric | None = None,
+        dtype: _BuiltinNumeric | Numeric | None = None,
         device: _DeviceType = "cpu",
     ) -> None:
         self._is_free = False
@@ -53,6 +53,7 @@ class Tensor(_TensorOps):
                 f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
             )
 
+        self.data: _NumPyArray | _MLXArray
         if not isinstance(data, (_NumPyArray, _MLXArray)):
             self.data = np.array(data, dtype=dtype.cpu if dtype is not None else dtype)
 

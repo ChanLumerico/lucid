@@ -1,7 +1,14 @@
 from typing import overload, Callable
 
 import lucid
-from lucid.types import _Scalar, _ShapeLike, _ArrayLike, _DeviceType
+from lucid.types import (
+    _Scalar,
+    _ShapeLike,
+    _ArrayLike,
+    _DeviceType,
+    _BuiltinNumeric,
+    Numeric,
+)
 
 from lucid._tensor import Tensor
 from lucid._func import bfunc, gfunc, ufunc
@@ -241,7 +248,7 @@ def swapaxes(a: Tensor, /, axis1: int, axis2: int) -> Tensor:
 @overload
 def zeros(
     *shape: int,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -251,7 +258,8 @@ def zeros(
 @overload
 def zeros(
     shape: _ShapeLike,
-    dtype: type | None = None,
+    /,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -260,7 +268,7 @@ def zeros(
 
 def zeros(
     *args: int | _ShapeLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -271,10 +279,11 @@ def zeros(
 
 def zeros_like(
     a: Tensor | _ArrayLike,
+    /,
     dtype: type = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
-    device: _DeviceType = "cpu",
+    device: _DeviceType | None = None,
 ) -> Tensor:
     return gfunc.zeros_like(a, dtype, requires_grad, keep_grad, device)
 
@@ -282,7 +291,7 @@ def zeros_like(
 @overload
 def ones(
     *shape: int,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -292,7 +301,8 @@ def ones(
 @overload
 def ones(
     shape: _ShapeLike,
-    dtype: type | None = None,
+    /,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -301,7 +311,7 @@ def ones(
 
 def ones(
     *args: int | _ShapeLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -316,7 +326,7 @@ def ones_like(
     dtype: type = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
-    device: _DeviceType = "cpu",
+    device: _DeviceType | None = None,
 ) -> Tensor:
     return gfunc.ones_like(a, dtype, requires_grad, keep_grad, device)
 
@@ -326,7 +336,7 @@ def eye(
     M: int | None = None,
     k: int = 0,
     /,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -338,10 +348,10 @@ def diag(
     v: Tensor | _ArrayLike,
     k: int = 0,
     /,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
-    device: _DeviceType = "cpu",
+    device: _DeviceType | None = None,
 ) -> Tensor:
     return gfunc.diag(v, k, dtype, requires_grad, keep_grad, device)
 
@@ -350,7 +360,7 @@ def diag(
 def arange(
     stop: _Scalar,
     *,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -362,7 +372,7 @@ def arange(
     start: _Scalar,
     stop: _Scalar,
     *,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -374,7 +384,8 @@ def arange(
     start: _Scalar,
     stop: _Scalar,
     step: _Scalar,
-    dtype: type | None = None,
+    /,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -383,7 +394,7 @@ def arange(
 
 def arange(
     *args,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -403,7 +414,7 @@ def arange(
 @overload
 def empty(
     *shape: int,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -413,7 +424,8 @@ def empty(
 @overload
 def empty(
     shape: _ShapeLike,
-    dtype: type | None = None,
+    /,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -422,7 +434,7 @@ def empty(
 
 def empty(
     *args: int | _ShapeLike,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
@@ -434,10 +446,10 @@ def empty(
 def empty_like(
     a: Tensor | _ArrayLike,
     /,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
-    device: _DeviceType = "cpu",
+    device: _DeviceType | None = None,
 ) -> Tensor:
     return gfunc.empty_like(a, dtype, requires_grad, keep_grad, device)
 
@@ -447,7 +459,7 @@ def linspace(
     stop: _Scalar,
     num: int = 50,
     /,
-    dtype: type | None = None,
+    dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
     device: _DeviceType = "cpu",

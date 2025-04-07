@@ -47,8 +47,8 @@ optimizer = optim.RMSprop(module.parameters())
 criterion = nn.MSELoss()
 
 
-x = lucid.random.randn(100, 3, 64, 64).to(device)
-y = lucid.random.randn(100, 1).to(device)
+x = lucid.random.randn(10, 3, 64, 64).to(device)
+y = lucid.random.randn(10, 1).to(device)
 
 t0 = time.time_ns()
 
