@@ -900,7 +900,6 @@ remaining lightweight, readable, and free of complex dependencies.</p>
 learning internals, Lucid delivers a transparent and highly introspectable API that
 faithfully replicates key behaviors of major frameworks like PyTorch, yet in a form simple
 enough to study line by line.</p>
-<p><a class="reference external" href="https://chanlumerico.github.io/lucid/build/html/index.html">Lucid Documentation</a></p>
 <section id="how-to-install">
 <h2>How to Install<a class="headerlink" href="#how-to-install" title="Link to this heading">¶</a></h2>
 <section id="basic-installation">
@@ -942,7 +941,7 @@ enough to study line by line.</p>
 <h2>Tensor: The Core Abstraction<a class="headerlink" href="#tensor-the-core-abstraction" title="Link to this heading">¶</a></h2>
 <p>At the heart of Lucid is the <cite>Tensor</cite> class—a generalization of NumPy arrays that supports advanced
 operations such as gradient tracking, device placement, and computation graph construction.</p>
-<p>Each <cite>Tensor</cite> encapsulates:</p>
+<p><strong>Each Tensor encapsulates</strong>:</p>
 <ul class="simple">
 <li><p>A data array (<cite>ndarray</cite> or <cite>mlx.array</cite>)</p></li>
 <li><p>A gradient buffer (<cite>grad</cite>)</p></li>
@@ -980,13 +979,13 @@ gradients of scalar-valued loss functions.</p>
 <p>It builds a dynamic graph during the forward pass, capturing every operation involving tensors that require
 gradients. Each node in the graph stores a custom backward function that computes local gradients and propagates
 them upstream using the chain rule.</p>
-<p>Computation Graph Internals:</p>
+<p><strong>Computation Graph Internals</strong>:</p>
 <ul class="simple">
 <li><p>Each <cite>Tensor</cite> acts as a node in a Directed Acyclic Graph (DAG).</p></li>
 <li><p>Operations create edges between inputs and outputs.</p></li>
 <li><p>Each tensor’s <cite>_backward_op</cite> defines how to compute gradients with respect to its parent tensors.</p></li>
 </ul>
-<p>The <cite>.backward()</cite> method:</p>
+<p><strong>The backward method</strong>:</p>
 <ol class="arabic simple">
 <li><p>Topologically sorts the computation graph.</p></li>
 <li><p>Initializes the output gradient (typically <cite>1.0</cite>).</p></li>
@@ -1018,7 +1017,7 @@ them upstream using the chain rule.</p>
 <a class="reference external" href="https://github.com/ml-explore/mlx">MLX</a> library. This integration enables tensor operations,
 neural network layers, and gradient computations to run efficiently on the GPU by leveraging Apple’s
 unified memory and neural engine.</p>
-<p>Key Features:</p>
+<p><strong>Key Features</strong>:</p>
 <ul class="simple">
 <li><p>Tensors with <cite>device=”gpu”</cite> are allocated as <cite>mlx.core.array</cite>.</p></li>
 <li><p>Core mathematical operations, matrix multiplications, and backward passes leverage MLX APIs.</p></li>
@@ -1053,27 +1052,18 @@ unified memory and neural engine.</p>
 <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 </pre></div>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
 <p>When training models on GPU using MLX, you <strong>must explicitly evaluate</strong> the loss tensor after each forward
 pass to prevent the MLX computation graph from growing uncontrollably. MLX defers evaluation until necessary;
-if evaluation is not forced (e.g. by calling <cite>.item()</cite> or accessing <cite>.data</cite>), the graph may grow too deep,
+if evaluation is not forced (e.g. by calling <cite>.eval()</cite>), the graph may grow too deep,
 leading to performance issues or memory errors.</p>
 </div>
 <p>Recommended GPU Training Pattern:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
-<span class="n">_</span> <span class="o">=</span> <span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>  <span class="c1"># Force evaluation on GPU</span>
-<span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-</pre></div>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>An alternative pattern uses <cite>loss.eval()</cite> to force evaluation:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
 <span class="n">loss</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>  <span class="c1"># Force evaluation on GPU</span>
 <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 </pre></div>
-</div>
 </div>
 </section>
 <section id="neural-networks-with-lucid-nn">

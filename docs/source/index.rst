@@ -156,8 +156,6 @@ learning internals, Lucid delivers a transparent and highly introspectable API t
 faithfully replicates key behaviors of major frameworks like PyTorch, yet in a form simple
 enough to study line by line.
 
-`Lucid Documentation <https://chanlumerico.github.io/lucid/build/html/index.html>`_
-
 How to Install
 --------------
 
@@ -205,7 +203,7 @@ Tensor: The Core Abstraction
 At the heart of Lucid is the `Tensor` class—a generalization of NumPy arrays that supports advanced
 operations such as gradient tracking, device placement, and computation graph construction.
 
-Each `Tensor` encapsulates:
+**Each Tensor encapsulates**:
 
 - A data array (`ndarray` or `mlx.array`)
 - A gradient buffer (`grad`)
@@ -248,13 +246,13 @@ It builds a dynamic graph during the forward pass, capturing every operation inv
 gradients. Each node in the graph stores a custom backward function that computes local gradients and propagates
 them upstream using the chain rule.
 
-Computation Graph Internals:
+**Computation Graph Internals**:
 
 - Each `Tensor` acts as a node in a Directed Acyclic Graph (DAG).
 - Operations create edges between inputs and outputs.
 - Each tensor’s `_backward_op` defines how to compute gradients with respect to its parent tensors.
 
-The `.backward()` method:
+**The backward method**:
 
 1. Topologically sorts the computation graph.
 2. Initializes the output gradient (typically `1.0`).
@@ -288,7 +286,7 @@ Lucid supports **Metal acceleration** on Apple Silicon devices using the
 neural network layers, and gradient computations to run efficiently on the GPU by leveraging Apple’s
 unified memory and neural engine.
 
-Key Features:
+**Key Features**:
 
 - Tensors with `device="gpu"` are allocated as `mlx.core.array`.
 - Core mathematical operations, matrix multiplications, and backward passes leverage MLX APIs.
@@ -327,10 +325,10 @@ GPU-Based Model Example:
    loss = output.sum()
    loss.backward()
 
-.. note::
+.. warning::
    When training models on GPU using MLX, you **must explicitly evaluate** the loss tensor after each forward
    pass to prevent the MLX computation graph from growing uncontrollably. MLX defers evaluation until necessary;
-   if evaluation is not forced (e.g. by calling `.item()` or accessing `.data`), the graph may grow too deep,
+   if evaluation is not forced (e.g. by calling `.eval()`), the graph may grow too deep,
    leading to performance issues or memory errors.
 
 Recommended GPU Training Pattern:
@@ -338,17 +336,8 @@ Recommended GPU Training Pattern:
 .. code-block:: python
 
    loss = model(input).sum()
-   _ = loss.item()  # Force evaluation on GPU
+   loss.eval()  # Force evaluation on GPU
    loss.backward()
-
-.. note::
-   An alternative pattern uses `loss.eval()` to force evaluation:
-
-   .. code-block:: python
-
-      loss = model(input).sum()
-      loss.eval()  # Force evaluation on GPU
-      loss.backward()
 
 Neural Networks with `lucid.nn`
 ----------------------------------
