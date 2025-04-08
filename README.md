@@ -161,62 +161,6 @@ loss = output.sum()
 loss.backward()
 ```
 
----
-
-
-When training models on GPU using MLX, **you must explicitly evaluate the loss tensor** after each forward pass to prevent the MLX computation graph from growing uncontrollably.
-
-MLX defers evaluation until needed. If you don’t force evaluation (e.g., accessing `.item()` or `.data`), the internal graph may become too deep and lead to performance degradation or memory errors.
-
-### Recommended GPU Training Pattern:
-```python
-loss = model(input).sum()
-_ = loss.item()  # force evaluation on GPU
-loss.backward()
-```
-This ensures that all prior GPU computations are flushed and evaluated **before** backward pass begins.
-
----
-
-Lucid supports **Metal acceleration** on Apple Silicon devices using [MLX](https://github.com/ml-explore/mlx). This integration allows tensor operations, neural network layers, and gradient computations to run efficiently on the GPU, leveraging Apple’s unified memory and neural engine.
-
-### 📋 Key Features
-- Tensors with `device="gpu"` are allocated as `mlx.core.array`.
-- Core mathematical operations, matrix multiplications, and backward passes use MLX APIs.
-- No change in API: switching to GPU is as simple as `.to("gpu")` or passing `device="gpu"` to tensor constructors.
-
-### 💡 Example 1: Basic Acceleration
-```python
-import lucid
-
-x = lucid.randn(1024, 1024, device="gpu", requires_grad=True)
-y = x @ x.T
-z = y.sum()
-z.backward()
-print(x.grad.device)  # gpu
-```
-
-### 💡 Example 2: GPU-Based Model
-```python
-import lucid.nn as nn
-import lucid.nn.functional as F
-
-class TinyNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc = nn.Linear(100, 10)
-
-    def forward(self, x):
-        return F.relu(self.fc(x))
-
-model = TinyNet().to("gpu")
-data = lucid.randn(32, 100, device="gpu", requires_grad=True)
-output = model(data)
-loss = output.sum()
-loss.backward()
-```
-
-
 When training models on GPU using MLX, **you must explicitly evaluate the loss tensor** after each forward pass to prevent the MLX computation graph from growing uncontrollably.
 
 MLX defers evaluation until needed. If you don’t force evaluation (e.g. calling `.eval()`), the internal graph may become too deep and lead to performance degradation or memory errors.
@@ -228,6 +172,7 @@ loss.eval()  # force evaluation on GPU
 loss.backward()
 ```
 This ensures that all prior GPU computations are flushed and evaluated **before** backward pass begins.
+
 
 ## 🧱 Neural Networks with `lucid.nn`
 
