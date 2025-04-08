@@ -1,5 +1,3 @@
-import numpy as np
-
 from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar, _DeviceType
 

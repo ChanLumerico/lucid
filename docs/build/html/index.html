@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/index.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>Lucid 1.23.0 documentation</title>
+        <title>Lucid 1.23.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="#"><div class="brand">Lucid 1.23.0 documentation</div></a>
+      <a href="#"><div class="brand">Lucid 1.23.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="#">
   
   
-  <span class="sidebar-brand-text">Lucid 1.23.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 1.23.1 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -884,153 +884,283 @@
 </div>
 <div class="toctree-wrapper compound">
 </div>
-<section id="lucid">
-<span id="module-lucid"></span><h1>Lucid<a class="headerlink" href="#lucid" title="Link to this heading">¶</a></h1>
-<p><strong>Lucid</strong> is an educational deep learning framework developed to help users understand
-the underlying mechanics of machine learning models and tensor operations.</p>
-<p>It is designed to provide a simple yet powerful environment to experiment with neural networks,
-optimization, and backpropagation using only <strong>NumPy</strong>.</p>
-<p>Lucid is ideal for those who want to learn about the inner workings of deep learning
-algorithms and operations without the complexity of high-level frameworks.</p>
-<section id="overview">
-<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
-<p>Lucid provides core functionality for building and training machine learning models.
-By utilizing NumPy arrays as the fundamental data structure (referred to as <strong>Tensors</strong>),
-Lucid allows for the construction of layers, models, and operations commonly found in neural networks.</p>
-<p>It offers automatic differentiation (autodiff) for computing gradients and performing backpropagation,
-enabling efficient optimization of model parameters.</p>
+<section id="lucid-2">
+<span id="module-lucid"></span><h1>Lucid 💎²<a class="headerlink" href="#lucid-2" title="Link to this heading">¶</a></h1>
+<img alt="PyPI - Version" src="https://img.shields.io/pypi/v/lucid-dl?color=red" />
+<img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/lucid-dl" />
+<img alt="PyPI - Total Downloads" src="https://img.shields.io/badge/total%20downloads-21.3k-yellow" />
+<img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/ChanLumerico/lucid" />
+<img alt="Code Style" src="https://img.shields.io/badge/code%20style-black-000000.svg" />
+<img alt="Lines of Code" src="https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&amp;label=Lines%20of%20Code&amp;color=purple" />
+<p><strong>Lucid</strong> is a minimalist deep learning framework built entirely from scratch in Python.
+It provides a pedagogically rich environment to explore the foundations of modern deep
+learning systems—including autodiff, neural network modules, and GPU acceleration—while
+remaining lightweight, readable, and free of complex dependencies.</p>
+<p>Whether you’re a student, educator, or an advanced researcher seeking to demystify deep
+learning internals, Lucid delivers a transparent and highly introspectable API that
+faithfully replicates key behaviors of major frameworks like PyTorch, yet in a form simple
+enough to study line by line.</p>
+<p><a class="reference external" href="https://chanlumerico.github.io/lucid/build/html/index.html">Lucid Documentation</a></p>
+<section id="how-to-install">
+<h2>How to Install<a class="headerlink" href="#how-to-install" title="Link to this heading">¶</a></h2>
+<section id="basic-installation">
+<h3>Basic Installation<a class="headerlink" href="#basic-installation" title="Link to this heading">¶</a></h3>
+<p>Install via PyPI:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>lucid-dl
+</pre></div>
+</div>
+<p>Alternatively, install the latest development version from GitHub:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>git+https://github.com/ChanLumerico/lucid.git
+</pre></div>
+</div>
 </section>
-<section id="key-features">
-<h2>Key Features<a class="headerlink" href="#key-features" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><strong>Tensors</strong>: Tensors are the main data structure in Lucid,
-similar to arrays in NumPy but with additional features such as automatic gradient tracking.</p></li>
-<li><p><strong>Autodiff</strong>: Lucid computes gradients automatically using reverse-mode differentiation,
-making it possible to train models through backpropagation.</p></li>
-<li><p><strong>Modularity</strong>: Lucid is designed with modularity in mind, allowing users to build and
-customize layers, models, and operations with ease.</p></li>
-<li><p><strong>Gradient Tracking</strong>: Support for tracking gradients through Tensors,
-enabling automatic backpropagation during training.</p></li>
-<li><p><strong>Educational Focus</strong>: Lucid is a minimalistic library designed to be intuitive and provide
-a deeper understanding of the mechanics of deep learning.</p></li>
-</ul>
+<section id="enable-gpu-metal-mlx-acceleration">
+<h3>Enable GPU (Metal / MLX Acceleration)<a class="headerlink" href="#enable-gpu-metal-mlx-acceleration" title="Link to this heading">¶</a></h3>
+<p>If you are using a Mac with Apple Silicon (M1, M2, M3), Lucid supports GPU execution via the MLX library.</p>
+<p>To enable Metal acceleration:</p>
+<ol class="arabic">
+<li><p><strong>Install MLX:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>mlx
+</pre></div>
+</div>
+</li>
+<li><p><strong>Confirm</strong> you have a compatible device (Apple Silicon).</p></li>
+<li><p><strong>Run any computation</strong> with <cite>device=”gpu”</cite>.</p></li>
+</ol>
 </section>
-<section id="core-components">
-<h2>Core Components<a class="headerlink" href="#core-components" title="Link to this heading">¶</a></h2>
-<p class="rubric"><cite>Tensors</cite></p>
-<p>Tensors are the primary data structure in Lucid, similar to NumPy arrays but with additional capabilities,
-such as the ability to track gradients.</p>
-<p>Operations performed on tensors are automatically tracked, allowing for efficient backpropagation.</p>
-<ul class="simple">
-<li><p><strong>Tensor Operations</strong>: Basic operations like addition, subtraction, multiplication,
-and division are supported, with automatic gradient computation for supported operations.</p></li>
-<li><p><strong>Gradient Tracking</strong>: When constructing Tensors,
-users can specify if they require gradients for backpropagation.</p></li>
-<li><p><strong>Shape Management</strong>: Lucid supports reshaping, transposing, and other tensor manipulation
-operations to allow for flexible model design.</p></li>
-</ul>
-<p class="rubric"><cite>Neural Networks (nn.Module)</cite></p>
-<p>Lucid provides a framework for defining and training neural networks.
-Models are built by subclassing the <strong>nn.Module</strong> class, which allows users to define layers,
-forward passes, and backward passes (gradient computations) for the model.</p>
-<ul class="simple">
-<li><p><strong>Layer Definitions</strong>: Layers can be constructed using basic operations, like matrix multiplication,
-activation functions, and loss functions.</p></li>
-<li><p><strong>Forward and Backward Passes</strong>: Users define the computation graph in the <cite>forward</cite> method,
-and Lucid handles backpropagation automatically by tracking operations performed on tensors.</p></li>
-</ul>
-<p class="rubric"><cite>Linear Algebra Operations (lucid.linalg)</cite></p>
-<p>Lucid includes basic linear algebra operations, such as matrix multiplication,
-inverse, determinant calculation, and more.</p>
-<ul class="simple">
-<li><p><strong>Matrix Operations</strong>: These operations are essential for building and manipulating neural networks,
-particularly for tasks like transforming data in the forward pass.</p></li>
-</ul>
-<p class="rubric"><cite>Optimization</cite></p>
-<p>Lucid supports optimization routines like Stochastic Gradient Descent (SGD),
-which allow for the training of models by minimizing a loss function.</p>
-<ul class="simple">
-<li><p><strong>Autodiff and Backpropagation</strong>: Lucid’s autodiff capabilities make it easy to compute
-gradients and optimize model parameters using backpropagation.</p></li>
-</ul>
-</section>
-<section id="example-usage">
-<h2>Example Usage<a class="headerlink" href="#example-usage" title="Link to this heading">¶</a></h2>
-<p>The following example demonstrates how to define and train a simple neural network using Lucid.</p>
-<div class="literal-block-wrapper docutils container" id="id1">
-<div class="code-block-caption"><span class="caption-text">Example of a Simple Model</span><a class="headerlink" href="#id1" title="Link to this code">¶</a></div>
+<section id="verification">
+<h3>Verification<a class="headerlink" href="#verification" title="Link to this heading">¶</a></h3>
+<p>Check whether GPU acceleration is functioning:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">1024</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>  <span class="c1"># Should print: &#39;gpu&#39;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="tensor-the-core-abstraction">
+<h2>Tensor: The Core Abstraction<a class="headerlink" href="#tensor-the-core-abstraction" title="Link to this heading">¶</a></h2>
+<p>At the heart of Lucid is the <cite>Tensor</cite> class—a generalization of NumPy arrays that supports advanced
+operations such as gradient tracking, device placement, and computation graph construction.</p>
+<p>Each <cite>Tensor</cite> encapsulates:</p>
+<ul class="simple">
+<li><p>A data array (<cite>ndarray</cite> or <cite>mlx.array</cite>)</p></li>
+<li><p>A gradient buffer (<cite>grad</cite>)</p></li>
+<li><p>The operation that produced it</p></li>
+<li><p>A list of parent tensors from which it was derived</p></li>
+<li><p>A flag indicating whether it participates in the computation graph (<cite>requires_grad</cite>)</p></li>
+</ul>
+<p>Construction and Configuration Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">lucid</span> <span class="kn">import</span> <span class="n">Tensor</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Setting <cite>requires_grad=True</cite> adds the tensor to the autodiff graph.</p></li>
+<li><p>Specifying <cite>device=”gpu”</cite> allocates the tensor using the Metal backend.</p></li>
+</ul>
+<section id="switching-between-devices">
+<h3>Switching Between Devices<a class="headerlink" href="#switching-between-devices" title="Link to this heading">¶</a></h3>
+<p>Tensors can be moved between CPU and GPU at any time using the <cite>.to()</cite> method:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>  <span class="c1"># Now uses MLX arrays for accelerated computation</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>  <span class="c1"># Moves data back to NumPy</span>
+</pre></div>
+</div>
+<p>Inspect the device of a tensor with:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>  <span class="c1"># Either &#39;cpu&#39; or &#39;gpu&#39;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="automatic-differentiation-autodiff">
+<h2>Automatic Differentiation (Autodiff)<a class="headerlink" href="#automatic-differentiation-autodiff" title="Link to this heading">¶</a></h2>
+<p>Lucid implements <strong>reverse-mode automatic differentiation</strong>, which is especially efficient for computing
+gradients of scalar-valued loss functions.</p>
+<p>It builds a dynamic graph during the forward pass, capturing every operation involving tensors that require
+gradients. Each node in the graph stores a custom backward function that computes local gradients and propagates
+them upstream using the chain rule.</p>
+<p>Computation Graph Internals:</p>
+<ul class="simple">
+<li><p>Each <cite>Tensor</cite> acts as a node in a Directed Acyclic Graph (DAG).</p></li>
+<li><p>Operations create edges between inputs and outputs.</p></li>
+<li><p>Each tensor’s <cite>_backward_op</cite> defines how to compute gradients with respect to its parent tensors.</p></li>
+</ul>
+<p>The <cite>.backward()</cite> method:</p>
+<ol class="arabic simple">
+<li><p>Topologically sorts the computation graph.</p></li>
+<li><p>Initializes the output gradient (typically <cite>1.0</cite>).</p></li>
+<li><p>Executes all backward operations in reverse order.</p></li>
+</ol>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span>
+<span class="n">z</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">z</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>  <span class="c1"># Output: [2.0, 2.0, 2.0]</span>
+</pre></div>
+</div>
+<p>This chain-rule application computes the gradient <span class="math notranslate nohighlight">\(\frac{\partial z}{\partial x} = \frac{\partial z}{\partial y} \cdot \frac{\partial y}{\partial x} = [2, 2, 2]\)</span>.</p>
+</section>
+<section id="hooks-shape-alignment">
+<h2>Hooks &amp; Shape Alignment<a class="headerlink" href="#hooks-shape-alignment" title="Link to this heading">¶</a></h2>
+<p>Lucid supports:</p>
+<ul class="simple">
+<li><p><strong>Hooks</strong> for inspecting or modifying gradients.</p></li>
+<li><p><strong>Shape broadcasting and matching</strong> to handle nonconforming tensor shapes.</p></li>
+</ul>
+</section>
+<section id="metal-acceleration-mlx-backend">
+<h2>Metal Acceleration (MLX Backend)<a class="headerlink" href="#metal-acceleration-mlx-backend" title="Link to this heading">¶</a></h2>
+<p>Lucid supports <strong>Metal acceleration</strong> on Apple Silicon devices using the
+<a class="reference external" href="https://github.com/ml-explore/mlx">MLX</a> library. This integration enables tensor operations,
+neural network layers, and gradient computations to run efficiently on the GPU by leveraging Apple’s
+unified memory and neural engine.</p>
+<p>Key Features:</p>
+<ul class="simple">
+<li><p>Tensors with <cite>device=”gpu”</cite> are allocated as <cite>mlx.core.array</cite>.</p></li>
+<li><p>Core mathematical operations, matrix multiplications, and backward passes leverage MLX APIs.</p></li>
+<li><p>The API remains unchanged; simply use <cite>.to(“gpu”)</cite> or pass <cite>device=”gpu”</cite> to tensor constructors.</p></li>
+</ul>
+<p>Basic Acceleration Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;gpu&quot;</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">@</span> <span class="n">x</span><span class="o">.</span><span class="n">T</span>
+<span class="n">z</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">z</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>  <span class="c1"># &#39;gpu&#39;</span>
+</pre></div>
+</div>
+<p>GPU-Based Model Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
 <span class="kn">import</span> <span class="nn">lucid.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
 
-<span class="c1"># Define a simple model class</span>
-<span class="k">class</span> <span class="nc">SimpleModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">TinyNet</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">dense1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">dense2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dense1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dense2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="k">return</span> <span class="n">F</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fc</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
 
-<span class="c1"># Create an instance of the model</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">SimpleModel</span><span class="p">()</span>
-
-<span class="c1"># Create a sample input tensor</span>
-<span class="n">input_tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">]])</span>
-
-<span class="c1"># Forward pass</span>
-<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
-
-<span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">TinyNet</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;gpu&quot;</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<span class="n">loss</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>When training models on GPU using MLX, you <strong>must explicitly evaluate</strong> the loss tensor after each forward
+pass to prevent the MLX computation graph from growing uncontrollably. MLX defers evaluation until necessary;
+if evaluation is not forced (e.g. by calling <cite>.item()</cite> or accessing <cite>.data</cite>), the graph may grow too deep,
+leading to performance issues or memory errors.</p>
+</div>
+<p>Recommended GPU Training Pattern:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>  <span class="c1"># Force evaluation on GPU</span>
+<span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>An alternative pattern uses <cite>loss.eval()</cite> to force evaluation:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">loss</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>  <span class="c1"># Force evaluation on GPU</span>
+<span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
-<p>In the above example, we define a simple model with two dense layers,
-apply a ReLU activation, and perform a forward pass using an input tensor.</p>
-<p>This showcases how easy it is to define models and run computations with Lucid.</p>
 </section>
-<section id="notes">
-<h2>Notes<a class="headerlink" href="#notes" title="Link to this heading">¶</a></h2>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<ul class="simple">
-<li><p>Lucid is built for learning and experimenting with deep learning concepts,
-allowing users to see how operations like backpropagation, optimization,
-and activation functions are implemented at a low level.</p></li>
-<li><p>Lucid is lightweight, with no external dependencies beyond NumPy,
-making it easy to install and use without complex setups or specialized hardware.</p></li>
-</ul>
+<section id="neural-networks-with-lucid-nn">
+<h2>Neural Networks with <cite>lucid.nn</cite><a class="headerlink" href="#neural-networks-with-lucid-nn" title="Link to this heading">¶</a></h2>
+<p>Lucid provides a modular, PyTorch-style interface for building neural networks via the <cite>nn.Module</cite> class.
+Users define model classes by subclassing <cite>nn.Module</cite> and assigning parameters and layers as attributes.
+Each module automatically registers its parameters, supports device migration via <cite>.to()</cite>, and integrates with
+Lucid’s autodiff system.</p>
+<p>Custom Module Definition Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+
+<span class="k">class</span> <span class="nc">MLP</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">784</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span>
+</pre></div>
+</div>
+<p>Parameter Registration:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>Moving to GPU:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+</pre></div>
 </div>
 </section>
-<section id="limitations">
-<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">¶</a></h2>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<ul class="simple">
-<li><p>Lucid does not aim to provide the high-level functionalities of production-ready frameworks.
-Instead, it focuses on educational value and understanding how deep
-learning models are built from scratch.</p></li>
-<li><p>Performance optimizations that are available in specialized libraries may not be as
-efficient in Lucid, as it is not optimized for production workloads.</p></li>
-</ul>
+<section id="training-evaluation">
+<h2>Training &amp; Evaluation<a class="headerlink" href="#training-evaluation" title="Link to this heading">¶</a></h2>
+<p>Lucid supports training neural networks using standard loops, customized optimizers, and
+tracking gradients across batches of data.</p>
+<p>Full Training Loop Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid</span>
+<span class="kn">from</span> <span class="nn">lucid.nn.functional</span> <span class="kn">import</span> <span class="n">mse_loss</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+    <span class="n">preds</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x_train</span><span class="p">)</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">mse_loss</span><span class="p">(</span><span class="n">preds</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+    <span class="n">loss</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>  <span class="c1"># Force evaluation</span>
+
+    <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+    <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+    <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Epoch </span><span class="si">{</span><span class="n">epoch</span><span class="si">}</span><span class="s2">, Loss: </span><span class="si">{</span><span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
 </div>
+<p>Evaluation without Gradients:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">lucid</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x_test</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="educational-by-design">
+<h2>Educational by Design<a class="headerlink" href="#educational-by-design" title="Link to this heading">¶</a></h2>
+<p>Lucid isn’t a black box—it’s built to be explored. Every class, function, and line of code is crafted
+to be readable and hackable.</p>
+<ul class="simple">
+<li><p>Build intuition for backpropagation.</p></li>
+<li><p>Modify internal operations to experiment with custom autograd.</p></li>
+<li><p>Benchmark CPU vs GPU behavior with your own models.</p></li>
+<li><p>Debug layer by layer, shape by shape, and gradient by gradient.</p></li>
+</ul>
 </section>
 <section id="conclusion">
 <h2>Conclusion<a class="headerlink" href="#conclusion" title="Link to this heading">¶</a></h2>
-<p>Lucid provides a minimalistic, educational environment to learn about deep learning using only NumPy.
-It gives users the tools to experiment with neural networks, automatic differentiation,
-optimization, and other essential components of deep learning, all while providing insight into how
-these operations are implemented at the core level.</p>
-<p>For further information and usage details, refer to the documentation of specific modules like
-<cite>lucid.nn</cite> and <cite>lucid.linalg</cite></p>
-<div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<p><cite>lucid.nn</cite>, <cite>lucid.linalg</cite></p>
-</div>
+<p>Lucid serves as a powerful educational resource and a minimalist experimental sandbox.
+By exposing the internals of tensors, gradients, and models—and integrating GPU acceleration—Lucid
+invites users to <em>see, touch, and understand</em> how deep learning truly works.</p>
+</section>
+<section id="others">
+<h2>Others<a class="headerlink" href="#others" title="Link to this heading">¶</a></h2>
+<p><strong>Dependencies:</strong> <cite>NumPy</cite>, <cite>MLX</cite>, <cite>openml</cite>, <cite>pandas</cite></p>
+<p><strong>Inspired By:</strong></p>
+<img alt="PyTorch" src="https://skillicons.dev/icons?i=pytorch" />
+<img alt="TensorFlow" src="https://skillicons.dev/icons?i=tensorflow" />
+<img alt="StackOverflow" src="https://skillicons.dev/icons?i=stackoverflow" />
 </section>
 </section>
 
@@ -1073,7 +1203,7 @@ these operations are implemented at the core level.</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=b8112b1c"></script>
+</div><script src="_static/documentation_options.js?v=1c69af05"></script>
     <script src="_static/doctools.js?v=9bcbadda"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/furo.js?v=5fa4622c"></script>

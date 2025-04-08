@@ -123,168 +123,331 @@
 
 
 .. module:: lucid
-   :synopsis: An educational deep learning framework built using NumPy.
+   :synopsis: An educational deep learning framework built from scratch.
 
-Lucid
-=====
+Lucid 💎²
+=========
 
-**Lucid** is an educational deep learning framework developed to help users understand 
-the underlying mechanics of machine learning models and tensor operations. 
+.. image:: https://img.shields.io/pypi/v/lucid-dl?color=red
+   :alt: PyPI - Version
 
-It is designed to provide a simple yet powerful environment to experiment with neural networks, 
-optimization, and backpropagation using only **NumPy**. 
+.. image:: https://img.shields.io/pypi/dm/lucid-dl
+   :alt: PyPI - Downloads
 
-Lucid is ideal for those who want to learn about the inner workings of deep learning 
-algorithms and operations without the complexity of high-level frameworks.
+.. image:: https://img.shields.io/badge/total%20downloads-21.3k-yellow
+   :alt: PyPI - Total Downloads
 
-Overview
---------
+.. image:: https://img.shields.io/github/languages/code-size/ChanLumerico/lucid
+   :alt: GitHub code size in bytes
 
-Lucid provides core functionality for building and training machine learning models. 
-By utilizing NumPy arrays as the fundamental data structure (referred to as **Tensors**), 
-Lucid allows for the construction of layers, models, and operations commonly found in neural networks. 
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
+   :alt: Code Style
 
-It offers automatic differentiation (autodiff) for computing gradients and performing backpropagation, 
-enabling efficient optimization of model parameters.
+.. image:: https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&label=Lines%20of%20Code&color=purple
+   :alt: Lines of Code
 
-Key Features
-------------
+**Lucid** is a minimalist deep learning framework built entirely from scratch in Python.
+It provides a pedagogically rich environment to explore the foundations of modern deep
+learning systems—including autodiff, neural network modules, and GPU acceleration—while
+remaining lightweight, readable, and free of complex dependencies.
 
-- **Tensors**: Tensors are the main data structure in Lucid, 
-  similar to arrays in NumPy but with additional features such as automatic gradient tracking.
+Whether you’re a student, educator, or an advanced researcher seeking to demystify deep
+learning internals, Lucid delivers a transparent and highly introspectable API that
+faithfully replicates key behaviors of major frameworks like PyTorch, yet in a form simple
+enough to study line by line.
 
-- **Autodiff**: Lucid computes gradients automatically using reverse-mode differentiation, 
-  making it possible to train models through backpropagation.
+`Lucid Documentation <https://chanlumerico.github.io/lucid/build/html/index.html>`_
 
-- **Modularity**: Lucid is designed with modularity in mind, allowing users to build and 
-  customize layers, models, and operations with ease.
+How to Install
+--------------
 
-- **Gradient Tracking**: Support for tracking gradients through Tensors, 
-  enabling automatic backpropagation during training.
+Basic Installation
+~~~~~~~~~~~~~~~~~~
+Install via PyPI:
 
-- **Educational Focus**: Lucid is a minimalistic library designed to be intuitive and provide 
-  a deeper understanding of the mechanics of deep learning.
+.. code-block:: bash
 
-Core Components
----------------
+   pip install lucid-dl
 
-.. rubric:: `Tensors`
+Alternatively, install the latest development version from GitHub:
 
-Tensors are the primary data structure in Lucid, similar to NumPy arrays but with additional capabilities, 
-such as the ability to track gradients. 
+.. code-block:: bash
 
-Operations performed on tensors are automatically tracked, allowing for efficient backpropagation.
+   pip install git+https://github.com/ChanLumerico/lucid.git
 
-- **Tensor Operations**: Basic operations like addition, subtraction, multiplication, 
-  and division are supported, with automatic gradient computation for supported operations.
+Enable GPU (Metal / MLX Acceleration)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+If you are using a Mac with Apple Silicon (M1, M2, M3), Lucid supports GPU execution via the MLX library.
 
-- **Gradient Tracking**: When constructing Tensors, 
-  users can specify if they require gradients for backpropagation.
+To enable Metal acceleration:
 
-- **Shape Management**: Lucid supports reshaping, transposing, and other tensor manipulation 
-  operations to allow for flexible model design.
+1. **Install MLX:**
 
-.. rubric:: `Neural Networks (nn.Module)`
+   .. code-block:: bash
 
-Lucid provides a framework for defining and training neural networks. 
-Models are built by subclassing the **nn.Module** class, which allows users to define layers, 
-forward passes, and backward passes (gradient computations) for the model.
+      pip install mlx
 
-- **Layer Definitions**: Layers can be constructed using basic operations, like matrix multiplication, 
-  activation functions, and loss functions.
+2. **Confirm** you have a compatible device (Apple Silicon).
+3. **Run any computation** with `device="gpu"`.
 
-- **Forward and Backward Passes**: Users define the computation graph in the `forward` method, 
-  and Lucid handles backpropagation automatically by tracking operations performed on tensors.
-
-.. rubric:: `Linear Algebra Operations (lucid.linalg)`
-
-Lucid includes basic linear algebra operations, such as matrix multiplication, 
-inverse, determinant calculation, and more.
-
-- **Matrix Operations**: These operations are essential for building and manipulating neural networks, 
-  particularly for tasks like transforming data in the forward pass.
-
-.. rubric:: `Optimization`
-
-Lucid supports optimization routines like Stochastic Gradient Descent (SGD), 
-which allow for the training of models by minimizing a loss function.
-
-- **Autodiff and Backpropagation**: Lucid's autodiff capabilities make it easy to compute 
-  gradients and optimize model parameters using backpropagation.
-
-Example Usage
--------------
-
-The following example demonstrates how to define and train a simple neural network using Lucid.
+Verification
+~~~~~~~~~~~~
+Check whether GPU acceleration is functioning:
 
 .. code-block:: python
-   :caption: Example of a Simple Model
 
    import lucid
+   x = lucid.ones((1024, 1024), device="gpu")
+   print(x.device)  # Should print: 'gpu'
+
+Tensor: The Core Abstraction
+-----------------------------
+At the heart of Lucid is the `Tensor` class—a generalization of NumPy arrays that supports advanced
+operations such as gradient tracking, device placement, and computation graph construction.
+
+Each `Tensor` encapsulates:
+
+- A data array (`ndarray` or `mlx.array`)
+- A gradient buffer (`grad`)
+- The operation that produced it
+- A list of parent tensors from which it was derived
+- A flag indicating whether it participates in the computation graph (`requires_grad`)
+
+Construction and Configuration Example:
+
+.. code-block:: python
+
+   from lucid import Tensor
+
+   x = Tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True, device="gpu")
+
+- Setting `requires_grad=True` adds the tensor to the autodiff graph.
+- Specifying `device="gpu"` allocates the tensor using the Metal backend.
+
+Switching Between Devices
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Tensors can be moved between CPU and GPU at any time using the `.to()` method:
+
+.. code-block:: python
+
+   x = x.to("gpu")  # Now uses MLX arrays for accelerated computation
+   y = x.to("cpu")  # Moves data back to NumPy
+
+Inspect the device of a tensor with:
+
+.. code-block:: python
+
+   print(x.device)  # Either 'cpu' or 'gpu'
+
+Automatic Differentiation (Autodiff)
+------------------------------------
+Lucid implements **reverse-mode automatic differentiation**, which is especially efficient for computing
+gradients of scalar-valued loss functions.
+
+It builds a dynamic graph during the forward pass, capturing every operation involving tensors that require
+gradients. Each node in the graph stores a custom backward function that computes local gradients and propagates
+them upstream using the chain rule.
+
+Computation Graph Internals:
+
+- Each `Tensor` acts as a node in a Directed Acyclic Graph (DAG).
+- Operations create edges between inputs and outputs.
+- Each tensor’s `_backward_op` defines how to compute gradients with respect to its parent tensors.
+
+The `.backward()` method:
+
+1. Topologically sorts the computation graph.
+2. Initializes the output gradient (typically `1.0`).
+3. Executes all backward operations in reverse order.
+
+Example:
+
+.. code-block:: python
+
+   import lucid
+
+   x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
+   y = x * 2 + 1
+   z = y.sum()
+   z.backward()
+   print(x.grad)  # Output: [2.0, 2.0, 2.0]
+
+This chain-rule application computes the gradient :math:`\frac{\partial z}{\partial x} = \frac{\partial z}{\partial y} \cdot \frac{\partial y}{\partial x} = [2, 2, 2]`.
+
+Hooks & Shape Alignment
+-------------------------
+Lucid supports:
+
+- **Hooks** for inspecting or modifying gradients.
+- **Shape broadcasting and matching** to handle nonconforming tensor shapes.
+
+Metal Acceleration (MLX Backend)
+--------------------------------
+Lucid supports **Metal acceleration** on Apple Silicon devices using the
+`MLX <https://github.com/ml-explore/mlx>`_ library. This integration enables tensor operations,
+neural network layers, and gradient computations to run efficiently on the GPU by leveraging Apple’s
+unified memory and neural engine.
+
+Key Features:
+
+- Tensors with `device="gpu"` are allocated as `mlx.core.array`.
+- Core mathematical operations, matrix multiplications, and backward passes leverage MLX APIs.
+- The API remains unchanged; simply use `.to("gpu")` or pass `device="gpu"` to tensor constructors.
+
+Basic Acceleration Example:
+
+.. code-block:: python
+
+   import lucid
+
+   x = lucid.randn(1024, 1024, device="gpu", requires_grad=True)
+   y = x @ x.T
+   z = y.sum()
+   z.backward()
+   print(x.grad.device)  # 'gpu'
+
+GPU-Based Model Example:
+
+.. code-block:: python
+
    import lucid.nn as nn
    import lucid.nn.functional as F
 
-   # Define a simple model class
-   class SimpleModel(nn.Module):
+   class TinyNet(nn.Module):
        def __init__(self):
            super().__init__()
-           self.dense1 = nn.Linear(3, 5)
-           self.dense2 = nn.Linear(5, 1)
-       
+           self.fc = nn.Linear(100, 10)
+
        def forward(self, x):
-           x = self.dense1(x)
-           x = F.relu(x)
-           x = self.dense2(x)
-           return x
+           return F.relu(self.fc(x))
 
-   # Create an instance of the model
-   model = SimpleModel()
-
-   # Create a sample input tensor
-   input_tensor = lucid.Tensor([[1.0, 2.0, 3.0]])
-
-   # Forward pass
-   output = model(input_tensor)
-
-   print(output)
-
-In the above example, we define a simple model with two dense layers, 
-apply a ReLU activation, and perform a forward pass using an input tensor. 
-
-This showcases how easy it is to define models and run computations with Lucid.
-
-Notes
------
+   model = TinyNet().to("gpu")
+   data = lucid.randn(32, 100, device="gpu", requires_grad=True)
+   output = model(data)
+   loss = output.sum()
+   loss.backward()
 
 .. note::
-   - Lucid is built for learning and experimenting with deep learning concepts, 
-     allowing users to see how operations like backpropagation, optimization, 
-     and activation functions are implemented at a low level.
+   When training models on GPU using MLX, you **must explicitly evaluate** the loss tensor after each forward
+   pass to prevent the MLX computation graph from growing uncontrollably. MLX defers evaluation until necessary;
+   if evaluation is not forced (e.g. by calling `.item()` or accessing `.data`), the graph may grow too deep,
+   leading to performance issues or memory errors.
 
-   - Lucid is lightweight, with no external dependencies beyond NumPy, 
-     making it easy to install and use without complex setups or specialized hardware.
+Recommended GPU Training Pattern:
 
-Limitations
------------
+.. code-block:: python
 
-.. warning::
-   - Lucid does not aim to provide the high-level functionalities of production-ready frameworks. 
-     Instead, it focuses on educational value and understanding how deep 
-     learning models are built from scratch.
+   loss = model(input).sum()
+   _ = loss.item()  # Force evaluation on GPU
+   loss.backward()
 
-   - Performance optimizations that are available in specialized libraries may not be as 
-     efficient in Lucid, as it is not optimized for production workloads.
+.. note::
+   An alternative pattern uses `loss.eval()` to force evaluation:
+
+   .. code-block:: python
+
+      loss = model(input).sum()
+      loss.eval()  # Force evaluation on GPU
+      loss.backward()
+
+Neural Networks with `lucid.nn`
+----------------------------------
+Lucid provides a modular, PyTorch-style interface for building neural networks via the `nn.Module` class.
+Users define model classes by subclassing `nn.Module` and assigning parameters and layers as attributes.
+Each module automatically registers its parameters, supports device migration via `.to()`, and integrates with
+Lucid’s autodiff system.
+
+Custom Module Definition Example:
+
+.. code-block:: python
+
+   import lucid.nn as nn
+
+   class MLP(nn.Module):
+       def __init__(self):
+           super().__init__()
+           self.fc1 = nn.Linear(784, 128)
+           self.fc2 = nn.Linear(128, 10)
+
+       def forward(self, x):
+           x = self.fc1(x)
+           x = nn.functional.relu(x)
+           x = self.fc2(x)
+           return x
+
+Parameter Registration:
+
+.. code-block:: python
+
+   model = MLP()
+   print(model.parameters())
+
+Moving to GPU:
+
+.. code-block:: python
+
+   model = model.to("gpu")
+
+Training & Evaluation
+---------------------
+Lucid supports training neural networks using standard loops, customized optimizers, and
+tracking gradients across batches of data.
+
+Full Training Loop Example:
+
+.. code-block:: python
+
+   import lucid
+   from lucid.nn.functional import mse_loss
+
+   model = MLP().to("gpu")
+   optimizer = lucid.optim.SGD(model.parameters(), lr=0.01)
+
+   for epoch in range(100):
+       preds = model(x_train)
+       loss = mse_loss(preds, y_train)
+       loss.eval()  # Force evaluation
+
+       optimizer.zero_grad()
+       loss.backward()
+       optimizer.step()
+
+       print(f"Epoch {epoch}, Loss: {loss.item()}")
+
+Evaluation without Gradients:
+
+.. code-block:: python
+
+   with lucid.no_grad():
+       out = model(x_test)
+
+Educational by Design
+----------------------
+Lucid isn’t a black box—it’s built to be explored. Every class, function, and line of code is crafted
+to be readable and hackable.
+
+- Build intuition for backpropagation.
+- Modify internal operations to experiment with custom autograd.
+- Benchmark CPU vs GPU behavior with your own models.
+- Debug layer by layer, shape by shape, and gradient by gradient.
 
 Conclusion
 ----------
+Lucid serves as a powerful educational resource and a minimalist experimental sandbox.
+By exposing the internals of tensors, gradients, and models—and integrating GPU acceleration—Lucid
+invites users to *see, touch, and understand* how deep learning truly works.
 
-Lucid provides a minimalistic, educational environment to learn about deep learning using only NumPy. 
-It gives users the tools to experiment with neural networks, automatic differentiation, 
-optimization, and other essential components of deep learning, all while providing insight into how 
-these operations are implemented at the core level.
+Others
+------
+**Dependencies:** `NumPy`, `MLX`, `openml`, `pandas`
 
-For further information and usage details, refer to the documentation of specific modules like 
-`lucid.nn` and `lucid.linalg`
+**Inspired By:**
 
-.. seealso::
-   `lucid.nn`, `lucid.linalg`
+.. image:: https://skillicons.dev/icons?i=pytorch
+   :alt: PyTorch
+
+.. image:: https://skillicons.dev/icons?i=tensorflow
+   :alt: TensorFlow
+
+.. image:: https://skillicons.dev/icons?i=stackoverflow
+   :alt: StackOverflow
