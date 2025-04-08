@@ -869,18 +869,20 @@
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">Tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">complex</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">complex</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">array</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">requires_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keep_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">type</span><span class="p"><span class="pre">[</span></span><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">complex</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Numeric</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'cpu'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'gpu'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'cpu'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.Tensor" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>Tensor</cite> class is a core component in the <cite>lucid</cite> library,
-providing support for data storage, gradient tracking, and automatic differentiation.
-The class encapsulates data in an <cite>ndarray</cite> and supports backpropagation,
-making it a foundation for neural network operations.</p>
+<p>The <cite>Tensor</cite> class is the fundamental data structure in the <cite>lucid</cite> library.
+It wraps raw data and provides support for automatic differentiation, gradient tracking,
+and GPU acceleration using Apple’s Metal backend via MLX arrays.</p>
+<p>This class serves as the core component for nearly all mathematical and
+neural network operations in Lucid.</p>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Tensor</span><span class="p">(</span><span class="n">_TensorOps</span><span class="p">):</span>
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
-        <span class="n">data</span><span class="p">:</span> <span class="n">_ArrayOrScalar</span><span class="p">,</span>
+        <span class="n">data</span><span class="p">:</span> <span class="n">_ArrayOrScalar</span> <span class="o">|</span> <span class="n">_MLXArray</span><span class="p">,</span>
         <span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">keep_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-        <span class="n">dtype</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+        <span class="n">dtype</span><span class="p">:</span> <span class="n">Numeric</span> <span class="o">|</span> <span class="n">_BuiltinNumeric</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;cpu&quot;</span><span class="p">,</span> <span class="s2">&quot;gpu&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </pre></div>
 </div>
@@ -888,90 +890,73 @@ making it a foundation for neural network operations.</p>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>data</strong> (<em>_ArrayOrScalar</em>):</dt><dd><p>Input data to be encapsulated as a Tensor.
-Accepts data types that can be converted to a NumPy array.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>requires_grad</strong> (<em>bool</em>, optional):</dt><dd><p>Enables gradient tracking if set to True. Defaults to False.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>keep_grad</strong> (<em>bool</em>, optional):</dt><dd><p>If True, retains gradient after each backward pass. Defaults to False.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>dtype</strong> (<em>Any</em>, optional):</dt><dd><p>Data type of the tensor elements. Defaults to <cite>np.float32</cite>.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>data</strong> (<em>_ArrayOrScalar | _MLXArray</em>):
+The data to be encapsulated. Can be a scalar, list, NumPy array, or MLX array.</p></li>
+<li><p><strong>requires_grad</strong> (<em>bool</em>, optional):
+Whether to track gradients for this tensor. Defaults to False.</p></li>
+<li><p><strong>keep_grad</strong> (<em>bool</em>, optional):
+If True, retains gradients after backpropagation. Defaults to False.</p></li>
+<li><p><strong>dtype</strong> (<em>Numeric | _BuiltinNumeric</em>, optional):
+The numeric type for tensor elements (e.g., Float32, Int64).
+If None, inferred from input.</p></li>
+<li><p><strong>device</strong> (<em>Literal[“cpu”, “gpu”]</em>, optional):
+Specifies device placement for the tensor. Defaults to ‘cpu’.</p></li>
 </ul>
 </section>
 <section id="attributes">
 <h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>data</strong> (<em>np.ndarray</em>):</dt><dd><p>The actual data stored in the tensor.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>requires_grad</strong> (<em>bool</em>):</dt><dd><p>Indicates whether this tensor requires gradient calculation.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>keep_grad</strong> (<em>bool</em>):</dt><dd><p>If set, gradients are retained after each backpropagation pass.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>grad</strong> (<em>Optional[np.ndarray]</em>):</dt><dd><p>Gradient of the tensor, computed during backpropagation if <cite>requires_grad</cite> is True.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>is_leaf</strong> (<em>bool</em>):</dt><dd><p>True if the tensor is a leaf node in the computation graph,
-with no other tensors feeding into it.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>data</strong> (<em>np.ndarray | mx.array</em>):
+The underlying data representation.</p></li>
+<li><p><strong>requires_grad</strong> (<em>bool</em>):
+Indicates whether this tensor is being tracked by the autodiff engine.</p></li>
+<li><p><strong>keep_grad</strong> (<em>bool</em>):
+Controls whether gradients are retained after each backward pass.</p></li>
+<li><p><strong>grad</strong> (<em>Optional[np.ndarray | mx.array]</em>):
+The gradient accumulated during backpropagation.</p></li>
+<li><p><strong>device</strong> (<em>str</em>):
+The device where the tensor resides, either ‘cpu’ or ‘gpu’.</p></li>
+<li><p><strong>is_leaf</strong> (<em>bool</em>):
+True if the tensor has no parent operations and is a leaf node
+in the computation graph.</p></li>
+<li><p><strong>is_free</strong> (<em>bool</em>):
+Indicates that the tensor is <em>free</em> from any fixed device.
+Such tensors can automatically adopt the device of their operand
+tensor during an operation. This is useful for enabling flexible
+device context resolution in multi-device environments.</p></li>
 </ul>
 </section>
 <section id="methods">
 <h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>backward(keep_grad: bool = False) -&gt; None</strong>:</dt><dd><p>Performs backpropagation from this tensor, computing gradients for each
-preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>zero_grad() -&gt; None</strong>:</dt><dd><p>Resets the gradient to None if <cite>keep_grad</cite> is False.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>backward(keep_grad: bool = False) -&gt; None</strong>:
+Performs reverse-mode differentiation starting from this tensor.</p></li>
+<li><p><strong>zero_grad() -&gt; None</strong>:
+Resets gradients to None.</p></li>
+<li><p><strong>to(device: Literal[“cpu”, “gpu”]) -&gt; Self</strong>:
+Moves the tensor to the specified device.</p></li>
+<li><p><strong>astype(dtype: type | Numeric) -&gt; Self</strong>:
+Changes the data type of the tensor.</p></li>
+<li><p><strong>eval() -&gt; Self</strong>:
+For GPU tensors, explicitly evaluates MLX operations.</p></li>
+<li><p><strong>register_hook(hook: Callable) -&gt; Callable</strong>:
+Registers a hook to be executed after backpropagation.</p></li>
 </ul>
 </section>
 <section id="properties">
 <h2>Properties<a class="headerlink" href="#properties" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><strong>shape</strong> (<em>tuple[int, …]</em>): Shape of the tensor.</p></li>
-<li><p><strong>ndim</strong> (<em>int</em>): Number of dimensions of the tensor.</p></li>
-<li><p><strong>size</strong> (<em>int</em>): Total number of elements in the tensor.</p></li>
+<li><p><strong>ndim</strong> (<em>int</em>): Number of dimensions.</p></li>
+<li><p><strong>size</strong> (<em>int</em>): Total number of elements.</p></li>
 </ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<div class="admonition-creating-a-tensor-with-gradient-tracking admonition">
-<p class="admonition-title">Creating a tensor with gradient tracking</p>
+<div class="admonition-creating-a-tensor-on-gpu-with-gradient-tracking admonition">
+<p class="admonition-title">Creating a tensor on GPU with gradient tracking</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
 <span class="go">[1. 2. 3.]</span>
 </pre></div>
@@ -979,29 +964,69 @@ preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p>
 </div>
 <div class="admonition-performing-backpropagation admonition">
 <p class="admonition-title">Performing backpropagation</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
 <span class="go">[1. 1. 1.]</span>
 </pre></div>
 </div>
 </div>
-<div class="admonition-indexing-and-slicing admonition">
-<p class="admonition-title">Indexing and slicing</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<span class="go">Tensor(1, grad=None)</span>
+<div class="admonition-moving-tensor-between-devices admonition">
+<p class="admonition-title">Moving tensor between devices</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">t_cpu</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">t_cpu</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+<span class="go">&#39;cpu&#39;</span>
 </pre></div>
 </div>
 </div>
-<div class="admonition-iterating-through-a-tensor admonition">
-<p class="admonition-title">Iterating through a tensor</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">sub_tensor</span> <span class="ow">in</span> <span class="n">t</span><span class="p">:</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">sub_tensor</span><span class="p">)</span>
-<span class="go">Tensor(1, grad=None)</span>
-<span class="go">Tensor(2, grad=None)</span>
-<span class="go">Tensor(3, grad=None)</span>
+<div class="admonition-gradient-hooks admonition">
+<p class="admonition-title">Gradient hooks</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">print_grad</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">grad</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Grad hooked:&quot;</span><span class="p">,</span> <span class="n">grad</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">register_hook</span><span class="p">(</span><span class="n">print_grad</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
+<div class="admonition-device-based-dtype-inference admonition">
+<p class="admonition-title">Device-based dtype inference</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">lucid</span><span class="o">.</span><span class="n">Float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+<span class="go">float32</span>
+</pre></div>
+</div>
+</div>
+<div class="admonition-using-free-tensors admonition">
+<p class="admonition-title">Using free tensors</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span><span class="o">.</span><span class="n">free</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+<span class="go">&#39;gpu&#39;</span>
+</pre></div>
+</div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Lucid tensors are hashable and indexable, support Python-style slicing,
+and are fully integrated with Lucid’s reverse-mode autodiff system.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Use <cite>Tensor.is_all_free(t1, t2, …)</cite> to check if tensors are not bound
+to a computation graph or fixed device.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Tensors with <cite>requires_grad=True</cite> should not be modified in-place.</p>
+</div>
+</section>
+<section id="mathematical-representation">
+<h2>Mathematical Representation<a class="headerlink" href="#mathematical-representation" title="Link to this heading">¶</a></h2>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\text{grad}_i = \frac{\partial y}{\partial x_i}\]</div>
+</div>
+<p>Where <span class="math notranslate nohighlight">\(y\)</span> is the final output and <span class="math notranslate nohighlight">\(x_i\)</span> are intermediate tensors
+in the computation graph.</p>
 </section>
 </section>
 
@@ -1068,6 +1093,7 @@ preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p>
 <li><a class="reference internal" href="#methods">Methods</a></li>
 <li><a class="reference internal" href="#properties">Properties</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#mathematical-representation">Mathematical Representation</a></li>
 </ul>
 </li>
 </ul>
@@ -1083,5 +1109,6 @@ preceding tensor. Clears gradients unless <cite>keep_grad</cite> is True.</p>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>

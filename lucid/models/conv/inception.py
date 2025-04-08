@@ -357,6 +357,8 @@ class Inception_V3(Inception):
 
         if use_aux:
             self.aux = _InceptionAux(768, num_classes, pool_size=(5, 5))
+        else:
+            self.aux = None
 
         self.incep_5 = nn.Sequential(
             _InceptionModule_V2C(1280), _InceptionModule_V2C(2048)
@@ -385,7 +387,7 @@ class Inception_V3(Inception):
         x = self.dropout(x)
         x = self.fc(x)
 
-        return x, aux
+        return x, aux if self.aux is not None else x
 
 
 class _InceptionStem_V4(nn.Module):

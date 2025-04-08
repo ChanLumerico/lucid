@@ -14,6 +14,7 @@ def summarize(
     recurse: bool = True,
     truncate_from: int | None = None,
     test_backward: bool = False,
+    do_eval: bool = False,
     **model_kwargs,
 ) -> None:
     PIPELINE: str = r"│   "
@@ -60,17 +61,21 @@ def summarize(
     dummy_inputs = []
     if isinstance(input_shape, list):
         for in_shape in input_shape:
-            dummy_inputs.append(lucid.random.rand(in_shape))
+            dummy_inputs.append(lucid.random.rand(in_shape, device=model.device))
     else:
-        dummy_inputs.append(lucid.random.rand(input_shape))
+        dummy_inputs.append(lucid.random.rand(input_shape, device=model.device))
 
     outputs = model(*dummy_inputs, **model_kwargs)
     if test_backward:
         if isinstance(outputs, tuple):
             for out in outputs:
                 out.backward()
+                if do_eval:
+                    out.eval()
         else:
             outputs.backward()
+            if do_eval:
+                outputs.eval()
 
     module_summary.reverse()
 
