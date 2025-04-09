@@ -42,16 +42,14 @@ class Tensor(_TensorOps):
             dtype = _dtype_map[dtype]
 
         dtype: Numeric | None
-        assert isinstance(dtype, (Numeric, NoneType))
+        assert isinstance(dtype, (Numeric, NoneType)), type(dtype)
 
         if dtype is not None and dtype.is_bit_free:
             raise TypeError(
                 f"Implicit dtypes is not supported for Tensor instantiation."
             )
         if device not in {"cpu", "gpu"}:
-            raise ValueError(
-                f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
-            )
+            raise lucid.UnknownDeviceError(device)
 
         self.data: _NumPyArray | _MLXArray
         if not isinstance(data, (_NumPyArray, _MLXArray)):
@@ -117,7 +115,7 @@ class Tensor(_TensorOps):
         elif isinstance(data, _MLXArray):
             return mx.array(data)
         else:
-            raise RuntimeError(f"Unexpected type: '{type(data).__name__}'")
+            raise TypeError(f"Unexpected type: '{type(data).__name__}'")
 
     @classmethod
     def copy_grad(cls, grad: _NumPyArray | _MLXArray) -> _NumPyArray | _MLXArray:
@@ -159,10 +157,7 @@ class Tensor(_TensorOps):
             try:
                 tensor._backward_op()
             except Exception as e:
-                raise RuntimeError(
-                    f"Exception above occurred for tensor "
-                    + f"of shape {tensor.shape} on operation {self._op}."
-                ) from e
+                raise lucid.BackwardError(shape=tensor.shape, op=self._op) from e
 
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
@@ -244,9 +239,7 @@ class Tensor(_TensorOps):
                 self.grad = mx.array(self.grad)
 
         else:
-            raise ValueError(
-                f"Unknown device type '{device}'. Must be either 'cpu' or 'gpu'."
-            )
+            raise lucid.UnknownDeviceError(device)
 
         self.dtype = types.to_numeric_type(self.data.dtype)
         self.device = device
@@ -279,7 +272,7 @@ class Tensor(_TensorOps):
             new_idx = parse_mlx_indexing(new_idx)
         else:
             if isinstance(idx, Tensor) and idx.is_gpu():
-                raise RuntimeError(f"Attempted GPU tensor indexing to CPU tensor.")
+                raise lucid.DeviceMismatchError(to="gpu", from_="cpu")
 
         sliced_data = self.data[new_idx]
         new_tensor = Tensor(
@@ -316,10 +309,6 @@ class Tensor(_TensorOps):
                 "Cannot perform in-place item setting on a "
                 + "Tensor that requires gradients. "
             )
-        if isinstance(value, Tensor) and self.device != value.device:
-            raise RuntimeError(
-                f"Devices does not match for the tensor and the value.",
-            )
 
         new_idx = idx
         if isinstance(idx, Tensor):
@@ -339,9 +328,8 @@ class Tensor(_TensorOps):
             if self.device != value.device:
                 if value.is_free:
                     data = value.to(self.device).data
-                raise RuntimeError(
-                    f"Devices does not match for the tensor and the value.",
-                )
+                else:
+                    raise lucid.DeviceMismatchError(to=self.device, from_=value.device)
             data = value.data
         else:
             data = value

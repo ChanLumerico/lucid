@@ -40,6 +40,7 @@ from lucid.types import (
     _BuiltinNumeric,
     Numeric,
 )
+from lucid.error import *
 
 import lucid.linalg as linalg
 import lucid.random as random
