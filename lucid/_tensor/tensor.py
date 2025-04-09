@@ -1,4 +1,4 @@
-from typing import Callable, Iterator, Optional, Self, SupportsIndex
+from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
 from types import NoneType
 import numpy as np
 
@@ -354,3 +354,27 @@ class Tensor(_TensorOps):
 
     def __hash__(self) -> int:
         return hash(id(self))
+
+    def __deepcopy__(self, memo: Any) -> Self:
+        copied_data = Tensor.copy_data(self.data)
+
+        new_tensor = Tensor(
+            copied_data,
+            requires_grad=self.requires_grad,
+            keep_grad=self.keep_grad,
+            dtype=self.dtype,
+            device=self.device,
+        )
+
+        if self.grad is not None:
+            new_tensor.grad = Tensor.copy_grad(self.grad)
+
+        new_tensor._op = self._op
+        new_tensor._backward_op = self._backward_op
+        new_tensor._prev = self._prev.copy()
+        new_tensor._backward_hooks = self._backward_hooks.copy()
+
+        new_tensor._is_free = self._is_free
+        new_tensor._is_bool_tensor = self._is_bool_tensor
+
+        return new_tensor

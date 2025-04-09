@@ -209,15 +209,19 @@ class _Attention(nn.Module):
         )
         dots = (q @ k.mT) * self.scale
 
-        rel_idx = self.relative_index.repeat(self.num_heads, axis=1)
+        rel_idx = self.relative_index.repeat(self.num_heads, axis=1).to(x.device)
         col_indices = (
-            lucid.arange(self.relative_bias_table.shape[1])
-            .unsqueeze(axis=0)
-            .broadcast_to(rel_idx.shape)
-        ).astype(int)
+            (
+                lucid.arange(self.relative_bias_table.shape[1])
+                .unsqueeze(axis=0)
+                .broadcast_to(rel_idx.shape)
+            )
+            .astype(lucid.Int)
+            .to(x.device)
+        )
 
         relative_bias = self.relative_bias_table[
-            rel_idx.astype(int), col_indices.astype(int)
+            rel_idx.astype(lucid.Int), col_indices.astype(lucid.Int)
         ]
         relative_bias = lucid.einops.rearrange(
             relative_bias, "(h w) c -> c h w", h=self.ih * self.iw, w=self.ih * self.iw

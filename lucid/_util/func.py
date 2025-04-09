@@ -191,20 +191,29 @@ class concatenate(operation):
     def cpu(self, *arr: Tensor) -> _FuncOpReturnType:
         data_arr = [a.data for a in arr]
         self.result = Tensor(np.concatenate(data_arr, axis=self.axis))
-        return self.result, partial(self.compute_grad, arr=arr, lib_=np)
+        return self.result, partial(self.compute_grad, arr=arr)
 
     @poly_func_op(device="gpu")
     def gpu(self, *arr: Tensor) -> _FuncOpReturnType:
         data_arr = [a.data for a in arr]
         self.result = Tensor(mx.concatenate(data_arr, axis=self.axis))
-        return self.result, partial(self.compute_grad, arr=arr, lib_=mx)
+        return self.result, partial(self.compute_grad, arr=arr)
 
-    def compute_grad(self, arr: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def compute_grad(self, arr: tuple[Tensor, ...]) -> tuple:
         split_sizes = [a.shape[self.axis] for a in arr]
-        split_indices = lib_.cumsum(lib_.array(split_sizes))[:-1]
+        grad = self.result.grad
+        outputs = []
+        start = 0
 
-        split_grad = lib_.split(self.result.grad, split_indices, axis=self.axis)
-        return tuple(split_grad)
+        for size in split_sizes:
+            end = start + size
+            slicer = [slice(None)] * grad.ndim
+            slicer[self.axis] = slice(start, end)
+
+            outputs.append(grad[tuple(slicer)])
+            start = end
+
+        return tuple(outputs)
 
 
 class pad(operation):
