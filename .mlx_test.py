@@ -4,15 +4,15 @@ import lucid.models as models
 import time
 
 
-model = models.transformer_base()
-model.to("cpu")
+model = models.pvt_large()
+model.to("gpu")
 
 t0 = time.time_ns()
 
 models.summarize(
     model,
-    input_shape=[(1, 500), (1, 500)],
-    truncate_from=25,
+    input_shape=(1, 3, 224, 224),
+    truncate_from=100,
     test_backward=True,
     do_eval=False,
 )

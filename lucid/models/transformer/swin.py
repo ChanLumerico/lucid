@@ -134,7 +134,7 @@ class _WindowAttention(nn.Module):
         attn = q @ k.mT
 
         relative_pos_bias = self.relative_position_bias_table[
-            self.relative_pos_index.flatten().astype(int)
+            self.relative_pos_index.flatten().astype(lucid.Int)
         ].reshape(
             self.window_size[0] * self.window_size[1],
             self.window_size[0] * self.window_size[1],
@@ -627,7 +627,7 @@ class _WindowAttention_V2(nn.Module):
                 -1, self.num_heads
             )
             rel_pos_bias = rel_pos_bias_table[
-                self.rel_pos_index.flatten().astype(int)
+                self.rel_pos_index.flatten().astype(lucid.Int)
             ].reshape(
                 self.window_size[0] * self.window_size[1],
                 self.window_size[0] * self.window_size[1],

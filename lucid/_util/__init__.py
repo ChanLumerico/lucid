@@ -114,10 +114,10 @@ def masked_fill(a: Tensor, /, mask: Tensor, value: _Scalar) -> Tensor:
 def roll(
     a: Tensor,
     /,
-    shift: int | tuple[int, ...],
+    shifts: int | tuple[int, ...],
     axis: int | tuple[int, ...] | None = None,
 ) -> Tensor:
-    return func.roll(shift, axis)(a)
+    return func.roll(shifts, axis)(a)
 
 
 Tensor.reshape = _reshape_immediate

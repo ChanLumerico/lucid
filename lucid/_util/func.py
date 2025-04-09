@@ -666,26 +666,26 @@ class masked_fill(operation):
 
 class roll(operation):
     def __init__(
-        self, shift: int | tuple[int, ...], axis: int | tuple[int, ...] | None
+        self, shifts: int | tuple[int, ...], axis: int | tuple[int, ...] | None
     ) -> None:
         super().__init__()
-        self.shift = shift
+        self.shifts = shifts
         self.axis = axis
 
     @unary_func_op()
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
-        self.result = Tensor(np.roll(a.data, shift=self.shift, axis=self.axis))
+        self.result = Tensor(np.roll(a.data, shift=self.shifts, axis=self.axis))
         return self.result, partial(self.compute_grad, lib_=np)
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        self.result = Tensor(mx.roll(a.data, shift=self.shift, axis=self.axis))
+        self.result = Tensor(mx.roll(a.data, shift=self.shifts, axis=self.axis))
         return self.result, partial(self.compute_grad, lib_=mx)
 
     def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
-        if isinstance(self.shift, int):
-            neg_shift = -self.shift
-        elif isinstance(self.shift, tuple):
-            neg_shift = tuple(-s for s in self.shift)
+        if isinstance(self.shifts, int):
+            neg_shift = -self.shifts
+        elif isinstance(self.shifts, tuple):
+            neg_shift = tuple(-s for s in self.shifts)
 
         return lib_.roll(self.result.grad, shift=neg_shift, axis=self.axis)

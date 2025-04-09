@@ -278,7 +278,7 @@ class Tensor(_TensorOps):
         if self.is_gpu():
             new_idx = parse_mlx_indexing(new_idx)
         else:
-            if isinstance(idx, Tensor) and isinstance(idx.data, _MLXArray):
+            if isinstance(idx, Tensor) and idx.is_gpu():
                 raise RuntimeError(f"Attempted GPU tensor indexing to CPU tensor.")
 
         sliced_data = self.data[new_idx]
@@ -324,7 +324,7 @@ class Tensor(_TensorOps):
         new_idx = idx
         if isinstance(idx, Tensor):
             new_idx = idx.data
-        if isinstance(idx, tuple):
+        elif isinstance(idx, tuple):
             new_idx = tuple()
             for id in idx:
                 if isinstance(id, Tensor):
@@ -334,7 +334,18 @@ class Tensor(_TensorOps):
         if self.is_gpu():
             new_idx = parse_mlx_indexing(new_idx)
 
-        self.data[new_idx] = value.data
+        data: _ArrayOrScalar
+        if isinstance(value, Tensor):
+            if self.device != value.device:
+                if value.is_free:
+                    data = value.to(self.device).data
+                raise RuntimeError(
+                    f"Devices does not match for the tensor and the value.",
+                )
+            data = value.data
+        else:
+            data = value
+        self.data[new_idx] = data
 
     def __len__(self) -> int:
         if self.ndim == 0:
@@ -355,7 +366,7 @@ class Tensor(_TensorOps):
     def __hash__(self) -> int:
         return hash(id(self))
 
-    def __deepcopy__(self, memo: Any) -> Self:
+    def __deepcopy__(self, *args: Any) -> Self:
         copied_data = Tensor.copy_data(self.data)
 
         new_tensor = Tensor(
