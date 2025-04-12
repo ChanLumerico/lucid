@@ -53,7 +53,7 @@ class _SRAttention(nn.Module):
         qk_scale: float | None = None,
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
-        sr_ratio: float = 1.0,
+        sr_ratio: int = 1,
     ) -> None:
         super().__init__()
         if dim % num_heads:
@@ -417,7 +417,130 @@ class _LSRAttention(nn.Module):
             self.norm = nn.LayerNorm(dim)
             self.act = nn.GELU()
 
-        ...  # TODO: Continue from here
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
+        B, N, C = x.shape
+        q = (
+            self.q(x)
+            .reshape(B, N, self.num_heads, C // self.num_heads)
+            .transpose((0, 2, 1, 3))
+        )
+
+        if not self.linear:
+            if self.sr_ratio > 1:
+                x_ = x.transpose((0, 2, 1)).reshape(B, C, H, W)
+                x_ = self.sr(x_).reshape(B, C, -1).transpose((0, 2, 1))
+                x_ = self.norm(x_)
+                kv = (
+                    self.kv(x_)
+                    .reshape(B, -1, 2, self.num_heads, C // self.num_heads)
+                    .transpose((2, 0, 3, 1, 4))
+                )
+            else:
+                kv = (
+                    self.kv(x)
+                    .reshape(B, -1, 2, self.num_heads, C // self.num_heads)
+                    .transpose((2, 0, 3, 1, 4))
+                )
+        else:
+            x_ = x.transpose((0, 2, 1)).reshape(B, C, H, W)
+            x_ = self.sr(self.pool(x_)).reshape(B, C, -1).transpose((0, 2, 1))
+            x_ = self.norm(x_)
+            x_ = self.act(x_)
+            kv = (
+                self.kv(x_)
+                .reshape(B, -1, 2, self.num_heads, C // self.num_heads)
+                .transpose((2, 0, 3, 1, 4))
+            )
+
+        k, v = kv[0], kv[1]
+        attn = (q @ k.mT) * self.scale
+        attn = F.softmax(attn, axis=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).swapaxes(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+
+        return x
+
+
+class _Block_V2(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = False,
+        qk_scale: float | None = None,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float = 0.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        sr_ratio: int = 1,
+        linear: bool = False,
+    ) -> None:
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.attn = _LSRAttention(
+            dim, num_heads, qkv_bias, qk_scale, attn_drop, drop, sr_ratio, linear
+        )
+
+        self.drop_path = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+        self.norm2 = norm_layer(dim)
+
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = _ConvMLP(
+            dim, mlp_hidden_dim, act_layer=act_layer, drop=drop, linear=linear
+        )
+
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
+        x += self.drop_path(self.attn(self.norm1(x), H, W))
+        x += self.drop_path(self.mlp(self.norm2(x), H, W))
+
+        return x
+
+
+class _OverlapPatchEmbed(nn.Module):
+    def __init__(
+        self,
+        img_size: int = 224,
+        patch_size: int = 7,
+        stride: int = 4,
+        in_channels: int = 3,
+        embed_dim: int = 768,
+    ) -> None:
+        super().__init__()
+        img_size = _to_2tuple(img_size)
+        patch_size = _to_2tuple(patch_size)
+        assert max(patch_size) > stride, "Set larger patch_size than stride."
+
+        self.img_size = img_size
+        self.patch_size = patch_size
+
+        self.H, self.W = img_size[0] // stride, img_size[1] // stride
+        self.num_patches = self.H * self.W
+
+        self.proj = nn.Conv2d(
+            in_channels,
+            embed_dim,
+            kernel_size=patch_size,
+            stride=stride,
+            padding=(patch_size[0] // 2, patch_size[1] // 2),
+        )
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:
+        x = self.proj(x)
+        H, W = x.shape[2:]
+        x = x.flatten(axis=2).swapaxes(1, 2)
+        x = self.norm(x)
+
+        return x, H, W
+
+
+class PVT_V2(nn.Module):
+    NotImplemented  # TODO: Continue from here
 
 
 @register_model
