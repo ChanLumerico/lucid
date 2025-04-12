@@ -1,4 +1,5 @@
 from functools import partial
+import math
 
 import lucid
 import lucid.nn as nn
@@ -299,6 +300,124 @@ class PVT(nn.Module):
 
         x = self.head(x[:, 0])
         return x
+
+
+class _DWConv(nn.Module):
+    def __init__(self, dim: int = 768) -> None:
+        super().__init__()
+        self.dwconv = nn.Conv2d(
+            dim, dim, kernel_size=3, stride=1, padding=1, groups=dim
+        )
+
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
+        B, _, C = x.shape
+        x = x.swapaxes(1, 2).reshape(B, C, H, W)
+        x = self.dwconv(x)
+        x = x.flatten(axis=2).swapaxes(1, 2)
+
+        return x
+
+
+class _ConvMLP(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: int | None = None,
+        out_features: int | None = None,
+        act_layer: type[nn.Module] = nn.GELU,
+        drop: float = 0.0,
+        linear: bool = False,
+    ) -> None:
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.dwconv = _DWConv(hidden_features)
+
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
+
+        self.linear = linear
+        if self.linear:
+            self.relu = nn.ReLU()
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m: nn.Module) -> None:
+        if isinstance(m, nn.Linear):
+            nn.init.normal(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant(m.bias, 0)
+
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant(m.bias, 0)
+            nn.init.constant(m.weight, 1.0)
+
+        elif isinstance(m, nn.Conv2d):
+            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            fan_out //= m.groups
+            nn.init.normal(m.weight, 0, math.sqrt(2.0 / fan_out))
+            if m.bias is not None:
+                m.bias.zero()
+
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
+        x = self.fc1(x)
+        if self.linear:
+            x = self.relu(x)
+
+        x = self.dwconv(x, H, W)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+
+        return x
+
+
+class _LSRAttention(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int = 8,
+        qkv_bias: bool = False,
+        qk_scale: float | None = None,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        sr_ratio: int = 1,
+        linear: bool = False,
+    ) -> None:
+        super().__init__()
+        assert (
+            dim % num_heads == 0
+        ), f"dim {dim} should be divided by num_heads {num_heads}."
+
+        self.dim = dim
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = qk_scale or head_dim**-0.5
+
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        self.linear = linear
+        self.sr_ratio = sr_ratio
+        if not linear:
+            if sr_ratio > 1:
+                self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
+                self.norm = nn.LayerNorm(dim)
+        else:
+            self.pool = nn.AdaptiveAvgPool2d(7)
+            self.sr = nn.Conv2d(dim, dim, kernel_size=1, stride=1)
+            self.norm = nn.LayerNorm(dim)
+            self.act = nn.GELU()
+
+        ...  # TODO: Continue from here
 
 
 @register_model

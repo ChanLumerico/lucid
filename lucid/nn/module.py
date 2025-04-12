@@ -167,7 +167,7 @@ class Module:
     def parameter_size(self) -> int:
         return self.count_parameters(recurse=True)
 
-    def apply(self, fn: Callable[[Self], None]) -> Self:
+    def apply(self, fn: Callable[[Self, Any], None]) -> Self:
         fn(self)
         for module in self._modules.values():
             module.apply(fn)
