@@ -16,6 +16,7 @@ Function Signature
         dtype: Any = None,
         requires_grad: bool = False,
         keep_grad: bool = False,
+        device: _DeviceType | None = None,
     ) -> Tensor
 
 Parameters

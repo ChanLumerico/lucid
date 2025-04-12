@@ -16,7 +16,8 @@ Function Signature
         *args: int | tuple[int, ...], 
         dtype: type = _base_dtype, 
         requires_grad: bool = False, 
-        keep_grad: bool = False
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
     ) -> Tensor
 
 Parameters

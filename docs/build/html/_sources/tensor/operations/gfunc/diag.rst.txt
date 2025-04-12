@@ -17,6 +17,7 @@ Function Signature
         dtype: Any = np.float32,
         requires_grad: bool = False,
         keep_grad: bool = False,
+        device: _DeviceType | None = None,
     ) -> Tensor
 
 Parameters

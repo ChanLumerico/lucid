@@ -17,7 +17,8 @@ Function Signature
         high: float,
         size: int | tuple[int, ...],
         requires_grad: bool = False,
-        keep_grad: bool = False
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
     ) -> Tensor
 
 Parameters

@@ -15,7 +15,7 @@ os.environ["SPHINX_BUILD"] = "1"
 project = "Lucid"
 copyright = "2025, ChanLumerico"
 author = "ChanLumerico"
-release = "1.23.2"
+release = "2.0.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -34,6 +34,12 @@ exclude_patterns = []
 
 html_theme = "furo"
 html_static_path = ["_static"]
+
+html_theme_options = {
+    "source_repository": "https://github.com/ChanLumerico/lucid/",
+    "source_branch": "main",
+    "source_directory": "docs/",
+}
 
 pygments_style = "xcode"
 pygments_dark_style = "github-dark"

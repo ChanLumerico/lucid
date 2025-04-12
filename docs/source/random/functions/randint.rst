@@ -17,6 +17,7 @@ Function Signature
         size: int | _ShapeLike,
         requires_grad: bool = False,
         keep_grad: bool = False,
+        device: _DeviceType = "cpu",
     ) -> Tensor
 
 Parameters

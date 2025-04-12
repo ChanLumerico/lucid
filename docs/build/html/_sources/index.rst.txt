@@ -115,7 +115,7 @@
    :caption: Others
    :hidden:
 
-   others/types.rst
+   others/Numeric.rst
    others/no_grad.rst
    others/grad_enabled.rst
    others/newaxis.rst

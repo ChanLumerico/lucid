@@ -14,7 +14,8 @@ Function Signature
     def randn(
         *shape: int,
         requires_grad: bool = False,
-        keep_grad: bool = False
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
     ) -> Tensor
 
 Parameters
