@@ -128,6 +128,7 @@ class Tensor(_TensorOps):
     def eval(self) -> Self:
         if self.is_gpu():
             mx.eval(self.data)
+            mx.stop_gradient(self.data)
         return self
 
     def backward(self, keep_grad: bool = False) -> None:

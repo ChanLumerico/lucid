@@ -10,7 +10,9 @@ from lucid.datasets import MNIST
 import numpy as np
 
 
-transform = transforms.Compose([transforms.Resize((48, 48))])
+transform = transforms.Compose(
+    [transforms.Resize((32, 32)), transforms.Normalize((0.5,), (0.5,))]
+)
 
 train_set = MNIST(
     root="./.data/mnist/train", train=True, download=False, transform=transform
@@ -21,18 +23,22 @@ test_set = MNIST(
 
 learning_rate = 1e-3
 num_epochs = 3
-batch_size = 16
-weight_decay = 1e-4
+batch_size = 100
+weight_decay = 1e-6
 
 train_loader = DataLoader(train_set, batch_size, shuffle=True)
 test_loader = DataLoader(test_set, batch_size)
 
-vit_tiny: nn.Module = models.vit_tiny(image_size=48, num_classes=10)
+model: nn.Module = models.lenet_5().to("cpu")
 
-optimizer = optim.Adam(
-    vit_tiny.parameters(), lr=learning_rate, weight_decay=weight_decay
-)
-criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+criterion = nn.CrossEntropyLoss().to("cpu")
+
+
+def normalize(images):
+    return (images - images.mean(axis=(2, 3), keepdims=True)) / images.var(
+        axis=(2, 3), keepdims=True
+    ) ** 0.5
 
 
 def train(model, train_loader, criterion, optimizer, num_epochs):
@@ -42,9 +48,12 @@ def train(model, train_loader, criterion, optimizer, num_epochs):
         total_loss = 0.0
         correct = 0
         for batch_idx, (images, labels) in enumerate(train_loader, start=1):
-            images = lucid.repeat(images, 3, axis=1)
+            images = images.reshape(batch_size, 1, 32, 32).to("cpu")
+            images = normalize(images)
+            labels = labels.to("cpu")
+
             outputs = model(images)
-            loss = criterion(outputs, labels)
+            loss = criterion(outputs, labels).eval()
 
             optimizer.zero_grad()
             loss.backward()
@@ -62,17 +71,17 @@ def train(model, train_loader, criterion, optimizer, num_epochs):
                 f"Accuracy: {accuracy:.4f}",
             )
 
-            with open("_vit_t.txt", "w") as f:
-                f.write(
-                    f"[Epoch {epoch}/{num_epochs} - "
-                    + f"Batch {batch_idx}/{len(train_loader)}]\n"
-                    + f"Loss: {loss.item():.4f}\n"
-                    + f"Avg. Loss: {avg_loss:.4f}\n"
-                    + f"Accuracy: {accuracy:.4f}\n"
-                )
+            # with open("_vit_t.txt", "w") as f:
+            #     f.write(
+            #         f"[Epoch {epoch}/{num_epochs} - "
+            #         + f"Batch {batch_idx}/{len(train_loader)}]\n"
+            #         + f"Loss: {loss.item():.4f}\n"
+            #         + f"Avg. Loss: {avg_loss:.4f}\n"
+            #         + f"Accuracy: {accuracy:.4f}\n"
+            #     )
 
         avg_loss = total_loss / len(train_loader)
         print(f"Epoch [{epoch+1}/{num_epochs}] - Loss: {avg_loss:.4f}\n")
 
 
-train(vit_tiny, train_loader, criterion, optimizer, num_epochs)
+train(model, train_loader, criterion, optimizer, num_epochs)

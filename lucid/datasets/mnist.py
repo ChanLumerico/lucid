@@ -35,7 +35,7 @@ class MNIST(DatasetBase):
             )
 
         df = pd.read_csv(csv_path)
-        labels = df["class"].values.astype(np.int64)
+        labels = df["class"].values.astype(np.int32)
         images = df.drop(columns=["class"]).values.astype(np.float32)
         images = images.reshape(-1, 1, 28, 28)
 
@@ -46,8 +46,8 @@ class MNIST(DatasetBase):
             images, labels = images[train_size:], labels[train_size:]
 
         if self.to_tensor:
-            images = lucid.to_tensor(images, dtype=np.float32)
-            labels = lucid.to_tensor(labels, dtype=np.int64)
+            images = lucid.to_tensor(images, dtype=lucid.Float32)
+            labels = lucid.to_tensor(labels, dtype=lucid.Int32)
 
         return images, labels
 
@@ -85,7 +85,7 @@ class FashionMNIST(DatasetBase):
             )
 
         df = pd.read_csv(csv_path)
-        labels = df["class"].values.astype(np.int64)
+        labels = df["class"].values.astype(np.int32)
         images = df.drop(columns=["class"]).values.astype(np.float32)
         images = images.reshape(-1, 1, 28, 28)
 
@@ -96,8 +96,8 @@ class FashionMNIST(DatasetBase):
             images, labels = images[train_size:], labels[train_size:]
 
         if self.to_tensor:
-            images = lucid.to_tensor(images, dtype=np.float32)
-            labels = lucid.to_tensor(labels, dtype=np.int64)
+            images = lucid.to_tensor(images, dtype=lucid.Float32)
+            labels = lucid.to_tensor(labels, dtype=lucid.Int32)
 
         return images, labels
 
