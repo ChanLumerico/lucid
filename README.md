@@ -13,6 +13,10 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 [📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
 
+### 🔥 What's New
+
+- Pyramid Vision Transformer v2 (PVT-v2) added: `lucid.models.PVT_V2`
+
 ## 🔧 How to Install
 
 Lucid is designed to be light, portable, and friendly to all users — no matter your setup.
