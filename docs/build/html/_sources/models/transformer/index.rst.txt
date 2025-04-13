@@ -11,6 +11,7 @@ Transformers
     Swin Transformer-v2 <swin/SwinTransformer_V2.rst>
     CvT <cvt/CvT.rst>
     PVT <pvt/PVT.rst>
+    PVT-v2 <pvt/PVT_V2.rst>
 
 Transformer
 -----------
@@ -244,13 +245,26 @@ dense prediction tasks.
 Pyramid Vision Transformer (PVT)
 --------------------------------
 
+.. versionadded:: 1.22.5
+    PVT
+
+.. versionadded:: 2.0.7
+    PVT-v2
+
 The **Pyramid Vision Transformer (PVT)** combines CNN-like pyramidal structures 
 with Transformer attention, capturing multi-scale features efficiently. It reduces 
 spatial resolution progressively and uses **spatial-reduction attention (SRA)** 
 to enhance performance in dense prediction tasks like detection and segmentation.
 
+ *PVT*
+
  Wang, Wenhai, et al. Pyramid Vision Transformer: A Versatile Backbone for Dense 
  Prediction without Convolutions. arXiv, 2021, arXiv:2102.12122.
+
+ *PVT-v2*
+
+ Wang, Wenhai, et al. PVTv2: Improved baselines with pyramid vision transformer.
+ *Computational Visual Media* 8.3 (2022): 415-424.
 
 .. list-table::
     :header-rows: 1
@@ -290,6 +304,58 @@ to enhance performance in dense prediction tasks like detection and segmentation
       - `pvt_huge <pvt/pvt_huge>`_
       - :math:`(N,3,224,224)`
       - 286,706,920
+      - ✅
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - PVT-v2-B0
+      - `pvt_v2_b0 <pvt/pvt_v2_b0>`_
+      - :math:`(N,3,224,224)`
+      - 3,666,760
+      - ✅
+    
+    * - PVT-v2-B1
+      - `pvt_v2_b1 <pvt/pvt_v2_b1>`_
+      - :math:`(N,3,224,224)`
+      - 14,009,000
+      - ✅
+    
+    * - PVT-v2-B2
+      - `pvt_v2_b2 <pvt/pvt_v2_b2>`_
+      - :math:`(N,3,224,224)`
+      - 25,362,856
+      - ✅
+    
+    * - PVT-v2-B2-Linear
+      - `pvt_v2_b2_li <pvt/pvt_v2_b2_li>`_
+      - :math:`(N,3,224,224)`
+      - 22,553,512
+      - ✅
+    
+    * - PVT-v2-B3
+      - `pvt_v2_b3 <pvt/pvt_v2_b3>`_
+      - :math:`(N,3,224,224)`
+      - 45,238,696
+      - ✅
+    
+    * - PVT-v2-B4
+      - `pvt_v2_b4 <pvt/pvt_v2_b4>`_
+      - :math:`(N,3,224,224)`
+      - 62,556,072
+      - ✅
+    
+    * - PVT-v2-B5
+      - `pvt_v2_b5 <pvt/pvt_v2_b5>`_
+      - :math:`(N,3,224,224)`
+      - 82,882,984
       - ✅
 
 *To be implemented...🔮*

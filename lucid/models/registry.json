@@ -760,5 +760,47 @@
         "family": "PVT",
         "param_size": 286706920,
         "arch": "transformer"
+    },
+    "pvt_v2_b0": {
+        "name": "pvt_v2_b0",
+        "family": "PVT_V2",
+        "param_size": 3666760,
+        "arch": "transformer"
+    },
+    "pvt_v2_b1": {
+        "name": "pvt_v2_b1",
+        "family": "PVT_V2",
+        "param_size": 14009000,
+        "arch": "transformer"
+    },
+    "pvt_v2_b2": {
+        "name": "pvt_v2_b2",
+        "family": "PVT_V2",
+        "param_size": 25362856,
+        "arch": "transformer"
+    },
+    "pvt_v2_b2_li": {
+        "name": "pvt_v2_b2_li",
+        "family": "PVT_V2",
+        "param_size": 22553512,
+        "arch": "transformer"
+    },
+    "pvt_v2_b3": {
+        "name": "pvt_v2_b3",
+        "family": "PVT_V2",
+        "param_size": 45238696,
+        "arch": "transformer"
+    },
+    "pvt_v2_b4": {
+        "name": "pvt_v2_b4",
+        "family": "PVT_V2",
+        "param_size": 62556072,
+        "arch": "transformer"
+    },
+    "pvt_v2_b5": {
+        "name": "pvt_v2_b5",
+        "family": "PVT_V2",
+        "param_size": 82882984,
+        "arch": "transformer"
     }
 }

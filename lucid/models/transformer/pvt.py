@@ -9,7 +9,22 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["PVT", "pvt_tiny", "pvt_small", "pvt_medium", "pvt_large", "pvt_huge"]
+__all__ = [
+    "PVT",
+    "PVT_V2",
+    "pvt_tiny",
+    "pvt_small",
+    "pvt_medium",
+    "pvt_large",
+    "pvt_huge",
+    "pvt_v2_b0",
+    "pvt_v2_b1",
+    "pvt_v2_b2",
+    "pvt_v2_b2_li",
+    "pvt_v2_b3",
+    "pvt_v2_b4",
+    "pvt_v2_b5",
+]
 
 
 def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
@@ -540,7 +555,108 @@ class _OverlapPatchEmbed(nn.Module):
 
 
 class PVT_V2(nn.Module):
-    NotImplemented  # TODO: Continue from here
+    def __init__(
+        self,
+        img_size: int = 224,
+        patch_size: int = 7,
+        in_channels: int = 3,
+        num_classes: int = 1000,
+        embed_dims: list[int] = [64, 128, 256, 512],
+        num_heads: list[int] = [1, 2, 4, 8],
+        mlp_ratios: list[int] = [4, 4, 4, 4],
+        qkv_bias: bool = False,
+        qk_scale: float | None = None,
+        drop_rate: float = 0.0,
+        attn_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        depths: list[int] = [3, 4, 6, 3],
+        sr_ratios: list[int] = [8, 4, 2, 1],
+        num_stages: int = 4,
+        linear: bool = False,
+    ) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        self.depths = depths
+        self.num_stages = num_stages
+
+        dpr = [x.item() for x in lucid.linspace(0, drop_path_rate, sum(depths))]
+        cur = 0
+
+        for i in range(num_stages):
+            patch_embed = _OverlapPatchEmbed(
+                img_size=img_size if i == 0 else img_size // (2 ** (i + 1)),
+                patch_size=patch_size if i == 0 else 3,
+                stride=4 if i == 0 else 2,
+                in_channels=in_channels if i == 0 else embed_dims[i - 1],
+                embed_dim=embed_dims[i],
+            )
+            block = [
+                _Block_V2(
+                    dim=embed_dims[i],
+                    num_heads=num_heads[i],
+                    mlp_ratio=mlp_ratios[i],
+                    qkv_bias=qkv_bias,
+                    qk_scale=qk_scale,
+                    drop=drop_rate,
+                    attn_drop=attn_drop_rate,
+                    drop_path=dpr[cur + j],
+                    norm_layer=norm_layer,
+                    sr_ratio=sr_ratios[i],
+                    linear=linear,
+                )
+                for j in range(depths[i])
+            ]
+            block = nn.ModuleList(block)
+
+            norm = norm_layer(embed_dims[i])
+            cur += depths[i]
+
+            setattr(self, f"patch_embed{i + 1}", patch_embed)
+            setattr(self, f"block{i + 1}", block)
+            setattr(self, f"norm{i + 1}", norm)
+
+        self.head = (
+            nn.Linear(embed_dims[3], num_classes) if num_classes > 0 else nn.Identity()
+        )
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m: nn.Module) -> None:
+        if isinstance(m, nn.Linear):
+            nn.init.normal(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant(m.bias, 0)
+
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant(m.bias, 0)
+            nn.init.constant(m.weight, 1.0)
+
+        elif isinstance(m, nn.Conv2d):
+            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            fan_out //= m.groups
+            nn.init.normal(m.weight, 0, math.sqrt(2.0 / fan_out))
+            if m.bias is not None:
+                m.bias.zero()
+
+    def forward(self, x: Tensor) -> Tensor:
+        B = x.shape[0]
+        for i in range(self.num_stages):
+            patch_embed = getattr(self, f"patch_embed{i + 1}")
+            block = getattr(self, f"block{i + 1}")
+            norm = getattr(self, f"norm{i + 1}")
+
+            x, H, W = patch_embed(x)
+            for blk in block:
+                x = blk(x, H, W)
+
+            x = norm(x)
+            if i != self.num_stages - 1:
+                x = x.reshape(B, H, W, -1).transpose((0, 3, 1, 2))
+
+        x = x.mean(axis=1)
+        x = self.head(x)
+
+        return x
 
 
 @register_model
@@ -627,3 +743,136 @@ def pvt_huge(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
         drop_path_rate=0.02,
         **kwargs,
     )
+
+
+@register_model
+def pvt_v2_b0(
+    img_size: int = 224, num_classes: int = 1000, in_channels: int = 3, **kwargs
+) -> PVT_V2:
+    model = PVT_V2(
+        img_size=img_size,
+        patch_size=7,
+        in_channels=in_channels,
+        num_classes=num_classes,
+        embed_dims=[32, 64, 160, 256],
+        num_heads=[1, 2, 5, 8],
+        mlp_ratios=[8, 8, 4, 4],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        depths=[2, 2, 2, 2],
+        sr_ratios=[8, 4, 2, 1],
+        **kwargs,
+    )
+    return model
+
+
+@register_model
+def pvt_v2_b1(
+    img_size: int = 224, num_classes: int = 1000, in_channels: int = 3, **kwargs
+) -> PVT_V2:
+    model = PVT_V2(
+        img_size=img_size,
+        patch_size=7,
+        in_channels=in_channels,
+        num_classes=num_classes,
+        embed_dims=[64, 128, 320, 512],
+        num_heads=[1, 2, 5, 8],
+        mlp_ratios=[8, 8, 4, 4],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        depths=[2, 2, 2, 2],
+        sr_ratios=[8, 4, 2, 1],
+        **kwargs,
+    )
+    return model
+
+
+@register_model
+def pvt_v2_b2(
+    img_size: int = 224, num_classes: int = 1000, in_channels: int = 3, **kwargs
+) -> PVT_V2:
+    model = PVT_V2(
+        img_size=img_size,
+        patch_size=7,
+        in_channels=in_channels,
+        num_classes=num_classes,
+        embed_dims=[64, 128, 320, 512],
+        num_heads=[1, 2, 5, 8],
+        mlp_ratios=[8, 8, 4, 4],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        depths=[3, 4, 6, 3],
+        sr_ratios=[8, 4, 2, 1],
+        **kwargs,
+    )
+    return model
+
+
+@register_model
+def pvt_v2_b2_li(
+    img_size: int = 224, num_classes: int = 1000, in_channels: int = 3, **kwargs
+) -> PVT_V2:
+    return pvt_v2_b2(img_size, num_classes, in_channels, linear=True, **kwargs)
+
+
+@register_model
+def pvt_v2_b3(
+    img_size: int = 224, num_classes: int = 1000, in_channels: int = 3, **kwargs
+) -> PVT_V2:
+    model = PVT_V2(
+        img_size=img_size,
+        patch_size=7,
+        in_channels=in_channels,
+        num_classes=num_classes,
+        embed_dims=[64, 128, 320, 512],
+        num_heads=[1, 2, 5, 8],
+        mlp_ratios=[8, 8, 4, 4],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        depths=[3, 4, 18, 3],
+        sr_ratios=[8, 4, 2, 1],
+        **kwargs,
+    )
+    return model
+
+
+@register_model
+def pvt_v2_b4(
+    img_size: int = 224, num_classes: int = 1000, in_channels: int = 3, **kwargs
+) -> PVT_V2:
+    model = PVT_V2(
+        img_size=img_size,
+        patch_size=7,
+        in_channels=in_channels,
+        num_classes=num_classes,
+        embed_dims=[64, 128, 320, 512],
+        num_heads=[1, 2, 5, 8],
+        mlp_ratios=[8, 8, 4, 4],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        depths=[3, 8, 27, 3],
+        sr_ratios=[8, 4, 2, 1],
+        **kwargs,
+    )
+    return model
+
+
+@register_model
+def pvt_v2_b5(
+    img_size: int = 224, num_classes: int = 1000, in_channels: int = 3, **kwargs
+) -> PVT_V2:
+    model = PVT_V2(
+        img_size=img_size,
+        patch_size=7,
+        in_channels=in_channels,
+        num_classes=num_classes,
+        embed_dims=[64, 128, 320, 512],
+        num_heads=[1, 2, 5, 8],
+        mlp_ratios=[8, 8, 4, 4],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        depths=[3, 6, 40, 3],
+        sr_ratios=[8, 4, 2, 1],
+        **kwargs,
+    )
+    return model
