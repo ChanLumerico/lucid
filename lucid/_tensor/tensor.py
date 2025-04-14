@@ -133,23 +133,21 @@ class Tensor(_TensorOps):
 
     def backward(self, keep_grad: bool = False) -> None:
         if self.grad is None:
-            if self.is_cpu():
-                self.grad = np.ones_like(self.data)
-            else:
-                self.grad = mx.ones_like(self.data)
-
+            self.grad = (
+                np.ones_like(self.data) if self.is_cpu() else mx.ones_like(self.data)
+            )
         visited = set()
         topo_order: list[Self] = []
         stack = [self]
 
         while stack:
-            tensor = stack.pop()
+            tensor = stack[-1]
             if tensor in visited:
+                stack.pop()
                 topo_order.append(tensor)
                 continue
 
             visited.add(tensor)
-            stack.append(tensor)
             for parent in tensor._prev:
                 if parent not in visited:
                     stack.append(parent)
