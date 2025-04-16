@@ -16,6 +16,8 @@ Transformers
 Transformer
 -----------
 
+.. versionadded:: 1.18
+
 The Transformer is a deep learning architecture introduced by Vaswani et al. in 2017, 
 designed for handling sequential data with self-attention mechanisms. It replaces 
 traditional recurrent layers with attention-based mechanisms, enabling highly 
@@ -48,6 +50,8 @@ parallelized training and capturing long-range dependencies effectively.
 
 Visual Transformer (ViT)
 ------------------------
+
+.. versionadded:: 1.19
 
 The Vision Transformer (ViT) is a deep learning architecture introduced by 
 Dosovitskiy et al. in 2020, designed for image recognition tasks using self-attention 
@@ -101,6 +105,12 @@ layers to capture global dependencies.
 
 Swin Transformer
 ----------------
+
+.. versionadded:: 1.20
+    Swin Transformer
+
+.. versionadded:: 1.20.5
+    Swin Transformer-v2
 
 The Swin Transformer is a hierarchical vision transformer introduced by 
 Liu et al. in 2021, designed for image recognition and dense prediction 
@@ -203,6 +213,8 @@ within each window.
 
 Convolutional Transformer (CvT)
 -------------------------------
+
+.. versionadded:: 1.21
 
 CvT (Convolutional Vision Transformer) combines self-attention with depthwise 
 convolutions to improve local feature extraction and computational efficiency. 

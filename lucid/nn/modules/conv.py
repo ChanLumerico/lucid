@@ -8,13 +8,49 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 
-__all__ = ["Conv1d", "Conv2d", "Conv3d"]
+__all__ = ["Unfold", "Conv1d", "Conv2d", "Conv3d"]
 
 
 def _single_to_tuple(value: Any, times: int) -> tuple[Any, ...]:
     if isinstance(value, tuple):
         return value
     return (value,) * times
+
+
+class Unfold(nn.Module):
+    def __init__(
+        self,
+        kernel_size: int | tuple[int, ...],
+        stride: int | tuple[int, ...],
+        padding: int | tuple[int, ...],
+        dilation: int | tuple[int, ...] = 1,
+    ) -> None:
+        super().__init__()
+        self.kernel_size = _single_to_tuple(kernel_size, 2)
+        self.stride = _single_to_tuple(stride, 2)
+        self.padding = _single_to_tuple(padding, 2)
+        self.dilation = _single_to_tuple(dilation, 2)
+
+    def forward(self, input_: Tensor) -> Tensor:
+        if input_.ndim != 4:
+            raise ValueError(f"'nn.Unfold' only supports 4D-tensors. (i.e. images)")
+
+        unfolded = F.unfold(
+            input_, self.kernel_size, self.stride, self.padding, self.dilation
+        )
+
+        N, C, *spatial_dims = input_.shape
+        out_dims = []
+        for in_dim, p, d, k, s in zip(
+            spatial_dims, self.padding, self.dilation, self.kernel_size, self.stride
+        ):
+            eff_k = d * (k - 1) + 1
+            out_dim = math.floor((in_dim + 2 * p - eff_k) / s + 1)
+            out_dims.append(out_dim)
+
+        L = math.prod(out_dims)
+        Ck = C * math.prod(self.kernel_size)
+        return unfolded.reshape(N, Ck, L)
 
 
 _PaddingStr = Literal["same", "valid"]
