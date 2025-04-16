@@ -32,6 +32,8 @@ ConvNets
 LeNet
 -----
 
+.. versionadded:: 1.0
+
 LeNet is a pioneering CNN by Yann LeCun for digit recognition, 
 combining convolutional, pooling, and fully connected layers. 
 It introduced concepts like weight sharing and local receptive fields, 
@@ -72,6 +74,8 @@ shaping modern CNNs.
 AlexNet
 -------
 
+.. versionadded:: 1.2
+
 AlexNet is a pioneering convolutional neural network introduced in 2012, 
 known for its deep architecture and use of ReLU activations, dropout, and GPU acceleration. 
 It achieved groundbreaking performance in the ImageNet Large Scale Visual Recognition 
@@ -98,6 +102,8 @@ Challenge (ILSVRC) in 2012, popularizing deep learning for computer vision.
 
 ZFNet
 -----
+
+.. versionadded:: 1.2.1
 
 ZFNet (Zeiler and Fergus Net) is a convolutional neural network that improved upon 
 AlexNet by using smaller convolutional filters and visualizing learned features to 
@@ -126,6 +132,8 @@ recognition and provided insights into deep learning interpretability.
 
 VGGNet
 ------
+
+.. versionadded:: 1.3
 
 VGGNet is a deep convolutional neural network known for its simplicity and use of 
 small 3x3 convolutional filters, which significantly improved object recognition accuracy.
@@ -170,6 +178,8 @@ small 3x3 convolutional filters, which significantly improved object recognition
 Inception
 ---------
 
+.. versionadded:: 1.4
+
 The Inception architecture, introduced in the GoogLeNet model, is a deep convolutional 
 neural network designed for efficient feature extraction using parallel convolutional and 
 pooling branches, reducing computational cost. It achieves this by combining multi-scale 
@@ -210,6 +220,8 @@ tasks.
 Inception-ResNet
 ----------------
 
+.. versionadded:: 1.5
+
 The Inception-ResNet architecture builds upon the Inception model by integrating 
 residual connections, which improve gradient flow and training stability in very 
 deep networks. This combination of Inception's multi-scale feature processing with 
@@ -244,6 +256,8 @@ for a wide range of image classification tasks.
 
 ResNet
 ------
+
+.. versionadded:: 1.6
 
 ResNets (Residual Networks) are deep neural network architectures that use skip 
 connections (residual connections) to alleviate the vanishing gradient problem, 
@@ -341,6 +355,10 @@ accuracy in tasks like image classification and object detection.
 ResNeXt
 -------
 
+.. versionadded:: 1.7
+
+.. versionchanged:: 1.13
+
 ResNeXt is an extension of the ResNet architecture that introduces a cardinality dimension 
 to the model, improving its performance and efficiency by allowing flexible aggregation of 
 transformations. ResNeXt builds on residual blocks by incorporating grouped convolutions, 
@@ -398,6 +416,10 @@ enabling parallel pathways for feature learning.
 
 SENet
 -----
+
+.. versionadded:: 1.8
+
+.. versionchanged:: 1.13.1
 
 SENets (Squeeze-and-Excitation Networks) are deep neural network architectures that enhance t
 he representational power of models by explicitly modeling channel interdependencies. 
@@ -484,6 +506,10 @@ feature responses.
 SKNet
 -----
 
+.. versionadded:: 1.9
+
+.. versionchanged:: 1.13.2
+
 SKNet (Selective Kernel Networks) is a deep learning architecture that enhances the 
 representational capacity of neural networks by enabling dynamic selection of kernel sizes 
 in convolutional layers. It introduces the concept of a "selective kernel" module, 
@@ -540,6 +566,8 @@ each spatial location in an image, improving its ability to capture multi-scale 
 DenseNet
 --------
 
+.. versionadded:: 1.10
+
 A deep learning architecture designed to improve the flow of information and gradients 
 in neural networks by introducing dense connectivity between layers. It leverages the 
 concept of "dense blocks," where each layer is directly connected to all preceding layers 
@@ -587,6 +615,8 @@ of parameters, and improves the efficiency of gradient propagation during traini
 Xception
 --------
 
+.. versionadded:: 1.10.5
+
 A deep learning architecture that introduces depthwise separable convolutions 
 to enhance efficiency and accuracy in convolutional neural networks. It builds 
 on the idea that spatial and channel-wise information can be decoupled, significantly 
@@ -614,6 +644,18 @@ reducing computational cost while maintaining performance.
 
 MobileNet
 ---------
+
+.. versionadded:: 1.11.0
+    MobileNet
+
+.. versionadded:: 1.11.1
+    MobileNet-v2
+
+.. versionadded:: 1.11.3
+    MobileNet-v3
+
+.. versionadded:: 1.15
+    MobileNet-v4
 
 A deep learning architecture that introduces depthwise separable convolutions 
 to enhance efficiency and accuracy in convolutional neural networks. It builds 
@@ -720,6 +762,12 @@ reducing computational cost while maintaining performance.
 
 EfficientNet
 ------------
+
+.. versionadded:: 1.12
+    EfficientNet
+
+.. versionadded:: 1.12.8
+    EfficientNet-v2
 
 EfficientNet is a family of convolutional neural networks optimized for 
 scalability and performance by systematically balancing network depth, width, 
@@ -833,6 +881,8 @@ computational resources compared to previous architectures.
 ResNeSt
 -------
 
+.. versionadded:: 1.14
+
 ResNeSt introduces Split Attention Blocks, which divide feature maps into groups, 
 compute attention for each group, and reassemble them to enhance representational power. 
 It extends ResNet by integrating these blocks, achieving improved performance in image 
@@ -901,6 +951,12 @@ recognition tasks with minimal computational overhead.
 
 ConvNeXt
 --------
+
+.. versionadded:: 1.15
+    ConvNeXt
+
+.. versionadded:: 1.15.6
+    ConvNeXt-v2
 
 ConvNeXt reimagines CNNs using principles inspired by vision transformers, 
 streamlining architectural design while preserving the efficiency of traditional CNNs. 
@@ -1017,6 +1073,8 @@ and expanded kernel sizes to enhance feature extraction.
 InceptionNeXt
 -------------
 
+.. versionadded:: 1.16
+
 InceptionNeXt extends the Inception architecture by incorporating modern design 
 principles inspired by vision transformers. It refines multi-scale feature extraction 
 through dynamic kernel selection, depthwise convolutions, and enhanced normalization 
@@ -1063,6 +1121,8 @@ diverse vision tasks.
 
 CoAtNet
 -------
+
+.. versionadded:: 1.17
 
 CoAtNet extends the hybrid architecture paradigm by integrating convolutional 
 and transformer-based designs. It enhances representation learning through 
