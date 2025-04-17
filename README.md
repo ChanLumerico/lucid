@@ -15,6 +15,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Supports ellipsis(`...`) for Einstein-operations; `lucid.einops`
 - Added `nn.Unfold`
 - Pyramid Vision Transformer v2 (PVT-v2) added: `lucid.models.PVT_V2`
 

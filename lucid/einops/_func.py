@@ -21,7 +21,7 @@ _ReduceStr = Literal["sum", "mean"]
 
 
 def _parse_pattern(pattern_side: str) -> list[str | tuple[str, ...]]:
-    parts = re.findall(r"\([^)]+\)|\S+", pattern_side)
+    parts = re.findall(r"\.\.\.|\([^)]+\)|\S+", pattern_side)
     tokens: list[str | tuple[str, ...]] = []
 
     for part in parts:
@@ -89,6 +89,32 @@ class rearrange(operation):
 
         input_tokens = _parse_pattern(in_pat)
         output_tokens = _parse_pattern(out_pat)
+
+        if "..." in input_tokens:
+            if input_tokens.count("...") > 1:
+                raise ValueError("Only one ellipsis '...' allowed in input pattern.")
+            ell_pos = input_tokens.index("...")
+            num_unnamed = len(t_shape) - (len(input_tokens) - 1)
+            if num_unnamed < 1:
+                raise ValueError("Ellipsis '...' expands to zero dimensions.")
+            ell_names = [f"_ellipsis_{i}" for i in range(num_unnamed)]
+            input_tokens = (
+                input_tokens[:ell_pos] + ell_names + input_tokens[ell_pos + 1 :]
+            )
+        else:
+            ell_names = []
+
+        if "..." in output_tokens:
+            if not ell_names:
+                raise ValueError("Output pattern has '...' but input pattern did not.")
+            if output_tokens.count("...") > 1:
+                raise ValueError("Only one ellipsis '...' allowed in output pattern.")
+            ell_pos_out = output_tokens.index("...")
+            output_tokens = (
+                output_tokens[:ell_pos_out]
+                + ell_names
+                + output_tokens[ell_pos_out + 1 :]
+            )
 
         if len(input_tokens) != len(t_shape):
             raise ValueError(
@@ -186,6 +212,32 @@ class reduce(operation):
 
         input_tokens = _parse_pattern(in_pat)
         output_tokens = _parse_pattern(out_pat)
+
+        if "..." in input_tokens:
+            if input_tokens.count("...") > 1:
+                raise ValueError("Only one ellipsis '...' allowed in input pattern.")
+            ell_pos = input_tokens.index("...")
+            num_unnamed = len(t_shape) - (len(input_tokens) - 1)
+            if num_unnamed < 1:
+                raise ValueError("Ellipsis '...' expands to zero dimensions.")
+            ell_names = [f"_ellipsis_{i}" for i in range(num_unnamed)]
+            input_tokens = (
+                input_tokens[:ell_pos] + ell_names + input_tokens[ell_pos + 1 :]
+            )
+        else:
+            ell_names = []
+
+        if "..." in output_tokens:
+            if not ell_names:
+                raise ValueError("Output pattern has '...' but input pattern did not.")
+            if output_tokens.count("...") > 1:
+                raise ValueError("Only one ellipsis '...' allowed in output pattern.")
+            ell_pos_out = output_tokens.index("...")
+            output_tokens = (
+                output_tokens[:ell_pos_out]
+                + ell_names
+                + output_tokens[ell_pos_out + 1 :]
+            )
 
         if len(input_tokens) != len(t_shape):
             raise ValueError(
@@ -310,6 +362,32 @@ class repeat(operation):
         input_tokens = _parse_pattern(in_pat)
         output_tokens = _parse_pattern(out_pat)
 
+        if "..." in input_tokens:
+            if input_tokens.count("...") > 1:
+                raise ValueError("Only one ellipsis '...' allowed in input pattern.")
+            ell_pos = input_tokens.index("...")
+            num_unnamed = len(t_shape) - (len(input_tokens) - 1)
+            if num_unnamed < 1:
+                raise ValueError("Ellipsis '...' expands to zero dimensions.")
+            ell_names = [f"_ellipsis_{i}" for i in range(num_unnamed)]
+            input_tokens = (
+                input_tokens[:ell_pos] + ell_names + input_tokens[ell_pos + 1 :]
+            )
+        else:
+            ell_names = []
+
+        if "..." in output_tokens:
+            if not ell_names:
+                raise ValueError("Output pattern has '...' but input pattern did not.")
+            if output_tokens.count("...") > 1:
+                raise ValueError("Only one ellipsis '...' allowed in output pattern.")
+            ell_pos_out = output_tokens.index("...")
+            output_tokens = (
+                output_tokens[:ell_pos_out]
+                + ell_names
+                + output_tokens[ell_pos_out + 1 :]
+            )
+
         if len(input_tokens) != len(t_shape):
             raise ValueError(
                 f"Input pattern has {len(input_tokens)} tokens, "
@@ -378,7 +456,6 @@ class repeat(operation):
                             )
                         prod_val *= shapes[t]
                     out_shape_list.append(prod_val)
-
                 else:
                     prod_val = np.prod(self.base_shape[idx : idx + n])
                     out_shape_list.append(prod_val)

@@ -1,6 +1,5 @@
 from functools import partial
 from typing import Any
-import math
 
 import lucid
 import lucid.nn as nn
@@ -94,7 +93,7 @@ class TNT(nn.Module):
         num_classes: int = 1000,
         in_channels: int = 3,
         num_heads: int = 8,
-        dim_heads: int = 64,
+        dim_head: int = 64,
         ff_dropout: float = 0.0,
         attn_dropout: float = 0.0,
         unfold_args: Any = None,
@@ -129,7 +128,40 @@ class TNT(nn.Module):
                 h=image_size // patch_size,
                 w=image_size // patch_size,
             ),
-            ...,  # TODO: Add `nn.Unfold`
+            nn.Unfold(kernel_size, stride, padding),
+            nn.Rearrange("... c n -> ... n c"),
+            nn.Linear(in_channels * kernel_size**2, pixel_dim),
+        )
+
+        self.patch_pos_emb = nn.Parameter(
+            lucid.random.randn(num_patch_tokens + 1, patch_dim)
+        )
+        self.pixel_pos_emb = nn.Parameter(lucid.random.randn(num_pixels, pixel_dim))
+
+        layers = nn.ModuleList()
+        for _ in range(depth):
+            pixel_to_patch = nn.Sequential(
+                nn.LayerNorm(pixel_dim),
+                nn.Rearrange("... n d -> ... (n d)"),
+                nn.Linear(pixel_dim * num_pixels, patch_dim),
+            )
+
+            _layers = [
+                _PreNorm(
+                    pixel_dim, _Attention(pixel_dim, num_heads, dim_head, attn_dropout)
+                ),
+                _PreNorm(pixel_dim, _FeedForward(pixel_dim, dropout=ff_dropout)),
+                pixel_to_patch,
+                _PreNorm(
+                    patch_dim, _Attention(patch_dim, num_heads, dim_head, attn_dropout)
+                ),
+                _PreNorm(patch_dim, _FeedForward(patch_dim, dropout=ff_dropout)),
+            ]
+            layers.append(nn.ModuleList(_layers))
+
+        self.layers = layers
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(patch_dim), nn.Linear(patch_dim, num_classes)
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -137,4 +169,4 @@ class TNT(nn.Module):
         if h != self.image_size or w != self.image_size:
             raise ValueError(f"Image size mismatch between {h} and {self.image_size}.")
 
-        # Further forward logic ...
+        # TODO: Continue `forward`
