@@ -9,6 +9,9 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
+__all__ = ["TNT", "tnt_tiny"]
+
+
 def _exists(val: Any) -> bool:
     return val is not None
 
@@ -148,12 +151,14 @@ class TNT(nn.Module):
 
             _layers = [
                 _PreNorm(
-                    pixel_dim, _Attention(pixel_dim, num_heads, dim_head, attn_dropout)
+                    pixel_dim,
+                    _Attention(pixel_dim, num_heads, dim_head, attn_dropout),
                 ),
                 _PreNorm(pixel_dim, _FeedForward(pixel_dim, dropout=ff_dropout)),
                 pixel_to_patch,
                 _PreNorm(
-                    patch_dim, _Attention(patch_dim, num_heads, dim_head, attn_dropout)
+                    patch_dim,
+                    _Attention(patch_dim, num_heads, dim_head, attn_dropout),
                 ),
                 _PreNorm(patch_dim, _FeedForward(patch_dim, dropout=ff_dropout)),
             ]
@@ -165,8 +170,42 @@ class TNT(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        _, _, h, w = x.shape
+        b, _, h, w = x.shape
         if h != self.image_size or w != self.image_size:
             raise ValueError(f"Image size mismatch between {h} and {self.image_size}.")
 
-        # TODO: Continue `forward`
+        patch_size = self.patch_size
+        if not (_divisible_by(h, patch_size) and _divisible_by(w, patch_size)):
+            raise ValueError(f"height {h} and width {w} of input must be divisible.")
+
+        num_patches_h = h // patch_size
+        num_patches_w = w // patch_size
+        n = num_patches_w * num_patches_h
+
+        pixels = self.to_pixel_tokens(x)
+        patches = lucid.einops.repeat(self.patch_tokens[: n + 1], "n d -> b n d", b=b)
+
+        patches += self.patch_pos_emb[: n + 1].unsqueeze(axis=0)
+        pixels += self.pixel_pos_emb[: n + 1].unsqueeze(axis=0)
+
+        for px_attn, px_ff, px_to_pat_res, pat_attn, pat_ff in self.layers:
+            pixels += px_attn(pixels)
+            pixels += px_ff(pixels)
+
+            patches_residual = px_to_pat_res(pixels)
+            patches_residual = lucid.einops.rearrange(
+                patches_residual,
+                "(b h w) d -> b (h w) d",
+                h=num_patches_h,
+                w=num_patches_w,
+            )
+            patches_residual = lucid.pad(patches_residual, (0, 0, 1, 0))
+
+            patches += patches_residual
+            patches += pat_attn(patches)
+            patches += pat_ff(patches)
+
+        cls_token = patches[:, 0]
+        out = self.mlp_head(cls_token)
+
+        return out
