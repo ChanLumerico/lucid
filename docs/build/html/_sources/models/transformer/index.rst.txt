@@ -370,4 +370,7 @@ to enhance performance in dense prediction tasks like detection and segmentation
       - 82,882,984
       - ✅
 
+CrossViT
+--------
+
 *To be implemented...🔮*
