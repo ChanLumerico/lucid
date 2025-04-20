@@ -63,5 +63,44 @@ class _PatchEmbed(nn.Module):
 
 
 class _CrossAttention(nn.Module):
-    def __init__(self):
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int = 8,
+        qkv_bias: bool = False,
+        qk_scale: float | None = None,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+    ) -> None:
         super().__init__()
+        head_dim = dim // num_heads
+        self.num_heads = num_heads
+        self.scale = qk_scale or head_dim**-0.5
+
+        self.wq = nn.Linear(dim, dim, bias=qkv_bias)
+        self.wk = nn.Linear(dim, dim, bias=qkv_bias)
+        self.wv = nn.Linear(dim, dim, bias=qkv_bias)
+
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x: Tensor) -> Tensor:
+        B, N, C = x.shape
+        q = (
+            self.wq(x[:, 0:1, ...])
+            .reshape(B, 1, self.num_heads, C // self.num_heads)
+            .swapaxes(1, 2)
+        )
+        k = self.wk(x).reshape(B, N, self.num_heads, C // self.num_heads).swapaxes(1, 2)
+        v = self.wv(x).reshape(B, N, self.num_heads, C // self.num_heads).swapaxes(1, 2)
+
+        attn = (q @ k.mT) * self.scale
+        attn = F.softmax(attn, axis=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).swapaxes(1, 2).reshape(B, 1, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+
+        return x
