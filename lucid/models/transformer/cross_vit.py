@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, override
 from functools import partial
 
 import lucid
@@ -9,8 +9,15 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
+__all__ = ["CrossViT"]
+
+
 def _to_2tuple(val: Any) -> tuple[Any, Any]:
     return (val, val)
+
+
+def _get_num_patches(img_size: tuple[int, int], patches: tuple[int, int]) -> list[int]:
+    return [(i // p) ** 2 for i, p in zip(img_size, patches)]
 
 
 class _PatchEmbed(nn.Module):
@@ -178,8 +185,36 @@ class _AttentionBlock(nn.Module):
         mlp_layer: type[nn.Module] = _MLP,
     ) -> None:
         super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.attn = _Attention(
+            dim,
+            num_heads,
+            qkv_bias,
+            qk_norm,
+            proj_bias,
+            attn_drop,
+            proj_drop,
+            norm_layer,
+        )
+        self.ls1 = _LayerScale(dim, init_value) if init_value else nn.Identity()
+        self.drop_path1 = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
-        # TODO: Finish this class and move on to `_CrossAttentionBlock`
+        self.norm2 = norm_layer(dim)
+        self.mlp = mlp_layer(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            bias=proj_bias,
+            drop=proj_drop,
+        )
+        self.ls2 = _LayerScale(dim, init_value) if init_value else nn.Identity()
+        self.drop_path2 = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+
+    def forward(self, x: Tensor) -> Tensor:
+        x += self.drop_path1(self.ls1(self.attn(self.norm1(x))))
+        x += self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+
+        return x
 
 
 class _CrossAttention(nn.Module):
@@ -237,7 +272,7 @@ class _CrossAttentionBlock(nn.Module):
         drop: float = 0.0,
         attn_drop: float = 0.0,
         drop_path: float = 0.0,
-        act_layer: type[nn.Module] = nn.ReLU,
+        act_layer: type[nn.Module] = nn.GELU,
         norm_layer: type[nn.Module] = nn.LayerNorm,
         has_mlp: bool = True,
     ) -> None:
@@ -252,4 +287,252 @@ class _CrossAttentionBlock(nn.Module):
         if has_mlp:
             self.norm2 = norm_layer(dim)
             mlp_hidden_dim = int(dim * mlp_ratio)
-            self.mlp = ...
+            self.mlp = _MLP(dim, mlp_hidden_dim, act_layer=act_layer, drop=drop)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = x[:, 0:1, ...] + self.drop_path(self.attn(self.norm1(x)))
+        if self.has_mlp:
+            x += self.drop_path(self.mlp(self.norm2(x)))
+
+        return x
+
+
+class _MultiScaleBlock(nn.Module):
+    def __init__(
+        self,
+        dim: list[int],
+        depth: list[int],
+        num_heads: list[int],
+        mlp_ratio: list[float],
+        qkv_bias: bool = False,
+        qk_scale: float | None = None,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float = 0.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        num_branches = len(dim)
+        self.num_branches = num_branches
+
+        self.blocks = nn.ModuleList()
+        for d in range(num_branches):
+            tmp = []
+            for _ in range(depth[d]):
+                tmp.append(
+                    _AttentionBlock(
+                        dim[d],
+                        num_heads[d],
+                        mlp_ratio[d],
+                        qkv_bias,
+                        proj_drop=drop,
+                        attn_drop=attn_drop,
+                        drop_path=drop_path,
+                        norm_layer=norm_layer,
+                    )
+                )
+            if len(tmp) != 0:
+                self.blocks.append(nn.Sequential(*tmp))
+
+        if len(self.blocks) == 0:
+            self.blocks = None
+
+        self.projs = nn.ModuleList()
+        for d in range(num_branches):
+            if dim[d] == dim[(d + 1) % num_branches]:
+                tmp = [nn.Identity()]
+            else:
+                tmp = [
+                    norm_layer(dim[d]),
+                    act_layer(),
+                    nn.Linear(dim[d], dim[(d + 1) % num_branches]),
+                ]
+            self.projs.append(nn.Sequential(*tmp))
+
+        self.fusion = nn.ModuleList()
+        for d in range(num_branches):
+            d_ = (d + 1) % num_branches
+            nh = num_heads[d_]
+
+            partial_crossblock = partial(
+                _CrossAttentionBlock(),
+                dim=dim[d_],
+                num_heads=nh,
+                mlp_ratio=mlp_ratio[d],
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                drop=drop,
+                attn_drop=attn_drop,
+                drop_path=drop_path,
+                norm_layer=norm_layer,
+            )
+            if depth[-1] == 0:
+                self.fusion.append(partial_crossblock(has_mlp=False))
+            else:
+                tmp = []
+                for _ in range(depth[-1]):
+                    tmp.append(partial_crossblock(has_mlp=False))
+
+                self.fusion.append(nn.Sequential(*tmp))
+
+        self.revert_projs = nn.ModuleList()
+        for d in range(num_branches):
+            if dim[(d + 1) % num_branches] == dim[d]:
+                tmp = [nn.Identity()]
+            else:
+                tmp = [
+                    norm_layer(dim[(d + 1) % num_branches]),
+                    act_layer(),
+                    nn.Linear(dim[(d + 1) % num_branches], dim[d]),
+                ]
+            self.revert_projs.append(nn.Sequential(*tmp))
+
+    @override
+    def forward(self, xs: list[Tensor]) -> list[Tensor]:
+        outs_b = [block(x_) for x_, block in zip(xs, self.blocks)]
+        proj_cls_token = [f_proj(x[:, 0:1]) for x, f_proj in zip(outs_b, self.projs)]
+
+        outs = []
+        for i in range(self.num_branches):
+            tmp = lucid.concatenate(
+                [proj_cls_token[i], outs_b[(i + 1) % self.num_branches][:, 1:, ...]],
+                axis=1,
+            )
+            tmp = self.fusion[i](tmp)
+
+            revert_proj_cls_token = self.revert_projs[i](tmp[:, 0:1, ...])
+            tmp = lucid.concatenate(
+                [revert_proj_cls_token, outs_b[i][:, 1:, ...]], axis=1
+            )
+            outs.append(tmp)
+
+        return outs
+
+
+class CrossViT(nn.Module):
+    def __init__(
+        self,
+        img_size: int | tuple[int] = (224, 224),
+        patch_size: tuple[int] = (8, 16),
+        in_channels: int = 3,
+        num_classes: int = 1000,
+        embed_dim: tuple[int] = (192, 384),
+        depth: tuple[list[int]] = ([1, 3, 1], [1, 3, 1], [1, 3, 1]),
+        num_heads: tuple[int] = (6, 12),
+        mlp_ratio: tuple[float] = (2.0, 2.0, 4.0),
+        qkv_bias: bool = False,
+        qk_scale: float | None = None,
+        drop_rate: float = 0.0,
+        attn_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        multi_conv: bool = False,
+    ) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+
+        if not isinstance(img_size, (list, tuple)):
+            img_size = _to_2tuple(img_size)
+        self.img_size = img_size
+
+        num_patches = _get_num_patches(img_size, patch_size)
+        self.num_branches = len(num_patches)
+
+        self.pos_embed = nn.ParameterList()
+        self.cls_token = nn.ParameterList()
+
+        for i in range(self.num_branches):
+            self.pos_embed.append(
+                nn.Parameter(lucid.zeros(1, 1 + num_patches[i], embed_dim[i]))
+            )
+            self.cls_token.append(nn.Parameter(lucid.zeros(1, 1, embed_dim[i])))
+
+        self.patch_embed = nn.ModuleList()
+        for im_s, p, d in zip(img_size, patch_size, embed_dim):
+            self.patch_embed.append(
+                _PatchEmbed(im_s, p, in_channels, d, multi_conv=multi_conv)
+            )
+
+        self.pos_drop = nn.Dropout(drop_rate)
+
+        total_depth = sum([sum(d[-2:]) for d in depth])
+        dpr = [x.item() for x in lucid.linspace(0, drop_path_rate, total_depth)]
+        dpr_ptr = 0
+
+        self.blocks = nn.ModuleList()
+        for block_cfg in depth:
+            cur_depth = max(block_cfg[:-1]) + block_cfg[-1]
+            dpr_ = dpr[dpr_ptr : dpr_ptr + cur_depth]
+
+            blk = _MultiScaleBlock(
+                dim=embed_dim,
+                depth=block_cfg,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                drop=drop_rate,
+                attn_drop=attn_drop_rate,
+                drop_path=dpr_,
+                norm_layer=norm_layer,
+            )
+            dpr_ptr += cur_depth
+            self.blocks.append(blk)
+
+        self.norm = nn.ModuleList(
+            [norm_layer(embed_dim[i]) for i in range(self.num_branches)]
+        )
+        self.head = nn.ModuleList()
+        for i in range(self.num_branches):
+            self.head.append(
+                nn.Linear(embed_dim[i], num_classes)
+                if num_classes > 0
+                else nn.Identity()
+            )
+
+        for i in range(self.num_branches):
+            if self.pos_embed[i].requires_grad:
+                nn.init.normal(self.pos_embed[i], std=0.02)
+            nn.init.normal(self.cls_token[i], std=0.02)
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m: nn.Module) -> None:
+        if isinstance(m, nn.Linear):
+            nn.init.normal(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant(m.bias, 0.0)
+
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant(m.weight, 1.0)
+            nn.init.constant(m.bias, 0.0)
+
+    def forward(self, x: Tensor) -> Tensor:
+        B, _, H, _ = x.shape
+        xs = []
+        for i in range(self.num_branches):
+            x_ = (
+                F.interpolate(x, (self.img_size[i], self.img_size[i]), mode="bilinear")
+                if H != self.img_size[i]
+                else x
+            )
+            tmp = self.patch_embed[i](x_)
+            cls_tokens = self.cls_token[i].repeat(B, axis=0)
+
+            tmp = lucid.concatenate([cls_tokens, tmp], axis=1)
+            tmp += self.pos_embed[i]
+            tmp = self.pos_drop(tmp)
+
+            xs.append(tmp)
+
+        for block in self.blocks:
+            xs = block(xs)
+
+        xs = [self.norm[i](_x) for i, _x in enumerate(xs)]
+        out = [_x[:, 0] for _x in xs]
+
+        logit = [self.head[i](_x) for i, _x in enumerate(out)]
+        logit = lucid.stack(logit, axis=0).mean(axis=0)
+
+        return logit
