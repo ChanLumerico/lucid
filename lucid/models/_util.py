@@ -8,6 +8,17 @@ from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
 
 
+def _get_input_shape(args: tuple[Tensor | tuple | list]) -> _ShapeLike | None:
+    for arg in args:
+        if isinstance(arg, Tensor):
+            return arg.shape
+        elif isinstance(arg, (tuple, list)):
+            for a in arg:
+                if isinstance(a, Tensor):
+                    return a.shape
+    return None
+
+
 def summarize(
     model: nn.Module,
     input_shape: _ShapeLike | list[_ShapeLike],
@@ -24,20 +35,11 @@ def summarize(
         def _hook(
             _module: nn.Module, input_arg: tuple, output: Tensor | tuple[Tensor]
         ) -> None:
-            layer_name = type(_module).__name__
-            # FIXME: Beta
-            input_shape = None
-            for in_arg in input_arg:
-                if isinstance(in_arg, Tensor):
-                    input_shape = in_arg.shape
-                    break
-                elif isinstance(in_arg, (list, tuple)):
-                    input_shape = (
-                        in_arg[0].shape if isinstance(in_arg, Tensor) else None
-                    )
-
+            input_shape = _get_input_shape(input_arg)
             output_shape = output.shape if isinstance(output, Tensor) else None
+
             param_size = _module.parameter_size
+            layer_name = type(_module).__name__
             layer_count = len(_module._modules)
 
             if depth == 1:

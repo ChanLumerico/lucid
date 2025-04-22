@@ -9,7 +9,18 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["CrossViT"]
+__all__ = [
+    "CrossViT",
+    "crossvit_tiny",
+    "crossvit_small",
+    "crossvit_base",
+    "crossvit_9",
+    "crossvit_15",
+    "crossvit_18",
+    "crossvit_9_dagger",
+    "crossvit_15_dagger",
+    "crossvit_18_dagger",
+]
 
 
 def _to_2tuple(val: Any) -> tuple[Any, Any]:
@@ -279,7 +290,7 @@ class _CrossAttentionBlock(nn.Module):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = _CrossAttention(
-            dim, num_heads, qkv_bias, qkv_bias, attn_drop, proj_drop=drop
+            dim, num_heads, qkv_bias, qk_scale, attn_drop, proj_drop=drop
         )
         self.drop_path = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
@@ -415,14 +426,14 @@ class _MultiScaleBlock(nn.Module):
 class CrossViT(nn.Module):
     def __init__(
         self,
-        img_size: int | tuple[int] = (224, 224),
-        patch_size: tuple[int] = (8, 16),
+        img_size: int | list[int] = [224, 224],
+        patch_size: list[int] = [12, 16],
         in_channels: int = 3,
         num_classes: int = 1000,
-        embed_dim: tuple[int] = (192, 384),
-        depth: tuple[list[int]] = ([1, 3, 1], [1, 3, 1], [1, 3, 1]),
-        num_heads: tuple[int] = (6, 12),
-        mlp_ratio: tuple[float] = (2.0, 2.0, 4.0),
+        embed_dim: list[int] = [192, 384],
+        depth: list[list[int]] = [[1, 3, 1], [1, 3, 1], [1, 3, 1]],
+        num_heads: list[int] = [6, 12],
+        mlp_ratio: list[float] = [2.0, 2.0, 4.0],
         qkv_bias: bool = False,
         qk_scale: float | None = None,
         drop_rate: float = 0.0,
@@ -529,7 +540,7 @@ class CrossViT(nn.Module):
             xs.append(tmp)
 
         for block in self.blocks:
-            xs = block(xs)  # BUG for `summarize()`
+            xs = block(xs)
 
         xs = [self.norm[i](_x) for i, _x in enumerate(xs)]
         out = [_x[:, 0] for _x in xs]
@@ -538,3 +549,141 @@ class CrossViT(nn.Module):
         logit = lucid.stack(logit, axis=0).mean(axis=0)
 
         return logit
+
+
+@register_model
+def crossvit_tiny(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[96, 192],
+        depth=[[1, 4, 0] for _ in range(3)],
+        num_heads=[3, 3],
+        mlp_ratio=[4, 4, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs,
+    )
+
+
+@register_model
+def crossvit_small(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[192, 384],
+        depth=[[1, 4, 0] for _ in range(3)],
+        num_heads=[6, 6],
+        mlp_ratio=[4, 4, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs,
+    )
+
+
+@register_model
+def crossvit_base(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[384, 768],
+        depth=[[1, 4, 0] for _ in range(3)],
+        num_heads=[12, 12],
+        mlp_ratio=[4, 4, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs,
+    )
+
+
+@register_model
+def crossvit_9(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[128, 256],
+        depth=[[1, 3, 0] for _ in range(3)],
+        num_heads=[4, 4],
+        mlp_ratio=[3, 3, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs,
+    )
+
+
+@register_model
+def crossvit_15(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[192, 384],
+        depth=[[1, 5, 0] for _ in range(3)],
+        num_heads=[6, 6],
+        mlp_ratio=[3, 3, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs,
+    )
+
+
+@register_model
+def crossvit_18(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[224, 448],
+        depth=[[1, 6, 0] for _ in range(3)],
+        num_heads=[7, 7],
+        mlp_ratio=[3, 3, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs,
+    )
+
+
+@register_model
+def crossvit_9_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[128, 256],
+        depth=[[1, 3, 0] for _ in range(3)],
+        num_heads=[4, 4],
+        mlp_ratio=[3, 3, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=True,
+        **kwargs,
+    )
+
+
+@register_model
+def crossvit_15_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[192, 384],
+        depth=[[1, 5, 0] for _ in range(3)],
+        num_heads=[6, 6],
+        mlp_ratio=[3, 3, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=True,
+        **kwargs,
+    )
+
+
+@register_model
+def crossvit_18_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
+    return CrossViT(
+        img_size=[240, 224],
+        num_classes=num_classes,
+        embed_dim=[224, 448],
+        depth=[[1, 6, 0] for _ in range(3)],
+        num_heads=[7, 7],
+        mlp_ratio=[3, 3, 1],
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=True,
+        **kwargs,
+    )

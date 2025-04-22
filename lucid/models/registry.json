@@ -802,5 +802,59 @@
         "family": "PVT_V2",
         "param_size": 82882984,
         "arch": "transformer"
+    },
+    "crossvit_tiny": {
+        "name": "crossvit_tiny",
+        "family": "CrossViT",
+        "param_size": 7014800,
+        "arch": "transformer"
+    },
+    "crossvit_small": {
+        "name": "crossvit_small",
+        "family": "CrossViT",
+        "param_size": 26856272,
+        "arch": "transformer"
+    },
+    "crossvit_base": {
+        "name": "crossvit_base",
+        "family": "CrossViT",
+        "param_size": 105025232,
+        "arch": "transformer"
+    },
+    "crossvit_9": {
+        "name": "crossvit_9",
+        "family": "CrossViT",
+        "param_size": 8553296,
+        "arch": "transformer"
+    },
+    "crossvit_15": {
+        "name": "crossvit_15",
+        "family": "CrossViT",
+        "param_size": 27528464,
+        "arch": "transformer"
+    },
+    "crossvit_18": {
+        "name": "crossvit_18",
+        "family": "CrossViT",
+        "param_size": 43271408,
+        "arch": "transformer"
+    },
+    "crossvit_9_dagger": {
+        "name": "crossvit_9_dagger",
+        "family": "CrossViT",
+        "param_size": 8776592,
+        "arch": "transformer"
+    },
+    "crossvit_15_dagger": {
+        "name": "crossvit_15_dagger",
+        "family": "CrossViT",
+        "param_size": 28209008,
+        "arch": "transformer"
+    },
+    "crossvit_18_dagger": {
+        "name": "crossvit_18_dagger",
+        "family": "CrossViT",
+        "param_size": 44266976,
+        "arch": "transformer"
     }
 }
