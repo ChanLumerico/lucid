@@ -308,7 +308,7 @@ class _MultiScaleBlock(nn.Module):
         qk_scale: float | None = None,
         drop: float = 0.0,
         attn_drop: float = 0.0,
-        drop_path: float = 0.0,
+        drop_path: list[float] | float = 0.0,
         act_layer: type[nn.Module] = nn.GELU,
         norm_layer: type[nn.Module] = nn.LayerNorm,
     ) -> None:
@@ -319,7 +319,7 @@ class _MultiScaleBlock(nn.Module):
         self.blocks = nn.ModuleList()
         for d in range(num_branches):
             tmp = []
-            for _ in range(depth[d]):
+            for i in range(depth[d]):
                 tmp.append(
                     _AttentionBlock(
                         dim[d],
@@ -328,7 +328,9 @@ class _MultiScaleBlock(nn.Module):
                         qkv_bias,
                         proj_drop=drop,
                         attn_drop=attn_drop,
-                        drop_path=drop_path,
+                        drop_path=(
+                            drop_path[i] if isinstance(drop_path, list) else drop_path
+                        ),
                         norm_layer=norm_layer,
                     )
                 )
@@ -356,7 +358,7 @@ class _MultiScaleBlock(nn.Module):
             nh = num_heads[d_]
 
             partial_crossblock = partial(
-                _CrossAttentionBlock(),
+                _CrossAttentionBlock,
                 dim=dim[d_],
                 num_heads=nh,
                 mlp_ratio=mlp_ratio[d],
@@ -364,7 +366,7 @@ class _MultiScaleBlock(nn.Module):
                 qk_scale=qk_scale,
                 drop=drop,
                 attn_drop=attn_drop,
-                drop_path=drop_path,
+                drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                 norm_layer=norm_layer,
             )
             if depth[-1] == 0:
@@ -527,7 +529,7 @@ class CrossViT(nn.Module):
             xs.append(tmp)
 
         for block in self.blocks:
-            xs = block(xs)
+            xs = block(xs)  # BUG for `summarize()`
 
         xs = [self.norm[i](_x) for i, _x in enumerate(xs)]
         out = [_x[:, 0] for _x in xs]

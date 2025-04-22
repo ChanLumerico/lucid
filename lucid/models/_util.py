@@ -21,10 +21,21 @@ def summarize(
     BRANCH: str = r"├── "
 
     def _register_hook(module: nn.Module, depth: int) -> None:
-
-        def _hook(_module: nn.Module, input_: Tensor, output: Tensor) -> None:
+        def _hook(
+            _module: nn.Module, input_arg: tuple, output: Tensor | tuple[Tensor]
+        ) -> None:
             layer_name = type(_module).__name__
-            input_shape = input_[0].shape if isinstance(input_, tuple) else input_.shape
+            # FIXME: Beta
+            input_shape = None
+            for in_arg in input_arg:
+                if isinstance(in_arg, Tensor):
+                    input_shape = in_arg.shape
+                    break
+                elif isinstance(in_arg, (list, tuple)):
+                    input_shape = (
+                        in_arg[0].shape if isinstance(in_arg, Tensor) else None
+                    )
+
             output_shape = output.shape if isinstance(output, Tensor) else None
             param_size = _module.parameter_size
             layer_count = len(_module._modules)
