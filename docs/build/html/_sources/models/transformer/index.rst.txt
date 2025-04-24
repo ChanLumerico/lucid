@@ -12,6 +12,7 @@ Transformers
     CvT <cvt/CvT.rst>
     PVT <pvt/PVT.rst>
     PVT-v2 <pvt/PVT_V2.rst>
+    CrossViT <cross_vit/CrossViT.rst>
 
 Transformer
 -----------
@@ -372,5 +373,80 @@ to enhance performance in dense prediction tasks like detection and segmentation
 
 CrossViT
 --------
+
+.. versionadded:: 2.0.17
+
+CrossViT is a vision transformer architecture that combines multi-scale 
+tokenization by processing input images at different resolutions in parallel, 
+enabling it to capture both fine-grained and coarse-grained visual features. 
+It uses a novel cross-attention mechanism to fuse information across these scales, 
+improving performance on image recognition tasks.
+
+ Chen, Chun-Fu, Quanfu Fan, and Rameswar Panda. CrossViT: Cross-Attention Multi-Scale 
+ Vision Transformer for Image Classification. arXiv, 2021. arXiv:2103.14899.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Implemented
+    
+    * - CrossViT-Ti
+      - `crossvit_tiny <cross_vit/crossvit_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 7,014,800
+      - ✅
+    
+    * - CrossViT-S
+      - `crossvit_small <cross_vit/crossvit_small>`_
+      - :math:`(N,3,224,224)`
+      - 26,856,272
+      - ✅
+    
+    * - CrossViT-B
+      - `crossvit_base <cross_vit/crossvit_base>`_
+      - :math:`(N,3,224,224)`
+      - 105,025,232
+      - ✅
+    
+    * - CrossViT-9
+      - `crossvit_9 <cross_vit/crossvit_9>`_
+      - :math:`(N,3,224,224)`
+      - 8,553,296
+      - ✅
+    
+    * - CrossViT-15
+      - `crossvit_15 <cross_vit/crossvit_15>`_
+      - :math:`(N,3,224,224)`
+      - 27,528,464
+      - ✅
+    
+    * - CrossViT-18
+      - `crossvit_18 <cross_vit/crossvit_18>`_
+      - :math:`(N,3,224,224)`
+      - 43,271,408
+      - ✅
+    
+    * - CrossViT-9:math:`^\dagger`
+      - `crossvit_9_dagger <cross_vit/crossvit_9_dagger>`_
+      - :math:`(N,3,224,224)`
+      - 8,776,592
+      - ✅
+    
+    * - CrossViT-15:math:`^\dagger`
+      - `crossvit_15_dagger <cross_vit/crossvit_15_dagger>`_
+      - :math:`(N,3,224,224)`
+      - 28,209,008
+      - ✅
+    
+    * - CrossViT-18:math:`^\dagger`
+      - `crossvit_18_dagger <cross_vit/crossvit_18_dagger>`_
+      - :math:`(N,3,224,224)`
+      - 44,266,976
+      - ✅
 
 *To be implemented...🔮*
