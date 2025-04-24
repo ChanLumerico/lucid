@@ -28,6 +28,9 @@ class ReLU(nn.Module):
     def forward(self, input_: Tensor) -> Tensor:
         return F.relu(input_)
 
+    def __flops__(self, input_: Tensor) -> int | None:
+        return input_.size
+
 
 class ReLU6(nn.Module):
     def __init__(self) -> None:
