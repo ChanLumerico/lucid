@@ -431,19 +431,19 @@ improving performance on image recognition tasks.
       - 43,271,408
       - ✅
     
-    * - CrossViT-9:math:`^\dagger`
+    * - CrossViT-9†
       - `crossvit_9_dagger <cross_vit/crossvit_9_dagger>`_
       - :math:`(N,3,224,224)`
       - 8,776,592
       - ✅
     
-    * - CrossViT-15:math:`^\dagger`
+    * - CrossViT-15†
       - `crossvit_15_dagger <cross_vit/crossvit_15_dagger>`_
       - :math:`(N,3,224,224)`
       - 28,209,008
       - ✅
     
-    * - CrossViT-18:math:`^\dagger`
+    * - CrossViT-18†
       - `crossvit_18_dagger <cross_vit/crossvit_18_dagger>`_
       - :math:`(N,3,224,224)`
       - 44,266,976
