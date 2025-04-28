@@ -173,7 +173,7 @@ class rearrange(operation):
         transposed = np.transpose(inter, axes=self.perm)
 
         self.result = Tensor(transposed.reshape(self.final_shape))
-        return self.result, partial(self.compute_grad, a=a, lib_=np)
+        return self.result, partial(self.__grad__, a=a, lib_=np)
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
@@ -181,9 +181,9 @@ class rearrange(operation):
         transposed = mx.transpose(inter, axes=self.perm)
 
         self.result = Tensor(transposed.reshape(self.final_shape))
-        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+        return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         unmerged_shape = tuple(dim for group in self.group_splits for dim in group)
         grad_unmerged = self.result.grad.reshape(unmerged_shape)
 
@@ -319,14 +319,14 @@ class reduce(operation):
     @unary_func_op()
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(self._unified(a.data))
-        return self.result, partial(self.compute_grad, a=a, lib_=np)
+        return self.result, partial(self.__grad__, a=a, lib_=np)
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(self._unified(a.data))
-        return self.result, partial(self.compute_grad, a=a, lib_=mx)
+        return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def compute_grad(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         grad_kept = self.result.grad.reshape(self.kept_flat_shape)
         new_shape = self.kept_flat_shape + (1,) * len(self.reduced_shape)
 
@@ -489,14 +489,14 @@ class repeat(operation):
     @unary_func_op()
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(self._unified(a.data, lib_=np))
-        return self.result, partial(self.compute_grad, a=a)
+        return self.result, partial(self.__grad__, a=a)
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(self._unified(a.data, lib_=mx))
-        return self.result, partial(self.compute_grad, a=a)
+        return self.result, partial(self.__grad__, a=a)
 
-    def compute_grad(self, a: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor) -> _GradFuncType:
         grad = self.result.grad
         for i, (b, o) in enumerate(zip(self.base_shape, self.out_shape)):
             if b == 1 and o != 1:

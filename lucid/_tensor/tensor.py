@@ -79,6 +79,7 @@ class Tensor(_TensorOps):
 
         self._op: type | None = None
         self._backward_op: Callable = lambda: None
+        self._flops: int = 0
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
 
@@ -179,6 +180,10 @@ class Tensor(_TensorOps):
     @property
     def size(self) -> int:
         return self.data.size
+
+    @property
+    def flops(self) -> int:
+        return self._flops
 
     def item(self) -> _Scalar:
         if self.ndim != 0:

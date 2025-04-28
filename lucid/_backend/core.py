@@ -23,12 +23,12 @@ def func_op(
     has_gradient: bool = True,
     device: _DeviceType = "cpu",
 ) -> Callable:
-
     def decorator(func: Callable[..., _FuncOpReturnType]) -> Callable:
         @functools.wraps(func)
-        def wrapper(op_self, *args, **kwargs) -> Tuple[Tensor, ...]:
+        def wrapper(op_self: operation, *args, **kwargs) -> Tuple[Tensor, ...]:
             tensors: Tuple[Tensor, ...] = tuple()
             requires_grad = False
+            is_free = True
 
             if n_in is None:
                 tensor_args = args
@@ -47,6 +47,7 @@ def func_op(
                 if tensor.is_free:
                     tensor.to(device)
                 else:
+                    is_free = False
                     if tensor.device != device:
                         raise RuntimeError(
                             f"{tensor.device} tensor of shape {tensor.shape} "
@@ -56,9 +57,12 @@ def func_op(
 
             non_tensor_args = args[n_in:] if n_in is not None else ()
             new_args = (*tensors, *non_tensor_args)
-            is_all_free = Tensor.is_all_free(*tensors)
-
             func_return_pairs = func(op_self, *new_args, **kwargs)
+
+            flops_prev, flops_new = 0, 0
+            if lucid.flops_enabled():
+                flops_prev = sum(t.flops for t in tensors)
+                flops_new = flops_prev + op_self.flops
 
             if n_ret is None:
                 if not isinstance(func_return_pairs, tuple):
@@ -70,7 +74,7 @@ def func_op(
                 num_returns = n_ret
 
             if num_returns == 1:
-                func_return_pairs = (func_return_pairs,)
+                func_return_pairs: _FuncOpReturnType = (func_return_pairs,)
 
             results: Tuple[Tensor, ...] = tuple()
             for result, compute_grad in func_return_pairs:
@@ -78,8 +82,10 @@ def func_op(
 
                 result.to(device)
                 result.dtype = types.to_numeric_type(result.data.dtype)
+
                 result._op = type(op_self)
-                if is_all_free:
+                result._flops += flops_new
+                if is_free:
                     result.free()
 
                 results += (result,)
@@ -131,6 +137,7 @@ class operation(ABC):
 
     def __init__(self) -> None:
         self.result: Tensor | tuple[Tensor, ...] | None = None
+        self._flops: int = 0
 
     @abstractmethod
     def cpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
@@ -138,16 +145,26 @@ class operation(ABC):
     @abstractmethod
     def gpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
 
-    def compute_grad(self, *args, **kwargs) -> _GradFuncType: ...
+    def __grad__(self, *args, **kwargs) -> _GradFuncType: ...
 
-    def compute_grad_cpu(self, *args, **kwargs) -> _GradFuncType: ...
+    def __grad_cpu__(self, *args, **kwargs) -> _GradFuncType: ...
 
-    def compute_grad_gpu(self, *args, **kwargs) -> _GradFuncType: ...
+    def __grad_gpu__(self, *args, **kwargs) -> _GradFuncType: ...
 
-    def __call__(self, *tensors, **kwargs) -> Tensor | tuple[Tensor, ...]:
-        if is_gpu_op(*tensors):
-            return self.gpu(*tensors, **kwargs)
-        return self.cpu(*tensors, **kwargs)
+    @abstractmethod
+    def __flops__(self, *args, **kwargs) -> int: ...
+
+    @property
+    def flops(self) -> int | None:
+        return self._flops
+
+    def __call__(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]:
+        if lucid.flops_enabled():
+            self._flops += self.__flops__(*args, **kwargs)
+
+        if is_gpu_op(*args):
+            return self.gpu(*args, **kwargs)
+        return self.cpu(*args, **kwargs)
 
 
 def fallback(cls: type[operation]) -> type[operation]:

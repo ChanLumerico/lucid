@@ -1,5 +1,6 @@
 from functools import partial
 from types import ModuleType
+import math
 import numpy as np
 
 from lucid._tensor import Tensor
@@ -19,15 +20,29 @@ class add(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(a.data + b.data)
-        return self.result, self.compute_grad
+        return self.result, self.__grad__
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.add(a.data, b.data))
-        return self.result, self.compute_grad
+        return self.result, self.__grad__
 
-    def compute_grad(self) -> _GradFuncType:
+    def __grad__(self) -> _GradFuncType:
         return self.result.grad, self.result.grad
+
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        if a.shape != b.shape:
+            max_dims = max(a.ndim, b.ndim)
+            shape_a = (1,) * (max_dims - a.ndim) if a.ndim < max_dims else ()
+            shape_b = (1,) * (max_dims - b.ndim) if b.ndim < max_dims else ()
+
+            shape_a += a.shape
+            shape_b += b.shape
+
+            out_shape = tuple(max(da, db) for da, db in zip(shape_a, shape_b))
+            return math.prod(out_shape)
+        else:
+            return a.size
 
 
 class sub(operation):
@@ -37,14 +52,14 @@ class sub(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(a.data - b.data)
-        return self.result, self.compute_grad
+        return self.result, self.__grad__
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.subtract(a.data, b.data))
-        return self.result, self.compute_grad
+        return self.result, self.__grad__
 
-    def compute_grad(self) -> _GradFuncType:
+    def __grad__(self) -> _GradFuncType:
         return self.result.grad, -self.result.grad
 
 
@@ -55,14 +70,14 @@ class multiply(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(a.data * b.data)
-        return self.result, partial(self.compute_grad, a=a, b=b)
+        return self.result, partial(self.__grad__, a=a, b=b)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.multiply(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b)
+        return self.result, partial(self.__grad__, a=a, b=b)
 
-    def compute_grad(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         return b.data * self.result.grad, a.data * self.result.grad
 
 
@@ -73,14 +88,14 @@ class truediv(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(a.data / b.data)
-        return self.result, partial(self.compute_grad, a=a, b=b)
+        return self.result, partial(self.__grad__, a=a, b=b)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.divide(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b)
+        return self.result, partial(self.__grad__, a=a, b=b)
 
-    def compute_grad(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         return (
             (1 / b.data) * self.result.grad,
             (-a.data / (b.data**2)) * self.result.grad,
@@ -94,14 +109,14 @@ class _equal(operation):
     @binary_func_op(has_gradient=False)
     def cpu(self, a: Tensor, b: Tensor) -> Tensor:
         self.result = Tensor((a.data == b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> Tensor:
         self.result = Tensor((a.data == b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=mx)
+        return self.result, partial(self.__grad__, lib=mx)
 
-    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
@@ -112,14 +127,14 @@ class _not_equal(operation):
     @binary_func_op(has_gradient=False)
     def cpu(self, a: Tensor, b: Tensor) -> Tensor:
         self.result = Tensor((a.data != b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> Tensor:
         self.result = Tensor((a.data != b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
-    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
@@ -130,14 +145,14 @@ class _greater(operation):
     @binary_func_op(has_gradient=False)
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data > b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data > b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
-    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
@@ -148,14 +163,14 @@ class _greater_or_equal(operation):
     @binary_func_op(has_gradient=False)
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data >= b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data >= b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
-    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
@@ -166,14 +181,14 @@ class _less(operation):
     @binary_func_op(has_gradient=False)
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data < b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data < b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
-    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
@@ -184,14 +199,14 @@ class _less_or_equal(operation):
     @binary_func_op(has_gradient=False)
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data <= b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
     @binary_func_op(has_gradient=False, device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor((a.data <= b.data).astype(a.data.dtype))
-        return self.result, partial(self.compute_grad, lib=np)
+        return self.result, partial(self.__grad__, lib=np)
 
-    def compute_grad(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
@@ -202,14 +217,14 @@ class minimum(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.minimum(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b)
+        return self.result, partial(self.__grad__, a=a, b=b)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.minimum(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b)
+        return self.result, partial(self.__grad__, a=a, b=b)
 
-    def compute_grad(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         a_grad = (a.data <= b.data).astype(a.data.dtype)
         b_grad = (a.data > b.data).astype(b.data.dtype)
 
@@ -223,14 +238,14 @@ class maximum(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.maximum(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b)
+        return self.result, partial(self.__grad__, a=a, b=b)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.maximum(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b)
+        return self.result, partial(self.__grad__, a=a, b=b)
 
-    def compute_grad(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         a_grad = (a.data >= b.data).astype(a.data.dtype)
         b_grad = (a.data < b.data).astype(b.data.dtype)
 
@@ -244,14 +259,14 @@ class power(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.power(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b, lib_=np)
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
 
     @binary_func_op(device="gpu")
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.power(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b, lib_=mx)
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
-    def compute_grad(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
         a_grad = b.data * lib_.power(a.data, b.data - 1)
         b_grad = lib_.power(a.data, b.data) * lib_.log(a.data)
 
@@ -265,7 +280,7 @@ class dot(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.dot(a.data, b.data))
-        return self.result, partial(self.compute_grad_cpu, a=a, b=b)
+        return self.result, partial(self.__grad_cpu__, a=a, b=b)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
@@ -273,12 +288,12 @@ class dot(operation):
             raise ValueError(f"Only 1D dot product is supported for Metal backend.")
 
         self.result = Tensor(mx.sum(a.data * b.data))
-        return self.result, partial(self.compute_grad_gpu, a=a, b=b)
+        return self.result, partial(self.__grad_gpu__, a=a, b=b)
 
-    def compute_grad_cpu(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad_cpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         return self.result.grad.dot(b.data.mT), a.data.mT.dot(self.result.grad)
 
-    def compute_grad_gpu(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad_gpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         return b.data * self.result.grad, a.data * self.result.grad
 
 
@@ -289,14 +304,14 @@ class inner(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.inner(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b, lib=np)
+        return self.result, partial(self.__grad__, a=a, b=b, lib=np)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.inner(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b, lib=mx)
+        return self.result, partial(self.__grad__, a=a, b=b, lib=mx)
 
-    def compute_grad(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
         return (
             lib_.tensordot(self.result.grad, b.data, axes=([-1], [-1])),
             lib_.tensordot(a.data, self.result.grad, axes=([-1], [-1])),
@@ -310,14 +325,14 @@ class outer(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.outer(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b, lib_=np)
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.outer(a.data, b.data))
-        return self.result, partial(self.compute_grad, a=a, b=b, lib_=mx)
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
-    def compute_grad(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
         return (
             lib_.tensordot(self.result.grad, b.data, axes=([1], [0])),
             lib_.tensordot(self.result.grad, a.data, axes=([0], [0])),
@@ -331,20 +346,20 @@ class matmul(operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.matmul(a.data, b.data))
-        return self.result, partial(self.compute_grad_cpu, a=a, b=b)
+        return self.result, partial(self.__grad_cpu__, a=a, b=b)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.matmul(a.data, b.data))
-        return self.result, partial(self.compute_grad_gpu, a=a, b=b)
+        return self.result, partial(self.__grad_gpu__, a=a, b=b)
 
-    def compute_grad_cpu(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad_cpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         return (
             np.matmul(self.result.grad, b.data.mT),
             np.matmul(a.data.mT, self.result.grad),
         )
 
-    def compute_grad_gpu(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad_gpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         return (
             mx.matmul(self.result.grad, mx.swapaxes(b.data, -1, -2)),
             mx.matmul(mx.swapaxes(a.data, -1, -2), self.result.grad),
