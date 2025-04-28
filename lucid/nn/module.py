@@ -14,6 +14,7 @@ from collections import OrderedDict
 from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar, _StateDict, _NumPyArray, _DeviceType
 
+import lucid
 import lucid.nn as nn
 
 
@@ -168,11 +169,12 @@ class Module:
     def parameter_size(self) -> int:
         return self.count_parameters(recurse=True)
 
+    @property
     def flops(self) -> int:
         total = 0
         for module in self.modules():
-            if module._flops is not None:
-                total += module._flops
+            if module.flops is not None:
+                total += module.flops
         return total
 
     def apply(self, fn: Callable[[Self, Any], None]) -> Self:
@@ -235,7 +237,8 @@ class Module:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
         output = self.forward(*args, **kwargs)
-        self._flops = self.__flops__(*args, **kwargs)  # NOTE: Hmm ...
+        if lucid.flops_enabled():
+            self._flops = self.__flops__(*args, **kwargs)
 
         for hook in self._forward_hooks:
             hook(self, args, output)

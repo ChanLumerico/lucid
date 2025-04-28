@@ -25,17 +25,12 @@ class MetalNotSupportedWarning(UserWarning):
         super().__init__(message or default_message)
 
 
-def is_metal_available() -> bool:
+def check_metal_availability() -> None:
     if MetalNotSupportedWarning._has_warned:
-        return False
-    try:
-        mx.default_device(mx.gpu)
-    except Exception:
+        return
+    if not mx.metal.is_available():
         MetalNotSupportedWarning._has_warned = True
         warnings.warn(MetalNotSupportedWarning(), stacklevel=2)
-        return False
-
-    return True
 
 
 def is_cpu_op(*tensor_or_any) -> bool:

@@ -50,6 +50,7 @@ import lucid.types as types
 
 
 _grad_enabled: bool = True
+_flops_enabled: bool = False
 
 newaxis = None
 
@@ -101,10 +102,24 @@ def grad_enabled() -> bool:
     return _grad_enabled
 
 
+@contextmanager
+def count_flops() -> Generator:
+    global _flops_enabled
+    prev_state = _flops_enabled
+    _flops_enabled = True
+    try:
+        yield
+    finally:
+        _flops_enabled = prev_state
+
+
+def flops_enabled() -> bool:
+    return _flops_enabled
+
+
 def shape(a: Tensor | _NumPyArray | _MLXArray) -> _ShapeLike:
     if hasattr(a, "shape"):
         return a.shape
-
     raise ValueError(f"The argument must be a Tensor or a NumPy array.")
 
 
@@ -168,7 +183,6 @@ def _match_grad_shape(
             raise ValueError(
                 f"Cannot broadcast grad of {grad.shape} to data of {data.shape}."
             )
-
         grad_expand = (
             grad_squeeze[..., None].repeat(int(expand_factor), axis=-1)
             if device == "cpu"

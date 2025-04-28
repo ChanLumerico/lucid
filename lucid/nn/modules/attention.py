@@ -34,6 +34,8 @@ class ScaledDotProductAttention(nn.Module):
             self.scale,
         )
 
+    def __flops__(self, query: Tensor, key: Tensor, value: Tensor) -> int | None: ...
+
 
 class MultiHeadAttention(nn.Module):
     def __init__(
