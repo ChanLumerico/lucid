@@ -47,7 +47,6 @@ class Module:
         self.training = True
         self.device: _DeviceType = "cpu"
 
-        self._flops: int | None = None
         self._forward_hooks: list[_ForwardHookType] = []
         self._backward_hooks: list[_BackwardHookType] = []
 
@@ -169,14 +168,6 @@ class Module:
     def parameter_size(self) -> int:
         return self.count_parameters(recurse=True)
 
-    @property
-    def flops(self) -> int:
-        total = 0
-        for module in self.modules():
-            if module.flops is not None:
-                total += module.flops
-        return total
-
     def apply(self, fn: Callable[[Self, Any], None]) -> Self:
         fn(self)
         for module in self._modules.values():
@@ -233,13 +224,8 @@ class Module:
             elif strict:
                 raise KeyError(f"Unexpected key '{key}' in state_dict.")
 
-    def __flops__(self, *args: Any, **kwargs: Any) -> int | None: ...
-
     def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
         output = self.forward(*args, **kwargs)
-        if lucid.flops_enabled():
-            self._flops = self.__flops__(*args, **kwargs)
-
         for hook in self._forward_hooks:
             hook(self, args, output)
 
