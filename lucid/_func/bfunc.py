@@ -13,6 +13,21 @@ from lucid._backend.core import (
 from lucid._backend.metal import mx
 
 
+def _basic_flops(a: Tensor, b: Tensor) -> int:
+    if a.shape != b.shape:
+        max_dims = max(a.ndim, b.ndim)
+        shape_a = (1,) * (max_dims - a.ndim) if a.ndim < max_dims else ()
+        shape_b = (1,) * (max_dims - b.ndim) if b.ndim < max_dims else ()
+
+        shape_a += a.shape
+        shape_b += b.shape
+
+        out_shape = tuple(max(da, db) for da, db in zip(shape_a, shape_b))
+        return math.prod(out_shape)
+    else:
+        return a.size
+
+
 class add(operation):
     def __init__(self) -> None:
         super().__init__()
@@ -31,18 +46,7 @@ class add(operation):
         return self.result.grad, self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        if a.shape != b.shape:
-            max_dims = max(a.ndim, b.ndim)
-            shape_a = (1,) * (max_dims - a.ndim) if a.ndim < max_dims else ()
-            shape_b = (1,) * (max_dims - b.ndim) if b.ndim < max_dims else ()
-
-            shape_a += a.shape
-            shape_b += b.shape
-
-            out_shape = tuple(max(da, db) for da, db in zip(shape_a, shape_b))
-            return math.prod(out_shape)
-        else:
-            return a.size
+        return _basic_flops(a, b)
 
 
 class sub(operation):
@@ -62,6 +66,9 @@ class sub(operation):
     def __grad__(self) -> _GradFuncType:
         return self.result.grad, -self.result.grad
 
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return _basic_flops(a, b)
+
 
 class multiply(operation):
     def __init__(self) -> None:
@@ -79,6 +86,9 @@ class multiply(operation):
 
     def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         return b.data * self.result.grad, a.data * self.result.grad
+
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return _basic_flops(a, b)
 
 
 class truediv(operation):
@@ -100,6 +110,9 @@ class truediv(operation):
             (1 / b.data) * self.result.grad,
             (-a.data / (b.data**2)) * self.result.grad,
         )
+
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return _basic_flops(a, b)
 
 
 class _equal(operation):
@@ -230,6 +243,9 @@ class minimum(operation):
 
         return a_grad * self.result.grad, b_grad * self.result.grad
 
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return _basic_flops(a, b)
+
 
 class maximum(operation):
     def __init__(self) -> None:
@@ -251,6 +267,9 @@ class maximum(operation):
 
         return a_grad * self.result.grad, b_grad * self.result.grad
 
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return _basic_flops(a, b)
+
 
 class power(operation):
     def __init__(self) -> None:
@@ -271,6 +290,9 @@ class power(operation):
         b_grad = lib_.power(a.data, b.data) * lib_.log(a.data)
 
         return a_grad * self.result.grad, b_grad * self.result.grad
+
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return _basic_flops(a, b)
 
 
 class dot(operation):
@@ -296,6 +318,32 @@ class dot(operation):
     def __grad_gpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
         return b.data * self.result.grad, a.data * self.result.grad
 
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        if a.ndim == 1 and b.ndim == 1:
+            return 2 * a.shape[0] - 1
+
+        a_batch_dims = a.shape[:-2] if a.ndim > 2 else ()
+        b_batch_dims = b.shape[:-2] if b.ndim > 2 else ()
+
+        m = a.shape[-2] if a.ndim >= 2 else 1
+        k = a.shape[-1] if a.ndim >= 1 else 1
+        k_b = b.shape[-2] if b.ndim >= 2 else 1
+        n = b.shape[-1] if b.ndim >= 2 else 1
+
+        if k != k_b:
+            raise ValueError("Incompatible shapes for dot product.")
+
+        batch_size = 1
+        if a_batch_dims or b_batch_dims:
+            max_dims = max(len(a_batch_dims), len(b_batch_dims))
+            a_padded = (1,) * (max_dims - len(a_batch_dims)) + a_batch_dims
+            b_padded = (1,) * (max_dims - len(b_batch_dims)) + b_batch_dims
+
+            for a_dim, b_dim in zip(a_padded, b_padded):
+                batch_size *= max(a_dim, b_dim)
+
+        return batch_size * m * n * (2 * k - 1)
+
 
 class inner(operation):
     def __init__(self) -> None:
@@ -317,6 +365,20 @@ class inner(operation):
             lib_.tensordot(a.data, self.result.grad, axes=([-1], [-1])),
         )
 
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        if a.ndim == 1 and b.ndim == 1:
+            n = a.shape[0]
+            return 2 * n - 1
+
+        elif a.ndim >= 1 and b.ndim >= 1:
+            n = a.shape[-1]
+            if b.shape[-1] != n:
+                raise ValueError("Last dimensions must match for inner product")
+
+            out_shape = list(a.shape[:-1]) + list(b.shape[:-1])
+            output_size = math.prod(out_shape)
+            return output_size * (2 * n - 1)
+
 
 class outer(operation):
     def __init__(self) -> None:
@@ -337,6 +399,9 @@ class outer(operation):
             lib_.tensordot(self.result.grad, b.data, axes=([1], [0])),
             lib_.tensordot(self.result.grad, a.data, axes=([0], [0])),
         )
+
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return a.size * b.size
 
 
 class matmul(operation):
@@ -364,3 +429,24 @@ class matmul(operation):
             mx.matmul(self.result.grad, mx.swapaxes(b.data, -1, -2)),
             mx.matmul(mx.swapaxes(a.data, -1, -2), self.result.grad),
         )
+
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        a_shape, b_shape = a.shape, b.shape
+
+        m = a_shape[-2] if len(a_shape) >= 2 else 1
+        k = a_shape[-1] if len(a_shape) >= 1 else 1
+        n = b_shape[-1] if len(b_shape) >= 1 else 1
+
+        a_ex_dims = a_shape[:-2] if len(a_shape) > 2 else ()
+        b_ex_dims = b_shape[:-2] if len(b_shape) > 2 else ()
+
+        batch_size = 1
+        if a_ex_dims or b_ex_dims:
+            max_batch_dims = max(len(a_ex_dims), len(b_ex_dims))
+            a_pad = (1,) * (max_batch_dims - len(a_ex_dims)) + a_ex_dims
+            b_pad = (1,) * (max_batch_dims - len(b_ex_dims)) + b_ex_dims
+
+            for i in range(max_batch_dims):
+                batch_size *= max(a_pad[i], b_pad[i])
+
+        return 2 * batch_size * m * k * n

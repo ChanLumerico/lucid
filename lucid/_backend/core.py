@@ -151,8 +151,8 @@ class operation(ABC):
 
     def __grad_gpu__(self, *args, **kwargs) -> _GradFuncType: ...
 
-    @abstractmethod
-    def __flops__(self, *args, **kwargs) -> int: ...
+    def __flops__(self, *args, **kwargs) -> int:
+        return 0
 
     @property
     def flops(self) -> int | None:
