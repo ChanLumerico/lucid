@@ -367,6 +367,12 @@ class repeat(operation):
 
         return grad_input
 
+    def __flops__(self, a: Tensor) -> int:
+        if isinstance(self.repeats, int):
+            return a.size * self.repeats
+        else:
+            return a.size * int(np.prod(self.repeats))
+
 
 class tile(operation):
     def __init__(self, reps: int | Sequence[int]) -> None:
@@ -418,6 +424,12 @@ class tile(operation):
         axes_to_sum = tuple(range(0, grad_output_reshape.ndim, 2))
 
         return grad_output_reshape.sum(axis=axes_to_sum)
+
+    def __flops__(self, a: Tensor) -> int:
+        if isinstance(self.reps, int):
+            return a.size * self.reps
+        else:
+            return a.size * int(np.prod(self.reps))
 
 
 class flatten(operation):
@@ -482,6 +494,9 @@ class meshgrid(operation):
 
         return grad_x, grad_y
 
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return a.size + b.size
+
 
 class split(operation):
     def __init__(
@@ -541,6 +556,9 @@ class tril(operation):
     def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.tril(self.result.grad, k=self.diagonal)
 
+    def __flops__(self, a: Tensor) -> int:
+        return a.size
+
 
 class triu(operation):
     def __init__(self, diagonal: int) -> None:
@@ -559,6 +577,9 @@ class triu(operation):
 
     def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.triu(self.result.grad, k=self.diagonal)
+
+    def __flops__(self, a: Tensor) -> int:
+        return a.size
 
 
 class broadcast_to(operation):
@@ -662,6 +683,9 @@ class masked_fill(operation):
         grad = mx.array(self.result.grad)
         grad = mx.where(self.mask.data.astype(bool), 0, grad)
         return grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return a.size
 
 
 class roll(operation):

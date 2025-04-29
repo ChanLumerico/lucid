@@ -13,21 +13,6 @@ from lucid._backend.core import (
 from lucid._backend.metal import mx
 
 
-def _basic_flops(a: Tensor, b: Tensor) -> int:
-    if a.shape != b.shape:
-        max_dims = max(a.ndim, b.ndim)
-        shape_a = (1,) * (max_dims - a.ndim) if a.ndim < max_dims else ()
-        shape_b = (1,) * (max_dims - b.ndim) if b.ndim < max_dims else ()
-
-        shape_a += a.shape
-        shape_b += b.shape
-
-        out_shape = tuple(max(da, db) for da, db in zip(shape_a, shape_b))
-        return math.prod(out_shape)
-    else:
-        return a.size
-
-
 class add(operation):
     def __init__(self) -> None:
         super().__init__()
@@ -46,7 +31,7 @@ class add(operation):
         return self.result.grad, self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return _basic_flops(a, b)
+        return max(a.size, b.size)
 
 
 class sub(operation):
@@ -67,7 +52,7 @@ class sub(operation):
         return self.result.grad, -self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return _basic_flops(a, b)
+        return max(a.size, b.size)
 
 
 class multiply(operation):
@@ -88,7 +73,7 @@ class multiply(operation):
         return b.data * self.result.grad, a.data * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return _basic_flops(a, b)
+        return max(a.size, b.size)
 
 
 class truediv(operation):
@@ -112,7 +97,7 @@ class truediv(operation):
         )
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return _basic_flops(a, b)
+        return max(a.size, b.size)
 
 
 class _equal(operation):
@@ -244,7 +229,7 @@ class minimum(operation):
         return a_grad * self.result.grad, b_grad * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return _basic_flops(a, b)
+        return max(a.size, b.size)
 
 
 class maximum(operation):
@@ -268,7 +253,7 @@ class maximum(operation):
         return a_grad * self.result.grad, b_grad * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return _basic_flops(a, b)
+        return max(a.size, b.size)
 
 
 class power(operation):
@@ -292,7 +277,7 @@ class power(operation):
         return a_grad * self.result.grad, b_grad * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return _basic_flops(a, b)
+        return max(a.size, b.size)
 
 
 class dot(operation):
@@ -437,16 +422,17 @@ class matmul(operation):
         k = a_shape[-1] if len(a_shape) >= 1 else 1
         n = b_shape[-1] if len(b_shape) >= 1 else 1
 
-        a_ex_dims = a_shape[:-2] if len(a_shape) > 2 else ()
-        b_ex_dims = b_shape[:-2] if len(b_shape) > 2 else ()
+        a_batch = (
+            (1,) * (len(b_shape) - len(a_shape)) + a_shape[:-2]
+            if len(a_shape) > 2
+            else (1,) * (len(b_shape) - len(a_shape))
+        )
+        b_batch = (
+            (1,) * (len(a_shape) - len(b_shape)) + b_shape[:-2]
+            if len(b_shape) > 2
+            else (1,) * (len(a_shape) - len(b_shape))
+        )
+        batch_shape = [max(x, y) for x, y in zip(a_batch, b_batch)]
+        batch_size = np.prod(batch_shape) if batch_shape else 1
 
-        batch_size = 1
-        if a_ex_dims or b_ex_dims:
-            max_batch_dims = max(len(a_ex_dims), len(b_ex_dims))
-            a_pad = (1,) * (max_batch_dims - len(a_ex_dims)) + a_ex_dims
-            b_pad = (1,) * (max_batch_dims - len(b_ex_dims)) + b_ex_dims
-
-            for i in range(max_batch_dims):
-                batch_size *= max(a_pad[i], b_pad[i])
-
-        return 2 * batch_size * m * k * n
+        return 2 * batch_size * m * n * k

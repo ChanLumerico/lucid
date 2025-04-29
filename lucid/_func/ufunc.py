@@ -2,6 +2,7 @@ from functools import partial
 from types import ModuleType
 from typing import Literal
 import numpy as np
+import math
 
 from lucid._tensor import Tensor
 from lucid.types import _Scalar
@@ -33,6 +34,20 @@ class _pow(operation):
     def __grad__(self, a: Tensor) -> _GradFuncType:
         return (self.exp * a.data ** (self.exp - 1)) * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        num_elements = a.size
+        flops_lookup = {0: 1, 1: 0, 2: 1, 0.5: 4, -1: 1}
+
+        if self.exp in flops_lookup:
+            return flops_lookup[self.exp] * num_elements
+
+        if isinstance(self.exp, (int, float)) and float(self.exp).is_integer():
+            exp_int = abs(int(self.exp))
+            factor = math.ceil(math.log2(exp_int)) + (1 if self.exp < 0 else 0)
+            return factor * num_elements
+
+        return 11 * num_elements
+
 
 class _neg(operation):
     def __init__(self) -> None:
@@ -50,6 +65,9 @@ class _neg(operation):
 
     def __grad__(self) -> _GradFuncType:
         return -self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return a.size
 
 
 class exp(operation):
@@ -69,6 +87,9 @@ class exp(operation):
     def __grad__(self) -> _GradFuncType:
         return self.result.data * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        return 10 * a.size
+
 
 class log(operation):
     def __init__(self) -> None:
@@ -86,6 +107,9 @@ class log(operation):
 
     def __grad__(self, a: Tensor) -> _GradFuncType:
         return (1 / a.data) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return 10 * a.size
 
 
 class log2(operation):
@@ -105,6 +129,9 @@ class log2(operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return (1 / (a.data * lib_.log(2))) * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        return 7 * a.size
+
 
 class sqrt(operation):
     def __init__(self) -> None:
@@ -122,6 +149,9 @@ class sqrt(operation):
 
     def __grad__(self) -> _GradFuncType:
         return (0.5 / self.result.data) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return 6 * a.size
 
 
 class sin(operation):
@@ -141,6 +171,9 @@ class sin(operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return lib_.cos(a.data) * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        return 6 * a.size
+
 
 class cos(operation):
     def __init__(self) -> None:
@@ -158,6 +191,9 @@ class cos(operation):
 
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return -lib_.sin(a.data) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return 6 * a.size
 
 
 class tan(operation):
@@ -177,6 +213,9 @@ class tan(operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return (1 / (lib_.cos(a.data) ** 2)) * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        return 8 * a.size
+
 
 class arcsin(operation):
     def __init__(self) -> None:
@@ -194,6 +233,9 @@ class arcsin(operation):
 
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return (1 / lib_.sqrt(1 - a.data**2)) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return 4 * a.size
 
 
 class arccos(operation):
@@ -213,6 +255,9 @@ class arccos(operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return (-1 / lib_.sqrt(1 - a.data**2)) * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        return 4 * a.size
+
 
 class arctan(operation):
     def __init__(self) -> None:
@@ -230,6 +275,9 @@ class arctan(operation):
 
     def __grad__(self, a: Tensor) -> _GradFuncType:
         return (1 / (1 + a.data**2)) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return 3 * a.size
 
 
 class sinh(operation):
@@ -249,6 +297,9 @@ class sinh(operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return lib_.cosh(a.data) * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        return 6 * a.size
+
 
 class cosh(operation):
     def __init__(self) -> None:
@@ -267,6 +318,9 @@ class cosh(operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return lib_.sinh(a.data) * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        return 6 * a.size
+
 
 class tanh(operation):
     def __init__(self) -> None:
@@ -284,6 +338,9 @@ class tanh(operation):
 
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return (1 - lib_.tanh(a.data) ** 2) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return 8 * a.size
 
 
 class clip(operation):
@@ -316,6 +373,15 @@ class clip(operation):
 
         return grad * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        if self.min_value is not None and self.max_value is not None:
+            factor = 2
+        elif self.min_value is None and self.max_value is None:
+            factor = 0
+        else:
+            factor = 1
+        return a.size * factor
+
 
 class abs(operation):
     def __init__(self) -> None:
@@ -333,6 +399,9 @@ class abs(operation):
 
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         return lib_.where(a.data >= 0, 1, -1) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return a.size
 
 
 class sign(operation):
@@ -352,6 +421,9 @@ class sign(operation):
     def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.array(0.0)
 
+    def __flops__(self, a: Tensor) -> int:
+        return a.size
+
 
 class reciprocal(operation):
     def __init__(self) -> None:
@@ -369,6 +441,9 @@ class reciprocal(operation):
 
     def __grad__(self, a: Tensor) -> _GradFuncType:
         return (-1 / (a.data**2)) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return a.size
 
 
 class square(operation):
@@ -388,6 +463,9 @@ class square(operation):
     def __grad__(self, a: Tensor) -> _GradFuncType:
         return 2 * a.data * self.result.grad
 
+    def __flops__(self, a: Tensor) -> int:
+        return a.size
+
 
 class cube(operation):
     def __init__(self) -> None:
@@ -405,6 +483,9 @@ class cube(operation):
 
     def __grad__(self, a: Tensor) -> _GradFuncType:
         return 3 * a.data**2 * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return 2 * a.size
 
 
 class _T(operation):
@@ -504,6 +585,19 @@ class sum(operation):
 
         return grad
 
+    def __flops__(self, a: Tensor) -> int:
+        if self.axis is None:
+            return a.size - 1
+        if isinstance(self.axis, int):
+            self.axis = (self.axis,)
+
+        reduced_size = 1
+        for ax in self.axis:
+            reduced_size *= a.shape[ax]
+
+        output_size = a.size // reduced_size
+        return output_size * (reduced_size - 1)
+
 
 class trace(operation):
     def __init__(self) -> None:
@@ -522,6 +616,9 @@ class trace(operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
         grad = lib_.eye(a.data.shape[0], dtype=a.data.dtype)
         return grad * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return min(a.shape) - 1
 
 
 class mean(operation):
@@ -557,6 +654,19 @@ class mean(operation):
 
         return grad / count
 
+    def __flops__(self, a: Tensor) -> int:
+        if self.axis is None:
+            return a.size
+        if isinstance(self.axis, int):
+            self.axis = (self.axis,)
+
+        reduced_size = 1
+        for ax in self.axis:
+            reduced_size *= a.shape[ax]
+
+        output_size = a.size // reduced_size
+        return output_size * reduced_size
+
 
 class var(operation):
     def __init__(self, axis: int | tuple[int] | None, keepdims: bool) -> None:
@@ -591,6 +701,19 @@ class var(operation):
             grad = lib_.reshape(grad, grad_shape)
 
         return grad
+
+    def __flops__(self, a: Tensor) -> int:
+        if self.axis is None:
+            reduced_size = a.size
+        else:
+            if isinstance(self.axis, int):
+                self.axis = (self.axis,)
+            reduced_size = 1
+            for ax in self.axis:
+                reduced_size *= a.shape[ax]
+
+        output_size = a.size // reduced_size
+        return output_size * (2 * reduced_size)
 
 
 class _min_or_max(operation):
@@ -647,6 +770,19 @@ class _min_or_max(operation):
         counts = lib_.where(counts == 0, 1, counts)
 
         return mask * grad / counts
+
+    def __flops__(self, a: Tensor) -> int:
+        if self.axis is None:
+            return a.size - 1
+        if isinstance(self.axis, int):
+            self.axis = (self.axis,)
+
+        reduced_size = 1
+        for ax in self.axis:
+            reduced_size *= a.shape[ax]
+
+        output_size = a.size // reduced_size
+        return output_size * (reduced_size - 1)
 
 
 class swapaxes(operation):
