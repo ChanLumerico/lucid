@@ -62,7 +62,7 @@ def func_op(
             flops_prev, flops_new = 0, 0
             if lucid.flops_enabled():
                 flops_prev = sum(t.flops for t in tensors)
-                flops_new = flops_prev + op_self.flops
+                flops_new = flops_prev + op_self.__flops__(*new_args, **kwargs)
 
             if n_ret is None:
                 if not isinstance(func_return_pairs, tuple):
@@ -137,7 +137,6 @@ class operation(ABC):
 
     def __init__(self) -> None:
         self.result: Tensor | tuple[Tensor, ...] | None = None
-        self._flops: int = 0
 
     @abstractmethod
     def cpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
@@ -154,14 +153,7 @@ class operation(ABC):
     def __flops__(self, *args, **kwargs) -> int:
         return 0
 
-    @property
-    def flops(self) -> int | None:
-        return self._flops
-
     def __call__(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]:
-        if lucid.flops_enabled():
-            self._flops += self.__flops__(*args, **kwargs)
-
         if is_gpu_op(*args):
             return self.gpu(*args, **kwargs)
         return self.cpu(*args, **kwargs)

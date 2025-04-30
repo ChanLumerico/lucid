@@ -346,6 +346,17 @@ class reduce(operation):
 
         return grad_intermediate.reshape(a.shape)
 
+    def __flops__(self, _) -> int:
+        reduced_size = np.prod(self.reduced_shape)
+        output_size = np.prod(self.final_shape)
+
+        if self.reduction == "sum":
+            return output_size * (reduced_size - 1)
+        elif self.reduction == "mean":
+            return output_size * reduced_size
+        else:
+            raise ValueError(f"Unsupported reduction type: {self.reduction}")
+
 
 class repeat(operation):
     def __init__(
@@ -503,3 +514,6 @@ class repeat(operation):
                 grad = grad.sum(axis=i, keepdims=True)
 
         return grad.reshape(self.base_shape).reshape(a.shape)
+
+    def __flops__(self, _) -> int:
+        return int(np.prod(self.out_shape))

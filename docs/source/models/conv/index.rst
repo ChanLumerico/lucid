@@ -51,25 +51,25 @@ shaping modern CNNs.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - LeNet-1
       - `lenet_1 <lenet/lenet_1>`_
       - :math:`(N,1,28,28)`
       - 3,246
-      - ✅
+      - 
     
     * - LeNet-4
       - `lenet_4 <lenet/lenet_4>`_
       - :math:`(N,1,28,28)`
       - 18,378
-      - ✅
+      - 
     
     * - LeNet-5
       - `lenet_5 <lenet/lenet_5>`_
       - :math:`(N,1,32,32)`
       - 61,706
-      - ✅
+      - 
 
 AlexNet
 -------
@@ -92,13 +92,13 @@ Challenge (ILSVRC) in 2012, popularizing deep learning for computer vision.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - AlexNet
       - `alexnet <alex/alexnet>`_
       - :math:`(N,3,224,224)`
       - 61,100,840
-      - ✅
+      - 
 
 ZFNet
 -----
@@ -122,13 +122,13 @@ recognition and provided insights into deep learning interpretability.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - ZFNet
       - `zfnet <zfnet/zfnet>`_
       - :math:`(N,3,224,224)`
       - 62,357,608
-      - ✅
+      - 
 
 VGGNet
 ------
@@ -149,31 +149,31 @@ small 3x3 convolutional filters, which significantly improved object recognition
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - VGGNet-11
       - `vggnet_11 <vgg/vggnet_11>`_
       - :math:`(N,3,224,224)`
       - 132,863,336
-      - ✅
+      - 
     
     * - VGGNet-13
       - `vggnet_13 <vgg/vggnet_13>`_
       - :math:`(N,3,224,224)`
       - 133,047,848
-      - ✅
+      - 
     
     * - VGGNet-16
       - `vggnet_16 <vgg/vggnet_16>`_
       - :math:`(N,3,224,224)`
       - 138,357,544
-      - ✅
+      - 
     
     * - VGGNet-19
       - `vggnet_19 <vgg/vggnet_19>`_
       - :math:`(N,3,224,224)`
       - 143,667,240
-      - ✅
+      - 
 
 Inception
 ---------

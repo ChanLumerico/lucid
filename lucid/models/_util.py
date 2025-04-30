@@ -19,6 +19,16 @@ def _get_input_shape(args: tuple[Tensor | tuple | list]) -> _ShapeLike | None:
     return None
 
 
+def _format_number(num: int | float, decimals: int = 2) -> str:
+    units = ["", "K", "M", "G", "T"]
+    mag = 0
+    while abs(num) >= 1000 and mag < len(units) - 1:
+        num /= 1000.0
+        mag += 1
+
+    return f"{num:.{decimals}f}{units[mag]}"
+
+
 def summarize(
     model: nn.Module,
     input_shape: _ShapeLike | list[_ShapeLike],
@@ -68,7 +78,6 @@ def summarize(
 
     hooks = []
     module_summary = []
-
     _recursive_register(module=model)
 
     dummy_inputs = []
@@ -78,15 +87,20 @@ def summarize(
     else:
         dummy_inputs.append(lucid.random.rand(input_shape, device=model.device))
 
-    outputs = model(*dummy_inputs, **model_kwargs)
+    with lucid.count_flops():
+        outputs = model(*dummy_inputs, **model_kwargs)
+
+    total_flops = 0
     if test_backward:
         if isinstance(outputs, tuple):
             for out in outputs:
                 out.backward()
+                total_flops = max(total_flops, out.flops)
                 if do_eval:
                     out.eval()
         else:
             outputs.backward()
+            total_flops = max(total_flops, outputs.flops)
             if do_eval:
                 outputs.eval()
 
@@ -127,7 +141,8 @@ def summarize(
 
     print("=" * 95)
     print(f"Total Layers(Submodules): {total_layers:,}")
-    print(f"Total Parameters: {total_params:,}")
+    print(f"Total Parameters: {total_params:,} ({_format_number(total_params)})")
+    print(f"Total FLOPs: {total_flops:,} ({_format_number(total_flops)})")
     print("=" * 95)
 
     for hook in hooks:
