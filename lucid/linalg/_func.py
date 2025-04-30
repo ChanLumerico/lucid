@@ -39,6 +39,9 @@ class inv(operation):
             mx.matmul(self.result.data.T, self.result.grad), self.result.data
         )
 
+    def __flops__(self, a: Tensor) -> int:
+        return int((2 / 3) * a.shape[-1] ** 3)
+
 
 class det(operation):
     def __init__(self) -> None:
@@ -66,6 +69,9 @@ class det(operation):
         grad = self.result.grad
         invA_T = mx.transpose(mx.linalg.inv(a.data))
         return grad * invA_T
+
+    def __flops__(self, a: Tensor) -> int:
+        return int((1 / 3) * a.shape[-1] ** 3)
 
 
 class solve(operation):
@@ -102,6 +108,11 @@ class solve(operation):
 
         return a_grad, b_grad
 
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        n = a.shape[-1]
+        m = b.shape[-1] if b.ndim >= 2 else 1
+        return int((2 / 3) * n**3 + 2 * n**2 * m)
+
 
 class cholesky(operation):
     def __init__(self) -> None:
@@ -126,6 +137,9 @@ class cholesky(operation):
         sym = 0.5 * (inner + inner.T)
 
         return L_inv.T @ (sym @ L_inv)
+
+    def __flops__(self, a: Tensor) -> int:
+        return int((1 / 3) * a.shape[-1] ** 3)
 
 
 @fallback
@@ -203,6 +217,26 @@ class norm(operation):
 
         return grad * grad_output
 
+    def __flops__(self, a: Tensor) -> int:
+        if self.axis is None:
+            reduced_size = a.size
+        else:
+            if isinstance(self.axis, int):
+                self.axis = (self.axis,)
+            reduced_size = 1
+            for ax in self.axis:
+                reduced_size *= a.shape[ax]
+
+        out_size = a.size // reduced_size
+        if self.ord == 1:
+            flops_per_out = 2 * reduced_size - 1
+        elif self.ord == 2:
+            flops_per_out = 2 * reduced_size
+        else:
+            flops_per_out = 3 * reduced_size
+
+        return out_size * flops_per_out
+
 
 @fallback
 class eig(operation):
@@ -223,8 +257,8 @@ class eig(operation):
         self.result = (Tensor(self._eigvals), Tensor(self._eigvecs))
 
         return (
-            (self.result[0], self.compute_grad_eigvals),
-            (self.result[1], self.compute_grad_eigvecs),
+            (self.result[0], self.__grad_eigvals__),
+            (self.result[1], self.__grad_eigvecs__),
         )
 
     @func_op(n_in=1, n_ret=2, device="gpu")
@@ -236,11 +270,11 @@ class eig(operation):
         )
 
         return (
-            (self.result[0], partial(self.compute_grad_eigvals, _fallback=True)),
-            (self.result[1], partial(self.compute_grad_eigvecs, _fallback=True)),
+            (self.result[0], partial(self.__grad_eigvals__, _fallback=True)),
+            (self.result[1], partial(self.__grad_eigvecs__, _fallback=True)),
         )
 
-    def compute_grad_eigvals(self, _fallback: bool = False) -> _GradFuncType:
+    def __grad_eigvals__(self, _fallback: bool = False) -> _GradFuncType:
         eigvals = self.result[0]
         grad = np.einsum(
             "...k,...ki,...kj->...ij",
@@ -250,7 +284,7 @@ class eig(operation):
         )
         return grad if not _fallback else mx.array(grad)
 
-    def compute_grad_eigvecs(self, _fallback: bool = False) -> _GradFuncType:
+    def __grad_eigvecs__(self, _fallback: bool = False) -> _GradFuncType:
         eigvals, eigvecs = self._eigvals, self._eigvecs
         eigvecs_t = self.result[1]
 
@@ -269,6 +303,9 @@ class eig(operation):
         )
         return grad if not _fallback else mx.array(grad)
 
+    def __flops__(self, a: Tensor) -> int:
+        return 9 * a.shape[-1] ** 3
+
 
 class qr(operation):
     def __init__(self) -> None:
@@ -280,8 +317,8 @@ class qr(operation):
         self.result = (Tensor(self.Q), Tensor(self.R))
 
         return (
-            (self.result[0], partial(self.compute_grad_q, lib_=np)),
-            (self.result[1], partial(self.compute_grad_r, lib_=np)),
+            (self.result[0], partial(self.__grad_q__, lib_=np)),
+            (self.result[1], partial(self.__grad_r__, lib_=np)),
         )
 
     @func_op(n_in=1, n_ret=2, device="gpu")
@@ -290,11 +327,11 @@ class qr(operation):
         self.result = (Tensor(self.Q), Tensor(self.R))
 
         return (
-            (self.result[0], partial(self.compute_grad_q, lib_=mx)),
-            (self.result[1], partial(self.compute_grad_r, lib_=mx)),
+            (self.result[0], partial(self.__grad_q__, lib_=mx)),
+            (self.result[1], partial(self.__grad_r__, lib_=mx)),
         )
 
-    def compute_grad_q(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_q__(self, lib_: ModuleType) -> _GradFuncType:
         grad_q = self.result[0].grad
         qt_grad_q = lib_.einsum("...ik,...kj->...ij", self.Q.swapaxes(-1, -2), grad_q)
         qt_grad_q_r = lib_.einsum("...ij,...jk->...ik", qt_grad_q, self.R)
@@ -303,9 +340,13 @@ class qr(operation):
             "...ij,...jk->...ik", self.Q, qt_grad_q_r
         )
 
-    def compute_grad_r(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_r__(self, lib_: ModuleType) -> _GradFuncType:
         grad_r = self.result[1].grad
         return lib_.einsum("...ij,...jk->...ik", self.Q, grad_r)
+
+    def __flops__(self, a: Tensor) -> int:
+        m, n = a.shape[-2:]
+        return int(2 * n**2 * (m - n / 3))
 
 
 @fallback
@@ -320,9 +361,9 @@ class svd(operation):
         self.result = (Tensor(self.U), Tensor(self.S), Tensor(self.VT))
 
         return (
-            (self.result[0], partial(self.compute_grad_u, lib_=np)),
-            (self.result[1], partial(self.compute_grad_s, lib_=np)),
-            (self.result[2], partial(self.compute_grad_vt, lib_=np)),
+            (self.result[0], partial(self.__grad_u__, lib_=np)),
+            (self.result[1], partial(self.__grad_s__, lib_=np)),
+            (self.result[2], partial(self.__grad_vt__, lib_=np)),
         )
 
     @func_op(n_in=1, n_ret=3, device="gpu")
@@ -336,12 +377,12 @@ class svd(operation):
         self.result = (Tensor(self.U), Tensor(self.S), Tensor(self.VT))
 
         return (
-            (self.result[0], partial(self.compute_grad_u, lib_=mx)),
-            (self.result[1], partial(self.compute_grad_s, lib_=mx)),
-            (self.result[2], partial(self.compute_grad_vt, lib_=mx)),
+            (self.result[0], partial(self.__grad_u__, lib_=mx)),
+            (self.result[1], partial(self.__grad_s__, lib_=mx)),
+            (self.result[2], partial(self.__grad_vt__, lib_=mx)),
         )
 
-    def compute_grad_u(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_u__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.einsum(
             "...ik,...k,...jk->...ij",
             self.result[0].grad,
@@ -349,7 +390,7 @@ class svd(operation):
             self.VT.swapaxes(-1, -2),
         )
 
-    def compute_grad_s(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_s__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.einsum(
             "...ik,...k,...jk->...ij",
             self.U,
@@ -357,13 +398,19 @@ class svd(operation):
             self.VT.swapaxes(-1, -2),
         )
 
-    def compute_grad_vt(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_vt__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.einsum(
             "...ik,...k,...jk->...ij",
             self.U,
             self.S,
             self.result[2].grad.swapaxes(-1, -2),
         )
+
+    def __flops__(self, a: Tensor) -> int:
+        m, n = a.shape[-2:]
+        if m < n:
+            m, n = n, m
+        return int(4 * m**2 * n + 8 * m * n**2 + 9 * n**3)
 
 
 class matrix_power(operation):
@@ -419,6 +466,11 @@ class matrix_power(operation):
 
         return grad
 
+    def __flops__(self, a: Tensor) -> int:
+        d = a.shape[-1]
+        num_mults = max(0, self.n.bit_length() - 1)
+        return 2 * num_mults * d**3
+
 
 class pinv(operation):
     def __init__(self, rcond: float) -> None:
@@ -466,3 +518,9 @@ class pinv(operation):
             + term_2
         ).T
         return grad
+
+    def __flops__(self, a: Tensor) -> int:
+        m, n = a.shape[-2:]
+        if m < n:
+            m, n = n, m
+        return int(20 * m * n**2 + 20 * n**3)
