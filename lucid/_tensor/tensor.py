@@ -1,5 +1,6 @@
 from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
 from types import NoneType
+from collections import deque
 import numpy as np
 
 import lucid
@@ -181,7 +182,22 @@ class Tensor(_TensorOps):
         return self.data.size
 
     @property
-    def flops(self) -> int: ...  # TODO: Implement flops adding algorithm (DFS)
+    def flops(self) -> int:
+        total = 0
+        queue = deque([self])
+        visited = set()
+
+        while queue:
+            cur = queue.popleft()
+            visited.add(cur)
+            if cur._op is not None:
+                total += cur._op.flops
+
+            for next in cur._prev:
+                if next not in visited:
+                    queue.appendleft(next)
+
+        return total
 
     def item(self) -> _Scalar:
         if self.ndim != 0:
