@@ -77,9 +77,8 @@ class Tensor(_TensorOps):
         if self._is_bool_tensor:
             self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
 
-        self._op: type | None = None
+        self._op: object | None = None
         self._backward_op: Callable = lambda: None
-        self._flops: int = 0
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
 

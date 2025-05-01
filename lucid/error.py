@@ -15,7 +15,7 @@ class DeviceMismatchError(Exception):
 
 
 class BackwardError(Exception):
-    def __init__(self, shape: _ShapeLike, op: type) -> None:
+    def __init__(self, shape: _ShapeLike, op: object) -> None:
         super().__init__(
             f"Exception above occurred for tensor of shape {shape} on operation {op}."
         )

@@ -59,10 +59,8 @@ def func_op(
             new_args = (*tensors, *non_tensor_args)
             func_return_pairs = func(op_self, *new_args, **kwargs)
 
-            flops_prev, flops_new = 0, 0
             if lucid.flops_enabled():
-                flops_prev = sum(t.flops for t in tensors)
-                flops_new = flops_prev + op_self.__flops__(*new_args, **kwargs)
+                op_self.flops = op_self.__flops__(*new_args, **kwargs)
 
             if n_ret is None:
                 if not isinstance(func_return_pairs, tuple):
@@ -83,8 +81,7 @@ def func_op(
                 result.to(device)
                 result.dtype = types.to_numeric_type(result.data.dtype)
 
-                result._op = type(op_self)
-                result._flops += flops_new
+                result._op = op_self
                 if is_free:
                     result.free()
 
@@ -137,6 +134,7 @@ class operation(ABC):
 
     def __init__(self) -> None:
         self.result: Tensor | tuple[Tensor, ...] | None = None
+        self._flops: int | None = None
 
     @abstractmethod
     def cpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
@@ -149,6 +147,16 @@ class operation(ABC):
     def __grad_cpu__(self, *args, **kwargs) -> _GradFuncType: ...
 
     def __grad_gpu__(self, *args, **kwargs) -> _GradFuncType: ...
+
+    @property
+    def flops(self) -> int:
+        if self._flops is None:
+            raise ValueError(f"flops counting for {self} has not been executed.")
+        return self._flops
+
+    @flops.setter
+    def flops(self, val: int) -> None:
+        self._flops = val
 
     def __flops__(self, *args, **kwargs) -> int:
         return 0
