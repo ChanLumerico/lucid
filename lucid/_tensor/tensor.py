@@ -181,8 +181,7 @@ class Tensor(_TensorOps):
         return self.data.size
 
     @property
-    def flops(self) -> int:
-        return self._flops
+    def flops(self) -> int: ...  # TODO: Implement flops adding algorithm (DFS)
 
     def item(self) -> _Scalar:
         if self.ndim != 0:

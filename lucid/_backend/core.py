@@ -86,6 +86,8 @@ def func_op(
                     result.free()
 
                 results += (result,)
+                if not lucid.grad_enabled() and not lucid.flops_enabled():
+                    continue
 
                 def _backward_op(*, _func: Callable = compute_grad) -> None:
                     grads = _func()
@@ -103,12 +105,11 @@ def func_op(
                         )
                         lucid._set_tensor_grad(tensor, new_grad)
 
-                if not lucid.grad_enabled():
-                    continue
-
-                if result.requires_grad:
-                    result._backward_op = _backward_op
+                if result.requires_grad or lucid.flops_enabled():
                     result._prev = list(tensors)
+                    result._backward_op = (
+                        _backward_op if result.requires_grad else lambda: None
+                    )
 
             return results if num_returns > 1 else results[0]
 
