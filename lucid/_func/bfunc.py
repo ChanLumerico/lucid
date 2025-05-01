@@ -13,6 +13,11 @@ from lucid._backend.core import (
 from lucid._backend.metal import mx
 
 
+def _broadcast_flops(a: Tensor, b: Tensor) -> int:
+    out_shape = np.broadcast_shapes(a.shape, b.shape)
+    return int(np.prod(out_shape))
+
+
 class add(operation):
     def __init__(self) -> None:
         super().__init__()
@@ -31,7 +36,7 @@ class add(operation):
         return self.result.grad, self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return max(a.size, b.size)
+        return _broadcast_flops(a, b)
 
 
 class sub(operation):
@@ -52,7 +57,7 @@ class sub(operation):
         return self.result.grad, -self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return max(a.size, b.size)
+        return _broadcast_flops(a, b)
 
 
 class multiply(operation):
@@ -73,7 +78,7 @@ class multiply(operation):
         return b.data * self.result.grad, a.data * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return max(a.size, b.size)
+        return _broadcast_flops(a, b)
 
 
 class truediv(operation):
@@ -97,7 +102,7 @@ class truediv(operation):
         )
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return max(a.size, b.size)
+        return _broadcast_flops(a, b)
 
 
 class _equal(operation):
@@ -229,7 +234,7 @@ class minimum(operation):
         return a_grad * self.result.grad, b_grad * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return max(a.size, b.size)
+        return _broadcast_flops(a, b)
 
 
 class maximum(operation):
@@ -253,7 +258,7 @@ class maximum(operation):
         return a_grad * self.result.grad, b_grad * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return max(a.size, b.size)
+        return _broadcast_flops(a, b)
 
 
 class power(operation):
@@ -277,7 +282,7 @@ class power(operation):
         return a_grad * self.result.grad, b_grad * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
-        return max(a.size, b.size)
+        return _broadcast_flops(a, b)
 
 
 class dot(operation):
@@ -435,4 +440,4 @@ class matmul(operation):
         batch_shape = [max(x, y) for x, y in zip(a_batch, b_batch)]
         batch_size = np.prod(batch_shape) if batch_shape else 1
 
-        return 2 * batch_size * m * n * k
+        return batch_size * m * n * k

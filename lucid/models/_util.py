@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 import json
 
 import lucid
@@ -19,8 +20,16 @@ def _get_input_shape(args: tuple[Tensor | tuple | list]) -> _ShapeLike | None:
     return None
 
 
-def _format_number(num: int | float, decimals: int = 2) -> str:
-    units = ["", "K", "M", "G", "T"]
+def _format_number(
+    num: int | float, mode: Literal["si", "abbr"], decimals: int = 2
+) -> str:
+    if mode == "si":
+        units = ["", "K", "M", "G", "T"]
+    elif mode == "abbr":
+        units = ["", "K", "M", "B", "T"]
+    else:
+        raise ValueError("Unknown number formatting mode.")
+
     mag = 0
     while abs(num) >= 1000 and mag < len(units) - 1:
         num /= 1000.0
@@ -91,21 +100,15 @@ def summarize(
         outputs = model(*dummy_inputs, **model_kwargs)
 
     total_flops = 0
-    if test_backward:
-        if isinstance(outputs, tuple):
-            for out in outputs:
-                out.backward()
-                total_flops = max(total_flops, out.flops)
-                if do_eval:
-                    out.eval()
-        else:
-            outputs.backward()
-            total_flops = max(total_flops, outputs.flops)
-            if do_eval:
-                outputs.eval()
+    outputs_tuple = outputs if isinstance(outputs, tuple) else (outputs,)
+    for out in outputs_tuple:
+        total_flops = max(total_flops, out.flops)
+        if do_eval:
+            out.eval()
+        if test_backward:
+            out.backward()
 
     module_summary.reverse()
-
     title = f"Summary of {type(model).__name__}"
     if model._alt_name:
         title += f"({model._alt_name})"
@@ -141,8 +144,14 @@ def summarize(
 
     print("=" * 95)
     print(f"Total Layers(Submodules): {total_layers:,}")
-    print(f"Total Parameters: {total_params:,} ({_format_number(total_params)})")
-    print(f"Total FLOPs: {total_flops:,} ({_format_number(total_flops)})")
+    print(
+        f"Total Parameters: {total_params:,}",
+        f"({_format_number(total_params, mode="abbr")})",
+    )
+    print(
+        f"Total FLOPs: {total_flops:,}",
+        f"({_format_number(total_flops, mode="si")})",
+    )
     print("=" * 95)
 
     for hook in hooks:

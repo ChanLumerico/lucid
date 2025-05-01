@@ -174,7 +174,7 @@ def clip(a: Tensor, /, min_value: _Scalar | None, max_value: _Scalar | None) -> 
 
 
 def abs(a: Tensor, /) -> Tensor:
-    return ufunc.abs()(a)
+    return ufunc._abs()(a)
 
 
 def sign(a: Tensor, /) -> Tensor:

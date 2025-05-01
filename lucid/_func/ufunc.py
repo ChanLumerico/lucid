@@ -35,18 +35,7 @@ class _pow(operation):
         return (self.exp * a.data ** (self.exp - 1)) * self.result.grad
 
     def __flops__(self, a: Tensor) -> int:
-        num_elements = a.size
-        flops_lookup = {0: 1, 1: 0, 2: 1, 0.5: 4, -1: 1}
-
-        if self.exp in flops_lookup:
-            return flops_lookup[self.exp] * num_elements
-
-        if isinstance(self.exp, (int, float)) and float(self.exp).is_integer():
-            exp_int = abs(int(self.exp))
-            factor = math.ceil(math.log2(exp_int)) + (1 if self.exp < 0 else 0)
-            return factor * num_elements
-
-        return 11 * num_elements
+        return 11 * a.size
 
 
 class _neg(operation):
@@ -373,17 +362,8 @@ class clip(operation):
 
         return grad * self.result.grad
 
-    def __flops__(self, a: Tensor) -> int:
-        if self.min_value is not None and self.max_value is not None:
-            factor = 2
-        elif self.min_value is None and self.max_value is None:
-            factor = 0
-        else:
-            factor = 1
-        return a.size * factor
 
-
-class abs(operation):
+class _abs(operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -713,7 +693,7 @@ class var(operation):
                 reduced_size *= a.shape[ax]
 
         output_size = a.size // reduced_size
-        return output_size * (2 * reduced_size)
+        return output_size * (4 * reduced_size)
 
 
 class _min_or_max(operation):
@@ -770,19 +750,6 @@ class _min_or_max(operation):
         counts = lib_.where(counts == 0, 1, counts)
 
         return mask * grad / counts
-
-    def __flops__(self, a: Tensor) -> int:
-        if self.axis is None:
-            return a.size - 1
-        if isinstance(self.axis, int):
-            self.axis = (self.axis,)
-
-        reduced_size = 1
-        for ax in self.axis:
-            reduced_size *= a.shape[ax]
-
-        output_size = a.size // reduced_size
-        return output_size * (reduced_size - 1)
 
 
 class swapaxes(operation):
