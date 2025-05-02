@@ -35,19 +35,19 @@ parallelized training and capturing long-range dependencies effectively.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - Transformer-Base
       - `transformer_base <base/transformer_base>`_
       - :math:`(N, L_{src})`, :math:`(N, L_{tgt})`
       - 62,584,544
-      - ✅
+      - 
     
     * - Transformer-Big
       - `transformer_big <base/transformer_big>`_
       - :math:`(N, L_{src})`, :math:`(N, L_{tgt})`
       - 213,237,472
-      - ✅
+      - 
 
 Visual Transformer (ViT)
 ------------------------
@@ -72,37 +72,37 @@ layers to capture global dependencies.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - ViT-Ti
       - `vit_tiny <vit/vit_tiny>`_
       - :math:`(N,3,224,224)`
       - 5,717,416
-      - ✅
+      - 
     
     * - ViT-S
       - `vit_small <vit/vit_small>`_
       - :math:`(N,3,224,224)`
       - 22,050,664
-      - ✅
+      - 
     
     * - ViT-B
       - `vit_base <vit/vit_base>`_
       - :math:`(N,3,224,224)`
       - 86,567,656
-      - ✅
+      - 
     
     * - ViT-L
       - `vit_large <vit/vit_large>`_
       - :math:`(N,3,224,224)`
       - 304,326,632
-      - ✅
+      - 
     
     * - ViT-H
       - `vit_huge <vit/vit_huge>`_
       - :math:`(N,3,224,224)`
       - 632,199,400
-      - ✅
+      - 
 
 Swin Transformer
 ----------------
@@ -140,31 +140,31 @@ within each window.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - Swin-T
       - `swin_tiny <swin/swin_tiny>`_
       - :math:`(N,3,224,224)`
       - 28,288,354
-      - ✅
+      - 
     
     * - Swin-S
       - `swin_small <swin/swin_small>`_
       - :math:`(N,3,224,224)`
       - 49,606,258
-      - ✅
+      - 
     
     * - Swin-B
       - `swin_base <swin/swin_base>`_
       - :math:`(N,3,224,224)`
       - 87,768,224
-      - ✅
+      - 
     
     * - Swin-L
       - `swin_large <swin/swin_large>`_
       - :math:`(N,3,224,224)`
       - 196,532,476
-      - ✅
+      - 
 
 .. list-table::
     :header-rows: 1
@@ -174,43 +174,43 @@ within each window.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - Swin-v2-T
       - `swin_v2_tiny <swin/swin_v2_tiny>`_
       - :math:`(N,3,224,224)`
       - 28,349,842
-      - ✅
+      - 
     
     * - Swin-v2-S
       - `swin_v2_small <swin/swin_v2_small>`_
       - :math:`(N,3,224,224)`
       - 49,731,106
-      - ✅
+      - 
     
     * - Swin-v2-B
       - `swin_v2_base <swin/swin_v2_base>`_
       - :math:`(N,3,224,224)`
       - 87,922,400
-      - ✅
+      - 
     
     * - Swin-v2-L
       - `swin_v2_large <swin/swin_v2_large>`_
       - :math:`(N,3,224,224)`
       - 196,745,308
-      - ✅
+      - 
     
     * - Swin-v2-H
       - `swin_v2_huge <swin/swin_v2_huge>`_
       - :math:`(N,3,224,224)`
       - 657,796,668
-      - ✅
+      - 
     
     * - Swin-v2-G
       - `swin_v2_giant <swin/swin_v2_giant>`_
       - :math:`(N,3,224,224)`
       - 3,000,869,564
-      - ✅
+      - 
 
 Convolutional Transformer (CvT)
 -------------------------------
@@ -235,25 +235,25 @@ dense prediction tasks.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - CvT-13
       - `cvt_13 <cvt/cvt_13>`_
       - :math:`(N,3,224,224)`
       - 19,997,480
-      - ✅
+      - 
     
     * - CvT-21
       - `cvt_21 <cvt/cvt_21>`_
       - :math:`(N,3,224,224)`
       - 31,622,696
-      - ✅
+      - 
     
     * - CvT-W24
       - `cvt_w24 <cvt/cvt_w24>`_
       - :math:`(N,3,384,384)`
       - 277,196,392
-      - ✅
+      - 
 
 Pyramid Vision Transformer (PVT)
 --------------------------------
@@ -287,37 +287,37 @@ to enhance performance in dense prediction tasks like detection and segmentation
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - PVT-Tiny
       - `pvt_tiny <pvt/pvt_tiny>`_
       - :math:`(N,3,224,224)`
       - 12,457,192
-      - ✅
+      - 
     
     * - PVT-Small
       - `pvt_small <pvt/pvt_small>`_
       - :math:`(N,3,224,224)`
       - 23,003,048
-      - ✅
+      - 
     
     * - PVT-Medium
       - `pvt_medium <pvt/pvt_medium>`_
       - :math:`(N,3,224,224)`
       - 41,492,648
-      - ✅
+      - 
     
     * - PVT-Large
       - `pvt_large <pvt/pvt_large>`_
       - :math:`(N,3,224,224)`
       - 55,359,848
-      - ✅
+      - 
     
     * - PVT-Huge
       - `pvt_huge <pvt/pvt_huge>`_
       - :math:`(N,3,224,224)`
       - 286,706,920
-      - ✅
+      - 
 
 .. list-table::
     :header-rows: 1
@@ -327,49 +327,49 @@ to enhance performance in dense prediction tasks like detection and segmentation
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - PVT-v2-B0
       - `pvt_v2_b0 <pvt/pvt_v2_b0>`_
       - :math:`(N,3,224,224)`
       - 3,666,760
-      - ✅
+      - 
     
     * - PVT-v2-B1
       - `pvt_v2_b1 <pvt/pvt_v2_b1>`_
       - :math:`(N,3,224,224)`
       - 14,009,000
-      - ✅
+      - 
     
     * - PVT-v2-B2
       - `pvt_v2_b2 <pvt/pvt_v2_b2>`_
       - :math:`(N,3,224,224)`
       - 25,362,856
-      - ✅
+      - 
     
     * - PVT-v2-B2-Linear
       - `pvt_v2_b2_li <pvt/pvt_v2_b2_li>`_
       - :math:`(N,3,224,224)`
       - 22,553,512
-      - ✅
+      - 
     
     * - PVT-v2-B3
       - `pvt_v2_b3 <pvt/pvt_v2_b3>`_
       - :math:`(N,3,224,224)`
       - 45,238,696
-      - ✅
+      - 
     
     * - PVT-v2-B4
       - `pvt_v2_b4 <pvt/pvt_v2_b4>`_
       - :math:`(N,3,224,224)`
       - 62,556,072
-      - ✅
+      - 
     
     * - PVT-v2-B5
       - `pvt_v2_b5 <pvt/pvt_v2_b5>`_
       - :math:`(N,3,224,224)`
       - 82,882,984
-      - ✅
+      - 
 
 CrossViT
 --------
@@ -393,60 +393,60 @@ improving performance on image recognition tasks.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - CrossViT-Ti
       - `crossvit_tiny <cross_vit/crossvit_tiny>`_
       - :math:`(N,3,224,224)`
       - 7,014,800
-      - ✅
+      - 
     
     * - CrossViT-S
       - `crossvit_small <cross_vit/crossvit_small>`_
       - :math:`(N,3,224,224)`
       - 26,856,272
-      - ✅
+      - 
     
     * - CrossViT-B
       - `crossvit_base <cross_vit/crossvit_base>`_
       - :math:`(N,3,224,224)`
       - 105,025,232
-      - ✅
+      - 
     
     * - CrossViT-9
       - `crossvit_9 <cross_vit/crossvit_9>`_
       - :math:`(N,3,224,224)`
       - 8,553,296
-      - ✅
+      - 
     
     * - CrossViT-15
       - `crossvit_15 <cross_vit/crossvit_15>`_
       - :math:`(N,3,224,224)`
       - 27,528,464
-      - ✅
+      - 
     
     * - CrossViT-18
       - `crossvit_18 <cross_vit/crossvit_18>`_
       - :math:`(N,3,224,224)`
       - 43,271,408
-      - ✅
+      - 
     
     * - CrossViT-9†
       - `crossvit_9_dagger <cross_vit/crossvit_9_dagger>`_
       - :math:`(N,3,224,224)`
       - 8,776,592
-      - ✅
+      - 
     
     * - CrossViT-15†
       - `crossvit_15_dagger <cross_vit/crossvit_15_dagger>`_
       - :math:`(N,3,224,224)`
       - 28,209,008
-      - ✅
+      - 
     
     * - CrossViT-18†
       - `crossvit_18_dagger <cross_vit/crossvit_18_dagger>`_
       - :math:`(N,3,224,224)`
       - 44,266,976
-      - ✅
+      - 
 
-*To be implemented...🔮*
+*To be FLOPs...🔮*
