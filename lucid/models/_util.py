@@ -20,16 +20,8 @@ def _get_input_shape(args: tuple[Tensor | tuple | list]) -> _ShapeLike | None:
     return None
 
 
-def _format_number(
-    num: int | float, mode: Literal["si", "abbr"], decimals: int = 2
-) -> str:
-    if mode == "si":
-        units = ["", "K", "M", "G", "T"]
-    elif mode == "abbr":
-        units = ["", "K", "M", "B", "T"]
-    else:
-        raise ValueError("Unknown number formatting mode.")
-
+def _format_number(num: int | float, decimals: int = 2) -> str:
+    units = ["", "K", "M", "B", "T"]
     mag = 0
     while abs(num) >= 1000 and mag < len(units) - 1:
         num /= 1000.0
@@ -144,14 +136,8 @@ def summarize(
 
     print("=" * 95)
     print(f"Total Layers(Submodules): {total_layers:,}")
-    print(
-        f"Total Parameters: {total_params:,}",
-        f"({_format_number(total_params, mode="abbr")})",
-    )
-    print(
-        f"Total FLOPs: {total_flops:,}",
-        f"({_format_number(total_flops, mode="si")})",
-    )
+    print(f"Total Parameters: {total_params:,} ({_format_number(total_params)})")
+    print(f"Total FLOPs: {total_flops:,} ({_format_number(total_flops)})")
     print("=" * 95)
 
     for hook in hooks:
