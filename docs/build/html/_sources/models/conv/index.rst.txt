@@ -51,25 +51,25 @@ shaping modern CNNs.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - LeNet-1
       - `lenet_1 <lenet/lenet_1>`_
       - :math:`(N,1,28,28)`
       - 3,246
-      - ✅
+      - 167.13K
     
     * - LeNet-4
       - `lenet_4 <lenet/lenet_4>`_
       - :math:`(N,1,28,28)`
       - 18,378
-      - ✅
+      - 182.93K
     
     * - LeNet-5
       - `lenet_5 <lenet/lenet_5>`_
       - :math:`(N,1,32,32)`
       - 61,706
-      - ✅
+      - 481.49K
 
 AlexNet
 -------
@@ -92,13 +92,13 @@ Challenge (ILSVRC) in 2012, popularizing deep learning for computer vision.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - AlexNet
       - `alexnet <alex/alexnet>`_
       - :math:`(N,3,224,224)`
       - 61,100,840
-      - ✅
+      - 715.21M
 
 ZFNet
 -----
@@ -122,13 +122,13 @@ recognition and provided insights into deep learning interpretability.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - ZFNet
       - `zfnet <zfnet/zfnet>`_
       - :math:`(N,3,224,224)`
       - 62,357,608
-      - ✅
+      - 1.20B
 
 VGGNet
 ------
@@ -149,31 +149,31 @@ small 3x3 convolutional filters, which significantly improved object recognition
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - VGGNet-11
       - `vggnet_11 <vgg/vggnet_11>`_
       - :math:`(N,3,224,224)`
       - 132,863,336
-      - ✅
+      - 7.62B
     
     * - VGGNet-13
       - `vggnet_13 <vgg/vggnet_13>`_
       - :math:`(N,3,224,224)`
       - 133,047,848
-      - ✅
+      - 11.33B
     
     * - VGGNet-16
       - `vggnet_16 <vgg/vggnet_16>`_
       - :math:`(N,3,224,224)`
       - 138,357,544
-      - ✅
+      - 15.50B
     
     * - VGGNet-19
       - `vggnet_19 <vgg/vggnet_19>`_
       - :math:`(N,3,224,224)`
       - 143,667,240
-      - ✅
+      - 19.66B
 
 Inception
 ---------
@@ -197,25 +197,25 @@ tasks.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - Inception-v1 (GoogLeNet)
       - `inception_v1 <inception/inception_v1>`_
       - :math:`(N,3,224,224)`
       - 13,393,352
-      - ✅
+      - 1.62B
     
     * - Inception-v3
       - `inception_v3 <inception/inception_v3>`_
       - :math:`(N,3,299,299)`
       - 30,817,392
-      - ✅
+      - 3.20B
     
     * - Inception-v4
       - `inception_v4 <inception/inception_v4>`_
       - :math:`(N,3,299,299)`
       - 40,586,984
-      - ✅
+      - 5.75B
 
 Inception-ResNet
 ----------------
@@ -240,19 +240,19 @@ for a wide range of image classification tasks.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - Inception-ResNet-v1
       - `inception_resnet_v1 <inception_res/inception_resnet_v1>`_
       - :math:`(N,3,299,299)`
       - 22,739,128
-      - ✅
+      - 3.16B
     
     * - Inception-ResNet-v2
       - `inception_resnet_v2 <inception_res/inception_resnet_v2>`_
       - :math:`(N,3,299,299)`
       - 35,847,512
-      - ✅
+      - 4.54B
 
 ResNet
 ------
@@ -280,55 +280,55 @@ accuracy in tasks like image classification and object detection.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
 
     * - ResNet-18
       - `resnet_18 <resnet/resnet_18>`_
       - :math:`(N,3,224,224)`
       - 11,689,512
-      - ✅
+      - 1.84B
     
     * - ResNet-34
       - `resnet_34 <resnet/resnet_34>`_
       - :math:`(N,3,224,224)`
       - 21,797,672
-      - ✅
+      - 3.70B
     
     * - ResNet-50
       - `resnet_50 <resnet/resnet_50>`_
       - :math:`(N,3,224,224)`
       - 25,557,032
-      - ✅
+      - 4.20B
     
     * - ResNet-101
       - `resnet_101 <resnet/resnet_101>`_
       - :math:`(N,3,224,224)`
       - 44,549,160
-      - ✅
+      - 7.97B
     
     * - ResNet-152
       - `resnet_152 <resnet/resnet_152>`_
       - :math:`(N,3,224,224)`
       - 60,192,808
-      - ✅
+      - 11.75B
     
     * - ResNet-200
       - `resnet_200 <resnet/resnet_200>`_
       - :math:`(N,3,224,224)`
       - 64,669,864
-      - ✅
+      - 15.35B
     
     * - ResNet-269
       - `resnet_269 <resnet/resnet_269>`_
       - :math:`(N,3,224,224)`
       - 102,069,416
-      - ✅
+      - 20.46B
     
     * - ResNet-1001
       - `resnet_1001 <resnet/resnet_1001>`_
       - :math:`(N,3,224,224)`
       - 149,071,016
-      - ✅
+      - 43.94B
 
 .. list-table::
     :header-rows: 1
@@ -338,19 +338,19 @@ accuracy in tasks like image classification and object detection.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - WideResNet-50
       - `wide_resnet_50 <resnet/wide_resnet_50>`_
       - :math:`(N,3,224,224)`
       - 78,973,224
-      - ✅
+      - 11.55B
     
     * - WideResNet-101
       - `wide_resnet_101 <resnet/wide_resnet_101>`_
       - :math:`(N,3,224,224)`
       - 126,886,696
-      - ✅
+      - 22.97B
 
 ResNeXt
 -------
@@ -376,43 +376,43 @@ enabling parallel pathways for feature learning.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - ResNeXt-50-32x4d
       - `resnext_50_32x4d <resnext/resnext_50_32x4d>`_
       - :math:`(N,3,224,224)`
       - 25,028,904
-      - ✅
+      - 4.38B
     
     * - ResNeXt-101-32x4d
       - `resnext_101_32x4d <resnext/resnext_101_32x4d>`_
       - :math:`(N,3,224,224)`
       - 44,177,704
-      - ✅
+      - 8.19B
     
     * - ResNeXt-101-32x8d
       - `resnext_101_32x8d <resnext/resnext_101_32x8d>`_
       - :math:`(N,3,224,224)`
       - 88,791,336
-      - ✅
+      - 16.73B
     
     * - ResNeXt-101-32x16d
       - `resnext_101_32x16d <resnext/resnext_101_32x16d>`_
       - :math:`(N,3,224,224)`
       - 194,026,792
-      - ✅
+      - 36.68B
     
     * - ResNeXt-101-32x32d
       - `resnext_101_32x32d <resnext/resnext_101_32x32d>`_
       - :math:`(N,3,224,224)`
       - 468,530,472
-      - ✅
+      - 88.03B
     
     * - ResNeXt-101-64x4d
       - `resnext_101_64x4d <resnext/resnext_101_64x4d>`_
       - :math:`(N,3,224,224)`
       - 83,455,272
-      - ✅
+      - 15.78B
 
 SENet
 -----
@@ -437,37 +437,37 @@ feature responses.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
 
     * - SE-ResNet-18
       - `se_resnet_18 <senet/se_resnet_18>`_
       - :math:`(N,3,224,224)`
       - 11,778,592
-      - ✅
+      - 1.84B
     
     * - SE-ResNet-34
       - `se_resnet_34 <senet/se_resnet_34>`_
       - :math:`(N,3,224,224)`
       - 21,958,868
-      - ✅
+      - 3.71B
     
     * - SE-ResNet-50
       - `se_resnet_50 <senet/se_resnet_50>`_
       - :math:`(N,3,224,224)`
       - 28,088,024
-      - ✅
+      - 4.22B
     
     * - SE-ResNet-101
       - `se_resnet_101 <senet/se_resnet_101>`_
       - :math:`(N,3,224,224)`
       - 49,326,872
-      - ✅
+      - 8.00B
     
     * - SE-ResNet-152
       - `se_resnet_152 <senet/se_resnet_152>`_
       - :math:`(N,3,224,224)`
       - 66,821,848
-      - ✅
+      - 11.80B
 
 .. list-table::
     :header-rows: 1
@@ -477,31 +477,31 @@ feature responses.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - SE-ResNeXt-50-32x4d
       - `se_resnext_50_32x4d <senet/se_resnext_50_32x4d>`_
       - :math:`(N,3,224,224)`
       - 27,559,896
-      - ✅
+      - 4.40B
     
     * - SE-ResNeXt-101-32x4d
       - `se_resnext_101_32x4d <senet/se_resnext_101_32x4d>`_
       - :math:`(N,3,224,224)`
       - 48,955,416
-      - ✅
+      - 8.22B
     
     * - SE-ResNeXt-101-32x8d
       - `se_resnext_101_32x8d <senet/se_resnext_101_32x8d>`_
       - :math:`(N,3,224,224)`
       - 93,569,048
-      - ✅
+      - 16.77B
     
     * - SE-ResNeXt-101-64x4d
       - `se_resnext_101_64x4d <senet/se_resnext_101_64x4d>`_
       - :math:`(N,3,224,224)`
       - 88,232,984
-      - ✅
+      - 15.81B
 
 SKNet
 -----
@@ -527,25 +527,25 @@ each spatial location in an image, improving its ability to capture multi-scale 
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - SK-ResNet-18
       - `sk_resnet_18 <sknet/sk_resnet_18>`_
       - :math:`(N,3,224,224)`
       - 25,647,368
-      - ✅
+      - 3.92B
     
     * - SK-ResNet-34
       - `sk_resnet_34 <sknet/sk_resnet_34>`_
       - :math:`(N,3,224,224)`
       - 45,895,512
-      - ✅
+      - 7.64B
     
     * - SK-ResNet-50
       - `sk_resnet_50 <sknet/sk_resnet_50>`_
       - :math:`(N,3,224,224)`
       - 57,073,368
-      - ✅
+      - 9.35B
     
 .. list-table::
     :header-rows: 1
@@ -555,13 +555,13 @@ each spatial location in an image, improving its ability to capture multi-scale 
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
 
     * - SK-ResNeXt-50-32x4d
       - `sk_resnext_50_32x4d <sknet/sk_resnext_50_32x4d>`_
       - :math:`(N,3,224,224)`
       - 29,274,760
-      - ✅
+      - 5.04B
 
 DenseNet
 --------
@@ -586,31 +586,31 @@ of parameters, and improves the efficiency of gradient propagation during traini
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - DenseNet-121
       - `densenet_121 <dense/densenet_121>`_
       - :math:`(N,3,224,224)`
       - 7,978,856
-      - ✅
+      - 2.99B
     
     * - DenseNet-169
       - `densenet_169 <dense/densenet_169>`_
       - :math:`(N,3,224,224)`
       - 14,149,480
-      - ✅
+      - 3.55B
     
     * - DenseNet-201
       - `densenet_201 <dense/densenet_201>`_
       - :math:`(N,3,224,224)`
       - 20,013,928
-      - ✅
+      - 4.54B
     
     * - DenseNet-264
       - `densenet_264 <dense/densenet_264>`_
       - :math:`(N,3,224,224)`
       - 33,337,704
-      - ✅
+      - 6.09B
 
 Xception
 --------
@@ -634,13 +634,13 @@ reducing computational cost while maintaining performance.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - Xception
       - `xception <xception/xception>`_
       - :math:`(N,3,224,224)`
       - 22,862,096
-      - ✅
+      - 4.67B
 
 MobileNet
 ---------
@@ -694,31 +694,31 @@ reducing computational cost while maintaining performance.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - MobileNet
       - `mobilenet <mobile/mobilenet>`_
       - :math:`(N,3,224,224)`
       - 4,232,008
-      - ✅
+      - 584.08M
     
     * - MobileNet-v2
       - `mobilenet_v2 <mobile/mobilenet_v2>`_
       - :math:`(N,3,224,224)`
       - 3,504,872
-      - ✅
+      - 367.39M
     
     * - MobileNet-v3-Small
       - `mobilenet_v3_small <mobile/mobilenet_v3_small>`_
       - :math:`(N,3,224,224)`
       - 2,537,238
-      - ✅
+      - 73.88M
     
     * - MobileNet-v3-Large
       - `mobilenet_v3_large <mobile/mobilenet_v3_large>`_
       - :math:`(N,3,224,224)`
       - 5,481,198
-      - ✅
+      - 266.91M
 
 .. list-table::
     :header-rows: 1
@@ -728,37 +728,37 @@ reducing computational cost while maintaining performance.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - MobileNet-v4-Conv-Small
       - `mobilenet_v4_conv_small <mobile/mobilenet_v4_conv_small>`_
       - :math:`(N,3,224,224)`
       - 3,774,024
-      - ✅
+      - 265.15M
     
     * - MobileNet-v4-Conv-Medium
       - `mobilenet_v4_conv_medium <mobile/mobilenet_v4_conv_medium>`_
       - :math:`(N,3,224,224)`
       - 9,715,512
-      - ✅
+      - 944.48M
     
     * - MobileNet-v4-Conv-Large
       - `mobilenet_v4_conv_large <mobile/mobilenet_v4_conv_large>`_
       - :math:`(N,3,224,224)`
       - 32,590,864
-      - ✅
+      - 2.32B
     
     * - MobileNet-v4-Hybrid-Medium
       - `mobilenet_v4_hybrid_medium <mobile/mobilenet_v4_hybrid_medium>`_
       - :math:`(N,3,224,224)`
       - 11,070,136
-      - ✅
+      - 1.09B
     
     * - MobileNet-v4-Hybrid-Large
       - `mobilenet_v4_hybrid_large <mobile/mobilenet_v4_hybrid_large>`_
       - :math:`(N,3,224,224)`
       - 37,755,152
-      - ✅
+      - 2.72B
 
 EfficientNet
 ------------
@@ -794,55 +794,55 @@ computational resources compared to previous architectures.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - EfficientNet-B0
       - `efficientnet_b0 <efficient/efficientnet_b0>`_
       - :math:`(N,3,224,224)`
       - 5,289,636
-      - ✅
+      - 463.32M
     
     * - EfficientNet-B1
       - `efficientnet_b1 <efficient/efficientnet_b1>`_
       - :math:`(N,3,240,240)`
       - 7,795,560
-      - ✅
+      - 849.06M
     
     * - EfficientNet-B2
       - `efficientnet_b2 <efficient/efficientnet_b2>`_
       - :math:`(N,3,260,260)`
       - 9,111,370
-      - ✅
+      - 1.20B
     
     * - EfficientNet-B3
       - `efficientnet_b3 <efficient/efficientnet_b3>`_
       - :math:`(N,3,300,300)`
       - 12,235,536
-      - ✅
+      - 2.01B
     
     * - EfficientNet-B4
       - `efficientnet_b4 <efficient/efficientnet_b4>`_
       - :math:`(N,3,380,380)`
       - 19,344,640
-      - ✅
+      - 4.63B
     
     * - EfficientNet-B5
       - `efficientnet_b5 <efficient/efficientnet_b5>`_
       - :math:`(N,3,456,456)`
       - 30,393,432
-      - ✅
+      - 12.17B
     
     * - EfficientNet-B6
       - `efficientnet_b6 <efficient/efficientnet_b6>`_
       - :math:`(N,3,528,528)`
       - 43,046,128
-      - ✅
+      - 21.34B
     
     * - EfficientNet-B7
       - `efficientnet_b7 <efficient/efficientnet_b7>`_
       - :math:`(N,3,600,600)`
       - 66,355,448
-      - ✅
+      - 40.31B
 
 .. list-table::
     :header-rows: 1
@@ -852,31 +852,31 @@ computational resources compared to previous architectures.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - EfficientNet-v2-S
       - `efficientnet_v2_s <efficient/efficientnet_v2_s>`_
       - :math:`(N,3,224,224)`
       - 21,136,440
-      - ✅
+      - 789.91M
     
     * - EfficientNet-v2-M
       - `efficientnet_v2_m <efficient/efficientnet_v2_m>`_
       - :math:`(N,3,224,224)`
       - 55,302,108
-      - ✅
+      - 1.42B
     
     * - EfficientNet-v2-L
       - `efficientnet_v2_l <efficient/efficientnet_v2_l>`_
       - :math:`(N,3,224,224)`
       - 120,617,032
-      - ✅
+      - 3.17B
     
     * - EfficientNet-v2-XL
       - `efficientnet_v2_xl <efficient/efficientnet_v2_xl>`_
       - :math:`(N,3,224,224)`
       - 210,221,568
-      - ✅
+      - 4.12B
 
 ResNeSt
 -------
@@ -899,55 +899,55 @@ recognition tasks with minimal computational overhead.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - ResNeSt-14
       - `resnest_14 <resnest/resnest_14>`_
       - :math:`(N,3,224,224)`
       - 10,611,560
-      - ✅
+      - 2.82B
     
     * - ResNeSt-26
       - `resnest_26 <resnest/resnest_26>`_
       - :math:`(N,3,224,224)`
       - 17,069,320
-      - ✅
+      - 3.72B
     
     * - ResNeSt-50
       - `resnest_50 <resnest/resnest_50>`_
       - :math:`(N,3,224,224)`
       - 27,483,112
-      - ✅
+      - 5.52B
     
     * - ResNeSt-101
       - `resnest_101 <resnest/resnest_101>`_
       - :math:`(N,3,224,224)`
       - 48,274,760
-      - ✅
+      - 10.43B
     
     * - ResNeSt-200
       - `resnest_200 <resnest/resnest_200>`_
       - :math:`(N,3,224,224)`
       - 70,201,288
-      - ✅
+      - 17.85B
     
     * - ResNeSt-269
       - `resnest_269 <resnest/resnest_269>`_
       - :math:`(N,3,224,224)`
       - 110,929,224
-      - ✅
+      - 22.98B
     
     * - ResNeSt-50-4s2x40d
       - `resnest_50_4s2x40d <resnest/resnest_50_4s2x40d>`_
       - :math:`(N,3,224,224)`
       - 30,417,464
-      - ✅
+      - 5.41B
     
     * - ResNeSt-50_1s4x24d
       - `resnest_50_1s4x24d <resnest/resnest_50_1s4x24d>`_
       - :math:`(N,3,224,224)`
       - 25,676,872
-      - ✅
+      - 5.14B
 
 ConvNeXt
 --------
@@ -980,37 +980,37 @@ and expanded kernel sizes to enhance feature extraction.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - ConvNeXt-Tiny
       - `convnext_tiny <convnext/convnext_tiny>`_
       - :math:`(N,3,224,224)`
       - 28,589,128
-      - ✅
+      - 4.73B
     
     * - ConvNeXt-Small
       - `convnext_small <convnext/convnext_small>`_
       - :math:`(N,3,224,224)`
       - 46,884,148
-      - ✅
+      - 8.46B
     
     * - ConvNeXt-Base
       - `convnext_base <convnext/convnext_base>`_
       - :math:`(N,3,224,224)`
       - 88,591,464
-      - ✅
+      - 15.93B
     
     * - ConvNeXt-Large
       - `convnext_large <convnext/convnext_large>`_
       - :math:`(N,3,224,224)`
       - 197,767,336
-      - ✅
+      - 35.23B
     
     * - ConvNeXt-XLarge
       - `convnext_xlarge <convnext/convnext_xlarge>`_
       - :math:`(N,3,224,224)`
       - 350,196,968
-      - ✅
+      - 62.08B
 
 .. list-table::
     :header-rows: 1
@@ -1020,55 +1020,55 @@ and expanded kernel sizes to enhance feature extraction.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - ConvNeXt-v2-Atto
       - `convnext_v2_atto <convnext/convnext_v2_atto>`_
       - :math:`(N,3,224,224)`
       - 3,708,400
-      - ✅
+      - 641.87M
     
     * - ConvNeXt-v2-Femto
       - `convnext_v2_femto <convnext/convnext_v2_femto>`_
       - :math:`(N,3,224,224)`
       - 5,233,240
-      - ✅
+      - 893.05M
     
     * - ConvNeXt-v2-Pico
       - `convnext_v2_pico <convnext/convnext_v2_pico>`_
       - :math:`(N,3,224,224)`
       - 9,066,280
-      - ✅
+      - 1.52B
     
     * - ConvNeXt-v2-Nano
       - `convnext_v2_nano <convnext/convnext_v2_nano>`_
       - :math:`(N,3,224,224)`
       - 15,623,800
-      - ✅
+      - 2.65B
     
     * - ConvNeXt-v2-Tiny
       - `convnext_v2_tiny <convnext/convnext_v2_tiny>`_
       - :math:`(N,3,224,224)`
       - 28,635,496
-      - ✅
+      - 4.79B
     
     * - ConvNeXt-v2-Base
       - `convnext_v2_base <convnext/convnext_v2_base>`_
       - :math:`(N,3,224,224)`
       - 88,717,800
-      - ✅
+      - 16.08B
     
     * - ConvNeXt-v2-Large
       - `convnext_v2_large <convnext/convnext_v2_large>`_
       - :math:`(N,3,224,224)`
       - 197,956,840
-      - ✅
+      - 35.64B
     
     * - ConvNeXt-v2-Huge
       - `convnext_v2_huge <convnext/convnext_v2_huge>`_
       - :math:`(N,3,224,224)`
       - 660,289,640
-      - ✅
+      - 120.89B
 
 InceptionNeXt
 -------------
@@ -1093,31 +1093,31 @@ diverse vision tasks.
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - InceptionNeXt-Atto
       - `inception_next_atto <inception_next/inception_next_atto>`_
       - :math:`(N,3,224,224)`
       - 4,156,520
-      - ✅
+      - 582.25M
     
     * - InceptionNeXt-Tiny
       - `inception_next_tiny <inception_next/inception_next_tiny>`_
       - :math:`(N,3,224,224)`
       - 28,083,832
-      - ✅
+      - 4.48B
     
     * - InceptionNeXt-Small
       - `inception_next_small <inception_next/inception_next_small>`_
       - :math:`(N,3,224,224)`
       - 49,431,544
-      - ✅
+      - 8.82B
     
     * - InceptionNeXt-Base
       - `inception_next_base <inception_next/inception_next_base>`_
       - :math:`(N,3,224,224)`
       - 86,748,840
-      - ✅
+      - 15.47B
 
 CoAtNet
 -------
@@ -1142,54 +1142,54 @@ CoAtNet achieves superior efficiency and performance across various vision tasks
       - Model
       - Input Shape
       - Parameter Count
-      - Implemented
+      - FLOPs
     
     * - CoAtNet-0
       - `coatnet_0 <coatnet/coatnet_0>`_
       - :math:`(N,3,224,224)`
       - 27,174,944
-      - ✅
+      - 5.52B
     
     * - CoAtNet-1
       - `coatnet_1 <coatnet/coatnet_1>`_
       - :math:`(N,3,224,224)`
       - 53,330,240
-      - ✅
+      - 12.32B
     
     * - CoAtNet-2
       - `coatnet_2 <coatnet/coatnet_2>`_
       - :math:`(N,3,224,224)`
       - 82,516,096
-      - ✅
+      - 19.72B
     
     * - CoAtNet-3
       - `coatnet_3 <coatnet/coatnet_3>`_
       - :math:`(N,3,224,224)`
       - 157,790,656
-      - ✅
+      - 37.17B
     
     * - CoAtNet-4
       - `coatnet_4 <coatnet/coatnet_4>`_
       - :math:`(N,3,224,224)`
       - 277,301,632
-      - ✅
+      - 66.79B
     
     * - CoAtNet-5
       - `coatnet_5 <coatnet/coatnet_5>`_
       - :math:`(N,3,224,224)`
       - 770,124,608
-      - ✅
+      - 189.34B
     
     * - CoAtNet-6
       - `coatnet_6 <coatnet/coatnet_6>`_
       - :math:`(N,3,224,224)`
       - 2,011,558,336
-      - ✅
+      - 293.51B
     
     * - CoAtNet-7
       - `coatnet_7 <coatnet/coatnet_7>`_
       - :math:`(N,3,224,224)`
       - 3,107,978,688
-      - ✅
+      - 364.71B
 
 *To be implemented...🔮*

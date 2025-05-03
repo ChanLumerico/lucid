@@ -1,8 +1,8 @@
-# Lucid 💎²
+# Lucid² 💎
 
 ![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-24.5k-yellow)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-24.8k-yellow)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 ![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&label=Lines%20of%20Code&color=purple&cacheSeconds=5)
@@ -15,10 +15,14 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- FLOPs counting mechanism added to `Tensor`
+  ```py
+  with lucid.count_flops():
+      c = a @ b
+  print(c.flops)
+  ```
+
 - CrossViT added: `lucid.models.CrossViT`
-- Supports ellipsis(`...`) for Einstein-operations: `lucid.einops`
-- Added `nn.Unfold`
-- Pyramid Vision Transformer v2 (PVT-v2) added: `lucid.models.PVT_V2`
 
 ## 🔧 How to Install
 

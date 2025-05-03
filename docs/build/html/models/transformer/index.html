@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/transformer/index.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>Transformers - Lucid 2.0.17 documentation</title>
+        <title>Transformers - Lucid 2.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">Lucid 2.0.17 documentation</div></a>
+      <a href="../../index.html"><div class="brand">Lucid 2.1.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -191,7 +191,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 2.0.17 documentation</span>
+  <span class="sidebar-brand-text">Lucid 2.1.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -913,7 +913,7 @@ parallelized training and capturing long-range dependencies effectively.</p>
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
-<th class="head"><p>Implemented</p></th>
+<th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
@@ -921,13 +921,13 @@ parallelized training and capturing long-range dependencies effectively.</p>
 <td><p><a class="reference external" href="base/transformer_base">transformer_base</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N, L_{src})\)</span>, <span class="math notranslate nohighlight">\((N, L_{tgt})\)</span></p></td>
 <td><p>62,584,544</p></td>
-<td><p>✅</p></td>
+<td><p><span class="math notranslate nohighlight">\(O(N \cdot d_{m} \cdot L_{src} \cdot L_{tgt})\)</span></p></td>
 </tr>
 <tr class="row-odd"><td><p>Transformer-Big</p></td>
 <td><p><a class="reference external" href="base/transformer_big">transformer_big</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N, L_{src})\)</span>, <span class="math notranslate nohighlight">\((N, L_{tgt})\)</span></p></td>
 <td><p>213,237,472</p></td>
-<td><p>✅</p></td>
+<td><p><span class="math notranslate nohighlight">\(O(N \cdot d_{m} \cdot L_{src} \cdot L_{tgt})\)</span></p></td>
 </tr>
 </tbody>
 </table>
@@ -955,7 +955,7 @@ Image Recognition at Scale.” <em>International Conference on Learning Represen
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
-<th class="head"><p>Implemented</p></th>
+<th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
@@ -963,31 +963,31 @@ Image Recognition at Scale.” <em>International Conference on Learning Represen
 <td><p><a class="reference external" href="vit/vit_tiny">vit_tiny</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>5,717,416</p></td>
-<td><p>✅</p></td>
+<td><p>1.36B</p></td>
 </tr>
 <tr class="row-odd"><td><p>ViT-S</p></td>
 <td><p><a class="reference external" href="vit/vit_small">vit_small</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>22,050,664</p></td>
-<td><p>✅</p></td>
+<td><p>4.81B</p></td>
 </tr>
 <tr class="row-even"><td><p>ViT-B</p></td>
 <td><p><a class="reference external" href="vit/vit_base">vit_base</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>86,567,656</p></td>
-<td><p>✅</p></td>
+<td><p>17.99B</p></td>
 </tr>
 <tr class="row-odd"><td><p>ViT-L</p></td>
 <td><p><a class="reference external" href="vit/vit_large">vit_large</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>304,326,632</p></td>
-<td><p>✅</p></td>
+<td><p>62.69B</p></td>
 </tr>
 <tr class="row-even"><td><p>ViT-H</p></td>
 <td><p><a class="reference external" href="vit/vit_huge">vit_huge</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>632,199,400</p></td>
-<td><p>✅</p></td>
+<td><p>169.45B</p></td>
 </tr>
 </tbody>
 </table>
@@ -1024,7 +1024,7 @@ arXiv preprint arXiv:2111.09883 (2021).</p>
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
-<th class="head"><p>Implemented</p></th>
+<th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
@@ -1032,25 +1032,25 @@ arXiv preprint arXiv:2111.09883 (2021).</p>
 <td><p><a class="reference external" href="swin/swin_tiny">swin_tiny</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>28,288,354</p></td>
-<td><p>✅</p></td>
+<td><p>4.95B</p></td>
 </tr>
 <tr class="row-odd"><td><p>Swin-S</p></td>
 <td><p><a class="reference external" href="swin/swin_small">swin_small</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>49,606,258</p></td>
-<td><p>✅</p></td>
+<td><p>9.37B</p></td>
 </tr>
 <tr class="row-even"><td><p>Swin-B</p></td>
 <td><p><a class="reference external" href="swin/swin_base">swin_base</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>87,768,224</p></td>
-<td><p>✅</p></td>
+<td><p>16.35B</p></td>
 </tr>
 <tr class="row-odd"><td><p>Swin-L</p></td>
 <td><p><a class="reference external" href="swin/swin_large">swin_large</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>196,532,476</p></td>
-<td><p>✅</p></td>
+<td><p>36.08B</p></td>
 </tr>
 </tbody>
 </table>
@@ -1062,7 +1062,7 @@ arXiv preprint arXiv:2111.09883 (2021).</p>
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
-<th class="head"><p>Implemented</p></th>
+<th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
@@ -1070,37 +1070,37 @@ arXiv preprint arXiv:2111.09883 (2021).</p>
 <td><p><a class="reference external" href="swin/swin_v2_tiny">swin_v2_tiny</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>28,349,842</p></td>
-<td><p>✅</p></td>
+<td><p>5.01B</p></td>
 </tr>
 <tr class="row-odd"><td><p>Swin-v2-S</p></td>
 <td><p><a class="reference external" href="swin/swin_v2_small">swin_v2_small</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>49,731,106</p></td>
-<td><p>✅</p></td>
+<td><p>9.48B</p></td>
 </tr>
 <tr class="row-even"><td><p>Swin-v2-B</p></td>
 <td><p><a class="reference external" href="swin/swin_v2_base">swin_v2_base</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>87,922,400</p></td>
-<td><p>✅</p></td>
+<td><p>16.49B</p></td>
 </tr>
 <tr class="row-odd"><td><p>Swin-v2-L</p></td>
 <td><p><a class="reference external" href="swin/swin_v2_large">swin_v2_large</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>196,745,308</p></td>
-<td><p>✅</p></td>
+<td><p>36.29B</p></td>
 </tr>
 <tr class="row-even"><td><p>Swin-v2-H</p></td>
 <td><p><a class="reference external" href="swin/swin_v2_huge">swin_v2_huge</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>657,796,668</p></td>
-<td><p>✅</p></td>
+<td><p>119.42B</p></td>
 </tr>
 <tr class="row-odd"><td><p>Swin-v2-G</p></td>
 <td><p><a class="reference external" href="swin/swin_v2_giant">swin_v2_giant</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>3,000,869,564</p></td>
-<td><p>✅</p></td>
+<td><p>531.67B</p></td>
 </tr>
 </tbody>
 </table>
@@ -1128,7 +1128,7 @@ dense prediction tasks.</p>
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
-<th class="head"><p>Implemented</p></th>
+<th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
@@ -1136,19 +1136,19 @@ dense prediction tasks.</p>
 <td><p><a class="reference external" href="cvt/cvt_13">cvt_13</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>19,997,480</p></td>
-<td><p>✅</p></td>
+<td><p>4.83B</p></td>
 </tr>
 <tr class="row-odd"><td><p>CvT-21</p></td>
 <td><p><a class="reference external" href="cvt/cvt_21">cvt_21</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>31,622,696</p></td>
-<td><p>✅</p></td>
+<td><p>7.57B</p></td>
 </tr>
 <tr class="row-even"><td><p>CvT-W24</p></td>
 <td><p><a class="reference external" href="cvt/cvt_w24">cvt_w24</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,384,384)\)</span></p></td>
 <td><p>277,196,392</p></td>
-<td><p>✅</p></td>
+<td><p>62.29B</p></td>
 </tr>
 </tbody>
 </table>
@@ -1181,7 +1181,7 @@ Prediction without Convolutions. arXiv, 2021, arXiv:2102.12122.</p>
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
-<th class="head"><p>Implemented</p></th>
+<th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
@@ -1189,31 +1189,31 @@ Prediction without Convolutions. arXiv, 2021, arXiv:2102.12122.</p>
 <td><p><a class="reference external" href="pvt/pvt_tiny">pvt_tiny</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>12,457,192</p></td>
-<td><p>✅</p></td>
+<td><p>2.02B</p></td>
 </tr>
 <tr class="row-odd"><td><p>PVT-Small</p></td>
 <td><p><a class="reference external" href="pvt/pvt_small">pvt_small</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>23,003,048</p></td>
-<td><p>✅</p></td>
+<td><p>3.93B</p></td>
 </tr>
 <tr class="row-even"><td><p>PVT-Medium</p></td>
 <td><p><a class="reference external" href="pvt/pvt_medium">pvt_medium</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>41,492,648</p></td>
-<td><p>✅</p></td>
+<td><p>6.66B</p></td>
 </tr>
 <tr class="row-odd"><td><p>PVT-Large</p></td>
 <td><p><a class="reference external" href="pvt/pvt_large">pvt_large</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>55,359,848</p></td>
-<td><p>✅</p></td>
+<td><p>8.71B</p></td>
 </tr>
 <tr class="row-even"><td><p>PVT-Huge</p></td>
 <td><p><a class="reference external" href="pvt/pvt_huge">pvt_huge</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>286,706,920</p></td>
-<td><p>✅</p></td>
+<td><p>48.63B</p></td>
 </tr>
 </tbody>
 </table>
@@ -1225,7 +1225,7 @@ Prediction without Convolutions. arXiv, 2021, arXiv:2102.12122.</p>
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
-<th class="head"><p>Implemented</p></th>
+<th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
@@ -1233,43 +1233,43 @@ Prediction without Convolutions. arXiv, 2021, arXiv:2102.12122.</p>
 <td><p><a class="reference external" href="pvt/pvt_v2_b0">pvt_v2_b0</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>3,666,760</p></td>
-<td><p>✅</p></td>
+<td><p>677.67M</p></td>
 </tr>
 <tr class="row-odd"><td><p>PVT-v2-B1</p></td>
 <td><p><a class="reference external" href="pvt/pvt_v2_b1">pvt_v2_b1</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>14,009,000</p></td>
-<td><p>✅</p></td>
+<td><p>2.32B</p></td>
 </tr>
 <tr class="row-even"><td><p>PVT-v2-B2</p></td>
 <td><p><a class="reference external" href="pvt/pvt_v2_b2">pvt_v2_b2</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>25,362,856</p></td>
-<td><p>✅</p></td>
+<td><p>4.39B</p></td>
 </tr>
 <tr class="row-odd"><td><p>PVT-v2-B2-Linear</p></td>
 <td><p><a class="reference external" href="pvt/pvt_v2_b2_li">pvt_v2_b2_li</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>22,553,512</p></td>
-<td><p>✅</p></td>
+<td><p>4.27B</p></td>
 </tr>
 <tr class="row-even"><td><p>PVT-v2-B3</p></td>
 <td><p><a class="reference external" href="pvt/pvt_v2_b3">pvt_v2_b3</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>45,238,696</p></td>
-<td><p>✅</p></td>
+<td><p>7.39B</p></td>
 </tr>
 <tr class="row-odd"><td><p>PVT-v2-B4</p></td>
 <td><p><a class="reference external" href="pvt/pvt_v2_b4">pvt_v2_b4</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>62,556,072</p></td>
-<td><p>✅</p></td>
+<td><p>10.80B</p></td>
 </tr>
 <tr class="row-even"><td><p>PVT-v2-B5</p></td>
 <td><p><a class="reference external" href="pvt/pvt_v2_b5">pvt_v2_b5</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>82,882,984</p></td>
-<td><p>✅</p></td>
+<td><p>13.47B</p></td>
 </tr>
 </tbody>
 </table>
@@ -1296,7 +1296,7 @@ Vision Transformer for Image Classification. arXiv, 2021. arXiv:2103.14899.</p>
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
-<th class="head"><p>Implemented</p></th>
+<th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
@@ -1304,55 +1304,55 @@ Vision Transformer for Image Classification. arXiv, 2021. arXiv:2103.14899.</p>
 <td><p><a class="reference external" href="cross_vit/crossvit_tiny">crossvit_tiny</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>7,014,800</p></td>
-<td><p>✅</p></td>
+<td><p>1.73B</p></td>
 </tr>
 <tr class="row-odd"><td><p>CrossViT-S</p></td>
 <td><p><a class="reference external" href="cross_vit/crossvit_small">crossvit_small</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>26,856,272</p></td>
-<td><p>✅</p></td>
+<td><p>5.94B</p></td>
 </tr>
 <tr class="row-even"><td><p>CrossViT-B</p></td>
 <td><p><a class="reference external" href="cross_vit/crossvit_base">crossvit_base</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>105,025,232</p></td>
-<td><p>✅</p></td>
+<td><p>21.85B</p></td>
 </tr>
 <tr class="row-odd"><td><p>CrossViT-9</p></td>
 <td><p><a class="reference external" href="cross_vit/crossvit_9">crossvit_9</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>8,553,296</p></td>
-<td><p>✅</p></td>
+<td><p>2.01B</p></td>
 </tr>
 <tr class="row-even"><td><p>CrossViT-15</p></td>
 <td><p><a class="reference external" href="cross_vit/crossvit_15">crossvit_15</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>27,528,464</p></td>
-<td><p>✅</p></td>
+<td><p>6.13B</p></td>
 </tr>
 <tr class="row-odd"><td><p>CrossViT-18</p></td>
 <td><p><a class="reference external" href="cross_vit/crossvit_18">crossvit_18</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>43,271,408</p></td>
-<td><p>✅</p></td>
+<td><p>9.48B</p></td>
 </tr>
 <tr class="row-even"><td><p>CrossViT-9†</p></td>
 <td><p><a class="reference external" href="cross_vit/crossvit_9_dagger">crossvit_9_dagger</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>8,776,592</p></td>
-<td><p>✅</p></td>
+<td><p>2.15B</p></td>
 </tr>
 <tr class="row-odd"><td><p>CrossViT-15†</p></td>
 <td><p><a class="reference external" href="cross_vit/crossvit_15_dagger">crossvit_15_dagger</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>28,209,008</p></td>
-<td><p>✅</p></td>
+<td><p>6.45B</p></td>
 </tr>
 <tr class="row-even"><td><p>CrossViT-18†</p></td>
 <td><p><a class="reference external" href="cross_vit/crossvit_18_dagger">crossvit_18_dagger</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
 <td><p>44,266,976</p></td>
-<td><p>✅</p></td>
+<td><p>9.93B</p></td>
 </tr>
 </tbody>
 </table>
@@ -1434,7 +1434,7 @@ Vision Transformer for Image Classification. arXiv, 2021. arXiv:2103.14899.</p>
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=86415d92"></script>
+</div><script src="../../_static/documentation_options.js?v=20623aea"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>
