@@ -3,4 +3,5 @@ from .vit import *
 from .swin import *
 from .cvt import *
 from .pvt import *
-from .cross_vit import *
+from .crossvit import *
+from .maxvit import *

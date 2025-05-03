@@ -449,4 +449,7 @@ improving performance on image recognition tasks.
       - 44,266,976
       - 9.93B
 
+MaxViT
+------
+
 *To be implemented...🔮*
