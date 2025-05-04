@@ -49,6 +49,11 @@ pygments_dark_style = "github-dark"
 
 rst_epilog = """
 
+.. |wip-badge| raw:: html
+
+    <span class="badge wip">Work-In-Progress</span>
+
+
 .. |convnet-badge| raw:: html
 
     <span class="badge convnet">ConvNet</span>

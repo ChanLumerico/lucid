@@ -1,43 +1,6 @@
 CrossViT
 ========
 
-.. raw:: html
-
-   <span
-     style="
-       display: inline-block; padding: 0.15em 0.6em;
-       border-radius: 999px; border: 1px solid #fd4ec3;
-       color: #fd4ec3; background-color: transparent;
-       font-size: 0.72em; font-weight: 500;
-     "
-   >
-     Transformer
-   </span>
-   
-   <span
-     style="
-       display: inline-block; padding: 0.15em 0.6em;
-       border-radius: 999px; border: 1px solid #ff8dd9;
-       color: #ff8dd9; background-color: transparent;
-       font-size: 0.72em; font-weight: 500;
-     "
-   >
-     Vision Transformer
-   </span>
-
-   <span
-     style="
-       display: inline-block; padding: 0.15em 0.6em;
-       border-radius: 999px; border: 1px solid #707070;
-       color: #707070; background-color: transparent;
-       font-size: 0.72em; font-weight: 500;
-     "
-   >
-     Image Classification
-   </span>
-
-.. autoclass:: lucid.models.transformer.CrossViT
-
 .. toctree::
     :maxdepth: 1
     :hidden:
@@ -51,6 +14,10 @@ CrossViT
     crossvit_9_dagger.rst
     crossvit_15_dagger.rst
     crossvit_18_dagger.rst
+
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
+
+.. autoclass:: lucid.models.transformer.CrossViT
 
 The `CrossViT` module implements the Cross-Attention Vision Transformer architecture, 
 which combines multiple vision transformer branches with cross-attention mechanisms 

@@ -13,40 +13,7 @@ PVT_V2
     pvt_v2_b4.rst
     pvt_v2_b5.rst
 
-.. raw:: html
-
-   <span
-     style="
-       display: inline-block; padding: 0.15em 0.6em;
-       border-radius: 999px; border: 1px solid #fd4ec3;
-       color: #fd4ec3; background-color: transparent;
-       font-size: 0.72em; font-weight: 500;
-     "
-   >
-     Transformer
-   </span>
-   
-   <span
-     style="
-       display: inline-block; padding: 0.15em 0.6em;
-       border-radius: 999px; border: 1px solid #ff8dd9;
-       color: #ff8dd9; background-color: transparent;
-       font-size: 0.72em; font-weight: 500;
-     "
-   >
-     Vision Transformer
-   </span>
-
-   <span
-     style="
-       display: inline-block; padding: 0.15em 0.6em;
-       border-radius: 999px; border: 1px solid #707070;
-       color: #707070; background-color: transparent;
-       font-size: 0.72em; font-weight: 500;
-     "
-   >
-     Image Classification
-   </span>
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
 
 .. autoclass:: lucid.models.PVT_V2
 
