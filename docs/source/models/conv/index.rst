@@ -31,8 +31,7 @@ ConvNets
 
 LeNet
 -----
-
-<span class="badge versionadded">Lucid 1.0+</span>
+|convnet-badge| |imgclf-badge|
 
 LeNet is a pioneering CNN by Yann LeCun for digit recognition, 
 combining convolutional, pooling, and fully connected layers. 
@@ -73,8 +72,7 @@ shaping modern CNNs.
 
 AlexNet
 -------
-
-<span class="badge versionadded">Lucid 1.2+</span>
+|convnet-badge| |imgclf-badge|
 
 AlexNet is a pioneering convolutional neural network introduced in 2012, 
 known for its deep architecture and use of ReLU activations, dropout, and GPU acceleration. 
@@ -102,8 +100,7 @@ Challenge (ILSVRC) in 2012, popularizing deep learning for computer vision.
 
 ZFNet
 -----
-
-<span class="badge versionadded">Lucid 1.2.1+</span>
+|convnet-badge| |imgclf-badge|
 
 ZFNet (Zeiler and Fergus Net) is a convolutional neural network that improved upon 
 AlexNet by using smaller convolutional filters and visualizing learned features to 
@@ -132,8 +129,7 @@ recognition and provided insights into deep learning interpretability.
 
 VGGNet
 ------
-
-<span class="badge versionadded">Lucid 1.3+</span>
+|convnet-badge| |imgclf-badge|
 
 VGGNet is a deep convolutional neural network known for its simplicity and use of 
 small 3x3 convolutional filters, which significantly improved object recognition accuracy.
@@ -177,8 +173,7 @@ small 3x3 convolutional filters, which significantly improved object recognition
 
 Inception
 ---------
-
-<span class="badge versionadded">Lucid 1.4+</span>
+|convnet-badge| |imgclf-badge|
 
 The Inception architecture, introduced in the GoogLeNet model, is a deep convolutional 
 neural network designed for efficient feature extraction using parallel convolutional and 
@@ -219,8 +214,7 @@ tasks.
 
 Inception-ResNet
 ----------------
-
-<span class="badge versionadded">Lucid 1.5+</span>
+|convnet-badge| |imgclf-badge|
 
 The Inception-ResNet architecture builds upon the Inception model by integrating 
 residual connections, which improve gradient flow and training stability in very 
@@ -256,8 +250,7 @@ for a wide range of image classification tasks.
 
 ResNet
 ------
-
-<span class="badge versionadded">Lucid 1.6+</span>
+|convnet-badge| |imgclf-badge|
 
 ResNets (Residual Networks) are deep neural network architectures that use skip 
 connections (residual connections) to alleviate the vanishing gradient problem, 
@@ -354,8 +347,7 @@ accuracy in tasks like image classification and object detection.
 
 ResNeXt
 -------
-
-<span class="badge versionadded">Lucid 1.7+</span><span class="badge versionchanged">Changed 1.13</span>
+|convnet-badge| |imgclf-badge|
 
 ResNeXt is an extension of the ResNet architecture that introduces a cardinality dimension 
 to the model, improving its performance and efficiency by allowing flexible aggregation of 
@@ -414,8 +406,7 @@ enabling parallel pathways for feature learning.
 
 SENet
 -----
-
-<span class="badge versionadded">Lucid 1.8+</span><span class="badge versionchanged">Changed 1.13.1</span>
+|convnet-badge| |imgclf-badge|
 
 SENets (Squeeze-and-Excitation Networks) are deep neural network architectures that enhance t
 he representational power of models by explicitly modeling channel interdependencies. 
@@ -501,8 +492,7 @@ feature responses.
 
 SKNet
 -----
-
-<span class="badge versionadded">Lucid 1.9+</span><span class="badge versionchanged">Changed 1.13.2</span>
+|convnet-badge| |imgclf-badge|
 
 SKNet (Selective Kernel Networks) is a deep learning architecture that enhances the 
 representational capacity of neural networks by enabling dynamic selection of kernel sizes 
@@ -559,8 +549,7 @@ each spatial location in an image, improving its ability to capture multi-scale 
 
 DenseNet
 --------
-
-<span class="badge versionadded">Lucid 1.10+</span>
+|convnet-badge| |imgclf-badge|
 
 A deep learning architecture designed to improve the flow of information and gradients 
 in neural networks by introducing dense connectivity between layers. It leverages the 
@@ -608,8 +597,7 @@ of parameters, and improves the efficiency of gradient propagation during traini
 
 Xception
 --------
-
-<span class="badge versionadded">Lucid 1.10.5+</span>
+|convnet-badge| |imgclf-badge|
 
 A deep learning architecture that introduces depthwise separable convolutions 
 to enhance efficiency and accuracy in convolutional neural networks. It builds 
@@ -638,11 +626,7 @@ reducing computational cost while maintaining performance.
 
 MobileNet
 ---------
-
-- MobileNet <span class="badge versionadded">Lucid 1.11+</span>
-- MobileNet-v2 <span class="badge versionadded">Lucid 1.11.1+</span>
-- MobileNet-v3 <span class="badge versionadded">Lucid 1.11.3+</span>
-- MobileNet-v4 <span class="badge versionadded">Lucid 1.15+</span>
+|convnet-badge| |imgclf-badge|
 
 A deep learning architecture that introduces depthwise separable convolutions 
 to enhance efficiency and accuracy in convolutional neural networks. It builds 
@@ -749,9 +733,7 @@ reducing computational cost while maintaining performance.
 
 EfficientNet
 ------------
-
-- EfficientNet <span class="badge versionadded">Lucid 1.12+</span>
-- EfficientNet-v2 <span class="badge versionadded">Lucid 1.12.8+</span>
+|convnet-badge| |imgclf-badge|
 
 EfficientNet is a family of convolutional neural networks optimized for 
 scalability and performance by systematically balancing network depth, width, 
@@ -864,8 +846,7 @@ computational resources compared to previous architectures.
 
 ResNeSt
 -------
-
-<span class="badge versionadded">Lucid 1.14+</span>
+|convnet-badge| |imgclf-badge|
 
 ResNeSt introduces Split Attention Blocks, which divide feature maps into groups, 
 compute attention for each group, and reassemble them to enhance representational power. 
@@ -935,9 +916,7 @@ recognition tasks with minimal computational overhead.
 
 ConvNeXt
 --------
-
-- ConvNeXt <span class="badge versionadded">Lucid 1.15+</span>
-- ConvNeXt-v2 <span class="badge versionadded">Lucid 1.15.6+</span>
+|convnet-badge| |imgclf-badge|
 
 ConvNeXt reimagines CNNs using principles inspired by vision transformers, 
 streamlining architectural design while preserving the efficiency of traditional CNNs. 
@@ -1053,8 +1032,7 @@ and expanded kernel sizes to enhance feature extraction.
 
 InceptionNeXt
 -------------
-
-<span class="badge versionadded">Lucid 1.16+</span>
+|convnet-badge| |imgclf-badge|
 
 InceptionNeXt extends the Inception architecture by incorporating modern design 
 principles inspired by vision transformers. It refines multi-scale feature extraction 
@@ -1102,8 +1080,7 @@ diverse vision tasks.
 
 CoAtNet
 -------
-
-<span class="badge versionadded">Lucid 1.17+</span>
+|convnet-badge| |imgclf-badge|
 
 CoAtNet extends the hybrid architecture paradigm by integrating convolutional 
 and transformer-based designs. It enhances representation learning through 

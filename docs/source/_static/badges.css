@@ -10,21 +10,11 @@
 
 .badge + .badge {
     margin-left: 0.5em;
-}  
+}
 
 .badge.normal {
     color: #7a7a7a;
     border-color: #7a7a7a;
-}
-
-.badge.versionadded {
-    color: #7a7a7a;
-    border-color: #7a7a7a;
-}
-
-.badge.versionchanged {
-    color: #209bff;
-    border-color: #209bff;
 }
 
 .badge.wip {

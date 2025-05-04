@@ -16,8 +16,7 @@ Transformers
 
 Transformer
 -----------
-
-<span class="badge versionadded">Lucid 1.18+</span>
+|transformer-badge| |seq2seq-badge|
 
 The Transformer is a deep learning architecture introduced by Vaswani et al. in 2017, 
 designed for handling sequential data with self-attention mechanisms. It replaces 
@@ -51,8 +50,7 @@ parallelized training and capturing long-range dependencies effectively.
 
 Visual Transformer (ViT)
 ------------------------
-
-<span class="badge versionadded">Lucid 1.19+</span>
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
 
 The Vision Transformer (ViT) is a deep learning architecture introduced by 
 Dosovitskiy et al. in 2020, designed for image recognition tasks using self-attention 
@@ -106,9 +104,7 @@ layers to capture global dependencies.
 
 Swin Transformer
 ----------------
-
-- Swin Transformer <span class="badge versionadded">Lucid 1.20+</span>
-- Swin Transformer-v2 <span class="badge versionadded">Lucid 1.20.5+</span>
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
 
 The Swin Transformer is a hierarchical vision transformer introduced by 
 Liu et al. in 2021, designed for image recognition and dense prediction 
@@ -211,8 +207,7 @@ within each window.
 
 Convolutional Transformer (CvT)
 -------------------------------
-
-<span class="badge versionadded">Lucid 1.21+</span>
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
 
 CvT (Convolutional Vision Transformer) combines self-attention with depthwise 
 convolutions to improve local feature extraction and computational efficiency. 
@@ -254,9 +249,7 @@ dense prediction tasks.
 
 Pyramid Vision Transformer (PVT)
 --------------------------------
-
-- PVT <span class="badge versionadded">Lucid 1.22.5+</span>
-- PVT-v2 <span class="badge versionadded">Lucid 2.0.7+</span>
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
 
 The **Pyramid Vision Transformer (PVT)** combines CNN-like pyramidal structures 
 with Transformer attention, capturing multi-scale features efficiently. It reduces 
@@ -367,8 +360,7 @@ to enhance performance in dense prediction tasks like detection and segmentation
 
 CrossViT
 --------
-
-- PVT-v2 <span class="badge versionadded">Lucid 2.0.17+</span>
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
 
 CrossViT is a vision transformer architecture that combines multi-scale 
 tokenization by processing input images at different resolutions in parallel, 
@@ -445,7 +437,6 @@ improving performance on image recognition tasks.
 
 MaxViT
 ------
-
 |wip-badge|
 
 *To be implemented...🔮*
