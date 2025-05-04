@@ -125,7 +125,7 @@
 .. module:: lucid
    :synopsis: An educational deep learning framework built from scratch.
 
-Lucid 💎²
+Lucid² 💎
 =========
 
 .. image:: https://img.shields.io/pypi/v/lucid-dl?color=red

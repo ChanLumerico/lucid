@@ -24,6 +24,7 @@ html_baseurl = "https://chanlumerico.github.io/lucid/"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.githubpages",
+    "sphinx_design",
 ]
 
 templates_path = ["_templates"]

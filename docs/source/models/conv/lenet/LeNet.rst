@@ -9,6 +9,10 @@ LeNet
     lenet_4.rst
     lenet_5.rst
 
+.. badge:: ConvNet
+    :style: color: green
+    :badge-style: outline
+
 .. autoclass:: lucid.models.LeNet
 
 Overview
