@@ -1,0 +1,29 @@
+.badge {
+    display: inline-block;
+    padding: 0.15em 0.6em;
+    border-radius: 999px;
+    font-size: 0.72em;
+    font-weight: 500;
+    background-color: transparent;
+    border: 1px solid;
+}
+
+.badge.normal {
+    color: #7a7a7a;
+    border-color: #7a7a7a;
+}
+
+.badge.convnet {
+    color: #ffa600;
+    border-color: #ffa600;
+}
+
+.badge.transformer {
+    color: #fd4ec3;
+    border-color: #fd4ec3;
+}
+
+.badge.vision_transformer {
+    color: #ff8dd9;
+    border-color: #ff8dd9;
+}

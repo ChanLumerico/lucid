@@ -35,6 +35,7 @@ exclude_patterns = []
 
 html_theme = "furo"
 html_static_path = ["_static"]
+html_css_files = ["badges.css"]
 
 html_theme_options = {
     "source_repository": "https://github.com/ChanLumerico/lucid/",
@@ -44,3 +45,29 @@ html_theme_options = {
 
 pygments_style = "xcode"
 pygments_dark_style = "github-dark"
+
+
+rst_epilog = """
+
+.. |convnet-badge| raw:: html
+
+    <span class="badge convnet">ConvNet</span>
+
+.. |transformer-badge| raw:: html
+
+    <span class="badge transformer">Transformer</span>
+
+.. |vision-transformer-badge| raw:: html
+
+    <span class="badge vision_transformer">Vision Transformer</span>
+
+    
+.. |imgclf-badge| raw:: html
+
+    <span class="badge normal">Image Classification</span>
+
+.. |seq2seq-badge| raw:: html
+
+    <span class="badge normal">Sequence-to-Sequence</span>
+
+"""
