@@ -9,9 +9,20 @@ LeNet
     lenet_4.rst
     lenet_5.rst
 
-.. badge:: ConvNet
-    :style: color: green
-    :badge-style: outline
+.. raw:: html
+
+   <span
+     style="
+       display: inline-block;
+       padding: 0.25em 0.75em;
+       border-radius: 999px;
+       background-color: #007bff;
+       color: white;
+       font-size: 0.9em;
+     "
+   >
+     ConvNet
+   </span>
 
 .. autoclass:: lucid.models.LeNet
 
