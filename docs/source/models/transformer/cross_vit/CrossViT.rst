@@ -1,6 +1,41 @@
 CrossViT
 ========
 
+.. raw:: html
+
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid #fd4ec3;
+       color: #fd4ec3; background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     Transformer
+   </span>
+   
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid rgba(253, 78, 195, 0.7);
+       color: rgba(253, 78, 195, 0.7); background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     Vision Transformer
+   </span>
+
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid #707070;
+       color: #707070; background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     Image Classification
+   </span>
+
 .. autoclass:: lucid.models.transformer.CrossViT
 
 .. toctree::

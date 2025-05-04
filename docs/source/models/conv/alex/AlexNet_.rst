@@ -7,6 +7,30 @@ AlexNet
 
     alexnet.rst
 
+.. raw:: html
+
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid #ffa600;
+       color: #ffa600; background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     ConvNet
+   </span>
+
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid #707070;
+       color: #707070; background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     Image Classification
+   </span>
+
 .. autoclass:: lucid.models.AlexNet
 
 The `AlexNet` module in `lucid.nn` implements the AlexNet architecture, 

@@ -14,6 +14,30 @@ ResNeSt
     resnest_50_4s2x40d.rst
     resnest_50_1s4x24d.rst
 
+.. raw:: html
+
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid #ffa600;
+       color: #ffa600; background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     ConvNet
+   </span>
+
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid #707070;
+       color: #707070; background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     Image Classification
+   </span>
+
 .. autoclass:: lucid.models.ResNeSt
 
 The `ResNeSt` class extends the ResNet architecture by integrating Split-Attention blocks,

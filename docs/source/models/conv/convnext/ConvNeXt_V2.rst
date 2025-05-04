@@ -14,6 +14,30 @@ ConvNeXt_V2
     convnext_v2_large.rst
     convnext_v2_huge.rst
 
+.. raw:: html
+
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid #ffa600;
+       color: #ffa600; background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     ConvNet
+   </span>
+
+   <span
+     style="
+       display: inline-block; padding: 0.15em 0.6em;
+       border-radius: 999px; border: 1px solid #707070;
+       color: #707070; background-color: transparent;
+       font-size: 0.72em; font-weight: 500;
+     "
+   >
+     Image Classification
+   </span>
+
 .. autoclass:: lucid.models.ConvNeXt_V2
 
 The `ConvNeXt_V2` module in `lucid.nn` builds upon the original ConvNeXt architecture, 
