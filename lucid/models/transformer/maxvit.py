@@ -1,4 +1,4 @@
-from typing import Any, override
+from typing import Any, override, Callable
 from functools import partial
 
 import lucid
@@ -7,6 +7,45 @@ import lucid.nn.functional as F
 
 from lucid import register_model
 from lucid._tensor import Tensor
+
+
+__all__ = ["MaxViT"]
+
+
+def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
+    return (val, val)
+
+
+class _MLP(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_feature: int | None = None,
+        out_features: int | None = None,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] | None = None,
+        bias: bool = True,
+        drop: float = 0.0,
+    ) -> None:
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_feature = hidden_feature or hidden_feature
+
+        bias = _to_2tuple(bias)
+        drop_probs = _to_2tuple(drop)
+
+        self.fc1 = nn.Linear(in_features, hidden_feature, bias=bias[0])
+        self.act = act_layer()
+        self.drop1 = nn.Dropout(drop_probs[0])
+        self.norm = norm_layer(hidden_feature)
+
+        self.fc2 = nn.Linear(hidden_feature, out_features, bias=bias[1])
+        self.drop2 = nn.Dropout(drop_probs[1])
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.drop1(self.act(self.fc1(x)))
+        x = self.drop2(self.fc2(self.norm(x)))
+        return x
 
 
 class _SqueezeExcite(nn.Module):
@@ -158,4 +197,139 @@ def _grid_partition(x: Tensor, grid_size: tuple[int, int] = (7, 7)) -> Tensor:
 def _grid_reverse(
     grid: Tensor, original_size: tuple[int, int], grid_size: tuple[int, int] = (7, 7)
 ) -> Tensor:
-    NotImplemented  # TODO: Continue from here
+    (H, W), C = original_size, grid.shape[-1]
+    B = int(grid.shape[0] / (H * W / grid_size[0] / grid_size[1]))
+    out = grid.reshape(B, H // grid_size[0], W // grid_size[1], *grid_size, C)
+    out = out.transpose((0, 5, 3, 1, 4, 2)).reshape(B, C, H, W)
+    return out
+
+
+def _get_relative_position_index(win_h: int, win_w: int) -> Tensor:
+    coords = lucid.stack(lucid.meshgrid([lucid.arange(win_h), lucid.arange(win_w)]))
+    coords_flatten = lucid.flatten(coords, axis=1)
+
+    relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
+    relative_coords = relative_coords.transpose((1, 2, 0))
+
+    relative_coords[:, :, 0] += win_h - 1
+    relative_coords[:, :, 1] += win_w - 1
+    relative_coords[:, :, 0] *= win_w - 1
+
+    return relative_coords.sum(axis=-1)
+
+
+class _RelativeSelfAttention(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        num_heads: int = 32,
+        grid_window_size: tuple[int, int] = (7, 7),
+        attn_drop: float = 0.0,
+        drop: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.in_channels = in_channels
+        self.num_heads = num_heads
+        self.grid_window_size = grid_window_size
+
+        self.scale = num_heads**-0.5
+        self.attn_area = grid_window_size[0] * grid_window_size[1]
+
+        self.qkv_mapping = nn.Linear(in_channels, 3 * in_channels)
+        self.attn_drop = nn.Dropout(attn_drop)
+
+        self.proj = nn.Linear(in_channels, in_channels)
+        self.proj_drop = nn.Dropout(drop)
+        self.softmax = nn.Softmax(axis=-1)
+
+        self.relative_pos_bias_table = nn.Parameter(
+            lucid.zeros(
+                (2 * grid_window_size[0] - 1) * (2 * grid_window_size[1] - 1), num_heads
+            )
+        )
+        nn.init.normal(self.relative_pos_bias_table, std=0.02)
+
+        self.relative_pos_index: nn.Buffer
+        self.register_buffer(
+            "relative_pos_index", _get_relative_position_index(*grid_window_size)
+        )
+
+    def _get_relative_positional_bias(self) -> Tensor:
+        rel_pos_bias = self.relative_pos_bias_table[
+            self.relative_pos_index.reshape(-1)
+        ].reshape(self.attn_area, self.attn_area, -1)
+
+        rel_pos_bias = rel_pos_bias.transpose((2, 0, 1))
+        return rel_pos_bias.unsqueeze(axis=0)
+
+    def forward(self, x: Tensor) -> Tensor:
+        B_, N, _ = x.shape
+        qkv = (
+            self.qkv_mapping(x)
+            .reshape(B_, N, 3, self.num_heads, -1)
+            .transpose((2, 0, 3, 1, 4))
+        )
+        q, k, v = qkv.chunk(3)
+        q *= self.scale
+
+        attn = self.softmax(q @ k.mT + self._get_relative_positional_bias())
+        out = (attn @ v).swapaxes(1, 2).reshape(B_, N, -1)
+        out = self.proj(out)
+        out = self.proj_drop(out)
+
+        return out
+
+
+class _MaxViTTransformerBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        partition_func: Callable,
+        reverse_func: Callable,
+        num_heads: int = 32,
+        grid_window_size: tuple[int, int] = (7, 7),
+        attn_drop: float = 0.0,
+        drop: float = 0.0,
+        drop_path: float = 0.0,
+        mlp_ratio: float = 4.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        self.partition_func: Callable[[Tensor, tuple], Tensor] = partition_func
+        self.reverse_func: Callable[[Tensor, tuple, tuple], Tensor] = reverse_func
+        self.grid_window_size = grid_window_size
+
+        self.norm_1 = norm_layer(in_channels)
+        self.attention = _RelativeSelfAttention(
+            in_channels, num_heads, grid_window_size, attn_drop, drop
+        )
+        self.drop_path = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+
+        self.norm_2 = norm_layer(in_channels)
+        self.mlp = _MLP(
+            in_channels, int(mlp_ratio * in_channels), act_layer=act_layer, drop=drop
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        _, C, H, W = x.shape
+        input_part = self.partition_func(x, self.grid_window_size)
+        input_part = input_part.reshape(-1, *self.grid_window_size, C)
+
+        out = input_part + self.drop_path(self.attention(self.norm_1(input_part)))
+        out += self.drop_path(self.mlp(self.norm_2(out)))
+        out = self.reverse_func(out, (H, W), self.grid_window_size)
+
+        return out
+
+
+class _MaxViTBlock(nn.Module):
+    NotImplemented
+
+
+class _MaxViTStage(nn.Module):
+    NotImplemented
+
+
+class MaxViT(nn.Module):
+    NotImplemented

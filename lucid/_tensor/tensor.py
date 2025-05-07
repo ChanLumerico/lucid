@@ -310,7 +310,7 @@ class Tensor(_TensorOps):
             )
             lucid._set_tensor_grad(self, new_grad, at=new_idx)
 
-        if self.requires_grad:
+        if self.requires_grad and lucid.grad_enabled():
             new_tensor._backward_op = _backward_op
             new_tensor._prev = [self]
 
