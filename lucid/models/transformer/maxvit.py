@@ -1,5 +1,6 @@
 from typing import Callable
 from functools import partial
+import math
 
 import lucid
 import lucid.nn as nn
@@ -8,7 +9,7 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["MaxViT"]
+__all__ = ["MaxViT", "maxvit_tiny"]
 
 
 def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
@@ -28,7 +29,7 @@ class _MLP(nn.Module):
     ) -> None:
         super().__init__()
         out_features = out_features or in_features
-        hidden_feature = hidden_feature or hidden_feature
+        hidden_feature = hidden_feature or in_features
 
         bias = _to_2tuple(bias)
         drop_probs = _to_2tuple(drop)
@@ -36,7 +37,9 @@ class _MLP(nn.Module):
         self.fc1 = nn.Linear(in_features, hidden_feature, bias=bias[0])
         self.act = act_layer()
         self.drop1 = nn.Dropout(drop_probs[0])
-        self.norm = norm_layer(hidden_feature)
+        self.norm = (
+            norm_layer(hidden_feature) if norm_layer is not None else nn.Identity()
+        )
 
         self.fc2 = nn.Linear(hidden_feature, out_features, bias=bias[1])
         self.drop2 = nn.Dropout(drop_probs[1])
@@ -120,7 +123,7 @@ class _MBConv(nn.Module):
         in_channels: int,
         out_channels: int,
         downscale: bool = False,
-        act_layer: type[nn.module] = nn.GELU,
+        act_layer: type[nn.Module] = nn.GELU,
         norm_layer: type[nn.Module] = nn.BatchNorm2d,
         drop_path: float = 0.0,
     ) -> None:
@@ -130,13 +133,14 @@ class _MBConv(nn.Module):
             assert (
                 in_channels == out_channels
             ), "in/out channels must be equal when downscale=True."
-
+        self.in_channels = in_channels
         self.main_path = nn.Sequential(
             norm_layer(in_channels),
-            nn.Conv2d(in_channels, out_channels, kernel_size=1),
+            nn.Conv2d(in_channels, in_channels, kernel_size=1),
             _DepthwiseSeparableConv(
                 in_channels,
                 out_channels,
+                kernel_size=3,
                 stride=2 if downscale else 1,
                 act_layer=act_layer,
                 drop_path_rate=drop_path,
@@ -204,7 +208,7 @@ def _grid_reverse(
 
 
 def _get_relative_position_index(win_h: int, win_w: int) -> Tensor:
-    coords = lucid.stack(lucid.meshgrid([lucid.arange(win_h), lucid.arange(win_w)]))
+    coords = lucid.stack(lucid.meshgrid(lucid.arange(win_h), lucid.arange(win_w)))
     coords_flatten = lucid.flatten(coords, axis=1)
 
     relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
@@ -253,7 +257,7 @@ class _RelativeSelfAttention(nn.Module):
             "relative_pos_index", _get_relative_position_index(*grid_window_size)
         )
 
-    def _get_relative_positional_bias(self) -> Tensor:
+    def _get_relative_positional_bias(self) -> Tensor:  # BUG: bias-table indexing error
         rel_pos_bias = self.relative_pos_bias_table[
             self.relative_pos_index.reshape(-1)
         ].reshape(self.attn_area, self.attn_area, -1)
@@ -313,7 +317,7 @@ class _MaxViTTransformerBlock(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         _, C, H, W = x.shape
         input_part = self.partition_func(x, self.grid_window_size)
-        input_part = input_part.reshape(-1, *self.grid_window_size, C)
+        input_part = input_part.reshape(-1, math.prod(self.grid_window_size), C)
 
         out = input_part + self.drop_path(self.attention(self.norm_1(input_part)))
         out += self.drop_path(self.mlp(self.norm_2(out)))
@@ -335,7 +339,7 @@ class _MaxViTBlock(nn.Module):
         drop_path: float = 0.0,
         mlp_ratio: float = 4.0,
         act_layer: type[nn.Module] = nn.GELU,
-        norm_layer: type[nn.Module] = nn.LayerNorm,
+        norm_layer: type[nn.Module] = nn.BatchNorm2d,
         norm_layer_tf: type[nn.Module] = nn.LayerNorm,
     ) -> None:
         super().__init__()
@@ -383,7 +387,7 @@ class _MaxViTStage(nn.Module):
         drop_path: list[float] | float = 0.0,
         mlp_ratio: float = 4.0,
         act_layer: type[nn.Module] = nn.GELU,
-        norm_layer: type[nn.Module] = nn.LayerNorm,
+        norm_layer: type[nn.Module] = nn.BatchNorm2d,
         norm_layer_tf: type[nn.Module] = nn.LayerNorm,
     ) -> None:
         super().__init__()
@@ -425,7 +429,7 @@ class MaxViT(nn.Module):
         drop_path: float = 0.0,
         mlp_ratio: float = 4.0,
         act_layer: type[nn.Module] = nn.GELU,
-        norm_layer: type[nn.Module] = nn.LayerNorm,
+        norm_layer: type[nn.Module] = nn.BatchNorm2d,
         norm_layer_tf: type[nn.Module] = nn.LayerNorm,
     ) -> None:
         super().__init__()
@@ -472,3 +476,14 @@ class MaxViT(nn.Module):
         x = x.mean(axis=(2, 3))
         out = self.head(x)
         return out
+
+
+def maxvit_tiny(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
+    return MaxViT(
+        in_channels=in_channels,
+        num_classes=num_classes,
+        depths=(2, 2, 5, 2),
+        channels=(64, 128, 256, 512),
+        embed_dim=64,
+        **kwargs
+    )
