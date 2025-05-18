@@ -856,5 +856,11 @@
         "family": "CrossViT",
         "param_size": 44266976,
         "arch": "transformer"
+    },
+    "maxvit_tiny": {
+        "name": "maxvit_tiny",
+        "family": "MaxViT",
+        "param_size": 25081416,
+        "arch": "transformer"
     }
 }

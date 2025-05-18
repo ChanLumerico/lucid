@@ -218,7 +218,7 @@ def _get_relative_position_index(win_h: int, win_w: int) -> Tensor:
     relative_coords[:, :, 1] += win_w - 1
     relative_coords[:, :, 0] *= win_w - 1
 
-    return relative_coords.sum(axis=-1)
+    return relative_coords.sum(axis=-1).astype(lucid.Int)
 
 
 class _RelativeSelfAttention(nn.Module):
@@ -257,7 +257,7 @@ class _RelativeSelfAttention(nn.Module):
             "relative_pos_index", _get_relative_position_index(*grid_window_size)
         )
 
-    def _get_relative_positional_bias(self) -> Tensor:  # BUG: bias-table indexing error
+    def _get_relative_positional_bias(self) -> Tensor:
         rel_pos_bias = self.relative_pos_bias_table[
             self.relative_pos_index.reshape(-1)
         ].reshape(self.attn_area, self.attn_area, -1)
@@ -478,6 +478,7 @@ class MaxViT(nn.Module):
         return out
 
 
+@register_model
 def maxvit_tiny(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
     return MaxViT(
         in_channels=in_channels,
