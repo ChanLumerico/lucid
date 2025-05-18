@@ -1,9 +1,8 @@
-from typing import Any, override, Callable
+from typing import Callable
 from functools import partial
 
 import lucid
 import lucid.nn as nn
-import lucid.nn.functional as F
 
 from lucid import register_model
 from lucid._tensor import Tensor
@@ -324,12 +323,152 @@ class _MaxViTTransformerBlock(nn.Module):
 
 
 class _MaxViTBlock(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        downscale: bool = False,
+        num_heads: int = 32,
+        grid_window_size: tuple[int, int] = (7, 7),
+        attn_drop: float = 0.0,
+        drop: float = 0.0,
+        drop_path: float = 0.0,
+        mlp_ratio: float = 4.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        norm_layer_tf: type[nn.Module] = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        self.mb_conv = _MBConv(
+            in_channels, out_channels, downscale, act_layer, norm_layer, drop_path
+        )
+        base_tf = partial(
+            _MaxViTTransformerBlock,
+            in_channels=out_channels,
+            num_heads=num_heads,
+            grid_window_size=grid_window_size,
+            attn_drop=attn_drop,
+            drop=drop,
+            drop_path=drop_path,
+            mlp_ratio=mlp_ratio,
+            act_layer=act_layer,
+            norm_layer=norm_layer_tf,
+        )
+
+        self.block_tf = base_tf(
+            partition_func=_window_partition, reverse_func=_window_reverse
+        )
+        self.grid_tf = base_tf(
+            partition_func=_grid_partition, reverse_func=_grid_reverse
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        out = self.mb_conv(x)
+        out = self.block_tf(out)
+        out = self.grid_tf(out)
+
+        return out
 
 
 class _MaxViTStage(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        depth: int,
+        in_channels: int,
+        out_channels: int,
+        num_heads: int = 32,
+        grid_window_size: tuple[int, int] = (7, 7),
+        attn_drop: float = 0.0,
+        drop: float = 0.0,
+        drop_path: list[float] | float = 0.0,
+        mlp_ratio: float = 4.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        norm_layer_tf: type[nn.Module] = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        blocks = [
+            _MaxViTBlock(
+                in_channels=in_channels if idx == 0 else out_channels,
+                out_channels=out_channels,
+                downscale=idx == 0,
+                num_heads=num_heads,
+                grid_window_size=grid_window_size,
+                attn_drop=attn_drop,
+                drop=drop,
+                drop_path=drop_path if isinstance(drop_path, float) else drop_path[idx],
+                mlp_ratio=mlp_ratio,
+                act_layer=act_layer,
+                norm_layer=norm_layer,
+                norm_layer_tf=norm_layer_tf,
+            )
+            for idx in range(depth)
+        ]
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.blocks(x)
 
 
 class MaxViT(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        in_channels: int = 3,
+        depths: tuple[int, ...] = (2, 2, 5, 2),
+        channels: tuple[int, ...] = (64, 128, 256, 512),
+        num_classes: int = 1000,
+        embed_dim: int = 64,
+        num_heads: int = 32,
+        grid_window_size: tuple[int, int] = (7, 7),
+        attn_drop: float = 0.0,
+        drop: float = 0.0,
+        drop_path: float = 0.0,
+        mlp_ratio: float = 4.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        norm_layer_tf: type[nn.Module] = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        assert len(depths) == len(
+            channels
+        ), "Channel dims must be given for each stage."
+
+        self.num_classes = num_classes
+        self.stem = nn.Sequential(
+            nn.Conv2d(in_channels, embed_dim, kernel_size=3, stride=2, padding=1),
+            act_layer(),
+            nn.Conv2d(embed_dim, embed_dim, kernel_size=3, stride=1, padding=1),
+            act_layer(),
+        )
+
+        drop_path = lucid.linspace(0, drop_path, sum(depths))
+        stages = []
+        for idx, (depth, channel) in enumerate(zip(depths, channels)):
+            stages.append(
+                _MaxViTStage(
+                    depth=depth,
+                    in_channels=embed_dim if idx == 0 else channels[idx - 1],
+                    out_channels=channel,
+                    num_heads=num_heads,
+                    grid_window_size=grid_window_size,
+                    attn_drop=attn_drop,
+                    drop=drop,
+                    drop_path=drop_path[sum(depths[:idx]) : sum(depths[: idx + 1])],
+                    mlp_ratio=mlp_ratio,
+                    act_layer=act_layer,
+                    norm_layer=norm_layer,
+                    norm_layer_tf=norm_layer_tf,
+                )
+            )
+
+        self.stages = nn.ModuleList(stages)
+        self.head = nn.Linear(channels[-1], num_classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.stem(x)
+        for stage in self.stages:
+            x = stage(x)
+
+        x = x.mean(axis=(2, 3))
+        out = self.head(x)
+        return out
