@@ -862,5 +862,29 @@
         "family": "MaxViT",
         "param_size": 25081416,
         "arch": "transformer"
+    },
+    "maxvit_small": {
+        "name": "maxvit_small",
+        "family": "MaxViT",
+        "param_size": 55757304,
+        "arch": "transformer"
+    },
+    "maxvit_base": {
+        "name": "maxvit_base",
+        "family": "MaxViT",
+        "param_size": 96626776,
+        "arch": "transformer"
+    },
+    "maxvit_large": {
+        "name": "maxvit_large",
+        "family": "MaxViT",
+        "param_size": 171187880,
+        "arch": "transformer"
+    },
+    "maxvit_xlarge": {
+        "name": "maxvit_xlarge",
+        "family": "MaxViT",
+        "param_size": 383734024,
+        "arch": "transformer"
     }
 }

@@ -9,7 +9,14 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["MaxViT", "maxvit_tiny"]
+__all__ = [
+    "MaxViT",
+    "maxvit_tiny",
+    "maxvit_small",
+    "maxvit_base",
+    "maxvit_large",
+    "maxvit_xlarge",
+]
 
 
 def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
@@ -486,5 +493,53 @@ def maxvit_tiny(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxV
         depths=(2, 2, 5, 2),
         channels=(64, 128, 256, 512),
         embed_dim=64,
+        **kwargs
+    )
+
+
+@register_model
+def maxvit_small(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
+    return MaxViT(
+        in_channels=in_channels,
+        num_classes=num_classes,
+        depths=(2, 2, 5, 2),
+        channels=(96, 192, 384, 768),
+        embed_dim=64,
+        **kwargs
+    )
+
+
+@register_model
+def maxvit_base(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
+    return MaxViT(
+        in_channels=in_channels,
+        num_classes=num_classes,
+        depths=(2, 6, 14, 2),
+        channels=(96, 192, 384, 768),
+        embed_dim=64,
+        **kwargs
+    )
+
+
+@register_model
+def maxvit_large(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
+    return MaxViT(
+        in_channels=in_channels,
+        num_classes=num_classes,
+        depths=(2, 6, 14, 2),
+        channels=(128, 256, 512, 1024),
+        embed_dim=128,
+        **kwargs
+    )
+
+
+@register_model
+def maxvit_xlarge(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
+    return MaxViT(
+        in_channels=in_channels,
+        num_classes=num_classes,
+        depths=(2, 6, 14, 2),
+        channels=(192, 384, 768, 1536),
+        embed_dim=192,
         **kwargs
     )
