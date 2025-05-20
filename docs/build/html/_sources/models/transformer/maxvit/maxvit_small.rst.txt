@@ -7,7 +7,7 @@ The `maxvit_small` function constructs a compact yet more expressive variant of 
 Compared to `maxvit_tiny`, it increases channel width, enabling stronger 
 representational capacity while maintaining efficiency.
 
-Total Parameters: 55,757,304
+**Total Parameters**: 55,757,304
 
 Function Signature
 ------------------

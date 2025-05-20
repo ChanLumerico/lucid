@@ -7,7 +7,7 @@ The `maxvit_base` function constructs a high-capacity MaxViT model variant desig
 for more complex tasks, such as large-scale image classification. It offers deeper 
 layers in the middle stages for enhanced expressiveness.
 
-Total Parameters: 171,187,880
+**Total Parameters**: 171,187,880
 
 Function Signature
 ------------------

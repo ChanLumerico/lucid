@@ -7,7 +7,7 @@ The `maxvit_tiny` function returns a preconfigured instance of the `MaxViT`
 architecture with a lightweight "tiny" setup. This configuration is suitable for 
 tasks requiring a small model footprint with effective performance on visual tasks.
 
-Total Parameters: 25,081,416
+**Total Parameters**: 25,081,416
 
 Function Signature
 ------------------

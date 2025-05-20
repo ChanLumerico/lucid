@@ -7,7 +7,7 @@ The `maxvit_xlarge` function returns the highest capacity variant of the MaxViT 
 It significantly increases both depth and channel width, making it ideal 
 for high-resolution datasets and demanding image classification tasks.
 
-Total Parameters: 383,734,024
+**Total Parameters**: 383,734,024
 
 Function Signature
 ------------------
