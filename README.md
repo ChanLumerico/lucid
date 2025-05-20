@@ -15,6 +15,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- MaxViT model series added `lucid.models.MaxViT`
 - FLOPs counting mechanism added to `Tensor`
   ```py
   with lucid.count_flops():
