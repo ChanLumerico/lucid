@@ -56,6 +56,3 @@ Example
 
 .. tip::
     Use `**kwargs` to override components such as activation, norm layers, or dropout.
-
-.. seealso::
-    - :class:`lucid.models.transformer.MaxViT`

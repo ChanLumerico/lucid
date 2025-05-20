@@ -13,7 +13,7 @@ MaxViT
 
 |transformer-badge| |vision-transformer-badge| |imgclf-badge|
 
-.. autoclass:: lucid.models.transformer.MaxViT
+.. autoclass:: lucid.models.MaxViT
 
 The `MaxViT` module implements the Multi-Axis Vision Transformer architecture, 
 which combines local and global attention using a novel block design 

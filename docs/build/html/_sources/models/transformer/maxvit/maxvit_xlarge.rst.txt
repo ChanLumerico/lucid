@@ -59,6 +59,3 @@ Example
 .. warning::
     Due to its large number of parameters, this model is recommended for 
     use on powerful hardware (e.g., GPU or Apple Silicon with MLX backend).
-
-.. seealso::
-    - :class:`lucid.models.transformer.MaxViT`

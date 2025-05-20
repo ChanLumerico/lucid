@@ -1,7 +1,7 @@
 maxvit_base
 ===========
 
-.. autofunction:: lucid.models.maxvit_base
+.. autofunction:: lucid.models.maxvit_large
 
 The `maxvit_base` function constructs a high-capacity MaxViT model variant designed 
 for more complex tasks, such as large-scale image classification. It offers deeper 
@@ -57,6 +57,3 @@ Example
 .. note::
     The `maxvit_base` variant is suitable for high-resolution datasets and 
     larger model capacity benchmarks.
-
-.. seealso::
-    - :class:`lucid.models.transformer.MaxViT`

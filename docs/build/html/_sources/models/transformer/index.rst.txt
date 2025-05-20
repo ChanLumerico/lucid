@@ -12,7 +12,8 @@ Transformers
     CvT <cvt/CvT.rst>
     PVT <pvt/PVT.rst>
     PVT-v2 <pvt/PVT_V2.rst>
-    CrossViT <cross_vit/CrossViT.rst>
+    CrossViT <crossvit/CrossViT.rst>
+    MaxViT <maxvit/MaxViT.rst>
 
 Transformer
 -----------
@@ -382,61 +383,108 @@ improving performance on image recognition tasks.
       - FLOPs
     
     * - CrossViT-Ti
-      - `crossvit_tiny <cross_vit/crossvit_tiny>`_
+      - `crossvit_tiny <crossvit/crossvit_tiny>`_
       - :math:`(N,3,224,224)`
       - 7,014,800
       - 1.73B
     
     * - CrossViT-S
-      - `crossvit_small <cross_vit/crossvit_small>`_
+      - `crossvit_small <crossvit/crossvit_small>`_
       - :math:`(N,3,224,224)`
       - 26,856,272
       - 5.94B
     
     * - CrossViT-B
-      - `crossvit_base <cross_vit/crossvit_base>`_
+      - `crossvit_base <crossvit/crossvit_base>`_
       - :math:`(N,3,224,224)`
       - 105,025,232
       - 21.85B
     
     * - CrossViT-9
-      - `crossvit_9 <cross_vit/crossvit_9>`_
+      - `crossvit_9 <crossvit/crossvit_9>`_
       - :math:`(N,3,224,224)`
       - 8,553,296
       - 2.01B
     
     * - CrossViT-15
-      - `crossvit_15 <cross_vit/crossvit_15>`_
+      - `crossvit_15 <crossvit/crossvit_15>`_
       - :math:`(N,3,224,224)`
       - 27,528,464
       - 6.13B
     
     * - CrossViT-18
-      - `crossvit_18 <cross_vit/crossvit_18>`_
+      - `crossvit_18 <crossvit/crossvit_18>`_
       - :math:`(N,3,224,224)`
       - 43,271,408
       - 9.48B
     
     * - CrossViT-9†
-      - `crossvit_9_dagger <cross_vit/crossvit_9_dagger>`_
+      - `crossvit_9_dagger <crossvit/crossvit_9_dagger>`_
       - :math:`(N,3,224,224)`
       - 8,776,592
       - 2.15B
     
     * - CrossViT-15†
-      - `crossvit_15_dagger <cross_vit/crossvit_15_dagger>`_
+      - `crossvit_15_dagger <crossvit/crossvit_15_dagger>`_
       - :math:`(N,3,224,224)`
       - 28,209,008
       - 6.45B
     
     * - CrossViT-18†
-      - `crossvit_18_dagger <cross_vit/crossvit_18_dagger>`_
+      - `crossvit_18_dagger <crossvit/crossvit_18_dagger>`_
       - :math:`(N,3,224,224)`
       - 44,266,976
       - 9.93B
 
 MaxViT
 ------
-|wip-badge|
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
+
+MaxViT is a hybrid vision architecture that combines convolution, windowed attention, 
+and grid-based attention in a multi-axis design. This hierarchical structure enables 
+MaxViT to efficiently capture both local and global dependencies, making it effective 
+for various vision tasks with high accuracy and scalability.
+
+ Tu, Zihang, et al. *MaxViT: Multi-Axis Vision Transformer*. arXiv, 2022, arXiv:2204.01697.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - FLOPs
+    
+    * - MaxViT-T
+      - `maxvit_tiny <maxvit/maxvit_tiny>`_
+      - :math:`(N,3,224,224)`
+      - 25,081,416
+      - 5.60B
+    
+    * - MaxViT-S
+      - `maxvit_small <maxvit/maxvit_small>`_
+      - :math:`(N,3,224,224)`
+      - 55,757,304
+      - 10.59B
+    
+    * - MaxViT-B
+      - `maxvit_base <maxvit/maxvit_base>`_
+      - :math:`(N,3,224,224)`
+      - 96,626,776
+      - 21.83B
+    
+    * - MaxViT-L
+      - `maxvit_large <maxvit/maxvit_large>`_
+      - :math:`(N,3,224,224)`
+      - 171,187,880
+      - 38.51B
+    
+    * - MaxViT-XL
+      - `maxvit_xlarge <maxvit/maxvit_xlarge>`_
+      - :math:`(N,3,224,224)`
+      - 383,734,024
+      - 83.74B
 
 *To be implemented...🔮*

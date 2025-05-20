@@ -57,6 +57,3 @@ Example
 .. note::
     The `maxvit_base` variant is suitable for high-resolution datasets and larger 
     model capacity benchmarks.
-
-.. seealso::
-    - :class:`lucid.models.transformer.MaxViT`

@@ -17,7 +17,7 @@ CrossViT
 
 |transformer-badge| |vision-transformer-badge| |imgclf-badge|
 
-.. autoclass:: lucid.models.transformer.CrossViT
+.. autoclass:: lucid.models.CrossViT
 
 The `CrossViT` module implements the Cross-Attention Vision Transformer architecture, 
 which combines multiple vision transformer branches with cross-attention mechanisms 
