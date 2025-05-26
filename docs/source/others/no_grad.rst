@@ -1,108 +1,90 @@
 lucid.no_grad
 =============
 
-.. autofunction:: lucid.no_grad
+.. autoclass:: lucid.no_grad
 
-The `no_grad` context manager temporarily disables gradient calculation. 
+Overview
+--------
 
-This is especially useful during inference, where gradients are not needed, 
-helping to save memory and computational resources.
+`no_grad` temporarily **disables gradient calculation**.  
+It can be used either
+
+* as a **context manager**
+
+  .. code-block:: python
+
+      with lucid.no_grad():
+          output = model(x)
+
+* or as a **decorator**
+
+  .. code-block:: python
+
+      @lucid.no_grad()
+      def inference(x):
+          return model(x)
+
+Using it during inference (or any code that does **not** require gradients) saves
+memory and speeds up computation.
 
 Function Signature
 ------------------
 
 .. code-block:: python
 
-    @contextmanager
-    def no_grad() -> Generator
+    class no_grad:
+        def __enter__(self): ...
+        def __exit__(self, exc_type, exc_value, traceback): ...
+        def __call__(self, fn): ...
 
 Parameters
 ----------
 
-This context manager does not take any parameters.
+`no_grad` takes **no arguments**.  
+Calling it—either in a `with` statement or as `@lucid.no_grad()`—creates a new
+instance that manages gradient state for the enclosed block or function.
 
 Returns
 -------
 
-- **Generator**: A generator object that, when used in a `with` block, 
-  disables gradient tracking temporarily and restores it afterward.
+*When used as a context manager* - returns the instance itself so that nested
+usage is safe.
 
-Usage
------
+*When used as a decorator* - returns a **wrapped function** that will execute
+with gradient tracking disabled.
 
-The `no_grad` context manager should be used to wrap parts of your code where 
-gradient tracking is unnecessary. 
+Examples
+--------
 
-This is typically useful during model inference or when performing operations not related to training.
-
-Example
--------
+Context-manager usage:
 
 .. code-block:: python
 
-    >>> import lucid
-    >>> with lucid.no_grad():
-    >>>     # Inside this block, gradients are disabled
-    >>>     output = model(input)
-    >>>     print(output)
+    with lucid.no_grad():
+        preds = model(inputs)  # gradients are *not* stored
 
-In the example above, any tensor operation within the `with` block does not track gradients. 
-Once the block exits, the gradient state is restored to what it was before entering the context manager.
+Decorator usage:
+
+.. code-block:: python
+
+    @lucid.no_grad()
+    def evaluate(batch):
+        return model(batch).argmax(-1)
 
 .. note::
-    The context manager ensures that the global gradient tracking state 
-    is restored after execution, even if an error occurs inside the block.
 
-How It Works
-------------
-
-The `no_grad` context manager temporarily modifies the global `_grad_enabled` variable, 
-disabling gradient tracking during the execution of the `yield` block. 
-
-Once the block is finished, the state of gradient tracking is reverted to its previous state.
-
-.. attention::
-    Since this context manager modifies a global variable, it should be used with care. 
-    Ensure that no unintended side effects occur when disabling gradient tracking globally.
-
-.. warning::
-    Avoid using the `no_grad` context manager during training. 
-    Disabling gradient tracking will prevent the model from updating its parameters.
+    * The previous global state is restored even if an exception occurs.
+    * Avoid wrapping training steps with `no_grad`; doing so prevents parameter
+      updates.
 
 Benefits
 --------
 
-Using `no_grad` during inference or when performing operations not 
-requiring gradients provides several advantages:
-
-- **Reduced memory usage**: Tensors won't store gradient information, saving memory.
-
-- **Faster computation**: Operations that don’t require gradients will be faster 
-  since gradient calculations are skipped.
-
-- **Cleaner code**: Instead of manually disabling and re-enabling gradients, 
-  the `no_grad` context manager handles this for you.
-
-.. tip::
-    When running inference on large models or datasets, wrapping the inference code 
-    in `no_grad` can result in significant memory and time savings.
-
-Potential Pitfalls
-------------------
-
-While `no_grad` is powerful, it must be used appropriately. Here are some things to keep in mind:
+* **Reduced memory usage** - tensors skip gradient bookkeeping.
+* **Faster execution** - no backward graph is built.
+* **Clean syntax** - one line disables and then restores gradients.
 
 .. caution::
 
-    - **Training operations**: Avoid using `no_grad` in training steps, 
-      as it will prevent gradients from being calculated, which are necessary for backpropagation.
-
-    - **Global state modification**: Since it changes a global variable (`_grad_enabled`), 
-      ensure it doesn’t interfere with other parts of the code that may rely on gradients.
-
-Conclusion
-----------
-
-The `no_grad` context manager is an efficient way to handle non-gradient-related operations in your code, 
-optimizing memory usage and computational performance, especially when working with large models during inference.
-
+    * Because it toggles a global flag, be mindful when mixing code that both
+      requires and disables gradients.

@@ -118,6 +118,7 @@
    others/Numeric.rst
    others/no_grad.rst
    others/grad_enabled.rst
+   others/count_flops.rst
    others/newaxis.rst
    others/register_model.rst
 

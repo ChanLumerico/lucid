@@ -13,8 +13,9 @@ algorithms and operations without the complexity of high-level frameworks.
 [📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
 """
 
-from contextlib import contextmanager
-from typing import Any, Generator, SupportsIndex, Callable
+from contextlib import contextmanager, AbstractContextManager
+from typing import Any, Generator, SupportsIndex, Callable, Self, Optional, Type
+from types import TracebackType
 from functools import wraps
 from pathlib import Path
 
@@ -87,15 +88,38 @@ def to_tensor(
     return tensor(a, requires_grad, keep_grad, dtype)
 
 
-@contextmanager
-def no_grad() -> Generator:
-    global _grad_enabled
-    prev_state = _grad_enabled
-    _grad_enabled = False
-    try:
-        yield
-    finally:
-        _grad_enabled = prev_state
+class _NoGrad(AbstractContextManager):
+    __slots__ = ("_prev_state",)
+
+    def __enter__(self) -> Self:
+        global _grad_enabled
+        self._prev_state = _grad_enabled
+
+        _grad_enabled = False
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> bool:
+        _ = (exc_type, exc_value, traceback)
+        global _grad_enabled
+
+        _grad_enabled = self._prev_state
+        return False
+
+    def __call__(self, func: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            with _NoGrad():
+                return func(*args, **kwargs)
+
+        return wrapper
+
+
+no_grad = _NoGrad
 
 
 def grad_enabled() -> bool:

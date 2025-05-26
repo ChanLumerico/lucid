@@ -3,12 +3,12 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.register_model" href="register_model.html" /><link rel="prev" title="lucid.grad_enabled" href="grad_enabled.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.register_model" href="register_model.html" /><link rel="prev" title="lucid.count_flops" href="count_flops.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/others/newaxis.html" />
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2024.08.06 -->
-        <title>lucid.newaxis - Lucid 2.1.5 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d8a2add5" />
+    <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+        <title>lucid.newaxis - Lucid 2.1.6 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Lucid 2.1.5 documentation</div></a>
+      <a href="../index.html"><div class="brand">Lucid 2.1.6 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -193,7 +193,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 2.1.5 documentation</span>
+  <span class="sidebar-brand-text">Lucid 2.1.6 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -853,6 +853,7 @@
 <li class="toctree-l1"><a class="reference internal" href="Numeric.html">lucid.Numeric</a></li>
 <li class="toctree-l1"><a class="reference internal" href="no_grad.html">lucid.no_grad</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grad_enabled.html">lucid.grad_enabled</a></li>
+<li class="toctree-l1"><a class="reference internal" href="count_flops.html">lucid.count_flops</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">lucid.newaxis</a></li>
 <li class="toctree-l1"><a class="reference internal" href="register_model.html">lucid.register_model</a></li>
 </ul>
@@ -913,7 +914,7 @@ element-wise operations or reshaping data.</p>
 <div class="admonition-example-1-adding-a-new-axis-to-a-1d-tensor admonition">
 <p class="admonition-title">Example 1: Adding a new axis to a 1D tensor</p>
 <p>In this example, <cite>newaxis</cite> is used to add a new axis at the beginning of a 1D tensor.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>  <span class="c1"># Output: (3,)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>  <span class="c1"># Adds a new axis at the beginning</span>
@@ -968,14 +969,14 @@ and for preparing data in machine learning tasks.</p>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="grad_enabled.html">
+          <a class="prev-page" href="count_flops.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.grad_enabled</div>
+                <div class="title">lucid.count_flops</div>
                 
               </div>
             </a>
@@ -1023,7 +1024,7 @@ and for preparing data in machine learning tasks.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=786ba454"></script>
+</div><script src="../_static/documentation_options.js?v=4f932e3e"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
