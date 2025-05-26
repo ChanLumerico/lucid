@@ -15,16 +15,10 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- `lucid.round` added
+- `lucid.full` and `lucid.full_like` added
 - Decorator support for `lucid.no_grad`
 - MaxViT model series added `lucid.models.MaxViT`
-- FLOPs counting mechanism added to `Tensor`
-  ```py
-  with lucid.count_flops():
-      c = a @ b
-  print(c.flops)
-  ```
-
-- CrossViT added: `lucid.models.CrossViT`
 
 ## 🔧 How to Install
 

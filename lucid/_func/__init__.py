@@ -21,10 +21,10 @@ __all__ = [
     
     "exp", "log", "log2", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", 
     "sinh", "cosh", "tanh", "clip", "abs", "sign", "reciprocal", "square", "cube",
-    "transpose", "sum", "trace", "mean", "var", "min", "max", "swapaxes",
+    "transpose", "sum", "trace", "mean", "var", "min", "max", "swapaxes", "round",
 
     "zeros", "zeros_like", "ones", "ones_like", "eye", "diag", "arange", "empty",
-    "empty_like", "linspace",
+    "empty_like", "linspace", "full", "full_like",
 ]
 # fmt: on
 
@@ -243,6 +243,10 @@ def max(
 
 def swapaxes(a: Tensor, /, axis1: int, axis2: int) -> Tensor:
     return ufunc.swapaxes(axis1, axis2)(a)
+
+
+def round(a: Tensor, /, decimals: int = 0) -> Tensor:
+    return ufunc.round(decimals)(a)
 
 
 @overload
@@ -467,6 +471,28 @@ def linspace(
     return gfunc.linspace(start, stop, num, dtype, requires_grad, keep_grad, device)
 
 
+def full(
+    shape: int | _ShapeLike,
+    fill_value: _Scalar,
+    dtype: _BuiltinNumeric | Numeric | None = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    device: _DeviceType = "cpu",
+) -> Tensor:
+    return gfunc.full(shape, fill_value, dtype, requires_grad, keep_grad, device)
+
+
+def full_like(
+    a: Tensor | _ArrayLike,
+    fill_value: _Scalar,
+    dtype: _BuiltinNumeric | Numeric | None = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    device: _DeviceType | None = None,
+) -> Tensor:
+    return gfunc.full_like(a, fill_value, dtype, requires_grad, keep_grad, device)
+
+
 Tensor.__add__ = add
 Tensor.__radd__ = _radd
 Tensor.__sub__ = sub
@@ -497,3 +523,4 @@ Tensor.mean = mean
 Tensor.var = var
 Tensor.clip = clip
 Tensor.swapaxes = swapaxes
+Tensor.round = round

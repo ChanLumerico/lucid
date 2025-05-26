@@ -32,6 +32,7 @@ Tensor Operations
    ufunc/min.rst
    ufunc/max.rst
    ufunc/swapaxes.rst
+   ufunc/round.rst
 
 .. toctree::
    :maxdepth: 1
@@ -63,3 +64,5 @@ Tensor Operations
    gfunc/empty.rst
    gfunc/empty_like.rst
    gfunc/linspace.rst
+   gfunc/full.rst
+   gfunc/full_like.rst

@@ -770,3 +770,25 @@ class swapaxes(operation):
 
     def __grad__(self, lib_: ModuleType) -> _GradFuncType:
         return lib_.swapaxes(self.result.grad, self.axis1, self.axis2)
+
+
+class round(operation):
+    def __init__(self, decimals: int = 0) -> None:
+        super().__init__()
+        self.decimals = decimals
+
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.round(a.data, decimals=self.decimals))
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.round(a.data, decimals=self.decimals))
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lambda: lib_.array(0.0)
+
+    def __flops__(self, a: Tensor) -> int:
+        return a.size

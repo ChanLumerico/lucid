@@ -11,6 +11,7 @@ from lucid.nn.functional import (
     _drop,
     _norm,
     _loss,
+    _spatial,
     _util,
 )
 
@@ -350,3 +351,9 @@ def scaled_dot_product_attention(
     return _attention.scaled_dot_product_attention(
         query, key, value, attn_mask, dropout_p, is_causal, scale
     )
+
+
+def affine_grid(
+    theta: Tensor, size: tuple[int, ...], align_corners: bool = True
+) -> Tensor:
+    return _spatial.affine_grid(theta, size, align_corners)

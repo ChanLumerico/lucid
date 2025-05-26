@@ -129,7 +129,7 @@ def empty_like(
     dtype: _BuiltinNumeric | Numeric | None = None,
     requires_grad: bool = False,
     keep_grad: bool = False,
-    device: _DeviceType = "cpu",
+    device: _DeviceType | None = None,
 ) -> Tensor:
     data, dtype, device = _get_tensor_specs(a, dtype, device)
     return Tensor(np.empty_like(data), requires_grad, keep_grad, dtype, device)
@@ -146,4 +146,29 @@ def linspace(
 ) -> Tensor:
     return Tensor(
         np.linspace(start, stop, num), requires_grad, keep_grad, dtype, device
+    )
+
+
+def full(
+    shape: int | _ShapeLike,
+    fill_value: _Scalar,
+    dtype: _BuiltinNumeric | Numeric | None = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    device: _DeviceType = "cpu",
+) -> Tensor:
+    return Tensor(np.full(shape, fill_value), requires_grad, keep_grad, dtype, device)
+
+
+def full_like(
+    a: Tensor | _ArrayLike,
+    fill_value: _Scalar,
+    dtype: _BuiltinNumeric | Numeric | None = None,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    device: _DeviceType | None = None,
+) -> Tensor:
+    data, dtype, device = _get_tensor_specs(a, dtype, device)
+    return Tensor(
+        np.full_like(data, fill_value), requires_grad, keep_grad, dtype, device
     )
