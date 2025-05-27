@@ -19,6 +19,8 @@ class RegionWarper(nn.Module):
             return lucid.empty(0, C, *self.output_size, device=device)
 
         boxes = lucid.concatenate(rois, axis=0).to(device)
-        img_ids = lucid.concatenate([...])  # NOTE: Implement `lucid.full`
+        img_ids = lucid.concatenate(
+            [lucid.full((len(r),), i, device=device) for i, r in enumerate(rois)]
+        )
 
-        # TODO: Should implement `F.affine_grad` and `F.grid_sample`
+        # TODO: Continue from here
