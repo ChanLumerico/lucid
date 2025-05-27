@@ -359,11 +359,14 @@ def affine_grid(
     return _spatial.affine_grid(theta, size, align_corners)
 
 
+_PaddingType = Literal["zeros", "border"]
+
+
 def grid_sample(
     input_: Tensor,
     grid: Tensor,
-    mode: str = "bilinear",
-    padding_mode: str = "zeros",
+    mode: _InterpolateType = "bilinear",
+    padding_mode: _PaddingType = "zeros",
     align_corners: bool = True,
 ) -> Tensor:
     return _spatial.grid_sample(input_, grid, mode, padding_mode, align_corners)

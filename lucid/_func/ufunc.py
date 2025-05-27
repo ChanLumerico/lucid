@@ -788,7 +788,49 @@ class round(operation):
         return self.result, partial(self.__grad__, lib_=mx)
 
     def __grad__(self, lib_: ModuleType) -> _GradFuncType:
-        return lambda: lib_.array(0.0)
+        return lib_.array(0.0)
 
     def __flops__(self, a: Tensor) -> int:
+        return a.size
+
+
+class floor(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.floor(a.data))
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.floor(a.data))
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
+
+    def __flops__(self, a: Tensor) -> __init__:
+        return a.size
+
+
+class ceil(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.ceil(a.data))
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.ceil(a.data))
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
+
+    def __flops__(self, a: Tensor) -> __init__:
         return a.size

@@ -33,6 +33,8 @@ Tensor Operations
    ufunc/max.rst
    ufunc/swapaxes.rst
    ufunc/round.rst
+   ufunc/floor.rst
+   ufunc/ceil.rst
 
 .. toctree::
    :maxdepth: 1

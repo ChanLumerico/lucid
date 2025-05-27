@@ -22,6 +22,7 @@ __all__ = [
     "exp", "log", "log2", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", 
     "sinh", "cosh", "tanh", "clip", "abs", "sign", "reciprocal", "square", "cube",
     "transpose", "sum", "trace", "mean", "var", "min", "max", "swapaxes", "round",
+    "floor", "ceil",
 
     "zeros", "zeros_like", "ones", "ones_like", "eye", "diag", "arange", "empty",
     "empty_like", "linspace", "full", "full_like",
@@ -247,6 +248,14 @@ def swapaxes(a: Tensor, /, axis1: int, axis2: int) -> Tensor:
 
 def round(a: Tensor, /, decimals: int = 0) -> Tensor:
     return ufunc.round(decimals)(a)
+
+
+def floor(a: Tensor) -> Tensor:
+    return ufunc.floor()(a)
+
+
+def ceil(a: Tensor) -> Tensor:
+    return ufunc.ceil()(a)
 
 
 @overload
@@ -524,3 +533,5 @@ Tensor.var = var
 Tensor.clip = clip
 Tensor.swapaxes = swapaxes
 Tensor.round = round
+Tensor.floor = floor
+Tensor.ceil = ceil
