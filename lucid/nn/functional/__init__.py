@@ -357,3 +357,13 @@ def affine_grid(
     theta: Tensor, size: tuple[int, ...], align_corners: bool = True
 ) -> Tensor:
     return _spatial.affine_grid(theta, size, align_corners)
+
+
+def grid_sample(
+    input_: Tensor,
+    grid: Tensor,
+    mode: str = "bilinear",
+    padding_mode: str = "zeros",
+    align_corners: bool = True,
+) -> Tensor:
+    return _spatial.grid_sample(input_, grid, mode, padding_mode, align_corners)
