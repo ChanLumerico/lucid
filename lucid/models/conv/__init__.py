@@ -1,3 +1,4 @@
+# Image Classification
 from .lenet import *
 from .alex import *
 from .zfnet import *
@@ -16,3 +17,6 @@ from .efficient import *
 from .convnext import *
 from .inception_next import *
 from .coatnet import *
+
+# Object Detection
+from .rcnn import *
