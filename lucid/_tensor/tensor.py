@@ -162,7 +162,7 @@ class Tensor(_TensorOps):
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
 
-            if not (tensor.is_leaf or keep_grad or self.keep_grad):
+            if not (tensor.is_leaf or keep_grad or tensor.keep_grad):
                 tensor.grad = None
 
     def register_hook(self, hook: _HookType) -> Callable:
