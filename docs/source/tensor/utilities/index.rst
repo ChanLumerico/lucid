@@ -24,3 +24,4 @@ Tensor Utilites
    chunk.rst
    masked_fill.rst
    roll.rst
+   unbind.rst

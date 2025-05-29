@@ -15,11 +15,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Added new Tensor utility function: `lucid.unbind`
 - Spatial functions added to `lucid.nn.functional`: `F.affine_grid` and `F.grid_sample`
 - `lucid.round`, `lucid.floor` and `lucid.ceil` added
 - `lucid.full` and `lucid.full_like` added
 - Decorator support for `lucid.no_grad`
-- MaxViT model series added `lucid.models.MaxViT`
 
 ## 🔧 How to Install
 

@@ -73,10 +73,11 @@ def tensor(
     requires_grad: bool = False,
     keep_grad: bool = False,
     dtype: _BuiltinNumeric | Numeric | None = None,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
     if isinstance(data, Tensor):
         data = data.data
-    return Tensor(data, requires_grad, keep_grad, dtype)
+    return Tensor(data, requires_grad, keep_grad, dtype, device)
 
 
 def to_tensor(
@@ -84,8 +85,9 @@ def to_tensor(
     requires_grad: bool = False,
     keep_grad: bool = False,
     dtype: _BuiltinNumeric | Numeric | None = None,
+    device: _DeviceType = "cpu",
 ) -> Tensor:
-    return tensor(a, requires_grad, keep_grad, dtype)
+    return tensor(a, requires_grad, keep_grad, dtype, device)
 
 
 class _NoGrad(AbstractContextManager):

@@ -10,7 +10,8 @@ from lucid._util import func
 __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
-    "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll"
+    "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
+    "unbind",
 ]
 # fmt: on
 
@@ -120,6 +121,10 @@ def roll(
     return func.roll(shifts, axis)(a)
 
 
+def unbind(a: Tensor, /, axis: int = 0) -> tuple[Tensor, ...]:
+    return func.unbind(axis)(a)
+
+
 Tensor.reshape = _reshape_immediate
 Tensor.squeeze = squeeze
 Tensor.unsqueeze = unsqueeze
@@ -135,3 +140,4 @@ Tensor.broadcast_to = broadcast_to
 Tensor.chunk = chunk
 Tensor.masked_fill = masked_fill
 Tensor.roll = roll
+Tensor.unbind = unbind

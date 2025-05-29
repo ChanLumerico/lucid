@@ -6,7 +6,7 @@ import numpy as np
 import math
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar
+from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike
 
 from lucid._backend.core import (
     operation,
@@ -689,3 +689,42 @@ class roll(operation):
             neg_shift = tuple(-s for s in self.shifts)
 
         return lib_.roll(self.result.grad, shift=neg_shift, axis=self.axis)
+
+
+class unbind(operation):
+    def __init__(self, axis: int = 0) -> None:
+        super().__init__()
+        self.axis = axis
+
+    def _take_along_axis(self, x: _ArrayLike, index: int) -> _ArrayLike:
+        idx = [slice(None)] * x.ndim
+        idx[self.axis] = index
+        return x[tuple(idx)]
+
+    def _unified(self, a: Tensor, lib_: ModuleType) -> _FuncOpReturnType:
+        dim_size = a.shape[self.axis]
+        results = []
+
+        for idx in range(dim_size):
+            arr = self._take_along_axis(a.data, idx)
+            ten = Tensor(arr)
+
+            def compute_grad(_a: Tensor = ten, _idx: int = idx) -> _GradFuncType:
+                idx_slices = [slice(None)] * a.ndim
+                idx_slices[self.axis] = _idx
+
+                grad = lib_.zeros_like(a.data)
+                grad[tuple(idx_slices)] = _a.grad
+                return grad
+
+            results.append((ten, compute_grad))
+
+        return tuple(results)
+
+    @func_op(n_in=1, n_ret=None)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        return self._unified(a, lib_=np)
+
+    @func_op(n_in=1, n_ret=None, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        return self._unified(a, lib_=mx)
