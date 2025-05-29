@@ -728,3 +728,7 @@ class unbind(operation):
     @func_op(n_in=1, n_ret=None, device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         return self._unified(a, lib_=mx)
+
+
+class sort(operation):
+    NotImplemented
