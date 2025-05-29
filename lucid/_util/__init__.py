@@ -11,7 +11,7 @@ __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
-    "unbind",
+    "unbind", "sort",
 ]
 # fmt: on
 
@@ -125,6 +125,12 @@ def unbind(a: Tensor, /, axis: int = 0) -> tuple[Tensor, ...]:
     return func.unbind(axis)(a)
 
 
+def sort(
+    a: Tensor, /, axis: int = -1, descending: bool = False
+) -> tuple[Tensor, Tensor]:
+    return func.sort(axis, descending)(a)
+
+
 Tensor.reshape = _reshape_immediate
 Tensor.squeeze = squeeze
 Tensor.unsqueeze = unsqueeze
@@ -141,3 +147,4 @@ Tensor.chunk = chunk
 Tensor.masked_fill = masked_fill
 Tensor.roll = roll
 Tensor.unbind = unbind
+Tensor.sort = sort

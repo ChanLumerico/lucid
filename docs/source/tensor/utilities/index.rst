@@ -25,3 +25,4 @@ Tensor Utilites
    masked_fill.rst
    roll.rst
    unbind.rst
+   sort.rst

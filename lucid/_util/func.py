@@ -6,7 +6,7 @@ import numpy as np
 import math
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike
+from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike, _MLXArray
 
 from lucid._backend.core import (
     operation,
@@ -731,4 +731,69 @@ class unbind(operation):
 
 
 class sort(operation):
-    NotImplemented
+    def __init__(self, axis: int = -1, descending: bool = False) -> None:
+        super().__init__()
+        self.axis = axis
+        self.descending = descending
+
+    @func_op(n_in=1, n_ret=2)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        data = a.data
+        indices = np.argsort(data, axis=self.axis)
+        sorted_data = np.take_along_axis(data, indices, axis=self.axis)
+
+        if self.descending:
+            indices = np.flip(indices, axis=self.axis)
+            sorted_data = np.take_along_axis(data, indices, axis=self.axis)
+
+        values = Tensor(sorted_data)
+        indices_t = Tensor(indices)
+
+        self.result = (values, indices_t)
+        return (
+            (values, partial(self.__grad__, lib_=np)),
+            (indices_t, lambda: np.zeros_like(indices)),
+        )
+
+    @func_op(n_in=1, n_ret=2, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        data = a.data
+        indices = mx.argsort(data, axis=self.axis)
+
+        if self.descending:
+            shape = [1] * data.ndim
+            shape[self.axis] = -1
+
+            rev_idx = mx.arange(indices.shape[self.axis] - 1, -1, -1)
+            rev_idx = rev_idx.reshape(*shape)
+            indices = mx.take_along_axis(indices, rev_idx, axis=self.axis)
+
+        sorted_data = mx.take_along_axis(data, indices, axis=self.axis)
+
+        values = Tensor(sorted_data)
+        indices_t = Tensor(indices)
+
+        self.result = (values, indices_t)
+        return (
+            (values, partial(self.__grad__, lib_=mx)),
+            (indices_t, lambda: mx.zeros_like(indices)),
+        )
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        grad = self.result[0].grad
+        reverse_indices = lib_.argsort(self.result[1].data, axis=self.axis)
+
+        grad_out = lib_.take_along_axis(grad, reverse_indices, axis=self.axis)
+        return grad_out
+
+    def __flops__(self, a: Tensor) -> int:
+        shape = a.shape
+        axis = self.axis if self.axis >= 0 else len(shape) + self.axis
+
+        n = shape[axis]
+        num_slices = 1
+        for i, dim in enumerate(shape):
+            if i != axis:
+                num_slices *= dim
+
+        return int(num_slices * n * math.log2(n))
