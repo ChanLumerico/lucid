@@ -141,7 +141,16 @@ class RCNN(nn.Module):
             keep_mask = cls_probs > self.score_thresh
             if keep_mask.sum().item() == 0:
                 continue
-            ...
+
+            keep_mask = keep_mask.astype(bool)
+            cls_boxes = self.apply_deltas(
+                boxes_all[keep_mask], bbox_deltas[keep_mask, c], self.add_one
+            )
+            cls_scores = cls_probs[keep_mask]
+            cls_imgs = img_indices[keep_mask]
+
+            for img_id in ...:  # TODO: imlement `Tensor.unique()`
+                ...
 
     @staticmethod
     def apply_deltas(boxes: Tensor, deltas: Tensor, add_one: float = 1.0) -> Tensor:
@@ -165,10 +174,19 @@ class RCNN(nn.Module):
 
     @staticmethod
     def nms(boxes: Tensor, scores: Tensor, iou_thresh: float = 0.3) -> Tensor:
-        if boxes.size == 0:
-            return lucid.empty(0)
+        N = boxes.shape[0]
+        if N == 0:
+            return lucid.empty(0, device=boxes.device).astype(lucid.Int)
+
+        _, order = scores.sort(descending=True)
+        boxes = boxes[order]
 
         x1, y1, x2, y2 = boxes.unbind(axis=1)
         areas = (x2 - x1 + 1) * (y2 - y1 + 1)
 
-        # TODO: implement `lucid.Tensor.sort`
+        xx1 = x1.unsqueeze(axis=1).clip(min_value=x1)
+        yy1 = y1.unsqueeze(axis=1).clip(min_value=y1)
+        xx2 = x2.unsqueeze(axis=1).clip(max_value=x2)
+        yy2 = y2.unsqueeze(axis=1).clip(max_value=y2)
+
+        # TODO: Continue from here ...
