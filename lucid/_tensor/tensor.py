@@ -259,7 +259,8 @@ class Tensor(_TensorOps):
         else:
             raise lucid.UnknownDeviceError(device)
 
-        self.dtype = types.to_numeric_type(self.data.dtype)
+        if not self._is_bool_tensor:
+            self.dtype = types.to_numeric_type(self.data.dtype)
         self.device = device
         return self
 
@@ -395,3 +396,25 @@ class Tensor(_TensorOps):
         new_tensor._is_bool_tensor = self._is_bool_tensor
 
         return new_tensor
+
+    def __bool__(self) -> bool:
+        if self.data.size != 1:
+            raise RuntimeError(
+                "Boolean value of Tensor with more than one value is ambiguous. "
+                "Use `tensor.any()` or `tensor.all()` instead."
+            )
+        return bool(self.data.item())
+
+    def any(self) -> bool:
+        if self.is_cpu():
+            return bool(np.any(self.data))
+        else:
+            mx.eval(self.data)
+            return bool(mx.any(self.data).item())
+
+    def all(self) -> bool:
+        if self.is_cpu():
+            return bool(np.all(self.data))
+        else:
+            mx.eval(self.data)
+            return bool(mx.all(self.data).item())

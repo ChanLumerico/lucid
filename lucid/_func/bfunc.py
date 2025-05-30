@@ -441,3 +441,25 @@ class matmul(operation):
         batch_size = np.prod(batch_shape) if batch_shape else 1
 
         return batch_size * m * n * k
+
+
+class _bitwise_and(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @binary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.bitwise_and(a.data, b.data))
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @binary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.bitwise_and(a.data, b.data))
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0), lib_.array(0.0)
+
+
+class _bitwise_or(operation):
+    NotImplemented

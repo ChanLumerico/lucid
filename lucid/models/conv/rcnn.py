@@ -189,4 +189,15 @@ class RCNN(nn.Module):
         xx2 = x2.unsqueeze(axis=1).clip(max_value=x2)
         yy2 = y2.unsqueeze(axis=1).clip(max_value=y2)
 
-        # TODO: Continue from here ...
+        w = (xx2 - xx1 + 1).clip(min_value=0)
+        h = (yy2 - yy1 + 1).clip(min_value=0)
+
+        inter: Tensor = w * h
+        iou = inter / (areas.unsqueeze(axis=1) + areas - inter)
+
+        keep_mask: Tensor = lucid.ones(N, dtype=bool, device=iou.device)
+        for i in range(N):
+            if not keep_mask[i]:
+                continue
+
+            # TODO: implement bitwise-logical operations first
