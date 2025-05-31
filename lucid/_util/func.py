@@ -921,11 +921,11 @@ class topk(operation):
             indices = np.take_along_axis(indices, sort_order, axis=axis)
 
         values_t = Tensor(values)
-        indices_t = Tensor(indices)
+        indices_t = Tensor(indices.astype(np.int32))
 
         self.result = (values_t, indices_t)
         return (
-            (values_t, partial(self.__grad_cpu__, a=a, indices=indices_t)),
+            (values_t, partial(self.__grad_cpu__, a=a)),
             (indices_t, lambda: np.zeros_like(indices)),
         )
 
@@ -960,20 +960,40 @@ class topk(operation):
 
         self.result = (values_t, indices_t)
         return (
-            (values_t, partial(self.__grad_gpu__, a=a, indices=indices_t)),
+            (values_t, partial(self.__grad_gpu__, a=a)),
             (indices_t, lambda: mx.zeros_like(indices)),
         )
 
-    def __grad_cpu__(self, a: Tensor, indices: Tensor) -> _GradFuncType:
+    def __grad_cpu__(self, a: Tensor) -> _GradFuncType:
         grad = self.result[0].grad
         axis = self.axis if self.axis >= 0 else grad.ndim + self.axis
 
         output_grad = np.zeros_like(a.data)
-        np.put_along_axis(output_grad, indices.data, grad, axis=axis)
+        np.put_along_axis(output_grad, self.result[1].data, grad, axis=axis)
         return output_grad
 
-    def __grad_gpu__(self, a: Tensor, indices: Tensor) -> _GradFuncType:
-        NotImplemented
+    def __grad_gpu__(self, a: Tensor) -> _GradFuncType:
+        grad = self.result[0].grad
+        axis = self.axis if self.axis >= 0 else grad.ndim + self.axis
+
+        input_shape = a.shape
+        indices = self.result[1].data
+
+        B, k = indices.shape
+        D = input_shape[axis]
+
+        grad_exp = grad.reshape(B, k, 1)
+        indices_exp = indices.reshape(B, k, 1)
+
+        class_range = mx.arange(D).reshape(1, 1, D)
+        one_hot = (indices_exp == class_range).astype(mx.float32)
+
+        scatter = grad_exp * one_hot
+        output = mx.sum(scatter, axis=1)
+        if axis != 1:
+            output = mx.moveaxis(output, 1, axis)
+
+        return output
 
     def __flops__(self, a: Tensor) -> int:
         shape = a.shape

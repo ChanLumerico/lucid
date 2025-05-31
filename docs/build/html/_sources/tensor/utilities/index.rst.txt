@@ -28,3 +28,4 @@ Tensor Utilites
    sort.rst
    nonzero.rst
    unique.rst
+   topk.rst

@@ -176,7 +176,13 @@ class RCNN(nn.Module):
                 res["labels"] = lucid.concatenate(res["labels"])
 
                 if res["scores"].size > max_det_per_img:
-                    ...  # TODO: implement `Tensor.topk` function
+                    # NOTE: Does it work for k >> len?
+                    _, topk = lucid.topk(res["scores"], k=max_det_per_img)
+                    res["boxes"] = res["boxes"][topk]
+                    res["scores"] = res["scores"][topk]
+                    res["labels"] = res["labels"][topk]
+
+        return results
 
     @staticmethod
     def apply_deltas(boxes: Tensor, deltas: Tensor, add_one: float = 1.0) -> Tensor:

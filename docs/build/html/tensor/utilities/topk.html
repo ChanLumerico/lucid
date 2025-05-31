@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.concatenate" href="concatenate.html" /><link rel="prev" title="lucid.hstack" href="hstack.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/utilities/vstack.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.linalg" href="../../linalg/linalg.html" /><link rel="prev" title="lucid.unique" href="unique.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/utilities/topk.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.vstack - Lucid 2.1.12 documentation</title>
+        <title>lucid.topk - Lucid 2.1.12 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -268,7 +268,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ravel.html">lucid.ravel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="stack.html">lucid.stack</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hstack.html">lucid.hstack</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.vstack</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vstack.html">lucid.vstack</a></li>
 <li class="toctree-l2"><a class="reference internal" href="concatenate.html">lucid.concatenate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pad.html">lucid.pad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="repeat.html">lucid.repeat</a></li>
@@ -286,7 +286,7 @@
 <li class="toctree-l2"><a class="reference internal" href="sort.html">lucid.sort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nonzero.html">lucid.nonzero</a></li>
 <li class="toctree-l2"><a class="reference internal" href="unique.html">lucid.unique</a></li>
-<li class="toctree-l2"><a class="reference internal" href="topk.html">lucid.topk</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.topk</a></li>
 </ul>
 </li>
 </ul>
@@ -891,12 +891,12 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/tensor/utilities/vstack.rst?plain=true" title="View this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/tensor/utilities/topk.rst?plain=true" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
 </div><div class="edit-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/tensor/utilities/vstack.rst" title="Edit this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/tensor/utilities/topk.rst" title="Edit this page">
     <svg><use href="#svg-pencil"></use></svg>
     <span class="visually-hidden">Edit this page</span>
   </a>
@@ -915,92 +915,92 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-vstack">
-<h1>lucid.vstack<a class="headerlink" href="#lucid-vstack" title="Link to this heading">¶</a></h1>
+          <section id="lucid-topk">
+<h1>lucid.topk<a class="headerlink" href="#lucid-topk" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.vstack">
-<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">vstack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.vstack" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.topk">
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">topk</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">largest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sorted</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.topk" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>vstack</cite> function stacks a sequence of tensors vertically (row-wise)
-along the first dimension (axis=0 by default).</p>
-<p>It concatenates the input tensors along the specified axis,
-effectively increasing the size of that dimension.</p>
+<p>The <cite>topk</cite> function returns the top <cite>k</cite> largest or smallest values along a given axis,
+along with their indices.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">vstack</span><span class="p">(</span><span class="n">arr</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">topk</span><span class="p">(</span>
+    <span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">largest</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="nb">sorted</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">Tensor</span><span class="p">]:</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>arr</strong> (<em>tuple[Tensor, …]</em>):</dt><dd><p>A sequence of tensors to be vertically stacked. All tensors must have the
-same shape except in the dimension corresponding to <cite>axis</cite>.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>input_</strong> (<em>Tensor</em>):
+The input tensor to extract values from.</p></li>
+<li><p><strong>k</strong> (<em>int</em>):
+The number of top elements to return.</p></li>
+<li><p><strong>axis</strong> (<em>int</em>, optional):
+The axis along which to retrieve the top values. Default is <cite>-1</cite>.</p></li>
+<li><p><strong>largest</strong> (<em>bool</em>, optional):
+If <cite>True</cite> (default), returns the <cite>k</cite> largest elements.
+Otherwise, returns the <cite>k</cite> smallest.</p></li>
+<li><p><strong>sorted</strong> (<em>bool</em>, optional):
+If <cite>True</cite> (default), the resulting <cite>k</cite> values will be sorted in descending
+(or ascending) order depending on <cite>largest</cite>.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new tensor resulting from vertically stacking the input tensors.
-The resulting tensor has the same number of dimensions as the input tensors,
-with the size along the vertical axis (<cite>axis=0</cite> by default) being the sum of
-the sizes of the input tensors along that axis.</p>
-</dd>
-</dl>
+<li><p><strong>tuple[Tensor, Tensor]</strong>:
+A tuple of two tensors:</p>
+<ul>
+<li><p>The first contains the top <cite>k</cite> values.</p></li>
+<li><p>The second contains the indices of those values in the original tensor.</p></li>
+</ul>
 </li>
 </ul>
 </section>
-<section id="forward-calculation">
-<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The <cite>vstack</cite> operation concatenates the input tensors along the vertical axis.</p>
+<section id="gradient-computation">
+<h2>Gradient Computation<a class="headerlink" href="#gradient-computation" title="Link to this heading">¶</a></h2>
+<p>Gradients are propagated only to the selected top <cite>k</cite> positions.
+Other positions receive a gradient of zero.</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{out} = \text{vstack}(\mathbf{a}_1, \mathbf{a}_2, \dots, \mathbf{a}_n)\]</div>
-</div>
-</section>
-<section id="backward-gradient-calculation">
-<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>The gradient for the <cite>vstack</cite> operation is split and passed to each of the
-input tensors along the concatenated axis.</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{out}}{\partial \mathbf{a}_i} = \mathbf{I}_i\]</div>
+\[\begin{split}\frac{\partial \text{topk}(x)}{\partial x_i} =
+\begin{cases}
+    \text{grad}_i &amp; \text{if } i \in \text{topk_indices} \\
+    0 &amp; \text{otherwise}
+\end{cases}\end{split}\]</div>
 </div>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<p>Finding the top-2 largest values along <cite>axis=1</cite>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">v_stacked</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">))</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">v_stacked</span><span class="p">)</span>
-<span class="go">Tensor([[1. 2.],</span>
-<span class="go">        [3. 4.]], grad=None)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">10.</span><span class="p">,</span> <span class="mf">5.</span><span class="p">,</span> <span class="mf">8.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">,</span> <span class="mf">3.</span><span class="p">,</span> <span class="mf">9.</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">values</span><span class="p">,</span> <span class="n">indices</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">largest</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="nb">sorted</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+<span class="go">[[10.  8.]</span>
+<span class="go"> [ 9.  4.]]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+<span class="go">[[0 2]</span>
+<span class="go"> [3 1]]</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">v_stacked</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">))</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">v_stacked</span><span class="p">)</span>
-<span class="go">Tensor([[1. 2.],</span>
-<span class="go">        [3. 4.],</span>
-<span class="go">        [5. 6.]], grad=None)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loss</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="go">[[1. 0. 1. 0.]</span>
+<span class="go"> [0. 1. 0. 1.]]</span>
 </pre></div>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<ul class="simple">
-<li><p>All input tensors must have the same shape except in the dimension corresponding
-to the vertical axis (<cite>axis=0</cite> by default).</p></li>
-<li><p>The <cite>vstack</cite> operation increases the size of the specified axis by concatenating the input tensors.</p></li>
-<li><p>The resulting tensor will have the same number of dimensions as the input tensors.</p></li>
-<li><p>If any of the input tensors require gradients, the resulting tensor will also require gradients.</p></li>
-<li><p>The vertical axis can be adjusted by modifying the underlying implementation if necessary.</p></li>
-</ul>
+<p><cite>topk</cite> ensures proper gradient routing only through the selected indices.</p>
 </div>
 </section>
 </section>
@@ -1010,23 +1010,23 @@ to the vertical axis (<cite>axis=0</cite> by default).</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="concatenate.html">
+          <a class="next-page" href="../../linalg/linalg.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.concatenate</div>
+                <div class="title">lucid.linalg</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="hstack.html">
+          <a class="prev-page" href="unique.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.hstack</div>
+                <div class="title">lucid.unique</div>
                 
               </div>
             </a>
@@ -1060,13 +1060,12 @@ to the vertical axis (<cite>axis=0</cite> by default).</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.vstack</a><ul>
-<li><a class="reference internal" href="#lucid.vstack"><code class="docutils literal notranslate"><span class="pre">vstack()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.topk</a><ul>
+<li><a class="reference internal" href="#lucid.topk"><code class="docutils literal notranslate"><span class="pre">topk()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
-<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
+<li><a class="reference internal" href="#gradient-computation">Gradient Computation</a></li>
 <li><a class="reference internal" href="#example">Example</a></li>
 </ul>
 </li>
