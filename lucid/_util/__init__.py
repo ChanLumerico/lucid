@@ -11,7 +11,7 @@ __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
-    "unbind", "sort", "nonzero", "unique",
+    "unbind", "sort", "nonzero", "unique", "topk",
 ]
 # fmt: on
 
@@ -131,12 +131,18 @@ def sort(
     return func.sort(axis, descending)(a)
 
 
-def nonzero(a: Tensor) -> Tensor:
+def nonzero(a: Tensor, /) -> Tensor:
     return func.nonzero()(a)
 
 
 def unique(a: Tensor, /, sorted: bool = True, axis: int | None = None) -> Tensor:
     return func.unique(sorted, axis)(a)
+
+
+def topk(
+    a: Tensor, /, k: int, axis: int = -1, largest: bool = True, sorted: bool = True
+) -> tuple[Tensor, Tensor]:
+    return func.topk(k, axis, largest, sorted)(a)
 
 
 Tensor.reshape = _reshape_immediate

@@ -150,7 +150,33 @@ class RCNN(nn.Module):
             cls_imgs = img_indices[keep_mask]
 
             for img_id in cls_imgs.unique():
-                ...
+                m = cls_imgs == img_id
+                det_boxes = cls_boxes[m]
+                det_scores = cls_scores[m]
+
+                keep = self.nms(det_boxes, det_scores, self.nms_iou_thresh)
+                if keep.size == 0:
+                    continue
+
+                res = results[int(img_id.item())]
+                res["boxes"].append(det_boxes[keep])
+                res["scores"].append(det_scores[keep])
+                res["labels"].append(
+                    lucid.full((keep.size,), c, dtype=int, device=device)
+                )
+
+        for res in results:
+            if not res["boxes"]:
+                res["boxes"] = lucid.empty(0, 4, device=device)
+                res["scores"] = lucid.empty(0, device=device)
+                res["labels"] = lucid.empty(0, dtype=int, device=device)
+            else:
+                res["boxes"] = lucid.concatenate(res["boxes"])
+                res["scores"] = lucid.concatenate(res["scores"])
+                res["labels"] = lucid.concatenate(res["labels"])
+
+                if res["scores"].size > max_det_per_img:
+                    ...  # TODO: implement `Tensor.topk` function
 
     @staticmethod
     def apply_deltas(boxes: Tensor, deltas: Tensor, add_one: float = 1.0) -> Tensor:
@@ -205,4 +231,4 @@ class RCNN(nn.Module):
             )[i]
 
         keep = lucid.nonzero(keep_mask).flatten()
-        return order[keep]
+        return order[keep].astype(lucid.Int)

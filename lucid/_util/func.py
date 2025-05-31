@@ -883,3 +883,106 @@ class unique(operation):
 
     def __flops__(self, a: Tensor) -> int:
         return int(a.size * math.log2(max(a.size, 2)))
+
+
+class topk(operation):
+    def __init__(
+        self, k: int, axis: int = -1, largest: bool = True, sorted: bool = True
+    ) -> None:
+        super().__init__()
+        self.k = k
+        self.axis = axis
+        self.largest = largest
+        self.sorted = sorted
+
+    @func_op(n_in=1, n_ret=2)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        axis = self.axis if self.axis >= 0 else a.ndim + self.axis
+        data = a.data.copy()
+        negate_for_sort = not self.largest
+
+        if negate_for_sort:
+            data = -data
+
+        indices = np.argpartition(data, -self.k, axis=axis)[..., -self.k :]
+        values = np.take_along_axis(data, indices, axis=axis)
+
+        if negate_for_sort:
+            values = -values
+            data = -data
+
+        if self.sorted:
+            sort_order = (
+                np.argsort(-values, axis=axis)
+                if self.largest
+                else np.argsort(values, axis=axis)
+            )
+            values = np.take_along_axis(values, sort_order, axis=axis)
+            indices = np.take_along_axis(indices, sort_order, axis=axis)
+
+        values_t = Tensor(values)
+        indices_t = Tensor(indices)
+
+        self.result = (values_t, indices_t)
+        return (
+            (values_t, partial(self.__grad_cpu__, a=a, indices=indices_t)),
+            (indices_t, lambda: np.zeros_like(indices)),
+        )
+
+    @func_op(n_in=1, n_ret=2, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        axis = self.axis if self.axis >= 0 else a.ndim + self.axis
+        data = a.data
+        negate_for_sort = not self.largest
+
+        if negate_for_sort:
+            data = mx.negative(data)
+
+        indices = mx.argsort(data, axis=axis)
+        indices = mx.take(indices, mx.arange(-self.k, 0), axis=axis)
+        values = mx.take_along_axis(data, indices, axis=axis)
+
+        if negate_for_sort:
+            values = mx.negative(values)
+            data = mx.negative(data)
+
+        if self.sorted:
+            sort_order = (
+                mx.argsort(mx.negative(values), axis=axis)
+                if self.largest
+                else mx.argsort(values, axis=axis)
+            )
+            values = mx.take_along_axis(values, sort_order, axis=axis)
+            indices = mx.take_along_axis(indices, sort_order, axis=axis)
+
+        values_t = Tensor(values)
+        indices_t = Tensor(indices.astype(mx.int32))
+
+        self.result = (values_t, indices_t)
+        return (
+            (values_t, partial(self.__grad_gpu__, a=a, indices=indices_t)),
+            (indices_t, lambda: mx.zeros_like(indices)),
+        )
+
+    def __grad_cpu__(self, a: Tensor, indices: Tensor) -> _GradFuncType:
+        grad = self.result[0].grad
+        axis = self.axis if self.axis >= 0 else grad.ndim + self.axis
+
+        output_grad = np.zeros_like(a.data)
+        np.put_along_axis(output_grad, indices.data, grad, axis=axis)
+        return output_grad
+
+    def __grad_gpu__(self, a: Tensor, indices: Tensor) -> _GradFuncType:
+        NotImplemented
+
+    def __flops__(self, a: Tensor) -> int:
+        shape = a.shape
+        axis = self.axis if self.axis >= 0 else len(shape) + self.axis
+
+        n = shape[axis]
+        num_slices = math.prod([s for i, s in enumerate(shape) if i != axis])
+
+        if self.sorted:
+            return int(num_slices * (n + self.k * math.log2(max(self.k, 1))))
+        else:
+            return int(num_slices * n)
