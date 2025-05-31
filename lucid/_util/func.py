@@ -6,9 +6,10 @@ import numpy as np
 import math
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike, _MLXArray
+from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike, _NumPyArray
 
 from lucid._backend.core import (
+    fallback,
     operation,
     func_op,
     unary_func_op,
@@ -792,9 +793,9 @@ class sort(operation):
 
         n = shape[axis]
         num_slices = 1
-        for i, dim in enumerate(shape):
+        for i, axis in enumerate(shape):
             if i != axis:
-                num_slices *= dim
+                num_slices *= axis
 
         return int(num_slices * n * math.log2(n))
 
@@ -845,3 +846,40 @@ class nonzero(operation):
     def __flops__(self, a: Tensor) -> int:
         flat = a.data.flatten()
         return sum(bool(x) for x in flat)
+
+
+@fallback
+class unique(operation):
+    def __init__(self, sorted: bool = True, axis: int | None = None) -> None:
+        super().__init__()
+        self.sorted = sorted
+        self.axis = axis
+
+    def _unified(self, a: Tensor) -> _NumPyArray:
+        if self.sorted:
+            unique_data = np.unique(a.data, axis=self.axis)
+        else:
+            unique_data, idx = np.unique(a.data, return_index=True, axis=self.axis)
+            sorter = np.sort(idx)
+            if self.axis is None:
+                unique_data = np.array(a.data).flat[sorter]
+            else:
+                unique_data = np.take(a.data, sorter, axis=self.axis)
+
+        return unique_data
+
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(self._unified(a))
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.array(self._unified(a)))
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
+
+    def __flops__(self, a: Tensor) -> int:
+        return int(a.size * math.log2(max(a.size, 2)))

@@ -11,7 +11,7 @@ __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
-    "unbind", "sort", "nonzero",
+    "unbind", "sort", "nonzero", "unique",
 ]
 # fmt: on
 
@@ -135,6 +135,10 @@ def nonzero(a: Tensor) -> Tensor:
     return func.nonzero()(a)
 
 
+def unique(a: Tensor, /, sorted: bool = True, axis: int | None = None) -> Tensor:
+    return func.unique(sorted, axis)(a)
+
+
 Tensor.reshape = _reshape_immediate
 Tensor.squeeze = squeeze
 Tensor.unsqueeze = unsqueeze
@@ -152,3 +156,4 @@ Tensor.masked_fill = masked_fill
 Tensor.roll = roll
 Tensor.unbind = unbind
 Tensor.sort = sort
+Tensor.unique = unique

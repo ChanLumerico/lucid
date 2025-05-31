@@ -261,7 +261,7 @@ class Tensor(_TensorOps):
 
         else:
             raise lucid.UnknownDeviceError(device)
-        
+
         self.device = device
         return self
 

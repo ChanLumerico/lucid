@@ -27,3 +27,4 @@ Tensor Utilites
    unbind.rst
    sort.rst
    nonzero.rst
+   unique.rst

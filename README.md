@@ -2,7 +2,7 @@
 
 ![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-25.7k-yellow)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-26.0k-yellow)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 ![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&label=Lines%20of%20Code&color=purple&cacheSeconds=5)
@@ -15,11 +15,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Added new Tensor utility function: `lucid.unbind` and `lucid.sort`
-- Spatial functions added to `lucid.nn.functional`: `F.affine_grid` and `F.grid_sample`
-- `lucid.round`, `lucid.floor` and `lucid.ceil` added
-- `lucid.full` and `lucid.full_like` added
-- Decorator support for `lucid.no_grad`
+- Added various Tensor utility operations (i.e. `lucid.unique`, etc.)
 
 ## 🔧 How to Install
 

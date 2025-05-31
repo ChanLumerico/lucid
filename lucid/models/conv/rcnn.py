@@ -149,7 +149,7 @@ class RCNN(nn.Module):
             cls_scores = cls_probs[keep_mask]
             cls_imgs = img_indices[keep_mask]
 
-            for img_id in ...:  # TODO: imlement `Tensor.unique()`
+            for img_id in cls_imgs.unique():
                 ...
 
     @staticmethod
@@ -204,4 +204,5 @@ class RCNN(nn.Module):
                 N, dtype=bool, device=iou.device
             )[i]
 
-        # TODO: implement `lucid.nonzero()`
+        keep = lucid.nonzero(keep_mask).flatten()
+        return order[keep]

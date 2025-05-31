@@ -6,9 +6,9 @@
 <link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="se_resnext_101_32x8d" href="se_resnext_101_32x8d.html" /><link rel="prev" title="se_resnext_50_32x4d" href="se_resnext_50_32x4d.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/conv/senet/se_resnext_101_32x4d.html" />
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2024.08.06 -->
-        <title>se_resnext_101_32x4d - Lucid 2.1.11 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d8a2add5" />
+    <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+        <title>se_resnext_101_32x4d - Lucid 2.1.12 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 2.1.11 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 2.1.12 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -193,7 +193,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 2.1.11 documentation</span>
+  <span class="sidebar-brand-text">Lucid 2.1.12 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -284,6 +284,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../tensor/utilities/roll.html">lucid.roll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../tensor/utilities/unbind.html">lucid.unbind</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../tensor/utilities/sort.html">lucid.sort</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../tensor/utilities/nonzero.html">lucid.nonzero</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../tensor/utilities/unique.html">lucid.unique</a></li>
 </ul>
 </li>
 </ul>
@@ -925,7 +927,7 @@ that incorporates Squeeze-and-Excitation (SE) blocks for improved performance.</
 <p><strong>Total Parameters</strong>: 48,955,416</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">se_resnext_101_32x4d</span><span class="p">(</span><span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SENet</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">se_resnext_101_32x4d</span><span class="p">(</span><span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SENet</span>
 </pre></div>
 </div>
 </section>
@@ -963,7 +965,7 @@ parameter.</p></li>
 <h2>Example Usage<a class="headerlink" href="#example-usage" title="Link to this heading">¶</a></h2>
 <p>The following example demonstrates how to instantiate the <cite>se_resnext_101_32x4d</cite>
 model for a custom task:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.nn.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">se_resnext_101_32x4d</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">lucid.nn.models</span> <span class="kn">import</span> <span class="n">se_resnext_101_32x4d</span>
 
 <span class="c1"># Create the model for a custom task with 1000 classes</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">se_resnext_101_32x4d</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
@@ -972,7 +974,7 @@ model for a custom task:</p>
 <span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 
 <span class="c1"># Forward pass with a sample input</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
+<span class="kn">import</span> <span class="nn">lucid</span>
 <span class="n">input_tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span>  <span class="c1"># Batch of one image, 3 channels, 224x224 resolution</span>
 <span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
 
@@ -1055,7 +1057,7 @@ model for a custom task:</p>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=fb76755c"></script>
+</div><script src="../../../_static/documentation_options.js?v=cc8eff36"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
