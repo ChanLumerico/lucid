@@ -200,4 +200,8 @@ class RCNN(nn.Module):
             if not keep_mask[i]:
                 continue
 
-            # TODO: implement bitwise-logical operations first
+            keep_mask &= (iou[i] <= iou_thresh) | lucid.eye(
+                N, dtype=bool, device=iou.device
+            )[i]
+
+        # TODO: implement `lucid.nonzero()`

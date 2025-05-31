@@ -77,10 +77,8 @@ def func_op(
             results: Tuple[Tensor, ...] = tuple()
             for result, compute_grad in func_return_pairs:
                 result.requires_grad = requires_grad and has_gradient
-                result.to(device)
-
-                result.dtype = types.to_numeric_type(result.data.dtype)
                 result._op = op_self
+                result.to(device)
                 if is_free:
                     result.free()
 

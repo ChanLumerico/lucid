@@ -26,3 +26,4 @@ Tensor Utilites
    roll.rst
    unbind.rst
    sort.rst
+   nonzero.rst

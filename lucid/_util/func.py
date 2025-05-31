@@ -797,3 +797,51 @@ class sort(operation):
                 num_slices *= dim
 
         return int(num_slices * n * math.log2(n))
+
+
+class nonzero(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        coords = np.transpose(np.nonzero(a.data))
+        self.result = Tensor(coords.astype(np.int32))
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        shape = a.shape
+        ndim = a.ndim
+        size = a.size
+
+        mask = mx.not_equal(a.data, mx.zeros_like(a.data)).reshape(-1)
+        flat_idx = mx.arange(size)
+
+        marked = mx.where(mask, flat_idx, size)
+        sorted_idx = mx.sort(marked)
+        count = int(mx.sum(mx.less(sorted_idx, size)).item())
+        kept = sorted_idx[:count]
+
+        strides = []
+        acc = 1
+        for s in reversed(shape):
+            strides.append(acc)
+            acc *= s
+
+        strides = strides[::-1]
+        strides_tensor = mx.array(strides).reshape(1, ndim)
+
+        kept = kept.reshape(-1, 1)
+        coords = (kept // strides_tensor) % mx.array(shape).reshape(1, ndim)
+        coords = coords.astype(mx.int32)
+
+        self.result = Tensor(coords)
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
+
+    def __flops__(self, a: Tensor) -> int:
+        flat = a.data.flatten()
+        return sum(bool(x) for x in flat)

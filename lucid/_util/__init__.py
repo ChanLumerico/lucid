@@ -11,7 +11,7 @@ __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
-    "unbind", "sort",
+    "unbind", "sort", "nonzero",
 ]
 # fmt: on
 
@@ -129,6 +129,10 @@ def sort(
     a: Tensor, /, axis: int = -1, descending: bool = False
 ) -> tuple[Tensor, Tensor]:
     return func.sort(axis, descending)(a)
+
+
+def nonzero(a: Tensor) -> Tensor:
+    return func.nonzero()(a)
 
 
 Tensor.reshape = _reshape_immediate

@@ -75,8 +75,11 @@ class Tensor(_TensorOps):
             check_metal_availability()
             self.data = mx.array(self.data)
 
-        if self._is_bool_tensor:
-            self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
+        if "bool" in str(self.data.dtype):
+            self._is_bool_tensor = True
+        else:
+            if self._is_bool_tensor:
+                self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
 
         self._op: object | None = None
         self._backward_op: Callable = lambda: None
@@ -258,9 +261,7 @@ class Tensor(_TensorOps):
 
         else:
             raise lucid.UnknownDeviceError(device)
-
-        if not self._is_bool_tensor:
-            self.dtype = types.to_numeric_type(self.data.dtype)
+        
         self.device = device
         return self
 

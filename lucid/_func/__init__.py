@@ -99,10 +99,29 @@ def matmul(a: Tensor, b: Tensor, /) -> Tensor:
     return bfunc.matmul()(a, b)
 
 
+def __check_int_bool_dtype(*ts: Tensor) -> None:
+    if not all(t.dtype is bool or t.dtype.base_dtype is int for t in ts):
+        raise TypeError(
+            f"All tensors must be int or boolean type for bitwise operations."
+        )
+
+
+def _bitwise_and(a: Tensor, b: Tensor, /) -> Tensor:
+    __check_int_bool_dtype(a, b)
+    return bfunc._bitwise_and()(a, b)
+
+
+def _bitwise_or(a: Tensor, b: Tensor, /) -> Tensor:
+    __check_int_bool_dtype(a, b)
+    return bfunc._bitwise_or()(a, b)
+
+
 _radd: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: add(a, b)
 _rsub: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: sub(b, a)
 _rmul: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: multiply(a, b)
 _rtruediv: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: div(b, a)
+_rbitwise_and: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: _bitwise_and(b, a)
+_rbitwise_or: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: _bitwise_or(b, a)
 
 
 def _pow(a: Tensor, /, exp: _Scalar) -> Tensor:
@@ -521,6 +540,11 @@ Tensor.__le__ = _less_or_equal
 
 Tensor.__pow__ = _pow
 Tensor.__neg__ = _neg
+
+Tensor.__and__ = _bitwise_and
+Tensor.__rand__ = _rbitwise_and
+Tensor.__or__ = _bitwise_or
+Tensor.__ror__ = _rbitwise_or
 
 Tensor.T = _T
 Tensor.mT = _mT
