@@ -154,8 +154,22 @@ def nonzero(a: Tensor, /) -> Tensor:
     return func.nonzero()(a)
 
 
-def unique(a: Tensor, /, sorted: bool = True, axis: int | None = None) -> Tensor:
-    return func.unique(sorted, axis)(a)
+def unique(
+    a: Tensor,
+    /,
+    sorted: bool = True,
+    axis: int | None = None,
+    return_inverse: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]:
+    op = func.unique(sorted, axis)
+    ret = op(a)
+    if return_inverse:
+        assert (
+            op.inverse_ is not None
+        ), "inverse_ was not computed; check axis/sorted constraints"
+        return ret, op.inverse_
+    else:
+        return ret
 
 
 def topk(

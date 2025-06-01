@@ -911,28 +911,40 @@ class unique(operation):
         super().__init__()
         self.sorted = sorted
         self.axis = axis
+        self.inverse_ = None
 
     def _unified(self, a: Tensor) -> _NumPyArray:
-        if self.sorted:
-            unique_data = np.unique(a.data, axis=self.axis)
-        else:
-            unique_data, idx = np.unique(a.data, return_index=True, axis=self.axis)
-            sorter = np.sort(idx)
-            if self.axis is None:
-                unique_data = np.array(a.data).flat[sorter]
-            else:
-                unique_data = np.take(a.data, sorter, axis=self.axis)
+        data = a.data
 
+        if self.sorted:
+            unique_data, inverse = np.unique(data, axis=self.axis, return_inverse=True)
+        else:
+            unique_data, idx = np.unique(data, return_index=True, axis=self.axis)
+            sorter = np.sort(idx)
+
+            if self.axis is None:
+                flat_data = np.ravel(data)
+                unique_data = flat_data[sorter]
+                _, inverse = np.unique(flat_data, return_inverse=True)
+            else:
+                unique_data = np.take(data, sorter, axis=self.axis)
+                inverse = None
+
+        self.inverse_ = None if inverse is None else Tensor(inverse)
         return unique_data
 
     @unary_func_op(has_gradient=False)
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
-        self.result = Tensor(self._unified(a))
+        out = self._unified(a)
+        self.result = Tensor(out)
         return self.result, partial(self.__grad__, lib_=np)
 
     @unary_func_op(has_gradient=False, device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        self.result = Tensor(mx.array(self._unified(a)))
+        out = self._unified(a)
+        self.result = Tensor(mx.array(out))
+        if self.inverse_ is not None:
+            self.inverse_ = Tensor(mx.array(self.inverse_.data))
         return self.result, partial(self.__grad__, lib_=mx)
 
     def __grad__(self, lib_: ModuleType) -> _GradFuncType:
