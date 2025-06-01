@@ -71,6 +71,9 @@ class _BBoxRegressor(nn.Module):
         return self.linear(x).reshape(x.shape[0], self.num_classes, 4)
 
 
+# TODO: Need to implement `Selective Search` algorithm
+
+
 class RCNN(nn.Module):
     def __init__(
         self,
@@ -176,8 +179,7 @@ class RCNN(nn.Module):
                 res["labels"] = lucid.concatenate(res["labels"])
 
                 if res["scores"].size > max_det_per_img:
-                    # NOTE: Does it work for k >> len?
-                    _, topk = lucid.topk(res["scores"], k=max_det_per_img)
+                    topk = lucid.topk(res["scores"], k=max_det_per_img)[1]
                     res["boxes"] = res["boxes"][topk]
                     res["scores"] = res["scores"][topk]
                     res["labels"] = res["labels"][topk]

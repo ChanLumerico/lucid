@@ -5,6 +5,7 @@ from functools import partial
 import numpy as np
 import math
 
+import lucid
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike, _NumPyArray
 
@@ -731,16 +732,31 @@ class unbind(operation):
         return self._unified(a, lib_=mx)
 
 
+_SortKind = Literal["quicksort", "mergesort", "heapsort", "stable"]
+
+
 class sort(operation):
-    def __init__(self, axis: int = -1, descending: bool = False) -> None:
+    def __init__(
+        self,
+        axis: int = -1,
+        descending: bool = False,
+        kind: _SortKind | None = None,
+        stable: bool = False,
+    ) -> None:
         super().__init__()
         self.axis = axis
         self.descending = descending
+        self.stable = stable
+
+        kind = kind or "quicksort"
+        if self.stable:
+            kind = "stable"
+        self.kind = kind
 
     @func_op(n_in=1, n_ret=2)
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
         data = a.data
-        indices = np.argsort(data, axis=self.axis)
+        indices = np.argsort(data, axis=self.axis, kind=self.kind)
         sorted_data = np.take_along_axis(data, indices, axis=self.axis)
 
         if self.descending:
@@ -788,16 +804,57 @@ class sort(operation):
         return grad_out
 
     def __flops__(self, a: Tensor) -> int:
-        shape = a.shape
-        axis = self.axis if self.axis >= 0 else len(shape) + self.axis
+        axis = self.axis if self.axis >= 0 else a.ndim + self.axis
+        n = a.shape[axis]
 
-        n = shape[axis]
-        num_slices = 1
-        for i, axis in enumerate(shape):
-            if i != axis:
-                num_slices *= axis
+        num_slices = math.prod([s for i, s in enumerate(a.shape) if i != axis])
+        return int(num_slices * n * math.log2(max(n, 2)))
 
-        return int(num_slices * n * math.log2(n))
+
+class argsort(operation):
+    def __init__(
+        self,
+        axis: int = -1,
+        descending: bool = False,
+        kind: _SortKind | None = None,
+        stable: bool = False,
+    ) -> None:
+        super().__init__()
+        self.axis = axis
+        self.descending = descending
+        self.stable = stable
+
+        kind = kind or "quicksort"
+        if self.stable:
+            kind = "stable"
+        self.kind = kind
+
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        axis = self.axis if self.axis >= 0 else a.ndim + self.axis
+        data = -a.data if self.descending else a.data
+        indices = np.argsort(data, axis=axis, kind=self.kind)
+
+        self.result = Tensor(indices.astype(np.int32))
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        axis = self.axis if self.axis >= 0 else a.ndim + self.axis
+        data = mx.negative(a.data) if self.descending else a.data
+        indices = mx.argsort(data, axis=axis)
+
+        self.result = Tensor(indices.astype(mx.int32))
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
+
+    def __flops__(self, a: Tensor) -> int:
+        axis = self.axis if self.axis >= 0 else a.ndim + self.axis
+        n = a.shape[axis]
+        num_slices = math.prod([s for i, s in enumerate(a.shape) if i != axis])
+        return int(num_slices * n * math.log2(max(n, 2)))
 
 
 class nonzero(operation):

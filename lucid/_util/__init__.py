@@ -11,7 +11,7 @@ __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
-    "unbind", "sort", "nonzero", "unique", "topk",
+    "unbind", "sort", "nonzero", "unique", "topk", "argsort",
 ]
 # fmt: on
 
@@ -125,10 +125,29 @@ def unbind(a: Tensor, /, axis: int = 0) -> tuple[Tensor, ...]:
     return func.unbind(axis)(a)
 
 
+_SortKind = Literal["quicksort", "mergesort", "heapsort", "stable"]
+
+
 def sort(
-    a: Tensor, /, axis: int = -1, descending: bool = False
+    a: Tensor,
+    /,
+    axis: int = -1,
+    descending: bool = False,
+    kind: _SortKind | None = None,
+    stable: bool = False,
 ) -> tuple[Tensor, Tensor]:
-    return func.sort(axis, descending)(a)
+    return func.sort(axis, descending, kind, stable)(a)
+
+
+def argsort(
+    a: Tensor,
+    /,
+    axis: int = -1,
+    descending: bool = False,
+    kind: _SortKind | None = None,
+    stable: bool = False,
+) -> Tensor:
+    return func.argsort(axis, descending, kind, stable)(a)
 
 
 def nonzero(a: Tensor, /) -> Tensor:
@@ -142,6 +161,10 @@ def unique(a: Tensor, /, sorted: bool = True, axis: int | None = None) -> Tensor
 def topk(
     a: Tensor, /, k: int, axis: int = -1, largest: bool = True, sorted: bool = True
 ) -> tuple[Tensor, Tensor]:
+    if k > a.shape[axis]:
+        raise ValueError(
+            f"k={k} is greater than dimension size {a.shape[axis]} along axis {axis}."
+        )
     return func.topk(k, axis, largest, sorted)(a)
 
 

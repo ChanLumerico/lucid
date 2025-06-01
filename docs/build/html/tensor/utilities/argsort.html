@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.repeat" href="repeat.html" /><link rel="prev" title="lucid.concatenate" href="concatenate.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/utilities/pad.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.nonzero" href="nonzero.html" /><link rel="prev" title="lucid.sort" href="sort.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/tensor/utilities/argsort.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.pad - Lucid 2.1.12 documentation</title>
+        <title>lucid.argsort - Lucid 2.1.12 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -270,7 +270,7 @@
 <li class="toctree-l2"><a class="reference internal" href="hstack.html">lucid.hstack</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vstack.html">lucid.vstack</a></li>
 <li class="toctree-l2"><a class="reference internal" href="concatenate.html">lucid.concatenate</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.pad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pad.html">lucid.pad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="repeat.html">lucid.repeat</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tile.html">lucid.tile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="flatten.html">lucid.flatten</a></li>
@@ -284,7 +284,7 @@
 <li class="toctree-l2"><a class="reference internal" href="roll.html">lucid.roll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="unbind.html">lucid.unbind</a></li>
 <li class="toctree-l2"><a class="reference internal" href="sort.html">lucid.sort</a></li>
-<li class="toctree-l2"><a class="reference internal" href="argsort.html">lucid.argsort</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.argsort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nonzero.html">lucid.nonzero</a></li>
 <li class="toctree-l2"><a class="reference internal" href="unique.html">lucid.unique</a></li>
 <li class="toctree-l2"><a class="reference internal" href="topk.html">lucid.topk</a></li>
@@ -892,12 +892,12 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/tensor/utilities/pad.rst?plain=true" title="View this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/tensor/utilities/argsort.rst?plain=true" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
 </div><div class="edit-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/tensor/utilities/pad.rst" title="Edit this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/tensor/utilities/argsort.rst" title="Edit this page">
     <svg><use href="#svg-pencil"></use></svg>
     <span class="visually-hidden">Edit this page</span>
   </a>
@@ -916,115 +916,105 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-pad">
-<h1>lucid.pad<a class="headerlink" href="#lucid-pad" title="Link to this heading">¶</a></h1>
+          <section id="lucid-argsort">
+<h1>lucid.argsort<a class="headerlink" href="#lucid-argsort" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.pad">
-<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">pad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pad_width</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.pad" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.argsort">
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">argsort</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">descending</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'quicksort'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'mergesort'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'heapsort'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'stable'</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stable</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.argsort" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>pad</cite> function adds constant padding to the edges of a tensor. It is similar to
-<cite>numpy.pad</cite> but with the padding mode fixed to <cite>constant</cite>. This operation is useful
-in various neural network applications, such as preparing input data for convolutional
-layers or ensuring consistent tensor dimensions.</p>
+<p>The <cite>argsort</cite> function returns the indices that would sort a tensor along a
+specified <strong>axis</strong>.</p>
+<p>It supports <strong>ascending / descending order</strong>, lets you choose the backend
+<cite>kind</cite> (quicksort, mergesort, heapsort, or stable), and offers an
+additional <strong>stable</strong> flag(only for CPU) for convenience.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">pad</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">pad_width</span><span class="p">:</span> <span class="n">_ArrayLikeInt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">argsort</span><span class="p">(</span>
+    <span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">descending</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">_SortKind</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">stable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor to be padded. It can be of any shape.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>pad_width</strong> (<em>_ArrayLikeInt</em>):</dt><dd><p>A sequence of integers specifying the number of values padded to the edges of each axis.
-The length of <cite>pad_width</cite> must be twice the number of dimensions of <cite>a</cite>, as it specifies
-padding before and after each dimension. For example, for a 2D tensor, <cite>pad_width</cite> should
-include four elements: <cite>(pad_before_dim1, pad_after_dim1, pad_before_dim2, pad_after_dim2)</cite>.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>a</strong> (<em>Tensor</em>):
+Input tensor whose elements will be ordered.</p></li>
+<li><p><strong>axis</strong> (<em>int</em>, optional):
+Axis along which to sort. Negative values count from the end.
+Defaults to <cite>-1</cite> (the last axis).</p></li>
+<li><p><strong>descending</strong> (<em>bool</em>, optional):
+If <cite>True</cite> the indices correspond to <strong>descending</strong> order.
+Defaults to <cite>False</cite> (ascending).</p></li>
+<li><p><strong>kind</strong> (<em>{ “quicksort” | “mergesort” | “heapsort” | “stable” }</em> or <em>None</em>):
+Sorting algorithm to use (passed straight to selected backends).
+If <em>None</em>, Lucid picks <cite>“quicksort”</cite> unless <cite>stable=True</cite>, in which
+case it chooses <cite>“stable”</cite> automatically.</p></li>
+<li><p><strong>stable</strong> (<em>bool</em>, optional):
+Ensures that the relative order of equal elements is preserved
+(<strong>stable sort</strong>).  Overrides <em>kind</em> to <cite>“stable”</cite> when set.
+Supported on CPU; on GPU the flag is accepted but currently ignored
+with a warning.  Defaults to <cite>False</cite>.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> with the specified padding applied. The shape of the output tensor
-will be larger than the input tensor based on the <cite>pad_width</cite>. If the input tensor
-<cite>a</cite> requires gradients, the resulting tensor will also require gradients.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>Tensor</strong> (<em>Int32</em>):
+A tensor of indices with the <strong>same shape</strong> as <em>a</em>; indexing <em>a</em> with this
+tensor along <em>axis</em> yields a sorted view of the original data.</p></li>
 </ul>
-</section>
-<section id="forward-calculation">
-<h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The forward calculation for the <cite>pad</cite> operation is:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathbf{out} = \text{constant\_pad}(\mathbf{a}, \mathbf{pad\_width}, \text{constant\_value}=0)\]</div>
+\[\operatorname{shape}(\text{out}) \;=\; \operatorname{shape}(a)\]</div>
 </div>
-<p>Where <cite>constant_pad</cite> adds zeros (by default) to the specified edges of the input tensor
-<cite>a</cite> based on <cite>pad_width</cite>.</p>
-</section>
-<section id="backward-gradient-calculation">
-<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>For the tensor <strong>a</strong> involved in the <cite>pad</cite> operation, the gradient with respect to the output (<strong>out</strong>)
-is computed by propagating gradients only to the unpadded regions of the input tensor. The padded
-regions do not receive any gradients.</p>
-<p><strong>Gradient with respect to</strong> <span class="math notranslate nohighlight">\(\mathbf{a}\)</span>:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}\frac{\partial \mathbf{out}}{\partial \mathbf{a}} =
-\begin{cases}
-    1 &amp; \text{for elements corresponding to the original tensor} \\
-    0 &amp; \text{for padded elements}
-\end{cases}\end{split}\]</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><cite>argsort</cite> is <strong>gradient-free</strong>; the output indices never track
+gradients, and back-propagation does <strong>not</strong> modify <cite>a.grad</cite>.</p>
 </div>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Using <cite>pad</cite> to add padding to a 1D tensor:</p>
+<div class="admonition-d-ascending admonition">
+<p class="admonition-title">1-D ascending</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">pad_width</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>  <span class="c1"># Pads 2 zeros before and 3 zeros after</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([0.0, 0.0, 1.0, 2.0, 3.0, 0.0, 0.0, 0.0], grad=None)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">idx</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>          <span class="c1"># sorted view</span>
+<span class="go">Tensor([1, 1, 3, 4], grad=None)</span>
 </pre></div>
 </div>
-<p>Backpropagation computes gradients for <cite>a</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[1.0, 1.0, 1.0]</span>
+</div>
+<div class="admonition-descending-heapsort-kernel admonition">
+<p class="admonition-title">Descending, heapsort kernel</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">lucid</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">descending</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;heapsort&quot;</span><span class="p">)</span>
+<span class="go">Tensor([2, 0, 1, 3], grad=None)</span>
 </pre></div>
 </div>
-<p>Using <cite>pad</cite> to add padding to a 2D tensor:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span>
-<span class="gp">... </span>           <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">pad_width</span><span class="o">=</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)))</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="go">Tensor([</span>
-<span class="go">    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],</span>
-<span class="go">    [0.0, 0.0, 1.0, 2.0, 0.0, 0.0],</span>
-<span class="go">    [0.0, 0.0, 3.0, 4.0, 0.0, 0.0],</span>
-<span class="go">    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</span>
-<span class="go">], grad=None)</span>
+</div>
+<div class="admonition-stable-sort-with-duplicates admonition">
+<p class="admonition-title">Stable sort with duplicates</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">z</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">9</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lucid</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">stable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">Tensor([3, 0, 1, 2], grad=None)   # duplicates keep insertion order</span>
 </pre></div>
 </div>
-<p>Backpropagation computes gradients for <cite>a</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
-<span class="go">[[1.0, 1.0],</span>
-<span class="go"> [1.0, 1.0]]</span>
-</pre></div>
 </div>
+</section>
+<section id="performance-flops">
+<h2>Performance / FLOPs<a class="headerlink" href="#performance-flops" title="Link to this heading">¶</a></h2>
+<p>For each slice of length <em>n</em> along <em>axis</em>, the complexity is</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathcal{O}\!\left(n \log n\right)\]</div>
+</div>
+<p>(with a smaller constant factor when MLX chooses radix-sort on GPU).</p>
 </section>
 </section>
 
@@ -1033,23 +1023,23 @@ regions do not receive any gradients.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="repeat.html">
+          <a class="next-page" href="nonzero.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.repeat</div>
+                <div class="title">lucid.nonzero</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="concatenate.html">
+          <a class="prev-page" href="sort.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.concatenate</div>
+                <div class="title">lucid.sort</div>
                 
               </div>
             </a>
@@ -1083,14 +1073,13 @@ regions do not receive any gradients.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.pad</a><ul>
-<li><a class="reference internal" href="#lucid.pad"><code class="docutils literal notranslate"><span class="pre">pad()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.argsort</a><ul>
+<li><a class="reference internal" href="#lucid.argsort"><code class="docutils literal notranslate"><span class="pre">argsort()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
-<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#performance-flops">Performance / FLOPs</a></li>
 </ul>
 </li>
 </ul>
