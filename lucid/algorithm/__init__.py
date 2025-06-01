@@ -1,1 +1,1 @@
-from felzenszwalb import felzenszwalb_segmentation
+from .felzenszwalb import felzenszwalb_segmentation

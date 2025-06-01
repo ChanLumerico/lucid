@@ -91,7 +91,7 @@ def felzenszwalb_segmentation(
         raise ValueError("Image must have shape (C, H, W)")
 
     C, H, W = image.shape
-    img_f32 = image.astype(lucid.Float32, copy=False)
+    img_f32 = image.astype(lucid.Float32)
     img_cl = img_f32[0] if C == 1 else img_f32.transpose((1, 2, 0))
 
     n_px = H * W
@@ -99,7 +99,7 @@ def felzenszwalb_segmentation(
     order = lucid.argsort(w, kind="mergesort")
     p, q, w = p[order], q[order], w[order]
 
-    p_list, q_list, w_list = p.tolist(), q.tolist(), w.tolist()
+    p_list, q_list, w_list = p.data.tolist(), q.data.tolist(), w.data.tolist()
     uf = _UnionFind(n_px)
 
     for pi, qi, wi in zip(p_list, q_list, w_list):
