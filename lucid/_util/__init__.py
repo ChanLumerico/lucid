@@ -11,7 +11,8 @@ __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
-    "unbind", "sort", "nonzero", "unique", "topk", "argsort",
+    "unbind", "sort", "nonzero", "unique", "topk", "argsort", "histogramdd", 
+    "histogram", "histogram2d",
 ]
 # fmt: on
 
@@ -180,6 +181,40 @@ def topk(
             f"k={k} is greater than dimension size {a.shape[axis]} along axis {axis}."
         )
     return func.topk(k, axis, largest, sorted)(a)
+
+
+def histogramdd(
+    a: Tensor,
+    /,
+    bins: list[int],
+    range: list[tuple[float, float]],
+    density: bool = False,
+) -> tuple[Tensor, Tensor]:
+    return func.histogramdd(bins, range, density)(a)
+
+
+def histogram(
+    a: Tensor,
+    /,
+    bins: int = 10,
+    range: tuple[float, float] | None = None,
+    density: bool = False,
+) -> tuple[Tensor, Tensor]:
+    if a.ndim != 1:
+        raise ValueError("histogram() expects a 1D tensor input.")
+    a = a.reshape(-1, 1)
+    range = [range or (float(a.data.min().item()), float(a.data.max().item()))]
+    return func.histogramdd([bins], range, density)(a)
+
+
+def histogram2d(
+    a: Tensor,
+    b: Tensor,
+    /,
+    bins: list[int, int] = [10, 10],
+    range: list[tuple[float, float]] | None = None,
+    density: bool = False,
+) -> tuple[Tensor, Tensor]: ...
 
 
 Tensor.reshape = _reshape_immediate

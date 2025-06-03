@@ -1075,3 +1075,75 @@ class topk(operation):
             return int(num_slices * (n + self.k * math.log2(max(self.k, 1))))
         else:
             return int(num_slices * n)
+
+
+class histogramdd(operation):
+    def __init__(
+        self,
+        bins: list[int],
+        range: list[tuple[float, float]],
+        density: bool = False,
+    ) -> None:
+        super().__init__()
+        if not all(isinstance(b, int) for b in bins):
+            raise TypeError("All elements of bins must be integers.")
+
+        self.bins = bins
+        self.range = range
+        self.density = density
+
+    @func_op(n_in=1, n_ret=2, has_gradient=False)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        hist, edges = np.histogramdd(a.data, self.bins, self.range, self.density)
+
+        hist_t = Tensor(hist)
+        edges_t = Tensor(np.stack([e for e in edges]))
+        self.result = (hist_t, edges_t)
+        return (
+            (hist_t, partial(self.__grad__, lib_=np)),
+            (edges_t, partial(self.__grad__, lib_=np)),
+        )
+
+    @func_op(n_in=1, n_ret=2, has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        data = a.data
+        N, D = data.shape[:2]
+        bins = self.bins
+
+        edges = [mx.linspace(*r, bins[i] + 1) for i, r in enumerate(self.range)]
+        bin_widths = [(r[1] - r[0]) / bins[i] for i, r in enumerate(self.range)]
+
+        bin_indices = []
+        for d in range(D):
+            col = data[:, d]
+            idx = mx.floor((col - self.range[d][0]) / bin_widths[d]).astype(mx.int32)
+            idx = mx.clip(idx, 0, bins[d] - 1)
+            bin_indices.append(idx)
+
+        bin_indices = mx.stack(bin_indices, axis=1)
+        hist_shape = tuple(bins)
+        hist = mx.zeros(hist_shape, dtype=mx.int32)
+
+        for i in range(N):
+            idx = tuple(int(bin_indices[i, d].item()) for d in range(D))
+            hist[idx] += 1
+
+        hist = hist.astype(mx.float32)
+        if self.density:
+            total = mx.sum(hist)
+            bin_volume = math.prod(bin_widths)
+            hist /= total * bin_volume
+
+        hist_t = Tensor(hist)
+        edges_t = Tensor(mx.stack([e for e in edges]))
+        self.result = (hist_t, edges_t)
+        return (
+            (hist_t, partial(self.__grad__, lib_=np)),
+            (edges_t, partial(self.__grad__, lib_=np)),
+        )
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
+
+    def __flops__(self, a: Tensor) -> int:
+        return int(math.prod(a.shape) + math.prod(self.bins))

@@ -1,1 +1,0 @@
-from .felzenszwalb import felzenszwalb_segmentation
