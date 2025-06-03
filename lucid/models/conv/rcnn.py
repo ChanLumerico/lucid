@@ -218,10 +218,36 @@ class _SelectiveSearch(nn.Module):
             regions: dict[int, _Region] = {}
             for rid in range(n_regions):
                 mask = labels == rid
-                if mask.astype(lucid.Int).sum() == 0:
+                coords = lucid.nonzero(mask.astype(lucid.Int16))
+                size = len(coords)
+                if size == 0:
                     continue
 
-                # TODO: implement `lucid.[Tensor].nonzero()`
+                ys, xs = coords[:, 0], coords[:, 1]
+                bbox = (
+                    int(lucid.min(xs).item()),
+                    int(lucid.min(ys).item()),
+                    int(lucid.max(xs).item()),
+                    int(lucid.max(ys).item()),
+                )
+                color_hist = self._color_hist(rgb[mask.astype(bool)])
+                regions[rid] = _Region(rid, bbox, size, color_hist)
+
+            adj: dict[tuple[int, int], float] = {}
+            h_a = labels[:, :-1].ravel()
+            h_b = labels[:, 1:].ravel()
+            v_a = labels[:-1, :].ravel()
+            v_b = labels[1:, :].ravel()
+            h_neigh = lucid.stack((h_a, h_b), axis=1)
+            v_neigh = lucid.stack((v_a, v_b), axis=1)
+
+            for a, b in lucid.stack((h_neigh, v_neigh)):
+                if a == b:
+                    continue
+                key = (a, b) if a < b else (b, a)
+                adj[key] = 1.0
+
+            # TODO: Continue from here ...
 
 
 class _RegionWarper(nn.Module):

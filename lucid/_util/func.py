@@ -1177,7 +1177,3 @@ class where(operation):
 
     def __flops__(self, condition: Tensor, a: Tensor, b: Tensor) -> int:
         return max(condition.size, a.size, b.size)
-
-
-class nonzero(operation):
-    NotImplemented

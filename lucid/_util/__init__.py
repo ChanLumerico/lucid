@@ -12,7 +12,7 @@ __all__ = [
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
     "unbind", "sort", "nonzero", "unique", "topk", "argsort", "histogramdd", 
-    "histogram", "histogram2d", "where",
+    "histogram", "histogram2d", "where", "nonzero",
 ]
 # fmt: on
 
@@ -248,3 +248,4 @@ Tensor.roll = roll
 Tensor.unbind = unbind
 Tensor.sort = sort
 Tensor.unique = unique
+Tensor.nonzero = nonzero

@@ -33,3 +33,4 @@ Tensor Utilites
    histogram.rst
    histogram2d.rst
    histogramdd.rst
+   where.rst
