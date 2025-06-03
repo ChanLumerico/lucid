@@ -164,11 +164,64 @@ class _SelectiveSearch(nn.Module):
         iou_thresh: float = 0.8,
     ) -> None:
         super().__init__()
+        self.scales = scales
+        self.min_size = min_size
+        self.connectivity = connectivity
+        self.max_boxes = max_boxes
+        self.iou_thresh = iou_thresh
 
     @staticmethod
-    def _color_hist(region_pixels: _NumPyArray, bins: int = 8) -> _NumPyArray:
-        # TODO: implement `lucid.histogram` series
-        ...
+    def _color_hist(region_pixels: Tensor, bins: int = 8) -> Tensor:
+        hist = lucid.histogramdd(
+            region_pixels.reshape(-1, 3), bins, range=((0, 256),) * 3
+        )[0].flatten()
+
+        hist_sum = hist.sum()
+        return hist / hist_sum if hist_sum.item() else hist
+
+    @staticmethod
+    def _iou(box_a: Tensor, box_b: Tensor) -> float:
+        xa1, ya1, xa2, ya2 = box_a
+        xb1, yb1, xb2, yb2 = box_b
+
+        inter_x1 = max(xa1.item(), xb1.item())
+        inter_y1 = max(ya1.item(), yb1.item())
+        inter_x2 = min(xa2.item(), ya2.item())
+        inter_y2 = min(ya2.item(), yb2.item())
+
+        if inter_x2 < inter_x1 or inter_y2 < inter_y1:
+            return 0.0
+
+        inter = (inter_x2 - inter_x1 + 1) * (inter_y2 - inter_y1 + 1)
+        area_a = (xa2 - xa1 + 1) * (ya2 - ya1 + 1)
+        area_b = (xb2 - xb1 + 1) * (yb2 - yb1 + 1)
+        return inter / (area_a + area_b - inter)
+
+    @lucid.no_grad()
+    def forward(self, image: Tensor) -> Tensor:
+        if image.ndim != 3:
+            raise ValueError("Expecting (C, H, W)")
+
+        C, H, W = image.shape
+        rgb = image.transpose((1, 2, 0)).astype(lucid.Int16)
+        all_boxes: list[tuple[int, int, int, int]] = []
+
+        for k in self.scales:
+            labels = _felzenszwalb_segmentation(
+                image,
+                k=float(k),
+                min_size=self.min_size,
+                connectivity=self.connectivity,
+            )
+            n_regions = lucid.max(labels).item() + 1
+
+            regions: dict[int, _Region] = {}
+            for rid in range(n_regions):
+                mask = labels == rid
+                if mask.astype(lucid.Int).sum() == 0:
+                    continue
+
+                # TODO: implement `lucid.[Tensor].nonzero()`
 
 
 class _RegionWarper(nn.Module):

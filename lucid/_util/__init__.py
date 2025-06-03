@@ -12,7 +12,7 @@ __all__ = [
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
     "unbind", "sort", "nonzero", "unique", "topk", "argsort", "histogramdd", 
-    "histogram", "histogram2d",
+    "histogram", "histogram2d", "where",
 ]
 # fmt: on
 
@@ -224,6 +224,10 @@ def histogram2d(
             (float(b.data.min().item()), float(b.data.max().item())),
         ]
     return func.histogramdd(bins, range, density)(ab)
+
+
+def where(condition: Tensor, a: Tensor, b: Tensor, /) -> Tensor:
+    return func.where()(condition, a, b)
 
 
 Tensor.reshape = _reshape_immediate

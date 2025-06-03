@@ -1147,3 +1147,37 @@ class histogramdd(operation):
 
     def __flops__(self, a: Tensor) -> int:
         return int(math.prod(a.shape) + math.prod(self.bins))
+
+
+class where(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @func_op(n_in=3, n_ret=1)
+    def cpu(self, condition: Tensor, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        self.cond_ = condition
+        self.result = Tensor(np.where(condition.data, a.data, b.data))
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @func_op(n_in=3, n_ret=1, device="gpu")
+    def gpu(self, condition: Tensor, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        self.cond_ = condition
+        self.result = Tensor(mx.where(condition.data, a.data, b.data))
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        cond = self.cond_.data
+        grad = self.result.grad
+
+        grad_cond = lib_.array(0.0)
+        grad_a = lib_.where(cond, grad, 0)
+        grad_b = lib_.where(lib_.logical_not(cond), grad, 0)
+
+        return grad_cond, grad_a, grad_b
+
+    def __flops__(self, condition: Tensor, a: Tensor, b: Tensor) -> int:
+        return max(condition.size, a.size, b.size)
+
+
+class nonzero(operation):
+    NotImplemented

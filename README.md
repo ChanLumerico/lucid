@@ -15,6 +15,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Conditional trinary operation `lucid.where` added
 - Histogram functions added (`lucid.{histogram, histogram2d, histogramdd}`)
 - Added various Tensor utility operations (i.e. `lucid.topk`, `lucid.argsort`, etc.)
 
