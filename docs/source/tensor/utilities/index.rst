@@ -30,3 +30,6 @@ Tensor Utilites
    nonzero.rst
    unique.rst
    topk.rst
+   histogram.rst
+   histogram2d.rst
+   histogramdd.rst

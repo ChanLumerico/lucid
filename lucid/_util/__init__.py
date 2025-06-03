@@ -214,7 +214,16 @@ def histogram2d(
     bins: list[int, int] = [10, 10],
     range: list[tuple[float, float]] | None = None,
     density: bool = False,
-) -> tuple[Tensor, Tensor]: ...
+) -> tuple[Tensor, Tensor]:
+    if a.shape != b.shape:
+        raise ValueError("a and b must have the same shape.")
+    ab = stack((a, b), axis=1)
+    if range is None:
+        range = [
+            (float(a.data.min().item()), float(a.data.max().item())),
+            (float(b.data.min().item()), float(b.data.max().item())),
+        ]
+    return func.histogramdd(bins, range, density)(ab)
 
 
 Tensor.reshape = _reshape_immediate
