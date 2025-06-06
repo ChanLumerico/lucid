@@ -13,17 +13,17 @@ Function Signature
 .. code-block:: python
 
     def rand(
-      *shape: int, 
-      requires_grad: bool = False, 
-      keep_grad: bool = False,
-      device: _DeviceType = "cpu",
+        shape: _ShapeLike,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
     ) -> Tensor
 
 Parameters
 ----------
 
-- **shape** (*int*): The dimensions of the tensor to generate. 
-  Accepts a variable number of arguments for multidimensional tensors.
+- **shape** (*int* or *tuple of int*): The dimensions of the tensor to generate.
+  Can be a single integer for a 1D tensor or a tuple for multidimensional tensors.
 
 - **requires_grad** (*bool*, optional): If set to `True`, the resulting tensor 
   will track gradients for automatic differentiation. Defaults to `False`.
