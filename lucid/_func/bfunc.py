@@ -272,7 +272,7 @@ class power(operation):
         return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
 
     @binary_func_op(device="gpu")
-    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.power(a.data, b.data))
         return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
@@ -297,7 +297,7 @@ class dot(operation):
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
-        if a.ndim != 1 or b.ndum != 1:
+        if a.ndim != 1 or b.ndim != 1:
             raise ValueError(f"Only 1D dot product is supported for Metal backend.")
 
         self.result = Tensor(mx.sum(a.data * b.data))
