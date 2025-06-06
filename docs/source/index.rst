@@ -12,7 +12,7 @@
    tensor/tensor.rst
 
    Tensor Operations <tensor/operations/index.rst>
-   Tensor Utilites <tensor/utilities/index.rst>
+   Tensor Utilities <tensor/utilities/index.rst>
 
 .. toctree::
    :maxdepth: 2

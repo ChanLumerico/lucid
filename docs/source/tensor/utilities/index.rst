@@ -1,5 +1,5 @@
-Tensor Utilites
-===============
+Tensor Utilities
+================
 
 .. toctree::
    :maxdepth: 1
