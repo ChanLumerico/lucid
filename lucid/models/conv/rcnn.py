@@ -6,7 +6,6 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.types import _NumPyArray
 
 
 # __all__ = ["RCNN"]
@@ -139,7 +138,7 @@ class _Region:
     idx: int
     bbox: tuple[int, int, int, int]
     size: int
-    color_hist: _NumPyArray
+    color_hist: Tensor
 
     def merge(self, other: Self, new_idx: int) -> Self:
         x1 = min(self.bbox[0], other.bbox[0])
@@ -186,7 +185,7 @@ class _SelectiveSearch(nn.Module):
 
         inter_x1 = max(xa1.item(), xb1.item())
         inter_y1 = max(ya1.item(), yb1.item())
-        inter_x2 = min(xa2.item(), ya2.item())
+        inter_x2 = min(xa2.item(), xb2.item())
         inter_y2 = min(ya2.item(), yb2.item())
 
         if inter_x2 < inter_x1 or inter_y2 < inter_y1:
@@ -241,13 +240,71 @@ class _SelectiveSearch(nn.Module):
             h_neigh = lucid.stack((h_a, h_b), axis=1)
             v_neigh = lucid.stack((v_a, v_b), axis=1)
 
-            for a, b in lucid.stack((h_neigh, v_neigh)):
-                if a == b:
-                    continue
-                key = (a, b) if a < b else (b, a)
-                adj[key] = 1.0
+            def _sim(r1: _Region, r2: _Region) -> float:
+                color_sim = lucid.minimum(r1.color_hist, r2.color_hist).sum().item()
+                size_sim = 1.0 - (r1.size + r2.size) / float(H * W)
+                x1 = min(r1.bbox[0], r2.bbox[0])
+                y1 = min(r1.bbox[1], r2.bbox[1])
+                x2 = max(r1.bbox[2], r2.bbox[2])
+                y2 = max(r1.bbox[3], r2.bbox[3])
+                bbox_size = (x2 - x1 + 1) * (y2 - y1 + 1)
+                fill_sim = 1.0 - (bbox_size - r1.size - r2.size) / float(H * W)
+                return color_sim + size_sim + fill_sim
 
-            # TODO: Continue from here ...
+            for a, b in lucid.concatenate((h_neigh, v_neigh), axis=0):
+                ai, bi = int(a.item()), int(b.item())
+                if ai == bi:
+                    continue
+                key = (ai, bi) if ai < bi else (bi, ai)
+                adj[key] = _sim(regions[ai], regions[bi])
+
+            for r in regions.values():
+                all_boxes.append(r.bbox)
+
+            next_idx = n_regions
+            while adj and len(all_boxes) < self.max_boxes:
+                (ra, rb), _ = max(adj.items(), key=lambda item: item[1])
+                new_region = regions[ra].merge(regions[rb], next_idx)
+                next_idx += 1
+
+                del regions[ra]
+                del regions[rb]
+
+                neighbors: set[int] = set()
+                for (i, j) in list(adj.keys()):
+                    if i in (ra, rb) or j in (ra, rb):
+                        adj.pop((i, j))
+                        n = j if i in (ra, rb) else i
+                        if n not in (ra, rb):
+                            neighbors.add(n)
+
+                regions[new_region.idx] = new_region
+                all_boxes.append(new_region.bbox)
+
+                for n in neighbors:
+                    if n not in regions:
+                        continue
+                    key = (n, new_region.idx) if n < new_region.idx else (
+                        new_region.idx,
+                        n,
+                    )
+                    adj[key] = _sim(regions[n], new_region)
+
+    
+    
+        unique_boxes: list[tuple[int, int, int, int]] = []
+        for b in all_boxes:
+            tb = Tensor(b)
+            if all(
+                self._iou(tb, Tensor(ub)) <= self.iou_thresh for ub in unique_boxes
+            ):
+                unique_boxes.append(b)
+            if len(unique_boxes) >= self.max_boxes:
+                break
+
+        if unique_boxes:
+            return Tensor(unique_boxes, dtype=lucid.Int32)
+        return lucid.empty(0, 4, dtype=lucid.Int32)
 
 
 class _RegionWarper(nn.Module):
@@ -311,10 +368,6 @@ class _BBoxRegressor(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.linear(x).reshape(x.shape[0], self.num_classes, 4)
-
-
-# TODO: Need to implement `Selective Search` algorithm
-
 
 class RCNN(nn.Module):
     def __init__(
