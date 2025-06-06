@@ -59,5 +59,5 @@ def kaiming_uniform(tensor: Tensor, mode: str) -> None:
 def kaiming_normal(tensor: Tensor, mode: str) -> None:
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     fan = fan_in if mode == "fan_in" else fan_out
-    std = (2 / fan) ** 5
+    std = (2 / fan) ** 0.5
     tensor.data = lucid.random.randn(tensor.shape).data * std
