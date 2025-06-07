@@ -41,7 +41,14 @@ class Numeric:
 
         if bits is not None:
             self._np_dtype = getattr(np, self.base_str + str(bits))
-            self._mlx_dtype = getattr(mx, self.base_str + str(bits))
+            bits_mlx = bits
+            if (
+                mx.default_device().type is mx.DeviceType.gpu
+                and self.base_dtype is float
+                and bits == 64
+            ):
+                bits_mlx = 32
+            self._mlx_dtype = getattr(mx, self.base_str + str(bits_mlx))
 
     @property
     def cpu(self) -> type | None:
