@@ -186,10 +186,12 @@ def topk(
 def histogramdd(
     a: Tensor,
     /,
-    bins: list[int],
+    bins: int | list[int],
     range: list[tuple[float, float]],
     density: bool = False,
 ) -> tuple[Tensor, Tensor]:
+    if isinstance(bins, int):
+        bins = [bins] * a.shape[1]
     return func.histogramdd(bins, range, density)(a)
 
 
