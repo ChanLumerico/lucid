@@ -1080,11 +1080,13 @@ class topk(operation):
 class histogramdd(operation):
     def __init__(
         self,
-        bins: list[int],
+        bins: int | list[int],
         range: list[tuple[float, float]],
         density: bool = False,
     ) -> None:
         super().__init__()
+        if isinstance(bins, int):
+            bins = [bins] * len(range)
         if not all(isinstance(b, int) for b in bins):
             raise TypeError("All elements of bins must be integers.")
 
