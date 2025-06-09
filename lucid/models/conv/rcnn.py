@@ -237,16 +237,19 @@ class _SelectiveSearch(nn.Module):
             h_b = labels[:, 1:].ravel()
             v_a = labels[:-1, :].ravel()
             v_b = labels[1:, :].ravel()
+
             h_neigh = lucid.stack((h_a, h_b), axis=1)
             v_neigh = lucid.stack((v_a, v_b), axis=1)
 
             def _sim(r1: _Region, r2: _Region) -> float:
                 color_sim = lucid.minimum(r1.color_hist, r2.color_hist).sum().item()
                 size_sim = 1.0 - (r1.size + r2.size) / float(H * W)
+
                 x1 = min(r1.bbox[0], r2.bbox[0])
                 y1 = min(r1.bbox[1], r2.bbox[1])
                 x2 = max(r1.bbox[2], r2.bbox[2])
                 y2 = max(r1.bbox[3], r2.bbox[3])
+
                 bbox_size = (x2 - x1 + 1) * (y2 - y1 + 1)
                 fill_sim = 1.0 - (bbox_size - r1.size - r2.size) / float(H * W)
                 return color_sim + size_sim + fill_sim
@@ -271,7 +274,7 @@ class _SelectiveSearch(nn.Module):
                 del regions[rb]
 
                 neighbors: set[int] = set()
-                for (i, j) in list(adj.keys()):
+                for i, j in list(adj.keys()):
                     if i in (ra, rb) or j in (ra, rb):
                         adj.pop((i, j))
                         n = j if i in (ra, rb) else i
@@ -284,20 +287,20 @@ class _SelectiveSearch(nn.Module):
                 for n in neighbors:
                     if n not in regions:
                         continue
-                    key = (n, new_region.idx) if n < new_region.idx else (
-                        new_region.idx,
-                        n,
+                    key = (
+                        (n, new_region.idx)
+                        if n < new_region.idx
+                        else (
+                            new_region.idx,
+                            n,
+                        )
                     )
                     adj[key] = _sim(regions[n], new_region)
 
-    
-    
         unique_boxes: list[tuple[int, int, int, int]] = []
         for b in all_boxes:
             tb = Tensor(b)
-            if all(
-                self._iou(tb, Tensor(ub)) <= self.iou_thresh for ub in unique_boxes
-            ):
+            if all(self._iou(tb, Tensor(ub)) <= self.iou_thresh for ub in unique_boxes):
                 unique_boxes.append(b)
             if len(unique_boxes) >= self.max_boxes:
                 break
@@ -368,6 +371,7 @@ class _BBoxRegressor(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.linear(x).reshape(x.shape[0], self.num_classes, 4)
+
 
 class RCNN(nn.Module):
     def __init__(
