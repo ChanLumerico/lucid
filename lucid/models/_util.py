@@ -107,8 +107,8 @@ def summarize(
 
     print(f"{title:^95}")
     print("=" * 95)
-    print(f"{"Layer":<36}{"Input Shape":<22}", end="")
-    print(f"{"Output Shape":<22}{"Parameter Size":<12}")
+    print(f"{'Layer':<36}{'Input Shape':<22}", end="")
+    print(f"{'Output Shape':<22}{'Parameter Size':<12}")
     print("=" * 95)
 
     total_layers = sum(layer["layer_count"] for layer in module_summary)
@@ -132,7 +132,7 @@ def summarize(
             print("-")
 
     if truncate_from is not None and truncated_lines > 0:
-        print(f"\n{f"... and more {truncated_lines} layer(s)":^95}")
+        print(f"\n{f'... and more {truncated_lines} layer(s)':^95}")
 
     print("=" * 95)
     print(f"Total Layers(Submodules): {total_layers:,}")

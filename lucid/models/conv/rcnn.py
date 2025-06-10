@@ -328,8 +328,8 @@ class _RegionWarper(nn.Module):
             [lucid.full((len(r),), i, device=device) for i, r in enumerate(rois)]
         )
 
-        widths = boxes[:, 2] - boxes[:, 0]
-        heights = boxes[:, 3] - boxes[:, 1]
+        widths = boxes[:, 2] - boxes[:, 0] + 1
+        heights = boxes[:, 3] - boxes[:, 1] + 1
         ctr_x = boxes[:, 0] + 0.5 * widths
         ctr_y = boxes[:, 1] + 0.5 * heights
 
@@ -393,10 +393,9 @@ class RCNN(nn.Module):
         self.svm = _LinearSVM(feat_dim, num_classes)
         self.bbox_reg = _BBoxRegressor(feat_dim, num_classes)
 
-        self.image_means: nn.buffer
-        self.register_buffer(
-            "image_means", lucid.Tensor(image_means).reshape(1, 3, 1, 1) / pixel_scale
-        )
+        self.image_means: nn.Buffer
+        means = lucid.Tensor(image_means).reshape(1, len(image_means), 1, 1)
+        self.register_buffer("image_means", means / pixel_scale)
 
         self.nms_iou_thresh = nms_iou_thresh
         self.score_thresh = score_thresh
@@ -405,7 +404,8 @@ class RCNN(nn.Module):
     def forward(
         self, images: Tensor, rois: list[Tensor], *, return_feats: bool = False
     ) -> tuple[Tensor, ...]:
-        images = images / lucid.max(images).clip(min_value=1.0)
+        denom = lucid.clip(lucid.max(images), 1.0, lucid.inf)
+        images = images / denom
         images = images - self.image_means
 
         crops = self.warper(images, rois)
@@ -494,14 +494,14 @@ class RCNN(nn.Module):
 
         dx, dy, dw, dh = deltas.unbind(axis=-1)
         pred_ctr_x = dx * widths + ctr_x
-        pred_crt_y = dy * heights + ctr_y
+        pred_ctr_y = dy * heights + ctr_y
         pred_w = lucid.exp(dw) * widths
         pred_h = lucid.exp(dh) * heights
 
         x1 = pred_ctr_x - 0.5 * pred_w
-        y1 = pred_crt_y - 0.5 * pred_h
+        y1 = pred_ctr_y - 0.5 * pred_h
         x2 = pred_ctr_x + 0.5 * pred_w - add_one
-        y2 = pred_crt_y + 0.5 * pred_h - add_one
+        y2 = pred_ctr_y + 0.5 * pred_h - add_one
 
         return lucid.stack([x1, y1, x2, y2], axis=-1)
 
@@ -517,13 +517,13 @@ class RCNN(nn.Module):
         x1, y1, x2, y2 = boxes.unbind(axis=1)
         areas = (x2 - x1 + 1) * (y2 - y1 + 1)
 
-        xx1 = x1.unsqueeze(axis=1).clip(min_value=x1)
-        yy1 = y1.unsqueeze(axis=1).clip(min_value=y1)
-        xx2 = x2.unsqueeze(axis=1).clip(max_value=x2)
-        yy2 = y2.unsqueeze(axis=1).clip(max_value=y2)
+        xx1 = lucid.maximum(x1.unsqueeze(axis=1), x1)
+        yy1 = lucid.maximum(y1.unsqueeze(axis=1), y1)
+        xx2 = lucid.minimum(x2.unsqueeze(axis=1), x2)
+        yy2 = lucid.minimum(y2.unsqueeze(axis=1), y2)
 
-        w = (xx2 - xx1 + 1).clip(min_value=0)
-        h = (yy2 - yy1 + 1).clip(min_value=0)
+        w = (xx2 - xx1 + 1).clip(0, lucid.inf)
+        h = (yy2 - yy1 + 1).clip(0, lucid.inf)
 
         inter: Tensor = w * h
         iou = inter / (areas.unsqueeze(axis=1) + areas - inter)
