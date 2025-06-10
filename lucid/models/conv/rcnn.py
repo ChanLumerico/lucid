@@ -328,8 +328,8 @@ class _RegionWarper(nn.Module):
             [lucid.full((len(r),), i, device=device) for i, r in enumerate(rois)]
         )
 
-        widths = boxes[:, 2] - boxes[:, 0]
-        heights = boxes[:, 3] - boxes[:, 1]
+        widths = boxes[:, 2] - boxes[:, 0] + 1
+        heights = boxes[:, 3] - boxes[:, 1] + 1
         ctr_x = boxes[:, 0] + 0.5 * widths
         ctr_y = boxes[:, 1] + 0.5 * heights
 
@@ -393,7 +393,7 @@ class RCNN(nn.Module):
         self.svm = _LinearSVM(feat_dim, num_classes)
         self.bbox_reg = _BBoxRegressor(feat_dim, num_classes)
 
-        self.image_means: nn.buffer
+        self.image_means: nn.Buffer
         self.register_buffer(
             "image_means", lucid.Tensor(image_means).reshape(1, 3, 1, 1) / pixel_scale
         )
@@ -494,14 +494,14 @@ class RCNN(nn.Module):
 
         dx, dy, dw, dh = deltas.unbind(axis=-1)
         pred_ctr_x = dx * widths + ctr_x
-        pred_crt_y = dy * heights + ctr_y
+        pred_ctr_y = dy * heights + ctr_y
         pred_w = lucid.exp(dw) * widths
         pred_h = lucid.exp(dh) * heights
 
         x1 = pred_ctr_x - 0.5 * pred_w
-        y1 = pred_crt_y - 0.5 * pred_h
+        y1 = pred_ctr_y - 0.5 * pred_h
         x2 = pred_ctr_x + 0.5 * pred_w - add_one
-        y2 = pred_crt_y + 0.5 * pred_h - add_one
+        y2 = pred_ctr_y + 0.5 * pred_h - add_one
 
         return lucid.stack([x1, y1, x2, y2], axis=-1)
 
