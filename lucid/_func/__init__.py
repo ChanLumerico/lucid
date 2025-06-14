@@ -184,7 +184,12 @@ def tanh(a: Tensor, /) -> Tensor:
     return ufunc.tanh()(a)
 
 
-def clip(a: Tensor, /, min_value: _Scalar | None, max_value: _Scalar | None) -> Tensor:
+def clip(
+    a: Tensor,
+    /,
+    min_value: _Scalar | None = None,
+    max_value: _Scalar | None = None,
+) -> Tensor:
     if min_value is None:
         min_value = lucid.min(a).item()
     if max_value is None:
