@@ -1,4 +1,5 @@
 import itertools
+import math
 from typing import Tuple, Optional
 
 import lucid
@@ -64,7 +65,7 @@ def unfold(
     return col.reshape((N_out, C_filt))
 
 
-def _conv(
+def _im2col_conv(
     input_: Tensor,
     weight: Tensor,
     bias: Optional[Tensor],
@@ -121,6 +122,88 @@ def _conv(
         out_final += bias.reshape(tuple(bias_sh))
 
     return out_final
+
+
+_B = [[1, 0, -1, 0], [0, 1, 1, 0], [0, -1, 1, 0], [0, 1, 0, -1]]
+_G = [[0.25, 0, 0], [-0.25, -0.25, -0.25], [-0.25, 0.25, -0.25], [0.25, 0, 0]]
+_A = [[1, 1, 1, 0], [0, 1, -1, -1]]
+
+B_ten = Tensor(_B, dtype=float)
+G_ten = Tensor(_G, dtype=float)
+A_ten = Tensor(_A, dtype=float)
+
+
+def _winograd_conv(input_: Tensor, weight: Tensor, bias: Optional[Tensor]) -> Tensor:
+    N, C_in, H, W = input_.shape
+    C_out = weight.shape[0]
+
+    extra_h, extra_w = H % 2, W % 2
+    w_flat = weight.reshape((C_out * C_in, 3, 3))
+    Gt = G_ten.swapaxes(1, 0)
+    w_t = G_ten.matmul(w_flat).matmul(Gt)
+    W_win = w_t.reshape((C_out, C_in, 4, 4))
+
+    pad_h = (1, 1 + extra_h)
+    pad_w = (1, 1 + extra_w)
+    x_pad = lucid.pad(input_, [(0, 0), (0, 0), pad_h, pad_w])
+
+    H_pad = H + 2 + extra_h
+    W_pad = W + 2 + extra_w
+    out_pad = lucid.zeros((N, C_out, H_pad - 2, W_pad - 2), dtype=input_.dtype)
+
+    Bt = B_ten.swapaxes(1, 0)
+    nH = math.ceil(H / 2)
+    nW = math.ceil(W / 2)
+
+    for i in range(nH):
+        for j in range(nW):
+            h0, w0 = i * 2, j * 2
+            d = x_pad[:, :, h0 : h0 + 4, w0 : w0 + 4]
+            d_flat = d.reshape((-1, 4, 4))
+            d_t = Bt.matmul(d_flat).matmul(B_ten)
+
+            D_win = d_t.reshape((N, C_in, 4, 4))
+            M_sum = (D_win.unsqueeze(1) * W_win.unsqueeze(0)).sum(axis=2)
+            m_flat = M_sum.reshape((-1, 4, 4))
+
+            At = A_ten.swapaxes(1, 0)
+            y_flat = At.matmul(m_flat).matmul(A_ten)
+
+            Y = y_flat.reshape((N, C_out, 2, 2))
+            out_pad[:, :, h0 : h0 + 2, w0 : w0 + 2] += Y
+
+    if bias is not None:
+        out_pad[:, :, :H, :W] += bias.reshape((1, C_out, 1, 1))
+
+    return out_pad[:, :, :H, :W]
+
+
+def _conv(
+    input_: Tensor,
+    weight: Tensor,
+    bias: Optional[Tensor],
+    stride: Tuple[int, ...],
+    padding: Tuple[int, ...],
+    dilation: Tuple[int, ...],
+    groups: int,
+) -> Tensor:
+    if (
+        input_.ndim == 4
+        and weight.shape[2:] == (3, 3)
+        and stride == (1, 1)
+        and padding == (1, 1)
+        and dilation == (1, 1)
+        and groups == 1
+    ):
+        return _winograd_conv(input_, weight, bias)
+
+    if len(input_.shape) < 3 or len(weight.shape) < 3:
+        raise ValueError("Input and weight tensors must have at least 3 dimensions.")
+
+    if len(stride) != len(padding) or len(stride) != len(dilation):
+        raise ValueError("Stride, padding, and dilation must have the same length.")
+
+    return _im2col_conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv1d(

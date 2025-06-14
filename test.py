@@ -7,7 +7,6 @@ import lucid.transforms as transforms
 from lucid.data import DataLoader
 from lucid.datasets import MNIST
 
-import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
@@ -26,7 +25,7 @@ test_set = MNIST(
 device = "cpu"
 learning_rate = 1e-3
 weight_decay = 1e-4
-num_epochs = 5
+num_epochs = 10
 batch_size = 100
 
 train_loader = DataLoader(train_set, batch_size, shuffle=True)
@@ -35,6 +34,7 @@ test_loader = DataLoader(test_set, batch_size)
 model: nn.Module = models.lenet_5(_base_activation=nn.ReLU).to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5)
 criterion = nn.CrossEntropyLoss().to(device)
 
 
@@ -85,6 +85,8 @@ def train(model, train_loader, criterion, optimizer, num_epochs):
                     "Acc": f"{accuracy:.4f}",
                 }
             )
+
+        scheduler.step()
 
     return losses
 
