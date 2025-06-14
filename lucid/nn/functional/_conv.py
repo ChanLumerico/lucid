@@ -14,69 +14,54 @@ def unfold(
 ) -> Tensor:
     input_shape = input_.shape
     if len(input_shape) < 2:
-        raise ValueError(
-            "Input tensor must have at least 2 dimensions (N and C).",
-        )
-
+        raise ValueError("Input tensor must have at least 2 dimensions (N and C).")
     N, C, *spatial_dims = input_shape
     D = len(spatial_dims)
 
     if not (len(filter_size) == len(stride) == len(padding) == len(dilation) == D):
         raise ValueError(
-            "filter_size, stride, padding, and dilation must have the same "
-            "length as the number of spatial dimensions."
+            "filter_size, stride, padding, and dilation must match spatial dims."
         )
 
     out_dims = []
     for i in range(D):
-        effective_filter_size = dilation[i] * (filter_size[i] - 1) + 1
-        out_dim = (
-            (spatial_dims[i] + 2 * padding[i] - effective_filter_size) // stride[i]
-        ) + 1
-        if out_dim <= 0:
-            raise ValueError(
-                f"Calculated output dimension is non-positive "
-                f"for spatial dimension {i}: {out_dim}."
-            )
-        out_dims.append(out_dim)
+        eff_k = dilation[i] * (filter_size[i] - 1) + 1
+        o = (spatial_dims[i] + 2 * padding[i] - eff_k) // stride[i] + 1
+        if o <= 0:
+            raise ValueError(f"Non-positive output dim for axis {i}: {o}")
+        out_dims.append(o)
 
     pad_config = [(0, 0), (0, 0)] + [(padding[i], padding[i]) for i in range(D)]
-    padded_input = lucid.pad(input_, pad_config)
+    x = lucid.pad(input_, pad_config)
 
-    filter_offsets = list(itertools.product(*[range(fs) for fs in filter_size]))
-
+    offsets = list(itertools.product(*[range(k) for k in filter_size]))
     patches = []
-    for offset in filter_offsets:
-        slices = [slice(None), slice(None)]
-
+    for off in offsets:
+        sl = [slice(None), slice(None)]
         for d in range(D):
-            start = offset[d] * dilation[d]
+            start = off[d] * dilation[d]
             end = start + stride[d] * out_dims[d]
-            step = stride[d]
-            slices.append(slice(start, end, step))
+            sl.append(slice(start, end, stride[d]))
 
-        patch = padded_input[tuple(slices)]
-        patch = patch.unsqueeze(axis=2 + D)
-        patches.append(patch)
+        p = x[tuple(sl)]
+        p = p.unsqueeze(axis=2)
+        patches.append(p)
 
-    col = lucid.concatenate(patches, axis=2 + D)
-
-    new_shape = [N, C] + list(filter_size) + list(out_dims)
+    col = lucid.concatenate(patches, axis=2)
+    new_shape = [N, C] + list(filter_size) + out_dims
     col = col.reshape(new_shape)
 
-    permute_order = [0] + list(range(2 + D, 2 + D + D)) + [1] + list(range(2, 2 + D))
-    col = col.transpose(permute_order)
+    perm = [0] + list(range(2 + D, 2 + 2 * D)) + [1] + list(range(2, 2 + D))
+    col = col.transpose(perm)
 
-    N_times_out = N
-    for od in out_dims:
-        N_times_out *= od
+    N_out = N
+    for o in out_dims:
+        N_out *= o
+    C_filt = C
+    for k in filter_size:
+        C_filt *= k
 
-    C_times_filter = C
-    for fs in filter_size:
-        C_times_filter *= fs
-
-    col = col.reshape((N_times_out, C_times_filter))
-    return col
+    return col.reshape((N_out, C_filt))
 
 
 def _conv(
@@ -92,59 +77,50 @@ def _conv(
     C_out, C_in_div_g, *filter_size = weight.shape
     D = len(filter_size)
 
-    if C_in % groups != 0:
-        raise ValueError("Number of input channels is not divisible by groups.")
-    if C_out % groups != 0:
-        raise ValueError("Number of output channels is not divisible by groups.")
-    if (C_in_div_g * groups) != C_in:
-        raise ValueError("Weight shape is inconsistent with given number of groups.")
+    if C_in % groups != 0 or C_out % groups != 0 or C_in_div_g * groups != C_in:
+        raise ValueError("Inconsistent channel/group configuration.")
 
     out_dims = []
     for i in range(D):
-        effective_filter_size = dilation[i] * (filter_size[i] - 1) + 1
-        out_dim = (
-            (input_spatial[i] + 2 * padding[i] - effective_filter_size) // stride[i]
-        ) + 1
-        if out_dim <= 0:
-            raise ValueError(
-                f"Calculated output dimension is non-positive "
-                + f"for dimension {i}: {out_dim}."
-            )
-        out_dims.append(out_dim)
+        eff = dilation[i] * (filter_size[i] - 1) + 1
+        o = (input_spatial[i] + 2 * padding[i] - eff) // stride[i] + 1
+        if o <= 0:
+            raise ValueError(f"Non-positive output dim for axis {i}: {o}")
+        out_dims.append(o)
 
     col = unfold(input_, filter_size, stride, padding, dilation)
 
-    prod_filter_size = 1
-    for fs in filter_size:
-        prod_filter_size *= fs
+    prod_filter = 1
+    for k in filter_size:
+        prod_filter *= k
 
-    C_in_group = C_in // groups
-    C_out_group = C_out // groups
+    C_in_g = C_in // groups
+    C_out_g = C_out // groups
 
-    weight_reshape = weight.reshape(groups, C_out_group, C_in_group * prod_filter_size)
+    weight_rs = weight.reshape(groups, C_out_g, C_in_g * prod_filter)
+    N_out = N
+    for o in out_dims:
+        N_out *= o
+    col_rs = col.reshape(N_out, groups, C_in_g * prod_filter)
 
-    N_out_product = N
-    for od in out_dims:
-        N_out_product *= od
-
-    col_reshape = col.reshape(N_out_product, groups, C_in_group * prod_filter_size)
-
-    out_groups = []
+    outs = []
     for g in range(groups):
-        col_g = col_reshape[:, g, :]
-        w_g = weight_reshape[g]
+        c_g = col_rs[:, g, :]
+        w_g = weight_rs[g]
+        outs.append(c_g @ w_g.T)
+    out_cat = lucid.concatenate(outs, axis=1)
 
-        out_g = col_g @ w_g.T
-        out_groups.append(out_g)
+    new_shape = [N] + out_dims + [C_out]
+    out_nd = out_cat.reshape(new_shape)
 
-    out_concated = lucid.concatenate(out_groups, axis=1)
-    out = out_concated.reshape([N, C_out] + out_dims)
+    perm = [0, D + 1] + list(range(1, 1 + D))
+    out_final = out_nd.transpose(perm)
 
     if bias is not None:
-        bias_shape = [1, C_out] + [1] * D
-        out += bias.reshape(tuple(bias_shape))
+        bias_sh = [1, C_out] + [1] * D
+        out_final += bias.reshape(tuple(bias_sh))
 
-    return out
+    return out_final
 
 
 def conv1d(
