@@ -333,7 +333,7 @@ class tanh(operation):
 
 
 class clip(operation):
-    def __init__(self, min_value: float | None, max_value: float) -> None:
+    def __init__(self, min_value: float | None, max_value: float | None) -> None:
         super().__init__()
         self.min_value = min_value
         self.max_value = max_value
@@ -350,15 +350,19 @@ class clip(operation):
 
     def __grad_cpu__(self, a: Tensor) -> _GradFuncType:
         grad = np.ones_like(a.data)
-        grad[a.data < self.min_value] = 0
-        grad[a.data > self.max_value] = 0
+        if self.min_value is not None:
+            grad[a.data < self.min_value] = 0
+        if self.max_value is not None:
+            grad[a.data > self.max_value] = 0
 
         return grad * self.result.grad
 
     def __grad_gpu__(self, a: Tensor) -> _GradFuncType:
         grad = mx.ones_like(a.data)
-        grad = mx.where(a.data < self.min_value, 0, grad)
-        grad = mx.where(a.data > self.max_value, 0, grad)
+        if self.min_value is not None:
+            grad = mx.where(a.data < self.min_value, 0, grad)
+        if self.max_value is not None:
+            grad = mx.where(a.data > self.max_value, 0, grad)
 
         return grad * self.result.grad
 

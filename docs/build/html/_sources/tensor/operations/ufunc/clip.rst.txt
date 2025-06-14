@@ -10,7 +10,11 @@ Function Signature
 
 .. code-block:: python
 
-    def clip(a: Tensor, min_value: _Scalar, max_value: _Scalar) -> Tensor
+    def clip(
+        a: Tensor,
+        min_value: _Scalar | None = None,
+        max_value: _Scalar | None = None,
+    ) -> Tensor
 
 Parameters
 ----------
@@ -18,13 +22,13 @@ Parameters
 - **a** (*Tensor*):  
   The input tensor whose values are to be clipped.
 
-- **min_value** (*_Scalar*):  
-  The minimum value to which elements in the tensor will be clipped.  
-  If an element is less than `min_value`, it will be set to `min_value`.
+- **min_value** (*_Scalar | None*, optional):
+  The lower bound for clipping. If ``None`` (default), the minimum of
+  ``a`` is used.
 
-- **max_value** (*_Scalar*):  
-  The maximum value to which elements in the tensor will be clipped.  
-  If an element is greater than `max_value`, it will be set to `max_value`.
+- **max_value** (*_Scalar | None*, optional):
+  The upper bound for clipping. If ``None`` (default), the maximum of
+  ``a`` is used.
 
 Returns
 -------

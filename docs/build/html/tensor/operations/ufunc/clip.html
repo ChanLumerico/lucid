@@ -929,7 +929,7 @@
 <p>The <cite>clip</cite> function limits the values in the input tensor to a specified range element-wise.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">clip</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">min_value</span><span class="p">:</span> <span class="n">_Scalar</span><span class="p">,</span> <span class="n">max_value</span><span class="p">:</span> <span class="n">_Scalar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">clip</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">min_value</span><span class="p">:</span> <span class="n">_Scalar</span> <span class="o">|</span> <span class="nb">None</span> <span class="o">=</span> <span class="nb">None</span><span class="p">,</span> <span class="n">max_value</span><span class="p">:</span> <span class="n">_Scalar</span> <span class="o">|</span> <span class="nb">None</span> <span class="o">=</span> <span class="nb">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
@@ -938,12 +938,10 @@
 <ul class="simple">
 <li><p><strong>a</strong> (<em>Tensor</em>):
 The input tensor whose values are to be clipped.</p></li>
-<li><p><strong>min_value</strong> (<em>_Scalar</em>):
-The minimum value to which elements in the tensor will be clipped.
-If an element is less than <cite>min_value</cite>, it will be set to <cite>min_value</cite>.</p></li>
-<li><p><strong>max_value</strong> (<em>_Scalar</em>):
-The maximum value to which elements in the tensor will be clipped.
-If an element is greater than <cite>max_value</cite>, it will be set to <cite>max_value</cite>.</p></li>
+<li><p><strong>min_value</strong> (<em>_Scalar | None</em>, optional):
+The lower bound for clipping. If <code class="docutils literal notranslate"><span class="pre">None</span></code> (default), the minimum of <cite>a</cite> is used.</p></li>
+<li><p><strong>max_value</strong> (<em>_Scalar | None</em>, optional):
+The upper bound for clipping. If <code class="docutils literal notranslate"><span class="pre">None</span></code> (default), the maximum of <cite>a</cite> is used.</p></li>
 </ul>
 </section>
 <section id="returns">
