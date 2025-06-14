@@ -401,7 +401,11 @@ class RCNN(nn.Module):
         self.add_one = 1.0 if add_one else 0.0
 
     def forward(
-        self, images: Tensor, rois: list[Tensor] | None = None, *, return_feats: bool = False
+        self,
+        images: Tensor,
+        rois: list[Tensor] | None = None,
+        *,
+        return_feats: bool = False,
     ) -> tuple[Tensor, ...]:
         images = images / lucid.max(images).clip(min_value=1.0)
         images = images - self.image_means
@@ -490,19 +494,24 @@ class RCNN(nn.Module):
     def apply_deltas(boxes: Tensor, deltas: Tensor, add_one: float = 1.0) -> Tensor:
         widths = boxes[:, 2] - boxes[:, 0] + add_one
         heights = boxes[:, 3] - boxes[:, 1] + add_one
+
         ctr_x = boxes[:, 0] + 0.5 * widths
         ctr_y = boxes[:, 1] + 0.5 * heights
 
         dx, dy, dw, dh = deltas.unbind(axis=-1)
+        pred_w = (lucid.exp(dw) * widths).clip(min_value=add_one)
+        pred_h = (lucid.exp(dh) * heights).clip(min_value=add_one)
+
         pred_ctr_x = dx * widths + ctr_x
         pred_ctr_y = dy * heights + ctr_y
-        pred_w = lucid.exp(dw) * widths
-        pred_h = lucid.exp(dh) * heights
 
         x1 = pred_ctr_x - 0.5 * pred_w
         y1 = pred_ctr_y - 0.5 * pred_h
         x2 = pred_ctr_x + 0.5 * pred_w - add_one
         y2 = pred_ctr_y + 0.5 * pred_h - add_one
+
+        x1, x2 = lucid.minimum(x1, x2), lucid.maximum(x1, x2)
+        y1, y2 = lucid.minimum(y1, y2), lucid.maximum(y1, y2)
 
         return lucid.stack([x1, y1, x2, y2], axis=-1)
 
@@ -518,10 +527,10 @@ class RCNN(nn.Module):
         x1, y1, x2, y2 = boxes.unbind(axis=1)
         areas = (x2 - x1 + 1) * (y2 - y1 + 1)
 
-        xx1 = x1.unsqueeze(axis=1).clip(min_value=x1)
-        yy1 = y1.unsqueeze(axis=1).clip(min_value=y1)
-        xx2 = x2.unsqueeze(axis=1).clip(max_value=x2)
-        yy2 = y2.unsqueeze(axis=1).clip(max_value=y2)
+        xx1 = x1.unsqueeze(axis=1).clip(min_value=x1.item())
+        yy1 = y1.unsqueeze(axis=1).clip(min_value=y1.item())
+        xx2 = x2.unsqueeze(axis=1).clip(max_value=x2.item())
+        yy2 = y2.unsqueeze(axis=1).clip(max_value=y2.item())
 
         w = (xx2 - xx1 + 1).clip(min_value=0)
         h = (yy2 - yy1 + 1).clip(min_value=0)

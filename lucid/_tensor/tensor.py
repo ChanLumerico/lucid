@@ -203,11 +203,12 @@ class Tensor(_TensorOps):
         return total
 
     def item(self) -> _Scalar:
-        if self.ndim != 0:
+        if self.size > 1:
             raise ValueError(
-                "Tensor must be 0-dimensional(scalar) to pop its item.",
+                "Tensor must be 0-dimensional(scalar) to pop its item. "
+                "Use `tensor.data` to access the data directly.",
             )
-        item = self.data
+        item = self.data[..., 0] if self.ndim > 0 else self.data
         if item % 1 == 0:
             return int(item)
         else:
