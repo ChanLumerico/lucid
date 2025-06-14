@@ -201,7 +201,7 @@ class _SelectiveSearch(nn.Module):
         if image.ndim != 3:
             raise ValueError("Expecting (C, H, W)")
 
-        C, H, W = image.shape
+        _, H, W = image.shape
         rgb = image.transpose((1, 2, 0)).astype(lucid.Int16)
         all_boxes: list[tuple[int, int, int, int]] = []
 
@@ -290,10 +290,7 @@ class _SelectiveSearch(nn.Module):
                     key = (
                         (n, new_region.idx)
                         if n < new_region.idx
-                        else (
-                            new_region.idx,
-                            n,
-                        )
+                        else (new_region.idx, n)
                     )
                     adj[key] = _sim(regions[n], new_region)
 
