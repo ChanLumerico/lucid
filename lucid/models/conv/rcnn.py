@@ -8,7 +8,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 
-# __all__ = ["RCNN"]
+__all__ = ["RCNN"]
 
 
 class _UnionFind:
@@ -386,6 +386,7 @@ class RCNN(nn.Module):
     ) -> None:
         super().__init__()
         self.backbone = backbone
+        self.ss = _SelectiveSearch()
         self.warper = _RegionWarper(warper_output_size)
         self.svm = _LinearSVM(feat_dim, num_classes)
         self.bbox_reg = _BBoxRegressor(feat_dim, num_classes)
@@ -400,11 +401,13 @@ class RCNN(nn.Module):
         self.add_one = 1.0 if add_one else 0.0
 
     def forward(
-        self, images: Tensor, rois: list[Tensor], *, return_feats: bool = False
+        self, images: Tensor, rois: list[Tensor] | None = None, *, return_feats: bool = False
     ) -> tuple[Tensor, ...]:
         images = images / lucid.max(images).clip(min_value=1.0)
         images = images - self.image_means
 
+        if rois is None:
+            rois = [self.ss(img) for img in images]
         crops = self.warper(images, rois)
         feats = self.backbone(crops)
 
@@ -421,10 +424,11 @@ class RCNN(nn.Module):
 
     @lucid.no_grad()
     def predict(
-        self, images: Tensor, rois: list[Tensor], *, max_det_per_img: int = 100
+        self, images: Tensor, *, max_det_per_img: int = 100
     ) -> list[dict[str, Tensor]]:
         device = images.device
-        cls_scores, bbox_deltas = self(images, rois)
+        rois = [self.ss(img) for img in images]
+        cls_scores, bbox_deltas = self(images, rois=rois)
         probs = F.softmax(cls_scores, axis=1)
 
         boxes_all = lucid.concatenate(rois).to(device)
