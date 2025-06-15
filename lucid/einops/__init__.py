@@ -6,7 +6,7 @@ from lucid.einops import _func
 from lucid.types import _EinopsPattern
 
 
-__all__ = ["rearrange", "reduce", "repeat"]
+__all__ = ["rearrange", "reduce", "repeat", "einsum"]
 
 
 _ReduceStr = Literal["sum", "mean"]
@@ -24,3 +24,7 @@ def reduce(
 
 def repeat(a: Tensor, /, pattern: _EinopsPattern, **shapes: int) -> Tensor:
     return _func.repeat(pattern, t_shape=a.shape, **shapes)(a)
+
+
+def einsum(pattern: str, *tensors: Tensor) -> Tensor:
+    return _func.einsum(pattern)(*tensors)
