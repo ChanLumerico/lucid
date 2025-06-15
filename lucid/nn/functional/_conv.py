@@ -125,7 +125,7 @@ def _im2col_conv(
 
 
 _B = [[1, 0, -1, 0], [0, 1, 1, 0], [0, -1, 1, 0], [0, 1, 0, -1]]
-_G = [[0.25, 0, 0], [-0.25, -0.25, -0.25], [-0.25, 0.25, -0.25], [0.25, 0, 0]]
+_G = [[1, 0, 0], [0.5, 0.5, 0.5], [0.5, -0.5, 0.5], [0, 0, 1]]
 _A = [[1, 1, 1, 0], [0, 1, -1, -1]]
 
 B_ten = Tensor(_B, dtype=float)
@@ -133,49 +133,50 @@ G_ten = Tensor(_G, dtype=float)
 A_ten = Tensor(_A, dtype=float)
 
 
-def _winograd_conv(input_: Tensor, weight: Tensor, bias: Optional[Tensor]) -> Tensor:
+def _winograd_conv(
+    input_: Tensor, weight: Tensor, bias: Optional[Tensor], padding: Tuple[int, int]
+) -> Tensor:
     N, C_in, H, W = input_.shape
-    C_out = weight.shape[0]
+    C_out, _, kH, kW = weight.shape
 
-    extra_h, extra_w = H % 2, W % 2
-    w_flat = weight.reshape((C_out * C_in, 3, 3))
-    Gt = G_ten.swapaxes(1, 0)
-    w_t = G_ten.matmul(w_flat).matmul(Gt)
-    W_win = w_t.reshape((C_out, C_in, 4, 4))
+    pad_h, pad_w = padding
+    H_out = H + 2 * pad_h - (kH - 1)
+    W_out = W + 2 * pad_w - (kW - 1)
 
-    pad_h = (1, 1 + extra_h)
-    pad_w = (1, 1 + extra_w)
-    x_pad = lucid.pad(input_, [(0, 0), (0, 0), pad_h, pad_w])
+    x = lucid.pad(
+        input_,
+        [(0, 0), (0, 0), (pad_h + 2, pad_h + 2), (pad_w + 2, pad_w + 2)],
+    )
+    w_flat = weight.reshape((C_out * C_in, kH, kW))
+    U = G_ten.matmul(w_flat).matmul(G_ten.swapaxes(1, 0))
+    U = U.reshape((C_out, C_in, 4, 4))
 
-    H_pad = H + 2 + extra_h
-    W_pad = W + 2 + extra_w
-    out_pad = lucid.zeros((N, C_out, H_pad - 2, W_pad - 2), dtype=input_.dtype)
+    nH = math.ceil(H_out / 2)
+    nW = math.ceil(W_out / 2)
 
+    out = lucid.zeros((N, C_out, 2 * nH, 2 * nW), dtype=input_.dtype)
     Bt = B_ten.swapaxes(1, 0)
-    nH = math.ceil(H / 2)
-    nW = math.ceil(W / 2)
 
     for i in range(nH):
         for j in range(nW):
-            h0, w0 = i * 2, j * 2
-            d = x_pad[:, :, h0 : h0 + 4, w0 : w0 + 4]
-            d_flat = d.reshape((-1, 4, 4))
-            d_t = Bt.matmul(d_flat).matmul(B_ten)
+            y0, x0 = 2 * i, 2 * j
+            patch = x[:, :, y0 : y0 + 4, x0 : x0 + 4]
+            V = Bt.matmul(patch.reshape(-1, 4, 4)).matmul(B_ten)
+            V = V.reshape((N, C_in, 4, 4))
 
-            D_win = d_t.reshape((N, C_in, 4, 4))
-            M_sum = (D_win.unsqueeze(1) * W_win.unsqueeze(0)).sum(axis=2)
-            m_flat = M_sum.reshape((-1, 4, 4))
+            M = (V.unsqueeze(1) * U.unsqueeze(0)).sum(axis=2)
+            M_flat = M.reshape(-1, 4, 4)
 
-            At = A_ten.swapaxes(1, 0)
-            y_flat = At.matmul(m_flat).matmul(A_ten)
+            y1 = A_ten.matmul(M_flat)
+            Y_flat = y1.matmul(A_ten.swapaxes(1, 0))
+            Y = Y_flat.reshape((N, C_out, 2, 2))
 
-            Y = y_flat.reshape((N, C_out, 2, 2))
-            out_pad[:, :, h0 : h0 + 2, w0 : w0 + 2] += Y
+            out[:, :, y0 : y0 + 2, x0 : x0 + 2] += Y
 
+    out = out[:, :, :H_out, :W_out]
     if bias is not None:
-        out_pad[:, :, :H, :W] += bias.reshape((1, C_out, 1, 1))
-
-    return out_pad[:, :, :H, :W]
+        out += bias.reshape((1, C_out, 1, 1))
+    return out
 
 
 def _conv(
@@ -191,11 +192,10 @@ def _conv(
         input_.ndim == 4
         and weight.shape[2:] == (3, 3)
         and stride == (1, 1)
-        and padding == (1, 1)
         and dilation == (1, 1)
         and groups == 1
     ):
-        return _winograd_conv(input_, weight, bias)
+        return _winograd_conv(input_, weight, bias, padding)
 
     if len(input_.shape) < 3 or len(weight.shape) < 3:
         raise ValueError("Input and weight tensors must have at least 3 dimensions.")
