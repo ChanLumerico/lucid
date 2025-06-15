@@ -76,10 +76,10 @@ def winograd_f23_multi(input, kernel, bias=None, padding=(0, 0)):
 
 
 if __name__ == "__main__":
-    np.random.seed(0)
-    inp_np = np.random.randn(2, 3, 7, 9).astype(np.float32)
-    kern_np = np.random.randn(4, 3, 3, 3).astype(np.float32)
-    bias_np = np.random.randn(4).astype(np.float32)
+    np.random.seed(42)
+    inp_np = np.random.randn(2, 3, 64, 64).astype(np.float32)
+    kern_np = np.random.randn(6, 3, 3, 3).astype(np.float32)
+    bias_np = np.random.randn(6).astype(np.float32)
 
     for pad in [(0, 0), (3, 3), (3, 1)]:
         out_win = winograd_f23_multi(inp_np, kern_np, bias_np, padding=pad)
