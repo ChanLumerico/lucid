@@ -136,47 +136,7 @@ A_ten = Tensor(_A, dtype=float)
 def _winograd_conv(
     input_: Tensor, weight: Tensor, bias: Optional[Tensor], padding: Tuple[int, int]
 ) -> Tensor:
-    N, C_in, H, W = input_.shape
-    C_out, _, kH, kW = weight.shape
-
-    pad_h, pad_w = padding
-    H_out = H + 2 * pad_h - (kH - 1)
-    W_out = W + 2 * pad_w - (kW - 1)
-
-    x = lucid.pad(
-        input_,
-        [(0, 0), (0, 0), (pad_h + 2, pad_h + 2), (pad_w + 2, pad_w + 2)],
-    )
-    w_flat = weight.reshape((C_out * C_in, kH, kW))
-    U = G_ten.matmul(w_flat).matmul(G_ten.swapaxes(1, 0))
-    U = U.reshape((C_out, C_in, 4, 4))
-
-    nH = math.ceil(H_out / 2)
-    nW = math.ceil(W_out / 2)
-
-    out = lucid.zeros((N, C_out, 2 * nH, 2 * nW), dtype=input_.dtype)
-    Bt = B_ten.swapaxes(1, 0)
-
-    for i in range(nH):
-        for j in range(nW):
-            y0, x0 = 2 * i, 2 * j
-            patch = x[:, :, y0 : y0 + 4, x0 : x0 + 4]
-            V = Bt.matmul(patch.reshape(-1, 4, 4)).matmul(B_ten)
-            V = V.reshape((N, C_in, 4, 4))
-
-            M = (V.unsqueeze(1) * U.unsqueeze(0)).sum(axis=2)
-            M_flat = M.reshape(-1, 4, 4)
-
-            y1 = A_ten.matmul(M_flat)
-            Y_flat = y1.matmul(A_ten.swapaxes(1, 0))
-            Y = Y_flat.reshape((N, C_out, 2, 2))
-
-            out[:, :, y0 : y0 + 2, x0 : x0 + 2] += Y
-
-    out = out[:, :, :H_out, :W_out]
-    if bias is not None:
-        out += bias.reshape((1, C_out, 1, 1))
-    return out
+    NotImplemented
 
 
 def _conv(
@@ -195,7 +155,9 @@ def _conv(
         and dilation == (1, 1)
         and groups == 1
     ):
-        return _winograd_conv(input_, weight, bias, padding)
+        # return _winograd_conv(input_, weight, bias, padding)
+        # NOTE: Implement Winograd convolution first before enabling this.
+        pass
 
     if len(input_.shape) < 3 or len(weight.shape) < 3:
         raise ValueError("Input and weight tensors must have at least 3 dimensions.")
