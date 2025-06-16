@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.linalg.eig" href="eig.html" /><link rel="prev" title="lucid.linalg.norm" href="norm.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/linalg/operations/cholesky.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="lucid.nn" href="../../nn/nn.html" /><link rel="prev" title="lucid.einops.repeat" href="repeat.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/einops/functions/einsum.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>lucid.linalg.cholesky - Lucid 2.1.15 documentation</title>
+        <title>lucid.einops.einsum - Lucid 2.1.15 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -296,19 +296,19 @@
 </li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Linear Algebra</span></p>
-<ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="../linalg.html">lucid.linalg</a></li>
-<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Linalg Operations</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Linalg Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="det.html">lucid.linalg.det</a></li>
-<li class="toctree-l2"><a class="reference internal" href="inv.html">lucid.linalg.inv</a></li>
-<li class="toctree-l2"><a class="reference internal" href="solve.html">lucid.linalg.solve</a></li>
-<li class="toctree-l2"><a class="reference internal" href="norm.html">lucid.linalg.norm</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.linalg.cholesky</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eig.html">lucid.linalg.eig</a></li>
-<li class="toctree-l2"><a class="reference internal" href="qr.html">lucid.linalg.qr</a></li>
-<li class="toctree-l2"><a class="reference internal" href="svd.html">lucid.linalg.svd</a></li>
-<li class="toctree-l2"><a class="reference internal" href="matrix_power.html">lucid.linalg.matrix_power</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pinv.html">lucid.linalg.pinv</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../linalg/linalg.html">lucid.linalg</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../linalg/operations/index.html">Linalg Operations</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Linalg Operations</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/det.html">lucid.linalg.det</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/inv.html">lucid.linalg.inv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/solve.html">lucid.linalg.solve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/norm.html">lucid.linalg.norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/cholesky.html">lucid.linalg.cholesky</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/eig.html">lucid.linalg.eig</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/qr.html">lucid.linalg.qr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/svd.html">lucid.linalg.svd</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/matrix_power.html">lucid.linalg.matrix_power</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../linalg/operations/pinv.html">lucid.linalg.pinv</a></li>
 </ul>
 </li>
 </ul>
@@ -326,13 +326,13 @@
 </li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Einstein Operations</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../einops/einops.html">lucid.einops</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../einops/functions/index.html">Einops Functions</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Einops Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../einops/functions/rearrange.html">lucid.einops.rearrange</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../einops/functions/reduce.html">lucid.einops.reduce</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../einops/functions/repeat.html">lucid.einops.repeat</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../einops/functions/einsum.html">lucid.einsum</a></li>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../einops.html">lucid.einops</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Einops Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of Einops Functions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="rearrange.html">lucid.einops.rearrange</a></li>
+<li class="toctree-l2"><a class="reference internal" href="reduce.html">lucid.einops.reduce</a></li>
+<li class="toctree-l2"><a class="reference internal" href="repeat.html">lucid.einops.repeat</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">lucid.einops.einsum</a></li>
 </ul>
 </li>
 </ul>
@@ -897,12 +897,12 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/linalg/operations/cholesky.rst?plain=true" title="View this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/einops/functions/einsum.rst?plain=true" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
 </div><div class="edit-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/linalg/operations/cholesky.rst" title="Edit this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/einops/functions/einsum.rst" title="Edit this page">
     <svg><use href="#svg-pencil"></use></svg>
     <span class="visually-hidden">Edit this page</span>
   </a>
@@ -921,93 +921,97 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-linalg-cholesky">
-<h1>lucid.linalg.cholesky<a class="headerlink" href="#lucid-linalg-cholesky" title="Link to this heading">¶</a></h1>
+          <section id="lucid-einops-einsum">
+<h1>lucid.einops.einsum<a class="headerlink" href="#lucid-einops-einsum" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.linalg.cholesky">
-<span class="sig-prename descclassname"><span class="pre">lucid.linalg.</span></span><span class="sig-name descname"><span class="pre">cholesky</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.linalg.cholesky" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.einops.einsum">
+<span class="sig-prename descclassname"><span class="pre">lucid.einops.</span></span><span class="sig-name descname"><span class="pre">einsum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pattern</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">tensors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.einops.einsum" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>cholesky</cite> function performs the Cholesky decomposition of a symmetric positive-definite matrix.</p>
+<p>The <cite>einsum</cite> function performs Einstein summation on one or more input tensors
+according to a specified subscript notation. It enables concise specification
+of complex tensor operations such as contractions, transpositions, reductions,
+and outer products.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">cholesky</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">einsum</span><span class="p">(</span><span class="n">pattern</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">tensors</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><dl class="simple">
-<dt><strong>a</strong> (<em>Tensor</em>):</dt><dd><p>A symmetric, positive-definite matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> to decompose.</p>
-</dd>
-</dl>
-</li>
+<li><p><strong>pattern</strong> (<em>str</em>):
+A string in Einstein summation notation (e.g., <cite>‘ij,jk-&gt;ik’</cite>) specifying the
+tensor operation.</p></li>
+<li><p><strong>tensors</strong> (<em>Tensor</em>):
+One or more input tensors that match the labels described in <cite>pattern</cite>.</p></li>
 </ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
-<ul>
-<li><dl>
-<dt><strong>Tensor</strong>:</dt><dd><p>A lower triangular matrix <span class="math notranslate nohighlight">\(\mathbf{L}\)</span> such that:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\mathbf{A} = \mathbf{L} \mathbf{L}^\top\]</div>
-</div>
-</dd>
-</dl>
-</li>
+<ul class="simple">
+<li><p><strong>Tensor</strong>:
+A new tensor resulting from the Einstein summation. Its shape depends on the
+output subscript in the pattern.</p></li>
 </ul>
 </section>
 <section id="forward-calculation">
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
-<p>The Cholesky decomposition computes a lower triangular matrix <span class="math notranslate nohighlight">\(\mathbf{L}\)</span> such that:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\mathbf{A} = \mathbf{L} \mathbf{L}^\top\]</div>
-</div>
-<p>Here, <span class="math notranslate nohighlight">\(\mathbf{L}^\top\)</span> is the transpose of the matrix <span class="math notranslate nohighlight">\(\mathbf{L}\)</span>.</p>
-</section>
-<section id="backward-gradient-calculation">
-<h2>Backward Gradient Calculation<a class="headerlink" href="#backward-gradient-calculation" title="Link to this heading">¶</a></h2>
-<p>The gradient of the Cholesky decomposition involves differentiating the decomposition itself.
-For a positive-definite matrix <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>, the gradient with respect to <span class="math notranslate nohighlight">\(\mathbf{L}\)</span>
-is computed using matrix calculus techniques.</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\frac{\partial \mathbf{A}}{\partial \mathbf{L}} =
-2 \cdot \mathbf{L} \cdot \frac{\partial \mathbf{L}}{\partial \mathbf{L}^\top}\]</div>
-</div>
-</section>
-<section id="raises">
-<h2>Raises<a class="headerlink" href="#raises" title="Link to this heading">¶</a></h2>
-<div class="admonition attention">
-<p class="admonition-title">Attention</p>
-<ul class="simple">
-<li><p><strong>ValueError</strong>: If the input tensor <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> is not square.</p></li>
-<li><p><strong>LinAlgError</strong>: If the input tensor <span class="math notranslate nohighlight">\(\mathbf{A}\)</span>
-is not symmetric or not positive definite.</p></li>
-</ul>
-</div>
-</section>
-<section id="example">
-<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">]])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">l</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">cholesky</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">l</span><span class="p">)</span>
-<span class="go">Tensor([[2.0, 0.0], [1.0, 1.41421356]])</span>
+<p>Einstein summation applies the convention of summing over repeated indices.
+For example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;ij,jk-&gt;ik&#39;</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
 </pre></div>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
+<p>is equivalent to:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[C_{ik} = \sum_j A_{ij} B_{jk}\]</div>
+</div>
+<p>This generalizes to multi-input, high-dimensional tensor algebra.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p><cite>einsum</cite> allows flexible and efficient expression of linear algebra,
+including batched operations.</p>
+</div>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p><strong>Matrix multiplication:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">B</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="p">[</span><span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">C</span> <span class="o">=</span> <span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;ij,jk-&gt;ik&#39;</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">C</span><span class="p">)</span>
+<span class="go">Tensor([[19, 22], [43, 50]], grad=None)</span>
+</pre></div>
+</div>
+<p><strong>Dot product:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;i,i-&gt;&#39;</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+<span class="go">Tensor(32, grad=None)</span>
+</pre></div>
+</div>
+<p><strong>Batch matrix multiplication:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]],</span> <span class="p">[[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="p">[</span><span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">]]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">([[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span> <span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">z</span> <span class="o">=</span> <span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;bij,bjk-&gt;bik&#39;</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<span class="go">Tensor([[[1, 2], [3, 4]], [[11, 11], [15, 15]]], grad=None)</span>
+</pre></div>
+</div>
+</section>
+<section id="notes">
+<h2>Notes<a class="headerlink" href="#notes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>The Cholesky decomposition is unique if <span class="math notranslate nohighlight">\(\mathbf{A}\)</span> is
-symmetric and positive definite.</p></li>
-<li><p>The input matrix must satisfy these conditions for the function to work as expected.</p></li>
-<li><p>The resulting lower triangular matrix <span class="math notranslate nohighlight">\(\mathbf{L}\)</span>
-can be used to solve linear systems or compute determinants.</p></li>
+<li><p>Fully supports autodiff in Lucid: gradients are propagated back to all input tensors.</p></li>
+<li><p>Ensures GPU/CPU compatibility with device matching.</p></li>
+<li><p>Subscript validation errors will raise runtime exceptions.</p></li>
 </ul>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Ensure input shapes and labels are consistent with the <cite>pattern</cite>.</p>
 </div>
 </section>
 </section>
@@ -1017,23 +1021,23 @@ can be used to solve linear systems or compute determinants.</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="eig.html">
+          <a class="next-page" href="../../nn/nn.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">lucid.linalg.eig</div>
+                <div class="title">lucid.nn</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="norm.html">
+          <a class="prev-page" href="repeat.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">lucid.linalg.norm</div>
+                <div class="title">lucid.einops.repeat</div>
                 
               </div>
             </a>
@@ -1067,15 +1071,14 @@ can be used to solve linear systems or compute determinants.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.linalg.cholesky</a><ul>
-<li><a class="reference internal" href="#lucid.linalg.cholesky"><code class="docutils literal notranslate"><span class="pre">cholesky()</span></code></a></li>
+<li><a class="reference internal" href="#">lucid.einops.einsum</a><ul>
+<li><a class="reference internal" href="#lucid.einops.einsum"><code class="docutils literal notranslate"><span class="pre">einsum()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
 <li><a class="reference internal" href="#forward-calculation">Forward Calculation</a></li>
-<li><a class="reference internal" href="#backward-gradient-calculation">Backward Gradient Calculation</a></li>
-<li><a class="reference internal" href="#raises">Raises</a></li>
-<li><a class="reference internal" href="#example">Example</a></li>
+<li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#notes">Notes</a></li>
 </ul>
 </li>
 </ul>

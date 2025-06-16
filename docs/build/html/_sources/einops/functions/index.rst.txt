@@ -7,3 +7,4 @@ Einops Functions
     rearrange.rst
     reduce.rst
     repeat.rst
+    einsum.rst

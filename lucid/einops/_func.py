@@ -531,32 +531,36 @@ class einsum(operation):
             lhs, rhs = eq.split("->")
         else:
             lhs, rhs = eq, None
+
         inputs = lhs.split(",")
         if len(inputs) != n_in:
-            raise ValueError(
-                f"Pattern expects {len(inputs)} operands, got {n_in}."
-            )
+            raise ValueError(f"Pattern expects {len(inputs)} operands, got {n_in}.")
+
         if rhs is None:
             counts: dict[str, int] = {}
             for s in inputs:
                 for c in s.replace("...", ""):
                     counts[c] = counts.get(c, 0) + 1
+
             rhs = "".join(sorted([c for c, v in counts.items() if v == 1]))
             if any("..." in s for s in inputs):
                 rhs = "..." + rhs
+
         return inputs, rhs
 
     @poly_func_op()
     def cpu(self, *arr: Tensor) -> _FuncOpReturnType:
         data_arr = [a.data for a in arr]
         self.in_sub, self.out_sub = self._parse_equation(len(arr))
+
         self.result = Tensor(np.einsum(self.pattern, *data_arr))
         return self.result, partial(self.__grad__, arr=arr, lib_=np)
 
     @poly_func_op(device="gpu")
     def gpu(self, *arr: Tensor) -> _FuncOpReturnType:
-        data_arr = [a.data for a in arr]
+        data_arr = [a.data.astype(mx.float32) for a in arr]
         self.in_sub, self.out_sub = self._parse_equation(len(arr))
+
         self.result = Tensor(mx.einsum(self.pattern, *data_arr))
         return self.result, partial(self.__grad__, arr=arr, lib_=mx)
 
@@ -564,10 +568,10 @@ class einsum(operation):
         grads = []
         for i in range(len(arr)):
             other = [t.data for j, t in enumerate(arr) if j != i]
-            eq = f"{self.out_sub}," + ",".join(self.in_sub[:i] + self.in_sub[i+1:])
-            eq += f"->{self.in_sub[i]}"
-            grads.append(lib_.einsum(eq, self.result.grad, *other))
-        return tuple(grads)
 
-    def __flops__(self, *_) -> int:
-        return 0
+            eq = f"{self.out_sub}," + ",".join(self.in_sub[:i] + self.in_sub[i + 1 :])
+            eq += f"->{self.in_sub[i]}"
+
+            grads.append(lib_.einsum(eq, self.result.grad, *other))
+
+        return tuple(grads)
