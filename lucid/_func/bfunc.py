@@ -444,6 +444,57 @@ class matmul(operation):
         return batch_size * m * n * k
 
 
+class tensordot(operation):  # NOTE: BETA
+    def __init__(
+        self, axes: int | tuple[int, int] | tuple[list[int], list[int]]
+    ) -> None:
+        super().__init__()
+        self.axes = axes
+
+    def _get_axes_lists(self) -> tuple[list[int], list[int]]:
+        if isinstance(self.axes, int):
+            return [self.axes], [self.axes]
+
+        axes_a, axes_b = self.axes
+        return list(axes_a), list(axes_b)
+
+    @binary_func_op()
+    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        axes_a, axes_b = self._get_axes_lists()
+        self.result = Tensor(np.tensordot(a.data, b.data, axes=(axes_a, axes_b)))
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
+
+    @binary_func_op(device="gpu")
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        axes_a, axes_b = self._get_axes_lists()
+        self.result = Tensor(mx.tensordot(a.data, b.data, axes=(axes_a, axes_b)))
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
+
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+        axes_a, axes_b = self._get_axes_lists()
+        dC = self.result.grad
+
+        axes_for_dA = list(range(dC.ndim - len(axes_b), dC.ndim))
+        dA = lib_.tensordot(dC, b.data, axes=(axes_for_dA, axes_b))
+        for in_axis in sorted(axes_a):
+            dA = lib_.moveaxis(dA, -1, in_axis)
+
+        axes_for_dB = list(range(len(axes_a)))
+        dB = lib_.tensordot(a.data, dC, axes=(axes_a, axes_for_dB))
+        for in_axis in sorted(axes_b):
+            dB = lib_.moveaxis(dB, -1, in_axis)
+
+        return dA, dB
+
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        axes_a, axes_b = self._get_axes_lists()
+        m = math.prod(a.shape[i] for i in axes_a)
+        n = math.prod(b.shape[i] for i in axes_b)
+
+        num_out = (a.size // m) * (b.size // n)
+        return num_out * (2 * m - 1)
+
+
 class _bitwise_and(operation):
     def __init__(self) -> None:
         super().__init__()

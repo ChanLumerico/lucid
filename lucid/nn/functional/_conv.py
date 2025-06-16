@@ -136,7 +136,44 @@ A_ten = Tensor(_A, dtype=float)
 def _winograd_conv(
     input_: Tensor, weight: Tensor, bias: Optional[Tensor], padding: Tuple[int, int]
 ) -> Tensor:
-    NotImplemented
+    N, C_in, H, W = input_.shape
+    C_out, _, kh, kw = weight.shape
+
+    pad_h, pad_w = padding
+    assert kh == 3 and kw == 3, "Kernel size must be 3x3 for Winograd Convolution."
+
+    x_pad = lucid.pad(input_, ((0, 0), (0, 0), (pad_h, pad_h), (pad_w, pad_w)))
+    H_out = H + 2 * pad_h - kh + 1
+    W_out = W + 2 * pad_w - kw + 1
+
+    m, r = 2, 3
+    alpha = m + r - 1
+    nH = int(math.ceil(H_out / m))
+    nW = int(math.ceil(W_out / m))
+
+    H_pad = nH * m + r - 1
+    W_pad = nW * m + r - 1
+
+    extra_h = H_pad - (H + 2 * pad_h)
+    extra_w = W_pad - (W + 2 * pad_w)
+    if extra_h > 0 or extra_w > 0:
+        x_pad = lucid.pad(x_pad, ((0, 0), (0, 0), (0, extra_h), (0, extra_w)))
+
+    U = lucid.einops.einsum("ik, ockl, jl -> ocij", G_ten, weight, G_ten)
+    Y = lucid.zeros((N, C_out, nH * m, nW * m), dtype=input_.dtype)
+
+    for i in range(nH):
+        for j in range(nW):
+            d = x_pad[:, :, i * m : i * m + alpha, j * m : j * m + alpha]
+            d_flat = d.reshape(-1, alpha, alpha)
+
+            V_flat = B_ten @ d_flat @ B_ten.T
+            V = V_flat.reshape(N, C_in, alpha, alpha)
+
+            M = lucid.einops.einsum("ocij, ncij -> noij", U, V)
+            M_flat = M.reshape(-1, alpha, alpha)
+
+            # TODO: implement `lucid.tensordot`
 
 
 def _conv(

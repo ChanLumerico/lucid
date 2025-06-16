@@ -17,7 +17,7 @@ from lucid._func import bfunc, gfunc, ufunc
 # fmt: off
 __all__ = [
     "add", "sub", "multiply", "div", "minimum", "maximum", "power", "dot", "inner", 
-    "outer", "matmul", 
+    "outer", "matmul", "tensordot",
     
     "exp", "log", "log2", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", 
     "sinh", "cosh", "tanh", "clip", "abs", "sign", "reciprocal", "square", "cube",
