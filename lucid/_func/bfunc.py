@@ -444,7 +444,7 @@ class matmul(operation):
         return batch_size * m * n * k
 
 
-class tensordot(operation):  # NOTE: BETA
+class tensordot(operation):
     def __init__(
         self, axes: int | tuple[int, int] | tuple[list[int], list[int]]
     ) -> None:
@@ -455,8 +455,13 @@ class tensordot(operation):  # NOTE: BETA
         if isinstance(self.axes, int):
             return [self.axes], [self.axes]
 
-        axes_a, axes_b = self.axes
-        return list(axes_a), list(axes_b)
+        if isinstance(self.axes, tuple):
+            if len(self.axes) == 2 and all(isinstance(x, int) for x in self.axes):
+                return [self.axes[0]], [self.axes[1]]
+            elif len(self.axes) == 2 and all(isinstance(x, list) for x in self.axes):
+                return list(self.axes[0]), list(self.axes[1])
+            else:
+                raise ValueError("Invalid axes format for tensordot operation.")
 
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
@@ -472,19 +477,26 @@ class tensordot(operation):  # NOTE: BETA
 
     def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
         axes_a, axes_b = self._get_axes_lists()
-        dC = self.result.grad
+        grad = self.result.grad
 
-        axes_for_dA = list(range(dC.ndim - len(axes_b), dC.ndim))
-        dA = lib_.tensordot(dC, b.data, axes=(axes_for_dA, axes_b))
-        for in_axis in sorted(axes_a):
-            dA = lib_.moveaxis(dA, -1, in_axis)
+        free_axes_a = [i for i in range(a.ndim) if i not in axes_a]
+        free_axes_b = [i for i in range(b.ndim) if i not in axes_b]
 
-        axes_for_dB = list(range(len(axes_a)))
-        dB = lib_.tensordot(a.data, dC, axes=(axes_a, axes_for_dB))
-        for in_axis in sorted(axes_b):
-            dB = lib_.moveaxis(dB, -1, in_axis)
+        grad_a = lib_.tensordot(
+            grad, b.data, axes=(list(range(len(free_axes_a), grad.ndim)), free_axes_b)
+        )
+        perm_a = free_axes_a + axes_a
+        inv_perm_a = [perm_a.index(i) for i in range(a.ndim)]
+        grad_a = lib_.transpose(grad_a, inv_perm_a)
 
-        return dA, dB
+        grad_b = lib_.tensordot(
+            a.data, grad, axes=(free_axes_a, list(range(len(free_axes_a))))
+        )
+        perm_b = axes_b + free_axes_b
+        inv_perm_b = [perm_b.index(i) for i in range(b.ndim)]
+        grad_b = lib_.transpose(grad_b, inv_perm_b)
+
+        return grad_a, grad_b
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
         axes_a, axes_b = self._get_axes_lists()

@@ -51,6 +51,7 @@ Tensor Operations
    bfunc/inner.rst
    bfunc/outer.rst
    bfunc/matmul.rst
+   bfunc/tensordot.rst
 
 .. toctree::
    :maxdepth: 1

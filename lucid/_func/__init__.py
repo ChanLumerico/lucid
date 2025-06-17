@@ -99,6 +99,15 @@ def matmul(a: Tensor, b: Tensor, /) -> Tensor:
     return bfunc.matmul()(a, b)
 
 
+def tensordot(
+    a: Tensor,
+    b: Tensor,
+    /,
+    axes: int | tuple[int, int] | tuple[list[int], list[int]] = 2,
+) -> Tensor:
+    return bfunc.tensordot(axes)(a, b)
+
+
 def __check_int_bool_dtype(*ts: Tensor) -> None:
     if not all(t.dtype is bool or t.dtype.base_dtype is int for t in ts):
         raise TypeError(
