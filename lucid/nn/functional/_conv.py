@@ -136,6 +136,7 @@ A_ten = Tensor(_A, dtype=float)
 def _winograd_conv(
     input_: Tensor, weight: Tensor, bias: Optional[Tensor], padding: Tuple[int, int]
 ) -> Tensor:
+    print("[Winograd Used]")
     N, C_in, H, W = input_.shape
     C_out, _, kh, kw = weight.shape
 
@@ -162,6 +163,7 @@ def _winograd_conv(
     U = lucid.einops.einsum("ik, ockl, jl -> ocij", G_ten, weight, G_ten)
     Y = lucid.zeros((N, C_out, nH * m, nW * m), dtype=input_.dtype)
 
+    tile_list: list[Tensor] = []
     for i in range(nH):
         for j in range(nW):
             d = x_pad[:, :, i * m : i * m + alpha, j * m : j * m + alpha]
@@ -173,7 +175,21 @@ def _winograd_conv(
             M = lucid.einops.einsum("ocij, ncij -> noij", U, V)
             M_flat = M.reshape(-1, alpha, alpha)
 
-            # TODO: implement `lucid.tensordot`
+            tmp = lucid.tensordot(A_ten, M_flat, axes=(1, 1))
+            tmp = lucid.tensordot(tmp, A_ten, axes=(2, 1))
+
+            Y_tile = tmp.transpose((1, 0, 2)).reshape(N, C_out, m, m)
+            tile_list.append(Y_tile)
+
+    Y_all = lucid.stack(tuple(tile_list), axis=0)
+    Y_all = Y_all.reshape(nH, nW, N, C_out, m, m).transpose((2, 3, 0, 4, 1, 5))
+    Y = Y_all.reshape(N, C_out, nH * m, nW * m)
+
+    Y = Y[:, :, :H_out, :W_out]
+    if bias is not None:
+        Y += bias.reshape(1, -1, 1, 1)
+
+    return Y
 
 
 def _conv(
@@ -192,9 +208,7 @@ def _conv(
         and dilation == (1, 1)
         and groups == 1
     ):
-        # return _winograd_conv(input_, weight, bias, padding)
-        # NOTE: Implement Winograd convolution first before enabling this.
-        pass
+        return _winograd_conv(input_, weight, bias, padding)
 
     if len(input_.shape) < 3 or len(weight.shape) < 3:
         raise ValueError("Input and weight tensors must have at least 3 dimensions.")

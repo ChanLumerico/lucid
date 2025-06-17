@@ -94,110 +94,50 @@
 #         assert diff < 1e-5, f"Mismatch at padding={pad}: {diff}"
 
 
-import numpy as np
 import torch
 import torch.nn.functional as F
+import numpy as np
+import lucid
+from lucid import Tensor
+
+# Parameters
+N, C_in, C_out, H, W = 2, 3, 4, 8, 8
+kernel_size = 3
+padding = 1
+
+# PyTorch tensors (with grad)
+torch_input = torch.randn(N, C_in, H, W, dtype=torch.float32, requires_grad=True)
+torch_weight = torch.randn(C_out, C_in, kernel_size, kernel_size, requires_grad=True)
+torch_bias = torch.randn(C_out, requires_grad=True)
+
+# Forward and loss
+torch_output = F.conv2d(
+    torch_input, torch_weight, torch_bias, stride=1, padding=padding
+)
+torch_output.backward(torch.ones_like(torch_output))
+
+# Convert to Lucid
+input_ = Tensor(torch_input.detach().numpy(), requires_grad=True)
+weight = Tensor(torch_weight.detach().numpy(), requires_grad=True)
+bias = Tensor(torch_bias.detach().numpy(), requires_grad=True)
+
+# Forward and backward
+lucid_output = lucid.nn.functional.conv2d(
+    input_, weight, bias, stride=1, padding=padding
+)
+lucid_output.backward()
 
 
-def winograd_conv2d_numpy(x, weight, bias=None, padding=(0, 0)):
-    """
-    Winograd F(2x2, 3x3) convolution for NCHW inputs using NumPy.
-    Supports multichannel, batch, odd spatial dims and arbitrary padding.
-    """
-    N, C_in, H, W = x.shape
-    C_out, _, kh, kw = weight.shape
-    pad_h, pad_w = padding
-    assert (kh, kw) == (3, 3), "Kernel must be 3x3"
-
-    # 1) Pad input
-    x_pad = np.pad(x, ((0, 0), (0, 0), (pad_h, pad_h), (pad_w, pad_w)), mode="constant")
-    H_out = H + 2 * pad_h - kh + 1
-    W_out = W + 2 * pad_w - kw + 1
-
-    # 2) Winograd params
-    m, r = 2, 3
-    alpha = m + r - 1  # = 4
-    nH = int(np.ceil(H_out / m))
-    nW = int(np.ceil(W_out / m))
-
-    # 3) Pad to full tiles if needed
-    H_pad = nH * m + r - 1
-    W_pad = nW * m + r - 1
-    extra_h = H_pad - (H + 2 * pad_h)
-    extra_w = W_pad - (W + 2 * pad_w)
-    if extra_h > 0 or extra_w > 0:
-        x_pad = np.pad(
-            x_pad, ((0, 0), (0, 0), (0, extra_h), (0, extra_w)), mode="constant"
-        )
-
-    # 4) Transform matrices
-    B = np.array(
-        [[1, 0, -1, 0], [0, 1, 1, 0], [0, -1, 1, 0], [0, 1, 0, -1]], dtype=x.dtype
-    )
-    G = np.array(
-        [[1, 0, 0], [0.5, 0.5, 0.5], [0.5, -0.5, 0.5], [0, 0, 1]], dtype=x.dtype
-    )
-    A = np.array([[1, 1, 1, 0], [0, 1, -1, -1]], dtype=x.dtype)
-
-    # 5) Transform filters
-    U = np.einsum("ik, ockl, jl -> ocij", G, weight, G)
-
-    # 6) Allocate output in tile space
-    Y = np.zeros((N, C_out, nH * m, nW * m), dtype=x.dtype)
-
-    # 7) Compute per-tile
-    for i in range(nH):
-        for j in range(nW):
-            d = x_pad[
-                :, :, i * m : i * m + alpha, j * m : j * m + alpha
-            ]  # (N, C_in,4,4)
-            d_flat = d.reshape(-1, alpha, alpha)  # (N*C_in,4,4)
-            V_flat = B @ d_flat @ B.T  # (N*C_in,4,4)
-            V = V_flat.reshape(N, C_in, alpha, alpha)  # (N,C_in,4,4)
-
-            M = np.einsum("ocij, ncij -> noij", U, V)  # (N,C_out,4,4)
-
-            M_flat = M.reshape(-1, alpha, alpha)  # (N*C_out,4,4)
-            tmp = np.tensordot(A, M_flat, axes=(1, 1))  # (2,N*C_out,4)
-            tmp = np.tensordot(tmp, A, axes=(2, 1))  # (2,N*C_out,2)
-            Y_tile = tmp.transpose(1, 0, 2).reshape(N, C_out, m, m)
-
-            Y[:, :, i * m : (i + 1) * m, j * m : (j + 1) * m] = Y_tile
-
-    # 8) Crop and add bias
-    Y = Y[:, :, :H_out, :W_out]
-    if bias is not None:
-        Y += bias.reshape(1, -1, 1, 1)
-
-    return Y
+# Compare gradients
+def check_grad(name, torch_grad, lucid_tensor):
+    lucid_grad = lucid_tensor.grad
+    error = np.abs(torch_grad.detach().numpy() - lucid_grad).max()
+    mse = np.square(torch_grad.detach().numpy() - lucid_grad).mean()
+    print(f"[{name}] max abs diff: {error:.6e}, MSE: {mse:.6e}")
+    assert error < 1e-4, f"{name} gradient mismatch!: {error:.6e}"
+    print(f"✅ {name} gradient matches.")
 
 
-# ----------------------------
-# Comparison with PyTorch
-# ----------------------------
-
-# 1) Create random test data
-np.random.seed(42)
-N, C_in, H, weight = 4, 3, 7, 5
-C_out = 6
-
-x_np = np.random.randn(N, C_in, H, weight).astype(np.float32)
-W_np = np.random.randn(C_out, C_in, 3, 3).astype(np.float32)
-b_np = np.random.randn(C_out).astype(np.float32)
-padding = (1, 0)
-
-# 2) NumPy Winograd conv
-out_np = winograd_conv2d_numpy(x_np, W_np, b_np, padding=padding)
-
-# 3) PyTorch reference conv
-x_t = torch.from_numpy(x_np)
-W_t = torch.from_numpy(W_np)
-b_t = torch.from_numpy(b_np)
-out_t = F.conv2d(x_t, W_t, bias=b_t, padding=padding).numpy()
-
-# 4) Compare
-diff = np.max(np.abs(out_np - out_t))
-print(f"Max absolute difference: {diff:.6e}")
-assert diff < 1e-4, "Outputs differ more than tolerance!"
-
-print("Success: NumPy Winograd matches PyTorch conv2d.")
+check_grad("input", torch_input.grad, input_)
+check_grad("weight", torch_weight.grad, weight)
+check_grad("bias", torch_bias.grad, bias)
