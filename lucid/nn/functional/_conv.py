@@ -108,7 +108,9 @@ def _im2col_conv(
     for g in range(groups):
         c_g = col_rs[:, g, :]
         w_g = weight_rs[g]
-        outs.append(c_g @ w_g.T)
+        out = lucid.einops.einsum("nk,ok->no", c_g, w_g)
+        outs.append(out)
+
     out_cat = lucid.concatenate(outs, axis=1)
 
     new_shape = [N] + out_dims + [C_out]
@@ -136,7 +138,6 @@ A_ten = Tensor(_A, dtype=float)
 def _winograd_conv(
     input_: Tensor, weight: Tensor, bias: Optional[Tensor], padding: Tuple[int, int]
 ) -> Tensor:
-    print("[Winograd Used]")
     N, C_in, H, W = input_.shape
     C_out, _, kh, kw = weight.shape
 

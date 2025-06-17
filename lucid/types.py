@@ -12,6 +12,8 @@ _Scalar = int | float | complex
 _NumPyArray: TypeAlias = np.ndarray
 _MLXArray: TypeAlias = mx.array
 
+_Gradient = _NumPyArray | _MLXArray | None
+
 _ArrayOrScalar = _Scalar | list[_Scalar] | _NumPyArray | _MLXArray
 
 _BuiltinNumeric = type[bool | int | float | complex]

@@ -5,6 +5,8 @@ import numpy as np
 
 import lucid
 from lucid._tensor import Tensor
+from lucid.types import _Gradient, _ShapeLike
+
 from lucid._backend.core import (
     operation,
     binary_func_op,
@@ -401,25 +403,41 @@ class matmul(operation):
 
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
-        self.result = Tensor(np.matmul(a.data, b.data))
-        return self.result, partial(self.__grad_cpu__, a=a, b=b)
+        out = np.matmul(a.data, b.data)
+        self.result = Tensor(out)
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
-        self.result = Tensor(mx.matmul(a.data, b.data))
-        return self.result, partial(self.__grad_gpu__, a=a, b=b)
+        out = mx.matmul(a.data, b.data)
+        self.result = Tensor(out)
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
-    def __grad_cpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
-        return (
-            np.matmul(self.result.grad, b.data.mT),
-            np.matmul(a.data.mT, self.result.grad),
-        )
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+        grad = self.result.grad
+        if grad.ndim == 0:
+            grad = lib_.reshape(grad, (1, 1))
 
-    def __grad_gpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
-        return (
-            mx.matmul(self.result.grad, mx.swapaxes(b.data, -1, -2)),
-            mx.matmul(mx.swapaxes(a.data, -1, -2), self.result.grad),
-        )
+        grad_a = lib_.matmul(grad, lib_.swapaxes(b.data, -1, -2))
+        grad_b = lib_.matmul(lib_.swapaxes(a.data, -1, -2), grad)
+
+        grad_a = self._reduce_broadcast_shape(grad_a, a.shape, lib_)
+        grad_b = self._reduce_broadcast_shape(grad_b, b.shape, lib_)
+
+        return grad_a, grad_b
+
+    def _reduce_broadcast_shape(
+        self, grad: _Gradient, ref_shape: _ShapeLike, lib_: ModuleType
+    ) -> _Gradient:
+        while len(grad.shape) > len(ref_shape):
+            grad = grad.sum(axis=0, keepdims=False)
+
+        for i, (gdim, rdim) in enumerate(zip(grad.shape, ref_shape)):
+            if gdim != rdim:
+                grad = grad.sum(axis=i, keepdims=True)
+
+        grad = lib_.reshape(grad, ref_shape)
+        return grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
         a_shape, b_shape = a.shape, b.shape
