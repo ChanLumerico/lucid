@@ -105,8 +105,6 @@ def _felzenszwalb_segmentation(
     uf = _UnionFind(n_px)
 
     for i, (pi, qi, wi) in enumerate(zip(p_list, q_list, w_list)):
-        if i % 1000 == 0:
-            print(f"Merge [{i}/{len(p_list)}]")  #
         Cp, Cq = uf.find(pi), uf.find(qi)
         if Cp == Cq:
             continue
@@ -119,8 +117,6 @@ def _felzenszwalb_segmentation(
             uf.union(Cp, Cq, wi)
 
     for i, (pi, qi, wi) in enumerate(zip(p_list, q_list, w_list)):
-        if i % 1000 == 0:
-            print(f"Clean [{i}/{len(p_list)}]")  #
         Cp, Cq = uf.find(pi), uf.find(qi)
         if Cp != Cq and (
             uf.component_size(Cp) < min_size or uf.component_size(Cq) < min_size
@@ -180,13 +176,13 @@ class _SelectiveSearch(nn.Module):
 
     @staticmethod
     def _iou(box_a: Tensor, box_b: Tensor) -> float:
-        xa1, ya1, xa2, ya2 = box_a
-        xb1, yb1, xb2, yb2 = box_b
+        xa1, ya1, xa2, ya2 = box_a.tolist()
+        xb1, yb1, xb2, yb2 = box_b.tolist()
 
-        inter_x1 = max(xa1.item(), xb1.item())
-        inter_y1 = max(ya1.item(), yb1.item())
-        inter_x2 = min(xa2.item(), xb2.item())
-        inter_y2 = min(ya2.item(), yb2.item())
+        inter_x1 = max(xa1, xb1)
+        inter_y1 = max(ya1, yb1)
+        inter_x2 = min(xa2, xb2)
+        inter_y2 = min(ya2, yb2)
 
         if inter_x2 < inter_x1 or inter_y2 < inter_y1:
             return 0.0
@@ -431,6 +427,8 @@ class RCNN(nn.Module):
         self, images: Tensor, *, max_det_per_img: int = 100
     ) -> list[dict[str, Tensor]]:
         device = images.device
+        _, _, H, W = images.shape
+
         rois = [self.ss(img) for img in images]
         cls_scores, bbox_deltas = self(images, rois=rois)
         probs = F.softmax(cls_scores, axis=1)
@@ -488,6 +486,16 @@ class RCNN(nn.Module):
                     res["scores"] = res["scores"][topk]
                     res["labels"] = res["labels"][topk]
 
+        for res in results:
+            b = res["boxes"]
+            b = b.clip(min_value=0)
+            bx = b[:, [0, 2]].clip(max_value=W - 1)
+            by = b[:, [1, 3]].clip(max_value=H - 1)
+
+            res["boxes"] = lucid.concatenate(
+                [bx[:, :1], by[:, :1], bx[:, 1:], by[:, 1:]], axis=1
+            )
+
         return results
 
     @staticmethod
@@ -527,25 +535,25 @@ class RCNN(nn.Module):
         x1, y1, x2, y2 = boxes.unbind(axis=1)
         areas = (x2 - x1 + 1) * (y2 - y1 + 1)
 
-        xx1 = x1.unsqueeze(axis=1).clip(min_value=x1.item())
-        yy1 = y1.unsqueeze(axis=1).clip(min_value=y1.item())
-        xx2 = x2.unsqueeze(axis=1).clip(max_value=x2.item())
-        yy2 = y2.unsqueeze(axis=1).clip(max_value=y2.item())
+        xx1 = lucid.maximum(x1.unsqueeze(1), x1.unsqueeze(0))
+        yy1 = lucid.maximum(y1.unsqueeze(1), y1.unsqueeze(0))
 
+        xx2 = lucid.minimum(x2.unsqueeze(1), x2.unsqueeze(0))
+        yy2 = lucid.minimum(y2.unsqueeze(1), y2.unsqueeze(0))
+
+        # intersection dims (zeros out negatives)
         w = (xx2 - xx1 + 1).clip(min_value=0)
         h = (yy2 - yy1 + 1).clip(min_value=0)
+        inter = w * h
 
-        inter: Tensor = w * h
-        iou = inter / (areas.unsqueeze(axis=1) + areas - inter)
+        iou = inter / (areas.unsqueeze(1) + areas - inter)
 
-        keep_mask: Tensor = lucid.ones(N, dtype=bool, device=iou.device)
+        keep_mask = lucid.ones(N, dtype=bool, device=boxes.device)
+        eye = lucid.eye(N, dtype=bool, device=boxes.device)
         for i in range(N):
             if not keep_mask[i]:
                 continue
-
-            keep_mask &= (iou[i] <= iou_thresh) | lucid.eye(
-                N, dtype=bool, device=iou.device
-            )[i]
+            keep_mask &= (iou[i] <= iou_thresh) | eye[i]
 
         keep = lucid.nonzero(keep_mask).flatten()
         return order[keep].astype(lucid.Int)

@@ -214,6 +214,15 @@ class Tensor(_TensorOps):
         else:
             return float(item)
 
+    def tolist(self) -> list:
+        return self.data.tolist()
+
+    def numpy(self) -> _NumPyArray:
+        return np.array(self.data)
+
+    def mlx(self) -> _MLXArray:
+        return mx.array(self.data)
+
     def zero(self) -> None:
         if self.is_cpu():
             self.data = np.zeros_like(self.data)
