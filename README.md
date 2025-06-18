@@ -15,6 +15,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Added `.tolist()`, `.numpy()`, and `.mlx()` methods to `lucid.Tensor`
 - Added new binary Tensor operation: `lucid.tensordot`
 - Added new einops operation: `lucid.einops.einsum`
 

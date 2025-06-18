@@ -104,7 +104,7 @@ def _felzenszwalb_segmentation(
     p_list, q_list, w_list = p.data.tolist(), q.data.tolist(), w.data.tolist()
     uf = _UnionFind(n_px)
 
-    for i, (pi, qi, wi) in enumerate(zip(p_list, q_list, w_list)):
+    for pi, qi, wi in zip(p_list, q_list, w_list):
         Cp, Cq = uf.find(pi), uf.find(qi)
         if Cp == Cq:
             continue
@@ -116,7 +116,7 @@ def _felzenszwalb_segmentation(
         if wi <= thresh:
             uf.union(Cp, Cq, wi)
 
-    for i, (pi, qi, wi) in enumerate(zip(p_list, q_list, w_list)):
+    for pi, qi, wi in zip(p_list, q_list, w_list):
         Cp, Cq = uf.find(pi), uf.find(qi)
         if Cp != Cq and (
             uf.component_size(Cp) < min_size or uf.component_size(Cq) < min_size
