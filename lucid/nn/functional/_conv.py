@@ -1,5 +1,4 @@
 import itertools
-import math
 from typing import Tuple, Optional
 
 import lucid
@@ -126,73 +125,6 @@ def _im2col_conv(
     return out_final
 
 
-_B = [[1, 0, -1, 0], [0, 1, 1, 0], [0, -1, 1, 0], [0, 1, 0, -1]]
-_G = [[1, 0, 0], [0.5, 0.5, 0.5], [0.5, -0.5, 0.5], [0, 0, 1]]
-_A = [[1, 1, 1, 0], [0, 1, -1, -1]]
-
-B_ten = Tensor(_B, dtype=float)
-G_ten = Tensor(_G, dtype=float)
-A_ten = Tensor(_A, dtype=float)
-
-
-def _winograd_conv(
-    input_: Tensor, weight: Tensor, bias: Optional[Tensor], padding: Tuple[int, int]
-) -> Tensor:
-    N, C_in, H, W = input_.shape
-    C_out, _, kh, kw = weight.shape
-
-    pad_h, pad_w = padding
-    assert kh == 3 and kw == 3, "Kernel size must be 3x3 for Winograd Convolution."
-
-    x_pad = lucid.pad(input_, ((0, 0), (0, 0), (pad_h, pad_h), (pad_w, pad_w)))
-    H_out = H + 2 * pad_h - kh + 1
-    W_out = W + 2 * pad_w - kw + 1
-
-    m, r = 2, 3
-    alpha = m + r - 1
-    nH = int(math.ceil(H_out / m))
-    nW = int(math.ceil(W_out / m))
-
-    H_pad = nH * m + r - 1
-    W_pad = nW * m + r - 1
-
-    extra_h = H_pad - (H + 2 * pad_h)
-    extra_w = W_pad - (W + 2 * pad_w)
-    if extra_h > 0 or extra_w > 0:
-        x_pad = lucid.pad(x_pad, ((0, 0), (0, 0), (0, extra_h), (0, extra_w)))
-
-    U = lucid.einops.einsum("ik, ockl, jl -> ocij", G_ten, weight, G_ten)
-    Y = lucid.zeros((N, C_out, nH * m, nW * m), dtype=input_.dtype)
-
-    tile_list: list[Tensor] = []
-    for i in range(nH):
-        for j in range(nW):
-            d = x_pad[:, :, i * m : i * m + alpha, j * m : j * m + alpha]
-            d_flat = d.reshape(-1, alpha, alpha)
-
-            V_flat = B_ten @ d_flat @ B_ten.T
-            V = V_flat.reshape(N, C_in, alpha, alpha)
-
-            M = lucid.einops.einsum("ocij, ncij -> noij", U, V)
-            M_flat = M.reshape(-1, alpha, alpha)
-
-            tmp = lucid.tensordot(A_ten, M_flat, axes=(1, 1))
-            tmp = lucid.tensordot(tmp, A_ten, axes=(2, 1))
-
-            Y_tile = tmp.transpose((1, 0, 2)).reshape(N, C_out, m, m)
-            tile_list.append(Y_tile)
-
-    Y_all = lucid.stack(tuple(tile_list), axis=0)
-    Y_all = Y_all.reshape(nH, nW, N, C_out, m, m).transpose((2, 3, 0, 4, 1, 5))
-    Y = Y_all.reshape(N, C_out, nH * m, nW * m)
-
-    Y = Y[:, :, :H_out, :W_out]
-    if bias is not None:
-        Y += bias.reshape(1, -1, 1, 1)
-
-    return Y
-
-
 def _conv(
     input_: Tensor,
     weight: Tensor,
@@ -202,15 +134,6 @@ def _conv(
     dilation: Tuple[int, ...],
     groups: int,
 ) -> Tensor:
-    if (
-        input_.ndim == 4
-        and weight.shape[2:] == (3, 3)
-        and stride == (1, 1)
-        and dilation == (1, 1)
-        and groups == 1
-    ):
-        return _winograd_conv(input_, weight, bias, padding)
-
     if len(input_.shape) < 3 or len(weight.shape) < 3:
         raise ValueError("Input and weight tensors must have at least 3 dimensions.")
 

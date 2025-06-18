@@ -25,7 +25,7 @@ test_set = MNIST(
 device = "cpu"
 learning_rate = 1e-3
 weight_decay = 1e-4
-num_epochs = 3
+num_epochs = 10
 batch_size = 100
 
 train_loader = DataLoader(train_set, batch_size, shuffle=True)
