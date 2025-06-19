@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="RCNN" href="rcnn/RCNN.html" /><link rel="prev" title="maxvit_xlarge" href="../imgclf/maxvit/maxvit_xlarge.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="R-CNN" href="rcnn/RCNN.html" /><link rel="prev" title="maxvit_xlarge" href="../imgclf/maxvit/maxvit_xlarge.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/index.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
@@ -845,7 +845,7 @@
 </ul>
 </li>
 <li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">Object Detection</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-68" name="toctree-checkbox-68" role="switch" type="checkbox"/><label for="toctree-checkbox-68"><div class="visually-hidden">Toggle navigation of Object Detection</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="rcnn/RCNN.html">RCNN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="rcnn/RCNN.html">R-CNN</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-69" name="toctree-checkbox-69" role="switch" type="checkbox"/><label for="toctree-checkbox-69"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -930,10 +930,10 @@
 <h1>Object detection<a class="headerlink" href="#object-detection" title="Link to this heading">¶</a></h1>
 <div class="toctree-wrapper compound">
 </div>
-<section id="rcnn">
-<h2>RCNN<a class="headerlink" href="#rcnn" title="Link to this heading">¶</a></h2>
+<section id="r-cnn">
+<h2>R-CNN<a class="headerlink" href="#r-cnn" title="Link to this heading">¶</a></h2>
 <p><span class="badge convnet">ConvNet</span> <span class="badge region_convnet">Region ConvNet</span> <span class="badge normal">Object Detection</span></p>
-<p>RCNN (Region-based CNN) detects objects by first generating region proposals using
+<p>R-CNN (Region-based CNN) detects objects by first generating region proposals using
 Selective Search, then classifies each using a shared CNN. It combines region warping,
 feature extraction, and per-region classification with Non-Maximum Suppression.</p>
 <blockquote>
@@ -952,7 +952,7 @@ pattern recognition</em> (2014): 580-587.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>RCNN</p></td>
+<tr class="row-even"><td><p>R-CNN</p></td>
 <td><p><a class="reference external" href="rcnn/RCNN">RCNN</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,C_{in},H,W)\)</span></p></td>
 <td><p><span class="math notranslate nohighlight">\(\mathcal{O}(P_{\text{cnn}} + F^2 + F \cdot K)\)</span></p></td>
@@ -975,7 +975,7 @@ pattern recognition</em> (2014): 580-587.</p>
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">RCNN</div>
+                <div class="title">R-CNN</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -1021,7 +1021,7 @@ pattern recognition</em> (2014): 580-587.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Object detection</a><ul>
-<li><a class="reference internal" href="#rcnn">RCNN</a></li>
+<li><a class="reference internal" href="#r-cnn">R-CNN</a></li>
 </ul>
 </li>
 </ul>

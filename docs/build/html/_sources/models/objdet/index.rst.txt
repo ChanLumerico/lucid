@@ -5,13 +5,13 @@ Object detection
     :maxdepth: 1
     :hidden:
 
-    RCNN <rcnn/RCNN.rst>
+    R-CNN <rcnn/RCNN.rst>
 
-RCNN
-----
+R-CNN
+-----
 |convnet-badge| |region-convnet-badge| |objdet-badge|
 
-RCNN (Region-based CNN) detects objects by first generating region proposals using 
+R-CNN (Region-based CNN) detects objects by first generating region proposals using 
 Selective Search, then classifies each using a shared CNN. It combines region warping, 
 feature extraction, and per-region classification with Non-Maximum Suppression.
 
@@ -29,7 +29,7 @@ feature extraction, and per-region classification with Non-Maximum Suppression.
       - Parameter Count
       - FLOPs
 
-    * - RCNN
+    * - R-CNN
       - `RCNN <rcnn/RCNN>`_
       - :math:`(N,C_{in},H,W)`
       - :math:`\mathcal{O}(P_{\text{cnn}} + F^2 + F \cdot K)`

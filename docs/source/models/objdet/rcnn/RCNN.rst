@@ -1,12 +1,12 @@
-RCNN
-====
+R-CNN
+=====
 |convnet-badge| |region-convnet-badge| |objdet-badge|
 
 .. autoclass:: lucid.models.RCNN
 
-The `RCNN` module in `lucid.nn` implements the classic Region-based Convolutional Neural Network architecture 
+The `RCNN` implements the classic Region-based Convolutional Neural Network architecture 
 for object detection. It integrates region proposal extraction, feature warping, CNN feature extraction, and 
-classification, following the original RCNN pipeline introduced by Ross Girshick et al.
+classification, following the original R-CNN pipeline introduced by Ross Girshick et al.
 
 .. image:: rcnn.png
     :width: 600
@@ -65,7 +65,7 @@ Parameters
 Architecture
 ------------
 
-The RCNN architecture consists of the following components:
+The R-CNN architecture consists of the following components:
 
 1. **Region Proposal (Selective Search)**:
    

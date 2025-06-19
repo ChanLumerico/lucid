@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/rcnn/RCNN.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>RCNN - Lucid 2.2.0 documentation</title>
+        <title>R-CNN - Lucid 2.2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -845,7 +845,7 @@
 </ul>
 </li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Object Detection</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-68" name="toctree-checkbox-68" role="switch" type="checkbox"/><label for="toctree-checkbox-68"><div class="visually-hidden">Toggle navigation of Object Detection</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">RCNN</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">R-CNN</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-69" name="toctree-checkbox-69" role="switch" type="checkbox"/><label for="toctree-checkbox-69"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -926,17 +926,17 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="rcnn">
-<h1>RCNN<a class="headerlink" href="#rcnn" title="Link to this heading">¶</a></h1>
+          <section id="r-cnn">
+<h1>R-CNN<a class="headerlink" href="#r-cnn" title="Link to this heading">¶</a></h1>
 <p><span class="badge convnet">ConvNet</span> <span class="badge region_convnet">Region ConvNet</span> <span class="badge normal">Object Detection</span></p>
 <dl class="py class">
 <dt class="sig sig-object py" id="lucid.models.RCNN">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">RCNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">backbone</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">feat_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_means</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(0.485,</span> <span class="pre">0.456,</span> <span class="pre">0.406)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pixel_scale</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">warper_output_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(224,</span> <span class="pre">224)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nms_iou_thresh</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">score_thresh</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_one</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.RCNN" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>RCNN</cite> module in <cite>lucid.nn</cite> implements the classic Region-based Convolutional Neural Network architecture
+<p>The <cite>RCNN</cite> implements the classic Region-based Convolutional Neural Network architecture
 for object detection. It integrates region proposal extraction, feature warping, CNN feature extraction, and
-classification, following the original RCNN pipeline introduced by Ross Girshick et al.</p>
+classification, following the original R-CNN pipeline introduced by Ross Girshick et al.</p>
 <a class="reference internal image-reference" href="../../../_images/rcnn.png"><img alt="RCNN architecture" class="align-center" src="../../../_images/rcnn.png" style="width: 600px;" />
 </a>
 <section id="class-signature">
@@ -982,7 +982,7 @@ If <cite>True</cite>, adds background class at index 0, shifting all class indic
 </section>
 <section id="architecture">
 <h2>Architecture<a class="headerlink" href="#architecture" title="Link to this heading">¶</a></h2>
-<p>The RCNN architecture consists of the following components:</p>
+<p>The R-CNN architecture consists of the following components:</p>
 <ol class="arabic simple">
 <li><p><strong>Region Proposal (Selective Search)</strong>:</p>
 <ul class="simple">
@@ -1143,7 +1143,7 @@ removes redundant overlapping boxes, and final predictions are returned.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">RCNN</a><ul>
+<li><a class="reference internal" href="#">R-CNN</a><ul>
 <li><a class="reference internal" href="#lucid.models.RCNN"><code class="docutils literal notranslate"><span class="pre">RCNN</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
