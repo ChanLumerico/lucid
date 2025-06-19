@@ -1,5 +1,6 @@
 RCNN
 ====
+|convnet-badge| |region-convnet-badge| |objdet-badge|
 
 .. autoclass:: lucid.models.RCNN
 
