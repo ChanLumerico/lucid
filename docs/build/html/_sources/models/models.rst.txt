@@ -9,7 +9,7 @@ concepts while leveraging the modular and educational nature of the `lucid` fram
 Computer Vision
 ~~~~~~~~~~~~~~~
 
-Computer Vision(CV) is a field of artificial intelligence that enables machines to interpret 
+Computer Vision (CV) is a field of artificial intelligence that enables machines to interpret 
 and understand visual information from the world, such as images and videos. It involves 
 teaching computers to process, analyze, and make sense of visual data in a way similar to 
 human vision.

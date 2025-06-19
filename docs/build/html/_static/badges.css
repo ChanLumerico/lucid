@@ -27,6 +27,11 @@
     border-color: #ffa600;
 }
 
+.badge.region_convnet {
+    color: #ffcc6d;
+    border-color: #ffcc6d;
+}
+
 .badge.transformer {
     color: #fd4ec3;
     border-color: #fd4ec3;

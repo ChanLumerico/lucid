@@ -15,7 +15,7 @@ os.environ["SPHINX_BUILD"] = "1"
 project = "Lucid"
 copyright = "2025, ChanLumerico"
 author = "ChanLumerico"
-release = "2.1.17"
+release = "2.2.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -58,6 +58,10 @@ rst_epilog = """
 
     <span class="badge convnet">ConvNet</span>
 
+.. |region-convnet-badge| raw:: html
+
+    <span class="badge region_convnet">Region ConvNet</span>
+
 .. |transformer-badge| raw:: html
 
     <span class="badge transformer">Transformer</span>
@@ -70,6 +74,10 @@ rst_epilog = """
 .. |imgclf-badge| raw:: html
 
     <span class="badge normal">Image Classification</span>
+
+.. |objdet-badge| raw:: html
+
+    <span class="badge normal">Object Detection</span>
 
 .. |seq2seq-badge| raw:: html
 

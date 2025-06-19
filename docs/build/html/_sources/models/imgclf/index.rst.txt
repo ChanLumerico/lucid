@@ -1159,8 +1159,6 @@ CoAtNet achieves superior efficiency and performance across various vision tasks
       - 3,107,978,688
       - 364.71B
 
----
-
 Visual Transformer (ViT)
 ------------------------
 |transformer-badge| |vision-transformer-badge| |imgclf-badge|
