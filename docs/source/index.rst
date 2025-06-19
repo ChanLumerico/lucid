@@ -96,8 +96,9 @@
     models/models.rst
     models/summarize.rst
 
-    ConvNets <models/conv/index.rst>
-    Transformers <models/transformer/index.rst>
+    Image Classification <models/imgclf/index.rst>
+    Object Detection <models/objdet/index.rst>
+    Sequence-to-Sequence <models/seq2seq/index.rst>
 
 .. toctree::
     :maxdepth: 2
