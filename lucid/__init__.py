@@ -272,13 +272,13 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
 
         family = model.__class__.__name__
         param_size = model.parameter_size
-        arch = sys.modules[func.__module__].__package__.replace("lucid.models.", "")
+        task = sys.modules[func.__module__].__package__.replace("lucid.models.", "")
 
         registry[name] = dict(
             name=name,
             family=family,
             param_size=param_size,
-            arch=arch,
+            task=task,
         )
 
         with open(REGISTRY_PATH, "w") as f:
