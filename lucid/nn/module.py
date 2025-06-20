@@ -161,6 +161,9 @@ class Module:
         for module in self._modules.values():
             yield from module.modules()
 
+    def children(self: nn.Module) -> Iterator[Self]:
+        return iter(self._modules.values())
+
     def count_parameters(self, recurse: bool = True) -> int:
         total_params = sum(p.size for p in self.parameters(recurse=recurse))
         return total_params

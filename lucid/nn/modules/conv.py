@@ -119,7 +119,7 @@ class _ConvNd(nn.Module):
                 bound = 1 / math.sqrt(fan_in)
                 nn.init.uniform(self.bias, -bound, bound)
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         s = (
             f"{self.in_channels}, {self.out_channels}, "
             f"kernel_size={self.kernel_size}, stride={self.stride}"

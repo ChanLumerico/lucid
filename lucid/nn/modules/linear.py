@@ -46,6 +46,9 @@ class Linear(nn.Module):
     def forward(self, input_: Tensor) -> Tensor:
         return F.linear(input_, self.weight, self.bias)
 
+    def extra_repr(self) -> str:
+        return f"{self.in_features}, {self.out_features}, bias={self.bias is not None}"
+
 
 class Bilinear(nn.Module):
     def __init__(
@@ -76,3 +79,9 @@ class Bilinear(nn.Module):
 
     def forward(self, input_1: Tensor, input_2: Tensor) -> Tensor:
         return F.bilinear(input_1, input_2, self.weight, self.bias)
+
+    def extra_repr(self) -> str:
+        return (
+            f"{self.in1_features}, {self.in2_features}, {self.out_features}, "
+            f"bias={self.bias is not None}"
+        )

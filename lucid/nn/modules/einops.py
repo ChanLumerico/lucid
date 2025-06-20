@@ -9,6 +9,7 @@ from lucid.einops._func import _EinopsPattern
 __all__ = ["Rearrange"]
 
 
+@nn.auto_repr("pattern")
 class Rearrange(nn.Module):
     def __init__(self, pattern: _EinopsPattern, **shapes: int) -> None:
         super().__init__()

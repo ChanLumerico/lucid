@@ -9,11 +9,7 @@ from lucid.types import _Scalar
 __all__ = ["ScaledDotProductAttention", "MultiHeadAttention"]
 
 
-@nn.auto_repr(
-    "dropout_p",
-    "is_causal",
-    "scale",
-)
+@nn.auto_repr("dropout_p", "is_causal", "scale")
 class ScaledDotProductAttention(nn.Module):
     def __init__(
         self,
