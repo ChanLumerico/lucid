@@ -17,6 +17,16 @@ __all__ = [
 ]
 
 
+@nn.auto_repr(
+    "d_model",
+    "num_heads",
+    "dim_feedforward",
+    "dropout",
+    "activation",
+    "layer_norm_eps",
+    "norm_first",
+    "bias",
+)
 class TransformerEncoderLayer(nn.Module):
     def __init__(
         self,
@@ -89,6 +99,16 @@ class TransformerEncoderLayer(nn.Module):
         return x
 
 
+@nn.auto_repr(
+    "d_model",
+    "num_heads",
+    "dim_feedforward",
+    "dropout",
+    "activation",
+    "layer_norm_eps",
+    "norm_first",
+    "bias",
+)
 class TransformerDecoderLayer(nn.Module):
     def __init__(
         self,
@@ -228,6 +248,9 @@ class TransformerEncoder(nn.Module):
 
         return output
 
+    def extra_repr(self) -> str:
+        return f"num_layers={self.num_layers}, norm={self.norm is not None}"
+
 
 class TransformerDecoder(nn.Module):
     def __init__(
@@ -271,7 +294,22 @@ class TransformerDecoder(nn.Module):
 
         return output
 
+    def extra_repr(self) -> str:
+        return f"num_layers={self.num_layers}, norm={self.norm is not None}"
 
+
+@nn.auto_repr(
+    "d_model",
+    "num_heads",
+    "num_encoder_layers",
+    "num_decoder_layers",
+    "dim_feedforward",
+    "dropout",
+    "activation",
+    "layer_norm_eps",
+    "norm_first",
+    "bias",
+)
 class Transformer(nn.Module):
     def __init__(
         self,

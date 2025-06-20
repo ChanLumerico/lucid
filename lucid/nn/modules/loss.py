@@ -13,6 +13,7 @@ __all__ = ["MSELoss", "BCELoss", "CrossEntropyLoss", "NLLLoss", "HuberLoss"]
 _ReductionType = Literal["mean", "sum"]
 
 
+@nn.auto_repr("reduction")
 class _Loss(nn.Module):
     def __init__(self, reduction: _ReductionType | None = "mean") -> None:
         super().__init__()
@@ -25,6 +26,7 @@ class _Loss(nn.Module):
         NotImplemented
 
 
+@nn.auto_repr("reduction")
 class _WeightedLoss(nn.Module):
     def __init__(
         self, weight: Tensor | None = None, reduction: _ReductionType | None = "mean"
@@ -84,6 +86,7 @@ class NLLLoss(_WeightedLoss):
         return F.nll_loss(input_, target, weight=self.weight, reduction=self.reduction)
 
 
+@nn.auto_repr("reduction", "delta")
 class HuberLoss(_Loss):
     def __init__(
         self, reduction: _ReductionType | None = "mean", delta: float = 1.0

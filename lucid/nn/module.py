@@ -6,6 +6,7 @@ from typing import (
     KeysView,
     Self,
     Type,
+    TypeVar,
     ValuesView,
     overload,
 )
@@ -14,7 +15,6 @@ from collections import OrderedDict
 from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar, _StateDict, _NumPyArray, _DeviceType
 
-import lucid
 import lucid.nn as nn
 
 
@@ -25,6 +25,7 @@ __all__ = [
     "ModuleDict",
     "ParameterList",
     "ParameterDict",
+    "auto_repr",
 ]
 
 _ForwardHookType = Callable[["Module", tuple[Tensor], tuple[Tensor]], None]
@@ -160,6 +161,9 @@ class Module:
         for module in self._modules.values():
             yield from module.modules()
 
+    def children(self: nn.Module) -> Iterator[Self]:
+        return iter(self._modules.values())
+
     def count_parameters(self, recurse: bool = True) -> int:
         total_params = sum(p.size for p in self.parameters(recurse=recurse))
         return total_params
@@ -234,6 +238,69 @@ class Module:
                 output.register_hook(hook)
 
         return output
+
+    def __repr__(self) -> str:
+        extra = self.extra_repr()
+        child_lines = []
+        for name, module in self._modules.items():
+            mod_str = repr(module)
+            mod_str = _add_indent(mod_str, 2)
+            child_lines.append(f"({name}): {mod_str}")
+
+        main_str = self._get_name() + "("
+        if extra:
+            main_str += extra
+        if child_lines:
+            if extra:
+                main_str += "\n"
+            main_str += "\n  " + "\n  ".join(child_lines) + "\n"
+        main_str += ")"
+        return main_str
+
+    def extra_repr(self) -> str:
+        exclude = {"training", "device"}
+        attrs = []
+        for name, value in vars(self).items():
+            if name.startswith("_") or name in exclude:
+                continue
+            if (
+                name in self._parameters
+                or name in self._buffers
+                or name in self._modules
+            ):
+                continue
+            attrs.append(f"{name}={value}")
+        return ", ".join(attrs)
+
+    def _get_name(self) -> str:
+        return self._alt_name or type(self).__name__
+
+
+def _add_indent(s: str, num_spaces: int) -> str:
+    lines = s.splitlines()
+    if len(lines) <= 1:
+        return s
+    first = lines[0]
+    indented = [" " * num_spaces + line for line in lines[1:]]
+    return "\n".join([first, *indented])
+
+
+T = TypeVar("T", bound=Type[Module])
+
+
+def auto_repr(*attr_names: str) -> Callable[[T], T]:
+    def wrapper(cls: T) -> T:
+        def extra_repr(self: nn.Module) -> str:
+            parts = []
+            for name in attr_names:
+                val = getattr(self, name, None)
+                parts.append(f"{name}={val}")
+            return ", ".join(parts)
+
+        cls.extra_repr = extra_repr
+        return cls
+
+    return wrapper
 
 
 class Sequential(Module):
@@ -547,6 +614,18 @@ class ParameterList(Module):
         for i, (_, p) in enumerate(items):
             self._parameters[str(i)] = p
 
+    def __repr__(self) -> str:
+        lines = []
+        for i, (_, p) in enumerate(self._parameters.items()):
+            param_str = _add_indent(repr(p), 2)
+            lines.append(f"({i}): {param_str}")
+
+        main_str = self._get_name() + "("
+        if lines:
+            main_str += "\n  " + "\n  ".join(lines) + "\n"
+        main_str += ")"
+        return main_str
+
 
 class ParameterDict(Module):
     def __init__(self, parameters: dict[str, nn.Parameter] | None = None) -> None:
@@ -591,3 +670,15 @@ class ParameterDict(Module):
 
     def items(self) -> ItemsView[str, nn.Parameter]:
         return self._parameters.items()
+
+    def __repr__(self) -> str:
+        lines = []
+        for name, param in self._parameters.items():
+            param_str = _add_indent(repr(param), 2)
+            lines.append(f"({name}): {param_str}")
+
+        main_str = self._get_name() + "("
+        if lines:
+            main_str += "\n  " + "\n  ".join(lines) + "\n"
+        main_str += ")"
+        return main_str

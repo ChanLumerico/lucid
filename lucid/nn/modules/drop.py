@@ -3,8 +3,6 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-import lucid.nn.functional
-import lucid.nn.parameter
 
 
 __all__ = [
@@ -56,6 +54,7 @@ class AlphaDropout(_DropoutNd):
         return F.alpha_dropout(input_, self.p, self.training)
 
 
+@nn.auto_repr("block_size", "p")
 class DropBlock(nn.Module):
     def __init__(self, block_size: int, p: float = 0.1, eps: float = 1e-7) -> None:
         super().__init__()

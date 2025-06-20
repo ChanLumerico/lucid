@@ -65,6 +65,12 @@ class _NormBase(nn.Module):
             self.weight = nn.Parameter(lucid.ones_like(self.weight))
             self.bias = nn.Parameter(lucid.zeros_like(self.bias))
 
+    def extra_repr(self) -> str:
+        return (
+            f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
+            f"affine={self.affine}, track_running_stats={self.track_running_stats}"
+        )
+
 
 class _BatchNorm(_NormBase):
     def __init__(
@@ -150,6 +156,7 @@ class InstanceNorm3d(_InstanceNorm):
         return super().forward(input_)
 
 
+@nn.auto_repr("normalized_shape", "eps", "elementwise_affine")
 class LayerNorm(nn.Module):
     def __init__(
         self,
@@ -185,6 +192,7 @@ class LayerNorm(nn.Module):
         )
 
 
+@nn.auto_repr("channels", "eps")
 class GlobalResponseNorm(nn.Module):
     def __init__(self, channels: int, eps: float = 1e-6) -> None:
         super().__init__()
