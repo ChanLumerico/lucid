@@ -119,6 +119,22 @@ class _ConvNd(nn.Module):
                 bound = 1 / math.sqrt(fan_in)
                 nn.init.uniform(self.bias, -bound, bound)
 
+    def extra_repr(self):
+        s = (
+            f"{self.in_channels}, {self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}"
+        )
+        if self.padding != (0,) * len(self.padding):
+            s += f", padding={self.padding}"
+        if self.dilation != (1,) * len(self.dilation):
+            s += f", dilation={self.dilation}"
+        if self.groups != 1:
+            s += f", groups={self.groups}"
+        if self.bias is None:
+            s += ", bias=False"
+
+        return s
+
 
 class Conv1d(_ConvNd):
     def __init__(

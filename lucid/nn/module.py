@@ -6,24 +6,15 @@ from typing import (
     KeysView,
     Self,
     Type,
+    TypeVar,
     ValuesView,
     overload,
 )
 from collections import OrderedDict
 
-
-def _add_indent(s: str, num_spaces: int) -> str:
-    lines = s.splitlines()
-    if len(lines) <= 1:
-        return s
-    first = lines[0]
-    indented = [" " * num_spaces + line for line in lines[1:]]
-    return "\n".join([first, *indented])
-
 from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar, _StateDict, _NumPyArray, _DeviceType
 
-import lucid
 import lucid.nn as nn
 
 
@@ -34,6 +25,7 @@ __all__ = [
     "ModuleDict",
     "ParameterList",
     "ParameterDict",
+    "auto_repr",
 ]
 
 _ForwardHookType = Callable[["Module", tuple[Tensor], tuple[Tensor]], None]
@@ -43,20 +35,6 @@ _BackwardHookType = Callable[[Tensor, _NumPyArray], None]
 class Module:
     _registry_map: dict[Type, OrderedDict[str, Any]] = {}
     _alt_name: str = ""
-
-    def _get_name(self) -> str:
-        return self._alt_name or type(self).__name__
-
-    def extra_repr(self) -> str:
-        exclude = {"training", "device"}
-        attrs = []
-        for name, value in vars(self).items():
-            if name.startswith("_") or name in exclude:
-                continue
-            if name in self._parameters or name in self._buffers or name in self._modules:
-                continue
-            attrs.append(f"{name}={value}")
-        return ", ".join(attrs)
 
     def __init__(self) -> None:
         self._parameters: OrderedDict[str, nn.Parameter]
@@ -275,6 +253,51 @@ class Module:
             main_str += "\n  " + "\n  ".join(child_lines) + "\n"
         main_str += ")"
         return main_str
+
+    def extra_repr(self) -> str:
+        exclude = {"training", "device"}
+        attrs = []
+        for name, value in vars(self).items():
+            if name.startswith("_") or name in exclude:
+                continue
+            if (
+                name in self._parameters
+                or name in self._buffers
+                or name in self._modules
+            ):
+                continue
+            attrs.append(f"{name}={value}")
+        return ", ".join(attrs)
+
+    def _get_name(self) -> str:
+        return self._alt_name or type(self).__name__
+
+
+def _add_indent(s: str, num_spaces: int) -> str:
+    lines = s.splitlines()
+    if len(lines) <= 1:
+        return s
+    first = lines[0]
+    indented = [" " * num_spaces + line for line in lines[1:]]
+    return "\n".join([first, *indented])
+
+
+T = TypeVar("T", bound=Type[Module])
+
+
+def auto_repr(*attr_names: str) -> Callable[[T], T]:
+    def wrapper(cls: T) -> T:
+        def extra_repr(self: nn.Module) -> str:
+            parts = []
+            for name in attr_names:
+                val = getattr(self, name, None)
+                parts.append(f"{name}={val}")
+            return ", ".join(parts)
+
+        cls.extra_repr = extra_repr
+        return cls
+
+    return wrapper
 
 
 class Sequential(Module):
