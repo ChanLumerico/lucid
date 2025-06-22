@@ -161,7 +161,7 @@ class Module:
         for module in self._modules.values():
             yield from module.modules()
 
-    def children(self: nn.Module) -> Iterator[Self]:
+    def children(self: Self) -> Iterator[Self]:
         return iter(self._modules.values())
 
     def count_parameters(self, recurse: bool = True) -> int:
@@ -290,7 +290,7 @@ T = TypeVar("T", bound=Type[Module])
 
 def auto_repr(*attr_names: str) -> Callable[[T], T]:
     def wrapper(cls: T) -> T:
-        def extra_repr(self: nn.Module) -> str:
+        def extra_repr(self: Module) -> str:
             parts = []
             for name in attr_names:
                 val = getattr(self, name, None)
