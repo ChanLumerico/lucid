@@ -200,6 +200,32 @@ def conv3d(
     return _conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
+def _upsample_nd(input_: Tensor, stride: Tuple[int, ...]) -> Tensor:
+    x = input_
+    D = len(stride)
+    for d in range(D):
+        axis = d + 2
+        s = stride[d]
+        if s <= 1:
+            continue
+
+        patches = []
+        L = x.shape[axis]
+        for i in range(L):
+            sl = [slice(None)] * x.ndim
+            sl[axis] = slice(i, i + 1)
+            patches.append(x[tuple(sl)])
+
+            if i < L - 1:
+                zero_shape = list(x.shape)
+                zero_shape[axis] = s - 1
+                patches.append(lucid.zeros(*zero_shape, device=x.device))
+
+        x = lucid.concatenate(patches, axis=axis)
+
+    return x
+
+
 def _conv_transpose(
     input_: Tensor,
     weight: Tensor,
@@ -209,4 +235,37 @@ def _conv_transpose(
     dilation: Tuple[int, ...],
     groups: int = 1,
 ) -> Tensor:
-    NotImplemented
+    C_in = input_.shape[1]
+    C_in_w, C_out_g, *kernel_size = weight.shape
+    D = len(kernel_size)
+
+    if C_in_w != C_in:
+        raise ValueError("Weight's first dimension must match input channels.")
+    if C_in % groups != 0:
+        raise ValueError("Input channels must be divisible by groups.")
+    C_in_g = C_in // groups
+
+    pad_ = tuple(kernel_size[i] - 1 - padding[i] for i in range(D))
+
+    outputs = []
+    for g in range(groups):
+        inp_g = input_[:, g * C_in_g : (g + 1) * C_in_g]
+        w_seg = weight[g * C_in_g : (g + 1) * C_in_g]
+
+        ups = _upsample_nd(inp_g, stride)
+
+        perm = [1, 0] + list(range(2, 2 + D))
+        w_t = w_seg.transpose(perm)
+        flip = [slice(None), slice(None)] + [slice(None, None, -1) for _ in range(D)]
+        w_t = w_t[tuple(flip)]
+
+        out_g = _im2col_conv(ups, w_t, None, (1,) * D, pad_, dilation, groups=1)
+        outputs.append(out_g)
+
+    output = lucid.concatenate(outputs, axis=1)
+
+    if bias is not None:
+        b_shape = [1, C_out_g * groups] + [1] * D
+        output = output + bias.reshape(tuple(b_shape))
+
+    return output

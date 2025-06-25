@@ -1181,5 +1181,52 @@ class where(operation):
         return max(condition.size, a.size, b.size)
 
 
+"""
 class scatter_add(operation):
-    NotImplemented
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.dim = dim
+
+    @func_op(n_in=3, n_ret=1)
+    def cpu(self, a: Tensor, index: Tensor, src: Tensor) -> _FuncOpReturnType:
+        shape = np.broadcast_shapes(a.shape, index.shape, src.shape)
+        a_b = np.broadcast_to(a.data, shape)
+        index_b = np.broadcast_to(index.data, shape)
+        src_b = np.broadcast_to(src.data, shape)
+
+        result_data = np.array(a_b, copy=True)
+        np.add.at(result_data, self._build_index(shape, index_b), src_b)
+
+        self.result = Tensor(result_data)
+
+    @func_op(n_in=3, n_ret=1, device="gpu")
+    def gpu(self, a: Tensor, index: Tensor, src: Tensor) -> _FuncOpReturnType:
+        a_data = mx.array(a.data)
+        index_data = index.data
+        src_data = src.data
+
+        dim = self.dim if self.dim >= 0 else self.dim + a.ndim
+        index_b = mx.broadcast_to(index_data, a.shape)
+        src_b = mx.broadcast_to(src_data, a.shape)
+
+        coords = mx.meshgrid(*[mx.arange(s) for s in a.shape], indexing="ij")
+        coords = list(coords)
+        coords[dim] = index_b
+
+        coord_stack = mx.stack(coords, axis=-1).reshape(-1, a.ndim)
+        src_flat = src_b.reshape(-1)
+
+        result = mx.zeros_like(a_data)
+        result_flat = result.reshape(-1)
+
+        strides = [int(math.prod(a.shape[i + 1:])) for i in range(a.ndim)]
+        flat_indices = sum(coord_stack[:, i] * strides[i] for i in range(a.ndim))
+
+        for i in range(flat_indices.size):
+            idx = int(flat_indices[i].item())
+
+    def _build_index(self, shape: _ShapeLike, index: _NumPyArray) -> tuple:
+        idx = list(np.meshgrid(*[np.arange(s) for s in shape], indexing="ij"))
+        idx[self.dim] = index
+        return tuple(idx)
+"""
