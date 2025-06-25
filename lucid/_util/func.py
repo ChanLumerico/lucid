@@ -5,7 +5,6 @@ from functools import partial
 import numpy as np
 import math
 
-import lucid
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike, _NumPyArray
 
@@ -13,6 +12,7 @@ from lucid._backend.core import (
     fallback,
     operation,
     func_op,
+    binary_func_op,
     unary_func_op,
     poly_func_op,
     _FuncOpReturnType,
@@ -1179,3 +1179,7 @@ class where(operation):
 
     def __flops__(self, condition: Tensor, a: Tensor, b: Tensor) -> int:
         return max(condition.size, a.size, b.size)
+
+
+class scatter_add(operation):
+    NotImplemented

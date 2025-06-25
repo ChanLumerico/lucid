@@ -198,3 +198,15 @@ def conv3d(
         dilation = (dilation, dilation, dilation)
 
     return _conv(input_, weight, bias, stride, padding, dilation, groups)
+
+
+def _conv_transpose(
+    input_: Tensor,
+    weight: Tensor,
+    bias: Optional[Tensor],
+    stride: Tuple[int, ...],
+    padding: Tuple[int, ...],
+    dilation: Tuple[int, ...],
+    groups: int = 1,
+) -> Tensor:
+    NotImplemented
