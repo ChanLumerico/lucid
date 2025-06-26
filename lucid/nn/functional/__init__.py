@@ -77,7 +77,14 @@ def conv1d(
     dilation: int | tuple[int, ...] = 1,
     groups: int = 1,
 ) -> Tensor:
-    return _conv.conv1d(input_, weight, bias, stride, padding, dilation, groups)
+    if isinstance(stride, int):
+        stride = (stride,)
+    if isinstance(padding, int):
+        padding = (padding,)
+    if isinstance(dilation, int):
+        dilation = (dilation,)
+
+    return _conv._conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv2d(
@@ -89,7 +96,14 @@ def conv2d(
     dilation: int | tuple[int, ...] = 1,
     groups: int = 1,
 ) -> Tensor:
-    return _conv.conv2d(input_, weight, bias, stride, padding, dilation, groups)
+    if isinstance(stride, int):
+        stride = (stride, stride)
+    if isinstance(padding, int):
+        padding = (padding, padding)
+    if isinstance(dilation, int):
+        dilation = (dilation, dilation)
+
+    return _conv._conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv3d(
@@ -101,7 +115,86 @@ def conv3d(
     dilation: int | tuple[int, ...] = 1,
     groups: int = 1,
 ) -> Tensor:
-    return _conv.conv3d(input_, weight, bias, stride, padding, dilation, groups)
+    if isinstance(stride, int):
+        stride = (stride, stride, stride)
+    if isinstance(padding, int):
+        padding = (padding, padding, padding)
+    if isinstance(dilation, int):
+        dilation = (dilation, dilation, dilation)
+
+    return _conv._conv(input_, weight, bias, stride, padding, dilation, groups)
+
+
+def conv_transpose1d(
+    input_: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, ...] = 1,
+    padding: int | tuple[int, ...] = 0,
+    output_padding: int | tuple[int, ...] = 0,
+    dilation: int | tuple[int, ...] = 1,
+    groups: int = 1,
+) -> Tensor:
+    if isinstance(stride, int):
+        stride = (stride,)
+    if isinstance(padding, int):
+        padding = (padding,)
+    if isinstance(output_padding, int):
+        output_padding = (output_padding,)
+    if isinstance(dilation, int):
+        dilation = (dilation,)
+
+    return _conv._conv_transpose(
+        input_, weight, bias, stride, padding, output_padding, dilation, groups
+    )
+
+
+def conv_transpose2d(
+    input_: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, ...] = 1,
+    padding: int | tuple[int, ...] = 0,
+    output_padding: int | tuple[int, ...] = 0,
+    dilation: int | tuple[int, ...] = 1,
+    groups: int = 1,
+) -> Tensor:
+    if isinstance(stride, int):
+        stride = (stride, stride)
+    if isinstance(padding, int):
+        padding = (padding, padding)
+    if isinstance(output_padding, int):
+        output_padding = (output_padding, output_padding)
+    if isinstance(dilation, int):
+        dilation = (dilation, dilation)
+
+    return _conv._conv_transpose(
+        input_, weight, bias, stride, padding, output_padding, dilation, groups
+    )
+
+
+def conv_transpose3d(
+    input_: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, ...] = 1,
+    padding: int | tuple[int, ...] = 0,
+    output_padding: int | tuple[int, ...] = 0,
+    dilation: int | tuple[int, ...] = 1,
+    groups: int = 1,
+) -> Tensor:
+    if isinstance(stride, int):
+        stride = (stride, stride, stride)
+    if isinstance(padding, int):
+        padding = (padding, padding, padding)
+    if isinstance(output_padding, int):
+        output_padding = (output_padding, output_padding, output_padding)
+    if isinstance(dilation, int):
+        dilation = (dilation, dilation, dilation)
+
+    return _conv._conv_transpose(
+        input_, weight, bias, stride, padding, output_padding, dilation, groups
+    )
 
 
 def avg_pool1d(

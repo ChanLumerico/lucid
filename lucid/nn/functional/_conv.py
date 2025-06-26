@@ -143,63 +143,6 @@ def _conv(
     return _im2col_conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
-def conv1d(
-    input_: Tensor,
-    weight: Tensor,
-    bias: Optional[Tensor] = None,
-    stride: int | Tuple[int, ...] = 1,
-    padding: int | Tuple[int, ...] = 0,
-    dilation: int | Tuple[int, ...] = 1,
-    groups: int = 1,
-) -> Tensor:
-    if isinstance(stride, int):
-        stride = (stride,)
-    if isinstance(padding, int):
-        padding = (padding,)
-    if isinstance(dilation, int):
-        dilation = (dilation,)
-
-    return _conv(input_, weight, bias, stride, padding, dilation, groups)
-
-
-def conv2d(
-    input_: Tensor,
-    weight: Tensor,
-    bias: Optional[Tensor] = None,
-    stride: int | Tuple[int, ...] = 1,
-    padding: int | Tuple[int, ...] = 0,
-    dilation: int | Tuple[int, ...] = 1,
-    groups: int = 1,
-) -> Tensor:
-    if isinstance(stride, int):
-        stride = (stride, stride)
-    if isinstance(padding, int):
-        padding = (padding, padding)
-    if isinstance(dilation, int):
-        dilation = (dilation, dilation)
-
-    return _conv(input_, weight, bias, stride, padding, dilation, groups)
-
-
-def conv3d(
-    input_: Tensor,
-    weight: Tensor,
-    bias: Optional[Tensor] = None,
-    stride: int | Tuple[int, ...] = 1,
-    padding: int | Tuple[int, ...] = 0,
-    dilation: int | Tuple[int, ...] = 1,
-    groups: int = 1,
-) -> Tensor:
-    if isinstance(stride, int):
-        stride = (stride, stride, stride)
-    if isinstance(padding, int):
-        padding = (padding, padding, padding)
-    if isinstance(dilation, int):
-        dilation = (dilation, dilation, dilation)
-
-    return _conv(input_, weight, bias, stride, padding, dilation, groups)
-
-
 def _upsample_nd(input_: Tensor, stride: Tuple[int, ...]) -> Tensor:
     x = input_
     D = len(stride)
@@ -232,6 +175,7 @@ def _conv_transpose(
     bias: Optional[Tensor],
     stride: Tuple[int, ...],
     padding: Tuple[int, ...],
+    output_padding: Tuple[int, ...],
     dilation: Tuple[int, ...],
     groups: int = 1,
 ) -> Tensor:
@@ -239,31 +183,57 @@ def _conv_transpose(
     C_in_w, C_out_g, *kernel_size = weight.shape
     D = len(kernel_size)
 
+    if len(output_padding) != D:
+        raise ValueError(
+            f"output_padding length must be {D}, got {len(output_padding)}"
+        )
+    for i, op in enumerate(output_padding):
+        if op < 0 or op >= stride[i]:
+            raise ValueError(
+                f"output_padding[{i}] must be in range [0, {stride[i]}), got {op}"
+            )
     if C_in_w != C_in:
         raise ValueError("Weight's first dimension must match input channels.")
     if C_in % groups != 0:
         raise ValueError("Input channels must be divisible by groups.")
     C_in_g = C_in // groups
 
-    pad_ = tuple(kernel_size[i] - 1 - padding[i] for i in range(D))
+    pad_ = tuple(dilation[i] * (kernel_size[i] - 1) - padding[i] for i in range(D))
 
     outputs = []
     for g in range(groups):
         inp_g = input_[:, g * C_in_g : (g + 1) * C_in_g]
         w_seg = weight[g * C_in_g : (g + 1) * C_in_g]
 
-        ups = _upsample_nd(inp_g, stride)
-
         perm = [1, 0] + list(range(2, 2 + D))
         w_t = w_seg.transpose(perm)
-        flip = [slice(None), slice(None)] + [slice(None, None, -1) for _ in range(D)]
-        w_t = w_t[tuple(flip)]
+        flip_slices = [slice(None), slice(None)] + [
+            slice(None, None, -1) for _ in range(D)
+        ]
+        w_t = w_t[tuple(flip_slices)]
+        ups = _upsample_nd(inp_g, stride)
 
-        out_g = _im2col_conv(ups, w_t, None, (1,) * D, pad_, dilation, groups=1)
+        if any(op > 0 for op in output_padding):
+            for d, op in enumerate(output_padding):
+                if op > 0:
+                    axis = d + 2
+                    zero_shape = list(ups.shape)
+                    zero_shape[axis] = op
+                    zeros = lucid.zeros(*zero_shape, dtype=ups.dtype, device=ups.device)
+                    ups = lucid.concatenate([ups, zeros], axis=axis)
+
+        out_g = _im2col_conv(
+            ups,
+            w_t,
+            bias=None,
+            stride=(1,) * D,
+            padding=pad_,
+            dilation=dilation,
+            groups=1,
+        )
         outputs.append(out_g)
 
     output = lucid.concatenate(outputs, axis=1)
-
     if bias is not None:
         b_shape = [1, C_out_g * groups] + [1] * D
         output = output + bias.reshape(tuple(b_shape))
