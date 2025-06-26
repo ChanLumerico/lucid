@@ -125,7 +125,7 @@ def _im2col_conv(
     return out_final
 
 
-def _conv(
+def conv(
     input_: Tensor,
     weight: Tensor,
     bias: Optional[Tensor],
@@ -169,7 +169,7 @@ def _upsample_nd(input_: Tensor, stride: Tuple[int, ...]) -> Tensor:
     return x
 
 
-def _conv_transpose(
+def conv_transpose(
     input_: Tensor,
     weight: Tensor,
     bias: Optional[Tensor],

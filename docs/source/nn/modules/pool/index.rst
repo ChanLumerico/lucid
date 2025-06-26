@@ -13,3 +13,6 @@ Pooling Layers
     AdaptiveAvgPool1d.rst
     AdaptiveAvgPool2d.rst
     AdaptiveAvgPool3d.rst
+    AdaptiveMaxPool1d.rst
+    AdaptiveMaxPool2d.rst
+    AdaptiveMaxPool3d.rst

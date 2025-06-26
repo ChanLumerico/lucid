@@ -1,4 +1,6 @@
 import math
+from typing import Literal
+
 import lucid
 from lucid._tensor import Tensor
 
@@ -191,20 +193,25 @@ def max_pool3d(
     return lucid.max(_pool3d(input_, kernel_size, stride, padding), axis=-1)
 
 
-def adaptive_avg_pool1d(input_: Tensor, output_size: int) -> Tensor:
-    _, _, L = input_.shape
-
+def adaptive_pool1d(
+    input_: Tensor, output_size: int, avg_or_max: Literal["avg", "max"]
+) -> Tensor:
+    L = input_.shape[2]
     kernel_size = math.ceil(L / output_size)
     stride = math.floor(L / output_size)
     pad = max((output_size - 1) * stride + kernel_size - L, 0)
 
     padding = (pad // 2,)
-    return avg_pool1d(input_, kernel_size, stride, padding)
+    if avg_or_max == "avg":
+        return avg_pool1d(input_, kernel_size, stride, padding)
+    else:
+        return max_pool1d(input_, kernel_size, stride, padding)
 
 
-def adaptive_avg_pool2d(
+def adaptive_pool2d(
     input_: Tensor,
     output_size: tuple[int, int] | int,
+    avg_or_max: Literal["avg", "max"],
 ) -> Tensor:
     if isinstance(output_size, int):
         output_size = (output_size, output_size)
@@ -222,16 +229,16 @@ def adaptive_avg_pool2d(
     pad_w = max((target_W - 1) * stride_w + kernel_w - W, 0)
 
     padding = (pad_h // 2, pad_w // 2)
-    return avg_pool2d(
-        input_,
-        (kernel_h, kernel_w),
-        (stride_h, stride_w),
-        padding,
-    )
+    if avg_or_max == "avg":
+        return avg_pool2d(input_, (kernel_h, kernel_w), (stride_h, stride_w), padding)
+    else:
+        return max_pool2d(input_, (kernel_h, kernel_w), (stride_h, stride_w), padding)
 
 
-def adaptive_avg_pool3d(
-    input_: Tensor, output_size: tuple[int, int, int] | int
+def adaptive_pool3d(
+    input_: Tensor,
+    output_size: tuple[int, int, int] | int,
+    avg_or_max: Literal["avg", "max"],
 ) -> Tensor:
     if isinstance(output_size, int):
         output_size = (output_size, output_size, output_size)
@@ -252,9 +259,17 @@ def adaptive_avg_pool3d(
     pad_w = max((target_W - 1) * stride_w + kernel_w - W, 0)
 
     padding = (pad_d // 2, pad_h // 2, pad_w // 2)
-    return avg_pool2d(
-        input_,
-        (kernel_d, kernel_h, kernel_w),
-        (stride_d, stride_h, stride_w),
-        padding,
-    )
+    if avg_or_max == "avg":
+        return avg_pool2d(
+            input_,
+            (kernel_d, kernel_h, kernel_w),
+            (stride_d, stride_h, stride_w),
+            padding,
+        )
+    else:
+        return max_pool2d(
+            input_,
+            (kernel_d, kernel_h, kernel_w),
+            (stride_d, stride_h, stride_w),
+            padding,
+        )

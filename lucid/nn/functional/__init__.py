@@ -84,7 +84,7 @@ def conv1d(
     if isinstance(dilation, int):
         dilation = (dilation,)
 
-    return _conv._conv(input_, weight, bias, stride, padding, dilation, groups)
+    return _conv.conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv2d(
@@ -103,7 +103,7 @@ def conv2d(
     if isinstance(dilation, int):
         dilation = (dilation, dilation)
 
-    return _conv._conv(input_, weight, bias, stride, padding, dilation, groups)
+    return _conv.conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv3d(
@@ -122,7 +122,7 @@ def conv3d(
     if isinstance(dilation, int):
         dilation = (dilation, dilation, dilation)
 
-    return _conv._conv(input_, weight, bias, stride, padding, dilation, groups)
+    return _conv.conv(input_, weight, bias, stride, padding, dilation, groups)
 
 
 def conv_transpose1d(
@@ -144,7 +144,7 @@ def conv_transpose1d(
     if isinstance(dilation, int):
         dilation = (dilation,)
 
-    return _conv._conv_transpose(
+    return _conv.conv_transpose(
         input_, weight, bias, stride, padding, output_padding, dilation, groups
     )
 
@@ -168,7 +168,7 @@ def conv_transpose2d(
     if isinstance(dilation, int):
         dilation = (dilation, dilation)
 
-    return _conv._conv_transpose(
+    return _conv.conv_transpose(
         input_, weight, bias, stride, padding, output_padding, dilation, groups
     )
 
@@ -192,7 +192,7 @@ def conv_transpose3d(
     if isinstance(dilation, int):
         dilation = (dilation, dilation, dilation)
 
-    return _conv._conv_transpose(
+    return _conv.conv_transpose(
         input_, weight, bias, stride, padding, output_padding, dilation, groups
     )
 
@@ -252,17 +252,31 @@ def max_pool3d(
 
 
 def adaptive_avg_pool1d(input_: Tensor, output_size: int) -> Tensor:
-    return _pool.adaptive_avg_pool1d(input_, output_size)
+    return _pool.adaptive_pool1d(input_, output_size, avg_or_max="avg")
 
 
 def adaptive_avg_pool2d(input_: Tensor, output_size: int | tuple[int, int]) -> Tensor:
-    return _pool.adaptive_avg_pool2d(input_, output_size)
+    return _pool.adaptive_pool2d(input_, output_size, avg_or_max="avg")
 
 
 def adaptive_avg_pool3d(
     input_: Tensor, output_size: int | tuple[int, int, int]
 ) -> Tensor:
-    return _pool.adaptive_avg_pool3d(input_, output_size)
+    return _pool.adaptive_pool3d(input_, output_size, avg_or_max="avg")
+
+
+def adaptive_max_pool1d(input_: Tensor, output_size: int) -> Tensor:
+    return _pool.adaptive_pool1d(input_, output_size, avg_or_max="max")
+
+
+def adaptive_max_pool2d(input_: Tensor, output_size: int | tuple[int, int]) -> Tensor:
+    return _pool.adaptive_pool2d(input_, output_size, avg_or_max="max")
+
+
+def adaptive_max_pool3d(
+    input_: Tensor, output_size: int | tuple[int, int, int]
+) -> Tensor:
+    return _pool.adaptive_pool3d(input_, output_size, avg_or_max="max")
 
 
 def dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:

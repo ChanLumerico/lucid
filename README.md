@@ -15,7 +15,8 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Added `nn.ConvTranspose{1,2,3}d` and `F.conv_transpose{1,2,3}d`
+- Added `nn.AdaptiveMaxPool` and `F.adaptive_max_pool`
+- Added `nn.ConvTranspose` and `F.conv_transpose`
 - New Model Category: *Object Detection* — Added initial support with RCNN(`lucid.models.RCNN`)
 
 ## 🔧 How to Install

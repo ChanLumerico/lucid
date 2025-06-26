@@ -16,6 +16,9 @@ __all__ = [
     "AdaptiveAvgPool1d",
     "AdaptiveAvgPool2d",
     "AdaptiveAvgPool3d",
+    "AdaptiveMaxPool1d",
+    "AdaptiveMaxPool2d",
+    "AdaptiveMaxPool3d",
 ]
 
 
@@ -143,3 +146,30 @@ class AdaptiveAvgPool3d(nn.Module):
 
     def forward(self, input_: Tensor) -> Tensor:
         return F.adaptive_avg_pool3d(input_, self.output_size)
+
+
+class AdaptiveMaxPool1d(nn.Module):
+    def __init__(self, output_size: int) -> None:
+        super().__init__()
+        self.output_size = output_size
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.adaptive_max_pool1d(input_, self.output_size)
+
+
+class AdaptiveMaxPool2d(nn.Module):
+    def __init__(self, output_size: int | tuple[int, int]) -> None:
+        super().__init__()
+        self.output_size = output_size
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.adaptive_max_pool2d(input_, self.output_size)
+
+
+class AdaptiveMaxPool3d(nn.Module):
+    def __init__(self, output_size: int | tuple[int, int, int]) -> None:
+        super().__init__()
+        self.output_size = output_size
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.adaptive_max_pool3d(input_, self.output_size)
