@@ -1,10 +1,10 @@
-from typing import Literal, Self
-
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+
+from ._util import SelectiveSearch, apply_deltas, nms, clip_boxes
 
 
 class _SlowROIPool(nn.Module):
@@ -36,7 +36,7 @@ class _SlowROIPool(nn.Module):
         return res
 
 
-class FastRCNN(nn.Module):
+class FastRCNN(nn.Module):  # NOTE: Need to integrate `SelectiveSearch`
     def __init__(
         self,
         backbone: nn.Module,
@@ -89,4 +89,50 @@ class FastRCNN(nn.Module):
             return cls_logits, bbox_deltas, features
         return cls_logits, bbox_deltas
 
-    ...
+    @lucid.no_grad()
+    def predict(
+        self,
+        rois: Tensor,
+        cls_logits: Tensor,
+        bbox_deltas: Tensor,
+        image_shape: tuple[int, int],
+        score_thresh: float = 0.05,
+        nms_thresh: float = 0.3,
+        top_k: int = 100,
+    ) -> list[dict[str, Tensor]]:
+        scores = F.softmax(cls_logits, axis=1)
+        num_classes = scores.shape[1]
+        detections: list[dict[str, Tensor]] = []
+
+        for cl in range(1, num_classes):
+            cls_scores = scores[:, cl]
+            mask = cls_scores > score_thresh
+            if lucid.sum(mask) == 0:
+                continue
+
+            deltas_cls = bbox_deltas[:, cl * 4, (cl + 1) * 4]
+            boxes_all = apply_deltas(rois, deltas_cls)
+            boxes = clip_boxes(boxes_all, image_shape)[mask]
+
+            scores_masked = cls_scores[mask]
+            keep = nms(boxes, scores_masked, nms_thresh)
+            keep = keep[:top_k]
+
+            detections.append(
+                {
+                    "boxes": boxes[keep],
+                    "scores": scores_masked[keep],
+                    "labels": lucid.full((keep.shape[0],), cl, dtype=lucid.Int16),
+                }
+            )
+
+        return detections
+
+    def get_loss(
+        self,
+        cls_logits: Tensor,
+        bbox_deltas: Tensor,
+        labels: Tensor,
+        reg_targets: Tensor,
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        NotImplemented
