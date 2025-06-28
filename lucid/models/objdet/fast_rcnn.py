@@ -1,3 +1,4 @@
+from typing import Callable
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -36,7 +37,7 @@ class _SlowROIPool(nn.Module):
         return res
 
 
-class FastRCNN(nn.Module):  # NOTE: Need to integrate `SelectiveSearch`
+class FastRCNN(nn.Module):
     def __init__(
         self,
         backbone: nn.Module,
@@ -47,13 +48,15 @@ class FastRCNN(nn.Module):  # NOTE: Need to integrate `SelectiveSearch`
         bbox_reg_means: tuple[int, ...] = (0.0, 0.0, 0.0, 0.0),
         bbox_reg_stds: tuple[int, ...] = (0.1, 0.1, 0.2, 0.2),
         dropout: float = 0.5,
+        proposal_generator: Callable[..., Tensor] | None = None,
     ) -> None:
         super().__init__()
         self.backbone = backbone
         self.roipool = _SlowROIPool(output_size=pool_size)
+        self.proposal_generator = proposal_generator or SelectiveSearch()
 
         self.fc1 = nn.Linear(feat_channels * pool_size[0] * pool_size[1], hidden_dim)
-        self.fc2 - nn.Linear(hidden_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
@@ -66,13 +69,28 @@ class FastRCNN(nn.Module):  # NOTE: Need to integrate `SelectiveSearch`
     def forward(
         self,
         images: Tensor,
-        rois: Tensor,
-        roi_idx: Tensor,
+        rois: Tensor | None,
+        roi_idx: Tensor | None,
         *,
         return_feats: bool = False
     ) -> tuple[Tensor, ...]:
-        features = self.backbone(images)
-        pooled = self.roipool(features, rois, roi_idx)
+        B, _, H, W = images.shape
+        if rois is None or roi_idx is None:
+            boxes_list, idx_list = [], []
+            for i in range(B):
+                props = self.proposal_generator(images[i])
+                norm = props.astype(lucid.Float32) / lucid.Tensor(
+                    [W, H, W, H], dtype=lucid.Float32
+                )
+
+                boxes_list.append(norm)
+                idx_list.append(lucid.full((norm.shape[0],), i, dtype=lucid.Int32))
+
+            rois = lucid.concatenate(boxes_list, axis=0)
+            roi_idx = lucid.concatenate(idx_list, axis=0)
+
+        feats = self.backbone(images)
+        pooled = self.roipool(feats, rois, roi_idx)
 
         N = pooled.shape[0]
         x = pooled.reshape(N, -1)
@@ -86,7 +104,7 @@ class FastRCNN(nn.Module):  # NOTE: Need to integrate `SelectiveSearch`
         bbox_deltas = self.bbox_pred(x)
 
         if return_feats:
-            return cls_logits, bbox_deltas, features
+            return cls_logits, bbox_deltas, feats
         return cls_logits, bbox_deltas
 
     @lucid.no_grad()
@@ -110,7 +128,7 @@ class FastRCNN(nn.Module):  # NOTE: Need to integrate `SelectiveSearch`
             if lucid.sum(mask) == 0:
                 continue
 
-            deltas_cls = bbox_deltas[:, cl * 4, (cl + 1) * 4]
+            deltas_cls = bbox_deltas[:, cl * 4 : (cl + 1) * 4]
             boxes_all = apply_deltas(rois, deltas_cls)
             boxes = clip_boxes(boxes_all, image_shape)[mask]
 
@@ -135,4 +153,25 @@ class FastRCNN(nn.Module):  # NOTE: Need to integrate `SelectiveSearch`
         labels: Tensor,
         reg_targets: Tensor,
     ) -> tuple[Tensor, Tensor, Tensor]:
-        NotImplemented
+        cls_loss = F.cross_entropy(cls_logits, labels)
+        targets_norm = (reg_targets - self.bbox_reg_means) / self.bbox_reg_stds
+        fg_mask = labels > 0
+
+        if lucid.sum(fg_mask) > 0:
+            labels_fg = labels[fg_mask]
+            deltas_fg = bbox_deltas[fg_mask]
+
+            preds: list[Tensor] = []
+            for i, c in enumerate(labels_fg):
+                start = c * 4
+                preds.append(deltas_fg[i, start : start + 4])
+
+            preds = lucid.stack(preds, axis=0)
+            targets_fg = targets_norm[fg_mask]
+            reg_loss = F.huber_loss(preds, targets_fg)
+
+        else:
+            reg_loss = lucid.zeros((), dtype=lucid.Float32)
+
+        total_loss = cls_loss + reg_loss
+        return total_loss, cls_loss, reg_loss

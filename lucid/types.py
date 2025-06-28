@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, Sequence, Literal, TypeAlias
 import re
 
-# NOTE: This module remains module independency.
+# NOTE: This module retains module independency.
 import numpy as np
 import mlx.core as mx
 
