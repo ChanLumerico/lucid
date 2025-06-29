@@ -8,33 +8,45 @@ from lucid._tensor import Tensor
 from ._util import SelectiveSearch, apply_deltas, nms, clip_boxes
 
 
+__all__ = ["FastRCNN"]
+
+
 class _SlowROIPool(nn.Module):
-    def __init__(self, output_size):
+    def __init__(self, output_size: tuple[int, int]) -> None:
         super().__init__()
         self.maxpool = nn.AdaptiveMaxPool2d(output_size)
         self.output_size = output_size
 
-    def forward(self, images, rois, roi_idx):
+    def forward(self, images: Tensor, rois: Tensor, roi_idx: Tensor) -> Tensor:
         N = rois.shape[0]
         H, W = images.shape[2:]
+        roi_idx_list = roi_idx.tolist()
 
-        x1, x2 = rois[:, 0], rois[:, 2]
-        y1, y2 = rois[:, 1], rois[:, 3]
+        x1 = lucid.floor(rois[:, 0] * W).astype(lucid.Int).tolist()
+        y1 = lucid.floor(rois[:, 1] * H).astype(lucid.Int).tolist()
+        x2 = lucid.ceil(rois[:, 2] * W).astype(lucid.Int).tolist()
+        y2 = lucid.ceil(rois[:, 3] * H).astype(lucid.Int).tolist()
 
-        x1 = lucid.floor(x1 * W).astype(lucid.Int)
-        x2 = lucid.ceil(x2 * W).astype(lucid.Int)
-        y1 = lucid.floor(y1 * H).astype(lucid.Int)
-        y2 = lucid.ceil(y2 * H).astype(lucid.Int)
+        crops: list[Tensor] = []
+        ph, pw = self.output_size
 
-        res = []
         for i in range(N):
-            img = images[roi_idx[i]].unsqueeze(axis=0)
-            img = img[:, :, y1[i] : y2[i], x1[i] : x2[i]]
-            img = self.maxpool(img)
-            res.append(img)
+            b = roi_idx_list[i]
+            xi1, yi1, xi2, yi2 = x1[i], y1[i], x2[i], y2[i]
+            if xi2 <= xi1 or yi2 <= yi1:
+                continue
 
-        res = lucid.concatenate(res, axis=0)
-        return res
+            patch = images[b : b + 1, :, yi1:yi2, xi1:xi2]
+            h, w = patch.shape[2], patch.shape[3]
+            if h < ph or w < pw:
+                patch = F.interpolate(patch, size=self.output_size, mode="nearest")
+            else:
+                patch = self.maxpool(patch)
+            crops.append(patch)
+
+        if not crops:
+            return lucid.empty(0, images.shape[1], ph, pw)
+        return lucid.concatenate(crops, axis=0)
 
 
 class FastRCNN(nn.Module):
@@ -45,8 +57,8 @@ class FastRCNN(nn.Module):
         num_classes: int,
         pool_size: tuple[int, int] = (7, 7),
         hidden_dim: int = 4096,
-        bbox_reg_means: tuple[int, ...] = (0.0, 0.0, 0.0, 0.0),
-        bbox_reg_stds: tuple[int, ...] = (0.1, 0.1, 0.2, 0.2),
+        bbox_reg_means: tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
+        bbox_reg_stds: tuple[float, ...] = (0.1, 0.1, 0.2, 0.2),
         dropout: float = 0.5,
         proposal_generator: Callable[..., Tensor] | None = None,
     ) -> None:
@@ -63,14 +75,14 @@ class FastRCNN(nn.Module):
         self.cls_score = nn.Linear(hidden_dim, num_classes)
         self.bbox_pred = nn.Linear(hidden_dim, num_classes * 4)
 
-        self.bbox_reg_means = Tensor(bbox_reg_means, dtype=lucid.Float16)
-        self.bbox_reg_stds = Tensor(bbox_reg_stds, dtype=lucid.Float16)
+        self.bbox_reg_means = Tensor(bbox_reg_means, dtype=lucid.Float32)
+        self.bbox_reg_stds = Tensor(bbox_reg_stds, dtype=lucid.Float32)
 
     def forward(
         self,
         images: Tensor,
-        rois: Tensor | None,
-        roi_idx: Tensor | None,
+        rois: Tensor | None = None,
+        roi_idx: Tensor | None = None,
         *,
         return_feats: bool = False
     ) -> tuple[Tensor, ...]:
@@ -79,10 +91,9 @@ class FastRCNN(nn.Module):
             boxes_list, idx_list = [], []
             for i in range(B):
                 props = self.proposal_generator(images[i])
-                norm = props.astype(lucid.Float32) / lucid.Tensor(
-                    [W, H, W, H], dtype=lucid.Float32
-                )
+                props_f = props.astype(lucid.Float32)
 
+                norm = props_f / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
                 boxes_list.append(norm)
                 idx_list.append(lucid.full((norm.shape[0],), i, dtype=lucid.Int32))
 
@@ -110,14 +121,31 @@ class FastRCNN(nn.Module):
     @lucid.no_grad()
     def predict(
         self,
-        rois: Tensor,
-        cls_logits: Tensor,
-        bbox_deltas: Tensor,
-        image_shape: tuple[int, int],
+        images: Tensor,
+        rois: Tensor | None = None,
+        roi_idx: Tensor | None = None,
         score_thresh: float = 0.05,
         nms_thresh: float = 0.3,
         top_k: int = 100,
     ) -> list[dict[str, Tensor]]:
+        B, _, H, W = images.shape
+        if rois is None or roi_idx is None:
+            boxes_list, idx_list = [], []
+            for i in range(B):
+                props = self.proposal_generator(images[i])
+                props_f = props.astype(lucid.Float32)
+                boxes_list.append(props_f)
+                idx_list.append(lucid.full((props_f.shape[0],), i, dtype=lucid.Int32))
+
+            rois_px = lucid.concatenate(boxes_list, axis=0)
+            roi_idx = lucid.concatenate(idx_list, axis=0)
+
+            rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
+            cls_logits, bbox_deltas = self.forward(images, rois_norm, roi_idx)
+        else:
+            rois_px = rois
+            cls_logits, bbox_deltas = self.forward(images, rois, roi_idx)
+
         scores = F.softmax(cls_logits, axis=1)
         num_classes = scores.shape[1]
         detections: list[dict[str, Tensor]] = []
@@ -129,18 +157,17 @@ class FastRCNN(nn.Module):
                 continue
 
             deltas_cls = bbox_deltas[:, cl * 4 : (cl + 1) * 4]
-            boxes_all = apply_deltas(rois, deltas_cls)
-            boxes = clip_boxes(boxes_all, image_shape)[mask]
+            boxes_all = apply_deltas(rois_px, deltas_cls)
+            boxes = clip_boxes(boxes_all, (H, W))[mask]
 
             scores_masked = cls_scores[mask]
-            keep = nms(boxes, scores_masked, nms_thresh)
-            keep = keep[:top_k]
+            keep = nms(boxes, scores_masked, nms_thresh)[:top_k]
 
             detections.append(
                 {
                     "boxes": boxes[keep],
                     "scores": scores_masked[keep],
-                    "labels": lucid.full((keep.shape[0],), cl, dtype=lucid.Int16),
+                    "labels": lucid.full((keep.shape[0],), cl, dtype=lucid.Int32),
                 }
             )
 
@@ -169,7 +196,6 @@ class FastRCNN(nn.Module):
             preds = lucid.stack(preds, axis=0)
             targets_fg = targets_norm[fg_mask]
             reg_loss = F.huber_loss(preds, targets_fg)
-
         else:
             reg_loss = lucid.zeros((), dtype=lucid.Float32)
 
