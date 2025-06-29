@@ -15,9 +15,9 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- **Fast R-CNN** implemented: `lucid.models.FastRCNN`
 - Added `nn.AdaptiveMaxPool` and `F.adaptive_max_pool`
 - Added `nn.ConvTranspose` and `F.conv_transpose`
-- New Model Category: *Object Detection* — Added initial support with RCNN(`lucid.models.RCNN`)
 
 ## 🔧 How to Install
 
