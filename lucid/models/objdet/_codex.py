@@ -5,7 +5,8 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from .objdet._util import apply_deltas, nms, clip_boxes
+
+from ._util import apply_deltas, nms, clip_boxes
 
 
 __all__ = ["FasterRCNN"]
@@ -50,7 +51,9 @@ class _SlowROIPool(nn.Module):
 
 
 class _AnchorGenerator(nn.Module):
-    def __init__(self, sizes: tuple[int, ...], ratios: tuple[float, ...], stride: int) -> None:
+    def __init__(
+        self, sizes: tuple[int, ...], ratios: tuple[float, ...], stride: int
+    ) -> None:
         super().__init__()
         self.stride = stride
         base_anchors = []
@@ -71,7 +74,9 @@ class _AnchorGenerator(nn.Module):
         shift_y = (lucid.arange(feat_h, device=device) + 0.5) * self.stride
         y, x = lucid.meshgrid(shift_y, shift_x, indexing="ij")
         shifts = lucid.stack((x.ravel(), y.ravel(), x.ravel(), y.ravel()), axis=1)
-        anchors = self.base_anchors.to(device).reshape(1, -1, 4) + shifts.reshape(-1, 1, 4)
+        anchors = self.base_anchors.to(device).reshape(1, -1, 4) + shifts.reshape(
+            -1, 1, 4
+        )
         return anchors.reshape(-1, 4)
 
 
@@ -158,7 +163,9 @@ class FasterRCNN(nn.Module):
     ) -> None:
         super().__init__()
         self.backbone = backbone
-        self.anchor_generator = _AnchorGenerator(anchor_sizes, aspect_ratios, anchor_stride)
+        self.anchor_generator = _AnchorGenerator(
+            anchor_sizes, aspect_ratios, anchor_stride
+        )
         self.rpn = _RegionProposalNetwork(feat_channels, self.anchor_generator)
         self.roipool = _SlowROIPool(pool_size)
 
@@ -194,16 +201,24 @@ class FasterRCNN(nn.Module):
                 if p.size == 0:
                     continue
                 boxes_list.append(p)
-                idx_list.append(lucid.full((p.shape[0],), i, dtype=lucid.Int32, device=images.device))
+                idx_list.append(
+                    lucid.full(
+                        (p.shape[0],), i, dtype=lucid.Int32, device=images.device
+                    )
+                )
             if boxes_list:
                 rois_px = lucid.concatenate(boxes_list, axis=0)
                 roi_idx = lucid.concatenate(idx_list, axis=0)
             else:
                 rois_px = lucid.empty(0, 4, device=images.device)
                 roi_idx = lucid.empty(0, dtype=lucid.Int32, device=images.device)
-            rois = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32).to(images.device)
+            rois = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32).to(
+                images.device
+            )
         else:
-            rois_px = rois * lucid.Tensor([W, H, W, H], dtype=lucid.Float32).to(images.device)
+            rois_px = rois * lucid.Tensor([W, H, W, H], dtype=lucid.Float32).to(
+                images.device
+            )
 
         pooled = self.roipool(feats, rois, roi_idx)
         N = pooled.shape[0]
@@ -240,14 +255,18 @@ class FasterRCNN(nn.Module):
             if p.size == 0:
                 continue
             boxes_list.append(p)
-            idx_list.append(lucid.full((p.shape[0],), i, dtype=lucid.Int32, device=images.device))
+            idx_list.append(
+                lucid.full((p.shape[0],), i, dtype=lucid.Int32, device=images.device)
+            )
         if boxes_list:
             rois_px = lucid.concatenate(boxes_list, axis=0)
             roi_idx = lucid.concatenate(idx_list, axis=0)
         else:
             rois_px = lucid.empty(0, 4, device=images.device)
             roi_idx = lucid.empty(0, dtype=lucid.Int32, device=images.device)
-        rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32).to(images.device)
+        rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32).to(
+            images.device
+        )
 
         cls_logits, bbox_deltas = self.forward(images, rois_norm, roi_idx)
         scores = F.softmax(cls_logits, axis=1)
@@ -277,7 +296,9 @@ class FasterRCNN(nn.Module):
                 det = detections[int(img_id.item())]
                 det["boxes"].append(boxes_i[keep])
                 det["scores"].append(scores_i[keep])
-                det["labels"].append(lucid.full((keep.size,), c, dtype=lucid.Int32, device=images.device))
+                det["labels"].append(
+                    lucid.full((keep.size,), c, dtype=lucid.Int32, device=images.device)
+                )
 
         for det in detections:
             if det["boxes"]:
@@ -290,4 +311,3 @@ class FasterRCNN(nn.Module):
                 det["labels"] = lucid.empty(0, dtype=lucid.Int32, device=images.device)
 
         return detections
-
