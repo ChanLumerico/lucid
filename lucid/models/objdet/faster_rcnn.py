@@ -11,6 +11,9 @@ from .fast_rcnn import _SlowROIPool
 from ._util import apply_deltas, nms, clip_boxes
 
 
+__all__ = ["FasterRCNN"]
+
+
 class _AnchorGenerator(nn.Module):
     def __init__(
         self, sizes: tuple[int, ...], ratios: tuple[float, ...], stride: int
@@ -57,3 +60,62 @@ class _RPNHead(nn.Module):
         deltas = self.bbox_pred(x)
 
         return logits, deltas
+
+
+class _RegionProposalNetwork(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        anchor_generator: _AnchorGenerator,
+        pre_nms_top_n: int = 6000,
+        post_nms_top_n: int = 1000,
+        nms_thresh: float = 0.7,
+        score_thresh: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.head = _RPNHead(in_channels, anchor_generator.num_anchors)
+        self.anchor_generator = anchor_generator
+        self.pre_nms_top_n = pre_nms_top_n
+        self.post_nms_top_n = post_nms_top_n
+        self.nms_thresh = nms_thresh
+        self.score_thresh = score_thresh
+
+    def forward(self, feature: Tensor, image_shape: tuple[int, int]) -> list[Tensor]:
+        B, _, H, W = feature.shape
+        logits, deltas = self.head(feature)
+        logits = logits.transpose((0, 2, 3, 1)).reshape(B, -1)
+        deltas = deltas.transpose((0, 2, 3, 1)).reshape(B, -1, 4)
+
+        anchors = self.anchor_generator.grid_anchors(H, W, feature.device)
+        proposals: list[Tensor] = []
+
+        for b in range(B):
+            scores = F.sigmoid(logits[b])
+            boxes = apply_deltas(anchors, deltas[b], add_one=1.0)
+            boxes = clip_boxes(boxes, image_shape)
+
+            keep = scores > self.score_thresh
+            if lucid.sum(keep) == 0:
+                proposals.append(lucid.empty(0, 4, device=feature.device))
+                continue
+
+            scores = scores[keep]
+            boxes = boxes[keep]
+            order = lucid.argsort(scores, descending=True)
+            if self.pre_nms_top_n:
+                order = order[: self.pre_nms_top_n]
+
+            boxes = boxes[order]
+            scores = scores[order]
+
+            keep_idx = nms(boxes, scores, self.nms_thresh)
+            if self.post_nms_top_n:
+                keep_idx = keep_idx[: self.post_nms_top_n]
+
+            proposals.append(boxes[keep_idx])
+
+        return proposals
+
+
+class FasterRCNN(nn.Module):
+    NotImplemented
