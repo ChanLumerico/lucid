@@ -28,7 +28,8 @@ class _AnchorGenerator(nn.Module):
                 h = w * r
                 base_anchors.append([-w / 2, -h / 2, w / 2, h / 2])
 
-        self.base_anchors = Tensor(base_anchors, dtype=lucid.Float32)
+        self.base_anchors: nn.Buffer
+        self.register_buffer("base_anchors", Tensor(base_anchors, dtype=lucid.Float32))
 
     @property
     def num_anchors(self) -> int:
@@ -41,7 +42,7 @@ class _AnchorGenerator(nn.Module):
         y, x = lucid.meshgrid(shift_y, shift_x, indexing="ij")
         shifts = lucid.stack((x.ravel(), y.ravel(), x.ravel(), y.ravel()), axis=1)
 
-        anchors = self.base_anchors.to(device).reshape(1.0 - 1, 4)
+        anchors = self.base_anchors.to(device).reshape(1, self.num_anchors, 4)
         anchors += shifts.reshape(-1, 1, 4)
 
         return anchors.reshape(-1, 4)
@@ -148,8 +149,14 @@ class FasterRCNN(nn.Module):
         self.cls_score = nn.Linear(hidden_dim, num_classes)
         self.bbox_pred = nn.Linear(hidden_dim, num_classes * 4)
 
-        self.bbox_reg_means = Tensor([0.0, 0.0, 0.0, 0.0], dtype=lucid.Float32)
-        self.bbox_reg_stds = Tensor([0.1, 0.1, 0.2, 0.2], dtype=lucid.Float32)
+        self.bbox_reg_means: nn.Buffer
+        self.bbox_reg_stds: nn.Buffer
+        self.register_buffer(
+            "bbox_reg_means", Tensor([0.0, 0.0, 0.0, 0.0], dtype=lucid.Float32)
+        )
+        self.register_buffer(
+            "bbox_reg_stds", Tensor([0.1, 0.1, 0.2, 0.2], dtype=lucid.Float32)
+        )
 
     def forward(
         self,
@@ -176,7 +183,6 @@ class FasterRCNN(nn.Module):
                         (p.shape[0],), i, dtype=lucid.Int32, device=images.device
                     )
                 )
-
             if boxes_list:
                 rois_px = lucid.concatenate(boxes_list, axis=0)
                 roi_idx = lucid.concatenate(idx_list, axis=0)
@@ -185,11 +191,11 @@ class FasterRCNN(nn.Module):
                 roi_idx = lucid.empty(0, dtype=lucid.Int32, device=images.device)
 
             rois = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
-            rois.to(images.device)
-
+            rois = rois.to(images.device)
         else:
-            rois_px = rois * lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
-            rois_px.to(images.device)
+            rois_px = (rois * lucid.Tensor([W, H, W, H], dtype=lucid.Float32)).to(
+                images.device
+            )
 
         pooled = self.roipool(feats, rois, roi_idx)
         N = pooled.shape[0]
@@ -197,7 +203,6 @@ class FasterRCNN(nn.Module):
         x = pooled.reshape(N, -1)
         x = F.relu(self.fc1(x))
         x = self.drop1(x)
-
         x = F.relu(self.fc2(x))
         x = self.drop2(x)
 
@@ -238,8 +243,9 @@ class FasterRCNN(nn.Module):
             rois_px = lucid.empty(0, 4, device=images.device)
             roi_idx = lucid.empty(0, dtype=lucid.Int32, device=images.device)
 
-        rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
-        rois_norm.to(images.device)
+        rois_norm = (rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)).to(
+            images.device
+        )
 
         cls_logits, bbox_deltas = self.forward(images, rois_norm, roi_idx)
         scores = F.softmax(cls_logits, axis=1)
@@ -250,6 +256,7 @@ class FasterRCNN(nn.Module):
         for c in range(1, num_classes):
             cls_scores = scores[:, c]
             deltas_cls = bbox_deltas[:, c * 4 : (c + 1) * 4]
+            deltas_cls = deltas_cls * self.bbox_reg_stds + self.bbox_reg_means
 
             boxes_all = apply_deltas(rois_px, deltas_cls)
             boxes_all = clip_boxes(boxes_all, (H, W))
@@ -288,3 +295,20 @@ class FasterRCNN(nn.Module):
                 det["labels"] = lucid.empty(0, dtype=lucid.Int32, device=images.device)
 
         return detections
+
+    def get_loss(
+        self, images: Tensor, targets: list[dict[str, Tensor]]
+    ) -> dict[str, Tensor]:
+        """
+        `targets` is a list of dictionaries with keys: {"boxes", "labels"}
+
+        Should return like:
+        return {
+            "rpn_cls_loss": rpn_cls_loss / B,
+            "rpn_reg_loss": rpn_reg_loss / B,
+            "roi_cls_loss": roi_cls_loss / B,
+            "roi_reg_loss": roi_reg_loss / B,
+            "total_loss": (rpn_cls_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss) / B,
+        }
+        """
+        NotImplemented
