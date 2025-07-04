@@ -14,6 +14,44 @@ from ._util import apply_deltas, nms, clip_boxes
 __all__ = ["FasterRCNN"]
 
 
+def _box_iou(boxes_a: Tensor, boxes_b: Tensor) -> Tensor:
+    x1a, y1a, x2a, y2a = boxes_a.unbind(axis=1)
+    x1b, y1b, x2b, y2b = boxes_b.unbind(axis=1)
+
+    xx1 = lucid.maximum(x1a.unsqueeze(1), x1b.unsqueeze(0))
+    yy1 = lucid.maximum(y1a.unsqueeze(1), y1b.unsqueeze(0))
+    xx2 = lucid.minimum(x2a.unsqueeze(1), x2b.unsqueeze(0))
+    yy2 = lucid.minimum(y2a.unsqueeze(1), y2b.unsqueeze(0))
+
+    w = (xx2 - xx1 + 1).clip(min_value=0)
+    h = (yy2 - yy1 + 1).clip(min_value=0)
+    inter = w * h
+
+    area_a = (x2a - x1a + 1) * (y2a - y1a + 1)
+    area_b = (x2b - x1b + 1) * (y2b - y1b + 1)
+
+    return inter / (area_a.unsqueeze(1) + area_b - inter)
+
+
+def _bbox2delta(src: Tensor, target: Tensor, add_one: float = 1.0) -> Tensor:
+    sw = src[:, 2] - src[:, 0] + add_one
+    sh = src[:, 3] - src[:, 1] + add_one
+    sx = src[:, 0] + 0.5 * sw
+    sy = src[:, 1] + 0.5 * sh
+
+    tw = target[:, 2] - target[:, 0] + add_one
+    th = target[:, 3] - target[:, 1] + add_one
+    tx = target[:, 0] + 0.5 * tw
+    ty = target[:, 1] + 0.5 * th
+
+    dx = (tx - sx) / sw
+    dy = (ty - sy) / sh
+    dw = lucid.log(tw / sw)
+    dh = lucid.log(th / sh)
+
+    return lucid.stack([dx, dy, dw, dh], axis=1)
+
+
 class _AnchorGenerator(nn.Module):
     def __init__(
         self, sizes: tuple[int, ...], ratios: tuple[float, ...], stride: int
@@ -30,12 +68,17 @@ class _AnchorGenerator(nn.Module):
 
         self.base_anchors: nn.Buffer
         self.register_buffer("base_anchors", Tensor(base_anchors, dtype=lucid.Float32))
+        self._cache: dict[tuple[int, int, _DeviceType], Tensor] = {}
 
     @property
     def num_anchors(self) -> int:
         return len(self.base_anchors)
 
     def grid_anchors(self, feat_h: int, feat_w: int, device: _DeviceType) -> Tensor:
+        key = (feat_h, feat_w, device)
+        if key in self._cache:
+            return self._cache[key]
+
         shift_x = (lucid.arange(feat_w, device=device) + 0.5) * self.stride
         shift_y = (lucid.arange(feat_h, device=device) + 0.5) * self.stride
 
@@ -45,7 +88,9 @@ class _AnchorGenerator(nn.Module):
         anchors = self.base_anchors.to(device).reshape(1, self.num_anchors, 4)
         anchors += shifts.reshape(-1, 1, 4)
 
-        return anchors.reshape(-1, 4)
+        anchors = anchors.reshape(-1, 4)
+        self._cache[key] = anchors
+        return anchors
 
 
 class _RPNHead(nn.Module):
@@ -158,6 +203,30 @@ class FasterRCNN(nn.Module):
             "bbox_reg_stds", Tensor([0.1, 0.1, 0.2, 0.2], dtype=lucid.Float32)
         )
 
+    def _roi_forward(
+        self,
+        feats: Tensor,
+        rois: Tensor,
+        roi_idx: Tensor,
+        *,
+        return_feats: bool = False,
+    ) -> tuple[Tensor, ...]:
+        pooled = self.roipool(feats, rois, roi_idx)
+        N = pooled.shape[0]
+
+        x = pooled.reshape(N, -1)
+        x = F.relu(self.fc1(x))
+        x = self.drop1(x)
+        x = F.relu(self.fc2(x))
+        x = self.drop2(x)
+
+        cls_logits = self.cls_score(x)
+        bbox_deltas = self.bbox_pred(x)
+
+        if return_feats:
+            return cls_logits, bbox_deltas, feats
+        return cls_logits, bbox_deltas
+
     def forward(
         self,
         images: Tensor,
@@ -197,21 +266,9 @@ class FasterRCNN(nn.Module):
                 images.device
             )
 
-        pooled = self.roipool(feats, rois, roi_idx)
-        N = pooled.shape[0]
-
-        x = pooled.reshape(N, -1)
-        x = F.relu(self.fc1(x))
-        x = self.drop1(x)
-        x = F.relu(self.fc2(x))
-        x = self.drop2(x)
-
-        cls_logits = self.cls_score(x)
-        bbox_deltas = self.bbox_pred(x)
-
-        if return_feats:
-            return cls_logits, bbox_deltas, feats
-        return cls_logits, bbox_deltas
+        return self._roi_forward(
+            feats, rois, roi_idx, return_feats=return_feats
+        )
 
     @lucid.no_grad()
     def predict(
@@ -247,7 +304,7 @@ class FasterRCNN(nn.Module):
             images.device
         )
 
-        cls_logits, bbox_deltas = self.forward(images, rois_norm, roi_idx)
+        cls_logits, bbox_deltas = self._roi_forward(feats, rois_norm, roi_idx)
         scores = F.softmax(cls_logits, axis=1)
 
         num_classes = scores.shape[1]
@@ -299,16 +356,159 @@ class FasterRCNN(nn.Module):
     def get_loss(
         self, images: Tensor, targets: list[dict[str, Tensor]]
     ) -> dict[str, Tensor]:
-        """
-        `targets` is a list of dictionaries with keys: {"boxes", "labels"}
+        """Compute Faster R-CNN training losses.
 
-        Should return like:
+        Parameters
+        ----------
+        images : Tensor
+            Input batch of images ``(B, C, H, W)``.
+        targets : list[dict[str, Tensor]]
+            Each dictionary must contain ``"boxes"`` and ``"labels"`` in
+            pixel coordinates.
+        """
+
+        B, _, H, W = images.shape
+        feats = self.backbone(images)
+        if isinstance(feats, (tuple, list)):
+            feats = feats[-1]
+
+        _, _, Hf, Wf = feats.shape
+
+        rpn_logits, rpn_deltas = self.rpn.head(feats)
+        rpn_logits = rpn_logits.transpose((0, 2, 3, 1)).reshape(B, -1)
+        rpn_deltas = rpn_deltas.transpose((0, 2, 3, 1)).reshape(B, -1, 4)
+
+        anchors = self.anchor_generator.grid_anchors(Hf, Wf, images.device)
+
+        rpn_cls_loss = lucid.zeros((), dtype=lucid.Float32)
+        rpn_reg_loss = lucid.zeros((), dtype=lucid.Float32)
+        proposals: list[Tensor] = []
+
+        for b in range(B):
+            gt_boxes = targets[b]["boxes"].to(images.device)
+            gt_labels = targets[b]["labels"].to(images.device)
+
+            if gt_boxes.size == 0:
+                rpn_labels = lucid.zeros(anchors.shape[0], dtype=lucid.Int32, device=images.device)
+                rpn_reg_targets = lucid.zeros_like(anchors)
+            else:
+                ious = _box_iou(anchors, gt_boxes)
+                max_iou = lucid.max(ious, axis=1)
+                max_idx = lucid.argsort(ious, axis=1, descending=True)[:, 0]
+
+                rpn_labels = lucid.full((anchors.shape[0],), -1, dtype=lucid.Int32, device=images.device)
+                rpn_labels[max_iou < 0.3] = 0
+                rpn_labels[max_iou >= 0.7] = 1
+
+                if gt_boxes.shape[0] > 0:
+                    anchor_for_gt = lucid.argsort(ious, axis=0, descending=True)[0]
+                    rpn_labels[anchor_for_gt] = 1
+
+                rpn_reg_targets = lucid.zeros(anchors.shape[0], 4, device=images.device)
+                pos_mask = rpn_labels == 1
+                if lucid.sum(pos_mask) > 0:
+                    matched_gt = gt_boxes[max_idx[pos_mask]]
+                    rpn_reg_targets[pos_mask] = _bbox2delta(anchors[pos_mask], matched_gt)
+
+            valid = rpn_labels >= 0
+            if lucid.sum(valid) > 0:
+                rpn_cls_loss += F.binary_cross_entropy(
+                    F.sigmoid(rpn_logits[b][valid]),
+                    rpn_labels[valid].astype(lucid.Float32),
+                )
+
+            pos_mask = rpn_labels == 1
+            if lucid.sum(pos_mask) > 0:
+                rpn_reg_loss += F.huber_loss(
+                    rpn_deltas[b][pos_mask],
+                    rpn_reg_targets[pos_mask],
+                )
+
+            scores = F.sigmoid(rpn_logits[b])
+            boxes = apply_deltas(anchors, rpn_deltas[b], add_one=1.0)
+            boxes = clip_boxes(boxes, (H, W))
+
+            keep = scores > self.rpn.score_thresh
+            if lucid.sum(keep) == 0:
+                proposals.append(lucid.empty(0, 4, device=images.device))
+                continue
+            scores = scores[keep]
+            boxes = boxes[keep]
+            order = lucid.argsort(scores, descending=True)
+            if self.rpn.pre_nms_top_n:
+                order = order[: self.rpn.pre_nms_top_n]
+            boxes = boxes[order]
+            scores = scores[order]
+            keep_idx = nms(boxes, scores, self.rpn.nms_thresh)
+            if self.rpn.post_nms_top_n:
+                keep_idx = keep_idx[: self.rpn.post_nms_top_n]
+            proposals.append(boxes[keep_idx])
+
+        # Prepare RoIs for head
+        boxes_list, idx_list = [], []
+        roi_labels_list: list[Tensor] = []
+        roi_reg_list: list[Tensor] = []
+        for i, props in enumerate(proposals):
+            if props.size == 0:
+                continue
+            boxes_list.append(props)
+            idx_list.append(lucid.full((props.shape[0],), i, dtype=lucid.Int32, device=images.device))
+
+            gt_b = targets[i]["boxes"].to(images.device)
+            gt_l = targets[i]["labels"].to(images.device)
+            if gt_b.size == 0:
+                roi_labels_list.append(lucid.zeros(props.shape[0], dtype=lucid.Int32, device=images.device))
+                roi_reg_list.append(lucid.zeros(props.shape[0], 4, device=images.device))
+            else:
+                ious = _box_iou(props, gt_b)
+                max_iou = lucid.max(ious, axis=1)
+                max_idx = lucid.argsort(ious, axis=1, descending=True)[:, 0]
+                labels = gt_l[max_idx]
+                labels = labels.astype(lucid.Int32)
+                labels[max_iou < 0.5] = 0
+                roi_labels_list.append(labels)
+                roi_reg_list.append(_bbox2delta(props, gt_b[max_idx]))
+
+        if boxes_list:
+            rois_px = lucid.concatenate(boxes_list, axis=0)
+            roi_idx = lucid.concatenate(idx_list, axis=0)
+            roi_labels = lucid.concatenate(roi_labels_list, axis=0)
+            roi_reg_targets = lucid.concatenate(roi_reg_list, axis=0)
+        else:
+            rois_px = lucid.empty(0, 4, device=images.device)
+            roi_idx = lucid.empty(0, dtype=lucid.Int32, device=images.device)
+            roi_labels = lucid.empty(0, dtype=lucid.Int32, device=images.device)
+            roi_reg_targets = lucid.empty(0, 4, device=images.device)
+
+        rois_norm = (rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)).to(images.device)
+
+        cls_logits, bbox_deltas = self._roi_forward(feats, rois_norm, roi_idx)
+
+        if roi_labels.size > 0:
+            roi_cls_loss = F.cross_entropy(cls_logits, roi_labels)
+        else:
+            roi_cls_loss = lucid.zeros((), dtype=lucid.Float32)
+
+        targets_norm = (roi_reg_targets - self.bbox_reg_means) / self.bbox_reg_stds
+        fg_mask = roi_labels > 0
+        if lucid.sum(fg_mask) > 0:
+            labels_fg = roi_labels[fg_mask]
+            deltas_fg = bbox_deltas[fg_mask]
+            preds = []
+            for i, c in enumerate(labels_fg):
+                start = c * 4
+                preds.append(deltas_fg[i, start : start + 4])
+            preds = lucid.stack(preds, axis=0)
+            roi_reg_loss = F.huber_loss(preds, targets_norm[fg_mask])
+        else:
+            roi_reg_loss = lucid.zeros((), dtype=lucid.Float32)
+
+        total_loss = rpn_cls_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss
+
         return {
             "rpn_cls_loss": rpn_cls_loss / B,
             "rpn_reg_loss": rpn_reg_loss / B,
             "roi_cls_loss": roi_cls_loss / B,
             "roi_reg_loss": roi_reg_loss / B,
-            "total_loss": (rpn_cls_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss) / B,
+            "total_loss": total_loss / B,
         }
-        """
-        NotImplemented
