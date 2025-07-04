@@ -169,24 +169,6 @@ class SelectiveSearch(nn.Module):
         hist_sum = hist.sum()
         return hist / hist_sum if hist_sum.item() else hist
 
-    @staticmethod
-    def _iou(box_a: Tensor, box_b: Tensor) -> float:
-        xa1, ya1, xa2, ya2 = box_a.tolist()
-        xb1, yb1, xb2, yb2 = box_b.tolist()
-
-        inter_x1 = max(xa1, xb1)
-        inter_y1 = max(ya1, yb1)
-        inter_x2 = min(xa2, xb2)
-        inter_y2 = min(ya2, yb2)
-
-        if inter_x2 < inter_x1 or inter_y2 < inter_y1:
-            return 0.0
-
-        inter = (inter_x2 - inter_x1 + 1) * (inter_y2 - inter_y1 + 1)
-        area_a = (xa2 - xa1 + 1) * (ya2 - ya1 + 1)
-        area_b = (xb2 - xb1 + 1) * (yb2 - yb1 + 1)
-        return inter / (area_a + area_b - inter)
-
     @lucid.no_grad()
     def forward(self, image: Tensor) -> Tensor:
         if image.ndim != 3:
@@ -288,7 +270,7 @@ class SelectiveSearch(nn.Module):
         unique_boxes: list[tuple[int, int, int, int]] = []
         for b in all_boxes:
             tb = Tensor(b)
-            if all(self._iou(tb, Tensor(ub)) <= self.iou_thresh for ub in unique_boxes):
+            if all(iou(tb, Tensor(ub)) <= self.iou_thresh for ub in unique_boxes):
                 unique_boxes.append(b)
             if len(unique_boxes) >= self.max_boxes:
                 break
@@ -296,6 +278,44 @@ class SelectiveSearch(nn.Module):
         if unique_boxes:
             return Tensor(unique_boxes, dtype=lucid.Int32)
         return lucid.empty(0, 4, dtype=lucid.Int32)
+
+
+def iou(boxes_a: Tensor, boxes_b: Tensor) -> Tensor:
+    x1a, y1a, x2a, y2a = boxes_a.unbind(axis=1)
+    x1b, y1b, x2b, y2b = boxes_b.unbind(axis=1)
+
+    xx1 = lucid.maximum(x1a.unsqueeze(1), x1b.unsqueeze(0))
+    yy1 = lucid.maximum(y1a.unsqueeze(1), y1b.unsqueeze(0))
+    xx2 = lucid.minimum(x2a.unsqueeze(1), x2b.unsqueeze(0))
+    yy2 = lucid.minimum(y2a.unsqueeze(1), y2b.unsqueeze(0))
+
+    w = (xx2 - xx1 + 1).clip(min_value=0)
+    h = (yy2 - yy1 + 1).clip(min_value=0)
+    inter = w * h
+
+    area_a = (x2a - x1a + 1) * (y2a - y1a + 1)
+    area_b = (x2b - x1b + 1) * (y2b - y1b + 1)
+
+    return inter / (area_a.unsqueeze(1) + area_b - inter)
+
+
+def bbox_to_delta(src: Tensor, target: Tensor, add_one: float = 1.0) -> Tensor:
+    sw = src[:, 2] - src[:, 0] + add_one
+    sh = src[:, 3] - src[:, 1] + add_one
+    sx = src[:, 0] + 0.5 * sw
+    sy = src[:, 1] + 0.5 * sh
+
+    tw = target[:, 2] - target[:, 0] + add_one
+    th = target[:, 3] - target[:, 1] + add_one
+    tx = target[:, 0] + 0.5 * tw
+    ty = target[:, 1] + 0.5 * th
+
+    dx = (tx - sx) / sw
+    dy = (ty - sy) / sh
+    dw = lucid.log(tw / sw)
+    dh = lucid.log(th / sh)
+
+    return lucid.stack([dx, dy, dw, dh], axis=1)
 
 
 def apply_deltas(boxes: Tensor, deltas: Tensor, add_one: float = 1.0) -> Tensor:

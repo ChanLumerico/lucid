@@ -1,4 +1,5 @@
 import math
+from typing import TypedDict
 
 import lucid
 import lucid.nn as nn
@@ -8,7 +9,7 @@ from lucid._tensor import Tensor
 from lucid.types import _DeviceType
 
 from .fast_rcnn import _SlowROIPool  # Try vectorize this
-from ._util import apply_deltas, nms, clip_boxes
+from ._util import apply_deltas, bbox_to_delta, nms, iou, clip_boxes
 
 
 __all__ = ["FasterRCNN"]
@@ -26,44 +27,6 @@ Further Improvements
 1. Vectorize ROIPool process; currently relies on pure Pythonic loops.
 
 """
-
-
-def _box_iou(boxes_a: Tensor, boxes_b: Tensor) -> Tensor:
-    x1a, y1a, x2a, y2a = boxes_a.unbind(axis=1)
-    x1b, y1b, x2b, y2b = boxes_b.unbind(axis=1)
-
-    xx1 = lucid.maximum(x1a.unsqueeze(1), x1b.unsqueeze(0))
-    yy1 = lucid.maximum(y1a.unsqueeze(1), y1b.unsqueeze(0))
-    xx2 = lucid.minimum(x2a.unsqueeze(1), x2b.unsqueeze(0))
-    yy2 = lucid.minimum(y2a.unsqueeze(1), y2b.unsqueeze(0))
-
-    w = (xx2 - xx1 + 1).clip(min_value=0)
-    h = (yy2 - yy1 + 1).clip(min_value=0)
-    inter = w * h
-
-    area_a = (x2a - x1a + 1) * (y2a - y1a + 1)
-    area_b = (x2b - x1b + 1) * (y2b - y1b + 1)
-
-    return inter / (area_a.unsqueeze(1) + area_b - inter)
-
-
-def _bbox_to_delta(src: Tensor, target: Tensor, add_one: float = 1.0) -> Tensor:
-    sw = src[:, 2] - src[:, 0] + add_one
-    sh = src[:, 3] - src[:, 1] + add_one
-    sx = src[:, 0] + 0.5 * sw
-    sy = src[:, 1] + 0.5 * sh
-
-    tw = target[:, 2] - target[:, 0] + add_one
-    th = target[:, 3] - target[:, 1] + add_one
-    tx = target[:, 0] + 0.5 * tw
-    ty = target[:, 1] + 0.5 * th
-
-    dx = (tx - sx) / sw
-    dy = (ty - sy) / sh
-    dw = lucid.log(tw / sw)
-    dh = lucid.log(th / sh)
-
-    return lucid.stack([dx, dy, dw, dh], axis=1)
 
 
 class _AnchorGenerator(nn.Module):
@@ -125,6 +88,12 @@ class _RPNHead(nn.Module):
         return logits, deltas
 
 
+class _RPNLoss(TypedDict):
+    rpn_cls_loss: Tensor
+    rpn_reg_loss: Tensor
+    proposals: list[Tensor]
+
+
 class _RegionProposalNetwork(nn.Module):
     def __init__(
         self,
@@ -179,6 +148,98 @@ class _RegionProposalNetwork(nn.Module):
             proposals.append(boxes[keep_idx])
 
         return proposals
+
+    def get_loss(
+        self,
+        feats: Tensor,
+        targets: list[dict[str, Tensor]],
+        image_shape: tuple[int, int],
+    ) -> _RPNLoss:
+        B, _, H, W = feats.shape
+        logits, deltas = self.head(feats)
+        logits = logits.transpose((0, 2, 3, 1)).reshape(B, -1)
+        deltas = deltas.transpose((0, 2, 3, 1)).reshape(B, -1, 4)
+
+        anchors = self.anchor_generator.grid_anchors(H, W, feats.device)
+
+        rpn_cls_loss = lucid.zeros((), dtype=lucid.Float32)
+        rpn_reg_loss = lucid.zeros((), dtype=lucid.Float32)
+        proposals: list[Tensor] = []
+
+        for b in range(B):
+            gt = targets[b]["boxes"].to(feats.device)
+            if gt.size == 0:
+                labels = lucid.zeros(
+                    anchors.shape[0], dtype=lucid.Int32, device=feats.device
+                )
+                reg_tgt = lucid.zeros_like(anchors)
+            else:
+                ious = iou(anchors, gt)
+                max_iou = lucid.max(ious, axis=1)
+                argmax = lucid.argsort(ious, axis=1, descending=True)[:, 0]
+
+                labels = lucid.full(
+                    (anchors.shape[0],), -1, dtype=lucid.Int32, device=feats.device
+                )
+                labels[max_iou < 0.3] = 0
+                labels[max_iou >= 0.7] = 1
+
+                for gi in range(gt.shape[0]):
+                    lucid.argmax(ious[:, gi])
+                    best = ...
+                    labels[best] = 1
+
+                reg_tgt = lucid.zeros(anchors.shape[0], 4, device=feats.device)
+                pos_mask = labels == 1
+                if lucid.sum(pos_mask) > 0:
+                    matched = gt[argmax[pos_mask]]
+                    reg_tgt[pos_mask] = bbox_to_delta(anchors[pos_mask], matched)
+
+            pos_idx = (labels == 1).nonzero().squeeze(axis=1)
+            neg_idx = (labels == 0).nonzero().squeeze(axis=1)
+
+            num_pos = min(pos_idx.shape[0], 128)
+            num_neg = min(neg_idx.shape[0], 256 - num_pos)
+
+            # NOTE: implement `lucid.random.randperm`
+            # perm_pos = lucid.random.randperm(pos_idx.shape[0])[:num_pos]
+            # perm_neg = lucid.random.randperm(neg_idx.shape[0])[:num_neg]
+            samp = lucid.concatenate([pos_idx[perm_pos], neg_idx[perm_neg]], axis=0)
+
+            cls_scores = F.sigmoid(logits[b][samp])
+            cls_targets = labels[samp].astype(lucid.Float32)
+            rpn_cls_loss += F.binary_cross_entropy(
+                cls_scores, cls_targets, reduction="mean"
+            )
+
+            if num_pos > 0:
+                reg_pred = deltas[b][pos_idx[perm_pos]]
+                reg_true = reg_tgt[pos_idx[perm_pos]]
+                rpn_reg_loss += F.huber_loss(reg_pred, reg_true, reduction="mean")
+
+            sc = F.sigmoid(logits[b])
+            bx = apply_deltas(anchors, deltas[b], add_one=1.0)
+            bx = clip_boxes(bx, image_shape)
+
+            keep = sc > self.score_thresh
+            if lucid.sum(keep) == 0:
+                proposals.append(lucid.empty(0, 4, device=feats.device))
+            else:
+                sc_k, bx_k = sc[keep], bx[keep]
+                order = lucid.argsort(sc_k, descending=True)[: self.pre_nms_top_n]
+                bx_k, sc_k = bx_k[order], sc_k[order]
+
+                keep_idx = nms(bx_k, sc_k, self.nms_thresh)[: self.post_nms_top_n]
+                proposals.append(bx_k[keep_idx])
+
+        rpn_cls_loss /= B
+        rpn_reg_loss /= B
+
+        return {
+            "rpn_cls_loss": rpn_cls_loss,
+            "rpn_reg_loss": rpn_reg_loss,
+            "proposals": proposals,
+        }
 
 
 class FasterRCNN(nn.Module):
@@ -371,204 +432,5 @@ class FasterRCNN(nn.Module):
 
         return detections
 
-    def get_loss(
-        self, images: Tensor, targets: list[dict[str, Tensor]]
-    ) -> dict[str, Tensor]:
-        B, _, H, W = images.shape
-        feats = self.backbone(images)
-        if isinstance(feats, (tuple, list)):
-            feats = feats[-1]
-
-        Hf, Wf = feats.shape[2:]
-        rpn_logits, rpn_deltas = self.rpn.head(feats)
-        rpn_logits = rpn_logits.transpose((0, 2, 3, 1)).reshape(B, -1)
-        rpn_deltas = rpn_deltas.transpose((0, 2, 3, 1)).reshape(B, -1, 4)
-
-        anchors = self.anchor_generator.grid_anchors(Hf, Wf, images.device)
-
-        rpn_cls_loss = lucid.zeros((), dtype=lucid.Float32)
-        rpn_reg_loss = lucid.zeros((), dtype=lucid.Float32)
-        proposals: list[Tensor] = []
-
-        for b in range(B):
-            gt_boxes = targets[b]["boxes"].to(images.device)
-
-            if gt_boxes.size == 0:
-                rpn_labels = lucid.zeros(
-                    anchors.shape[0], dtype=lucid.Int32, device=images.device
-                )
-                rpn_reg_targets = lucid.zeros_like(anchors)
-            else:
-                ious = _box_iou(anchors, gt_boxes)
-                max_iou = lucid.max(ious, axis=1)
-                max_idx = lucid.argsort(ious, axis=1, descending=True)[:, 0]
-
-                rpn_labels = lucid.full(
-                    (anchors.shape[0],), -1, dtype=lucid.Int32, device=images.device
-                )
-                rpn_labels[max_iou < 0.3] = 0
-                rpn_labels[max_iou >= 0.7] = 1
-
-                for gi in range(gt_boxes.shape[0]):
-                    best_anchor = lucid.argmax(ious[:, gi])
-                    rpn_labels[best_anchor] = 1
-
-                rpn_reg_targets = lucid.zeros(anchors.shape[0], 4, device=images.device)
-                pos_mask = rpn_labels == 1
-
-                if lucid.sum(pos_mask) > 0:
-                    matched = gt_boxes[max_idx[pos_mask]]
-                    rpn_reg_targets[pos_mask] = _bbox_to_delta(
-                        anchors[pos_mask], matched
-                    )
-
-            pos_idx = (rpn_labels == 1).nonzero().squeeze(1)
-            neg_idx = (rpn_labels == 0).nonzero().squeeze(1)
-
-            num_pos = min(pos_idx.shape[0], 128)
-            num_neg = min(neg_idx.shape[0], 256 - num_pos)
-
-            # NOTE: Activate below after implementing `lucid.random.randperm`
-            # perm_pos = lucid.randperm(pos_idx.shape[0])[:num_pos]
-            # perm_neg = lucid.randperm(neg_idx.shape[0])[:num_neg]
-
-            samp_idx = lucid.concatenate([pos_idx[perm_pos], neg_idx[perm_neg]], axis=0)
-
-            cls_scores = F.sigmoid(rpn_logits[b][samp_idx])
-            cls_targets = rpn_labels[samp_idx].astype(lucid.Float32)
-
-            rpn_cls_loss += F.binary_cross_entropy(
-                cls_scores, cls_targets, reduction="mean"
-            )
-
-            if num_pos > 0:
-                reg_scores = rpn_deltas[b][pos_idx[perm_pos]]
-                reg_targets = rpn_reg_targets[pos_idx[perm_pos]]
-                rpn_reg_loss += F.huber_loss(reg_scores, reg_targets, reduction="mean")
-
-            scores = F.sigmoid(rpn_logits[b])
-            boxes = apply_deltas(anchors, rpn_deltas[b], add_one=1.0)
-            boxes = clip_boxes(boxes, (H, W))
-
-            keep = scores > self.rpn.score_thresh
-            if lucid.sum(keep) == 0:
-                proposals.append(lucid.empty(0, 4, device=images.device))
-                continue
-
-            scores = scores[keep]
-            boxes = boxes[keep]
-            order = lucid.argsort(scores, descending=True)
-            if self.rpn.pre_nms_top_n:
-                order = order[: self.rpn.pre_nms_top_n]
-
-            boxes = boxes[order]
-            scores = scores[order]
-
-            keep_idx = nms(boxes, scores, self.rpn.nms_thresh)
-            if self.rpn.post_nms_top_n:
-                keep_idx = keep_idx[: self.rpn.post_nms_top_n]
-
-            proposals.append(boxes[keep_idx])
-
-        boxes_list, idx_list = [], []
-        roi_labels_list, roi_reg_list = [], []
-        for i, props in enumerate(proposals):
-            if props.size == 0:
-                continue
-
-            boxes_list.append(props)
-            idx_list.append(
-                lucid.full(
-                    (props.shape[0],), i, dtype=lucid.Int32, device=images.device
-                )
-            )
-            gt_b = targets[i]["boxes"].to(images.device)
-            gt_l = targets[i]["labels"].to(images.device)
-
-            if gt_b.size == 0:
-                roi_labels_list.append(
-                    lucid.zeros(props.shape[0], dtype=lucid.Int32, device=images.device)
-                )
-                roi_reg_list.append(
-                    lucid.zeros(props.shape[0], 4, device=images.device)
-                )
-
-            else:
-                ious = _box_iou(props, gt_b)
-                max_iou = lucid.max(ious, axis=1)
-                max_idx = lucid.argsort(ious, axis=1, descending=True)[:, 0]
-
-                labels = gt_l[max_idx].astype(lucid.Int32)
-                labels[max_iou < 0.5] = 0
-                roi_labels_list.append(labels)
-                roi_reg_list.append(_bbox_to_delta(props, gt_b[max_idx]))
-
-        if boxes_list:
-            rois_px = lucid.concatenate(boxes_list, axis=0)
-            roi_idx = lucid.concatenate(idx_list, axis=0)
-
-            roi_labels = lucid.concatenate(roi_labels_list, axis=0)
-            roi_reg_targets = lucid.concatenate(roi_reg_list, axis=0)
-
-        else:
-            rois_px = lucid.empty(0, 4, device=images.device)
-            roi_idx = lucid.empty(0, dtype=lucid.Int32, device=images.device)
-
-            roi_labels = lucid.empty(0, dtype=lucid.Int32, device=images.device)
-            roi_reg_targets = lucid.empty(0, 4, device=images.device)
-
-        rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
-        rois_norm = rois_norm.to(images.device)
-
-        sampled_rois, sampled_idx, sampled_labels, sampled_tgts = [], [], [], []
-        for i in range(B):
-            mask_i = (roi_idx == i).nonzero().squeeze(1)
-            labels_i = roi_labels[mask_i]
-
-            pos_i = (labels_i > 0).nonzero().squeeze(1)
-            neg_i = (labels_i == 0).nonzero().squeeze(1)
-
-            num_pos = min(pos_i.shape[0], 32)
-            num_neg = min(neg_i.shape[0], 128 - num_pos)
-
-            perm_pos = lucid.randperm(pos_i.shape[0])[:num_pos]
-            perm_neg = lucid.randperm(neg_i.shape[0])[:num_neg]
-            sel = mask_i[lucid.concatenate([pos_i[perm_pos], neg_i[perm_neg]], axis=0)]
-
-            sampled_rois.append(rois_norm[sel])
-            sampled_idx.append(roi_idx[sel])
-
-            sampled_labels.append(roi_labels[sel])
-            sampled_tgts.append(roi_reg_targets[sel])
-
-        sb_rois = lucid.concatenate(sampled_rois, axis=0)
-        sb_idx = lucid.concatenate(sampled_idx, axis=0)
-
-        sb_labels = lucid.concatenate(sampled_labels, axis=0)
-        sb_targets = lucid.concatenate(sampled_tgts, axis=0)
-
-        cls_logits, bbox_deltas = self._roi_forward(feats, sb_rois, sb_idx)
-        roi_cls_loss = F.cross_entropy(cls_logits, sb_labels, reduction="mean")
-
-        fg = (sb_labels > 0).nonzero().squeeze(1)
-        if fg.shape[0] > 0:
-            preds = []
-            for j, c in enumerate(sb_labels[fg]):
-                start = c * 4
-                preds.append(bbox_deltas[fg[j], start : start + 4])
-
-            preds = lucid.stack(preds, axis=0)
-            tgt = sb_targets[fg]
-            roi_reg_loss = F.huber_loss(preds, tgt, reduction="mean")
-        else:
-            roi_reg_loss = lucid.zeros((), dtype=lucid.Float32)
-
-        total_loss = rpn_cls_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss
-
-        return {
-            "rpn_cls_loss": rpn_cls_loss / B,
-            "rpn_reg_loss": rpn_reg_loss / B,
-            "roi_cls_loss": roi_cls_loss,
-            "roi_reg_loss": roi_reg_loss,
-            "total_loss": total_loss / B,
-        }
+    def get_loss(self, images: Tensor, targets: list[dict[str, Tensor]]) -> ...:
+        NotImplemented
