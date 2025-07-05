@@ -3,12 +3,19 @@ from typing import overload
 import lucid
 from lucid.random import _func
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _Scalar, _ArrayOrScalar, _DeviceType
+from lucid.types import (
+    _ShapeLike,
+    _Scalar,
+    _ArrayOrScalar,
+    _DeviceType,
+    _BuiltinNumeric,
+    Numeric,
+)
 
 
 # fmt: off
 __all__ = [
-    "seed", "rand", "randint", "randn", "uniform", "bernoulli"
+    "seed", "rand", "randint", "randn", "uniform", "bernoulli", "permutation"
 ]
 # fmt: on
 
@@ -102,3 +109,13 @@ def bernoulli(
     device: _DeviceType = "cpu",
 ) -> Tensor:
     return _func.bernoulli(probs, requires_grad, keep_grad, device)
+
+
+def permutation(
+    n: int,
+    dtype: _BuiltinNumeric | Numeric = int,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    device: _DeviceType = "cpu",
+) -> Tensor:
+    return _func.permutation(n, dtype, requires_grad, keep_grad, device)

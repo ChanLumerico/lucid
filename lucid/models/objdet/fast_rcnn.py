@@ -5,48 +5,54 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
-from ._util import SelectiveSearch, apply_deltas, nms, clip_boxes
+from lucid.models.objdet.util import (
+    ROIPool,
+    SelectiveSearch,
+    apply_deltas,
+    nms,
+    clip_boxes,
+)
 
 
 __all__ = ["FastRCNN"]
 
 
-class _SlowROIPool(nn.Module):
-    def __init__(self, output_size: tuple[int, int]) -> None:
-        super().__init__()
-        self.maxpool = nn.AdaptiveMaxPool2d(output_size)
-        self.output_size = output_size
+# class _SlowROIPool(nn.Module):
+#     def __init__(self, output_size: tuple[int, int]) -> None:
+#         super().__init__()
+#         self.maxpool = nn.AdaptiveMaxPool2d(output_size)
+#         self.output_size = output_size
 
-    def forward(self, images: Tensor, rois: Tensor, roi_idx: Tensor) -> Tensor:
-        N = rois.shape[0]
-        H, W = images.shape[2:]
-        roi_idx_list = roi_idx.tolist()
+#     def forward(self, images: Tensor, rois: Tensor, roi_idx: Tensor) -> Tensor:
+#         N = rois.shape[0]
+#         H, W = images.shape[2:]
+#         roi_idx_list = roi_idx.tolist()
 
-        x1 = lucid.floor(rois[:, 0] * W).astype(lucid.Int).tolist()
-        y1 = lucid.floor(rois[:, 1] * H).astype(lucid.Int).tolist()
-        x2 = lucid.ceil(rois[:, 2] * W).astype(lucid.Int).tolist()
-        y2 = lucid.ceil(rois[:, 3] * H).astype(lucid.Int).tolist()
+#         x1 = lucid.floor(rois[:, 0] * W).astype(lucid.Int).tolist()
+#         y1 = lucid.floor(rois[:, 1] * H).astype(lucid.Int).tolist()
+#         x2 = lucid.ceil(rois[:, 2] * W).astype(lucid.Int).tolist()
+#         y2 = lucid.ceil(rois[:, 3] * H).astype(lucid.Int).tolist()
 
-        crops: list[Tensor] = []
-        ph, pw = self.output_size
+#         crops: list[Tensor] = []
+#         ph, pw = self.output_size
 
-        for i in range(N):
-            b = roi_idx_list[i]
-            xi1, yi1, xi2, yi2 = x1[i], y1[i], x2[i], y2[i]
-            if xi2 <= xi1 or yi2 <= yi1:
-                continue
+#         for i in range(N):
+#             b = roi_idx_list[i]
+#             xi1, yi1, xi2, yi2 = x1[i], y1[i], x2[i], y2[i]
+#             if xi2 <= xi1 or yi2 <= yi1:
+#                 continue
 
-            patch = images[b : b + 1, :, yi1:yi2, xi1:xi2]
-            h, w = patch.shape[2], patch.shape[3]
-            if h < ph or w < pw:
-                patch = F.interpolate(patch, size=self.output_size, mode="nearest")
-            else:
-                patch = self.maxpool(patch)
-            crops.append(patch)
+#             patch = images[b : b + 1, :, yi1:yi2, xi1:xi2]
+#             h, w = patch.shape[2], patch.shape[3]
+#             if h < ph or w < pw:
+#                 patch = F.interpolate(patch, size=self.output_size, mode="nearest")
+#             else:
+#                 patch = self.maxpool(patch)
+#             crops.append(patch)
 
-        if not crops:
-            return lucid.empty(0, images.shape[1], ph, pw)
-        return lucid.concatenate(crops, axis=0)
+#         if not crops:
+#             return lucid.empty(0, images.shape[1], ph, pw)
+#         return lucid.concatenate(crops, axis=0)
 
 
 class FastRCNN(nn.Module):
@@ -64,7 +70,7 @@ class FastRCNN(nn.Module):
     ) -> None:
         super().__init__()
         self.backbone = backbone
-        self.roipool = _SlowROIPool(output_size=pool_size)
+        self.roipool = ROIPool(output_size=pool_size)
         self.proposal_generator = proposal_generator or SelectiveSearch()
 
         self.fc1 = nn.Linear(feat_channels * pool_size[0] * pool_size[1], hidden_dim)

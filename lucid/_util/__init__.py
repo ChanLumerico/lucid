@@ -12,7 +12,7 @@ __all__ = [
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
     "unbind", "sort", "nonzero", "unique", "topk", "argsort", "histogramdd", 
-    "histogram", "histogram2d", "where", "nonzero",
+    "histogram", "histogram2d", "where", "nonzero", "argmin", "argmax"
 ]
 # fmt: on
 
@@ -149,6 +149,14 @@ def argsort(
     stable: bool = False,
 ) -> Tensor:
     return func.argsort(axis, descending, kind, stable)(a)
+
+
+def argmin(a: Tensor, axis: int | None = None, keepdims: bool = False) -> Tensor:
+    return func.argmin(axis, keepdims)(a)
+
+
+def argmax(a: Tensor, axis: int | None = None, keepdims: bool = False) -> Tensor:
+    return func.argmax(axis, keepdims)(a)
 
 
 def nonzero(a: Tensor, /) -> Tensor:

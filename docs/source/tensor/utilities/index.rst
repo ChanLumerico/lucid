@@ -27,6 +27,8 @@ Tensor Utilities
    unbind.rst
    sort.rst
    argsort.rst
+   argmin.rst
+   argmax.rst
    nonzero.rst
    unique.rst
    topk.rst

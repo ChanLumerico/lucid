@@ -2,7 +2,14 @@ import numpy as np
 
 import lucid
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _Scalar, _ArrayOrScalar, _DeviceType
+from lucid.types import (
+    _ShapeLike,
+    _Scalar,
+    _ArrayOrScalar,
+    _DeviceType,
+    _BuiltinNumeric,
+    Numeric,
+)
 
 from lucid._backend.metal import mx
 
@@ -30,7 +37,11 @@ def randint(
     device: _DeviceType = "cpu",
 ) -> Tensor:
     return Tensor(
-        np.random.randint(low, high, size), requires_grad, keep_grad, device=device
+        np.random.randint(low, high, size),
+        requires_grad,
+        keep_grad,
+        lucid.Int64,
+        device,
     )
 
 
@@ -76,3 +87,14 @@ def bernoulli(
         keep_grad,
         device=device,
     )
+
+
+def permutation(
+    n: int,
+    dtype: _BuiltinNumeric | Numeric,
+    requires_grad: bool = False,
+    keep_grad: bool = False,
+    device: _DeviceType = "cpu",
+) -> Tensor:
+    data = np.random.permutation(n)
+    return Tensor(data, requires_grad, keep_grad, dtype, device)
