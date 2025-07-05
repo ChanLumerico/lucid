@@ -390,4 +390,49 @@ def clip_boxes(boxes: Tensor, image_shape: tuple[int, int]) -> Tensor:
 
 
 class ROIPool(nn.Module):
-    NotImplemented
+    def __init__(self, output_size: tuple[int, int]) -> None:
+        super().__init__()
+        self.output_size = output_size
+
+    def forward(self, images: Tensor, rois: Tensor, roi_idx: Tensor) -> Tensor:
+        C = images.shape[1]
+        ph, pw = self.output_size
+        device = images.device
+
+        x1, y1, x2, y2 = rois.unbind(axis=1)
+        valid = (x2 > x1) & (y2 > y1)
+        if lucid.sum(valid) == 0:
+            return lucid.empty(0, C, ph, pw, device=device)
+
+        idx = valid.nonzero().squeeze(axis=1)
+        rois = rois[idx]
+        roi_idx = roi_idx[idx]
+        x1, y1, x2, y2 = rois.unbind(axis=1)
+
+        if pw > 1:
+            xs = lucid.arange(pw, dtype=lucid.Float32, device=device) / (pw - 1)
+        else:
+            xs = lucid.full((1,), 0.5, dtype=lucid.Float32, device=device)
+
+        if ph > 1:
+            ys = lucid.arange(ph, dtype=lucid.Float32, device=device) / (ph - 1)
+        else:
+            ys = lucid.full((1,), 0.5, dtype=lucid.Float32, device=device)
+
+        grid_y_base, grid_x_base = lucid.meshgrid(ys, xs, indexing="ij")
+        grid_x_base = grid_x_base.unsqueeze(axis=0)
+        grid_y_base = grid_y_base.unsqueeze(axis=0)
+
+        x1_ = x1.unsqueeze(axis=-1).unsqueeze(axis=-1)
+        y1_ = y1.unsqueeze(axis=-1).unsqueeze(axis=-1)
+        w_ = (x2 - x1).unsqueeze(axis=-1).unsqueeze(axis=-1)
+        h_ = (y2 - y1).unsqueeze(axis=-1).unsqueeze(axis=-1)
+
+        grid_x = x1_ + w_ * grid_x_base
+        grid_y = y1_ + h_ * grid_y_base
+        grid = lucid.stack([grid_y * 2 - 1, grid_x * 2 - 1], axis=-1)
+
+        feat_per_roi = images[roi_idx]
+        out = F.grid_sample(feat_per_roi, grid, mode="bilinear", align_corners=True)
+
+        return out
