@@ -202,13 +202,16 @@ class Tensor(_TensorOps):
 
         return total
 
-    def item(self) -> _Scalar:
+    def item(self) -> _Scalar | bool:
         if self.size > 1:
             raise ValueError(
                 "Tensor must be 0-dimensional(scalar) to pop its item. "
                 "Use `tensor.data` to access the data directly.",
             )
         item = self.data[..., 0] if self.ndim > 0 else self.data
+        if self.dtype is bool:
+            return bool(item)
+
         if item % 1 == 0:
             return int(item)
         else:
@@ -222,6 +225,12 @@ class Tensor(_TensorOps):
 
     def mlx(self) -> _MLXArray:
         return mx.array(self.data)
+
+    def detach(self) -> Self:
+        data_copy = Tensor.copy_data(self.data)
+        return Tensor(
+            data_copy, requires_grad=False, dtype=self.dtype, device=self.device
+        )
 
     def zero(self) -> None:
         if self.is_cpu():

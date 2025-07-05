@@ -8,25 +8,17 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.types import _DeviceType
 
-from .fast_rcnn import _SlowROIPool  # Try vectorize this
-from ._util import apply_deltas, bbox_to_delta, nms, iou, clip_boxes
+from lucid.models.objdet.util import (
+    ROIPool,
+    apply_deltas,
+    bbox_to_delta,
+    nms,
+    iou,
+    clip_boxes,
+)
 
 
 __all__ = ["FasterRCNN"]
-
-"""
-NOTE
-
-Implement
----------
-1. `lucid.randperm` to lucid.random package.
-2. add `.detach` functionality to `Tensor`
-
-Further Improvements
---------------------
-1. Vectorize ROIPool process; currently relies on pure Pythonic loops.
-
-"""
 
 
 class _AnchorGenerator(nn.Module):
@@ -185,8 +177,7 @@ class _RegionProposalNetwork(nn.Module):
                 labels[max_iou >= 0.7] = 1
 
                 for gi in range(gt.shape[0]):
-                    lucid.argmax(ious[:, gi])
-                    best = ...
+                    best = lucid.argmax(ious[:, gi])
                     labels[best] = 1
 
                 reg_tgt = lucid.zeros(anchors.shape[0], 4, device=feats.device)
@@ -201,9 +192,8 @@ class _RegionProposalNetwork(nn.Module):
             num_pos = min(pos_idx.shape[0], 128)
             num_neg = min(neg_idx.shape[0], 256 - num_pos)
 
-            # NOTE: implement `lucid.random.randperm`
-            # perm_pos = lucid.random.randperm(pos_idx.shape[0])[:num_pos]
-            # perm_neg = lucid.random.randperm(neg_idx.shape[0])[:num_neg]
+            perm_pos = lucid.random.permutation(pos_idx.shape[0])[:num_pos]
+            perm_neg = lucid.random.permutation(neg_idx.shape[0])[:num_neg]
             samp = lucid.concatenate([pos_idx[perm_pos], neg_idx[perm_neg]], axis=0)
 
             cls_scores = F.sigmoid(logits[b][samp])
@@ -242,6 +232,14 @@ class _RegionProposalNetwork(nn.Module):
         }
 
 
+class _FasterRCNNLoss(TypedDict):
+    rpn_cls_loss: Tensor
+    rpn_reg_loss: Tensor
+    roi_cls_loss: Tensor
+    roi_reg_loss: Tensor
+    total_loss: Tensor
+
+
 class FasterRCNN(nn.Module):
     def __init__(
         self,
@@ -262,7 +260,7 @@ class FasterRCNN(nn.Module):
             anchor_sizes, aspect_ratios, anchor_stride
         )
         self.rpn = _RegionProposalNetwork(feat_channels, self.anchor_generator)
-        self.roipool = _SlowROIPool(pool_size)
+        self.roipool = ROIPool(pool_size)
 
         fc_in = feat_channels * pool_size[0] * pool_size[1]
         self.fc1 = nn.Linear(fc_in, hidden_dim)
@@ -282,7 +280,7 @@ class FasterRCNN(nn.Module):
             "bbox_reg_stds", Tensor([0.1, 0.1, 0.2, 0.2], dtype=lucid.Float32)
         )
 
-    def _roi_forward(
+    def roi_forward(
         self,
         feats: Tensor,
         rois: Tensor,
@@ -321,6 +319,8 @@ class FasterRCNN(nn.Module):
 
         if rois is None or roi_idx is None:
             proposals = self.rpn(feats, (H, W))
+            proposals = [p.detach() for p in proposals]
+
             boxes_list, idx_list = [], []
             for i, p in enumerate(proposals):
                 if p.size == 0:
@@ -345,7 +345,7 @@ class FasterRCNN(nn.Module):
                 images.device
             )
 
-        return self._roi_forward(feats, rois, roi_idx, return_feats=return_feats)
+        return self.roi_forward(feats, rois, roi_idx, return_feats=return_feats)
 
     @lucid.no_grad()
     def predict(
@@ -362,6 +362,8 @@ class FasterRCNN(nn.Module):
             feats = feats[-1]
 
         proposals = self.rpn(feats, (H, W))
+        proposals = [p.detach() for p in proposals]
+
         boxes_list, idx_list = [], []
         for i, p in enumerate(proposals):
             if p.size == 0:
@@ -382,7 +384,7 @@ class FasterRCNN(nn.Module):
         rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
         rois_norm = rois_norm.to(images.device)
 
-        cls_logits, bbox_deltas = self._roi_forward(feats, rois_norm, roi_idx)
+        cls_logits, bbox_deltas = self.roi_forward(feats, rois_norm, roi_idx)
         scores = F.softmax(cls_logits, axis=1)
 
         num_classes = scores.shape[1]
@@ -432,5 +434,124 @@ class FasterRCNN(nn.Module):
 
         return detections
 
-    def get_loss(self, images: Tensor, targets: list[dict[str, Tensor]]) -> ...:
-        NotImplemented
+    def _match_rois(
+        self, proposals: list[Tensor], targets: list[dict[str, Tensor]]
+    ) -> tuple[Tensor, Tensor]:
+        all_labels: list[Tensor] = []
+        all_deltas: list[Tensor] = []
+
+        for i, props in enumerate(proposals):
+            gt_boxes = targets[i]["boxes"].to(props.device)
+            gt_labels = targets[i]["labels"].to(props.device)
+
+            if props.size == 0:
+                all_labels.append(
+                    lucid.empty(0, dtype=lucid.Int32, device=props.device)
+                )
+                all_deltas.append(lucid.empty(0, 4, device=props.device))
+                continue
+
+            ious = iou(props, gt_boxes)
+            max_iou = lucid.max(ious, axis=1)
+            argmax = lucid.argsort(ious, axis=1, descending=True)[:, 0]
+
+            labels = gt_labels[argmax].astype(lucid.Int32)
+            labels[max_iou < 0.5] = 0
+
+            deltas = bbox_to_delta(props, gt_labels[argmax])
+            all_labels.append(labels)
+            all_deltas.append(deltas)
+
+        roi_labels = lucid.concatenate(all_labels, axis=0)
+        roi_reg_tgts = lucid.concatenate(all_deltas, axis=0)
+
+        return roi_labels, roi_reg_tgts
+
+    def get_loss(
+        self, images: Tensor, targets: list[dict[str, Tensor]]
+    ) -> _FasterRCNNLoss:
+        B, _, H, W = images.shape
+        feats = self.backbone(images)
+        if isinstance(feats, (tuple, list)):
+            feats = feats[-1]
+
+        rpn_out = self.rpn.get_loss(feats, targets, (H, W))
+        rpn_cls_loss = rpn_out["rpn_cls_loss"]
+        rpn_reg_loss = rpn_out["rpn_reg_loss"]
+        proposals = rpn_out["proposals"]
+        proposals = [p.detach() for p in proposals]
+
+        boxes_list, idx_list = [], []
+        for i, props in enumerate(proposals):
+            if props.size == 0:
+                continue
+            boxes_list.append(props)
+            idx_list.append(
+                lucid.full(
+                    (props.shape[0],), i, dtype=lucid.Int32, device=images.device
+                )
+            )
+
+        if boxes_list:
+            rois_px = lucid.concatenate(boxes_list, axis=0)
+            roi_idx = lucid.concatenate(idx_list, axis=0)
+        else:
+            rois_px = lucid.empty(0, 4, device=images.device)
+            roi_idx = lucid.empty(0, dtype=lucid.Int32, device=images.device)
+
+        rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
+        rois_norm = rois_norm.to(images.device)
+
+        sampled_rois, sampled_idx, sampled_labels, sampled_tgts = [], [], [], []
+        roi_labels, roi_reg_targets = self._match_rois(proposals, targets)
+
+        for i in range(B):
+            mask_i = (roi_idx == i).nonzero().squeeze(axis=1)
+            labels_i = roi_labels[mask_i]
+            pos_i = (labels_i > 0).nonzero().squeeze(axis=1)
+            neg_i = (labels_i == 0).nonzero().squeeze(axis=1)
+
+            num_pos = min(pos_i.shape[0], 32)
+            num_neg = min(neg_i.shape[0], 128 - num_pos)
+
+            perm_pos = lucid.random.permutation(pos_i.shape[0])[:num_pos]
+            perm_neg = lucid.random.permutation(neg_i.shape[0])[:num_neg]
+
+            sel_idx = lucid.concatenate([pos_i[perm_pos], neg_i[perm_neg]], axis=0)
+            sel = mask_i[sel_idx]
+
+            sampled_rois.append(rois_norm[sel])
+            sampled_idx.append(roi_idx[sel])
+            sampled_labels.append(roi_labels[sel])
+            sampled_tgts.append(roi_reg_targets[sel])
+
+        sb_rois = lucid.concatenate(sampled_rois, axis=0)
+        sb_idx = lucid.concatenate(sampled_idx, axis=0)
+        sb_labels = lucid.concatenate(sampled_labels, axis=0)
+        sb_tgts = lucid.concatenate(sampled_tgts, axis=0)
+
+        cls_logits, bbox_deltas = self.roi_forward(feats, sb_rois, sb_idx)
+        roi_cls_loss = F.cross_entropy(cls_logits, sb_labels, reduction="mean")
+
+        fg = (sb_labels > 0).nonzero().squeeze(axis=1)
+        if fg.shape[0] > 0:
+            preds = []
+            for j, c in enumerate(sb_labels[fg]):
+                start = c * 4
+                preds.append(bbox_deltas[fg[j], start : start + 4])
+
+            preds = lucid.stack(preds, axis=0)
+            reg_tgt_fg = sb_tgts[fg]
+            roi_reg_loss = F.huber_loss(preds, reg_tgt_fg, reduction="mean")
+
+        else:
+            roi_reg_loss = lucid.zeros((), dtype=lucid.Float32)
+
+        total_loss = (rpn_cls_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss) / B
+        return {
+            "rpn_cls_loss": rpn_cls_loss,
+            "rpn_reg_loss": rpn_reg_loss,
+            "roi_cls_loss": roi_cls_loss,
+            "roi_reg_loss": roi_reg_loss,
+            "total_loss": total_loss,
+        }

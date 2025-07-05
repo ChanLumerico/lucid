@@ -3,6 +3,8 @@ from typing import Literal, Self
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
+
 from lucid._tensor import Tensor
 
 
@@ -385,3 +387,7 @@ def clip_boxes(boxes: Tensor, image_shape: tuple[int, int]) -> Tensor:
     y2 = lucid.clip(boxes[:, 3], 0, H - 1)
 
     return lucid.stack([x1, y1, x2, y2], axis=-1)
+
+
+class ROIPool(nn.Module):
+    NotImplemented
