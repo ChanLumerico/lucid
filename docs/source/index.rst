@@ -94,7 +94,6 @@
     :hidden:
 
     models/models.rst
-    models/summarize.rst
 
     Image Classification <models/imgclf/index.rst>
     Object Detection <models/objdet/index.rst>
