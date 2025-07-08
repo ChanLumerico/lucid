@@ -1,7 +1,7 @@
-models.summarize
+Summarize Models
 ================
 
-.. autofunction:: lucid.models.summarize
+.. autofunction:: lucid.models.util.summarize
 
 The `summarize` function generates a detailed summary of a neural network model, including 
 information about its layers, input and output shapes, and the number of trainable parameters. 

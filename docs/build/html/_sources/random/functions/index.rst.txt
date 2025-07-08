@@ -10,3 +10,4 @@ Random Number Generations
     randn.rst
     uniform.rst
     bernoulli.rst
+    permutation.rst
