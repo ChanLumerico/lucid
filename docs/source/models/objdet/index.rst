@@ -7,6 +7,7 @@ Object detection
 
     R-CNN <rcnn/RCNN.rst>
     Fast R-CNN <rcnn/FastRCNN.rst>
+    Faster R-CNN <rcnn/FasterRCNN.rst>
 
 R-CNN
 -----
@@ -28,13 +29,11 @@ feature extraction, and per-region classification with Non-Maximum Suppression.
       - Model
       - Input Shape
       - Parameter Count
-      - FLOPs
 
     * - R-CNN
       - `RCNN <rcnn/RCNN>`_
       - :math:`(N,C_{in},H,W)`
       - :math:`\mathcal{O}(P_{\text{cnn}} + F^2 + F \cdot K)`
-      - :math:`\mathcal{O}\left(P_{\text{cnn}} + N \cdot (FHW + F^2 + FK)\right)`
 
 Fast R-CNN
 ----------
@@ -55,12 +54,36 @@ and bounding box regression into a single network with a shared backbone.
       - Model
       - Input Shape
       - Parameter Count
-      - FLOPs
 
     * - Fast R-CNN
       - `FastRCNN <rcnn/FastRCNN>`_
       - :math:`(N,C_{in},H,W)`
       - :math:`\mathcal{O}(P_{\text{cnn}} + 2FH + 5CH)`
-      - :math:`\mathcal{O}\left(P_{\text{cnn}} + N \cdot (2FH + 5CH)\right)`
+
+Faster R-CNN
+------------
+|convnet-badge| |region-convnet-badge| |objdet-badge|
+
+Faster R-CNN builds on Fast R-CNN by introducing a Region Proposal Network (RPN) 
+that shares convolutional features with the detection head, enabling end-to-end 
+training and real-time inference.
+
+ Ren, Shaoqing et al. "Faster R-CNN: Towards Real-Time Object Detection with 
+ Region Proposal Networks." *IEEE Transactions on Pattern Analysis and Machine 
+ Intelligence* (2017).
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+
+    * - Faster R-CNN
+      - `FasterRCNN <rcnn/FasterRCNN>`_
+      - :math:`(N,C_{in},H,W)`
+      - :math:`\mathcal{O}(P_{\text{cnn}} + P_{\text{rpn}} + P_{\text{head}})`
 
 *To be implemented...🔮*

@@ -3,6 +3,8 @@ from typing import Literal, Self
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
+
 from lucid._tensor import Tensor
 
 
@@ -169,24 +171,6 @@ class SelectiveSearch(nn.Module):
         hist_sum = hist.sum()
         return hist / hist_sum if hist_sum.item() else hist
 
-    @staticmethod
-    def _iou(box_a: Tensor, box_b: Tensor) -> float:
-        xa1, ya1, xa2, ya2 = box_a.tolist()
-        xb1, yb1, xb2, yb2 = box_b.tolist()
-
-        inter_x1 = max(xa1, xb1)
-        inter_y1 = max(ya1, yb1)
-        inter_x2 = min(xa2, xb2)
-        inter_y2 = min(ya2, yb2)
-
-        if inter_x2 < inter_x1 or inter_y2 < inter_y1:
-            return 0.0
-
-        inter = (inter_x2 - inter_x1 + 1) * (inter_y2 - inter_y1 + 1)
-        area_a = (xa2 - xa1 + 1) * (ya2 - ya1 + 1)
-        area_b = (xb2 - xb1 + 1) * (yb2 - yb1 + 1)
-        return inter / (area_a + area_b - inter)
-
     @lucid.no_grad()
     def forward(self, image: Tensor) -> Tensor:
         if image.ndim != 3:
@@ -288,7 +272,7 @@ class SelectiveSearch(nn.Module):
         unique_boxes: list[tuple[int, int, int, int]] = []
         for b in all_boxes:
             tb = Tensor(b)
-            if all(self._iou(tb, Tensor(ub)) <= self.iou_thresh for ub in unique_boxes):
+            if all(iou(tb, Tensor(ub)) <= self.iou_thresh for ub in unique_boxes):
                 unique_boxes.append(b)
             if len(unique_boxes) >= self.max_boxes:
                 break
@@ -296,6 +280,44 @@ class SelectiveSearch(nn.Module):
         if unique_boxes:
             return Tensor(unique_boxes, dtype=lucid.Int32)
         return lucid.empty(0, 4, dtype=lucid.Int32)
+
+
+def iou(boxes_a: Tensor, boxes_b: Tensor) -> Tensor:
+    x1a, y1a, x2a, y2a = boxes_a.unbind(axis=1)
+    x1b, y1b, x2b, y2b = boxes_b.unbind(axis=1)
+
+    xx1 = lucid.maximum(x1a.unsqueeze(1), x1b.unsqueeze(0))
+    yy1 = lucid.maximum(y1a.unsqueeze(1), y1b.unsqueeze(0))
+    xx2 = lucid.minimum(x2a.unsqueeze(1), x2b.unsqueeze(0))
+    yy2 = lucid.minimum(y2a.unsqueeze(1), y2b.unsqueeze(0))
+
+    w = (xx2 - xx1 + 1).clip(min_value=0)
+    h = (yy2 - yy1 + 1).clip(min_value=0)
+    inter = w * h
+
+    area_a = (x2a - x1a + 1) * (y2a - y1a + 1)
+    area_b = (x2b - x1b + 1) * (y2b - y1b + 1)
+
+    return inter / (area_a.unsqueeze(1) + area_b - inter)
+
+
+def bbox_to_delta(src: Tensor, target: Tensor, add_one: float = 1.0) -> Tensor:
+    sw = src[:, 2] - src[:, 0] + add_one
+    sh = src[:, 3] - src[:, 1] + add_one
+    sx = src[:, 0] + 0.5 * sw
+    sy = src[:, 1] + 0.5 * sh
+
+    tw = target[:, 2] - target[:, 0] + add_one
+    th = target[:, 3] - target[:, 1] + add_one
+    tx = target[:, 0] + 0.5 * tw
+    ty = target[:, 1] + 0.5 * th
+
+    dx = (tx - sx) / sw
+    dy = (ty - sy) / sh
+    dw = lucid.log(tw / sw)
+    dh = lucid.log(th / sh)
+
+    return lucid.stack([dx, dy, dw, dh], axis=1)
 
 
 def apply_deltas(boxes: Tensor, deltas: Tensor, add_one: float = 1.0) -> Tensor:
@@ -365,3 +387,52 @@ def clip_boxes(boxes: Tensor, image_shape: tuple[int, int]) -> Tensor:
     y2 = lucid.clip(boxes[:, 3], 0, H - 1)
 
     return lucid.stack([x1, y1, x2, y2], axis=-1)
+
+
+class ROIPool(nn.Module):
+    def __init__(self, output_size: tuple[int, int]) -> None:
+        super().__init__()
+        self.output_size = output_size
+
+    def forward(self, images: Tensor, rois: Tensor, roi_idx: Tensor) -> Tensor:
+        C = images.shape[1]
+        ph, pw = self.output_size
+        device = images.device
+
+        x1, y1, x2, y2 = rois.unbind(axis=1)
+        valid = (x2 > x1) & (y2 > y1)
+        if lucid.sum(valid) == 0:
+            return lucid.empty(0, C, ph, pw, device=device)
+
+        idx = valid.nonzero().squeeze(axis=1)
+        rois = rois[idx]
+        roi_idx = roi_idx[idx]
+        x1, y1, x2, y2 = rois.unbind(axis=1)
+
+        if pw > 1:
+            xs = lucid.arange(pw, dtype=lucid.Float32, device=device) / (pw - 1)
+        else:
+            xs = lucid.full((1,), 0.5, dtype=lucid.Float32, device=device)
+
+        if ph > 1:
+            ys = lucid.arange(ph, dtype=lucid.Float32, device=device) / (ph - 1)
+        else:
+            ys = lucid.full((1,), 0.5, dtype=lucid.Float32, device=device)
+
+        grid_y_base, grid_x_base = lucid.meshgrid(ys, xs, indexing="ij")
+        grid_x_base = grid_x_base.unsqueeze(axis=0)
+        grid_y_base = grid_y_base.unsqueeze(axis=0)
+
+        x1_ = x1.unsqueeze(axis=-1).unsqueeze(axis=-1)
+        y1_ = y1.unsqueeze(axis=-1).unsqueeze(axis=-1)
+        w_ = (x2 - x1).unsqueeze(axis=-1).unsqueeze(axis=-1)
+        h_ = (y2 - y1).unsqueeze(axis=-1).unsqueeze(axis=-1)
+
+        grid_x = x1_ + w_ * grid_x_base
+        grid_y = y1_ + h_ * grid_y_base
+        grid = lucid.stack([grid_y * 2 - 1, grid_x * 2 - 1], axis=-1)
+
+        feat_per_roi = images[roi_idx]
+        out = F.grid_sample(feat_per_roi, grid, mode="bilinear", align_corners=True)
+
+        return out
