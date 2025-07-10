@@ -1,6 +1,8 @@
 import math
 from typing import TypedDict
 
+from lucid import register_model
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -17,8 +19,49 @@ from lucid.models.objdet.util import (
     clip_boxes,
 )
 
+from lucid.models.imgclf.resnet import resnet_50
+from lucid.models.imgclf.mobile import mobilenet_v3_large
 
-__all__ = ["FasterRCNN"]
+
+__all__ = [
+    "FasterRCNN",
+    "faster_rcnn_resnet50",
+    "faster_rcnn_mobilenet_v3",
+]
+
+
+class _ResNetBackbone(nn.Module):
+    def __init__(self, net: nn.Module) -> None:
+        super().__init__()
+        self.stem = net.stem
+        self.maxpool = net.maxpool
+        self.layer1 = net.layer1
+        self.layer2 = net.layer2
+        self.layer3 = net.layer3
+        self.layer4 = net.layer4
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.stem(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        return x
+
+
+class _MobileNetV3Backbone(nn.Module):
+    def __init__(self, net: nn.Module) -> None:
+        super().__init__()
+        self.conv_first = net.conv_first
+        self.bottlenecks = net.bottlenecks
+        self.conv_last = net.conv_last
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv_first(x)
+        x = self.bottlenecks(x)
+        x = self.conv_last(x)
+        return x
 
 
 class _AnchorGenerator(nn.Module):
@@ -555,3 +598,17 @@ class FasterRCNN(nn.Module):
             "roi_reg_loss": roi_reg_loss,
             "total_loss": total_loss,
         }
+
+
+@register_model
+def faster_rcnn_resnet50(num_classes: int = 21, **kwargs) -> FasterRCNN:
+    backbone = resnet_50(num_classes=1000)
+    backbone = _ResNetBackbone(backbone)
+    return FasterRCNN(backbone, feat_channels=2048, num_classes=num_classes, **kwargs)
+
+
+@register_model
+def faster_rcnn_mobilenet_v3(num_classes: int = 21, **kwargs) -> FasterRCNN:
+    backbone = mobilenet_v3_large(num_classes=1000)
+    backbone = _MobileNetV3Backbone(backbone)
+    return FasterRCNN(backbone, feat_channels=960, num_classes=num_classes, **kwargs)

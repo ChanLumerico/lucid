@@ -886,5 +886,17 @@
         "family": "MaxViT",
         "param_size": 383734024,
         "task": "imgclf"
+    },
+    "faster_rcnn_resnet50": {
+        "name": "faster_rcnn_resnet50",
+        "family": "FasterRCNN",
+        "param_size": 489383071,
+        "task": "objdet"
+    },
+    "faster_rcnn_mobilenet_v3": {
+        "name": "faster_rcnn_mobilenet_v3",
+        "family": "FasterRCNN",
+        "param_size": 220974821,
+        "task": "objdet"
     }
 }
