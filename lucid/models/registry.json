@@ -887,16 +887,16 @@
         "param_size": 383734024,
         "task": "imgclf"
     },
-    "faster_rcnn_resnet50": {
-        "name": "faster_rcnn_resnet50",
+    "faster_rcnn_resnet_50_fpn": {
+        "name": "faster_rcnn_resnet_50_fpn",
         "family": "FasterRCNN",
-        "param_size": 489383071,
+        "param_size": 43515902,
         "task": "objdet"
     },
-    "faster_rcnn_mobilenet_v3": {
-        "name": "faster_rcnn_mobilenet_v3",
+    "faster_rcnn_resnet_101_fpn": {
+        "name": "faster_rcnn_resnet_101_fpn",
         "family": "FasterRCNN",
-        "param_size": 220974821,
+        "param_size": 62508030,
         "task": "objdet"
     }
 }

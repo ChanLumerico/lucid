@@ -11,7 +11,9 @@ from lucid._tensor import Tensor
 from lucid.types import _DeviceType
 
 from lucid.models.objdet.util import (
-    ROIPool,
+    ROIAlign,
+    MultiScaleROIAlign,
+    FPN,
     apply_deltas,
     bbox_to_delta,
     nms,
@@ -19,49 +21,14 @@ from lucid.models.objdet.util import (
     clip_boxes,
 )
 
-from lucid.models.imgclf.resnet import resnet_50
-from lucid.models.imgclf.mobile import mobilenet_v3_large
+from lucid.models.imgclf.resnet import resnet_50, resnet_101
 
 
 __all__ = [
     "FasterRCNN",
-    "faster_rcnn_resnet50",
-    "faster_rcnn_mobilenet_v3",
+    "faster_rcnn_resnet_50_fpn",
+    "faster_rcnn_resnet_101_fpn",
 ]
-
-
-class _ResNetBackbone(nn.Module):
-    def __init__(self, net: nn.Module) -> None:
-        super().__init__()
-        self.stem = net.stem
-        self.maxpool = net.maxpool
-        self.layer1 = net.layer1
-        self.layer2 = net.layer2
-        self.layer3 = net.layer3
-        self.layer4 = net.layer4
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.stem(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        return x
-
-
-class _MobileNetV3Backbone(nn.Module):
-    def __init__(self, net: nn.Module) -> None:
-        super().__init__()
-        self.conv_first = net.conv_first
-        self.bottlenecks = net.bottlenecks
-        self.conv_last = net.conv_last
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.conv_first(x)
-        x = self.bottlenecks(x)
-        x = self.conv_last(x)
-        return x
 
 
 class _AnchorGenerator(nn.Module):
@@ -290,6 +257,7 @@ class FasterRCNN(nn.Module):
         feat_channels: int,
         num_classes: int,
         *,
+        use_fpn: bool = False,
         anchor_sizes: tuple[int, ...] = (128, 256, 512),
         aspect_ratios: tuple[float, ...] = (0.5, 1.0, 2.0),
         anchor_stride: int = 16,
@@ -303,7 +271,10 @@ class FasterRCNN(nn.Module):
             anchor_sizes, aspect_ratios, anchor_stride
         )
         self.rpn = _RegionProposalNetwork(feat_channels, self.anchor_generator)
-        self.roipool = ROIPool(pool_size)
+        self.use_fpn = use_fpn
+        self.roipool = (
+            MultiScaleROIAlign(pool_size) if self.use_fpn else ROIAlign(pool_size)
+        )
 
         fc_in = feat_channels * pool_size[0] * pool_size[1]
         self.fc1 = nn.Linear(fc_in, hidden_dim)
@@ -325,7 +296,7 @@ class FasterRCNN(nn.Module):
 
     def roi_forward(
         self,
-        feats: Tensor,
+        feats: Tensor | list[Tensor],
         rois: Tensor,
         roi_idx: Tensor,
         *,
@@ -357,11 +328,15 @@ class FasterRCNN(nn.Module):
     ) -> tuple[Tensor, ...]:
         H, W = images.shape[2:]
         feats = self.backbone(images)
-        if isinstance(feats, (tuple, list)):
-            feats = feats[-1]
+        if self.use_fpn and isinstance(feats, (list, tuple)):
+            feature_rpn = feats[0]
+            feature_roi = feats
+        else:
+            feature_rpn = feats
+            feature_roi = feats
 
         if rois is None or roi_idx is None:
-            proposals = self.rpn(feats, (H, W))
+            proposals = self.rpn(feature_rpn, (H, W))
             proposals = [p.detach() for p in proposals]
 
             boxes_list, idx_list = [], []
@@ -388,7 +363,7 @@ class FasterRCNN(nn.Module):
                 images.device
             )
 
-        return self.roi_forward(feats, rois, roi_idx, return_feats=return_feats)
+        return self.roi_forward(feature_roi, rois, roi_idx, return_feats=return_feats)
 
     @lucid.no_grad()
     def predict(
@@ -401,10 +376,14 @@ class FasterRCNN(nn.Module):
     ) -> list[dict[str, Tensor]]:
         B, _, H, W = images.shape
         feats = self.backbone(images)
-        if isinstance(feats, (tuple, list)):
-            feats = feats[-1]
+        if self.use_fpn and isinstance(feats, (list, tuple)):
+            feature_rpn = feats[0]
+            feature_roi = feats
+        else:
+            feature_rpn = feats
+            feature_roi = feats
 
-        proposals = self.rpn(feats, (H, W))
+        proposals = self.rpn(feature_rpn, (H, W))
         proposals = [p.detach() for p in proposals]
 
         boxes_list, idx_list = [], []
@@ -427,7 +406,7 @@ class FasterRCNN(nn.Module):
         rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
         rois_norm = rois_norm.to(images.device)
 
-        cls_logits, bbox_deltas = self.roi_forward(feats, rois_norm, roi_idx)
+        cls_logits, bbox_deltas = self.roi_forward(feature_roi, rois_norm, roi_idx)
         scores = F.softmax(cls_logits, axis=1)
 
         num_classes = scores.shape[1]
@@ -515,10 +494,14 @@ class FasterRCNN(nn.Module):
     ) -> _FasterRCNNLoss:
         B, _, H, W = images.shape
         feats = self.backbone(images)
-        if isinstance(feats, (tuple, list)):
-            feats = feats[-1]
+        if self.use_fpn and isinstance(feats, (list, tuple)):
+            feature_rpn = feats[0]
+            feature_roi = feats
+        else:
+            feature_rpn = feats
+            feature_roi = feats
 
-        rpn_out = self.rpn.get_loss(feats, targets, (H, W))
+        rpn_out = self.rpn.get_loss(feature_rpn, targets, (H, W))
         rpn_cls_loss = rpn_out["rpn_cls_loss"]
         rpn_reg_loss = rpn_out["rpn_reg_loss"]
         proposals = rpn_out["proposals"]
@@ -573,7 +556,7 @@ class FasterRCNN(nn.Module):
         sb_labels = lucid.concatenate(sampled_labels, axis=0)
         sb_tgts = lucid.concatenate(sampled_tgts, axis=0)
 
-        cls_logits, bbox_deltas = self.roi_forward(feats, sb_rois, sb_idx)
+        cls_logits, bbox_deltas = self.roi_forward(feature_roi, sb_rois, sb_idx)
         roi_cls_loss = F.cross_entropy(cls_logits, sb_labels, reduction="mean")
 
         fg = (sb_labels > 0).nonzero().squeeze(axis=1)
@@ -600,15 +583,57 @@ class FasterRCNN(nn.Module):
         }
 
 
-@register_model
-def faster_rcnn_resnet50(num_classes: int = 21, **kwargs) -> FasterRCNN:
-    backbone = resnet_50(num_classes=1000)
-    backbone = _ResNetBackbone(backbone)
-    return FasterRCNN(backbone, feat_channels=2048, num_classes=num_classes, **kwargs)
+class _ResNetFPNBackbone(nn.Module):
+    def __init__(self, net: nn.Module) -> None:
+        super().__init__()
+        self.net = net
+        self.stem = self.net.stem
+        self.maxpool = self.net.maxpool
+        self.layers = [
+            self.net.layer1,
+            self.net.layer2,
+            self.net.layer3,
+            self.net.layer4,
+        ]
+        self.fpn = FPN([256, 512, 1024, 2048], out_channels=256)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.stem(x)
+        x = self.maxpool(x)
+        cs = []
+        for i in range(4):
+            x = self.layers[i](x)
+            cs.append(x)
+        return self.fpn(cs)
 
 
 @register_model
-def faster_rcnn_mobilenet_v3(num_classes: int = 21, **kwargs) -> FasterRCNN:
-    backbone = mobilenet_v3_large(num_classes=1000)
-    backbone = _MobileNetV3Backbone(backbone)
-    return FasterRCNN(backbone, feat_channels=960, num_classes=num_classes, **kwargs)
+def faster_rcnn_resnet_50_fpn(
+    num_classes: int = 21, backbone_num_classes: int = 1000, **kwargs
+) -> FasterRCNN:
+    backbone = resnet_50(backbone_num_classes)
+    backbone = _ResNetFPNBackbone(backbone)
+    return FasterRCNN(
+        backbone,
+        feat_channels=256,
+        num_classes=num_classes,
+        use_fpn=True,
+        hidden_dim=1024,
+        **kwargs,
+    )
+
+
+@register_model
+def faster_rcnn_resnet_101_fpn(
+    num_classes: int = 21, backbone_num_classes: int = 1000, **kwargs
+) -> FasterRCNN:
+    backbone = resnet_101(backbone_num_classes)
+    backbone = _ResNetFPNBackbone(backbone)
+    return FasterRCNN(
+        backbone,
+        feat_channels=256,
+        num_classes=num_classes,
+        use_fpn=True,
+        hidden_dim=1024,
+        **kwargs,
+    )

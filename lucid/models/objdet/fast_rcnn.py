@@ -6,7 +6,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 from lucid.models.objdet.util import (
-    ROIPool,
+    ROIAlign,
     SelectiveSearch,
     apply_deltas,
     nms,
@@ -32,7 +32,7 @@ class FastRCNN(nn.Module):
     ) -> None:
         super().__init__()
         self.backbone = backbone
-        self.roipool = ROIPool(output_size=pool_size)
+        self.roipool = ROIAlign(output_size=pool_size)
         self.proposal_generator = proposal_generator or SelectiveSearch()
 
         self.fc1 = nn.Linear(feat_channels * pool_size[0] * pool_size[1], hidden_dim)

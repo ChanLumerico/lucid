@@ -389,7 +389,7 @@ def clip_boxes(boxes: Tensor, image_shape: tuple[int, int]) -> Tensor:
     return lucid.stack([x1, y1, x2, y2], axis=-1)
 
 
-class ROIPool(nn.Module):
+class ROIAlign(nn.Module):
     def __init__(self, output_size: tuple[int, int]) -> None:
         super().__init__()
         self.output_size = output_size
@@ -436,3 +436,69 @@ class ROIPool(nn.Module):
         out = F.grid_sample(feat_per_roi, grid, mode="bilinear", align_corners=True)
 
         return out
+
+
+class MultiScaleROIAlign(nn.Module):
+    def __init__(
+        self,
+        output_size: tuple[int, int],
+        canonical_level: int = 2,
+        canocical_scale: int = 224,
+    ) -> None:
+        super().__init__()
+        self.output_size = output_size
+        self.canonical_level = canonical_level
+        self.canonical_scale = canocical_scale
+
+        self.align = ROIAlign(output_size)
+
+    def forward(self, features: list[Tensor], rois: Tensor, roi_idx: Tensor) -> Tensor:
+        device = rois.device
+
+        x1, y1, x2, y2 = rois.unbind(axis=-1)
+        widths = x2 - x1
+        heights = y2 - y1
+        scales = lucid.sqrt(widths * heights)
+
+        target_lvls = lucid.log2(scales / self.canonical_scale + 1e-6)
+        target_lvls = target_lvls.astype(lucid.Int32) + self.canonical_level
+        target_lvls = lucid.clip(target_lvls, 2, 5)
+
+        pooled = []
+        for level in range(2, 6):
+            mask = (target_lvls == level).nonzero().squeeze(axis=1)
+            if mask.size == 0:
+                continue
+
+            feat = features[level - 2]
+            rois_l = rois[mask]
+            idx_l = roi_idx[mask]
+            pooled.append(self.align(feat, rois_l, idx_l))
+
+        if pooled:
+            return lucid.concatenate(pooled, axis=0)
+        else:
+            B, C, ph, pw = features[0].shape[0], features[0].shape[1], *self.output_size
+            return lucid.empty(B, C, ph, pw, device=device)
+
+
+class FPN(nn.Module):
+    def __init__(self, in_channels_list: list[int], out_channels: int = 256) -> None:
+        super().__init__()
+        self.lateral_convs = nn.ModuleList(
+            [nn.Conv2d(in_c, out_channels, kernel_size=1) for in_c in in_channels_list]
+        )
+        self.output_convs = nn.ModuleList(
+            [
+                nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
+                for _ in in_channels_list
+            ]
+        )
+
+    def forward(self, features: list[Tensor]) -> list[Tensor]:
+        feats = [lateral(f) for f, lateral in zip(features, self.lateral_convs)]
+        for i in reversed(range(len(feats) - 1)):
+            up = F.interpolate(feats[i + 1], size=feats[i].shape[2:], mode="nearest")
+            feats[i] += up
+
+        return [conv(f) for f, conv in zip(feats, self.output_convs)]
