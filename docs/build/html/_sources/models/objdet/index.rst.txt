@@ -5,9 +5,11 @@ Object detection
     :maxdepth: 1
     :hidden:
 
+    Utilities <utilities/index.rst>
+
     R-CNN <rcnn/RCNN.rst>
     Fast R-CNN <rcnn/FastRCNN.rst>
-    Faster R-CNN <rcnn/FasterRCNN.rst>
+    Faster R-CNN <faster_rcnn/FasterRCNN.rst>
 
 R-CNN
 -----
@@ -82,8 +84,18 @@ training and real-time inference.
       - Parameter Count
 
     * - Faster R-CNN
-      - `FasterRCNN <rcnn/FasterRCNN>`_
+      - `FasterRCNN <faster_rcnn/FasterRCNN>`_
       - :math:`(N,C_{in},H,W)`
       - :math:`\mathcal{O}(P_{\text{cnn}} + P_{\text{rpn}} + P_{\text{head}})`
+    
+    * - Faster R-CNN ResNet-50 FPN
+      - `faster_rcnn_resnet_50_fpn <faster_rcnn/faster_rcnn_resnet_50_fpn>`_
+      - :math:`(N,3,H,W)`
+      - 43,515,902
+    
+    * - Faster R-CNN ResNet-101 FPN
+      - `faster_rcnn_resnet_101_fpn <faster_rcnn/faster_rcnn_resnet_101_fpn>`_
+      - :math:`(N,3,H,W)`
+      - 62,508,030
 
 *To be implemented...🔮*

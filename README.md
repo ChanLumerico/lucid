@@ -16,6 +16,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 ### 🔥 What's New
 
 - **Faster R-CNN** implemented: `lucid.mdoels.FasterRCNN`
+
+  Also comes with two ResNet-FPN backbone variants:
+  * Faster R-CNN ResNet-50 FPN: `models.faster_rcnn_resnet_50_fpn`
+  * Faster R-CNN ResNet-101 FPN: `models.faster_rcnn_resnet_101_fpn`
+
 - **Fast R-CNN** implemented: `lucid.models.FastRCNN`
 
 ## 🔧 How to Install

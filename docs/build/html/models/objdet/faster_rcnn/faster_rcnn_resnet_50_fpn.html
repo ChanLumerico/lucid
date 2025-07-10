@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="Sequence-to-Sequence" href="../../seq2seq/index.html" /><link rel="prev" title="Fast R-CNN" href="FastRCNN.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/rcnn/FasterRCNN.html" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="faster_rcnn_resnet_101_fpn" href="faster_rcnn_resnet_101_fpn.html" /><link rel="prev" title="Faster R-CNN" href="FasterRCNN.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/faster_rcnn/faster_rcnn_resnet_50_fpn.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>Faster R-CNN - Lucid 2.2.5 documentation</title>
+        <title>faster_rcnn_resnet_50_fpn - Lucid 2.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 2.2.5 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 2.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -193,7 +193,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 2.2.5 documentation</span>
+  <span class="sidebar-brand-text">Lucid 2.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -859,13 +859,18 @@
 </ul>
 </li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Object Detection</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-68" name="toctree-checkbox-68" role="switch" type="checkbox"/><label for="toctree-checkbox-68"><div class="visually-hidden">Toggle navigation of Object Detection</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="RCNN.html">R-CNN</a></li>
-<li class="toctree-l2"><a class="reference internal" href="FastRCNN.html">Fast R-CNN</a></li>
-<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Faster R-CNN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../utilities/index.html">Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../rcnn/RCNN.html">R-CNN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../rcnn/FastRCNN.html">Fast R-CNN</a></li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="FasterRCNN.html">Faster R-CNN</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-69" name="toctree-checkbox-69" role="switch" type="checkbox"/><label for="toctree-checkbox-69"><div class="visually-hidden">Toggle navigation of Faster R-CNN</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">faster_rcnn_resnet_50_fpn</a></li>
+<li class="toctree-l3"><a class="reference internal" href="faster_rcnn_resnet_101_fpn.html">faster_rcnn_resnet_101_fpn</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-69" name="toctree-checkbox-69" role="switch" type="checkbox"/><label for="toctree-checkbox-69"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../seq2seq/transformer/Transformer.html">Transformer</a><input class="toctree-checkbox" id="toctree-checkbox-70" name="toctree-checkbox-70" role="switch" type="checkbox"/><label for="toctree-checkbox-70"><div class="visually-hidden">Toggle navigation of Transformer</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-70" name="toctree-checkbox-70" role="switch" type="checkbox"/><label for="toctree-checkbox-70"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../seq2seq/transformer/Transformer.html">Transformer</a><input class="toctree-checkbox" id="toctree-checkbox-71" name="toctree-checkbox-71" role="switch" type="checkbox"/><label for="toctree-checkbox-71"><div class="visually-hidden">Toggle navigation of Transformer</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../seq2seq/transformer/transformer_base.html">transformer_base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../seq2seq/transformer/transformer_big.html">transformer_big</a></li>
 </ul>
@@ -878,7 +883,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-71" name="toctree-checkbox-71" role="switch" type="checkbox"/><label for="toctree-checkbox-71"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-72" name="toctree-checkbox-72" role="switch" type="checkbox"/><label for="toctree-checkbox-72"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -918,12 +923,12 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/models/objdet/rcnn/FasterRCNN.rst?plain=true" title="View this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/models/objdet/faster_rcnn/faster_rcnn_resnet_50_fpn.rst?plain=true" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
 </div><div class="edit-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/models/objdet/rcnn/FasterRCNN.rst" title="Edit this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/models/objdet/faster_rcnn/faster_rcnn_resnet_50_fpn.rst" title="Edit this page">
     <svg><use href="#svg-pencil"></use></svg>
     <span class="visually-hidden">Edit this page</span>
   </a>
@@ -942,159 +947,108 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="faster-r-cnn">
-<h1>Faster R-CNN<a class="headerlink" href="#faster-r-cnn" title="Link to this heading">¶</a></h1>
-<p><span class="badge convnet">ConvNet</span> <span class="badge region_convnet">Region ConvNet</span> <span class="badge normal">Object Detection</span></p>
-<dl class="py class">
-<dt class="sig sig-object py" id="lucid.models.FasterRCNN">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">FasterRCNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">backbone</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">feat_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anchor_sizes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(128,</span> <span class="pre">256,</span> <span class="pre">512)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aspect_ratios</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(0.5,</span> <span class="pre">1.0,</span> <span class="pre">2.0)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anchor_stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pool_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(7,</span> <span class="pre">7)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4096</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dropout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.FasterRCNN" title="Link to this definition">¶</a></dt>
+          <section id="faster-rcnn-resnet-50-fpn">
+<h1>faster_rcnn_resnet_50_fpn<a class="headerlink" href="#faster-rcnn-resnet-50-fpn" title="Link to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="lucid.models.faster_rcnn_resnet_50_fpn">
+<span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">faster_rcnn_resnet_50_fpn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">21</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backbone_num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="FasterRCNN.html#lucid.models.FasterRCNN" title="lucid.models.objdet.faster_rcnn.FasterRCNN"><span class="pre">FasterRCNN</span></a></span></span><a class="headerlink" href="#lucid.models.faster_rcnn_resnet_50_fpn" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p><cite>FasterRCNN</cite> implements the Faster Region-based Convolutional Neural Network,
-an improvement over Fast R-CNN that introduces a learnable Region Proposal Network (RPN).
-This architecture eliminates the need for external proposal methods by jointly learning
-region proposals and object classification in a unified network.</p>
-<a class="reference internal image-reference" href="../../../_images/faster_rcnn.png"><img alt="FasterRCNN architecture" class="align-center" src="../../../_images/faster_rcnn.png" style="width: 600px;" />
-</a>
-<section id="class-signature">
-<h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">FasterRCNN</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">backbone</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
-        <span class="n">feat_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-        <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-        <span class="o">*</span><span class="p">,</span>
-        <span class="n">anchor_sizes</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">512</span><span class="p">),</span>
-        <span class="n">aspect_ratios</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">),</span>
-        <span class="n">anchor_stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
-        <span class="n">pool_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">7</span><span class="p">),</span>
-        <span class="n">hidden_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4096</span><span class="p">,</span>
-        <span class="n">dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
-    <span class="p">)</span>
+<p>The <cite>faster_rcnn_resnet_50_fpn</cite> function constructs a two-stage object detection model
+based on the Faster R-CNN architecture, with a ResNet-50 backbone and Feature Pyramid Network (FPN).
+This configuration is suitable for a wide range of object detection tasks
+with a balance of speed and accuracy.</p>
+<p><strong>Total Parameters</strong>: 43,515,902</p>
+<section id="function-signature">
+<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@register_model</span>
+<span class="k">def</span> <span class="nf">faster_rcnn_resnet_50_fpn</span><span class="p">(</span>
+    <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">21</span><span class="p">,</span>
+    <span class="n">backbone_num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FasterRCNN</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>backbone</strong> (<em>nn.Module</em>):
-Feature extraction network applied once per image to produce a feature map.</p></li>
-<li><p><strong>feat_channels</strong> (<em>int</em>):
-Number of output channels from the backbone’s final feature map.</p></li>
-<li><p><strong>num_classes</strong> (<em>int</em>):
-Number of object categories (excluding background).</p></li>
-<li><p><strong>anchor_sizes</strong> (<em>tuple[int, …]</em>, optional):
-Set of anchor box scales used by the RPN. Default is <cite>(128, 256, 512)</cite>.</p></li>
-<li><p><strong>aspect_ratios</strong> (<em>tuple[float, …]</em>, optional):
-Set of aspect ratios for the anchors. Default is <cite>(0.5, 1.0, 2.0)</cite>.</p></li>
-<li><p><strong>anchor_stride</strong> (<em>int</em>, optional):
-Stride of the anchor generation relative to the backbone feature map. Default is <cite>16</cite>.</p></li>
-<li><p><strong>pool_size</strong> (<em>tuple[int, int]</em>, optional):
-Spatial size of each RoI feature after pooling. Default is <cite>(7, 7)</cite>.</p></li>
-<li><p><strong>hidden_dim</strong> (<em>int</em>, optional):
-Number of units in the fully connected head. Default is <cite>4096</cite>.</p></li>
-<li><p><strong>dropout</strong> (<em>float</em>, optional):
-Dropout probability used in the classification and regression head. Default is <cite>0.5</cite>.</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>, optional):
+The number of target object classes to detect. Default is 21 (e.g., PASCAL VOC).
+This affects the final classification layer of the detection head.</p></li>
+<li><p><strong>backbone_num_classes</strong> (<em>int</em>, optional):
+The number of classes used when initializing the ResNet-50 backbone (e.g., 1000 for ImageNet).
+This affects the initial backbone setup and should match the pretraining phase if any.</p></li>
+<li><p><strong>kwargs</strong> (<em>dict</em>, optional):
+Additional keyword arguments to customize <cite>FasterRCNN</cite>, such as anchor sizes,
+NMS thresholds, etc.</p></li>
 </ul>
 </section>
-<section id="architecture">
-<h2>Architecture<a class="headerlink" href="#architecture" title="Link to this heading">¶</a></h2>
-<p>Faster R-CNN enhances Fast R-CNN by replacing external proposal mechanisms with a
-learnable RPN:</p>
-<ol class="arabic simple">
-<li><p><strong>Feature Map Extraction</strong>:</p>
+<section id="returns">
+<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>The image is processed by the <cite>backbone</cite> to produce a dense feature map.</p></li>
+<li><p><strong>FasterRCNN</strong>:
+An instance of the <cite>FasterRCNN</cite> model with a ResNet-50 + FPN backbone.</p></li>
 </ul>
-</li>
-<li><p><strong>Region Proposal Network (RPN)</strong>:</p>
-<ul class="simple">
-<li><p>Anchors are placed over the feature map.</p></li>
-<li><p>The RPN classifies whether each anchor contains an object and regresses
-its bounding box.</p></li>
-</ul>
-</li>
-<li><p><strong>RoI Pooling</strong>:</p>
-<ul class="simple">
-<li><p>High-confidence proposals are selected and pooled to a fixed size (<cite>pool_size</cite>).</p></li>
-</ul>
-</li>
-<li><p><strong>Detection Head</strong>:</p>
-<ul class="simple">
-<li><p>Each RoI is processed by fully connected layers for classification and bounding
-box refinement.</p></li>
-</ul>
-</li>
-<li><p><strong>Loss Output</strong>:</p>
-<ul class="simple">
-<li><p>The model provides a <cite>.get_loss()</cite> method, returning a structured loss dictionary.</p></li>
-</ul>
-</li>
-</ol>
-</section>
-<section id="loss-dictionary">
-<h2>Loss Dictionary<a class="headerlink" href="#loss-dictionary" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">_FasterRCNNLoss</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
-    <span class="n">rpn_cls_loss</span><span class="p">:</span> <span class="n">Tensor</span>
-    <span class="n">rpn_reg_loss</span><span class="p">:</span> <span class="n">Tensor</span>
-    <span class="n">roi_cls_loss</span><span class="p">:</span> <span class="n">Tensor</span>
-    <span class="n">roi_reg_loss</span><span class="p">:</span> <span class="n">Tensor</span>
-    <span class="n">total_loss</span><span class="p">:</span> <span class="n">Tensor</span>
-</pre></div>
-</div>
-<p>Returned by <cite>FasterRCNN.get_loss()</cite>, this dictionary provides detailed loss breakdowns
-for both RPN and RoI heads.</p>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
 <p><strong>Basic Usage</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="kn">import</span> <span class="nn">lucid.random</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">lucid.models</span> <span class="kn">import</span> <span class="n">faster_rcnn_resnet_50_fpn</span>
 
-<span class="k">class</span> <span class="nc">SimpleBackbone</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">conv</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
-            <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-            <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(),</span>
-            <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-            <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">()</span>
-        <span class="p">)</span>
+<span class="c1"># Create the model with 21 object classes (VOC-style)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">faster_rcnn_resnet_50_fpn</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">21</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="c1"># Input tensor: 1 image with 3 channels and 224x224 spatial dimensions</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span>
 
-<span class="n">backbone</span> <span class="o">=</span> <span class="n">SimpleBackbone</span><span class="p">()</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">FasterRCNN</span><span class="p">(</span><span class="n">backbone</span><span class="p">,</span> <span class="n">feat_channels</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="c1"># Forward pass</span>
+<span class="n">cls_logits</span><span class="p">,</span> <span class="n">bbox_deltas</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
-<span class="n">image</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">)</span>
-<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="s2">&quot;boxes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">output</span><span class="p">[</span><span class="s2">&quot;scores&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">output</span><span class="p">[</span><span class="s2">&quot;labels&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">cls_logits</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>   <span class="c1"># (N, R, C), e.g., (1, 300, 21)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">bbox_deltas</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>  <span class="c1"># (N, R, 4),   e.g., (1, 300, 4)</span>
 </pre></div>
 </div>
-<p><strong>Custom Configuration</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">backbone</span> <span class="o">=</span> <span class="n">SimpleBackbone</span><span class="p">()</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">FasterRCNN</span><span class="p">(</span>
-    <span class="n">backbone</span><span class="o">=</span><span class="n">backbone</span><span class="p">,</span>
-    <span class="n">feat_channels</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span>
-    <span class="n">num_classes</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
-    <span class="n">anchor_sizes</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
-    <span class="n">aspect_ratios</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
-    <span class="n">pool_size</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
-    <span class="n">hidden_dim</span><span class="o">=</span><span class="mi">2048</span><span class="p">,</span>
-    <span class="n">dropout</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span>
-<span class="p">)</span>
+</section>
+<section id="training-notes">
+<h2>Training Notes<a class="headerlink" href="#training-notes" title="Link to this heading">¶</a></h2>
+<p>Lucid does <strong>not</strong> provide pre-trained weights for object detection backbones.
+To train <cite>faster_rcnn_resnet_50_fpn</cite> properly, follow this two-stage strategy:</p>
+<ol class="arabic">
+<li><p><strong>Pretrain the Backbone as a Classifier</strong></p>
+<p>Extract the internal <cite>resnet_50</cite> backbone via:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">lucid.models</span> <span class="kn">import</span> <span class="n">faster_rcnn_resnet_50_fpn</span>
 
-<span class="n">image</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">384</span><span class="p">,</span> <span class="mi">384</span><span class="p">)</span>
-<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="s2">&quot;boxes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">output</span><span class="p">[</span><span class="s2">&quot;scores&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">output</span><span class="p">[</span><span class="s2">&quot;labels&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+<span class="n">detector</span> <span class="o">=</span> <span class="n">faster_rcnn_resnet_50_fpn</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">21</span><span class="p">)</span>
+<span class="n">backbone_net</span> <span class="o">=</span> <span class="n">detector</span><span class="o">.</span><span class="n">backbone</span><span class="o">.</span><span class="n">net</span>  <span class="c1"># This is a ResNet-50 model</span>
 </pre></div>
 </div>
+<p>You can train <cite>backbone_net</cite> on an image classification task (e.g., ImageNet or CIFAR)
+using standard training pipelines (<cite>nn.CrossEntropyLoss</cite>, <cite>nn.SGD</cite>, etc.).</p>
+<p>Save the weights via:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">state_dict</span> <span class="o">=</span> <span class="n">backbone_net</span><span class="o">.</span><span class="n">state_dict</span><span class="p">()</span>
+<span class="c1"># Save using your own serialization logic</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Fine-tune the Detection Model</strong></p>
+<p>Once pretrained, reload the saved <cite>state_dict</cite> into the <cite>backbone.net</cite>
+and train the detection head:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">detector</span><span class="o">.</span><span class="n">backbone</span><span class="o">.</span><span class="n">net</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">)</span>
+<span class="c1"># Now proceed to train the FasterRCNN model on your object detection dataset</span>
+</pre></div>
+</div>
+</li>
+</ol>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
-<p>For training, use <cite>model.get_loss()</cite> with the predicted and ground-truth targets
-to compute total and component-wise loss terms.</p>
+<p>When training from scratch, reduce learning rates for the backbone using parameter groups
+to stabilize optimization.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Ensure the backbone’s <cite>backbone_num_classes</cite> matches the number of output classes
+used during pretraining. Otherwise, classifier weights will mismatch and must be discarded.</p>
 </div>
 </section>
 </section>
@@ -1104,23 +1058,23 @@ to compute total and component-wise loss terms.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="../../seq2seq/index.html">
+          <a class="next-page" href="faster_rcnn_resnet_101_fpn.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Sequence-to-Sequence</div>
+                <div class="title">faster_rcnn_resnet_101_fpn</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="FastRCNN.html">
+          <a class="prev-page" href="FasterRCNN.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Fast R-CNN</div>
+                <div class="title">Faster R-CNN</div>
                 
               </div>
             </a>
@@ -1154,13 +1108,13 @@ to compute total and component-wise loss terms.</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Faster R-CNN</a><ul>
-<li><a class="reference internal" href="#lucid.models.FasterRCNN"><code class="docutils literal notranslate"><span class="pre">FasterRCNN</span></code></a></li>
-<li><a class="reference internal" href="#class-signature">Class Signature</a></li>
+<li><a class="reference internal" href="#">faster_rcnn_resnet_50_fpn</a><ul>
+<li><a class="reference internal" href="#lucid.models.faster_rcnn_resnet_50_fpn"><code class="docutils literal notranslate"><span class="pre">faster_rcnn_resnet_50_fpn()</span></code></a></li>
+<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
-<li><a class="reference internal" href="#architecture">Architecture</a></li>
-<li><a class="reference internal" href="#loss-dictionary">Loss Dictionary</a></li>
+<li><a class="reference internal" href="#returns">Returns</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#training-notes">Training Notes</a></li>
 </ul>
 </li>
 </ul>
@@ -1172,7 +1126,7 @@ to compute total and component-wise loss terms.</p>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=ea147abf"></script>
+</div><script src="../../../_static/documentation_options.js?v=c3c8ae58"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>

@@ -2,6 +2,13 @@ Faster R-CNN
 ============
 |convnet-badge| |region-convnet-badge| |objdet-badge|
 
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    faster_rcnn_resnet_50_fpn.rst
+    faster_rcnn_resnet_101_fpn.rst
+
 .. autoclass:: lucid.models.FasterRCNN
 
 `FasterRCNN` implements the Faster Region-based Convolutional Neural Network,
@@ -26,6 +33,7 @@ Class Signature
             feat_channels: int,
             num_classes: int,
             *,
+            use_fpn: bool = False,
             anchor_sizes: tuple[int, ...] = (128, 256, 512),
             aspect_ratios: tuple[float, ...] = (0.5, 1.0, 2.0),
             anchor_stride: int = 16,
@@ -45,6 +53,11 @@ Parameters
 
 - **num_classes** (*int*):  
   Number of object categories (excluding background).
+
+- **use_fpn** (*bool*, optional):
+  Whether to use Feature Pyramid Network (FPN) for backbone feature extraction.
+  Default is `False`. When set to `True`, the user should attach backbone model that
+  supports FPN feature returns.
 
 - **anchor_sizes** (*tuple[int, ...]*, optional):  
   Set of anchor box scales used by the RPN. Default is `(128, 256, 512)`.
