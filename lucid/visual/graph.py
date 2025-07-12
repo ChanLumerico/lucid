@@ -9,7 +9,10 @@ __all__ = ["draw_tensor_graph"]
 
 
 def draw_tensor_graph(
-    tensor: Tensor, horizontal: bool = False, title: str | None = None
+    tensor: Tensor,
+    horizontal: bool = False,
+    title: str | None = None,
+    start_id: int | None = None,
 ) -> plt.Figure:
     G = nx.DiGraph()
     visited = set()
@@ -40,6 +43,8 @@ def draw_tensor_graph(
                 if id(t) == result_id
                 else "lightgray" if not t.requires_grad else "lightblue"
             )
+        if start_id is not None and id(t) == start_id:
+            color = "blue"
 
         G.add_node(id(t), label=shape_label, shape="rectangle", color=color)
 
