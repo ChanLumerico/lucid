@@ -266,7 +266,15 @@ Lucid serves as a powerful educational resource and a minimalist experimental sa
 
 ## 📜 Others
 
-**Dependencies**: `NumPy`, `MLX`, `openml`, `pandas`
+**Dependencies**:
+
+| Library | Purpose |
+| ------- | ------- |
+| `numpy` | Core Tensor operations for CPU |
+|  `mlx`  | Core Tensor operations for GPU(Apple Silicon) |
+| `pandas`, `openml` | Dataset download and fetching |
+| `matplotlib` | Various visualizations |
+| `networkx` | Graph construction of Tensors and modules for visualizations |
 
 **Inspired By**:
 
