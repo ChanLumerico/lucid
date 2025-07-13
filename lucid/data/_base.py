@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Self, Any
+from typing import Callable, Self, Any
 import random
 import math
+
+import lucid
+from lucid._tensor import Tensor
 
 
 class Dataset(ABC):
@@ -54,11 +57,16 @@ class ConcatDataset(Dataset):
 
 class DataLoader:
     def __init__(
-        self, dataset: Dataset, batch_size: int = 1, shuffle: bool = False
+        self,
+        dataset: Dataset,
+        batch_size: int = 1,
+        shuffle: bool = False,
+        collate_fn: Callable | None = None,
     ) -> None:
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.collate_fn = collate_fn or self.default_collate
         self.indices = list(range(len(dataset)))
 
         if shuffle:
@@ -73,18 +81,29 @@ class DataLoader:
             self._shuffle_indices()
         return self
 
-    def __next__(self):
+    def __next__(self) -> Any:
         if self.current_index >= len(self.indices):
             raise StopIteration
 
         start = self.current_index
         end = min(start + self.batch_size, len(self.indices))
-
         batch_indices = self.indices[start:end]
-        batch = self.dataset[batch_indices]
-
         self.current_index = end
-        return batch
+
+        batch = [self.dataset[i] for i in batch_indices]
+        return self.collate_fn(batch)
 
     def __len__(self) -> int:
         return int(math.ceil(len(self.dataset) / self.batch_size))
+
+    @staticmethod
+    def default_collate(batch: list[Any]) -> Any:
+        if isinstance(batch[0], (tuple, list)) and all(
+            isinstance(x, Tensor) for x in batch[0]
+        ):
+            transposed = list(zip(*batch))
+            return tuple(lucid.stack(tuple(x), axis=0) for x in transposed)
+        elif isinstance(batch[0], Tensor):
+            return lucid.stack(tuple(batch), axis=0)
+        else:
+            return batch
