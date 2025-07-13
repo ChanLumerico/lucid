@@ -134,6 +134,5 @@ def draw_tensor_graph(
 
     ax.axis("off")
     ax.set_title(title if title is not None else "")
-    plt.tight_layout()
 
     return fig

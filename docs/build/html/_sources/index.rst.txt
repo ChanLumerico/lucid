@@ -112,6 +112,15 @@
 
 .. toctree::
    :maxdepth: 1
+   :caption: Visualization
+   :hidden:
+
+   visual/visual.rst
+   
+   visual/draw_tensor_graph.rst
+
+.. toctree::
+   :maxdepth: 1
    :caption: Others
    :hidden:
 
