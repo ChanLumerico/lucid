@@ -23,8 +23,6 @@ _ShapeLike = list[int] | tuple[int]
 _ArrayLike = list | _NumPyArray | _MLXArray
 _ArrayLikeInt = int | Sequence[int | tuple[int, int]]
 
-_StateDict = Dict[str, Any]
-
 _OptimClosure = Callable[[], Any]
 
 _EinopsPattern = str

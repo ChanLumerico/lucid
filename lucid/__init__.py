@@ -42,6 +42,7 @@ from lucid.types import (
     Numeric,
 )
 from lucid.error import *
+from lucid.port import *
 
 import lucid.linalg as linalg
 import lucid.random as random

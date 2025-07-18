@@ -24,6 +24,9 @@ _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
 _dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
 
 
+def _noop() -> None: ...
+
+
 class Tensor(_TensorOps):
     def __init__(
         self,
@@ -82,7 +85,7 @@ class Tensor(_TensorOps):
                 self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
 
         self._op: object | None = None
-        self._backward_op: Callable = lambda: None
+        self._backward_op: Callable = _noop
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
 

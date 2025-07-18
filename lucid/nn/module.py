@@ -13,7 +13,7 @@ from typing import (
 from collections import OrderedDict
 
 from lucid._tensor import Tensor
-from lucid.types import _ArrayOrScalar, _StateDict, _NumPyArray, _DeviceType
+from lucid.types import _ArrayOrScalar, _NumPyArray, _DeviceType
 
 import lucid.nn as nn
 
@@ -183,7 +183,7 @@ class Module:
         destination: OrderedDict[str, Any] | None = None,
         prefix: str = "",
         keep_vars: bool = False,
-    ) -> _StateDict:
+    ) -> OrderedDict:
         if destination is None:
             destination = OrderedDict()
 
@@ -200,7 +200,7 @@ class Module:
 
         return destination
 
-    def load_state_dict(self, state_dict: _StateDict, strict: bool = True) -> None:
+    def load_state_dict(self, state_dict: OrderedDict, strict: bool = True) -> None:
         own_state = self.state_dict(keep_vars=True)
 
         missing_keys = set(own_state.keys()) - set(state_dict.keys())
