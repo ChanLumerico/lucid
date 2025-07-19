@@ -18,18 +18,14 @@ transform = transforms.Compose([transforms.Resize((32, 32))])
 train_set = MNIST(
     root="./.data/mnist/train", train=True, download=False, transform=transform
 )
-test_set = MNIST(
-    root="./.data/mnist/test", train=False, download=False, transform=transform
-)
 
-device = "cpu"
+device = "gpu"
 learning_rate = 1e-3
 weight_decay = 1e-4
-num_epochs = 10
+num_epochs = 1
 batch_size = 100
 
 train_loader = DataLoader(train_set, batch_size, shuffle=True)
-test_loader = DataLoader(test_set, batch_size)
 
 model: nn.Module = models.lenet_5(_base_activation=nn.ReLU).to(device)
 
@@ -59,7 +55,7 @@ def train(model, train_loader, criterion, optimizer, num_epochs):
 
         for batch_idx, (images, labels) in progress_bar:
             images = normalize(images)
-            images = images.reshape(batch_size, 1, 32, 32)
+            images = images.reshape(-1, 1, 32, 32)
 
             images = images.to(device)
             labels = labels.to(device)
@@ -100,5 +96,4 @@ plt.title("MNIST Training Loss")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig("training_loss.png")
 plt.show()

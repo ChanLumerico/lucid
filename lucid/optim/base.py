@@ -1,11 +1,11 @@
 from collections import defaultdict
-from typing import Any, Iterable
+from typing import Any, Iterable, OrderedDict
 from abc import ABC, abstractmethod
 import copy
 
 import lucid.nn as nn
 
-from lucid.types import _StateDict, _OptimClosure
+from lucid.types import _OptimClosure
 
 
 class Optimizer(ABC):
@@ -43,13 +43,13 @@ class Optimizer(ABC):
                 )
         self.param_groups.append(param_group)
 
-    def state_dict(self) -> _StateDict:
+    def state_dict(self) -> OrderedDict:
         return {
             "state": copy.deepcopy(self.state),
             "param_groups": copy.deepcopy(self.param_groups),
         }
 
-    def load_state_dict(self, state_dict: _StateDict) -> None:
+    def load_state_dict(self, state_dict: OrderedDict) -> None:
         self.state = defaultdict(dict, copy.deepcopy(state_dict["state"]))
         self.param_groups = copy.deepcopy(state_dict["param_groups"])
 
