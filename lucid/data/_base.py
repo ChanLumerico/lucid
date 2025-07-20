@@ -98,9 +98,7 @@ class DataLoader:
 
     @staticmethod
     def default_collate(batch: list[Any]) -> Any:
-        if isinstance(batch[0], (tuple, list)) and all(
-            isinstance(x, Tensor) for x in batch[0]
-        ):
+        if isinstance(batch[0], (tuple, list)):
             transposed = list(zip(*batch))
             return tuple(lucid.stack(tuple(x), axis=0) for x in transposed)
         elif isinstance(batch[0], Tensor):
