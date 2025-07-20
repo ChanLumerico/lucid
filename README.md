@@ -15,6 +15,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Added Porting System: `lucid.save`, `lucid.load`
+  
+  Supports `lucid.Tensor` and state-dict(`OrderedDict`) save/load
+  (For `lucid.nn.Module`, it automatically extracts its state-dict and then saves the dict)
+
 - **Faster R-CNN** implemented: `lucid.mdoels.FasterRCNN`
 
   Also comes with two ResNet-FPN backbone variants:

@@ -131,6 +131,14 @@
    others/newaxis.rst
    others/register_model.rst
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Porting
+   :hidden:
+
+   porting/save.rst
+   porting/load.rst
+
 
 .. module:: lucid
    :synopsis: An educational deep learning framework built from scratch.
