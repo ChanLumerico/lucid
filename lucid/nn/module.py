@@ -188,10 +188,10 @@ class Module:
             destination = OrderedDict()
 
         for name, param in self._parameters.items():
-            destination[prefix + name] = param if keep_vars else param.data
+            destination[prefix + name] = param if keep_vars else param.numpy()
 
         for name, buffer in self._buffers.items():
-            destination[prefix + name] = buffer if keep_vars else buffer.data
+            destination[prefix + name] = buffer if keep_vars else buffer.numpy()
 
         for name, module in self._modules.items():
             module.state_dict(
