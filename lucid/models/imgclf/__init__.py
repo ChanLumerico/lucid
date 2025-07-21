@@ -5,6 +5,7 @@ from .crossvit import *
 from .cvt import *
 from .dense import *
 from .efficient import *
+from .efficientformer import *
 from .inception_next import *
 from .inception_res import *
 from .inception import *
