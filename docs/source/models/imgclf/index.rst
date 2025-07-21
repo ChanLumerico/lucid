@@ -1597,4 +1597,8 @@ for various vision tasks with high accuracy and scalability.
       - 383,734,024
       - 83.74B
 
+EfficientFormer
+---------------
+|wip-badge|
+
 *To be implemented...🔮*
