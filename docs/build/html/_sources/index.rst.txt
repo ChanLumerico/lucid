@@ -121,6 +121,14 @@
 
 .. toctree::
    :maxdepth: 1
+   :caption: Porting
+   :hidden:
+
+   porting/save.rst
+   porting/load.rst
+
+.. toctree::
+   :maxdepth: 1
    :caption: Others
    :hidden:
 
@@ -130,14 +138,6 @@
    others/count_flops.rst
    others/newaxis.rst
    others/register_model.rst
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Porting
-   :hidden:
-
-   porting/save.rst
-   porting/load.rst
 
 
 .. module:: lucid
