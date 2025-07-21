@@ -10,11 +10,49 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["EfficientFormer"]
+__all__ = [
+    "EfficientFormer",
+    "efficientformer_l1",
+    "efficientformer_l3",
+    "efficientformer_l7",
+]
 
 
 def _to_2_tuple(val: int | float) -> tuple:
     return (val, val)
+
+
+class _MLP(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: int | None = None,
+        out_features: int | None = None,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] | None = None,
+        bias: bool = True,
+        drop: float = 0.0,
+    ) -> None:
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        bias = _to_2_tuple(bias)
+        drop_probs = _to_2_tuple(drop)
+
+        self.fc1 = nn.Linear(in_features, hidden_features, bias=bias[0])
+        self.act = act_layer()
+        self.drop1 = nn.Dropout(drop_probs[0])
+
+        self.norm = (
+            norm_layer(hidden_features) if norm_layer is not None else nn.Identity()
+        )
+        self.fc2 = nn.Linear(hidden_features, out_features, bias=bias[1])
+        self.drop2 = nn.Dropout(drop_probs[1])
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.drop1(self.act(self.fc1(x)))
+        x = self.drop2(self.fc2(self.norm(x)))
+        return x
 
 
 class _Attention(nn.Module):
@@ -68,7 +106,7 @@ class _Attention(nn.Module):
         return x
 
 
-class _Stem4(nn.Sequential):
+class _Stem(nn.Sequential):
     def __init__(
         self,
         in_channels: int,
@@ -185,16 +223,264 @@ class _LayerScale2d(_LayerScale):
 
 
 class _MetaBlock1d(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        dim: int,
+        mlp_ratio: float = 4.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        proj_drop: float = 0.0,
+        drop_path: float = 0.0,
+        layer_scale_init_value: float = 1e-5,
+    ) -> None:
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.token_mixer = _Attention(dim)
+        self.norm2 = norm_layer(dim)
+        self.mlp = _MLP(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
+
+        self.drop_path = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+        self.ls1 = _LayerScale(dim, layer_scale_init_value)
+        self.ls2 = _LayerScale(dim, layer_scale_init_value)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x += self.drop_path(self.ls1(self.token_mixer(self.norm1(x))))
+        x += self.drop_path(self.ls2(self.mlp(self.norm2(x))))
+        return x
 
 
 class _MetaBlock2d(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        dim: int,
+        pool_size: int = 3,
+        mlp_ratio: float = 4.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.BatchNorm2d,
+        proj_drop: float = 0.0,
+        drop_path: float = 0.0,
+        layer_scale_init_value: float = 1e-5,
+    ) -> None:
+        super().__init__()
+        self.token_mixer = _Pooling(pool_size)
+        self.ls1 = _LayerScale2d(dim, layer_scale_init_value)
+        self.drop_path1 = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+
+        self.mlp = _ConvMLPNorm(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            norm_layer=norm_layer,
+            drop=proj_drop,
+        )
+        self.ls2 = _LayerScale2d(dim, layer_scale_init_value)
+        self.drop_path2 = nn.DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+
+    def forward(self, x: Tensor) -> Tensor:
+        x += self.drop_path1(self.ls1(self.token_mixer(x)))
+        x += self.drop_path2(self.ls2(self.mlp(x)))
+        return x
 
 
 class _EfficientFormerStage(nn.Module):
-    NotImplemented
+    def __init__(
+        self,
+        dim: int,
+        dim_out: int,
+        depth: int,
+        downsample: bool = True,
+        num_vit: int = 1,
+        pool_size: int = 3,
+        mlp_ratio: float = 4.0,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.BatchNorm2d,
+        norm_layer_cl: type[nn.Module] = nn.LayerNorm,
+        proj_drop: float = 0.0,
+        drop_path: float = 0.0,
+        layer_scale_init_value: float = 1e-5,
+    ) -> None:
+        super().__init__()
+        if downsample:
+            self.downsample = _Downsample(dim, dim_out, norm_layer=norm_layer)
+            dim = dim_out
+        else:
+            assert dim == dim_out
+            self.downsample = nn.Identity()
+
+        blocks = []
+        if num_vit and num_vit >= depth:
+            blocks.append(_Flatten())
+
+        for block_idx in range(depth):
+            remain_idx = depth - block_idx - 1
+            if num_vit and num_vit > remain_idx:
+                blocks.append(
+                    _MetaBlock1d(
+                        dim,
+                        mlp_ratio=mlp_ratio,
+                        act_layer=act_layer,
+                        norm_layer=norm_layer_cl,
+                        proj_drop=proj_drop,
+                        drop_path=drop_path[block_idx],
+                        layer_scale_init_value=layer_scale_init_value,
+                    )
+                )
+            else:
+                blocks.append(
+                    _MetaBlock2d(
+                        dim,
+                        pool_size=pool_size,
+                        mlp_ratio=mlp_ratio,
+                        act_layer=act_layer,
+                        norm_layer=norm_layer,
+                        proj_drop=proj_drop,
+                        drop_path=drop_path[block_idx],
+                        layer_scale_init_value=layer_scale_init_value,
+                    )
+                )
+                if num_vit and num_vit == remain_idx:
+                    blocks.append(_Flatten())
+
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.blocks(x)
 
 
 class EfficientFormer(nn.Module):
+    def __init__(
+        self,
+        depths: list[int],
+        embed_dims: int | None = None,
+        in_channels: int = 3,
+        num_classes: int = 1000,
+        global_pool: bool = True,
+        downsamples: list[bool] | None = None,
+        num_vit: int = 0,
+        mlp_ratios: float = 4.0,
+        pool_size: int = 3,
+        layer_scale_init_value: float = 1e-5,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.BatchNorm2d,
+        norm_layer_cl: type[nn.Module] = nn.LayerNorm,
+        drop_rate: float = 0.0,
+        proj_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        self.global_pool = global_pool
+
+        self.stem = _Stem(in_channels, embed_dims[0], norm_layer=norm_layer)
+        prev_dim = embed_dims[0]
+
+        self.num_stages = len(depths)
+        last_stage = self.num_stages - 1
+        dpr = [
+            x.tolist()
+            for x in lucid.linspace(0, drop_path_rate, sum(depths)).split(depths)
+        ]
+        downsamples = downsamples or (False,) + (True,) * (self.num_stages - 1)
+
+        stages = []
+        self.feature_info = []
+        for i in range(self.num_stages):
+            stage = _EfficientFormerStage(
+                prev_dim,
+                embed_dims[i],
+                depths[i],
+                downsample=downsamples[i],
+                num_vit=num_vit if i == last_stage else 0,
+                pool_size=pool_size,
+                mlp_ratio=mlp_ratios,
+                act_layer=act_layer,
+                norm_layer_cl=norm_layer_cl,
+                norm_layer=norm_layer,
+                proj_drop=proj_drop_rate,
+                drop_path=dpr[i],
+                layer_scale_init_value=layer_scale_init_value,
+            )
+            prev_dim = embed_dims[i]
+            stages.append(stage)
+
+            self.feature_info += [
+                dict(
+                    num_channels=embed_dims[i],
+                    reduction=2 ** (i + 2),
+                    module=f"stages.{i}",
+                )
+            ]
+
+        self.stages = nn.Sequential(*stages)
+
+        self.num_features = embed_dims[-1]
+        self.norm = norm_layer_cl(self.num_features)
+        self.head_drop = nn.Dropout(drop_rate)
+        self.head = (
+            nn.Linear(self.num_features, num_classes)
+            if num_classes > 0
+            else nn.Identity()
+        )
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m: nn.Module) -> None:
+        if isinstance(m, nn.Linear):
+            nn.init.normal(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant(m.bias, 0.0)
+
+    def forward_features(self, x: Tensor) -> Tensor:
+        x = self.stem(x)
+        x = self.stages(x)
+        x = self.norm(x)
+        return x
+
+    def forward_head(self, x: Tensor, pre_logits: bool = False) -> Tensor:
+        if self.global_pool:
+            x = x.mean(axis=1)
+
+        x = self.head_drop(x)
+        if pre_logits:
+            return x
+
+        x = self.head(x)
+        return x
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.forward_features(x)
+        x = self.forward_head(x)
+        return x
+
+
+EfficientFormer_width = {
+    "l1": (48, 96, 224, 448),
+    "l3": (64, 128, 320, 512),
+    "l7": (96, 192, 384, 768),
+}
+
+EfficientFormer_depth = {
+    "l1": (3, 2, 6, 4),
+    "l3": (4, 4, 12, 6),
+    "l7": (6, 6, 18, 8),
+}
+
+
+@register_model
+def efficientformer_l1(num_classes: int = 1000, **kwargs) -> EfficientFormer:
+    NotImplemented
+
+
+@register_model
+def efficientformer_l3(num_classes: int = 1000, **kwargs) -> EfficientFormer:
+    NotImplemented
+
+
+@register_model
+def efficientformer_l7(num_classes: int = 1000, **kwargs) -> EfficientFormer:
     NotImplemented
