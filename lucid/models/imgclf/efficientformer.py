@@ -88,7 +88,7 @@ class _Attention(nn.Module):
             lucid.zeros(num_heads, resolution[0] * resolution[1])
         )
         self.attention_bias_idxs: nn.Buffer
-        self.register_buffer("attention_bias_idxs", rel_pos)
+        self.register_buffer("attention_bias_idxs", rel_pos.astype(lucid.Int))
 
     def forward(self, x: Tensor) -> Tensor:
         B, N, _ = x.shape
@@ -349,7 +349,9 @@ class _EfficientFormerStage(nn.Module):
         self.blocks = nn.Sequential(*blocks)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.blocks(x)
+        x = self.downsample(x)
+        x = self.blocks(x)
+        return x
 
 
 class EfficientFormer(nn.Module):
@@ -388,7 +390,6 @@ class EfficientFormer(nn.Module):
         downsamples = downsamples or (False,) + (True,) * (self.num_stages - 1)
 
         stages = []
-        self.feature_info = []
         for i in range(self.num_stages):
             stage = _EfficientFormerStage(
                 prev_dim,
@@ -407,14 +408,6 @@ class EfficientFormer(nn.Module):
             )
             prev_dim = embed_dims[i]
             stages.append(stage)
-
-            self.feature_info += [
-                dict(
-                    num_channels=embed_dims[i],
-                    reduction=2 ** (i + 2),
-                    module=f"stages.{i}",
-                )
-            ]
 
         self.stages = nn.Sequential(*stages)
 
@@ -473,7 +466,13 @@ EfficientFormer_depth = {
 
 @register_model
 def efficientformer_l1(num_classes: int = 1000, **kwargs) -> EfficientFormer:
-    NotImplemented
+    return EfficientFormer(
+        depths=EfficientFormer_depth["l1"],
+        embed_dims=EfficientFormer_width["l1"],
+        num_vit=1,
+        num_classes=num_classes,
+        **kwargs,
+    )
 
 
 @register_model

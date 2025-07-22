@@ -898,5 +898,11 @@
         "family": "FasterRCNN",
         "param_size": 62508030,
         "task": "objdet"
+    },
+    "efficientformer_l1": {
+        "name": "efficientformer_l1",
+        "family": "EfficientFormer",
+        "param_size": 11840928,
+        "task": "imgclf"
     }
 }
