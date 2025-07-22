@@ -477,9 +477,21 @@ def efficientformer_l1(num_classes: int = 1000, **kwargs) -> EfficientFormer:
 
 @register_model
 def efficientformer_l3(num_classes: int = 1000, **kwargs) -> EfficientFormer:
-    NotImplemented
+    return EfficientFormer(
+        depths=EfficientFormer_depth["l3"],
+        embed_dims=EfficientFormer_width["l3"],
+        num_vit=4,
+        num_classes=num_classes,
+        **kwargs,
+    )
 
 
 @register_model
 def efficientformer_l7(num_classes: int = 1000, **kwargs) -> EfficientFormer:
-    NotImplemented
+    return EfficientFormer(
+        depths=EfficientFormer_depth["l7"],
+        embed_dims=EfficientFormer_width["l7"],
+        num_vit=8,
+        num_classes=num_classes,
+        **kwargs,
+    )

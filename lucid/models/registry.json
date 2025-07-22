@@ -904,5 +904,17 @@
         "family": "EfficientFormer",
         "param_size": 11840928,
         "task": "imgclf"
+    },
+    "efficientformer_l3": {
+        "name": "efficientformer_l3",
+        "family": "EfficientFormer",
+        "param_size": 30893000,
+        "task": "imgclf"
+    },
+    "efficientformer_l7": {
+        "name": "efficientformer_l7",
+        "family": "EfficientFormer",
+        "param_size": 81460328,
+        "task": "imgclf"
     }
 }

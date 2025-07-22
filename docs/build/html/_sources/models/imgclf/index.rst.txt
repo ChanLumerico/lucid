@@ -37,6 +37,7 @@ Image Classification
     PVT-v2 <pvt/PVT_V2.rst>
     CrossViT <crossvit/CrossViT.rst>
     MaxViT <maxvit/MaxViT.rst>
+    EfficientFormer <efficientformer/EfficientFormer.rst>
 
 LeNet
 -----
@@ -1599,6 +1600,42 @@ for various vision tasks with high accuracy and scalability.
 
 EfficientFormer
 ---------------
-|wip-badge|
+|transformer-badge| |vision-transformer-badge| |imgclf-badge|
+
+EfficientFormer is a lightweight and efficient vision transformer architecture designed 
+for mobile and edge devices. By combining the strengths of convolutional inductive biases 
+with self-attention in a hybrid structure, EfficientFormer achieves a strong balance 
+between accuracy and computational efficiency.
+
+ Li, Yanyu, et al. EfficientFormer: Vision Transformers at MobileNet Speed. 
+ arXiv, 2022, arXiv:2206.01191.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - FLOPs
+    
+    * - EfficientFormer-L1
+      - `efficientformer_l1 <efficientformer/efficientformer_l1>`_
+      - :math:`(N,3,224,224)`
+      - 11,840,928
+      - 316.47M
+    
+    * - EfficientFormer-L3
+      - `efficientformer_l3 <efficientformer/efficientformer_l3>`_
+      - :math:`(N,3,224,224)`
+      - 30,893,000
+      - 1.07B
+
+    * - EfficientFormer-L7
+      - `efficientformer_l7 <efficientformer/efficientformer_l7>`_
+      - :math:`(N,3,224,224)`
+      - 81,460,328
+      - 3.44B
 
 *To be implemented...🔮*
