@@ -96,6 +96,7 @@
     models/models.rst
 
     Image Classification <models/imgclf/index.rst>
+    Image Generation <models/imggen/index.rst>
     Object Detection <models/objdet/index.rst>
     Sequence-to-Sequence <models/seq2seq/index.rst>
 

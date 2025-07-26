@@ -70,10 +70,18 @@ rst_epilog = """
 
     <span class="badge vision_transformer">Vision Transformer</span>
 
+.. |diffusion-badge| raw:: html
+
+    <span class="badge diffusion">Diffusion</span>
+
     
 .. |imgclf-badge| raw:: html
 
     <span class="badge normal">Image Classification</span>
+
+.. |imggen-badge| raw:: html
+
+    <span class="badge normal">Image Generation</span>
 
 .. |objdet-badge| raw:: html
 

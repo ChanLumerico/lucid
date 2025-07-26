@@ -29,6 +29,12 @@ human vision.
         features and predict the most likely class.
       - `Image Classification <imgclf/index>`_
     
+    * - Image generation
+      - Image generation is a fundamental task in generative modeling where a model learns 
+        to create new images that resemble a given dataset. It involves learning patterns 
+        and structures from data to synthesize realistic or novel visuals.
+      - `Image Generation <imggen/index>`_
+    
     * - Object Detection
       - Object detection is a computer vision task that identifies and classifies multiple 
         objects within an image. It assigns labels and draws bounding boxes around each 
