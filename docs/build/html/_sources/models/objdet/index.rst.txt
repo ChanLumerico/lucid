@@ -30,12 +30,10 @@ feature extraction, and per-region classification with Non-Maximum Suppression.
     * - Name
       - Model
       - Input Shape
-      - Parameter Count
 
     * - R-CNN
       - `RCNN <rcnn/RCNN>`_
       - :math:`(N,C_{in},H,W)`
-      - :math:`\mathcal{O}(P_{\text{cnn}} + F^2 + F \cdot K)`
 
 Fast R-CNN
 ----------
@@ -55,12 +53,10 @@ and bounding box regression into a single network with a shared backbone.
     * - Name
       - Model
       - Input Shape
-      - Parameter Count
 
     * - Fast R-CNN
       - `FastRCNN <rcnn/FastRCNN>`_
       - :math:`(N,C_{in},H,W)`
-      - :math:`\mathcal{O}(P_{\text{cnn}} + 2FH + 5CH)`
 
 Faster R-CNN
 ------------
@@ -86,7 +82,7 @@ training and real-time inference.
     * - Faster R-CNN
       - `FasterRCNN <faster_rcnn/FasterRCNN>`_
       - :math:`(N,C_{in},H,W)`
-      - :math:`\mathcal{O}(P_{\text{cnn}} + P_{\text{rpn}} + P_{\text{head}})`
+      - -
     
     * - Faster R-CNN ResNet-50 FPN
       - `faster_rcnn_resnet_50_fpn <faster_rcnn/faster_rcnn_resnet_50_fpn>`_

@@ -2,7 +2,7 @@
 
 ![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-29.1k-yellow)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-29.5k-yellow)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 ![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&label=Lines%20of%20Code&color=purple&cacheSeconds=5)
@@ -15,6 +15,9 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Generalized **VAE** implemented to newly addded *Image Generation* 
+  model category: `lucid.models.VAE`
+
 - **EfficientFormer** implemented: `lucid.models.EfficientFormer`
 
   Detailed variants: `efficientformer_l1`, `efficientformer_l3`, and `efficientformer_l7`
@@ -23,14 +26,6 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
   
   Supports `lucid.Tensor` and state-dict(`OrderedDict`) save/load
   (For `lucid.nn.Module`, it automatically extracts its state-dict and then saves the dict)
-
-- **Faster R-CNN** implemented: `lucid.mdoels.FasterRCNN`
-
-  Also comes with two ResNet-FPN backbone variants:
-  * Faster R-CNN ResNet-50 FPN: `models.faster_rcnn_resnet_50_fpn`
-  * Faster R-CNN ResNet-101 FPN: `models.faster_rcnn_resnet_101_fpn`
-
-- **Fast R-CNN** implemented: `lucid.models.FastRCNN`
 
 ## 🔧 How to Install
 

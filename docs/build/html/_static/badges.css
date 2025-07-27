@@ -42,7 +42,7 @@
     border-color: #ff8dd9;
 }
 
-.badge.diffusion {
-    color: #66ff00;
-    border-color: #66ff00;
+.badge.autoencoder {
+    color: #5ce600;
+    border-color: #5ce600;
 }
