@@ -1,6 +1,6 @@
 VAE
 ===
-|autoencoder-badge| |imggen-badge|
+|autoencoder-badge| |vae-badge| |imggen-badge|
 
 .. autoclass:: lucid.models.imggen.VAE
 
@@ -151,6 +151,11 @@ Examples
     x = lucid.randn(32, 784)
     recon, mus, logvars, zs = vae(x)
     loss, recon_loss, kl = vae.get_loss(x, recon, mus, logvars, zs)
+
+.. note::
+
+    This `VAE` class encompasses the standard VAE, :math:`\beta`-VAE, 
+    and Hierarchical VAE (HAVE).
 
 .. tip::
 

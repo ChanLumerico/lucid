@@ -9,7 +9,7 @@ Image Generation
 
 Variational Autoencoder (VAE)
 -----------------------------
-|autoencoder-badge| |imggen-badge|
+|autoencoder-badge| |vae-badge| |imggen-badge|
 
 A Variational Autoencoder (VAE) is a generative model that learns to encode input 
 data into a probabilistic latent space and reconstruct it through a decoder. 

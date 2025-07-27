@@ -76,6 +76,10 @@ ARCH_EP = """
 
     <span class="badge autoencoder">Autoencoder</span>
 
+.. |vae-badge| raw:: html
+
+    <span class="badge vae">Variational Autoencoder</span>
+
 .. |diffusion-badge| raw:: html
 
     <span class="badge diffusion">Diffusion</span>

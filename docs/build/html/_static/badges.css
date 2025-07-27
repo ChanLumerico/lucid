@@ -47,6 +47,11 @@
     border-color: #5ce600;
 }
 
+.badge.vae {
+    color: #8de453;
+    border-color: #8de453;
+}
+
 .badge.diffusion {
     color: #1896fd;
     border-color: #1896fd;
