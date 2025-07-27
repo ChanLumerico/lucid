@@ -82,7 +82,7 @@ training and real-time inference.
     * - Faster R-CNN
       - `FasterRCNN <faster_rcnn/FasterRCNN>`_
       - :math:`(N,C_{in},H,W)`
-      - -
+      - :math:`-`
     
     * - Faster R-CNN ResNet-50 FPN
       - `faster_rcnn_resnet_50_fpn <faster_rcnn/faster_rcnn_resnet_50_fpn>`_

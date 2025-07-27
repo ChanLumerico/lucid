@@ -7,8 +7,8 @@ Image Generation
 
     VAE <vae/VAE.rst>
 
-VAE
----
+Variational Autoencoder (VAE)
+-----------------------------
 |autoencoder-badge| |imggen-badge|
 
 A Variational Autoencoder (VAE) is a generative model that learns to encode input 
