@@ -5,7 +5,6 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike
 
 
 __all__ = ["VAE"]
@@ -16,7 +15,6 @@ class VAE(nn.Module):
         self,
         encoders: list[nn.Module],
         decoders: list[nn.Module],
-        input_shape: _ShapeLike,
         priors: list[nn.Module] | None,
         reconstruction_loss: Literal["mse", "bce"] = "mse",
         kl_weight: float = 1.0,
@@ -34,7 +32,6 @@ class VAE(nn.Module):
         self.decoders = nn.ModuleList(decoders)
         self.priors = nn.ModuleList(priors) if priors is not None else None
 
-        self.input_shape = input_shape
         self.reconstruction_loss = reconstruction_loss
         self.base_kl_weight = kl_weight
         self.beta_schedule = beta_schedule

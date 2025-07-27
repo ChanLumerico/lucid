@@ -31,4 +31,8 @@ over latent variables, enabling smooth sampling and interpolation.
       - `VAE <vae/VAE>`_
       - :math:`(N,C,H,W)`
 
+DDPM
+----
+|wip-badge|
+
 *To be implemented...🔮*

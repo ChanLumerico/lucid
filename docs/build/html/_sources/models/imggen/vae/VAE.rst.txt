@@ -25,7 +25,6 @@ Class Signature
     class VAE(
         encoders: list[nn.Module],
         decoders: list[nn.Module],
-        input_shape: _ShapeLike,
         priors: list[nn.Module] | None = None,
         reconstruction_loss: Literal["mse", "bce"] = "mse",
         kl_weight: float = 1.0,
@@ -45,9 +44,6 @@ Parameters
 - **decoders** (*list[nn.Module]*):  
   A list of decoder modules. Decoding starts from the deepest latent and 
   reconstructs to the original data space.
-
-- **input_shape** (*_ShapeLike*):  
-  Shape of the input data, used to verify dimensions in reconstruction loss.
 
 - **priors** (*list[nn.Module] | None*):  
   Optional list of prior modules that map the latent from the next layer into 

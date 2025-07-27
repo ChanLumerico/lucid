@@ -357,6 +357,16 @@ def instance_norm(
     )
 
 
+def group_norm(
+    input_: Tensor,
+    num_groups: int,
+    weight: Tensor | None = None,
+    bias: Tensor | None = None,
+    eps: float = 1e-5,
+) -> Tensor:
+    return _norm.group_norm(input_, num_groups, weight, bias, eps)
+
+
 def global_response_norm(
     input_: Tensor, gamma: Tensor, beta: Tensor, eps: float = 1e-6
 ) -> Tensor:

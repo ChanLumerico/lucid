@@ -15,7 +15,7 @@ os.environ["SPHINX_BUILD"] = "1"
 project = "Lucid"
 copyright = "2025, ChanLumerico"
 author = "ChanLumerico"
-release = "2.4.1"
+release = "2.4.2"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -47,13 +47,15 @@ pygments_style = "xcode"
 pygments_dark_style = "github-dark"
 
 
-rst_epilog = """
+# -- RST Epilogs -------------------------------------------------------------
 
+MISC_EP = """
 .. |wip-badge| raw:: html
 
     <span class="badge wip">Work-In-Progress</span>
+"""
 
-
+ARCH_EP = """
 .. |convnet-badge| raw:: html
 
     <span class="badge convnet">ConvNet</span>
@@ -74,7 +76,12 @@ rst_epilog = """
 
     <span class="badge autoencoder">Autoencoder</span>
 
-    
+.. |diffusion-badge| raw:: html
+
+    <span class="badge diffusion">Diffusion</span>
+"""
+
+TASK_EP = """    
 .. |imgclf-badge| raw:: html
 
     <span class="badge normal">Image Classification</span>
@@ -90,5 +97,6 @@ rst_epilog = """
 .. |seq2seq-badge| raw:: html
 
     <span class="badge normal">Sequence-to-Sequence</span>
-
 """
+
+rst_epilog = ARCH_EP + TASK_EP + MISC_EP

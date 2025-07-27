@@ -15,6 +15,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Added *Group Normalization* APIs: `F.group_norm`, `nn.GroupNorm`
 - Generalized **VAE** implemented to newly addded *Image Generation* 
   model category: `lucid.models.VAE`
 

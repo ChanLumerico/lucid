@@ -14,6 +14,7 @@ __all__ = [
     "InstanceNorm2d",
     "InstanceNorm3d",
     "LayerNorm",
+    "GroupNorm",
     "GlobalResponseNorm",
 ]
 
@@ -190,6 +191,28 @@ class LayerNorm(nn.Module):
         return F.layer_norm(
             input_, self.normalized_shape, self.weight, self.bias, self.eps
         )
+
+
+@nn.auto_repr("num_groups", "num_channels", "affine")
+class GroupNorm(nn.Module):
+    def __init__(
+        self, num_groups: int, num_channels: int, eps: float = 1e-5, affine: bool = True
+    ) -> None:
+        super().__init__()
+        self.num_groups = num_groups
+        self.num_channels = num_channels
+        self.eps = eps
+        self.affine = affine
+
+        if self.affine:
+            self.weight = nn.Parameter(lucid.ones(num_channels))
+            self.bias = nn.Parameter(lucid.zeros(num_channels))
+        else:
+            self.weight = None
+            self.bias = None
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return F.group_norm(input_, self.num_groups, self.weight, self.bias, self.eps)
 
 
 @nn.auto_repr("channels", "eps")

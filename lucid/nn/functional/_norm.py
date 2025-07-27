@@ -148,6 +148,38 @@ def instance_norm(
     return normalized
 
 
+def group_norm(
+    input_: Tensor,
+    num_groups: int,
+    weight: Tensor | None,
+    bias: Tensor | None,
+    eps: float = 1e-5,
+) -> Tensor:
+    N, C, *spatial_dims = input_.shape
+    assert C % num_groups == 0, "Number of channels must be divisible by num_groups"
+
+    group_size = C // num_groups
+    new_shape = (N, num_groups, group_size, *spatial_dims)
+    reshaped = input_.reshape(*new_shape)
+
+    axes = (2,) + tuple(range(3, reshaped.ndim))
+    mean = reshaped.mean(axis=axes, keepdims=True)
+    var = reshaped.var(axis=axes, keepdims=True)
+
+    normalized = (reshaped - mean) / lucid.sqrt(var + eps)
+    normalized = normalized.reshape(N, C, *spatial_dims)
+
+    if weight is not None:
+        weight = weight.reshape(1, C, *(1,) * len(spatial_dims))
+        normalized *= weight
+
+    if bias is not None:
+        bias = bias.reshape(1, C, *(1,) * len(spatial_dims))
+        normalized += bias
+
+    return normalized
+
+
 def global_response_norm(
     input_: Tensor, gamma: Tensor, beta: Tensor, eps: float = 1e-6
 ) -> Tensor:
