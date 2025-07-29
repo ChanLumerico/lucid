@@ -11,9 +11,6 @@ __all__ = ["Identity", "Linear", "Bilinear"]
 
 
 class Identity(nn.Module):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__()
-
     def forward(self, input_: Tensor) -> Tensor:
         return input_
 
