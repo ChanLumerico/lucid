@@ -838,3 +838,75 @@ class ceil(operation):
 
     def __flops__(self, a: Tensor) -> __init__:
         return a.size
+
+
+class cumprod(operation):
+    def __init__(self, axis: int) -> None:
+        super().__init__()
+        self.axis = axis
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.cumprod(a.data, axis=self.axis))
+        return self.result, partial(self.__grad_cpu__, a=a)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.cumprod(a.data, axis=self.axis))
+        return self.result, partial(self.__grad_gpu__, a=a)
+
+    def __grad_cpu__(self, a: Tensor) -> _GradFuncType:
+        y = self.result.data
+        grad = self.result.grad
+
+        u = grad * y
+        rev = np.flip(u, axis=self.axis)
+        csum = np.cumsum(rev, axis=self.axis)
+        rev_csum = np.flip(csum, axis=self.axis)
+
+        return rev_csum / a.data
+
+    def __grad_gpu__(self, a: Tensor) -> _GradFuncType:
+        y = self.result.data
+        grad = self.result.grad
+
+        u = grad * y
+        slices = [slice(None)] * u.ndim
+        slices[self.axis] = slice(None, None, -1)
+
+        rev = u[tuple(slices)]
+        csum = mx.cumsum(rev, axis=self.axis)
+        rev_csum = csum[tuple(slices)]
+
+        return rev_csum / a.data
+
+    def __flops__(self, a: Tensor) -> int:
+        return 4 * a.size
+
+
+class cumsum(operation):
+    def __init__(self, axis: int = -1) -> None:
+        super().__init__()
+        self.axis = axis
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(np.cumsum(a.data, axis=self.axis))
+        return self.result, partial(self.__grad__, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.cumsum(a.data, axis=self.axis))
+        return self.result, partial(self.__grad__, a=a, lib_=mx)
+
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+        g = self.result.grad
+        rev = tuple(
+            slice(None, None, -1) if ax == self.axis else slice(None)
+            for ax in range(a.ndim)
+        )
+        grad_rev = lib_.cumsum(g[rev], axis=self.axis)
+        return grad_rev[rev]
+
+    def __flops__(self, a: Tensor) -> int:
+        return a.size

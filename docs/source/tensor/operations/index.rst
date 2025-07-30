@@ -35,6 +35,8 @@ Tensor Operations
    ufunc/round.rst
    ufunc/floor.rst
    ufunc/ceil.rst
+   ufunc/cumprod.rst
+   ufunc/cumsum.rst
 
 .. toctree::
    :maxdepth: 1

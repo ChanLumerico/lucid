@@ -22,7 +22,7 @@ __all__ = [
     "exp", "log", "log2", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", 
     "sinh", "cosh", "tanh", "clip", "abs", "sign", "reciprocal", "square", "cube",
     "transpose", "sum", "trace", "mean", "var", "min", "max", "swapaxes", "round",
-    "floor", "ceil",
+    "floor", "ceil", "cumprod", "cumsum",
 
     "zeros", "zeros_like", "ones", "ones_like", "eye", "diag", "arange", "empty",
     "empty_like", "linspace", "full", "full_like",
@@ -289,6 +289,14 @@ def floor(a: Tensor) -> Tensor:
 
 def ceil(a: Tensor) -> Tensor:
     return ufunc.ceil()(a)
+
+
+def cumprod(a: Tensor, axis: int = -1) -> Tensor:
+    return ufunc.cumprod(axis)(a)
+
+
+def cumsum(a: Tensor, axis: int = -1) -> Tensor:
+    return ufunc.cumsum(axis)(a)
 
 
 @overload
