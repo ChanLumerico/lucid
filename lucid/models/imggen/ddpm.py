@@ -125,7 +125,7 @@ class _UNet(nn.Module):
                 self.ups.append(
                     _ResBlock(
                         now_channels + channels.pop(), out_ch, time_emb_dim, dropout
-                    )
+                    )  # BUG: `channels.pop()` has bug: `IndexError: pop from empty list`
                 )
                 now_channels = out_ch
 
