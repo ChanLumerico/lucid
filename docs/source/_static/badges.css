@@ -43,13 +43,13 @@
 }
 
 .badge.autoencoder {
-    color: #5ce600;
-    border-color: #5ce600;
+    color: #61f300;
+    border-color: #61f300;
 }
 
 .badge.vae {
-    color: #99e963;
-    border-color: #99e963;
+    color: #a3f070;
+    border-color: #a3f070;
 }
 
 .badge.diffusion {

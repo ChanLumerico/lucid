@@ -5,7 +5,8 @@ Image Generation
     :maxdepth: 1
     :hidden:
 
-    VAE <vae/VAE.rst>
+    VAE <autoencoder/VAE.rst>
+    DDPM <diffusion/DDPM.rst>
 
 Variational Autoencoder (VAE)
 -----------------------------
@@ -28,11 +29,31 @@ over latent variables, enabling smooth sampling and interpolation.
       - Input Shape
     
     * - VAE
-      - `VAE <vae/VAE>`_
+      - `VAE <autoencoder/VAE>`_
       - :math:`(N,C,H,W)`
 
 DDPM
 ----
-|wip-badge|
+|diffusion-badge| |imggen-badge|
+
+A Denoising Diffusion Probabilistic Model (DDPM) is a generative model that learns to 
+generate data by reversing a gradual noising process. It adds Gaussian noise over 
+several timesteps and trains a neural network to denoise and recover the original 
+data distribution through a Markovian process.
+
+ J. Ho, A. Jain, and P. Abbeel, “Denoising Diffusion Probabilistic Models,”  
+ *Advances in Neural Information Processing Systems (NeurIPS)*, 2020.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+
+    * - DDPM
+      - `DDPM <diffusion/DDPM>`_
+      - :math:`(N,C,H,W)`
 
 *To be implemented...🔮*

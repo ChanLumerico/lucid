@@ -15,6 +15,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- **DDPM** implemented: `lucid.models.DDPM`
 - Added `lucid.cumprod` and `lucid.cumsum`
 - Added *Group Normalization* APIs: `F.group_norm`, `nn.GroupNorm`
 - Generalized **VAE** implemented to newly addded *Image Generation* 
@@ -23,11 +24,6 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 - **EfficientFormer** implemented: `lucid.models.EfficientFormer`
 
   Detailed variants: `efficientformer_l1`, `efficientformer_l3`, and `efficientformer_l7`
-
-- Added Porting System: `lucid.save`, `lucid.load`
-  
-  Supports `lucid.Tensor` and state-dict(`OrderedDict`) save/load
-  (For `lucid.nn.Module`, it automatically extracts its state-dict and then saves the dict)
 
 ## 🔧 How to Install
 
