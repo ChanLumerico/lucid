@@ -72,91 +72,147 @@ class _UNet(nn.Module):
         in_channels: int = 3,
         out_channels: int = 3,
         base_channels: int = 128,
-        channel_mults: tuple[int] = (1, 2, 2),
+        channel_mults: tuple[int, ...] = (1, 2, 2),
         num_res_blocks: int = 2,
-        attention_res: tuple[int] = (16,),
+        attention_res: tuple[int, ...] = (16,),
         image_size: int = 32,
         time_emb_dim: int = 512,
         dropout: float = 0.1,
         use_sigmoid: bool = True,
     ) -> None:
         super().__init__()
+        self.base_channels = base_channels
+        self.channel_mults = channel_mults
+        self.num_res_blocks = num_res_blocks
+        self.attn_resolutions = set(attention_res)
+        self.image_size = image_size
+        self.time_emb_dim = time_emb_dim
         self.use_sigmoid = use_sigmoid
+        self.dropout = dropout
+
         self.time_mlp = nn.Sequential(
-            nn.Linear(base_channels, time_emb_dim),
+            nn.Linear(time_emb_dim, time_emb_dim * 4),
             nn.Swish(),
-            nn.Linear(time_emb_dim, time_emb_dim),
+            nn.Linear(time_emb_dim * 4, time_emb_dim),
         )
         self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
-        self.downs = nn.ModuleList()
-        channels = [base_channels]
-        now_channels = base_channels
-        current_res = image_size
+        self.down_resblocks = nn.ModuleList()
+        self.downsample = nn.ModuleList()
+        self.down_attn: dict[int, nn.Module] = {}
 
-        for mult in channel_mults:
+        curr_channels = base_channels
+        curr_res = image_size
+        for i, mult in enumerate(channel_mults):
             out_ch = base_channels * mult
+            blocks = nn.ModuleList()
+
             for _ in range(num_res_blocks):
-                self.downs.append(
-                    _ResBlock(now_channels, out_ch, time_emb_dim, dropout)
-                )
-                now_channels = out_ch
+                blocks.append(_ResBlock(curr_channels, out_ch, time_emb_dim, dropout))
+                curr_channels = out_ch
 
-                if current_res in attention_res:
-                    self.downs.append(_AttentionBlock(now_channels))
+            self.down_resblocks.append(blocks)
+            if curr_res in self.attn_resolutions:
+                self.down_attn[i] = _AttentionBlock(curr_channels)
 
-            if mult != channel_mults[-1]:
-                self.downs.append(
+            if i < len(channel_mults) - 1:
+                self.downsample.append(
                     nn.Conv2d(
-                        now_channels, now_channels, kernel_size=3, stride=2, padding=1
+                        curr_channels, curr_channels, kernel_size=3, stride=2, padding=1
                     )
                 )
-                current_res //= 2
-            channels.append(now_channels)
+                curr_res //= 2
 
-        self.mid_block1 = _ResBlock(now_channels, now_channels, time_emb_dim, dropout)
-        self.mid_attn = _AttentionBlock(now_channels)
-        self.mid_block2 = _ResBlock(now_channels, now_channels, time_emb_dim, dropout)
+        self.mid_block1 = _ResBlock(curr_channels, curr_channels, time_emb_dim, dropout)
+        self.mid_attn = _AttentionBlock(curr_channels)
+        self.mid_block2 = _ResBlock(curr_channels, curr_channels, time_emb_dim, dropout)
 
-        self.ups = nn.ModuleList()
-        for mult in reversed(channel_mults):
-            out_ch = base_channels * mult
-            for _ in range(num_res_blocks + 1):
-                self.ups.append(
-                    _ResBlock(
-                        now_channels + channels.pop(), out_ch, time_emb_dim, dropout
-                    )  # BUG: `channels.pop()` has bug: `IndexError: pop from empty list`
-                )
-                now_channels = out_ch
+        self.upsample = nn.ModuleList()
+        self.up_resblocks = nn.ModuleList()
+        self.up_attn: dict[int, nn.Module] = {}
 
-                if current_res in attention_res:
-                    self.ups.append(_AttentionBlock(now_channels))
-
-            if mult != channel_mults[0]:
-                self.ups.append(
+        rev_mults = list(reversed(channel_mults))
+        curr_res = curr_res
+        for i, mult in enumerate(rev_mults):
+            if i > 0:
+                self.upsample.append(
                     nn.Sequential(
                         nn.Upsample(scale_factor=2, mode="nearest"),
-                        nn.Conv2d(now_channels, now_channels, kernel_size=3, padding=1),
+                        nn.Conv2d(
+                            curr_channels, curr_channels, kernel_size=3, padding=1
+                        ),
                     )
                 )
-                current_res *= 2
+                curr_res *= 2
 
-        self.final_norm = nn.GroupNorm(num_groups=32, num_channels=now_channels)
+            out_ch = base_channels * mult
+            blocks = nn.ModuleList()
+            for j in range(num_res_blocks):
+                in_ch = curr_channels + (base_channels * mult if j == 0 else 0)
+                blocks.append(
+                    _ResBlock(in_ch or curr_channels, out_ch, time_emb_dim, dropout)
+                )
+                curr_channels = out_ch
+
+            self.up_resblocks.append(blocks)
+            if curr_res in self.attn_resolutions:
+                self.up_attn[i] = _AttentionBlock(curr_channels)
+
+        self.final_norm = nn.GroupNorm(num_groups=32, num_channels=curr_channels)
         self.final_act = nn.Swish()
         self.final_conv = nn.Conv2d(
-            now_channels, out_channels, kernel_size=3, padding=1
+            curr_channels, out_channels, kernel_size=3, padding=1
         )
         self.final_sigmoid = nn.Sigmoid()
 
     def time_embedding(self, t: Tensor) -> Tensor:
-        half_dim = self.time_mlp[0].in_features // 2
-        emb_scale = lucid.log(10000.0) / (half_dim - 1)
+        half_dim = self.time_emb_dim // 2
+        scale = lucid.log(10000.0) / (half_dim - 1)
 
-        emb = lucid.exp(lucid.arange(half_dim) * -emb_scale)
-        emb = t[:, None] * emb[None, :]
+        emb = lucid.arange(half_dim, device=t.device) * -scale
+        emb = lucid.exp(emb)[None, :] * t[:, None]
         emb = lucid.concatenate([lucid.sin(emb), lucid.cos(emb)], axis=-1)
 
-        return self.time_mlp(emb.astype(lucid.Float32))
+        return self.time_mlp(emb)
+
+    def forward(self, x: Tensor, t: Tensor) -> Tensor:
+        t_emb = self.time_embedding(t)
+        x = self.init_conv(x)
+
+        skips: list[Tensor] = []
+        for i, blocks in enumerate(self.down_resblocks):
+            for layer in blocks:
+                x = layer(x, t_emb)
+            if i in self.down_attn:
+                x = self.down_attn[i](x)
+            skips.append(x)
+            if i < len(self.downsample):
+                x = self.downsample[i](x)
+
+        x = self.mid_block1(x, t_emb)
+        x = self.mid_attn(x)
+        x = self.mid_block2(x, t_emb)
+
+        for i, blocks in enumerate(self.up_resblocks):
+            if i > 0:
+                x = self.upsample[i - 1](x)
+            skip = skips.pop()
+
+            x = lucid.concatenate([x, skip], axis=1)
+            for layer in blocks:
+                x = layer(x, t_emb)
+
+            if i in self.up_attn:
+                x = self.up_attn[i](x)
+
+        x = self.final_norm(x)
+        x = self.final_act(x)
+        x = self.final_conv(x)
+
+        if self.use_sigmoid:
+            x = self.final_sigmoid(x)
+
+        return x
 
 
 class _GaussianDiffuser(nn.Module):
@@ -171,7 +227,7 @@ class _GaussianDiffuser(nn.Module):
         self.register_buffer("alphas_cumprod", lucid.cumprod(self.alphas, axis=0))
         self.register_buffer(
             "alphas_cumprod_prev",
-            lucid.concatenate([Tensor(1.0), self.alphas_cumprod[:-1]], axis=0),
+            lucid.concatenate([Tensor([1.0]), self.alphas_cumprod[:-1]], axis=0),
         )
         self.register_buffer(
             "posterior_var",
@@ -237,8 +293,8 @@ class DDPM(nn.Module):
 
     def get_loss(self, x: Tensor) -> Tensor:
         B = x.shape[0]
-        t = self.diffuser.sample_timesteps(B)
-        noise = lucid.random.randn(*x.shape)
+        t = self.diffuser.sample_timesteps(B).to(x.device)
+        noise = lucid.random.randn(*x.shape).to(x.device)
 
         x_t = self.diffuser.add_noise(x, t, noise)
         noise_pred = self.model(x_t, t)
