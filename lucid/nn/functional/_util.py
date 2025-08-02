@@ -48,13 +48,14 @@ def _interpolate_nearest(
     input_: Tensor, size: tuple[int, int], align_corners: bool = False
 ) -> None:
     _, _, H, W = input_.shape
+    device = input_.device
     out_h, out_w = size
 
     scale_h = H / out_h
     scale_w = W / out_w
 
-    indices_h = (lucid.arange(out_h) * scale_h).clip(0, H - 1).astype(int)
-    indices_w = (lucid.arange(out_w) * scale_w).clip(0, W - 1).astype(int)
+    indices_h = (lucid.arange(out_h) * scale_h).clip(0, H - 1).astype(int).to(device)
+    indices_w = (lucid.arange(out_w) * scale_w).clip(0, W - 1).astype(int).to(device)
 
     return input_[:, :, indices_h[:, None], indices_w]
 

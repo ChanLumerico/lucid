@@ -99,7 +99,7 @@ class _UNet(nn.Module):
 
         self.down_resblocks = nn.ModuleList()
         self.downsample = nn.ModuleList()
-        self.down_attn: dict[int, nn.Module] = {}
+        self.down_attn = nn.ModuleDict()
 
         curr_channels = base_channels
         curr_res = image_size
@@ -113,7 +113,7 @@ class _UNet(nn.Module):
 
             self.down_resblocks.append(blocks)
             if curr_res in self.attn_resolutions:
-                self.down_attn[i] = _AttentionBlock(curr_channels)
+                self.down_attn[str(i)] = _AttentionBlock(curr_channels)
 
             if i < len(channel_mults) - 1:
                 self.downsample.append(
@@ -129,7 +129,7 @@ class _UNet(nn.Module):
 
         self.upsample = nn.ModuleList()
         self.up_resblocks = nn.ModuleList()
-        self.up_attn: dict[int, nn.Module] = {}
+        self.up_attn = nn.ModuleDict()
 
         rev_mults = list(reversed(channel_mults))
         curr_res = curr_res
@@ -156,7 +156,7 @@ class _UNet(nn.Module):
 
             self.up_resblocks.append(blocks)
             if curr_res in self.attn_resolutions:
-                self.up_attn[i] = _AttentionBlock(curr_channels)
+                self.up_attn[str(i)] = _AttentionBlock(curr_channels)
 
         self.final_norm = nn.GroupNorm(num_groups=32, num_channels=curr_channels)
         self.final_act = nn.Swish()
@@ -183,8 +183,8 @@ class _UNet(nn.Module):
         for i, blocks in enumerate(self.down_resblocks):
             for layer in blocks:
                 x = layer(x, t_emb)
-            if i in self.down_attn:
-                x = self.down_attn[i](x)
+            if str(i) in self.down_attn:
+                x = self.down_attn[str(i)](x)
             skips.append(x)
             if i < len(self.downsample):
                 x = self.downsample[i](x)
@@ -202,8 +202,8 @@ class _UNet(nn.Module):
             for layer in blocks:
                 x = layer(x, t_emb)
 
-            if i in self.up_attn:
-                x = self.up_attn[i](x)
+            if str(i) in self.up_attn:
+                x = self.up_attn[str(i)](x)
 
         x = self.final_norm(x)
         x = self.final_act(x)

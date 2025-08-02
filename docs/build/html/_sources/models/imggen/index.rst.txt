@@ -51,9 +51,11 @@ data distribution through a Markovian process.
     * - Name
       - Model
       - Input Shape
+      - Parameter Count
 
     * - DDPM
       - `DDPM <diffusion/DDPM>`_
       - :math:`(N,C,H,W)`
+      - 20,907,649 (Default)
 
 *To be implemented...🔮*
