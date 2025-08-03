@@ -13,7 +13,7 @@ Object detection
 
 R-CNN
 -----
-|convnet-badge| |region-convnet-badge| |objdet-badge|
+|convnet-badge| |two-stage-det-badge| |objdet-badge|
 
 R-CNN (Region-based CNN) detects objects by first generating region proposals using 
 Selective Search, then classifies each using a shared CNN. It combines region warping, 
@@ -37,7 +37,7 @@ feature extraction, and per-region classification with Non-Maximum Suppression.
 
 Fast R-CNN
 ----------
-|convnet-badge| |region-convnet-badge| |objdet-badge|
+|convnet-badge| |two-stage-det-badge| |objdet-badge|
 
 Fast R-CNN improves upon R-CNN by computing the feature map once for the entire image, 
 then pooling features from proposed regions using RoI Pooling. It unifies classification 
@@ -60,7 +60,7 @@ and bounding box regression into a single network with a shared backbone.
 
 Faster R-CNN
 ------------
-|convnet-badge| |region-convnet-badge| |objdet-badge|
+|convnet-badge| |two-stage-det-badge| |objdet-badge|
 
 Faster R-CNN builds on Fast R-CNN by introducing a Region Proposal Network (RPN) 
 that shares convolutional features with the detection head, enabling end-to-end 
@@ -93,5 +93,11 @@ training and real-time inference.
       - `faster_rcnn_resnet_101_fpn <faster_rcnn/faster_rcnn_resnet_101_fpn>`_
       - :math:`(N,3,H,W)`
       - 62,508,030
+
+YOLO
+----
+|convnet-badge| |one-stage-det-badge| |objdet-badge|
+
+|wip-badge|
 
 *To be implemented...🔮*

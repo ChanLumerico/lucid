@@ -1,6 +1,6 @@
 Fast R-CNN
 ==========
-|convnet-badge| |region-convnet-badge| |objdet-badge|
+|convnet-badge| |two-stage-det-badge| |objdet-badge|
 
 .. autoclass:: lucid.models.FastRCNN
 

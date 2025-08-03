@@ -12,7 +12,7 @@
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
-    <link rel="stylesheet" type="text/css" href="../../_static/badges.css?v=ee5c0dbd" />
+    <link rel="stylesheet" type="text/css" href="../../_static/badges.css?v=9b87a0c7" />
     
     
 
@@ -989,7 +989,7 @@
 </div>
 <section id="r-cnn">
 <h2>R-CNN<a class="headerlink" href="#r-cnn" title="Link to this heading">¶</a></h2>
-<p><span class="badge convnet">ConvNet</span> <span class="badge region_convnet">Region ConvNet</span> <span class="badge normal">Object Detection</span></p>
+<p><span class="badge convnet">ConvNet</span> <span class="badge two_stage_det">Two-Stage Detector</span> <span class="badge normal">Object Detection</span></p>
 <p>R-CNN (Region-based CNN) detects objects by first generating region proposals using
 Selective Search, then classifies each using a shared CNN. It combines region warping,
 feature extraction, and per-region classification with Non-Maximum Suppression.</p>
@@ -1017,7 +1017,7 @@ pattern recognition</em> (2014): 580-587.</p>
 </section>
 <section id="fast-r-cnn">
 <h2>Fast R-CNN<a class="headerlink" href="#fast-r-cnn" title="Link to this heading">¶</a></h2>
-<p><span class="badge convnet">ConvNet</span> <span class="badge region_convnet">Region ConvNet</span> <span class="badge normal">Object Detection</span></p>
+<p><span class="badge convnet">ConvNet</span> <span class="badge two_stage_det">Two-Stage Detector</span> <span class="badge normal">Object Detection</span></p>
 <p>Fast R-CNN improves upon R-CNN by computing the feature map once for the entire image,
 then pooling features from proposed regions using RoI Pooling. It unifies classification
 and bounding box regression into a single network with a shared backbone.</p>
@@ -1044,7 +1044,7 @@ computer vision</em> (2015): 1440-1448.</p>
 </section>
 <section id="faster-r-cnn">
 <h2>Faster R-CNN<a class="headerlink" href="#faster-r-cnn" title="Link to this heading">¶</a></h2>
-<p><span class="badge convnet">ConvNet</span> <span class="badge region_convnet">Region ConvNet</span> <span class="badge normal">Object Detection</span></p>
+<p><span class="badge convnet">ConvNet</span> <span class="badge two_stage_det">Two-Stage Detector</span> <span class="badge normal">Object Detection</span></p>
 <p>Faster R-CNN builds on Fast R-CNN by introducing a Region Proposal Network (RPN)
 that shares convolutional features with the detection head, enabling end-to-end
 training and real-time inference.</p>
@@ -1081,6 +1081,11 @@ Intelligence</em> (2017).</p>
 </tbody>
 </table>
 </div>
+</section>
+<section id="yolo">
+<h2>YOLO<a class="headerlink" href="#yolo" title="Link to this heading">¶</a></h2>
+<p><span class="badge convnet">ConvNet</span> <span class="badge one_stage_det">One-Stage Detector</span> <span class="badge normal">Object Detection</span></p>
+<p><span class="badge wip">Work-In-Progress</span></p>
 <p><em>To be implemented…🔮</em></p>
 </section>
 </section>
@@ -1144,6 +1149,7 @@ Intelligence</em> (2017).</p>
 <li><a class="reference internal" href="#r-cnn">R-CNN</a></li>
 <li><a class="reference internal" href="#fast-r-cnn">Fast R-CNN</a></li>
 <li><a class="reference internal" href="#faster-r-cnn">Faster R-CNN</a></li>
+<li><a class="reference internal" href="#yolo">YOLO</a></li>
 </ul>
 </li>
 </ul>

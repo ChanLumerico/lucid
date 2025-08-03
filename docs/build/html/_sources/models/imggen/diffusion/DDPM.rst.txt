@@ -12,6 +12,8 @@ This implementation is modular and supports custom noise prediction models
 and diffusion schedules, while defaulting to a U-Net and linear Gaussian 
 :math:`\beta`-schedule.
 
+**Total Parameters**: 20,907,649 (Default)
+
 .. image:: ddpm.png
     :width: 600
     :alt: DDPM architecture

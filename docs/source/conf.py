@@ -60,9 +60,13 @@ ARCH_EP = """
 
     <span class="badge convnet">ConvNet</span>
 
-.. |region-convnet-badge| raw:: html
+.. |one-stage-det-badge| raw:: html
 
-    <span class="badge region_convnet">Region ConvNet</span>
+    <span class="badge one_stage_det">One-Stage Detector</span>
+
+.. |two-stage-det-badge| raw:: html
+
+    <span class="badge two_stage_det">Two-Stage Detector</span>
 
 .. |transformer-badge| raw:: html
 

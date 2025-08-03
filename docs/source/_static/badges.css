@@ -27,7 +27,12 @@
     border-color: #ffa600;
 }
 
-.badge.region_convnet {
+.badge.one_stage_det {
+    color: #ffc55b;
+    border-color: #ffc55b;
+}
+
+.badge.two_stage_det {
     color: #ffc55b;
     border-color: #ffc55b;
 }
