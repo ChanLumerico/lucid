@@ -77,8 +77,8 @@ def tile(a: Tensor, /, reps: int | Sequence[int]) -> Tensor:
     return func.tile(reps)(a)
 
 
-def flatten(a: Tensor, /, axis: int = 0) -> Tensor:
-    return func.flatten(axis)(a)
+def flatten(a: Tensor, /, start_axis: int = 0, end_axis: int = -1) -> Tensor:
+    return func.flatten(start_axis, end_axis)(a)
 
 
 def meshgrid(

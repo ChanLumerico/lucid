@@ -423,21 +423,32 @@ class tile(operation):
 
 
 class flatten(operation):
-    def __init__(self, axis: int) -> None:
+    def __init__(self, start_axis: int = 0, end_axis: int = -1) -> None:
         super().__init__()
-        self.axis = axis
+        self.start_axis = start_axis
+        self.end_axis = end_axis
+
+    def _unified(self, a: Tensor) -> _FuncOpReturnType:
+        self.original_shape = a.shape
+
+        start = self.start_axis if self.start_axis >= 0 else a.ndim + self.start_axis
+        end = self.end_axis if self.end_axis >= 0 else a.ndim + self.end_axis
+
+        flat_axis = 1
+        for i in range(start, end + 1):
+            flat_axis *= a.shape[i]
+
+        new_shape = a.shape[:start] + (flat_axis,) + a.shape[end + 1 :]
+        self.result = Tensor(a.data.reshape(new_shape))
+        return self.result, self.__grad__
 
     @unary_func_op()
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
-        self.original_shape = a.shape
-        self.result = Tensor(a.data.reshape(*a.shape[: self.axis], -1))
-        return self.result, self.__grad__
+        return self._unified(a)
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        self.original_shape = a.shape
-        self.result = Tensor(a.data.reshape(*a.shape[: self.axis], -1))
-        return self.result, self.__grad__
+        return self._unified(a)
 
     def __grad__(self) -> _GradFuncType:
         return self.result.grad.reshape(self.original_shape)

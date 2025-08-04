@@ -5,5 +5,6 @@ Linear Layers
     :maxdepth: 1
     
     Identity.rst
+    Flatten.rst
     Linear.rst
     Bilinear.rst

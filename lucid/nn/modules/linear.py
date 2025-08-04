@@ -7,12 +7,22 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 
-__all__ = ["Identity", "Linear", "Bilinear"]
+__all__ = ["Identity", "Flatten", "Linear", "Bilinear"]
 
 
 class Identity(nn.Module):
     def forward(self, input_: Tensor) -> Tensor:
         return input_
+
+
+class Flatten(nn.Module):
+    def __init__(self, start_axis: int = 0, end_axis: int = -1) -> None:
+        super().__init__()
+        self.start_axis = start_axis
+        self.end_axis = end_axis
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return lucid.flatten(input_, self.start_axis, self.end_axis)
 
 
 class Linear(nn.Module):
