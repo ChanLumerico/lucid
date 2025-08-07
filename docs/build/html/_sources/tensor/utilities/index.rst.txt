@@ -36,3 +36,4 @@ Tensor Utilities
    histogram2d.rst
    histogramdd.rst
    where.rst
+   diagonal.rst

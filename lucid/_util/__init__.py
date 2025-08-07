@@ -12,7 +12,8 @@ __all__ = [
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
     "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
     "unbind", "sort", "nonzero", "unique", "topk", "argsort", "histogramdd", 
-    "histogram", "histogram2d", "where", "nonzero", "argmin", "argmax"
+    "histogram", "histogram2d", "where", "nonzero", "argmin", "argmax", 
+    "diagonal",
 ]
 # fmt: on
 
@@ -240,6 +241,10 @@ def where(condition: Tensor, a: Tensor, b: Tensor, /) -> Tensor:
     return func.where()(condition, a, b)
 
 
+def diagonal(a: Tensor, /, offset: int = 0, axis1: int = 0, axis2: int = 1) -> Tensor:
+    return func.diagonal(offset, axis1, axis2)(a)
+
+
 Tensor.reshape = _reshape_immediate
 Tensor.squeeze = squeeze
 Tensor.unsqueeze = unsqueeze
@@ -259,3 +264,4 @@ Tensor.unbind = unbind
 Tensor.sort = sort
 Tensor.unique = unique
 Tensor.nonzero = nonzero
+Tensor.diagonal = diagonal

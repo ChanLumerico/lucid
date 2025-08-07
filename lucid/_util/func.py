@@ -1258,3 +1258,53 @@ class where(operation):
 
     def __flops__(self, condition: Tensor, a: Tensor, b: Tensor) -> int:
         return max(condition.size, a.size, b.size)
+
+
+class diagonal(operation):
+    def __init__(self, offset: int = 0, axis1: int = 0, axis2: int = 1) -> None:
+        super().__init__()
+        self.offset = offset
+        self.axis1 = axis1
+        self.axis2 = axis2
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(np.diagonal(a.data, self.offset, self.axis1, self.axis2))
+        return self.result, partial(self.__grad__, a=a, lib_=np)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> Tensor:
+        self.result = Tensor(mx.diagonal(a.data, self.offset, self.axis1, self.axis2))
+        return self.result, partial(self.__grad__, a=a, lib_=mx)
+
+    def __grad__(self, a: Tensor, lib_) -> _GradFuncType:
+        grad_out = self.result.grad
+        grad_in = lib_.zeros_like(a.data)
+
+        if self.offset >= 0:
+            size = min(a.shape[self.axis1], a.shape[self.axis2] - self.offset)
+            i = lib_.arange(size, dtype=lib_.int32)
+            j = i + self.offset
+        else:
+            size = min(a.shape[self.axis1] + self.offset, a.shape[self.axis2])
+            i = lib_.arange(size, dtype=lib_.int32) - self.offset
+            j = lib_.arange(size, dtype=lib_.int32)
+
+        indexer = []
+        for ax in range(a.ndim):
+            if ax == self.axis1:
+                indexer.append(i)
+            elif ax == self.axis2:
+                indexer.append(j)
+            else:
+                indexer.append(lib_.zeros_like(i))
+
+        if lib_ is np:
+            grad_in[tuple(indexer)] += grad_out
+        else:
+            grad_in = grad_in.at[tuple(indexer)].add(grad_out)
+
+        return grad_in
+
+    def __flops__(self, a: Tensor) -> int:
+        return min(a.shape[self.axis1], a.shape[self.axis2])
