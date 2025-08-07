@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="Sequence-to-Sequence" href="../../../seq2seq/index.html" /><link rel="prev" title="YOLO v1" href="YOLO_V1.html" />
+<link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="Sequence-to-Sequence" href="../../../seq2seq/index.html" /><link rel="prev" title="YOLO-v1" href="YOLO_V1.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/yolo/v1/yolo_v1.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>yolo_v1 - Lucid 2.4.5 documentation</title>
+        <title>yolo_v1 - Lucid 2.5.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../../index.html"><div class="brand">Lucid 2.4.5 documentation</div></a>
+      <a href="../../../../index.html"><div class="brand">Lucid 2.5.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -193,7 +193,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 2.4.5 documentation</span>
+  <span class="sidebar-brand-text">Lucid 2.5.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -1000,6 +1000,86 @@
 <span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">yolo_v1</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="YOLO_V1.html#lucid.models.YOLO_V1" title="lucid.models.objdet.yolo.YOLO_V1"><span class="pre">YOLO_V1</span></a></span></span><a class="headerlink" href="#lucid.models.yolo_v1" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
+<p>The <cite>yolo_v1</cite> function constructs a YOLO (You Only Look Once) object detection model
+following the original YOLO-v1 architecture proposed by Redmon et al. (2016).
+This single-stage detector is optimized for speed and enables real-time detection
+of multiple objects in grid-based regions of the input image.</p>
+<p><strong>Total Parameters</strong>: 271,716,734 (ConvNet + FC)</p>
+<section id="function-signature">
+<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@register_model</span>
+<span class="k">def</span> <span class="nf">yolo_v1</span><span class="p">(</span><span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">YOLO_V1</span>
+</pre></div>
+</div>
+</section>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>num_classes</strong> (<em>int</em>, optional):
+Number of object classes to detect. Default is 20 (PASCAL VOC).</p></li>
+<li><p><strong>kwargs</strong> (<em>dict</em>, optional):
+Additional arguments to override defaults in <cite>YOLO_V1</cite>, such as:</p>
+<ul>
+<li><p><cite>split_size</cite> (int): Grid size for dividing the input image (default: 7).</p></li>
+<li><p><cite>num_boxes</cite> (int): Number of bounding boxes per grid cell (default: 2).</p></li>
+<li><p><cite>lambda_coord</cite> (float): Weight for coordinate loss (default: 5.0).</p></li>
+<li><p><cite>lambda_noobj</cite> (float): Weight for no-object confidence loss (default: 0.5).</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="returns">
+<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>YOLO_V1</strong>:
+An instance of the YOLOv1 model ready for training or inference.</p></li>
+</ul>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p><strong>Basic Usage</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">lucid.models</span> <span class="kn">import</span> <span class="n">yolo_v1</span>
+
+<span class="c1"># Create YOLOv1 model with 20 target classes</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">yolo_v1</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+
+<span class="c1"># Input: batch of images with shape (N, 3, 448, 448)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">448</span><span class="p">,</span> <span class="mi">448</span><span class="p">)</span>
+
+<span class="c1"># Output: tensor of shape (N, 7, 7, 30) for VOC (20 classes, 2 boxes)</span>
+<span class="n">preds</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">preds</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>  <span class="c1"># (8, 7, 7, 30)</span>
+</pre></div>
+</div>
+</section>
+<section id="training-notes">
+<h2>Training Notes<a class="headerlink" href="#training-notes" title="Link to this heading">¶</a></h2>
+<p>The output shape of the model is:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>(N, S, S, 5 * B + C)
+</pre></div>
+</div>
+<p>Where:
+- <cite>S</cite> is the grid size (<cite>split_size</cite>, default: 7),
+- <cite>B</cite> is the number of boxes per cell (<cite>num_boxes</cite>, default: 2),
+- <cite>C</cite> is the number of object classes (<cite>num_classes</cite>, e.g., 20 for VOC).</p>
+<p>This includes:
+- B bounding boxes (<cite>x</cite>, <cite>y</cite>, <cite>w</cite>, <cite>h</cite>, <cite>conf</cite>),
+- C class probabilities.</p>
+<p>Use the <cite>get_loss</cite> method of the returned model to compute the training loss
+against the corresponding ground truth targets in the same format.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>You can override architectural options like <cite>split_size</cite>, <cite>num_boxes</cite>, or loss coefficients
+via <cite>**kwargs</cite> to create variants of the original YOLOv1 model.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Make sure the ground truth targets fed into the loss function match the required shape
+<cite>(N, S, S, 5 * B + C)</cite>, with coordinates normalized to the grid and confidence +
+class vectors properly set.</p>
+</div>
+</section>
 </section>
 
         </article>
@@ -1023,7 +1103,7 @@
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">YOLO v1</div>
+                <div class="title">YOLO-v1</div>
                 
               </div>
             </a>
@@ -1059,6 +1139,11 @@
             <ul>
 <li><a class="reference internal" href="#">yolo_v1</a><ul>
 <li><a class="reference internal" href="#lucid.models.yolo_v1"><code class="docutils literal notranslate"><span class="pre">yolo_v1()</span></code></a></li>
+<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#returns">Returns</a></li>
+<li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#training-notes">Training Notes</a></li>
 </ul>
 </li>
 </ul>
@@ -1070,7 +1155,7 @@
       
     </aside>
   </div>
-</div><script src="../../../../_static/documentation_options.js?v=159ac128"></script>
+</div><script src="../../../../_static/documentation_options.js?v=3c4615cf"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/scripts/furo.js?v=5fa4622c"></script>
