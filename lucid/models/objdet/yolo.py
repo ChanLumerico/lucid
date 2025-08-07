@@ -8,7 +8,7 @@ from lucid._tensor import Tensor
 from lucid.models.objdet.util import iou
 
 
-__all__ = ["YOLO_V1"]
+__all__ = ["YOLO_V1", "yolo_v1"]
 
 
 arch_config = [
@@ -51,15 +51,15 @@ class YOLO_V1(nn.Module):
         split_size: int,
         num_boxes: int,
         num_classes: int,
-        lambda_obj: float = 5.0,
-        lambda_noobj: float = 5.0,
+        lambda_coord: float = 5.0,
+        lambda_noobj: float = 0.5,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
         self.split_size = split_size
         self.num_boxes = num_boxes
         self.num_classes = num_classes
-        self.lambda_obj = lambda_obj
+        self.lambda_coord = lambda_coord
         self.lambda_noobj = lambda_noobj
 
         self.darknet = self._create_conv_layers(arch=arch_config)
@@ -138,16 +138,81 @@ class YOLO_V1(nn.Module):
             [pred_xy - pred_wh, pred_xy + pred_wh], axis=-1
         )
 
-        target_xy = target_box[..., 2:]
+        target_xy = target_box[..., :2]
         target_wh = target_box[..., 2:4] / 2
-        tatget_corners = lucid.concatenate(
+        target_corners = lucid.concatenate(
             [target_xy - target_wh, target_xy + target_wh], axis=-1
         )
 
         ious = []
         for b in range(B):
-            iou_val = iou(
-                pred_corners[..., b, :].reshape(-1, 4),
-                tatget_corners.reshape(-1, 4),
+            iou_val = (
+                iou(
+                    pred_corners[..., b, :].reshape(-1, 4),
+                    target_corners.reshape(-1, 4),
+                )
+                .diagonal()
+                .reshape(N, S, S, 1)
             )
-            # TODO: implement `lucid.Tensor.diagonal`
+            ious.append(iou_val)
+        ious = lucid.stack(ious, axis=3)
+
+        best_box = lucid.argmax(ious, axis=3, keepdims=True)
+        box_range = lucid.arange(B).reshape(1, 1, 1, B)
+        best_mask = (box_range == best_box).astype(lucid.Float32).unsqueeze(axis=-1)
+
+        pred_resp = (pred_boxes * best_mask).sum(axis=3)
+        pred_xy = pred_resp[..., :2]
+        pred_wh = pred_resp[..., 2:4]
+        pred_conf = pred_resp[..., 4:5]
+
+        tgt_xy = target_box[..., :2]
+        tgt_wh = target_box[..., 2:4]
+
+        loss_xy = F.mse_loss(pred_xy * obj_mask, tgt_xy * obj_mask, reduction="sum")
+        loss_wh = F.mse_loss(
+            lucid.sqrt(pred_wh + 1e-6) * obj_mask,
+            lucid.sqrt(tgt_wh) * obj_mask,
+            reduction="sum",
+        )
+
+        pred_conf_all = pred_boxes[..., 4]
+        best_ious = lucid.max(ious, axis=3, keepdims=True)
+
+        loss_obj = F.mse_loss(
+            pred_conf * obj_mask.squeeze(axis=-1),
+            best_ious * obj_mask.squeeze(axis=-1),
+            reduction="sum",
+        )
+        loss_noobj = F.mse_loss(
+            pred_conf_all * noobj_mask.squeeze(axis=-1),
+            lucid.zeros_like(pred_conf_all),
+            reduction="sum",
+        )
+
+        pred_cls = pred[..., B * 5 :]
+        target_cls = target[..., B * 5 :]
+        loss_cls = F.mse_loss(
+            pred_cls * obj_mask, target_cls * obj_mask, reduction="sum"
+        )
+
+        total_loss = (
+            self.lambda_coord * (loss_xy + loss_wh)
+            + loss_obj
+            + self.lambda_noobj * loss_noobj
+            + loss_cls
+        )
+        return total_loss / N
+
+
+@register_model
+def yolo_v1(num_classes: int = 20, **kwargs) -> YOLO_V1:
+    return YOLO_V1(
+        in_channels=3,
+        split_size=7,
+        num_boxes=2,
+        num_classes=num_classes,
+        lambda_coord=5.0,
+        lambda_noobj=0.5,
+        **kwargs
+    )

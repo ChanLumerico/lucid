@@ -916,5 +916,11 @@
         "family": "EfficientFormer",
         "param_size": 81460328,
         "task": "imgclf"
+    },
+    "yolo_v1": {
+        "name": "yolo_v1",
+        "family": "YOLO_V1",
+        "param_size": 271716734,
+        "task": "objdet"
     }
 }

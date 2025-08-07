@@ -895,10 +895,14 @@
 <li class="toctree-l3"><a class="reference internal" href="faster_rcnn/faster_rcnn_resnet_101_fpn.html">faster_rcnn_resnet_101_fpn</a></li>
 </ul>
 </li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="yolo/index.html">YOLO</a><input class="toctree-checkbox" id="toctree-checkbox-73" name="toctree-checkbox-73" role="switch" type="checkbox"/><label for="toctree-checkbox-73"><div class="visually-hidden">Toggle navigation of YOLO</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="yolo/v1/YOLO_V1.html">YOLO-v1</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-73" name="toctree-checkbox-73" role="switch" type="checkbox"/><label for="toctree-checkbox-73"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../seq2seq/transformer/Transformer.html">Transformer</a><input class="toctree-checkbox" id="toctree-checkbox-74" name="toctree-checkbox-74" role="switch" type="checkbox"/><label for="toctree-checkbox-74"><div class="visually-hidden">Toggle navigation of Transformer</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-74" name="toctree-checkbox-74" role="switch" type="checkbox"/><label for="toctree-checkbox-74"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../seq2seq/transformer/Transformer.html">Transformer</a><input class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of Transformer</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../seq2seq/transformer/transformer_base.html">transformer_base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../seq2seq/transformer/transformer_big.html">transformer_big</a></li>
 </ul>
@@ -911,7 +915,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-76" name="toctree-checkbox-76" role="switch" type="checkbox"/><label for="toctree-checkbox-76"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -1087,7 +1091,31 @@ Intelligence</em> (2017).</p>
 <section id="yolo">
 <h2>YOLO<a class="headerlink" href="#yolo" title="Link to this heading">¶</a></h2>
 <p><span class="badge convnet">ConvNet</span> <span class="badge one_stage_det">One-Stage Detector</span> <span class="badge normal">Object Detection</span></p>
-<p><span class="badge wip">Work-In-Progress</span></p>
+<p>YOLO is a one-stage object detector that frames detection as a single regression problem,
+directly predicting bounding boxes and class probabilities from full images in a single
+forward pass. It enables real-time detection with impressive speed and accuracy.</p>
+<blockquote>
+<div><p>Redmon, Joseph et al. “You Only Look Once: Unified, Real-Time Object Detection.”
+<em>Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</em> (2016).</p>
+</div></blockquote>
+<div class="table-wrapper docutils container">
+<table class="docutils align-left">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Model</p></th>
+<th class="head"><p>Input Shape</p></th>
+<th class="head"><p>Parameter Count</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>YOLO-v1</p></td>
+<td><p><a class="reference external" href="yolo/v1/yolo_v1">yolo_v1</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,448,448)\)</span></p></td>
+<td><p>271,716,734</p></td>
+</tr>
+</tbody>
+</table>
+</div>
 <p><em>To be implemented…🔮</em></p>
 </section>
 </section>

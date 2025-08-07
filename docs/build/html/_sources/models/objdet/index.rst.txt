@@ -10,6 +10,7 @@ Object detection
     R-CNN <rcnn/RCNN.rst>
     Fast R-CNN <rcnn/FastRCNN.rst>
     Faster R-CNN <faster_rcnn/FasterRCNN.rst>
+    YOLO <yolo/index.rst>
 
 R-CNN
 -----
@@ -94,10 +95,30 @@ training and real-time inference.
       - :math:`(N,3,H,W)`
       - 62,508,030
 
+
 YOLO
 ----
 |convnet-badge| |one-stage-det-badge| |objdet-badge|
 
-|wip-badge|
+YOLO is a one-stage object detector that frames detection as a single regression problem, 
+directly predicting bounding boxes and class probabilities from full images in a single 
+forward pass. It enables real-time detection with impressive speed and accuracy.
+
+ Redmon, Joseph et al. "You Only Look Once: Unified, Real-Time Object Detection."
+ *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition* (2016).
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+    
+    * - YOLO-v1
+      - `yolo_v1 <yolo/v1/yolo_v1>`_
+      - :math:`(N,3,448,448)`
+      - 271,716,734
 
 *To be implemented...🔮*
