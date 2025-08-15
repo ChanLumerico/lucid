@@ -1080,6 +1080,23 @@ the <cite>darknet_19</cite> attribute will raise an <cite>AttributeError</cite> 
 not have the full pre-built Darknet-19 structure.</p>
 </div>
 </section>
+<section id="input-format">
+<h2>Input Format<a class="headerlink" href="#input-format" title="Link to this heading">¶</a></h2>
+<p>The target tensor from the dataset should have shape:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="n">B</span> <span class="o">*</span> <span class="p">(</span><span class="mi">5</span> <span class="o">+</span> <span class="n">C</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Where:</p>
+<ul class="simple">
+<li><p><cite>S</cite> is <cite>split_size</cite> (grid size),</p></li>
+<li><p><cite>B</cite> is <cite>num_anchors</cite> (number of anchor boxes per grid cell),</p></li>
+<li><p><cite>C</cite> is <cite>num_classes</cite>.</p></li>
+</ul>
+<p>Each vector at <cite>(i, j)</cite> of shape <cite>(B * (5 + C))</cite> is flattened and contains:</p>
+<ul class="simple">
+<li><p>For each box <cite>b = 0 .. B-1</cite>: <cite>(x, y, w, h, conf, cls_1, …, cls_C)</cite></p></li>
+</ul>
+</section>
 <section id="yolo-v2-loss">
 <h2>YOLO-v2 Loss<a class="headerlink" href="#yolo-v2-loss" title="Link to this heading">¶</a></h2>
 <p>The YOLO-v2 loss function builds upon YOLOv1’s multi-part loss and incorporates <strong>anchor boxes</strong>.
@@ -1092,13 +1109,15 @@ shape becomes <span class="math notranslate nohighlight">\((S, S, B \times (5 + 
 <p>The total loss <span class="math notranslate nohighlight">\(\mathcal{L}\)</span> is composed of three parts:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\begin{split}\mathcal{L} = \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}}
+\[\begin{split}\begin{aligned}
+\mathcal{L} &amp;= \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}}
 \left[
     (x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2 + (\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2
 \right] \\
-+ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
-+ \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
-+ \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2\end{split}\]</div>
+&amp;+ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
+&amp;+ \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
+&amp;+ \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2
+\end{aligned}\end{split}\]</div>
 </div>
 <p>Where:</p>
 <ul class="simple">
@@ -1220,6 +1239,7 @@ as well as the detection head:</p>
 </ul>
 </li>
 <li><a class="reference internal" href="#darknet-19-integration">Darknet-19 Integration</a></li>
+<li><a class="reference internal" href="#input-format">Input Format</a></li>
 <li><a class="reference internal" href="#yolo-v2-loss">YOLO-v2 Loss</a></li>
 <li><a class="reference internal" href="#example-usage">Example Usage</a></li>
 <li><a class="reference internal" href="#backward-propagation">Backward Propagation</a></li>

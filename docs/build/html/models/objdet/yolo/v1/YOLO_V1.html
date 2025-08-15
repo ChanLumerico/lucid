@@ -1045,7 +1045,7 @@ Weight for the no-object confidence loss (default: 0.5).</p></li>
 <section id="input-format">
 <h2>Input Format<a class="headerlink" href="#input-format" title="Link to this heading">¶</a></h2>
 <p>The target tensor from the dataset should have shape:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="mi">5</span> <span class="o">*</span> <span class="n">B</span> <span class="o">+</span> <span class="n">C</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span>  <span class="o">*</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Where:</p>

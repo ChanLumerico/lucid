@@ -84,6 +84,25 @@ can be automatically integrated back into the `YOLO_V2` model.
     the `darknet_19` attribute will raise an `AttributeError` because the custom backbone does 
     not have the full pre-built Darknet-19 structure.
 
+Input Format
+------------
+
+The target tensor from the dataset should have shape:
+
+.. code-block:: python
+
+    (N, S, S, B * (5 + C))
+
+Where:
+
+- `S` is `split_size` (grid size),
+- `B` is `num_anchors` (number of anchor boxes per grid cell),
+- `C` is `num_classes`.
+
+Each vector at `(i, j)` of shape `(B * (5 + C))` is flattened and contains:
+
+- For each box `b = 0 .. B-1`: `(x, y, w, h, conf, cls_1, ..., cls_C)`
+
 YOLO-v2 Loss
 ------------
 The YOLO-v2 loss function builds upon YOLOv1's multi-part loss and incorporates **anchor boxes**. 
@@ -97,13 +116,15 @@ The total loss :math:`\mathcal{L}` is composed of three parts:
 
 .. math::
 
-    \mathcal{L} = \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} 
+    \begin{aligned}
+    \mathcal{L} &= \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} 
     \left[
         (x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2 + (\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2
     \right] \\
-    + \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
-    + \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
-    + \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2
+    &+ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
+    &+ \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
+    &+ \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2
+    \end{aligned}
 
 Where:
 

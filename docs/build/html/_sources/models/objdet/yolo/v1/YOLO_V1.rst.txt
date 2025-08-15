@@ -63,7 +63,7 @@ The target tensor from the dataset should have shape:
 
 .. code-block:: python
 
-    (N, S, S, 5 * B + C)
+    (N, S, S,  *)
 
 Where:
 
