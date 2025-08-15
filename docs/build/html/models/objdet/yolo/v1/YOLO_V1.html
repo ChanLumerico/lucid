@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/yolo/v1/YOLO_V1.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>YOLO-v1 - Lucid 2.5.0 documentation</title>
+        <title>YOLO-v1 - Lucid 2.5.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../../index.html"><div class="brand">Lucid 2.5.0 documentation</div></a>
+      <a href="../../../../index.html"><div class="brand">Lucid 2.5.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -193,7 +193,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 2.5.0 documentation</span>
+  <span class="sidebar-brand-text">Lucid 2.5.1 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -900,12 +900,16 @@
 <li class="toctree-l4"><a class="reference internal" href="yolo_v1.html">yolo_v1</a></li>
 </ul>
 </li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../v2/YOLO_V2.html">YOLO-v2</a><input class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of YOLO-v2</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../v2/yolo_v2.html">yolo_v2</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../../seq2seq/transformer/Transformer.html">Transformer</a><input class="toctree-checkbox" id="toctree-checkbox-76" name="toctree-checkbox-76" role="switch" type="checkbox"/><label for="toctree-checkbox-76"><div class="visually-hidden">Toggle navigation of Transformer</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-76" name="toctree-checkbox-76" role="switch" type="checkbox"/><label for="toctree-checkbox-76"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../seq2seq/transformer/Transformer.html">Transformer</a><input class="toctree-checkbox" id="toctree-checkbox-77" name="toctree-checkbox-77" role="switch" type="checkbox"/><label for="toctree-checkbox-77"><div class="visually-hidden">Toggle navigation of Transformer</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../../seq2seq/transformer/transformer_base.html">transformer_base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../seq2seq/transformer/transformer_big.html">transformer_big</a></li>
 </ul>
@@ -918,7 +922,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../transforms/transforms.html">lucid.transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../transforms/Compose.html">transforms.Compose</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../transforms/ToTensor.html">transforms.ToTensor</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-77" name="toctree-checkbox-77" role="switch" type="checkbox"/><label for="toctree-checkbox-77"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../transforms/image/index.html">Image Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-78" name="toctree-checkbox-78" role="switch" type="checkbox"/><label for="toctree-checkbox-78"><div class="visually-hidden">Toggle navigation of Image Transforms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../../transforms/image/Normalize.html">transforms.Normalize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../transforms/image/Resize.html">transforms.Resize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../transforms/image/RandomHorizontalFlip.html">transforms.RandomHorizontalFlip</a></li>
@@ -1044,13 +1048,17 @@ Weight for the no-object confidence loss (default: 0.5).</p></li>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="mi">5</span> <span class="o">*</span> <span class="n">B</span> <span class="o">+</span> <span class="n">C</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Where:
-- <cite>S</cite> is <cite>split_size</cite> (grid size),
-- <cite>B</cite> is <cite>num_boxes</cite> (bounding boxes per cell),
-- <cite>C</cite> is <cite>num_classes</cite>.</p>
-<p>Each vector at <cite>(i, j)</cite> of shape <cite>(5 * B + C)</cite> contains:
-- For each box (B): <cite>(x, y, w, h, conf)</cite>
-- For the cell: one-hot class vector of length <cite>C</cite></p>
+<p>Where:</p>
+<ul class="simple">
+<li><p><cite>S</cite> is <cite>split_size</cite> (grid size),</p></li>
+<li><p><cite>B</cite> is <cite>num_boxes</cite> (bounding boxes per cell),</p></li>
+<li><p><cite>C</cite> is <cite>num_classes</cite>.</p></li>
+</ul>
+<p>Each vector at <cite>(i, j)</cite> of shape <cite>(5 * B + C)</cite> contains:</p>
+<ul class="simple">
+<li><p>For each box (B): <cite>(x, y, w, h, conf)</cite></p></li>
+<li><p>For the cell: one-hot class vector of length <cite>C</cite></p></li>
+</ul>
 </section>
 <section id="returns">
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
@@ -1085,11 +1093,13 @@ Scalar total loss for object detection, including coordinate, confidence, and cl
   (C_i - \hat{C}_i)^2 \\
 + \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c=1}^{C} (p_i(c) - \hat{p}_i(c))^2\end{split}\]</div>
 </div>
-<p>Where:
-- <span class="math notranslate nohighlight">\(\mathbb{1}_{ij}^{\text{obj}}\)</span> indicates that object exists in cell i for box j,
-- <span class="math notranslate nohighlight">\(\hat{C}_i\)</span> is the predicted confidence,
-- <span class="math notranslate nohighlight">\((x_i, y_i, w_i, h_i)\)</span> are bounding box values,
-- <span class="math notranslate nohighlight">\(p_i(c)\)</span> is the class probability.</p>
+<p>Where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\mathbb{1}_{ij}^{\text{obj}}\)</span> indicates that object exists in cell i for box j,</p></li>
+<li><p><span class="math notranslate nohighlight">\(\hat{C}_i\)</span> is the predicted confidence,</p></li>
+<li><p><span class="math notranslate nohighlight">\((x_i, y_i, w_i, h_i)\)</span> are bounding box values,</p></li>
+<li><p><span class="math notranslate nohighlight">\(p_i(c)\)</span> is the class probability.</p></li>
+</ul>
 </section>
 <section id="methods">
 <h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
@@ -1130,9 +1140,11 @@ Scalar total loss for object detection, including coordinate, confidence, and cl
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
-<p>YOLO expects bounding boxes as relative coordinates:
-- <cite>x</cite>, <cite>y</cite> are center positions relative to the grid cell.
-- <cite>w</cite>, <cite>h</cite> are normalized by image width and height.</p>
+<p>YOLO expects bounding boxes as relative coordinates:</p>
+<ul class="simple">
+<li><p><cite>x</cite>, <cite>y</cite> are center positions relative to the grid cell.</p></li>
+<li><p><cite>w</cite>, <cite>h</cite> are normalized by image width and height.</p></li>
+</ul>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
@@ -1221,7 +1233,7 @@ Make sure your dataset follows the expected shape: <cite>(N, S, S, 5 * B + C)</c
       
     </aside>
   </div>
-</div><script src="../../../../_static/documentation_options.js?v=3c4615cf"></script>
+</div><script src="../../../../_static/documentation_options.js?v=983e91d6"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/scripts/furo.js?v=5fa4622c"></script>

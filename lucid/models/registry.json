@@ -927,6 +927,6 @@
         "name": "yolo_v2",
         "family": "YOLO_V2",
         "param_size": 21287133,
-        "task": "objdet.yolo"
+        "task": "objdet"
     }
 }

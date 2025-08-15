@@ -153,7 +153,7 @@ Lucid² 💎
 .. image:: https://img.shields.io/pypi/dm/lucid-dl
    :alt: PyPI - Downloads
 
-.. image:: https://img.shields.io/badge/total%20downloads-21.3k-yellow
+.. image:: https://img.shields.io/badge/total%20downloads-30.0k-yellow
    :alt: PyPI - Total Downloads
 
 .. image:: https://img.shields.io/github/languages/code-size/ChanLumerico/lucid

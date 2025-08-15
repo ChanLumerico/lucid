@@ -66,11 +66,13 @@ The target tensor from the dataset should have shape:
     (N, S, S, 5 * B + C)
 
 Where:
+
 - `S` is `split_size` (grid size),
 - `B` is `num_boxes` (bounding boxes per cell),
 - `C` is `num_classes`.
 
 Each vector at `(i, j)` of shape `(5 * B + C)` contains:
+
 - For each box (B): `(x, y, w, h, conf)`
 - For the cell: one-hot class vector of length `C`
 
@@ -112,6 +114,7 @@ The total YOLO loss is defined as:
     + \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c=1}^{C} (p_i(c) - \hat{p}_i(c))^2
 
 Where:
+
 - :math:`\mathbb{1}_{ij}^{\text{obj}}` indicates that object exists in cell i for box j,
 - :math:`\hat{C}_i` is the predicted confidence,
 - :math:`(x_i, y_i, w_i, h_i)` are bounding box values,
@@ -152,6 +155,7 @@ Examples
 .. tip::
 
     YOLO expects bounding boxes as relative coordinates:  
+    
     - `x`, `y` are center positions relative to the grid cell.  
     - `w`, `h` are normalized by image width and height.
 

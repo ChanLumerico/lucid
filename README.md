@@ -15,12 +15,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Implemented **YOLO-v2**: `lucid.models.YOLO_V2` (or `yolo_v2` for preset version)
 - Implemented **YOLO-v1**: `lucid.models.YOLO_V1` (or `yolo_v1` for preset version)
 - **DDPM** implemented: `lucid.models.DDPM`
 - Added `lucid.cumprod` and `lucid.cumsum`
 - Added *Group Normalization* APIs: `F.group_norm`, `nn.GroupNorm`
-- Generalized **VAE** implemented to newly addded *Image Generation* 
-  model category: `lucid.models.VAE`
 
 ## 🔧 How to Install
 

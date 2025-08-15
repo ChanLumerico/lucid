@@ -115,10 +115,18 @@ forward pass. It enables real-time detection with impressive speed and accuracy.
       - Model
       - Input Shape
       - Parameter Count
+      - FLOPs
     
     * - YOLO-v1
       - `yolo_v1 <yolo/v1/yolo_v1>`_
       - :math:`(N,3,448,448)`
       - 271,716,734
+      - 404.84M
+
+    * - YOLO-v2
+      - `yolo_v2 <yolo/v2/yolo_v2>`_
+      - :math:`(N,3,416,416)`
+      - 193,164,147
+      - 214.26M
 
 *To be implemented...🔮*

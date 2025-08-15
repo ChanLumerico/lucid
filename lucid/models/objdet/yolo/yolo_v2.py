@@ -10,38 +10,52 @@ from lucid._tensor import Tensor
 __all__ = ["YOLO_V2", "yolo_v2"]
 
 
-class _DarkNet19(nn.Sequential):
-    def __init__(self) -> None:
-        layers: list[nn.Module] = []
-        layers += [
+class _DarkNet_19(nn.Module):
+    def __init__(self, num_classes: int = 1000) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+
+        conv: list[nn.Module] = []
+        conv += [
             *self._convblock(3, 32, 3),
             nn.MaxPool2d(kernel_size=2, stride=2),
             *self._convblock(32, 64, 3),
             nn.MaxPool2d(kernel_size=2, stride=2),
         ]
-
-        layers += [
+        conv += [
             *self._convblock(64, 128, 3),
             *self._convblock(128, 64, 1),
             *self._convblock(64, 128, 3),
             nn.MaxPool2d(kernel_size=2, stride=2),
         ]
-
-        layers += [
+        conv += [
             *self._convblock(128, 256, 3),
             *self._convblock(256, 128, 1),
             *self._convblock(128, 256, 3),
             nn.MaxPool2d(kernel_size=2, stride=2),
         ]
-
-        layers += [
+        conv += [
             *self._convblock(256, 512, 3),
             *self._convblock(512, 256, 1),
             *self._convblock(256, 512, 3),
             *self._convblock(512, 256, 1),
             *self._convblock(256, 512, 3),
         ]
-        super().__init__(*layers)
+        self.conv = nn.Sequential(*conv)
+
+        self.classifier = nn.Sequential(
+            *self._convblock(512, 1024, 3),
+            *self._convblock(1024, 1024, 3),
+            nn.Conv2d(1024, self.num_classes, kernel_size=1),
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+            nn.Softmax(axis=1),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.classifier(x)
+        return x
 
     @staticmethod
     def _convblock(
@@ -92,8 +106,9 @@ class YOLO_V2(nn.Module):
         self.anchors = self.register_buffer("anchors", anchors, dtype=lucid.Float32)
 
         if darknet is None:
-            self.darknet = _DarkNet19()
-            self.route_layer = len(self.darknet) - 1
+            self.darknet_19 = _DarkNet_19()
+            self.darknet = self.darknet_19.conv
+            self.route_layer = 28
         else:
             self.darknet = darknet
             if route_layer is None:
@@ -163,11 +178,10 @@ class YOLO_V2(nn.Module):
             x = layer(x)
             shapes.append((i, x.shape))
 
-        pre_h, pre_w = shapes[-1][1][2:]
-        for i in range(len(shapes) - 2, -1, -1):
+        for i in range(len(shapes) - 1, -1, -1):
             h, w = shapes[i][1][2:]
-            if h == pre_h and w == pre_w:
-                return shapes[i][0]
+            if h == 26 and w == 26:
+                return i
 
         return shapes[-1][0]
 
@@ -240,10 +254,4 @@ class YOLO_V2(nn.Module):
 
 @register_model
 def yolo_v2(num_classes: int = 20, **kwargs) -> YOLO_V2:
-    return YOLO_V2(
-        num_classes=num_classes,
-        num_anchors=5,
-        image_size=416,
-        darknet=_DarkNet19(),
-        **kwargs
-    )
+    return YOLO_V2(num_classes=num_classes, num_anchors=5, image_size=416, **kwargs)
