@@ -126,7 +126,7 @@ forward pass. It enables real-time detection with impressive speed and accuracy.
     * - YOLO-v2
       - `yolo_v2 <yolo/v2/yolo_v2>`_
       - :math:`(N,3,416,416)`
-      - 193,164,147
+      - 21,287,133
       - 214.26M
 
 *To be implemented...🔮*

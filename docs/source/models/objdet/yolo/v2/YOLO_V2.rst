@@ -51,6 +51,12 @@ Attributes
   The detection head that processes the output from the backbone and generates 
   bounding boxes and class scores.
 
+Methods
+-------
+
+.. automethod:: lucid.models.objdet.YOLO_V2.forward
+.. automethod:: lucid.models.objdet.YOLO_V2.get_loss
+
 Darknet-19 Integration
 ----------------------
 The default backbone for the `YOLO_V2` class is **Darknet-19**, a convolutional neural network 
@@ -94,9 +100,9 @@ The total loss :math:`\mathcal{L}` is composed of three parts:
     \mathcal{L} = \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} 
     \left[
         (x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2 + (\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2
-    \right]
-    + \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2
-    + \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2
+    \right] \\
+    + \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
+    + \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
     + \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2
 
 Where:

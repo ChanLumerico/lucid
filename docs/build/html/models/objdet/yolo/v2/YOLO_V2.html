@@ -1045,6 +1045,19 @@ The detection head that processes the output from the backbone and generates
 bounding boxes and class scores.</p></li>
 </ul>
 </section>
+<section id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
+<dl class="py method">
+<dt class="sig sig-object py" id="lucid.models.objdet.YOLO_V2.forward">
+<span class="sig-prename descclassname"><span class="pre">YOLO_V2.</span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.models.objdet.YOLO_V2.forward" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lucid.models.objdet.YOLO_V2.get_loss">
+<span class="sig-prename descclassname"><span class="pre">YOLO_V2.</span></span><span class="sig-name descname"><span class="pre">get_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.models.objdet.YOLO_V2.get_loss" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
 <section id="darknet-19-integration">
 <h2>Darknet-19 Integration<a class="headerlink" href="#darknet-19-integration" title="Link to this heading">¶</a></h2>
 <p>The default backbone for the <cite>YOLO_V2</cite> class is <strong>Darknet-19</strong>, a convolutional neural network
@@ -1079,13 +1092,13 @@ shape becomes <span class="math notranslate nohighlight">\((S, S, B \times (5 + 
 <p>The total loss <span class="math notranslate nohighlight">\(\mathcal{L}\)</span> is composed of three parts:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\mathcal{L} = \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}}
+\[\begin{split}\mathcal{L} = \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}}
 \left[
     (x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2 + (\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2
-\right]
-+ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2
-+ \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2
-+ \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2\]</div>
+\right] \\
++ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
++ \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
++ \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2\end{split}\]</div>
 </div>
 <p>Where:</p>
 <ul class="simple">
@@ -1201,6 +1214,11 @@ as well as the detection head:</p>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#attributes">Attributes</a></li>
+<li><a class="reference internal" href="#methods">Methods</a><ul>
+<li><a class="reference internal" href="#lucid.models.objdet.YOLO_V2.forward"><code class="docutils literal notranslate"><span class="pre">YOLO_V2.forward()</span></code></a></li>
+<li><a class="reference internal" href="#lucid.models.objdet.YOLO_V2.get_loss"><code class="docutils literal notranslate"><span class="pre">YOLO_V2.get_loss()</span></code></a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#darknet-19-integration">Darknet-19 Integration</a></li>
 <li><a class="reference internal" href="#yolo-v2-loss">YOLO-v2 Loss</a></li>
 <li><a class="reference internal" href="#example-usage">Example Usage</a></li>
