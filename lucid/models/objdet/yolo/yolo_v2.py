@@ -5,10 +5,60 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.models.imgclf import vggnet_16
 
 
-__all__ = ["YOLO_V2"]
+__all__ = ["YOLO_V2", "yolo_v2"]
+
+
+class _DarkNet19(nn.Sequential):
+    def __init__(self) -> None:
+        layers: list[nn.Module] = []
+        layers += [
+            *self._convblock(3, 32, 3),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            *self._convblock(32, 64, 3),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        ]
+
+        layers += [
+            *self._convblock(64, 128, 3),
+            *self._convblock(128, 64, 1),
+            *self._convblock(64, 128, 3),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        ]
+
+        layers += [
+            *self._convblock(128, 256, 3),
+            *self._convblock(256, 128, 1),
+            *self._convblock(128, 256, 3),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        ]
+
+        layers += [
+            *self._convblock(256, 512, 3),
+            *self._convblock(512, 256, 1),
+            *self._convblock(256, 512, 3),
+            *self._convblock(512, 256, 1),
+            *self._convblock(256, 512, 3),
+        ]
+        super().__init__(*layers)
+
+    @staticmethod
+    def _convblock(
+        cin: int, cout: int, k: int, s: int = 1, p: int | None = None
+    ) -> list[nn.Module]:
+        return [
+            nn.Conv2d(
+                cin,
+                cout,
+                kernel_size=k,
+                stride=s,
+                padding=p if p is not None else "same",
+                bias=False,
+            ),
+            nn.BatchNorm2d(cout),
+            nn.LeakyReLU(0.1),
+        ]
 
 
 class YOLO_V2(nn.Module):
@@ -21,6 +71,7 @@ class YOLO_V2(nn.Module):
         lambda_noobj: float = 0.5,
         darknet: nn.Module | None = None,
         route_layer: int | None = None,
+        image_size: int = 416,
     ) -> None:
         super().__init__()
         self.num_classes = num_classes
@@ -36,10 +87,19 @@ class YOLO_V2(nn.Module):
                 (9.47112, 4.84053),
                 (11.2364, 10.0071),
             ]
-        self.anchors = Tensor(anchors, dtype=lucid.Float32)
 
-        self.darknet = darknet if darknet is not None else vggnet_16().conv[:30]
-        self.route_layer = route_layer if route_layer is not None else 22
+        self.anchors: nn.Buffer
+        self.anchors = self.register_buffer("anchors", anchors, dtype=lucid.Float32)
+
+        if darknet is None:
+            self.darknet = _DarkNet19()
+            self.route_layer = len(self.darknet) - 1
+        else:
+            self.darknet = darknet
+            if route_layer is None:
+                self.route_layer = self._auto_route_index(self.darknet, image_size)
+            else:
+                self.route_layer = route_layer
 
         route_c = self._layer_out_channels(self.darknet, self.route_layer)
         out_c = self._darknet_out_channels(self.darknet)
@@ -95,19 +155,33 @@ class YOLO_V2(nn.Module):
         x = x.transpose((0, 1, 3, 5, 2, 4))
         return x.reshape(n, c * stride**2, h // stride, w // stride)
 
-    def forward(self, x: Tensor) -> Tensor:
-        passthrough: Tensor | None = None
-        for i, layer in enumerate(self.darknet):
+    @staticmethod
+    def _auto_route_index(darknet: nn.Module, input_hw: int) -> int:
+        x = lucid.zeros(1, 3, input_hw, input_hw)
+        shapes = []
+        for i, layer in enumerate(darknet):
             x = layer(x)
-            if i == self.route_layer:
-                passthrough = x
+            shapes.append((i, x.shape))
 
-        assert passthrough is not None
+        pre_h, pre_w = shapes[-1][1][2:]
+        for i in range(len(shapes) - 2, -1, -1):
+            h, w = shapes[i][1][2:]
+            if h == pre_h and w == pre_w:
+                return shapes[i][0]
+
+        return shapes[-1][0]
+
+    def forward(self, x: Tensor) -> Tensor:
+        p = None
+        for idx, layer in enumerate(self.darknet):
+            x = layer(x)
+            if idx == self.route_layer:
+                p = x
 
         x = self.head_pool(x)
         x = self.head_conv1(x)
 
-        p = self.passthrough_conv(passthrough)
+        p = self.passthrough_conv(p)
         p = self._reorg(p)
 
         x = lucid.concatenate([p, x], axis=1)
@@ -118,4 +192,58 @@ class YOLO_V2(nn.Module):
         x = x.transpose((0, 2, 3, 1))
         return x.reshape(N, H, W, self.num_anchors * (5 + self.num_classes))
 
-    def get_loss(self, x: Tensor, target: Tensor) -> Tensor: ...
+    def get_loss(self, x: Tensor, target: Tensor) -> Tensor:
+        N = x.shape[0]
+        pred = self.forward(x)
+
+        S = pred.shape[1]
+        B, C = self.num_anchors, self.num_classes
+
+        pred = pred.reshape(N, S, S, B, 5 + C)
+        target = target.reshape(N, S, S, B, 5 + C)
+
+        obj_mask = target[..., 4:5]
+        noobj_mask = 1 - obj_mask
+
+        pred_xy = F.sigmoid(pred[..., 0:2])
+        pred_wh = lucid.exp(pred[..., 2:4]) * self.anchors.reshape(1, 1, 1, B, 2)
+        pred_obj = F.sigmoid(pred[..., 4:5])
+        pred_cls = pred[..., 5:]
+
+        tgt_xy = target[..., 0:2]
+        tgt_wh = target[..., 2:4]
+        tgt_cls = target[..., 5:]
+
+        loss_xy = F.mse_loss(pred_xy * obj_mask, tgt_xy * obj_mask, reduction="sum")
+        loss_wh = F.mse_loss(pred_wh * obj_mask, tgt_wh * obj_mask, reduction="sum")
+
+        loss_obj = F.mse_loss(pred_obj * obj_mask, obj_mask, reduction="sum")
+        loss_noobj = F.mse_loss(
+            pred_obj * noobj_mask, lucid.zeros_like(pred_obj), reduction="sum"
+        )
+
+        cls_loss = F.cross_entropy(
+            pred_cls.reshape(-1, C),
+            lucid.argmax(tgt_cls, axis=-1).reshape(-1),
+            reduction=None,
+        )
+        loss_cls = (cls_loss.reshape(N, S, S, B) * obj_mask.reshape(N, S, S, B)).sum()
+
+        total_loss = (
+            self.lambda_coord * (loss_xy + loss_wh)
+            + loss_obj
+            + self.lambda_noobj * loss_noobj
+            + loss_cls
+        )
+        return total_loss / N
+
+
+@register_model
+def yolo_v2(num_classes: int = 20, **kwargs) -> YOLO_V2:
+    return YOLO_V2(
+        num_classes=num_classes,
+        num_anchors=5,
+        image_size=416,
+        darknet=_DarkNet19(),
+        **kwargs
+    )
