@@ -7,6 +7,7 @@ YOLO-v1
     :hidden:
 
     yolo_v1.rst
+    yolo_v1_tiny.rst
 
 .. autoclass:: lucid.models.YOLO_V1
 

@@ -923,10 +923,22 @@
         "param_size": 271716734,
         "task": "objdet"
     },
+    "yolo_v1_tiny": {
+        "name": "yolo_v1_tiny",
+        "family": "YOLO_V1",
+        "param_size": 236720462,
+        "task": "objdet"
+    },
     "yolo_v2": {
         "name": "yolo_v2",
         "family": "YOLO_V2",
         "param_size": 21287133,
         "task": "objdet"
+    },
+    "yolo_v2_tiny": {
+        "name": "yolo_v2_tiny",
+        "family": "YOLO_V2",
+        "param_size": 15863821,
+        "task": "objdet.yolo"
     }
 }

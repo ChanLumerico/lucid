@@ -8,7 +8,7 @@ from lucid._tensor import Tensor
 from lucid.models.objdet.util import iou
 
 
-__all__ = ["YOLO_V1", "yolo_v1"]
+__all__ = ["YOLO_V1", "yolo_v1", "yolo_v1_tiny"]
 
 
 arch_config = [
@@ -28,6 +28,24 @@ arch_config = [
     [(512, 1, 1, 0), (1024, 3, 1, 1), 2],
     (1024, 3, 1, 1),
     (1024, 3, 2, 1),
+    (1024, 3, 1, 1),
+    (1024, 3, 1, 1),
+]
+
+arch_config_tiny = [
+    (16, 3, 1, 1),
+    "M",
+    (32, 3, 1, 1),
+    "M",
+    (64, 3, 1, 1),
+    "M",
+    (128, 3, 1, 1),
+    "M",
+    (256, 3, 1, 1),
+    "M",
+    (512, 3, 1, 1),
+    "M",
+    (1024, 3, 1, 1),
     (1024, 3, 1, 1),
     (1024, 3, 1, 1),
 ]
@@ -53,6 +71,7 @@ class YOLO_V1(nn.Module):
         num_classes: int,
         lambda_coord: float = 5.0,
         lambda_noobj: float = 0.5,
+        conv_config: list | None = None,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -62,7 +81,8 @@ class YOLO_V1(nn.Module):
         self.lambda_coord = lambda_coord
         self.lambda_noobj = lambda_noobj
 
-        self.darknet = self._create_conv_layers(arch=arch_config)
+        config = conv_config if conv_config is not None else arch_config
+        self.darknet = self._create_conv_layers(arch=config)
         self.fcs = nn.Sequential(
             nn.Linear(1024 * split_size**2, 4096),
             nn.LeakyReLU(0.1),
@@ -214,5 +234,19 @@ def yolo_v1(num_classes: int = 20, **kwargs) -> YOLO_V1:
         num_classes=num_classes,
         lambda_coord=5.0,
         lambda_noobj=0.5,
+        **kwargs
+    )
+
+
+@register_model
+def yolo_v1_tiny(num_classes: int = 20, **kwargs) -> YOLO_V1:
+    return YOLO_V1(
+        in_channels=3,
+        split_size=7,
+        num_boxes=2,
+        num_classes=num_classes,
+        lambda_coord=5.0,
+        lambda_noobj=0.5,
+        conv_config=arch_config_tiny,
         **kwargs
     )

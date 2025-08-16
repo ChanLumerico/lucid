@@ -26,6 +26,7 @@ __all__ = [
     "ParameterList",
     "ParameterDict",
     "auto_repr",
+    "set_state_dict_pass_attr",
 ]
 
 _ForwardHookType = Callable[["Module", tuple[Tensor], tuple[Tensor]], None]
@@ -51,6 +52,8 @@ class Module:
         self._forward_hooks: list[_ForwardHookType] = []
         self._backward_hooks: list[_BackwardHookType] = []
 
+        self._state_dict_pass_attr = set()
+
     def __setattr__(self, name: str, value: Any) -> None:
         registry_map: dict[Type, OrderedDict[str, Any]] = {
             nn.Parameter: self._parameters,
@@ -75,6 +78,9 @@ class Module:
                     del registry[name]
 
         super().__setattr__(name, value)
+
+    def setattr_raw(self, name: str, value: Any) -> None:
+        object.__setattr__(self, name, value)
 
     def add_module(self, name: str, module: Self) -> None:
         if not isinstance(module, Module) and module is not None:
@@ -198,6 +204,10 @@ class Module:
                 destination=destination, prefix=prefix + name + ".", keep_vars=keep_vars
             )
 
+        for key in destination.keys():
+            if key in self._state_dict_pass_attr:
+                del destination[key]
+
         return destination
 
     def load_state_dict(self, state_dict: OrderedDict, strict: bool = True) -> None:
@@ -298,6 +308,14 @@ def auto_repr(*attr_names: str) -> Callable[[T], T]:
             return ", ".join(parts)
 
         cls.extra_repr = extra_repr
+        return cls
+
+    return wrapper
+
+
+def set_state_dict_pass_attr(*attr_names: str) -> Callable[[T], T]:
+    def wrapper(cls: T) -> T:
+        cls._state_dict_pass_attr = set(attr_names)
         return cls
 
     return wrapper

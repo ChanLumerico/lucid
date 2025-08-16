@@ -3,11 +3,11 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="yolo_v2" href="yolo_v2.html" /><link rel="prev" title="yolo_v1_tiny" href="../v1/yolo_v1_tiny.html" />
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/yolo/v2/YOLO_V2.html" />
+<link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="Sequence-to-Sequence" href="../../../seq2seq/index.html" /><link rel="prev" title="yolo_v2" href="yolo_v2.html" />
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/yolo/v2/yolo_v2_tiny.html" />
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>YOLO_V2 - Lucid 2.5.2 documentation</title>
+        <title>yolo_v2_tiny - Lucid 2.5.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -901,9 +901,9 @@
 <li class="toctree-l4"><a class="reference internal" href="../v1/yolo_v1_tiny.html">yolo_v1_tiny</a></li>
 </ul>
 </li>
-<li class="toctree-l3 current has-children current-page"><a class="current reference internal" href="#">YOLO-v2</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of YOLO-v2</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3 current has-children"><a class="reference internal" href="YOLO_V2.html">YOLO-v2</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of YOLO-v2</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l4"><a class="reference internal" href="yolo_v2.html">yolo_v2</a></li>
-<li class="toctree-l4"><a class="reference internal" href="yolo_v2_tiny.html">yolo_v2_tiny</a></li>
+<li class="toctree-l4 current current-page"><a class="current reference internal" href="#">yolo_v2_tiny</a></li>
 </ul>
 </li>
 </ul>
@@ -974,12 +974,12 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/models/objdet/yolo/v2/YOLO_V2.rst?plain=true" title="View this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/models/objdet/yolo/v2/yolo_v2_tiny.rst?plain=true" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
 </div><div class="edit-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/models/objdet/yolo/v2/YOLO_V2.rst" title="Edit this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/models/objdet/yolo/v2/yolo_v2_tiny.rst" title="Edit this page">
     <svg><use href="#svg-pencil"></use></svg>
     <span class="visually-hidden">Edit this page</span>
   </a>
@@ -998,224 +998,67 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="yolo-v2">
-<h1>YOLO_V2<a class="headerlink" href="#yolo-v2" title="Link to this heading">¶</a></h1>
+          <section id="yolo-v2-tiny">
+<h1>yolo_v2_tiny<a class="headerlink" href="#yolo-v2-tiny" title="Link to this heading">¶</a></h1>
 <p><span class="badge convnet">ConvNet</span> <span class="badge one_stage_det">One-Stage Detector</span> <span class="badge normal">Object Detection</span></p>
-<div class="toctree-wrapper compound">
-</div>
-<dl class="py class">
-<dt class="sig sig-object py" id="lucid.models.YOLO_V2">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">YOLO_V2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_anchors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anchors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_coord</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_noobj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">darknet</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">route_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">416</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_passthrough</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.YOLO_V2" title="Link to this definition">¶</a></dt>
+<dl class="py function">
+<dt class="sig sig-object py" id="lucid.models.yolo_v2_tiny">
+<span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">yolo_v2_tiny</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="YOLO_V2.html#lucid.models.YOLO_V2" title="lucid.models.objdet.yolo.yolo_v2.YOLO_V2"><span class="pre">YOLO_V2</span></a></span></span><a class="headerlink" href="#lucid.models.yolo_v2_tiny" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>YOLO_V2</cite> class implements the YOLO-v2 object detection model.
-It is an improvement over YOLO-v1, designed to detect objects in images using
-anchor-based bounding boxes, batch normalization, and a stronger backbone (Darknet-19).</p>
-<a class="reference internal image-reference" href="../../../../_images/yolo_v2.png"><img alt="YOLO-v2 architecture" class="align-center" src="../../../../_images/yolo_v2.png" style="width: 600px;" />
-</a>
-<section id="class-signature">
-<h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">YOLO_V2</span><span class="p">(</span>
-    <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-    <span class="n">num_anchors</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
-    <span class="n">anchors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">lambda_coord</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
-    <span class="n">lambda_noobj</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
-    <span class="n">darknet</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">route_layer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">image_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">416</span><span class="p">,</span>
-<span class="p">)</span>
+<p>The <cite>yolo_v2_tiny</cite> function returns an instance of the <cite>YOLO_V2</cite> model,
+configured with a lightweight version of the original YOLO-v2 architecture using
+a compact DarkNet-19 variant.</p>
+<p><strong>Total Parameters</strong>: 15,863,821</p>
+<section id="function-signature">
+<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">yolo_v2_tiny</span><span class="p">(</span><span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">YOLO_V2</span>
 </pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul>
+<li><p><strong>num_classes</strong> (<em>int</em>, default=20):
+Number of object categories to detect. This sets the number of output class scores per
+anchor in the final detection head.</p></li>
+<li><p><strong>kwargs</strong>:
+Additional keyword arguments passed directly to the <cite>YOLO_V2</cite> constructor.</p>
+<p>Common kwargs include:</p>
 <ul class="simple">
-<li><p><strong>darknet</strong> (<em>nn.Module</em>, optional):
-A custom backbone model for feature extraction. If set to <cite>None</cite> (default),
-the model uses the pre-configured Darknet-19 architecture.</p></li>
+<li><p><cite>darknet</cite> (<em>nn.Module</em>, optional): custom lightweight backbone</p></li>
+<li><p><cite>num_anchors</cite> (<em>int</em>, default=5): number of anchor boxes (defaults to 5)</p></li>
+<li><p><cite>image_size</cite> (<em>int</em>, default=416): input image resolution</p></li>
+</ul>
+</li>
 </ul>
 </section>
-<section id="attributes">
-<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<section id="returns">
+<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>darknet</strong> (<em>nn.Module</em>):
-The feature extraction backbone model, either a custom model or Darknet-19.
-If <cite>None</cite> is passed, Darknet-19 is used by default.</p></li>
-<li><p><strong>detect_head</strong> (<em>nn.Module</em>):
-The detection head that processes the output from the backbone and generates
-bounding boxes and class scores.</p></li>
-</ul>
-</section>
-<section id="methods">
-<h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.objdet.YOLO_V2.forward">
-<span class="sig-prename descclassname"><span class="pre">YOLO_V2.</span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.models.objdet.YOLO_V2.forward" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.objdet.YOLO_V2.get_loss">
-<span class="sig-prename descclassname"><span class="pre">YOLO_V2.</span></span><span class="sig-name descname"><span class="pre">get_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.models.objdet.YOLO_V2.get_loss" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.objdet.YOLO_V2.predict">
-<span class="sig-prename descclassname"><span class="pre">YOLO_V2.</span></span><span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">conf_thresh</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iou_thresh</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.objdet.YOLO_V2.predict" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-</section>
-<section id="darknet-19-integration">
-<h2>Darknet-19 Integration<a class="headerlink" href="#darknet-19-integration" title="Link to this heading">¶</a></h2>
-<p>The default backbone for the <cite>YOLO_V2</cite> class is <strong>Darknet-19</strong>, a convolutional neural network
-designed for efficient feature extraction.</p>
-<p>When <cite>darknet=None</cite> is passed during initialization, the model automatically uses the
-pre-defined Darknet-19 architecture.</p>
-<p>To use the Darknet-19 network for object detection, the user must “pop” the network from
-the model to use it for training on the classification task.</p>
-<p>This can be done using <cite>.darknet_19</cite>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">yolo_v2_model</span> <span class="o">=</span> <span class="n">YOLO_V2</span><span class="p">()</span>
-<span class="n">darknet_model</span> <span class="o">=</span> <span class="n">yolo_v2_model</span><span class="o">.</span><span class="n">darknet_19</span>
-</pre></div>
-</div>
-<p>After training on the classification task, the trained <strong>darknet</strong>
-can be automatically integrated back into the <cite>YOLO_V2</cite> model.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>If a custom backbone is provided (i.e., passing a custom <cite>darknet</cite> model during initialization),
-the <cite>darknet_19</cite> attribute will raise an <cite>AttributeError</cite> because the custom backbone does
-not have the full pre-built Darknet-19 structure.</p>
-</div>
-</section>
-<section id="input-format">
-<h2>Input Format<a class="headerlink" href="#input-format" title="Link to this heading">¶</a></h2>
-<p>The target tensor from the dataset should have shape:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="n">B</span> <span class="o">*</span> <span class="p">(</span><span class="mi">5</span> <span class="o">+</span> <span class="n">C</span><span class="p">))</span>
-</pre></div>
-</div>
-<p>Where:</p>
-<ul class="simple">
-<li><p><cite>S</cite> is <cite>split_size</cite> (grid size),</p></li>
-<li><p><cite>B</cite> is <cite>num_anchors</cite> (number of anchor boxes per grid cell),</p></li>
-<li><p><cite>C</cite> is <cite>num_classes</cite>.</p></li>
-</ul>
-<p>Each vector at <cite>(i, j)</cite> of shape <cite>(B * (5 + C))</cite> is flattened and contains:</p>
-<ul class="simple">
-<li><p>For each box <cite>b = 0 .. B-1</cite>: <cite>(x, y, w, h, conf, cls_1, …, cls_C)</cite></p></li>
-</ul>
-</section>
-<section id="yolo-v2-loss">
-<h2>YOLO-v2 Loss<a class="headerlink" href="#yolo-v2-loss" title="Link to this heading">¶</a></h2>
-<p>The YOLO-v2 loss function builds upon YOLO-v1’s multi-part loss and incorporates <strong>anchor boxes</strong>.
-For a grid of size <span class="math notranslate nohighlight">\(S \times S\)</span> and <span class="math notranslate nohighlight">\(B\)</span> anchors per grid cell, the predicted tensor
-shape becomes <span class="math notranslate nohighlight">\((S, S, B \times (5 + C))\)</span> where:</p>
-<ul class="simple">
-<li><p>5 = [x, y, w, h, objectness]</p></li>
-<li><p>C = number of classes</p></li>
-</ul>
-<p>The total loss <span class="math notranslate nohighlight">\(\mathcal{L}\)</span> is composed of three parts:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}\begin{aligned}
-\mathcal{L} &amp;= \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}}
-\left[
-    (x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2 + (\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2
-\right] \\
-&amp;+ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
-&amp;+ \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
-&amp;+ \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2
-\end{aligned}\end{split}\]</div>
-</div>
-<p>Where:</p>
-<ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(\hat{x}_i, \hat{y}_i, \hat{w}_i, \hat{h}_i\)</span> are predicted box parameters</p></li>
-<li><p><span class="math notranslate nohighlight">\(x_i, y_i, w_i, h_i\)</span> are target box parameters</p></li>
-<li><p><span class="math notranslate nohighlight">\(\hat{C}_i\)</span> is predicted objectness score</p></li>
-<li><p><span class="math notranslate nohighlight">\(C_i\)</span> is the target confidence (IoU)</p></li>
-<li><p><span class="math notranslate nohighlight">\(p_i(c)\)</span> is the predicted class probability</p></li>
-<li><p><span class="math notranslate nohighlight">\(\hat{p}_i(c)\)</span> is the ground-truth class probability (one-hot)</p></li>
-<li><p><span class="math notranslate nohighlight">\(\mathbb{1}_{ij}^{\text{obj}}\)</span> indicates if anchor <span class="math notranslate nohighlight">\(j\)</span> in cell
-<span class="math notranslate nohighlight">\(i\)</span> is responsible for detecting an object</p></li>
-<li><p><span class="math notranslate nohighlight">\(\lambda_{\text{coord}}\)</span>, <span class="math notranslate nohighlight">\(\lambda_{\text{noobj}}\)</span> are weighting hyperparameters</p></li>
-</ul>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Unlike YOLO-v1, YOLO-v2 uses <strong>predefined anchors</strong> and decouples object classification
-and localization more clearly, improving detection stability and accuracy.</p>
-</div>
-</section>
-<section id="target-encoding-and-anchors">
-<h2>Target Encoding and Anchors<a class="headerlink" href="#target-encoding-and-anchors" title="Link to this heading">¶</a></h2>
-<dl>
-<dt>The YOLO_V2 model expects target bounding boxes to be encoded in <strong>t-coordinates</strong>,</dt><dd><p>which are offsets relative to the anchor boxes and grid cell positions.</p>
-<p>The target should have shape <cite>(N, S, S, B, 5 + C)</cite>, where each box consists of:</p>
-</dd>
-</dl>
-<ul class="simple">
-<li><p><cite>tx, ty</cite>: offset of the center from the top-left corner of the grid cell
-(normalized to <span class="math notranslate nohighlight">\([0,1]\)</span>)</p></li>
-<li><p><cite>tw, th</cite>: log-scale ratio between the ground truth width/height and anchor width/height</p></li>
-<li><p><cite>objectness</cite>: 1 if the box is responsible for the object, otherwise 0</p></li>
-<li><p><cite>C</cite>: one-hot encoded class vector</p></li>
-</ul>
-<p>To construct these targets properly, one must make use of the anchor box scales.
-These can be accessed from the class variable:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">YOLO_V2</span><span class="o">.</span><span class="n">default_anchors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span>
-</pre></div>
-</div>
-<p>This list contains default anchor box widths and heights relative to the feature map scale.</p>
-<p>When preparing your dataset, you should assign ground truth boxes to the most appropriate
-anchor using IoU(<cite>lucid.models.objdet.utils.iou</cite>), and convert the box coordinates into
-t-coordinates (as above) based on the matching anchor. The same anchors must be used
-when instantiating the model via the <cite>anchors</cite> parameter
-(if not set, <cite>default_anchors</cite> is used).</p>
-</section>
-<section id="prediction-output">
-<h2>Prediction Output<a class="headerlink" href="#prediction-output" title="Link to this heading">¶</a></h2>
-<p>Calling <cite>model.predict(…)</cite> returns final post-processed detections after applying
-confidence thresholding and non-maximum suppression (NMS).</p>
-<p>The return value is a list of length <cite>N</cite> (batch size), where each element is a list
-of dictionaries representing the detected objects in that image. Each dictionary
-has the following keys:</p>
-<ul class="simple">
-<li><p><cite>“box”</cite>: Tensor of shape <cite>(4,)</cite> representing the absolute coordinates
-<cite>[x1, y1, x2, y2]</cite> of the bounding box in pixels</p></li>
-<li><p><cite>“score”</cite>: Confidence score after multiplying objectness with class probability</p></li>
-<li><p><cite>“class_id”</cite>: Predicted class index</p></li>
+<li><p><strong>YOLO_V2</strong>:
+An initialized instance of the <cite>YOLO_V2</cite> detection model using a tiny backbone.</p></li>
 </ul>
 </section>
 <section id="example-usage">
 <h2>Example Usage<a class="headerlink" href="#example-usage" title="Link to this heading">¶</a></h2>
-<div class="admonition-using-yolo-v2-with-default-darknet-19 admonition">
-<p class="admonition-title">Using YOLO-V2 with default Darknet-19</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.models</span> <span class="k">as</span> <span class="nn">models</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">YOLO_V2</span><span class="p">()</span>  <span class="c1"># Uses default Darknet-19 backbone</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">lucid.models</span> <span class="kn">import</span> <span class="n">yolo_v2_tiny</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">yolo_v2_tiny</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">416</span><span class="p">,</span> <span class="mi">416</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>  <span class="c1"># shape: (1, 125, 13, 13) for Pascal-VOC (20 classes, 5 anchors)</span>
 </pre></div>
 </div>
-</div>
-<div class="admonition-using-yolo-v2-with-a-custom-backbone admonition">
-<p class="admonition-title">Using YOLO-V2 with a custom backbone</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">custom_darknet</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># Define or load your custom backbone</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">YOLO_V2</span><span class="p">(</span><span class="n">darknet</span><span class="o">=</span><span class="n">custom_darknet</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
-</pre></div>
-</div>
-</div>
-</section>
-<section id="backward-propagation">
-<h2>Backward Propagation<a class="headerlink" href="#backward-propagation" title="Link to this heading">¶</a></h2>
-<p>The YOLO-V2 model supports backpropagation through its network for training purposes.
-During backpropagation, gradients are computed and propagated through the darknet layers
-as well as the detection head:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">output</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_tensor</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>  <span class="c1"># Gradients w.r.t. the input tensor</span>
-</pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The tiny version uses a compressed version of the DarkNet-19 backbone,
+significantly reducing model size and computation while maintaining similar output
+format to the original YOLO-v2.</p>
+<p>The model follows the YOLO-v2 head design with 5 anchor boxes and a grid output shape of
+<span class="math notranslate nohighlight">\(S \times S \times (B \times (5 + C))\)</span>, where <span class="math notranslate nohighlight">\(C\)</span> is the number of classes,
+<span class="math notranslate nohighlight">\(B=5\)</span> is the number of anchors, and <span class="math notranslate nohighlight">\(S=13\)</span> when input image size is 416.</p>
 </div>
 </section>
 </section>
@@ -1225,23 +1068,23 @@ as well as the detection head:</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="yolo_v2.html">
+          <a class="next-page" href="../../../seq2seq/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">yolo_v2</div>
+                <div class="title">Sequence-to-Sequence</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../v1/yolo_v1_tiny.html">
+          <a class="prev-page" href="yolo_v2.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">yolo_v1_tiny</div>
+                <div class="title">yolo_v2</div>
                 
               </div>
             </a>
@@ -1275,24 +1118,12 @@ as well as the detection head:</p>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">YOLO_V2</a><ul>
-<li><a class="reference internal" href="#lucid.models.YOLO_V2"><code class="docutils literal notranslate"><span class="pre">YOLO_V2</span></code></a></li>
-<li><a class="reference internal" href="#class-signature">Class Signature</a></li>
+<li><a class="reference internal" href="#">yolo_v2_tiny</a><ul>
+<li><a class="reference internal" href="#lucid.models.yolo_v2_tiny"><code class="docutils literal notranslate"><span class="pre">yolo_v2_tiny()</span></code></a></li>
+<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
-<li><a class="reference internal" href="#attributes">Attributes</a></li>
-<li><a class="reference internal" href="#methods">Methods</a><ul>
-<li><a class="reference internal" href="#lucid.models.objdet.YOLO_V2.forward"><code class="docutils literal notranslate"><span class="pre">YOLO_V2.forward()</span></code></a></li>
-<li><a class="reference internal" href="#lucid.models.objdet.YOLO_V2.get_loss"><code class="docutils literal notranslate"><span class="pre">YOLO_V2.get_loss()</span></code></a></li>
-<li><a class="reference internal" href="#lucid.models.objdet.YOLO_V2.predict"><code class="docutils literal notranslate"><span class="pre">YOLO_V2.predict()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#darknet-19-integration">Darknet-19 Integration</a></li>
-<li><a class="reference internal" href="#input-format">Input Format</a></li>
-<li><a class="reference internal" href="#yolo-v2-loss">YOLO-v2 Loss</a></li>
-<li><a class="reference internal" href="#target-encoding-and-anchors">Target Encoding and Anchors</a></li>
-<li><a class="reference internal" href="#prediction-output">Prediction Output</a></li>
+<li><a class="reference internal" href="#returns">Returns</a></li>
 <li><a class="reference internal" href="#example-usage">Example Usage</a></li>
-<li><a class="reference internal" href="#backward-propagation">Backward Propagation</a></li>
 </ul>
 </li>
 </ul>

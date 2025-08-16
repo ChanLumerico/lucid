@@ -7,11 +7,12 @@ YOLO_V2
     :hidden:
 
     yolo_v2.rst
+    yolo_v2_tiny.rst
 
 .. autoclass:: lucid.models.YOLO_V2
 
 The `YOLO_V2` class implements the YOLO-v2 object detection model. 
-It is an improvement over YOLOv1, designed to detect objects in images using 
+It is an improvement over YOLO-v1, designed to detect objects in images using 
 anchor-based bounding boxes, batch normalization, and a stronger backbone (Darknet-19).
 
 .. image:: yolo_v2.png
@@ -56,6 +57,7 @@ Methods
 
 .. automethod:: lucid.models.objdet.YOLO_V2.forward
 .. automethod:: lucid.models.objdet.YOLO_V2.get_loss
+.. automethod:: lucid.models.objdet.YOLO_V2.predict
 
 Darknet-19 Integration
 ----------------------
@@ -105,7 +107,7 @@ Each vector at `(i, j)` of shape `(B * (5 + C))` is flattened and contains:
 
 YOLO-v2 Loss
 ------------
-The YOLO-v2 loss function builds upon YOLOv1's multi-part loss and incorporates **anchor boxes**. 
+The YOLO-v2 loss function builds upon YOLO-v1's multi-part loss and incorporates **anchor boxes**. 
 For a grid of size :math:`S \times S` and :math:`B` anchors per grid cell, the predicted tensor 
 shape becomes :math:`(S, S, B \times (5 + C))` where:
 
@@ -141,8 +143,54 @@ Where:
 
 .. note::
 
-    Unlike YOLOv1, YOLO-v2 uses **predefined anchors** and decouples object classification 
+    Unlike YOLO-v1, YOLO-v2 uses **predefined anchors** and decouples object classification 
     and localization more clearly, improving detection stability and accuracy.
+
+Target Encoding and Anchors
+---------------------------
+
+The YOLO_V2 model expects target bounding boxes to be encoded in **t-coordinates**,
+ which are offsets relative to the anchor boxes and grid cell positions. 
+ 
+ The target should have shape `(N, S, S, B, 5 + C)`, where each box consists of:
+
+- `tx, ty`: offset of the center from the top-left corner of the grid cell 
+  (normalized to :math:`[0,1]`)
+
+- `tw, th`: log-scale ratio between the ground truth width/height and anchor width/height
+- `objectness`: 1 if the box is responsible for the object, otherwise 0
+- `C`: one-hot encoded class vector
+
+To construct these targets properly, one must make use of the anchor box scales. 
+These can be accessed from the class variable:
+
+.. code-block:: python
+
+   YOLO_V2.default_anchors: list[tuple[float, float]]
+
+This list contains default anchor box widths and heights relative to the feature map scale. 
+
+When preparing your dataset, you should assign ground truth boxes to the most appropriate 
+anchor using IoU(`lucid.models.objdet.utils.iou`), and convert the box coordinates into 
+t-coordinates (as above) based on the matching anchor. The same anchors must be used 
+when instantiating the model via the `anchors` parameter 
+(if not set, `default_anchors` is used).
+
+Prediction Output
+-----------------
+
+Calling `model.predict(...)` returns final post-processed detections after applying 
+confidence thresholding and non-maximum suppression (NMS). 
+
+The return value is a list of length `N` (batch size), where each element is a list 
+of dictionaries representing the detected objects in that image. Each dictionary 
+has the following keys:
+
+- `"box"`: Tensor of shape `(4,)` representing the absolute coordinates 
+  `[x1, y1, x2, y2]` of the bounding box in pixels
+
+- `"score"`: Confidence score after multiplying objectness with class probability
+- `"class_id"`: Predicted class index
 
 Example Usage
 -------------
