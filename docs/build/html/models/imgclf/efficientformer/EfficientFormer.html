@@ -6,9 +6,9 @@
 <link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="efficientformer_l1" href="efficientformer_l1.html" /><link rel="prev" title="maxvit_xlarge" href="../maxvit/maxvit_xlarge.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/imgclf/efficientformer/EfficientFormer.html" />
 
-    <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>EfficientFormer - Lucid 2.5.1 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=3d3fbe02" />
+    <!-- Generated with Sphinx 8.2.3 and Furo 2024.08.06 -->
+        <title>EfficientFormer - Lucid 2.5.2 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d8a2add5" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">Lucid 2.5.1 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">Lucid 2.5.2 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -193,7 +193,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
   
-  <span class="sidebar-brand-text">Lucid 2.5.1 documentation</span>
+  <span class="sidebar-brand-text">Lucid 2.5.2 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -896,12 +896,14 @@
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../objdet/yolo/index.html">YOLO</a><input class="toctree-checkbox" id="toctree-checkbox-73" name="toctree-checkbox-73" role="switch" type="checkbox"/><label for="toctree-checkbox-73"><div class="visually-hidden">Toggle navigation of YOLO</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3 has-children"><a class="reference internal" href="../../objdet/yolo/v1/YOLO_V1.html">YOLO-v1</a><input class="toctree-checkbox" id="toctree-checkbox-74" name="toctree-checkbox-74" role="switch" type="checkbox"/><label for="toctree-checkbox-74"><div class="visually-hidden">Toggle navigation of YOLO-v1</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../objdet/yolo/v1/YOLO_V1_.html">YOLO-v1</a><input class="toctree-checkbox" id="toctree-checkbox-74" name="toctree-checkbox-74" role="switch" type="checkbox"/><label for="toctree-checkbox-74"><div class="visually-hidden">Toggle navigation of YOLO-v1</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../objdet/yolo/v1/yolo_v1.html">yolo_v1</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../objdet/yolo/v1/yolo_v1_tiny.html">yolo_v1_tiny</a></li>
 </ul>
 </li>
-<li class="toctree-l3 has-children"><a class="reference internal" href="../../objdet/yolo/v2/YOLO_V2.html">YOLO-v2</a><input class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of YOLO-v2</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../objdet/yolo/v2/YOLO_V2_.html">YOLO-v2</a><input class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of YOLO-v2</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../objdet/yolo/v2/yolo_v2.html">yolo_v2</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../objdet/yolo/v2/yolo_v2_tiny.html">yolo_v2_tiny</a></li>
 </ul>
 </li>
 </ul>
@@ -1003,7 +1005,7 @@
 <p><span class="badge transformer">Transformer</span> <span class="badge vision_transformer">Vision Transformer</span> <span class="badge normal">Image Classification</span></p>
 <dl class="py class">
 <dt class="sig sig-object py" id="lucid.models.EfficientFormer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">EfficientFormer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">depths:</span> <span class="pre">list[int],</span> <span class="pre">embed_dims:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">in_channels:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">3,</span> <span class="pre">num_classes:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">1000,</span> <span class="pre">global_pool:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">downsamples:</span> <span class="pre">list[bool]</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">num_vit:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">0,</span> <span class="pre">mlp_ratios:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">4.0,</span> <span class="pre">pool_size:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">3,</span> <span class="pre">layer_scale_init_value:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">1e-05,</span> <span class="pre">act_layer:</span> <span class="pre">type[~lucid.nn.module.Module]</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'lucid.nn.modules.activation.GELU'&gt;,</span> <span class="pre">norm_layer:</span> <span class="pre">type[~lucid.nn.module.Module]</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'lucid.nn.modules.norm.BatchNorm2d'&gt;,</span> <span class="pre">norm_layer_cl:</span> <span class="pre">type[~lucid.nn.module.Module]</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'lucid.nn.modules.norm.LayerNorm'&gt;,</span> <span class="pre">drop_rate:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0,</span> <span class="pre">proj_drop_rate:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0,</span> <span class="pre">drop_path_rate:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0</span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.EfficientFormer" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">EfficientFormer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">depths:</span> <span class="pre">list[int],</span> <span class="pre">embed_dims:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">in_channels:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">3,</span> <span class="pre">num_classes:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">1000,</span> <span class="pre">global_pool:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">downsamples:</span> <span class="pre">list[bool]</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">num_vit:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">0,</span> <span class="pre">mlp_ratios:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">4.0,</span> <span class="pre">pool_size:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">3,</span> <span class="pre">layer_scale_init_value:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">1e-05,</span> <span class="pre">act_layer:</span> <span class="pre">type[~lucid.nn.module.Module]</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'lucid.nn.modules.activation.GELU'&gt;,</span> <span class="pre">norm_layer:</span> <span class="pre">type[~lucid.nn.module.Module]</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'lucid.nn.modules.norm.BatchNorm2d'&gt;,</span> <span class="pre">norm_layer_cl:</span> <span class="pre">type[~lucid.nn.module.Module]</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'lucid.nn.modules.norm.LayerNorm'&gt;,</span> <span class="pre">drop_rate:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0,</span> <span class="pre">proj_drop_rate:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0,</span> <span class="pre">drop_path_rate:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0</span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.EfficientFormer" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>EfficientFormer</cite> module implements a lightweight hybrid vision transformer
@@ -1014,8 +1016,8 @@ efficiency and competitive accuracy.</p>
 </a>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">EfficientFormer</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">EfficientFormer</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">depths</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
         <span class="n">embed_dims</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1121,8 +1123,8 @@ complexity while retaining flexibility.</p></li>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
 <p><strong>Basic Usage</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid</span>
-<span class="kn">from</span> <span class="nn">lucid.models.transformer</span> <span class="kn">import</span> <span class="n">EfficientFormer</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models.transformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">EfficientFormer</span>
 
 <span class="c1"># Create a default EfficientFormer model</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">EfficientFormer</span><span class="p">(</span><span class="n">depths</span><span class="o">=</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">num_vit</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
@@ -1233,7 +1235,7 @@ should not exceed that length.</p>
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=983e91d6"></script>
+</div><script src="../../../_static/documentation_options.js?v=afc61bbc"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>

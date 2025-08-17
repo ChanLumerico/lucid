@@ -6,9 +6,9 @@
 <link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Image Datasets" href="image/index.html" /><link rel="prev" title="data.DataLoader" href="../data/DataLoader.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/datasets/datasets.html" />
 
-    <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+    <!-- Generated with Sphinx 8.2.3 and Furo 2024.08.06 -->
         <title>lucid.datasets - Lucid 2.5.2 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=3d3fbe02" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d8a2add5" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -896,12 +896,12 @@
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../models/objdet/yolo/index.html">YOLO</a><input class="toctree-checkbox" id="toctree-checkbox-73" name="toctree-checkbox-73" role="switch" type="checkbox"/><label for="toctree-checkbox-73"><div class="visually-hidden">Toggle navigation of YOLO</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l3 has-children"><a class="reference internal" href="../models/objdet/yolo/v1/YOLO_V1.html">YOLO-v1</a><input class="toctree-checkbox" id="toctree-checkbox-74" name="toctree-checkbox-74" role="switch" type="checkbox"/><label for="toctree-checkbox-74"><div class="visually-hidden">Toggle navigation of YOLO-v1</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../models/objdet/yolo/v1/YOLO_V1_.html">YOLO-v1</a><input class="toctree-checkbox" id="toctree-checkbox-74" name="toctree-checkbox-74" role="switch" type="checkbox"/><label for="toctree-checkbox-74"><div class="visually-hidden">Toggle navigation of YOLO-v1</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l4"><a class="reference internal" href="../models/objdet/yolo/v1/yolo_v1.html">yolo_v1</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../models/objdet/yolo/v1/yolo_v1_tiny.html">yolo_v1_tiny</a></li>
 </ul>
 </li>
-<li class="toctree-l3 has-children"><a class="reference internal" href="../models/objdet/yolo/v2/YOLO_V2.html">YOLO-v2</a><input class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of YOLO-v2</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../models/objdet/yolo/v2/YOLO_V2_.html">YOLO-v2</a><input class="toctree-checkbox" id="toctree-checkbox-75" name="toctree-checkbox-75" role="switch" type="checkbox"/><label for="toctree-checkbox-75"><div class="visually-hidden">Toggle navigation of YOLO-v2</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l4"><a class="reference internal" href="../models/objdet/yolo/v2/yolo_v2.html">yolo_v2</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../models/objdet/yolo/v2/yolo_v2_tiny.html">yolo_v2_tiny</a></li>
 </ul>
@@ -1028,7 +1028,7 @@ datasets with minimal setup.</p>
 <p>The <cite>lucid.datasets</cite> package allows for easy access to datasets through predefined classes.
 Each class provides flexible arguments to tailor the dataset to specific needs.</p>
 <p><strong>Example: Loading the MNIST Dataset</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">lucid.datasets</span> <span class="kn">import</span> <span class="n">MNIST</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">MNIST</span>
 
 <span class="c1"># Load the training set, downloading it if necessary</span>
 <span class="n">mnist_train</span> <span class="o">=</span> <span class="n">MNIST</span><span class="p">(</span><span class="n">root</span><span class="o">=</span><span class="s2">&quot;./data&quot;</span><span class="p">,</span> <span class="n">train</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">download</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>

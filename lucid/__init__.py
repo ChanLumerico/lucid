@@ -245,7 +245,7 @@ def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:
     return shape
 
 
-REGISTRY_PATH: Path = Path("lucid/models/registry.json")
+MODELS_REGISTRY_PATH: Path = Path("lucid/models/registry.json")
 
 _ModuleReturnFunc = Callable[[Any], nn.Module]
 
@@ -256,12 +256,12 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
         if os.environ.get("SPHINX_BUILD"):
             return func(*args, **kwargs)
 
-        if not REGISTRY_PATH.exists():
-            REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(REGISTRY_PATH, "w") as f:
+        if not MODELS_REGISTRY_PATH.exists():
+            MODELS_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(MODELS_REGISTRY_PATH, "w") as f:
                 json.dump({}, f)
 
-        with open(REGISTRY_PATH, "r") as f:
+        with open(MODELS_REGISTRY_PATH, "r") as f:
             registry = json.load(f)
 
         model = func(*args, **kwargs)
@@ -282,7 +282,7 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
             task=task,
         )
 
-        with open(REGISTRY_PATH, "w") as f:
+        with open(MODELS_REGISTRY_PATH, "w") as f:
             json.dump(registry, f, indent=4)
 
         return model
