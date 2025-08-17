@@ -144,7 +144,7 @@ def summarize(
         hook()
 
 
-def get_model_names(registry_path: Path = lucid.REGISTRY_PATH) -> list[str]:
+def get_model_names(registry_path: Path = lucid.MODELS_REGISTRY_PATH) -> list[str]:
     model_name_list = []
     try:
         with open(registry_path, "r") as file:
