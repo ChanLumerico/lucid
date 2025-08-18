@@ -1,0 +1,35 @@
+{
+  "lenet_5": {
+    "MNIST": {
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet_5/lenet_5_mnist.safetensors",
+      "sha256": "0baf6defe62ea17b51718fe7924a85d2f09cf2b864c73b3739a708ed50e4c626",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "lenet_5_mnist.safetensors",
+        "input_size": [
+          1,
+          32,
+          32
+        ]
+      },
+      "dataset": "mnist",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet_5/lenet_5_mnist.safetensors",
+      "sha256": "0baf6defe62ea17b51718fe7924a85d2f09cf2b864c73b3739a708ed50e4c626",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "lenet_5_mnist.safetensors",
+        "input_size": [
+          1,
+          32,
+          32
+        ]
+      },
+      "dataset": "mnist"
+    }
+  }
+}

@@ -245,7 +245,8 @@ def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:
     return shape
 
 
-MODELS_REGISTRY_PATH: Path = Path("lucid/models/registry.json")
+_PACKAGE_DIR: Path = Path(__file__).resolve().parent
+MODELS_REGISTRY_PATH: Path = _PACKAGE_DIR / "models" / "registry.json"
 
 _ModuleReturnFunc = Callable[[Any], nn.Module]
 
@@ -253,6 +254,8 @@ _ModuleReturnFunc = Callable[[Any], nn.Module]
 def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
     @wraps(func)
     def wrapper(*args, **kwargs) -> nn.Module:
+        weights = kwargs.pop("weights", None)
+
         if os.environ.get("SPHINX_BUILD"):
             return func(*args, **kwargs)
 
@@ -268,22 +271,24 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
         model._alt_name = func.__name__
         name = func.__name__
 
-        if name in registry:
-            return model
+        if name not in registry:
+            family = model.__class__.__name__
+            param_size = model.parameter_size
+            task = sys.modules[func.__module__].__package__.split(".")[2]
 
-        family = model.__class__.__name__
-        param_size = model.parameter_size
-        task = sys.modules[func.__module__].__package__.replace("lucid.models.", "")
+            registry[name] = dict(
+                name=name, family=family, param_size=param_size, task=task
+            )
+            with open(MODELS_REGISTRY_PATH, "w") as f:
+                json.dump(registry, f, indent=4)
 
-        registry[name] = dict(
-            name=name,
-            family=family,
-            param_size=param_size,
-            task=task,
-        )
+        if weights is not None:
+            import lucid.weights as W
 
-        with open(MODELS_REGISTRY_PATH, "w") as f:
-            json.dump(registry, f, indent=4)
+            try:
+                W.apply(model, weights)
+            except Exception as e:
+                raise RuntimeError(f"Failed to apply pre-trained weights: {e}") from e
 
         return model
 
