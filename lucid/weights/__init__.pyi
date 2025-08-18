@@ -11,10 +11,15 @@ class WeightEntry:
     dataset: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
 
+class LeNet_1_Weights(Enum):
+    MNIST: WeightEntry
+    DEFAULT: WeightEntry
+
 class LeNet_5_Weights(Enum):
     MNIST: WeightEntry
     DEFAULT: WeightEntry
 
 __all__ = [
+    "LeNet_1_Weights",
     "LeNet_5_Weights",
 ]

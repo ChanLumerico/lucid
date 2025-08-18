@@ -13,7 +13,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 [📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
 
-[🤗 Lucid Pre-Trained Weights Huggingface](https://huggingface.co/ChanLumerico/lucid)
+[🤗 Lucid Huggingface](https://huggingface.co/ChanLumerico/lucid)
 
 ### 🔥 What's New
 

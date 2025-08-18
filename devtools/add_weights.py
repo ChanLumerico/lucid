@@ -1,8 +1,6 @@
 import argparse, json, hashlib
 from pathlib import Path
 
-from lucid.weights import WEIGHTS_REGISTRY_PATH
-
 
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
@@ -27,7 +25,7 @@ p.add_argument(
 )
 p.add_argument("--dataset", default=None)
 p.add_argument("--input_size", default=None)
-p.add_argument("--registry", default=str(WEIGHTS_REGISTRY_PATH))
+p.add_argument("--registry", default="../lucid/weights/registry.json")
 
 args = p.parse_args()
 
