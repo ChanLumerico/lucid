@@ -98,4 +98,8 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-lucid.save(model.to("cpu"), "out/lenet_5_mnist")
+st_dict = model.state_dict()
+for k, v in st_dict.items():
+    print(f"({k}): {v.shape}")
+
+lucid.save(st_dict, "out/lenet_5_mnist", safetensors=True)

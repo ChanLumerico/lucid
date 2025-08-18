@@ -2,7 +2,7 @@
 
 ![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-30.0k-yellow)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-30.2k-yellow)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 ![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&label=Lines%20of%20Code&color=purple&cacheSeconds=5)
@@ -15,12 +15,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Now supports **`🤗 Safetensors`** for lucid neural module porting along with legacy `.lcd` format
 - Implemented **YOLO-v2**: `lucid.models.YOLO_V2` with variants `yolo_v2`, `yolo_v2_tiny`
 - Implemented **YOLO-v1**: `lucid.models.YOLO_V1` with variants `yolo_v1`, `yolo_v1_tiny`
-
 - **DDPM** implemented: `lucid.models.DDPM`
 - Added `lucid.cumprod` and `lucid.cumsum`
-- Added *Group Normalization* APIs: `F.group_norm`, `nn.GroupNorm`
 
 ## 🔧 How to Install
 
