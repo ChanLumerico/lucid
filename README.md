@@ -13,9 +13,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 [📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
 
+[🤗 Lucid Pre-Trained Weights Huggingface](https://huggingface.co/ChanLumerico/lucid)
+
 ### 🔥 What's New
 
-- Now supports **`🤗 Safetensors`** for lucid neural module porting along with legacy `.lcd` format
+- Now supports [**`🤗 Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
 - Implemented **YOLO-v2**: `lucid.models.YOLO_V2` with variants `yolo_v2`, `yolo_v2_tiny`
 - Implemented **YOLO-v1**: `lucid.models.YOLO_V1` with variants `yolo_v1`, `yolo_v1_tiny`
 - **DDPM** implemented: `lucid.models.DDPM`
