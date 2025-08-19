@@ -250,6 +250,21 @@ with lucid.no_grad():
 ```
 Prevents gradient tracking and reduces memory usage.
 
+## 📦 Loading Pretrained Weights
+
+Lucid supports loading pretrained weights for models using the `lucid.weights` module, 
+which provides access to standard pretrained initializations.
+
+```python
+from lucid.models import lenet_5
+from lucid.weights import LeNet_5_Weights
+
+# Load LeNet-5 with pretrained weights
+model = lenet_5(weights=LeNet_5_Weights.DEFAULT)
+```
+
+You can also initialize models without weights by passing `weights=None`.
+
 ## 🧬 Educational by Design
 
 Lucid is not a black box. It’s built to be explored. Every class, every function, and every line is designed to be readable and hackable.

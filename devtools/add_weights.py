@@ -1,6 +1,8 @@
 import argparse, json, hashlib
 from pathlib import Path
 
+from lucid import models
+
 
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
@@ -38,7 +40,12 @@ reg_path = Path(args.registry)
 reg_path.parent.mkdir(parents=True, exist_ok=True)
 reg = json.loads(reg_path.read_text()) if reg_path.exists() else {}
 
-meta = {"hf_repo": args.repo, "hf_revision": args.revision, "hf_filename": fn}
+meta = {
+    "hf_repo": args.repo,
+    "hf_revision": args.revision,
+    "hf_filename": fn,
+    "parameter_size": getattr(models, model_key)().parameter_size,
+}
 if args.input_size:
     meta["input_size"] = [int(x) for x in args.input_size.split(",")]
 

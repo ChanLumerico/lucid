@@ -27,7 +27,7 @@ batch_size = 100
 
 train_loader = DataLoader(train_set, batch_size, shuffle=True)
 
-model: nn.Module = models.lenet_1(_base_activation=nn.ReLU).to(device)
+model: nn.Module = models.lenet_4(_base_activation=nn.ReLU).to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5)
@@ -102,4 +102,4 @@ st_dict = model.state_dict()
 for k, v in st_dict.items():
     print(f"({k}): {v.shape}")
 
-lucid.save(st_dict, "out/lenet_1_mnist", safetensors=True)
+lucid.save(st_dict, "out/lenet_4_mnist", safetensors=True)

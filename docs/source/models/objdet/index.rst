@@ -104,7 +104,8 @@ YOLO is a one-stage object detector that frames detection as a single regression
 directly predicting bounding boxes and class probabilities from full images in a single 
 forward pass. It enables real-time detection with impressive speed and accuracy.
 
-**YOLO-v1**
+YOLO-v1
+~~~~~~~
 
  Redmon, Joseph et al. "You Only Look Once: Unified, Real-Time Object Detection."
  *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition* (2016).
@@ -131,7 +132,8 @@ forward pass. It enables real-time detection with impressive speed and accuracy.
       - 236,720,462
       - 302.21M
 
-**YOLO-v2**
+YOLO-v2
+~~~~~~~
 
  Redmon, Joseph, and Ali Farhadi. “YOLO9000: Better, Faster, Stronger.” 
  *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition* (CVPR), 

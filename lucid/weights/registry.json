@@ -7,11 +7,15 @@
         "hf_repo": "ChanLumerico/lucid",
         "hf_revision": "main",
         "hf_filename": "lenet_1_mnist.safetensors",
+        "parameter_size": 3246,
         "input_size": [
           1,
           28,
           28
-        ]
+        ],
+        "metric": {
+          "acc@1": 0.7937
+        }
       },
       "dataset": "mnist",
       "default": "True"
@@ -23,11 +27,56 @@
         "hf_repo": "ChanLumerico/lucid",
         "hf_revision": "main",
         "hf_filename": "lenet_1_mnist.safetensors",
+        "parameter_size": 3246,
         "input_size": [
           1,
           28,
           28
-        ]
+        ],
+        "metric": {
+          "acc@1": 0.7937
+        }
+      },
+      "dataset": "mnist"
+    }
+  },
+  "lenet_4": {
+    "MNIST": {
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet_4/lenet_4_mnist.safetensors",
+      "sha256": "6aba73a3668104b7bd171b8066006a3e618fad157757e8f7471a0fe406e372c4",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "lenet_4_mnist.safetensors",
+        "parameter_size": 18378,
+        "input_size": [
+          1,
+          28,
+          28
+        ],
+        "metric": {
+          "acc@1": 0.821
+        }
+      },
+      "dataset": "mnist",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet_4/lenet_4_mnist.safetensors",
+      "sha256": "6aba73a3668104b7bd171b8066006a3e618fad157757e8f7471a0fe406e372c4",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "lenet_4_mnist.safetensors",
+        "parameter_size": 18378,
+        "input_size": [
+          1,
+          28,
+          28
+        ],
+        "metric": {
+          "acc@1": 0.821
+        }
       },
       "dataset": "mnist"
     }
@@ -40,13 +89,14 @@
         "hf_repo": "ChanLumerico/lucid",
         "hf_revision": "main",
         "hf_filename": "lenet_5_mnist.safetensors",
+        "parameter_size": 61706,
         "input_size": [
           1,
           32,
           32
         ],
         "metric": {
-          "accuracy": 0.9981
+          "acc@1": 0.9981
         }
       },
       "dataset": "mnist",
@@ -59,16 +109,60 @@
         "hf_repo": "ChanLumerico/lucid",
         "hf_revision": "main",
         "hf_filename": "lenet_5_mnist.safetensors",
+        "parameter_size": 61706,
         "input_size": [
           1,
           32,
           32
         ],
         "metric": {
-          "accuracy": 0.9981
+          "acc@1": 0.9981
         }
       },
       "dataset": "mnist"
+    }
+  },
+  "alexnet": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/alexnet/alexnet_in1k.safetensors",
+      "sha256": "b8676e503e3685822d39a2c2246ccf1fe03218e1997adb19dbda799ce81511f0",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "alexnet_in1k.safetensors",
+        "parameter_size": 61100840,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.56522,
+          "acc@5": 0.79066
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/alexnet/alexnet_in1k.safetensors",
+      "sha256": "b8676e503e3685822d39a2c2246ccf1fe03218e1997adb19dbda799ce81511f0",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "alexnet_in1k.safetensors",
+        "parameter_size": 61100840,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.56522,
+          "acc@5": 0.79066
+        }
+      },
+      "dataset": "imagenet_1k"
     }
   }
 }

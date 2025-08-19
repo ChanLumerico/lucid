@@ -15,11 +15,21 @@ class LeNet_1_Weights(Enum):
     MNIST: WeightEntry
     DEFAULT: WeightEntry
 
+class LeNet_4_Weights(Enum):
+    MNIST: WeightEntry
+    DEFAULT: WeightEntry
+
 class LeNet_5_Weights(Enum):
     MNIST: WeightEntry
     DEFAULT: WeightEntry
 
+class AlexNet_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
+    "LeNet_4_Weights",
     "LeNet_5_Weights",
+    "AlexNet_Weights",
 ]

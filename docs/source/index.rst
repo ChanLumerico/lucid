@@ -101,6 +101,13 @@
     Sequence-to-Sequence <models/seq2seq/index.rst>
 
 .. toctree::
+    :maxdepth: 1
+    :caption: Weights
+    :hidden:
+    
+    weights/weights.rst
+
+.. toctree::
     :maxdepth: 2
     :caption: Transformation
     :hidden:
@@ -428,6 +435,22 @@ Evaluation without Gradients:
 
    with lucid.no_grad():
        out = model(x_test)
+
+Loading Pretrained Weights
+--------------------------
+
+Lucid supports loading pretrained weights for models using the `lucid.weights` module, 
+which provides access to standard pretrained initializations.
+
+.. code-block:: python
+
+   from lucid.models import lenet_5
+   from lucid.weights import LeNet_5_Weights
+
+   # Load LeNet-5 with pretrained weights
+   model = lenet_5(weights=LeNet_5_Weights.DEFAULT)
+
+You can also initialize models without weights by passing `weights=None`.
 
 Educational by Design
 ----------------------

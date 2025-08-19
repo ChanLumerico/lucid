@@ -919,6 +919,10 @@
 </ul>
 </li>
 </ul>
+<p class="caption" role="heading"><span class="caption-text">Weights</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="weights/weights.html">lucid.weights</a></li>
+</ul>
 <p class="caption" role="heading"><span class="caption-text">Transformation</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="transforms/transforms.html">lucid.transforms</a></li>
@@ -999,6 +1003,8 @@
         </div>
         <article role="main" id="furo-main-content">
           <div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
 </div>
 <div class="toctree-wrapper compound">
 </div>
@@ -1266,6 +1272,19 @@ tracking gradients across batches of data.</p>
     <span class="n">out</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x_test</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
+<section id="loading-pretrained-weights">
+<h2>Loading Pretrained Weights<a class="headerlink" href="#loading-pretrained-weights" title="Link to this heading">¶</a></h2>
+<p>Lucid supports loading pretrained weights for models using the <cite>lucid.weights</cite> module,
+which provides access to standard pretrained initializations.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">lenet_5</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lucid.weights</span><span class="w"> </span><span class="kn">import</span> <span class="n">LeNet_5_Weights</span>
+
+<span class="c1"># Load LeNet-5 with pretrained weights</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">lenet_5</span><span class="p">(</span><span class="n">weights</span><span class="o">=</span><span class="n">LeNet_5_Weights</span><span class="o">.</span><span class="n">DEFAULT</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You can also initialize models without weights by passing <cite>weights=None</cite>.</p>
 </section>
 <section id="educational-by-design">
 <h2>Educational by Design<a class="headerlink" href="#educational-by-design" title="Link to this heading">¶</a></h2>
