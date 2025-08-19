@@ -180,8 +180,8 @@
           224
         ],
         "metric": {
-          "acc@1": 69.02,
-          "acc@5": 88.628
+          "acc@1": 0.6902,
+          "acc@5": 0.8862
         }
       },
       "dataset": "imagenet_1k",
@@ -201,8 +201,8 @@
           224
         ],
         "metric": {
-          "acc@1": 69.02,
-          "acc@5": 88.628
+          "acc@1": 0.6902,
+          "acc@5": 0.8862
         }
       },
       "dataset": "imagenet_1k"
@@ -223,8 +223,8 @@
           224
         ],
         "metric": {
-          "acc@1": 69.928,
-          "acc@5": 89.246
+          "acc@1": 0.6992,
+          "acc@5": 0.8924
         }
       },
       "dataset": "imagenet_1k",
@@ -244,8 +244,94 @@
           224
         ],
         "metric": {
-          "acc@1": 69.928,
-          "acc@5": 89.246
+          "acc@1": 0.6992,
+          "acc@5": 0.8924
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "vggnet_16": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_16/vggnet_16_in1k.safetensors",
+      "sha256": "de85ba044318ddcf6c85d897c1e72e451ae65f3d1ac8b56a508de36b69c5fcce",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "vggnet_16_in1k.safetensors",
+        "parameter_size": 138357544,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7159,
+          "acc@5": 0.9038
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_16/vggnet_16_in1k.safetensors",
+      "sha256": "de85ba044318ddcf6c85d897c1e72e451ae65f3d1ac8b56a508de36b69c5fcce",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "vggnet_16_in1k.safetensors",
+        "parameter_size": 138357544,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7159,
+          "acc@5": 0.9038
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "vggnet_19": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_19/vggnet_19_in1k.safetensors",
+      "sha256": "a257dacd851fcf4a7245bef2d018a8a6a922bd0019edfcb977b6b4922fa6ab5a",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "vggnet_19_in1k.safetensors",
+        "parameter_size": 143667240,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7237,
+          "acc@5": 0.9087
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_19/vggnet_19_in1k.safetensors",
+      "sha256": "a257dacd851fcf4a7245bef2d018a8a6a922bd0019edfcb977b6b4922fa6ab5a",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "vggnet_19_in1k.safetensors",
+        "parameter_size": 143667240,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7237,
+          "acc@5": 0.9087
         }
       },
       "dataset": "imagenet_1k"

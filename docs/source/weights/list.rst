@@ -73,6 +73,8 @@ VGGNet
 
 .. autoclass:: lucid.weights.VGGNet_11_Weights
 .. autoclass:: lucid.weights.VGGNet_13_Weights
+.. autoclass:: lucid.weights.VGGNet_16_Weights
+.. autoclass:: lucid.weights.VGGNet_19_Weights
 
 .. list-table::
     :header-rows: 1
@@ -101,3 +103,19 @@ VGGNet
       - 532 MB
       - 0.6992
       - 0.8924
+    
+    * - *VGGNet_16_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 138,357,544
+      - 553 MB
+      - 0.7159
+      - 0.9038
+    
+    * - *VGGNet_19_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 1436,67,240
+      - 575 MB
+      - 0.7237
+      - 0.9087
