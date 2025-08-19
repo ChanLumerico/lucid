@@ -107,6 +107,8 @@
     
     weights/weights.rst
 
+    Pre-Trained Weights <weights/list.rst>
+
 .. toctree::
     :maxdepth: 2
     :caption: Transformation

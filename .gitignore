@@ -7,4 +7,5 @@ tmp.py
 _pip_macro.sh
 
 *.lcd
+*.safetensors
 *.DS_Store
