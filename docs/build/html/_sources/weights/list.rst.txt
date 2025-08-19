@@ -66,3 +66,38 @@ AlexNet
       - 244 MB
       - 0.5652
       - 0.7906
+
+VGGNet
+------
+|convnet-badge| |imgclf-badge|
+
+.. autoclass:: lucid.weights.VGGNet_11_Weights
+.. autoclass:: lucid.weights.VGGNet_13_Weights
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+      - Metric (acc@1)
+      - Metric (acc@5)
+    
+    * - *VGGNet_11_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 132,863,336
+      - 531 MB
+      - 0.6902
+      - 0.8863
+
+    * - *VGGNet_13_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 133,047,848
+      - 532 MB
+      - 0.6992
+      - 0.8924

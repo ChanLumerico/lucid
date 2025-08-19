@@ -7,7 +7,6 @@ class WeightEntry:
     url: str
     sha256: str
     tag: str
-    size: Optional[int] = None
     dataset: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
 
@@ -27,9 +26,19 @@ class AlexNet_Weights(Enum):
     IMAGENET1K: WeightEntry
     DEFAULT: WeightEntry
 
+class VGGNet_11_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class VGGNet_13_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
     "LeNet_5_Weights",
     "AlexNet_Weights",
+    "VGGNet_11_Weights",
+    "VGGNet_13_Weights",
 ]

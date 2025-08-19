@@ -35,7 +35,6 @@ class WeightEntry:
     url: str
     sha256: str
     tag: str
-    size: int | None = None
     dataset: str | None = None
     meta: dict[str, Any] | None = None
 
@@ -84,7 +83,6 @@ def _make_enum(model_key: str, entries: dict[str, Any]) -> type[Enum]:
             url=info["url"],
             sha256=info["sha256"],
             tag=tag,
-            size=info.get("size"),
             dataset=info.get("dataset"),
             meta=info.get("meta", {}),
         )

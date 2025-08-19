@@ -164,5 +164,91 @@
       },
       "dataset": "imagenet_1k"
     }
+  },
+  "vggnet_11": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_11/vggnet_11_in1k.safetensors",
+      "sha256": "6a370b0af29b9ef9245632017182060d082f53c0777334c8aee04c10a2db83dd",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "vggnet_11_in1k.safetensors",
+        "parameter_size": 132863336,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 69.02,
+          "acc@5": 88.628
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_11/vggnet_11_in1k.safetensors",
+      "sha256": "6a370b0af29b9ef9245632017182060d082f53c0777334c8aee04c10a2db83dd",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "vggnet_11_in1k.safetensors",
+        "parameter_size": 132863336,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 69.02,
+          "acc@5": 88.628
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "vggnet_13": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_13/vggnet_13_in1k.safetensors",
+      "sha256": "25d8f06bb1a0b5848abbecfd31590430ec2f3e58d01253273115fd77e62bb56d",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "vggnet_13_in1k.safetensors",
+        "parameter_size": 133047848,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 69.928,
+          "acc@5": 89.246
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_13/vggnet_13_in1k.safetensors",
+      "sha256": "25d8f06bb1a0b5848abbecfd31590430ec2f3e58d01253273115fd77e62bb56d",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "vggnet_13_in1k.safetensors",
+        "parameter_size": 133047848,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 69.928,
+          "acc@5": 89.246
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
   }
 }

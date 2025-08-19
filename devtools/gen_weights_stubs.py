@@ -26,7 +26,6 @@ basic_stub = [
     "    url: str",
     "    sha256: str",
     "    tag: str",
-    "    size: Optional[int] = None",
     "    dataset: Optional[str] = None",
     "    meta: Optional[Dict[str, Any]] = None",
     "",
