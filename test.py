@@ -13,7 +13,7 @@ from tqdm import tqdm
 lucid.random.seed(42)
 
 
-transform = transforms.Compose([transforms.Resize((28, 28))])
+transform = transforms.Compose([transforms.Resize((32, 32))])
 
 train_set = MNIST(
     root="./.data/mnist/train", train=True, download=False, transform=transform
@@ -27,7 +27,7 @@ batch_size = 100
 
 train_loader = DataLoader(train_set, batch_size, shuffle=True)
 
-model: nn.Module = models.lenet_4(_base_activation=nn.ReLU).to(device)
+model: nn.Module = models.lenet_5(_base_activation=nn.ReLU).to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5)
@@ -55,7 +55,7 @@ def train(model, train_loader, criterion, optimizer, num_epochs):
 
         for batch_idx, (images, labels) in progress_bar:
             images = normalize(images)
-            images = images.reshape(-1, 1, 28, 28)
+            images = images.reshape(-1, 1, 32, 32)
 
             images = images.to(device)
             labels = labels.to(device)
@@ -102,4 +102,4 @@ st_dict = model.state_dict()
 for k, v in st_dict.items():
     print(f"({k}): {v.shape}")
 
-lucid.save(st_dict, "out/lenet_4_mnist", safetensors=True)
+lucid.save(st_dict, "out/lenet_5_mnist", safetensors=True)

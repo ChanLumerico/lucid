@@ -327,16 +327,16 @@ class Inception_V3(Inception):
         in_channels = 3
 
         self.conv1 = nn.Sequential(
-            nn.ConvBNReLU2d(in_channels, 32, kernel_size=3, stride=2),
-            nn.ConvBNReLU2d(32, 32, kernel_size=3),
-            nn.ConvBNReLU2d(32, 64, kernel_size=3, padding=1),
+            nn.ConvBNReLU2d(in_channels, 32, kernel_size=3, stride=2, conv_bias=False),
+            nn.ConvBNReLU2d(32, 32, kernel_size=3, conv_bias=False),
+            nn.ConvBNReLU2d(32, 64, kernel_size=3, padding=1, conv_bias=False),
         )
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2)
 
         self.conv2 = nn.Sequential(
-            nn.ConvBNReLU2d(64, 80, kernel_size=3),
-            nn.ConvBNReLU2d(80, 192, kernel_size=3, stride=2),
-            nn.ConvBNReLU2d(192, 288, kernel_size=3, padding=1),
+            nn.ConvBNReLU2d(64, 80, kernel_size=1, conv_bias=False),
+            nn.ConvBNReLU2d(80, 192, kernel_size=3, stride=2, conv_bias=False),
+            nn.ConvBNReLU2d(192, 288, kernel_size=3, padding=1, conv_bias=False),
         )
 
         self.incep_3 = nn.Sequential(

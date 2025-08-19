@@ -119,3 +119,96 @@ VGGNet
       - 575 MB
       - 0.7237
       - 0.9087
+
+ResNet
+------
+|convnet-badge| |imgclf-badge|
+
+.. autoclass:: lucid.weights.ResNet_18_Weights
+.. autoclass:: lucid.weights.ResNet_34_Weights
+.. autoclass:: lucid.weights.ResNet_50_Weights
+.. autoclass:: lucid.weights.ResNet_101_Weights
+.. autoclass:: lucid.weights.ResNet_152_Weights
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+      - Metric (acc@1)
+      - Metric (acc@5)
+    
+    * - *ResNet_18_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 11,689,512
+      - 44.7 MB
+      - 0.6976
+      - 0.8907
+    
+    * - *ResNet_34_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 21,797,672
+      - 83.3 MB
+      - 0.7331
+      - 0.9124
+    
+    * - *ResNet_50_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 25,557,032
+      - 97.8 MB
+      - 0.7613
+      - 0.9286
+    
+    * - *ResNet_101_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 44,549,160
+      - 170 MB
+      - 0.7737
+      - 0.9534
+    
+    * - *ResNet_152_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 60,192,808
+      - 230 MB
+      - 0.7831
+      - 0.9600
+
+.. autoclass:: lucid.weights.Wide_ResNet_50_Weights
+.. autoclass:: lucid.weights.Wide_ResNet_101_Weights
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+      - Metric (acc@1)
+      - Metric (acc@5)
+    
+    * - *Wide_ResNet_50_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 68,883,240
+      - 131 MB
+      - 0.7846
+      - 0.9409
+    
+    * - *Wide_ResNet_101_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 126,886,696
+      - 242 MB
+      - 0.7885
+      - 0.9248

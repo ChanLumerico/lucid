@@ -2,13 +2,7 @@ from pathlib import Path
 import json
 
 from lucid import models
-
-
-def _clsname(key: str) -> str | None:
-    for k, v in models.__dict__.items():
-        if isinstance(v, type) and k.lower() in key:
-            return k + key.split(k.lower())[1] + "_Weights"
-    return None
+from lucid.weights import _classname
 
 
 reg_path = Path("lucid/weights/registry.json")
@@ -36,7 +30,7 @@ lines.extend(basic_stub)
 
 all_names = []
 for key, entries in reg.items():
-    name = _clsname(key)
+    name = _classname(key, family=entries["DEFAULT"]["meta"].get("family", None))
     if name is None:
         raise RuntimeError(f"Cannot resolve model key '{key}'.")
 

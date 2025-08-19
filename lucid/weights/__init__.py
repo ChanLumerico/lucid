@@ -62,7 +62,10 @@ def _family_of(model_key: str) -> str | None:
     return None
 
 
-def _classname(model_key: str) -> str:
+def _classname(model_key: str, family: str | None = None) -> str:
+    if family is not None:
+        return family + model_key[len(family) :] + "_Weights"
+
     fam = _family_of(model_key)
     if fam:
         suf = model_key
@@ -87,7 +90,10 @@ def _make_enum(model_key: str, entries: dict[str, Any]) -> type[Enum]:
             meta=info.get("meta", {}),
         )
 
-    cl = Enum(_classname(model_key), members)
+    cl = Enum(
+        _classname(model_key, family=entries["DEFAULT"]["meta"].get("family", None)),
+        members,
+    )
     _DYNAMIC[_canon(model_key)] = cl
     return cl
 

@@ -42,6 +42,34 @@ class VGGNet_19_Weights(Enum):
     IMAGENET1K: WeightEntry
     DEFAULT: WeightEntry
 
+class ResNet_18_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class ResNet_34_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class ResNet_50_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class ResNet_101_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class ResNet_152_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class Wide_ResNet_50_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class Wide_ResNet_101_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
@@ -51,4 +79,11 @@ __all__ = [
     "VGGNet_13_Weights",
     "VGGNet_16_Weights",
     "VGGNet_19_Weights",
+    "ResNet_18_Weights",
+    "ResNet_34_Weights",
+    "ResNet_50_Weights",
+    "ResNet_101_Weights",
+    "ResNet_152_Weights",
+    "Wide_ResNet_50_Weights",
+    "Wide_ResNet_101_Weights",
 ]

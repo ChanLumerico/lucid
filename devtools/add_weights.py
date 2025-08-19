@@ -25,6 +25,7 @@ p.add_argument(
     action="store_true",
     help="Mark this tag as the DEFAULT weight for the given model key",
 )
+p.add_argument("--family", default=None)
 p.add_argument("--dataset", default=None)
 p.add_argument("--input_size", default=None)
 p.add_argument("--registry", default="../lucid/weights/registry.json")
@@ -46,8 +47,12 @@ meta = {
     "hf_filename": fn,
     "parameter_size": getattr(models, model_key)().parameter_size,
 }
+
 if args.input_size:
     meta["input_size"] = [int(x) for x in args.input_size.split(",")]
+
+if args.family:
+    meta["family"] = args.family
 
 entry = {
     "url": f"hf://{args.repo}@{args.revision}/weights/{model_key}/{fn}",

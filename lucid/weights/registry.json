@@ -336,5 +336,310 @@
       },
       "dataset": "imagenet_1k"
     }
+  },
+  "resnet_18": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_18/resnet_18_in1k.safetensors",
+      "sha256": "bb239b3a8da5a4d70cb8abca5795cf9f5a02e7223839e96eb6d6c819d12dcdbd",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_18_in1k.safetensors",
+        "parameter_size": 11689512,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.6975,
+          "acc@5": 0.8907
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_18/resnet_18_in1k.safetensors",
+      "sha256": "bb239b3a8da5a4d70cb8abca5795cf9f5a02e7223839e96eb6d6c819d12dcdbd",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_18_in1k.safetensors",
+        "parameter_size": 11689512,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.6975,
+          "acc@5": 0.8907
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "resnet_34": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_34/resnet_34_in1k.safetensors",
+      "sha256": "3d0ff6edcdf5d1d52334d2c4c1ee12a627c469bbb210a085ebfd0c7cd5414af3",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_34_in1k.safetensors",
+        "parameter_size": 21797672,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7331,
+          "acc@5": 0.9142
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_34/resnet_34_in1k.safetensors",
+      "sha256": "3d0ff6edcdf5d1d52334d2c4c1ee12a627c469bbb210a085ebfd0c7cd5414af3",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_34_in1k.safetensors",
+        "parameter_size": 21797672,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7331,
+          "acc@5": 0.9142
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "resnet_50": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_50/resnet_50_in1k.safetensors",
+      "sha256": "2155a98ca479e988145c20ed2756adbb23bae165f633db54b749f10b352fef16",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_50_in1k.safetensors",
+        "parameter_size": 25557032,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7631,
+          "acc@5": 0.9286
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_50/resnet_50_in1k.safetensors",
+      "sha256": "2155a98ca479e988145c20ed2756adbb23bae165f633db54b749f10b352fef16",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_50_in1k.safetensors",
+        "parameter_size": 25557032,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7631,
+          "acc@5": 0.9286
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "resnet_101": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_101/resnet_101_in1k.safetensors",
+      "sha256": "09d30562c593c88b6bf44c800f2b7ee31d473bc4b80c896ac3da7a395e78680c",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_101_in1k.safetensors",
+        "parameter_size": 44549160,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7737,
+          "acc@5": 0.9355
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_101/resnet_101_in1k.safetensors",
+      "sha256": "09d30562c593c88b6bf44c800f2b7ee31d473bc4b80c896ac3da7a395e78680c",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_101_in1k.safetensors",
+        "parameter_size": 44549160,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7737,
+          "acc@5": 0.9355
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "resnet_152": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_152/resnet_152_in1k.safetensors",
+      "sha256": "890ae58bef7a1098d89e0a44cbecb8cdac979f9920d7181fd2fe3afffa57889d",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_152_in1k.safetensors",
+        "parameter_size": 60192808,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7831,
+          "acc@5": 0.9405
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet_152/resnet_152_in1k.safetensors",
+      "sha256": "890ae58bef7a1098d89e0a44cbecb8cdac979f9920d7181fd2fe3afffa57889d",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnet_152_in1k.safetensors",
+        "parameter_size": 60192808,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7831,
+          "acc@5": 0.9405
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "wide_resnet_50": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/wide_resnet_50/wide_resnet_50_in1k.safetensors",
+      "sha256": "5684065e10a0b8befdcdfb22a151bdf743a3a31520b4cddba0123e8e62b71a4c",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "wide_resnet_50_in1k.safetensors",
+        "parameter_size": 68883240,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7847,
+          "acc@5": 0.9409
+        },
+        "family": "Wide_ResNet"
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/wide_resnet_50/wide_resnet_50_in1k.safetensors",
+      "sha256": "5684065e10a0b8befdcdfb22a151bdf743a3a31520b4cddba0123e8e62b71a4c",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "wide_resnet_50_in1k.safetensors",
+        "parameter_size": 68883240,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7847,
+          "acc@5": 0.9409
+        },
+        "family": "Wide_ResNet"
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "wide_resnet_101": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/wide_resnet_101/wide_resnet_101_in1k.safetensors",
+      "sha256": "4d6b7ec31f68722cd5b31916c708c76f2ec5227e9fbe9c00a9f522735fa2d6f5",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "wide_resnet_101_in1k.safetensors",
+        "parameter_size": 126886696,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7885,
+          "acc@5": 0.9428
+        },
+        "family": "Wide_ResNet"
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/wide_resnet_101/wide_resnet_101_in1k.safetensors",
+      "sha256": "4d6b7ec31f68722cd5b31916c708c76f2ec5227e9fbe9c00a9f522735fa2d6f5",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "wide_resnet_101_in1k.safetensors",
+        "parameter_size": 126886696,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7885,
+          "acc@5": 0.9428
+        },
+        "family": "Wide_ResNet"
+      },
+      "dataset": "imagenet_1k"
+    }
   }
 }
