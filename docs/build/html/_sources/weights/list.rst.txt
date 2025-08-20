@@ -300,3 +300,47 @@ DenseNet
       - 77.3 MB
       - 0.7690
       - 0.9337
+
+MobileNet
+---------
+|convnet-badge| |imgclf-badge|
+
+.. autoclass:: lucid.weights.MobileNet_V2_Weights
+.. autoclass:: lucid.weights.MobileNet_V3_Small_Weights
+.. autoclass:: lucid.weights.MobileNet_V3_Large_Weights
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+      - Metric (acc@1)
+      - Metric (acc@5)
+    
+    * - *MobileNet_V2_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 3,504,872
+      - 13.5 MB
+      - 0.7188
+      - 0.9029
+    
+    * - *MobileNet_V3_Small_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 2,542,856
+      - 9.82 MB
+      - 0.6767
+      - 0.8740
+    
+    * - *MobileNet_V3_Large_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 5,483,032
+      - 21.11 MB
+      - 0.7404
+      - 0.9134

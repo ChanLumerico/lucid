@@ -11,18 +11,18 @@ def convert_torch_to_lucid(torch_dict, lucid_dict, ignore=[], verbose=False):
             continue
         new_torch_dict[tk] = tv.numpy()
 
-    is_mismatch = False
+    mismatch_keys = []
     for idx, ((tk, tv), (lk, lv)) in enumerate(
         zip(new_torch_dict.items(), lucid_dict.items()), start=1
     ):
         if tv.shape != lv.shape:
+            mismatch_keys.append(lk)
             if verbose:
                 print(
                     f"{f"[{idx}]":>6}",
                     f"{f"❌ ({tk}) <-> ({lk}):":<80}",
                     f"{f"{tv.shape} <-> {lv.shape}":<30}",
                 )
-            is_mismatch = True
             continue
 
         if verbose:
@@ -32,10 +32,9 @@ def convert_torch_to_lucid(torch_dict, lucid_dict, ignore=[], verbose=False):
                 f"{f"{tv.shape} <-> {lv.shape}":<30}",
             )
 
-    if is_mismatch:
-        raise RuntimeError()
-
     for (_, tv), (lk, _) in zip(new_torch_dict.items(), lucid_dict.items()):
+        if lk in mismatch_keys:
+            continue
         lucid_dict[lk] = tv
 
 
@@ -46,17 +45,22 @@ def manual_convert(torch_dict, lucid_dict, torch_key_arr, lucid_key_arr, verbose
     for tk, lk in zip(torch_key_arr, lucid_key_arr):
         torch_np = torch_dict[tk].numpy()
         if torch_np.shape != lucid_dict[lk].shape:
-            raise ValueError(f"Shape mismatch: ({tk}) <-> ({lk})")
+            try:
+                torch_np.reshape(*lucid_dict[lk].shape)
+            except Exception:
+                raise ValueError(f"Shape mismatch: ({tk}) <-> ({lk})")
 
-        lucid_dict[lk] = torch_np
+        lucid_dict[lk] = torch_np.reshape(*lucid_dict[lk].shape)
         if verbose:
-            print("[Manual]", f"{f"✅ ({tk}) <-> ({lk})":<80}")
+            print("[Manual]", f"{f"✅ ({tk}) <-> ({lk}):":<80} {lucid_dict[lk].shape}")
 
 
 import torch
 import torchvision.models as models
 
-torch_model = models.densenet201(weights=models.DenseNet201_Weights.IMAGENET1K_V1)
+torch_model = models.mobilenet_v3_large(
+    weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1
+)
 torch_model.eval()
 torch_dict = torch_model.state_dict()
 
@@ -67,13 +71,13 @@ import lucid.models as models
 lucid.random.seed(42)
 
 
-lucid_model = models.densenet_201()
+lucid_model = models.mobilenet_v3_large()
 lucid_dict = lucid_model.state_dict()
 
 convert_torch_to_lucid(
     torch_dict,
     lucid_dict,
-    ignore=["num_batches_tracked", "transition", "norm5", "classifier"],
+    ignore=["num_batches_tracked"],
     verbose=True,
 )
 
@@ -81,34 +85,28 @@ manual_convert(
     torch_dict,
     lucid_dict,
     torch_key_arr=[
-        "features.transition1.norm.weight",
-        "features.transition1.norm.bias",
-        "features.transition1.conv.weight",
-        "features.transition2.norm.weight",
-        "features.transition2.norm.bias",
-        "features.transition2.conv.weight",
-        "features.transition3.norm.weight",
-        "features.transition3.norm.bias",
-        "features.transition3.conv.weight",
-        "features.norm5.weight",
-        "features.norm5.bias",
-        "classifier.weight",
-        "classifier.bias",
+        "features.11.block.2.fc1.weight",
+        "features.11.block.2.fc2.weight",
+        "features.12.block.2.fc1.weight",
+        "features.12.block.2.fc2.weight",
+        "features.13.block.2.fc1.weight",
+        "features.13.block.2.fc2.weight",
+        "features.14.block.2.fc1.weight",
+        "features.14.block.2.fc2.weight",
+        "features.15.block.2.fc1.weight",
+        "features.15.block.2.fc2.weight",
     ],
     lucid_key_arr=[
-        "transitions.0.bn.weight",
-        "transitions.0.bn.bias",
-        "transitions.0.conv.weight",
-        "transitions.1.bn.weight",
-        "transitions.1.bn.bias",
-        "transitions.1.conv.weight",
-        "transitions.2.bn.weight",
-        "transitions.2.bn.bias",
-        "transitions.2.conv.weight",
-        "bn_final.weight",
-        "bn_final.bias",
-        "fc.weight",
-        "fc.bias",
+        "bottlenecks.10.residual.2.fc1.weight",
+        "bottlenecks.10.residual.2.fc2.weight",
+        "bottlenecks.11.residual.2.fc1.weight",
+        "bottlenecks.11.residual.2.fc2.weight",
+        "bottlenecks.12.residual.2.fc1.weight",
+        "bottlenecks.12.residual.2.fc2.weight",
+        "bottlenecks.13.residual.2.fc1.weight",
+        "bottlenecks.13.residual.2.fc2.weight",
+        "bottlenecks.14.residual.2.fc1.weight",
+        "bottlenecks.14.residual.2.fc2.weight",
     ],
     verbose=True,
 )

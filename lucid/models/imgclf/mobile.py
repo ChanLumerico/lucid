@@ -230,6 +230,7 @@ class _InvertedBottleneck_V3(nn.Module):
         stride: int,
         use_se: bool,
         use_hswish: bool,
+        se_reduction: int = 4,
     ) -> None:
         super().__init__()
         self.do_skip = stride == 1 and in_channels == out_channels
@@ -254,7 +255,7 @@ class _InvertedBottleneck_V3(nn.Module):
             nn.HardSwish() if use_hswish else nn.ReLU(),
         )
 
-        se_block = _SEBlock(mid_channels) if use_se else None
+        se_block = _SEBlock(mid_channels, se_reduction) if use_se else None
 
         pointwise = nn.Sequential(
             nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False),
@@ -301,6 +302,7 @@ class MobileNet_V3(nn.Module):
             use_se,
             use_hswish,
             stride,
+            se_reduction,
         ) in bottleneck_cfg:
             bottleneck_layers.append(
                 _InvertedBottleneck_V3(
@@ -311,6 +313,7 @@ class MobileNet_V3(nn.Module):
                     stride,
                     use_se,
                     use_hswish,
+                    se_reduction,
                 )
             )
             in_channels = out_channels
@@ -762,17 +765,17 @@ def mobilenet_v2(num_classes: int = 1000, **kwargs) -> MobileNet_V2:
 @register_model
 def mobilenet_v3_small(num_classes: int = 1000, **kwargs) -> MobileNet_V3:
     cfg = [
-        [3, 16, 16, True, False, 2],
-        [3, 72, 24, False, False, 2],
-        [3, 88, 24, False, False, 1],
-        [5, 96, 40, True, True, 2],
-        [5, 240, 40, True, True, 1],
-        [5, 240, 40, True, True, 1],
-        [5, 120, 48, True, True, 1],
-        [5, 144, 48, True, True, 1],
-        [5, 288, 96, True, True, 2],
-        [5, 576, 96, True, True, 1],
-        [5, 576, 96, True, True, 1],
+        [3, 16, 16, True, False, 2, 2],
+        [3, 72, 24, False, False, 2, 4],
+        [3, 88, 24, False, False, 1, 4],
+        [5, 96, 40, True, True, 2, 4],
+        [5, 240, 40, True, True, 1, 4],
+        [5, 240, 40, True, True, 1, 4],
+        [5, 120, 48, True, True, 1, 4],
+        [5, 144, 48, True, True, 1, 4],
+        [5, 288, 96, True, True, 2, 4],
+        [5, 576, 96, True, True, 1, 4],
+        [5, 576, 96, True, True, 1, 4],
     ]
     return MobileNet_V3(
         bottleneck_cfg=cfg, last_channels=1024, num_classes=num_classes, **kwargs
@@ -782,21 +785,21 @@ def mobilenet_v3_small(num_classes: int = 1000, **kwargs) -> MobileNet_V3:
 @register_model
 def mobilenet_v3_large(num_classes: int = 1000, **kwargs) -> MobileNet_V3:
     cfg = [
-        [3, 16, 16, False, False, 1],
-        [3, 64, 24, False, False, 2],
-        [3, 72, 24, False, False, 1],
-        [5, 72, 40, True, False, 2],
-        [5, 120, 40, True, False, 1],
-        [5, 120, 40, True, False, 1],
-        [3, 240, 80, False, True, 2],
-        [3, 200, 80, False, True, 1],
-        [3, 184, 80, False, True, 1],
-        [3, 184, 80, False, True, 1],
-        [3, 480, 112, True, True, 1],
-        [3, 672, 112, True, True, 1],
-        [5, 672, 160, True, True, 2],
-        [5, 960, 160, True, True, 1],
-        [5, 960, 160, True, True, 1],
+        [3, 16, 16, False, False, 1, 4],
+        [3, 64, 24, False, False, 2, 4],
+        [3, 72, 24, False, False, 1, 4],
+        [5, 72, 40, True, False, 2, 4],
+        [5, 120, 40, True, False, 1, 4],
+        [5, 120, 40, True, False, 1, 4],
+        [3, 240, 80, False, True, 2, 4],
+        [3, 200, 80, False, True, 1, 4],
+        [3, 184, 80, False, True, 1, 4],
+        [3, 184, 80, False, True, 1, 4],
+        [3, 480, 112, True, True, 1, 4],
+        [3, 672, 112, True, True, 1, 4],
+        [5, 672, 160, True, True, 2, 4],
+        [5, 960, 160, True, True, 1, 4],
+        [5, 960, 160, True, True, 1, 4],
     ]
     return MobileNet_V3(
         bottleneck_cfg=cfg, last_channels=1280, num_classes=num_classes, **kwargs

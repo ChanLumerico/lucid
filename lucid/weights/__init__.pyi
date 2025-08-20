@@ -82,6 +82,30 @@ class ResNeXt_101_64X4D_Weights(Enum):
     IMAGENET1K: WeightEntry
     DEFAULT: WeightEntry
 
+class DenseNet_121_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class DenseNet_169_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class DenseNet_201_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class MobileNet_V2_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class MobileNet_V3_Small_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class MobileNet_V3_Large_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
@@ -101,4 +125,10 @@ __all__ = [
     "ResNeXt_50_32X4D_Weights",
     "ResNeXt_101_32X8D_Weights",
     "ResNeXt_101_64X4D_Weights",
+    "DenseNet_121_Weights",
+    "DenseNet_169_Weights",
+    "DenseNet_201_Weights",
+    "MobileNet_V2_Weights",
+    "MobileNet_V3_Small_Weights",
+    "MobileNet_V3_Large_Weights",
 ]

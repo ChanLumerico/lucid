@@ -753,21 +753,21 @@ reducing computational cost while maintaining performance.
       - :math:`(N,3,224,224)`
       - 3,504,872
       - 367.39M
-      - ❌
+      - ✅
     
     * - MobileNet-v3-Small
       - `mobilenet_v3_small <mobile/mobilenet_v3_small>`_
       - :math:`(N,3,224,224)`
       - 2,537,238
       - 73.88M
-      - ❌
+      - ✅
     
     * - MobileNet-v3-Large
       - `mobilenet_v3_large <mobile/mobilenet_v3_large>`_
       - :math:`(N,3,224,224)`
       - 5,481,198
       - 266.91M
-      - ❌
+      - ✅
 
 .. list-table::
     :header-rows: 1

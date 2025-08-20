@@ -829,7 +829,7 @@
           224
         ],
         "metric": {
-          "acc@1": 0.7560,
+          "acc@1": 0.756,
           "acc@5": 0.9281
         }
       },
@@ -850,7 +850,7 @@
           224
         ],
         "metric": {
-          "acc@1": 0.7560,
+          "acc@1": 0.756,
           "acc@5": 0.9281
         }
       },
@@ -872,7 +872,7 @@
           224
         ],
         "metric": {
-          "acc@1": 0.7690,
+          "acc@1": 0.769,
           "acc@5": 0.9337
         }
       },
@@ -893,9 +893,144 @@
           224
         ],
         "metric": {
-          "acc@1": 0.7690,
+          "acc@1": 0.769,
           "acc@5": 0.9337
         }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "mobilenet_v2": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/mobilenet/mobilenet_v2_in1k.safetensors",
+      "sha256": "cfd7cf7d029ac94c8c7993153d0e07448af3ebf2c54d0cdbf06726804cc9afb3",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "mobilenet_v2_in1k.safetensors",
+        "parameter_size": 3504872,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7188,
+          "acc@5": 0.9029
+        },
+        "family": "MobileNet_V2"
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/mobilenet/mobilenet_v2_in1k.safetensors",
+      "sha256": "cfd7cf7d029ac94c8c7993153d0e07448af3ebf2c54d0cdbf06726804cc9afb3",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "mobilenet_v2_in1k.safetensors",
+        "parameter_size": 3504872,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7188,
+          "acc@5": 0.9029
+        },
+        "family": "MobileNet_V2"
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "mobilenet_v3_small": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/mobilenet/mobilenet_v3_small_in1k.safetensors",
+      "sha256": "618314025d5423c159adbaf82f8b56be07b19d00b5f83e514d73accaeb8a9831",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "mobilenet_v3_small_in1k.safetensors",
+        "parameter_size": 2537238,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.6767,
+          "acc@5": 0.8740
+        },
+        "family": "MobileNet_V3_Small"
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/mobilenet/mobilenet_v3_small_in1k.safetensors",
+      "sha256": "618314025d5423c159adbaf82f8b56be07b19d00b5f83e514d73accaeb8a9831",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "mobilenet_v3_small_in1k.safetensors",
+        "parameter_size": 2537238,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.6767,
+          "acc@5": 0.8740
+        },
+        "family": "MobileNet_V3_Small"
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "mobilenet_v3_large": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/mobilenet/mobilenet_v3_large_in1k.safetensors",
+      "sha256": "532b0f1ef3650e06ae3d7fa7deea0d5b0a9b8568f39c40e306990a6604fc14b9",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "mobilenet_v3_large_in1k.safetensors",
+        "parameter_size": 5481198,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7404,
+          "acc@5": 0.9134
+        },
+        "family": "MobileNet_V3_Large"
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/mobilenet/mobilenet_v3_large_in1k.safetensors",
+      "sha256": "532b0f1ef3650e06ae3d7fa7deea0d5b0a9b8568f39c40e306990a6604fc14b9",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "mobilenet_v3_large_in1k.safetensors",
+        "parameter_size": 5481198,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7404,
+          "acc@5": 0.9134
+        },
+        "family": "MobileNet_V3_Large"
       },
       "dataset": "imagenet_1k"
     }
