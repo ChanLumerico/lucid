@@ -64,7 +64,7 @@ def _family_of(model_key: str) -> str | None:
 
 def _classname(model_key: str, family: str | None = None) -> str:
     if family is not None:
-        return family + model_key[len(family) :] + "_Weights"
+        return family + model_key[len(family) :].upper() + "_Weights"
 
     fam = _family_of(model_key)
     if fam:
@@ -73,7 +73,7 @@ def _classname(model_key: str, family: str | None = None) -> str:
         suf = suf[len(fam_key) :] if suf.replace("_", "").startswith(fam_key) else suf
         suf = suf.lstrip()
 
-        return f"{fam}{suf}_Weights" if suf else f"{fam}_Weights"
+        return f"{fam}{suf.upper()}_Weights" if suf else f"{fam}_Weights"
 
     parts = model_key.split("_")
     return "_".join(p.capitalize() for p in parts) + "_Weights"

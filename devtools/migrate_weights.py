@@ -42,8 +42,8 @@ def convert_torch_to_lucid(torch_dict, lucid_dict, ignore=[], verbose=False):
 import torch
 import torchvision.models as models
 
-torch_model = models.wide_resnet101_2(
-    weights=models.Wide_ResNet101_2_Weights.IMAGENET1K_V1
+torch_model = models.resnext101_64x4d(
+    weights=models.ResNeXt101_64X4D_Weights.IMAGENET1K_V1
 )
 torch_model.eval()
 torch_dict = torch_model.state_dict()
@@ -55,7 +55,7 @@ import lucid.models as models
 lucid.random.seed(42)
 
 
-lucid_model = models.wide_resnet_101()
+lucid_model = models.resnext_101_64x4d()
 lucid_dict = lucid_model.state_dict()
 
 convert_torch_to_lucid(

@@ -416,7 +416,7 @@ enabling parallel pathways for feature learning.
       - :math:`(N,3,224,224)`
       - 25,028,904
       - 4.38B
-      - ❌
+      - ✅
     
     * - ResNeXt-101-32x4d
       - `resnext_101_32x4d <resnext/resnext_101_32x4d>`_
@@ -430,7 +430,7 @@ enabling parallel pathways for feature learning.
       - :math:`(N,3,224,224)`
       - 88,791,336
       - 16.73B
-      - ❌
+      - ✅
     
     * - ResNeXt-101-32x16d
       - `resnext_101_32x16d <resnext/resnext_101_32x16d>`_
@@ -451,7 +451,7 @@ enabling parallel pathways for feature learning.
       - :math:`(N,3,224,224)`
       - 83,455,272
       - 15.78B
-      - ❌
+      - ✅
 
 SENet
 -----

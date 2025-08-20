@@ -212,3 +212,47 @@ ResNet
       - 242 MB
       - 0.7885
       - 0.9248
+
+ResNeXt
+-------
+|convnet-badge| |imgclf-badge|
+
+.. autoclass:: lucid.weights.ResNeXt_50_32X4D_Weights
+.. autoclass:: lucid.weights.ResNeXt_101_32X8D_Weights
+.. autoclass:: lucid.weights.ResNeXt_101_64X4D_Weights
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+      - Metric (acc@1)
+      - Metric (acc@5)
+    
+    * - *ResNeXt_50_32X4D_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 25,028,904
+      - 95.7 MB
+      - 0.7761
+      - 0.9370
+    
+    * - *ResNeXt_101_32X8D_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 88,791,336
+      - 339 MB
+      - 0.7931
+      - 0.9457
+    
+    * - *ResNeXt_101_64X4D_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 83,455,272
+      - 319 MB
+      - 0.8325
+      - 0.9645

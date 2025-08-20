@@ -1,7 +1,7 @@
 {
   "lenet_1": {
     "MNIST": {
-      "url": "hf://ChanLumerico/lucid@main/weights/lenet_1/lenet_1_mnist.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet/lenet_1_mnist.safetensors",
       "sha256": "4c66e67c8940ac0d03662f2d93c28ba7e6d0ebd0629b149e81c6b2f4d8948098",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -21,7 +21,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/lenet_1/lenet_1_mnist.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet/lenet_1_mnist.safetensors",
       "sha256": "4c66e67c8940ac0d03662f2d93c28ba7e6d0ebd0629b149e81c6b2f4d8948098",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -42,7 +42,7 @@
   },
   "lenet_4": {
     "MNIST": {
-      "url": "hf://ChanLumerico/lucid@main/weights/lenet_4/lenet_4_mnist.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet/lenet_4_mnist.safetensors",
       "sha256": "6aba73a3668104b7bd171b8066006a3e618fad157757e8f7471a0fe406e372c4",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -62,7 +62,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/lenet_4/lenet_4_mnist.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet/lenet_4_mnist.safetensors",
       "sha256": "6aba73a3668104b7bd171b8066006a3e618fad157757e8f7471a0fe406e372c4",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -83,7 +83,7 @@
   },
   "lenet_5": {
     "MNIST": {
-      "url": "hf://ChanLumerico/lucid@main/weights/lenet_5/lenet_5_mnist.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet/lenet_5_mnist.safetensors",
       "sha256": "0baf6defe62ea17b51718fe7924a85d2f09cf2b864c73b3739a708ed50e4c626",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -103,7 +103,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/lenet_5/lenet_5_mnist.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/lenet/lenet_5_mnist.safetensors",
       "sha256": "0baf6defe62ea17b51718fe7924a85d2f09cf2b864c73b3739a708ed50e4c626",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -167,7 +167,7 @@
   },
   "vggnet_11": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_11/vggnet_11_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet/vggnet_11_in1k.safetensors",
       "sha256": "6a370b0af29b9ef9245632017182060d082f53c0777334c8aee04c10a2db83dd",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -188,7 +188,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_11/vggnet_11_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet/vggnet_11_in1k.safetensors",
       "sha256": "6a370b0af29b9ef9245632017182060d082f53c0777334c8aee04c10a2db83dd",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -210,7 +210,7 @@
   },
   "vggnet_13": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_13/vggnet_13_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet/vggnet_13_in1k.safetensors",
       "sha256": "25d8f06bb1a0b5848abbecfd31590430ec2f3e58d01253273115fd77e62bb56d",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -231,7 +231,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_13/vggnet_13_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet/vggnet_13_in1k.safetensors",
       "sha256": "25d8f06bb1a0b5848abbecfd31590430ec2f3e58d01253273115fd77e62bb56d",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -253,7 +253,7 @@
   },
   "vggnet_16": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_16/vggnet_16_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet/vggnet_16_in1k.safetensors",
       "sha256": "de85ba044318ddcf6c85d897c1e72e451ae65f3d1ac8b56a508de36b69c5fcce",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -274,7 +274,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_16/vggnet_16_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet/vggnet_16_in1k.safetensors",
       "sha256": "de85ba044318ddcf6c85d897c1e72e451ae65f3d1ac8b56a508de36b69c5fcce",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -296,7 +296,7 @@
   },
   "vggnet_19": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_19/vggnet_19_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet/vggnet_19_in1k.safetensors",
       "sha256": "a257dacd851fcf4a7245bef2d018a8a6a922bd0019edfcb977b6b4922fa6ab5a",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -317,7 +317,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/vggnet_19/vggnet_19_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/vggnet/vggnet_19_in1k.safetensors",
       "sha256": "a257dacd851fcf4a7245bef2d018a8a6a922bd0019edfcb977b6b4922fa6ab5a",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -339,7 +339,7 @@
   },
   "resnet_18": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_18/resnet_18_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_18_in1k.safetensors",
       "sha256": "bb239b3a8da5a4d70cb8abca5795cf9f5a02e7223839e96eb6d6c819d12dcdbd",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -360,7 +360,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_18/resnet_18_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_18_in1k.safetensors",
       "sha256": "bb239b3a8da5a4d70cb8abca5795cf9f5a02e7223839e96eb6d6c819d12dcdbd",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -382,7 +382,7 @@
   },
   "resnet_34": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_34/resnet_34_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_34_in1k.safetensors",
       "sha256": "3d0ff6edcdf5d1d52334d2c4c1ee12a627c469bbb210a085ebfd0c7cd5414af3",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -403,7 +403,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_34/resnet_34_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_34_in1k.safetensors",
       "sha256": "3d0ff6edcdf5d1d52334d2c4c1ee12a627c469bbb210a085ebfd0c7cd5414af3",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -425,7 +425,7 @@
   },
   "resnet_50": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_50/resnet_50_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_50_in1k.safetensors",
       "sha256": "2155a98ca479e988145c20ed2756adbb23bae165f633db54b749f10b352fef16",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -446,7 +446,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_50/resnet_50_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_50_in1k.safetensors",
       "sha256": "2155a98ca479e988145c20ed2756adbb23bae165f633db54b749f10b352fef16",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -468,7 +468,7 @@
   },
   "resnet_101": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_101/resnet_101_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_101_in1k.safetensors",
       "sha256": "09d30562c593c88b6bf44c800f2b7ee31d473bc4b80c896ac3da7a395e78680c",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -489,7 +489,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_101/resnet_101_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_101_in1k.safetensors",
       "sha256": "09d30562c593c88b6bf44c800f2b7ee31d473bc4b80c896ac3da7a395e78680c",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -511,7 +511,7 @@
   },
   "resnet_152": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_152/resnet_152_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_152_in1k.safetensors",
       "sha256": "890ae58bef7a1098d89e0a44cbecb8cdac979f9920d7181fd2fe3afffa57889d",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -532,7 +532,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/resnet_152/resnet_152_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/resnet_152_in1k.safetensors",
       "sha256": "890ae58bef7a1098d89e0a44cbecb8cdac979f9920d7181fd2fe3afffa57889d",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -554,7 +554,7 @@
   },
   "wide_resnet_50": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/wide_resnet_50/wide_resnet_50_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/wide_resnet_50_in1k.safetensors",
       "sha256": "5684065e10a0b8befdcdfb22a151bdf743a3a31520b4cddba0123e8e62b71a4c",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -576,7 +576,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/wide_resnet_50/wide_resnet_50_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/wide_resnet_50_in1k.safetensors",
       "sha256": "5684065e10a0b8befdcdfb22a151bdf743a3a31520b4cddba0123e8e62b71a4c",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -599,7 +599,7 @@
   },
   "wide_resnet_101": {
     "IMAGENET1K": {
-      "url": "hf://ChanLumerico/lucid@main/weights/wide_resnet_101/wide_resnet_101_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/wide_resnet_101_in1k.safetensors",
       "sha256": "4d6b7ec31f68722cd5b31916c708c76f2ec5227e9fbe9c00a9f522735fa2d6f5",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -621,7 +621,7 @@
       "default": "True"
     },
     "DEFAULT": {
-      "url": "hf://ChanLumerico/lucid@main/weights/wide_resnet_101/wide_resnet_101_in1k.safetensors",
+      "url": "hf://ChanLumerico/lucid@main/weights/resnet/wide_resnet_101_in1k.safetensors",
       "sha256": "4d6b7ec31f68722cd5b31916c708c76f2ec5227e9fbe9c00a9f522735fa2d6f5",
       "meta": {
         "hf_repo": "ChanLumerico/lucid",
@@ -638,6 +638,135 @@
           "acc@5": 0.9428
         },
         "family": "Wide_ResNet"
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "resnext_50_32x4d": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnext/resnext_50_32x4d_in1k.safetensors",
+      "sha256": "255139de09923100f9d6740da3cbc9eda34a9a39129d29bbf0b848798809ca6e",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnext_50_32x4d_in1k.safetensors",
+        "parameter_size": 25028904,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7761,
+          "acc@5": 0.9369
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnext/resnext_50_32x4d_in1k.safetensors",
+      "sha256": "255139de09923100f9d6740da3cbc9eda34a9a39129d29bbf0b848798809ca6e",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnext_50_32x4d_in1k.safetensors",
+        "parameter_size": 25028904,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7761,
+          "acc@5": 0.9369
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "resnext_101_32x8d": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnext/resnext_101_32x8d_in1k.safetensors",
+      "sha256": "e258a89157666ef27828ef9afc79430bf8f4b02b98d24e67d930a7ba6385693b",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnext_101_32x8d_in1k.safetensors",
+        "parameter_size": 88791336,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7931,
+          "acc@5": 0.9452
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnext/resnext_101_32x8d_in1k.safetensors",
+      "sha256": "e258a89157666ef27828ef9afc79430bf8f4b02b98d24e67d930a7ba6385693b",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnext_101_32x8d_in1k.safetensors",
+        "parameter_size": 88791336,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7931,
+          "acc@5": 0.9452
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "resnext_101_64x4d": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnext/resnext_101_64x4d_in1k.safetensors",
+      "sha256": "903f3962bcc71715071189b7422c14a22aa116ca93257f9f7111adcc6935eee5",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnext_101_64x4d_in1k.safetensors",
+        "parameter_size": 83455272,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.8324,
+          "acc@5": 0.9645
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/resnext/resnext_101_64x4d_in1k.safetensors",
+      "sha256": "903f3962bcc71715071189b7422c14a22aa116ca93257f9f7111adcc6935eee5",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "resnext_101_64x4d_in1k.safetensors",
+        "parameter_size": 83455272,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.8324,
+          "acc@5": 0.9645
+        }
       },
       "dataset": "imagenet_1k"
     }

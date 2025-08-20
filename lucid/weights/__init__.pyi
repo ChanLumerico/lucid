@@ -70,6 +70,18 @@ class Wide_ResNet_101_Weights(Enum):
     IMAGENET1K: WeightEntry
     DEFAULT: WeightEntry
 
+class ResNeXt_50_32X4D_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class ResNeXt_101_32X8D_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class ResNeXt_101_64X4D_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
@@ -86,4 +98,7 @@ __all__ = [
     "ResNet_152_Weights",
     "Wide_ResNet_50_Weights",
     "Wide_ResNet_101_Weights",
+    "ResNeXt_50_32X4D_Weights",
+    "ResNeXt_101_32X8D_Weights",
+    "ResNeXt_101_64X4D_Weights",
 ]

@@ -2,6 +2,7 @@ import argparse, json, hashlib
 from pathlib import Path
 
 from lucid import models
+from lucid.weights import _family_of
 
 
 def sha256(path: Path) -> str:
@@ -54,11 +55,8 @@ if args.input_size:
 if args.family:
     meta["family"] = args.family
 
-entry = {
-    "url": f"hf://{args.repo}@{args.revision}/weights/{model_key}/{fn}",
-    "sha256": h,
-    "meta": meta,
-}
+url = f"hf://{args.repo}@{args.revision}/weights/{_family_of(model_key).lower()}/{fn}"
+entry = {"url": url, "sha256": h, "meta": meta}
 
 if args.dataset:
     entry["dataset"] = args.dataset
