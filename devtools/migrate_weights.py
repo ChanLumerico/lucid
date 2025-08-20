@@ -33,18 +33,30 @@ def convert_torch_to_lucid(torch_dict, lucid_dict, ignore=[], verbose=False):
             )
 
     if is_mismatch:
-        raise ValueError()
+        raise RuntimeError()
 
     for (_, tv), (lk, _) in zip(new_torch_dict.items(), lucid_dict.items()):
         lucid_dict[lk] = tv
 
 
+def manual_convert(torch_dict, lucid_dict, torch_key_arr, lucid_key_arr, verbose=False):
+    assert all(tk in torch_dict for tk in torch_key_arr)
+    assert all(lk in lucid_dict for lk in lucid_key_arr)
+
+    for tk, lk in zip(torch_key_arr, lucid_key_arr):
+        torch_np = torch_dict[tk].numpy()
+        if torch_np.shape != lucid_dict[lk].shape:
+            raise ValueError(f"Shape mismatch: ({tk}) <-> ({lk})")
+
+        lucid_dict[lk] = torch_np
+        if verbose:
+            print("[Manual]", f"{f"✅ ({tk}) <-> ({lk})":<80}")
+
+
 import torch
 import torchvision.models as models
 
-torch_model = models.resnext101_64x4d(
-    weights=models.ResNeXt101_64X4D_Weights.IMAGENET1K_V1
-)
+torch_model = models.densenet201(weights=models.DenseNet201_Weights.IMAGENET1K_V1)
 torch_model.eval()
 torch_dict = torch_model.state_dict()
 
@@ -55,13 +67,49 @@ import lucid.models as models
 lucid.random.seed(42)
 
 
-lucid_model = models.resnext_101_64x4d()
+lucid_model = models.densenet_201()
 lucid_dict = lucid_model.state_dict()
 
 convert_torch_to_lucid(
     torch_dict,
     lucid_dict,
-    ignore=["num_batches_tracked"],
+    ignore=["num_batches_tracked", "transition", "norm5", "classifier"],
+    verbose=True,
+)
+
+manual_convert(
+    torch_dict,
+    lucid_dict,
+    torch_key_arr=[
+        "features.transition1.norm.weight",
+        "features.transition1.norm.bias",
+        "features.transition1.conv.weight",
+        "features.transition2.norm.weight",
+        "features.transition2.norm.bias",
+        "features.transition2.conv.weight",
+        "features.transition3.norm.weight",
+        "features.transition3.norm.bias",
+        "features.transition3.conv.weight",
+        "features.norm5.weight",
+        "features.norm5.bias",
+        "classifier.weight",
+        "classifier.bias",
+    ],
+    lucid_key_arr=[
+        "transitions.0.bn.weight",
+        "transitions.0.bn.bias",
+        "transitions.0.conv.weight",
+        "transitions.1.bn.weight",
+        "transitions.1.bn.bias",
+        "transitions.1.conv.weight",
+        "transitions.2.bn.weight",
+        "transitions.2.bn.bias",
+        "transitions.2.conv.weight",
+        "bn_final.weight",
+        "bn_final.bias",
+        "fc.weight",
+        "fc.bias",
+    ],
     verbose=True,
 )
 

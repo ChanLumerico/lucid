@@ -643,21 +643,21 @@ of parameters, and improves the efficiency of gradient propagation during traini
       - :math:`(N,3,224,224)`
       - 7,978,856
       - 2.99B
-      - ❌
+      - ✅
     
     * - DenseNet-169
       - `densenet_169 <dense/densenet_169>`_
       - :math:`(N,3,224,224)`
       - 14,149,480
       - 3.55B
-      - ❌
+      - ✅
     
     * - DenseNet-201
       - `densenet_201 <dense/densenet_201>`_
       - :math:`(N,3,224,224)`
       - 20,013,928
       - 4.54B
-      - ❌
+      - ✅
     
     * - DenseNet-264
       - `densenet_264 <dense/densenet_264>`_

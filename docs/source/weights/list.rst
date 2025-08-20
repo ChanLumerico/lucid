@@ -256,3 +256,47 @@ ResNeXt
       - 319 MB
       - 0.8325
       - 0.9645
+
+DenseNet
+--------
+|convnet-badge| |imgclf-badge|
+
+.. autoclass:: lucid.weights.DenseNet_121_Weights
+.. autoclass:: lucid.weights.DenseNet_169_Weights
+.. autoclass:: lucid.weights.DenseNet_201_Weights
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+      - Metric (acc@1)
+      - Metric (acc@5)
+    
+    * - *DenseNet_121_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 7,978,856
+      - 30.8 MB
+      - 0.7434
+      - 0.9197
+    
+    * - *DenseNet_169_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 14,149,480
+      - 54.7 MB
+      - 0.7560
+      - 0.9281
+    
+    * - *DenseNet_201_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 20,013,928
+      - 77.3 MB
+      - 0.7690
+      - 0.9337

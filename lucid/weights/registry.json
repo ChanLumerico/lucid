@@ -770,5 +770,134 @@
       },
       "dataset": "imagenet_1k"
     }
+  },
+  "densenet_121": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/densenet/densenet_121_in1k.safetensors",
+      "sha256": "8ae32dacdd3f307f108895d3a97de51043119cbd6da31ddc1b74a146cbb50791",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "densenet_121_in1k.safetensors",
+        "parameter_size": 7978856,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7443,
+          "acc@5": 0.9197
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/densenet/densenet_121_in1k.safetensors",
+      "sha256": "8ae32dacdd3f307f108895d3a97de51043119cbd6da31ddc1b74a146cbb50791",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "densenet_121_in1k.safetensors",
+        "parameter_size": 7978856,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7443,
+          "acc@5": 0.9197
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "densenet_169": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/densenet/densenet_169_in1k.safetensors",
+      "sha256": "f38a008150efb0202f024237b85cd31715a21bec5b70bfa0ff95b2c5e569479f",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "densenet_169_in1k.safetensors",
+        "parameter_size": 14149480,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7560,
+          "acc@5": 0.9281
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/densenet/densenet_169_in1k.safetensors",
+      "sha256": "f38a008150efb0202f024237b85cd31715a21bec5b70bfa0ff95b2c5e569479f",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "densenet_169_in1k.safetensors",
+        "parameter_size": 14149480,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7560,
+          "acc@5": 0.9281
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
+  },
+  "densenet_201": {
+    "IMAGENET1K": {
+      "url": "hf://ChanLumerico/lucid@main/weights/densenet/densenet_201_in1k.safetensors",
+      "sha256": "cf05fe199622f9a8b7e6cc67b8b2582a3edb6e5030d7abf0925831f35d19de2d",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "densenet_201_in1k.safetensors",
+        "parameter_size": 20013928,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7690,
+          "acc@5": 0.9337
+        }
+      },
+      "dataset": "imagenet_1k",
+      "default": "True"
+    },
+    "DEFAULT": {
+      "url": "hf://ChanLumerico/lucid@main/weights/densenet/densenet_201_in1k.safetensors",
+      "sha256": "cf05fe199622f9a8b7e6cc67b8b2582a3edb6e5030d7abf0925831f35d19de2d",
+      "meta": {
+        "hf_repo": "ChanLumerico/lucid",
+        "hf_revision": "main",
+        "hf_filename": "densenet_201_in1k.safetensors",
+        "parameter_size": 20013928,
+        "input_size": [
+          3,
+          224,
+          224
+        ],
+        "metric": {
+          "acc@1": 0.7690,
+          "acc@5": 0.9337
+        }
+      },
+      "dataset": "imagenet_1k"
+    }
   }
 }
