@@ -118,25 +118,22 @@ The total loss :math:`\mathcal{L}` is composed of three parts:
 
 .. math::
 
-    \begin{aligned}
     \mathcal{L}
-    &= \lambda_{\text{coord}}
+    = \lambda_{\text{coord}}
        \sum_{i=1}^{S^2}\sum_{j=1}^{B}
        \mathbb{1}_{ij}^{\text{obj}} \,\alpha_{ij}
        \Big[
            (\sigma(\hat{t}_{x,ij}) - t_{x,ij})^2
          + (\sigma(\hat{t}_{y,ij}) - t_{y,ij})^2 \\
-    &\quad+ (\hat{t}_{w,ij} - t_{w,ij})^2 + (\hat{t}_{h,ij} - t_{h,ij})^2 \Big] \\
-    &+ \sum_{i=1}^{S^2}\sum_{j=1}^{B}
+    \quad+ (\hat{t}_{w,ij} - t_{w,ij})^2 + (\hat{t}_{h,ij} - t_{h,ij})^2 \Big] \\
+    +\sum_{i=1}^{S^2}\sum_{j=1}^{B}
        \Big[
            \mathbb{1}_{ij}^{\text{obj}}\,(\hat{C}_{ij}-1)^2
          + \lambda_{\text{noobj}}\,\mathbb{1}_{ij}^{\text{noobj}}\,(\hat{C}_{ij}-0)^2
        \Big] \\
-    &+ \sum_{i=1}^{S^2}\sum_{j=1}^{B}
+    + \sum_{i=1}^{S^2}\sum_{j=1}^{B}
        \mathbb{1}_{ij}^{\text{obj}}
        \sum_{c=1}^{C}\big(\hat{p}_{ij}(c) - p_{ij}(c)\big)^2
-
-    \end{aligned}
 
 Where:
 
