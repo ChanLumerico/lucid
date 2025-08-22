@@ -134,12 +134,12 @@ The total loss :math:`\mathcal{L}` is composed of three parts:
        \Big] \\
     &\quad+ \sum_{i=1}^{S^2}\sum_{j=1}^{B}
        \mathbb{1}_{ij}^{\text{obj}}\;
-       \sum_{c=1}^{C}\big(\hat{p}_{ij}(c) - p_{ij}(c)\big)^2
+       \sum_{c=1}^{C}\big(\hat{p}_{ij}(c) - p_{ij}(c)\big)^2 \\
 
     &\text{with }\;
     \alpha_{ij} = 2 - w_{ij}h_{ij},\quad
     \hat{C}_{ij} = \sigma(\hat{t}_{o,ij}),\quad
-    \hat{p}_{ij}(c) = \sigma(\hat{z}_{ij}(c))
+    \hat{p}_{ij}(c) = \sigma(\hat{z}_{ij}(c)) \\
 
     \end{aligned}
 
