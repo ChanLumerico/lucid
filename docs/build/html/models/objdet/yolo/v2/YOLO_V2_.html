@@ -1125,7 +1125,7 @@ shape becomes <span class="math notranslate nohighlight">\((S, S, B \times (5 + 
 \mathcal{L}
 &amp;= \lambda_{\text{coord}}
    \sum_{i=1}^{S^2}\sum_{j=1}^{B}
-   \mathbb{1}_{ij}^{\text{obj}} \,\alpha_{ij}\;
+   \mathbb{1}_{ij}^{\text{obj}} \,\alpha_{ij}
    \Big[
        (\sigma(\hat{t}_{x,ij}) - t_{x,ij})^2
      + (\sigma(\hat{t}_{y,ij}) - t_{y,ij})^2 \\
@@ -1136,11 +1136,8 @@ shape becomes <span class="math notranslate nohighlight">\((S, S, B \times (5 + 
      + \lambda_{\text{noobj}}\,\mathbb{1}_{ij}^{\text{noobj}}\,(\hat{C}_{ij}-0)^2
    \Big] \\
 &amp;+ \sum_{i=1}^{S^2}\sum_{j=1}^{B}
-   \mathbb{1}_{ij}^{\text{obj}}\;
-   \sum_{c=1}^{C}\big(\hat{p}_{ij}(c) - p_{ij}(c)\big)^2 \\\end{split}\\&amp;\text{with }\;
-\alpha_{ij} = 2 - w_{ij}h_{ij},\quad
-\hat{C}_{ij} = \sigma(\hat{t}_{o,ij}),\quad
-\hat{p}_{ij}(c) = \sigma(\hat{z}_{ij}(c))\\\end{aligned}\end{aligned}\end{align} \]</div>
+   \mathbb{1}_{ij}^{\text{obj}}
+   \sum_{c=1}^{C}\big(\hat{p}_{ij}(c) - p_{ij}(c)\big)^2\end{split}\\\end{aligned}\end{aligned}\end{align} \]</div>
 </div>
 <p>Where:</p>
 <ul class="simple">
