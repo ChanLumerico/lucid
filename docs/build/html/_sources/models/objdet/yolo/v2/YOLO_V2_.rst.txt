@@ -119,62 +119,54 @@ The total loss :math:`\mathcal{L}` is composed of three parts:
 .. math::
 
     \begin{aligned}
-    \mathcal{L} &= \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} 
-    \left[
-        (x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2 + (\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2
-    \right] \\
-    &+ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
-    &+ \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
-    &+ \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2
+    \mathcal{L}
+    &= \lambda_{\text{coord}}
+       \sum_{i=1}^{S^2}\sum_{j=1}^{B}
+       \mathbb{1}_{ij}^{\text{obj}} \,\alpha_{ij}\;
+       \Big[
+           (\sigma(\hat{t}_{x,ij}) - t_{x,ij})^2
+         + (\sigma(\hat{t}_{y,ij}) - t_{y,ij})^2
+         + (\hat{t}_{w,ij} - t_{w,ij})^2
+         + (\hat{t}_{h,ij} - t_{h,ij})^2
+       \Big] \\
+    &\quad+ \sum_{i=1}^{S^2}\sum_{j=1}^{B}
+       \Big[
+           \mathbb{1}_{ij}^{\text{obj}}\,(\hat{C}_{ij}-1)^2
+         + \lambda_{\text{noobj}}\,\mathbb{1}_{ij}^{\text{noobj}}\,(\hat{C}_{ij}-0)^2
+       \Big] \\
+    &\quad+ \sum_{i=1}^{S^2}\sum_{j=1}^{B}
+       \mathbb{1}_{ij}^{\text{obj}}\;
+       \sum_{c=1}^{C}\big(\hat{p}_{ij}(c) - p_{ij}(c)\big)^2
     \end{aligned}
+
+    \text{with }\;
+    \alpha_{ij} = 2 - w_{ij}h_{ij},\quad
+    \hat{C}_{ij} = \sigma(\hat{t}_{o,ij}),\quad
+    \hat{p}_{ij}(c) = \sigma(\hat{z}_{ij}(c)).
 
 Where:
 
-- :math:`\hat{x}_i, \hat{y}_i, \hat{w}_i, \hat{h}_i` are predicted box parameters
-- :math:`x_i, y_i, w_i, h_i` are target box parameters
-- :math:`\hat{C}_i` is predicted objectness score
-- :math:`C_i` is the target confidence (IoU)
-- :math:`p_i(c)` is the predicted class probability
-- :math:`\hat{p}_i(c)` is the ground-truth class probability (one-hot)
+- :math:`\hat{t}_{x,ij}, \hat{t}_{y,ij}, \hat{t}_{w,ij}, \hat{t}_{h,ij}` are the 
+  raw network outputs for the bounding box parameters
+- :math:`t_{x,ij}, t_{y,ij}` are the target offsets of the box center relative 
+  to the grid cell location
+- :math:`t_{w,ij}, t_{h,ij}` are the target log-scale factors relative to the 
+  anchor dimensions
+- :math:`\hat{C}_{ij} = \sigma(\hat{t}_{o,ij})` is the predicted objectness score
+- :math:`C_{ij}` is the target confidence (1 if the anchor is responsible for an 
+  object, 0 otherwise; anchors with IoU above the ignore threshold are excluded)
+- :math:`\hat{p}_{ij}(c)` are the predicted class probabilities (after sigmoid) 
+  for class :math:`c`
+- :math:`p_{ij}(c)` are the ground-truth class probabilities (one-hot encoding)
 - :math:`\mathbb{1}_{ij}^{\text{obj}}` indicates if anchor :math:`j` in cell 
   :math:`i` is responsible for detecting an object
-
-- :math:`\lambda_{\text{coord}}`, :math:`\lambda_{\text{noobj}}` are weighting hyperparameters
+- :math:`\mathbb{1}_{ij}^{\text{noobj}} = 1 - \mathbb{1}_{ij}^{\text{obj}}` indicates
+  that anchor :math:`j` in cell :math:`i` is not responsible for any object
 
 .. note::
 
     Unlike YOLO-v1, YOLO-v2 uses **predefined anchors** and decouples object classification 
     and localization more clearly, improving detection stability and accuracy.
-
-Target Encoding and Anchors
----------------------------
-
-The YOLO_V2 model expects target bounding boxes to be encoded in **t-coordinates**,
- which are offsets relative to the anchor boxes and grid cell positions. 
- 
- The target should have shape `(N, S, S, B, 5 + C)`, where each box consists of:
-
-- `tx, ty`: offset of the center from the top-left corner of the grid cell 
-  (normalized to :math:`[0,1]`)
-
-- `tw, th`: log-scale ratio between the ground truth width/height and anchor width/height
-- `objectness`: 1 if the box is responsible for the object, otherwise 0
-- `C`: one-hot encoded class vector
-
-To construct these targets properly, one must make use of the anchor box scales. 
-These can be accessed from the class variable:
-
-.. code-block:: python
-
-   YOLO_V2.default_anchors: list[tuple[float, float]]
-
-This list contains default anchor box widths and heights relative to the feature map scale. 
-
-When preparing your dataset, you should assign ground truth boxes to the most appropriate 
-anchor using IoU(`lucid.models.objdet.utils.iou`), and convert the box coordinates into 
-t-coordinates (as above) based on the matching anchor. The same anchors must be used 
-when instantiating the model via the `anchors` parameter 
-(if not set, `default_anchors` is used).
 
 Prediction Output
 -----------------

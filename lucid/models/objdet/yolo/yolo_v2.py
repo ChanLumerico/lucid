@@ -267,6 +267,7 @@ class YOLO_V2(nn.Module):
 
         B, C = self.num_anchors, self.num_classes
         S = pred.shape[2]
+
         pred = pred.reshape(N, B, 5 + C, S, S).transpose((0, 3, 4, 1, 2))
         target = target.reshape(N, S, S, B, 5 + C)
 
@@ -274,7 +275,8 @@ class YOLO_V2(nn.Module):
         noobj_mask = 1 - obj_mask
 
         pred_xy = F.sigmoid(pred[..., 0:2])
-        pred_wh = pred[..., 2:4]
+        pred_wh = lucid.exp(pred[..., 2:4]) * self.anchors.reshape(1, 1, 1, B, 2)
+
         pred_obj = F.sigmoid(pred[..., 4:5])
         pred_cls = pred[..., 5:]
 
@@ -290,12 +292,14 @@ class YOLO_V2(nn.Module):
             pred_obj * noobj_mask, lucid.zeros_like(pred_obj), reduction="sum"
         )
 
-        cls_loss = F.cross_entropy(
+        cls_loss_vec = F.cross_entropy(
             pred_cls.reshape(-1, C),
             lucid.argmax(tgt_cls, axis=-1).reshape(-1),
             reduction=None,
         )
-        loss_cls = (cls_loss.reshape(N, S, S, B) * obj_mask.reshape(N, S, S, B)).sum()
+        loss_cls = (
+            cls_loss_vec.reshape(N, S, S, B) * obj_mask.reshape(N, S, S, B)
+        ).sum()
 
         total_loss = (
             self.lambda_coord * (loss_xy + loss_wh)

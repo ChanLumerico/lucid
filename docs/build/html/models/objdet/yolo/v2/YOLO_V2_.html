@@ -6,9 +6,9 @@
 <link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="yolo_v2" href="yolo_v2.html" /><link rel="prev" title="yolo_v1_tiny" href="../v1/yolo_v1_tiny.html" />
         <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/objdet/yolo/v2/YOLO_V2_.html" />
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2024.08.06 -->
+    <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
         <title>YOLO-v2 - Lucid 2.5.7 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=d8a2add5" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=3d3fbe02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=302659d7" />
@@ -1010,7 +1010,7 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="lucid.models.YOLO_V2">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">YOLO_V2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_anchors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anchors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_coord</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_noobj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">darknet</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">route_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">416</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_passthrough</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.YOLO_V2" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">YOLO_V2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_anchors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anchors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_coord</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_noobj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">darknet</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">route_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">416</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_passthrough</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.YOLO_V2" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>YOLO_V2</cite> class implements the YOLO-v2 object detection model.
@@ -1020,7 +1020,7 @@ anchor-based bounding boxes, batch normalization, and a stronger backbone (Darkn
 </a>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">YOLO_V2</span><span class="p">(</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">YOLO_V2</span><span class="p">(</span>
     <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">num_anchors</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
     <span class="n">anchors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1121,59 +1121,54 @@ shape becomes <span class="math notranslate nohighlight">\((S, S, B \times (5 + 
 <p>The total loss <span class="math notranslate nohighlight">\(\mathcal{L}\)</span> is composed of three parts:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\begin{split}\begin{aligned}
-\mathcal{L} &amp;= \lambda_{\text{coord}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}}
-\left[
-    (x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2 + (\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2
-\right] \\
-&amp;+ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{obj}} (C_i - \hat{C}_i)^2 \\
-&amp;+ \lambda_{\text{noobj}} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{\text{noobj}} (C_i - \hat{C}_i)^2 \\
-&amp;+ \sum_{i=0}^{S^2} \mathbb{1}_i^{\text{obj}} \sum_{c \in \text{classes}} (p_i(c) - \hat{p}_i(c))^2
-\end{aligned}\end{split}\]</div>
+\[ \begin{align}\begin{aligned}\begin{split}\begin{aligned}
+\mathcal{L}
+&amp;= \lambda_{\text{coord}}
+   \sum_{i=1}^{S^2}\sum_{j=1}^{B}
+   \mathbb{1}_{ij}^{\text{obj}} \,\alpha_{ij}\;
+   \Big[
+       (\sigma(\hat{t}_{x,ij}) - t_{x,ij})^2
+     + (\sigma(\hat{t}_{y,ij}) - t_{y,ij})^2
+     + (\hat{t}_{w,ij} - t_{w,ij})^2
+     + (\hat{t}_{h,ij} - t_{h,ij})^2
+   \Big] \\
+&amp;\quad+ \sum_{i=1}^{S^2}\sum_{j=1}^{B}
+   \Big[
+       \mathbb{1}_{ij}^{\text{obj}}\,(\hat{C}_{ij}-1)^2
+     + \lambda_{\text{noobj}}\,\mathbb{1}_{ij}^{\text{noobj}}\,(\hat{C}_{ij}-0)^2
+   \Big] \\
+&amp;\quad+ \sum_{i=1}^{S^2}\sum_{j=1}^{B}
+   \mathbb{1}_{ij}^{\text{obj}}\;
+   \sum_{c=1}^{C}\big(\hat{p}_{ij}(c) - p_{ij}(c)\big)^2
+\end{aligned}\end{split}\\\text{with }\;
+\alpha_{ij} = 2 - w_{ij}h_{ij},\quad
+\hat{C}_{ij} = \sigma(\hat{t}_{o,ij}),\quad
+\hat{p}_{ij}(c) = \sigma(\hat{z}_{ij}(c)).\end{aligned}\end{align} \]</div>
 </div>
 <p>Where:</p>
 <ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(\hat{x}_i, \hat{y}_i, \hat{w}_i, \hat{h}_i\)</span> are predicted box parameters</p></li>
-<li><p><span class="math notranslate nohighlight">\(x_i, y_i, w_i, h_i\)</span> are target box parameters</p></li>
-<li><p><span class="math notranslate nohighlight">\(\hat{C}_i\)</span> is predicted objectness score</p></li>
-<li><p><span class="math notranslate nohighlight">\(C_i\)</span> is the target confidence (IoU)</p></li>
-<li><p><span class="math notranslate nohighlight">\(p_i(c)\)</span> is the predicted class probability</p></li>
-<li><p><span class="math notranslate nohighlight">\(\hat{p}_i(c)\)</span> is the ground-truth class probability (one-hot)</p></li>
+<li><p><span class="math notranslate nohighlight">\(\hat{t}_{x,ij}, \hat{t}_{y,ij}, \hat{t}_{w,ij}, \hat{t}_{h,ij}\)</span> are the
+raw network outputs for the bounding box parameters</p></li>
+<li><p><span class="math notranslate nohighlight">\(t_{x,ij}, t_{y,ij}\)</span> are the target offsets of the box center relative
+to the grid cell location</p></li>
+<li><p><span class="math notranslate nohighlight">\(t_{w,ij}, t_{h,ij}\)</span> are the target log-scale factors relative to the
+anchor dimensions</p></li>
+<li><p><span class="math notranslate nohighlight">\(\hat{C}_{ij} = \sigma(\hat{t}_{o,ij})\)</span> is the predicted objectness score</p></li>
+<li><p><span class="math notranslate nohighlight">\(C_{ij}\)</span> is the target confidence (1 if the anchor is responsible for an
+object, 0 otherwise; anchors with IoU above the ignore threshold are excluded)</p></li>
+<li><p><span class="math notranslate nohighlight">\(\hat{p}_{ij}(c)\)</span> are the predicted class probabilities (after sigmoid)
+for class <span class="math notranslate nohighlight">\(c\)</span></p></li>
+<li><p><span class="math notranslate nohighlight">\(p_{ij}(c)\)</span> are the ground-truth class probabilities (one-hot encoding)</p></li>
 <li><p><span class="math notranslate nohighlight">\(\mathbb{1}_{ij}^{\text{obj}}\)</span> indicates if anchor <span class="math notranslate nohighlight">\(j\)</span> in cell
 <span class="math notranslate nohighlight">\(i\)</span> is responsible for detecting an object</p></li>
-<li><p><span class="math notranslate nohighlight">\(\lambda_{\text{coord}}\)</span>, <span class="math notranslate nohighlight">\(\lambda_{\text{noobj}}\)</span> are weighting hyperparameters</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbb{1}_{ij}^{\text{noobj}} = 1 - \mathbb{1}_{ij}^{\text{obj}}\)</span> indicates
+that anchor <span class="math notranslate nohighlight">\(j\)</span> in cell <span class="math notranslate nohighlight">\(i\)</span> is not responsible for any object</p></li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Unlike YOLO-v1, YOLO-v2 uses <strong>predefined anchors</strong> and decouples object classification
 and localization more clearly, improving detection stability and accuracy.</p>
 </div>
-</section>
-<section id="target-encoding-and-anchors">
-<h2>Target Encoding and Anchors<a class="headerlink" href="#target-encoding-and-anchors" title="Link to this heading">¶</a></h2>
-<dl>
-<dt>The YOLO_V2 model expects target bounding boxes to be encoded in <strong>t-coordinates</strong>,</dt><dd><p>which are offsets relative to the anchor boxes and grid cell positions.</p>
-<p>The target should have shape <cite>(N, S, S, B, 5 + C)</cite>, where each box consists of:</p>
-</dd>
-</dl>
-<ul class="simple">
-<li><p><cite>tx, ty</cite>: offset of the center from the top-left corner of the grid cell
-(normalized to <span class="math notranslate nohighlight">\([0,1]\)</span>)</p></li>
-<li><p><cite>tw, th</cite>: log-scale ratio between the ground truth width/height and anchor width/height</p></li>
-<li><p><cite>objectness</cite>: 1 if the box is responsible for the object, otherwise 0</p></li>
-<li><p><cite>C</cite>: one-hot encoded class vector</p></li>
-</ul>
-<p>To construct these targets properly, one must make use of the anchor box scales.
-These can be accessed from the class variable:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">YOLO_V2</span><span class="o">.</span><span class="n">default_anchors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span>
-</pre></div>
-</div>
-<p>This list contains default anchor box widths and heights relative to the feature map scale.</p>
-<p>When preparing your dataset, you should assign ground truth boxes to the most appropriate
-anchor using IoU(<cite>lucid.models.objdet.utils.iou</cite>), and convert the box coordinates into
-t-coordinates (as above) based on the matching anchor. The same anchors must be used
-when instantiating the model via the <cite>anchors</cite> parameter
-(if not set, <cite>default_anchors</cite> is used).</p>
 </section>
 <section id="prediction-output">
 <h2>Prediction Output<a class="headerlink" href="#prediction-output" title="Link to this heading">¶</a></h2>
@@ -1193,8 +1188,8 @@ has the following keys:</p>
 <h2>Example Usage<a class="headerlink" href="#example-usage" title="Link to this heading">¶</a></h2>
 <div class="admonition-using-yolo-v2-with-default-darknet-19 admonition">
 <p class="admonition-title">Using YOLO-V2 with default Darknet-19</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">models</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">lucid.models</span> <span class="k">as</span> <span class="nn">models</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">YOLO_V2</span><span class="p">()</span>  <span class="c1"># Uses default Darknet-19 backbone</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">input_tensor</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
@@ -1294,7 +1289,6 @@ as well as the detection head:</p>
 <li><a class="reference internal" href="#darknet-19-integration">Darknet-19 Integration</a></li>
 <li><a class="reference internal" href="#input-format">Input Format</a></li>
 <li><a class="reference internal" href="#yolo-v2-loss">YOLO-v2 Loss</a></li>
-<li><a class="reference internal" href="#target-encoding-and-anchors">Target Encoding and Anchors</a></li>
 <li><a class="reference internal" href="#prediction-output">Prediction Output</a></li>
 <li><a class="reference internal" href="#example-usage">Example Usage</a></li>
 <li><a class="reference internal" href="#backward-propagation">Backward Propagation</a></li>
