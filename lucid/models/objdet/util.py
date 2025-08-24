@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Self
+from typing import Literal, Self, Sequence, TypedDict
 
 import lucid
 import lucid.nn as nn
@@ -502,3 +502,9 @@ class FPN(nn.Module):
             feats[i] += up
 
         return [conv(f) for f, conv in zip(feats, self.output_convs)]
+
+
+class DetectionDict(TypedDict):
+    box: tuple[float, float, float, float] | list[float]
+    score: float
+    class_id: int

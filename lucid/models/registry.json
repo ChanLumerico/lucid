@@ -940,5 +940,17 @@
         "family": "YOLO_V2",
         "param_size": 15863821,
         "task": "objdet"
+    },
+    "yolo_v3": {
+        "name": "yolo_v3",
+        "family": "YOLO_V3",
+        "param_size": 62974149,
+        "task": "objdet"
+    },
+    "yolo_v3_tiny": {
+        "name": "yolo_v3_tiny",
+        "family": "YOLO_V3",
+        "param_size": 23450997,
+        "task": "objdet"
     }
 }

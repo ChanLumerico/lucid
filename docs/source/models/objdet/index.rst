@@ -161,4 +161,32 @@ YOLO-v2
       - 15,863,821
       - 77.45M
 
+YOLO-v3
+~~~~~~~
+
+ Redmon, Joseph, and Ali Farhadi. "YOLOv3: An Incremental Improvement." 
+ *arXiv preprint* arXiv:1804.02767 (2018).
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - FLOPs
+
+    * - YOLO-v3
+      - `yolo_v3 <yolo/v3/yolo_v3>`_
+      - :math:`(N,3,416,416)`
+      - 62,974,149
+      - 558.71M
+    
+    * - YOLO-v3-Tiny
+      - `yolo_v3_tiny <yolo/v3/yolo_v3_tiny>`_
+      - :math:`(N,3,416,416)`
+      - 23,106,933
+      - 147.93M
+
 *To be implemented...🔮*

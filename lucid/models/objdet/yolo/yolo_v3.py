@@ -6,10 +6,10 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.models.objdet.util import nms, iou
+from lucid.models.objdet.util import nms, iou, DetectionDict
 
 
-__all__ = ["YOLO_V3", "yolo_v3"]
+__all__ = ["YOLO_V3", "yolo_v3", "yolo_v3_tiny"]
 
 
 def _convblock(
@@ -50,16 +50,16 @@ class _DarkNet_53(nn.Module):
             *_convblock(32, 64, 3, s=2, p=1), _ResidualBlock(64)
         )
         self.layer3 = nn.Sequential(
-            *_convblock(64, 128, 3, s=1, p=1),
+            *_convblock(64, 128, 3, s=2, p=1),
             *[_ResidualBlock(128) for _ in range(2)],
         )
         self.layer4 = nn.Sequential(
-            *_convblock(128, 256, s=2, p=1),
+            *_convblock(128, 256, 3, s=2, p=1),
             *[_ResidualBlock(256) for _ in range(8)],
         )
         self.layer5 = nn.Sequential(
-            *_convblock(256, 512, s=2, p=1),
-            *[_ResidualBlock(512) for _ in range(4)],
+            *_convblock(256, 512, 3, s=2, p=1),
+            *[_ResidualBlock(512) for _ in range(8)],
         )
         self.layer6 = nn.Sequential(
             *_convblock(512, 1024, 3, s=2, p=1),
@@ -72,10 +72,42 @@ class _DarkNet_53(nn.Module):
 
     def forward(
         self, x: Tensor, classification: bool = False
-    ) -> Tensor | tuple[Tensor]:
+    ) -> Tensor | tuple[Tensor, ...]:
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+
+        r1 = self.layer4(x)
+        r2 = self.layer5(r1)
+        r3 = self.layer6(r2)
+
+        if classification:
+            out = self.gap(r3)
+            return self.fc(out)
+
+        return r1, r2, r3
+
+
+class _DarkNet_53_Tiny(nn.Module):
+    def __init__(self, num_classes: int = 1000) -> None:
+        super().__init__()
+        self.layer_prev = nn.Sequential(
+            *_convblock(3, 16, 3, p=1),
+            *_convblock(16, 32, 3, s=2, p=1),
+            *_convblock(32, 64, 3, s=2, p=1),
+        )
+        self.layer4 = nn.Sequential(*_convblock(64, 128, 3, s=2, p=1))
+        self.layer5 = nn.Sequential(*_convblock(128, 256, 3, s=2, p=1))
+        self.layer6 = nn.Sequential(*_convblock(256, 512, 3, s=2, p=1))
+
+        self.num_classes = num_classes
+        self.gap = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512, self.num_classes)
+
+    def forward(
+        self, x: Tensor, classification: bool = False
+    ) -> Tensor | tuple[Tensor, ...]:
+        x = self.layer_prev(x)
 
         r1 = self.layer4(x)
         r2 = self.layer5(r1)
@@ -110,6 +142,7 @@ class YOLO_V3(nn.Module):
         anchors: list[tuple[int, int]] | None = None,
         image_size: int = 416,
         darknet: nn.Module | None = None,
+        darknet_out_channels_arr: list[int] | None = None,
     ) -> None:
         super().__init__()
         self.num_classes = num_classes
@@ -121,9 +154,18 @@ class YOLO_V3(nn.Module):
         self.anchor_masks = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
 
         self.darknet = _DarkNet_53() if darknet is None else darknet
+        if darknet is None:
+            dark_out_chs = [256, 512, 1024]
+        else:
+            if darknet_out_channels_arr is None:
+                raise ValueError(
+                    "If providing a custom darknet, you must also specify "
+                    "`darknet_out_channels_arr`."
+                )
+            dark_out_chs = darknet_out_channels_arr
 
         self.head1_pre = nn.Sequential(
-            *_convblock(1024, 512, 1),
+            *_convblock(dark_out_chs[2], 512, 1),
             *_convblock(512, 1024, 3, p=1),
             *_convblock(1024, 512, 1),
             *_convblock(512, 1024, 3, p=1),
@@ -142,7 +184,7 @@ class YOLO_V3(nn.Module):
         )
 
         self.head2_pre = nn.Sequential(
-            *_convblock(768, 256, 1),
+            *_convblock(dark_out_chs[1] + 256, 256, 1),
             *_convblock(256, 512, 3, p=1),
             *_convblock(512, 256, 1),
             *_convblock(256, 512, 3, p=1),
@@ -161,7 +203,7 @@ class YOLO_V3(nn.Module):
         )
 
         self.head3_pre = nn.Sequential(
-            *_convblock(384, 128, 1),
+            *_convblock(dark_out_chs[0] + 128, 128, 1),
             *_convblock(128, 256, 3, p=1),
             *_convblock(256, 128, 1),
             *_convblock(128, 256, 3, p=1),
@@ -211,14 +253,18 @@ class YOLO_V3(nn.Module):
         obj_mask = target[..., 4:5]
         noobj_mask = 1.0 - obj_mask
 
-        pred_xy = F.sigmoid(pred[..., 0:2])
-        pred_wh = lucid.exp(pred[..., 2:4]) * ahw.reshape(1, 1, 1, B, 2)
+        pred_xy_logits = pred[..., 0:2]
+        pred_wh_logits = pred[..., 2:4]
         obj_logits = pred[..., 4:5]
         cls_logits = pred[..., 5:]
 
-        tgt_xy = target[..., 0:2]
-        tgt_wh = target[..., 2:4]
+        tgt_xy_off = target[..., 0:2]
+        tgt_wh_log = target[..., 2:4]
         tgt_cls = target[..., 5:]
+
+        pred_xy = F.sigmoid(pred_xy_logits)
+        pred_wh = lucid.exp(pred_wh_logits) * ahw.reshape(1, 1, 1, B, 2)
+        tgt_wh = lucid.exp(tgt_wh_log) * ahw.reshape(1, 1, 1, B, 2)
 
         gy, gx = lucid.meshgrid(lucid.arange(H), lucid.arange(W), indexing="ij")
         grid = lucid.stack([gx, gy], axis=-1).reshape(1, H, W, 1, 2)
@@ -227,15 +273,15 @@ class YOLO_V3(nn.Module):
         pred_wh_px = pred_wh * stride
 
         pred_x1y1 = pred_xy_px - pred_wh_px / 2
-        pred_x2y2 = pred_xy_px + pred_wh_px / 2
-        pred_boxes_px = lucid.concatenate([pred_x1y1, pred_x2y2], axis=-1)
+        pred_x1y2 = pred_xy_px + pred_wh_px / 2
+        pred_boxes_px = lucid.concatenate([pred_x1y1, pred_x1y2], axis=-1)
 
-        tgt_xy_px = (tgt_xy + grid) * stride
+        tgt_xy_px = (tgt_xy_off + grid) * stride
         tgt_wh_px = tgt_wh * stride
 
         tgt_x1y1 = tgt_xy_px - tgt_wh_px / 2
-        tgt_x2y2 = tgt_xy_px + tgt_wh_px / 2
-        tgt_boxes_px = lucid.concatenate([tgt_x1y1, tgt_x2y2], axis=-1)
+        tgt_x1y2 = tgt_xy_px + tgt_wh_px / 2
+        tgt_boxes_px = lucid.concatenate([tgt_x1y1, tgt_x1y2], axis=-1)
 
         pred_boxes_flat = pred_boxes_px.reshape(N, -1, 4)
         tgt_boxes_flat = tgt_boxes_px.reshape(N, -1, 4)
@@ -253,14 +299,16 @@ class YOLO_V3(nn.Module):
         max_iou = max_iou.reshape(N, H, W, B, 1)
         noobj_mask = noobj_mask * (max_iou < ignore_thresh).astype(lucid.Float32)
 
-        box_scale = 2.0 - (tgt_wh_px[..., 0] * tgt_wh_px[..., 1]) / self.image_size**2
+        box_scale = 2.0 - (tgt_wh_px[..., 0] * tgt_wh_px[..., 1]) / (self.image_size**2)
 
         w = box_scale * obj_mask[..., 0]
         w = lucid.clip(w, 0.0, None)
         sw = lucid.sqrt(w).reshape(N, H, W, B, 1)
 
-        loss_xy = F.mse_loss(pred_xy * sw, tgt_xy * sw, reduction="sum")
-        loss_wh = F.mse_loss(pred_wh * sw, tgt_wh * sw, reduction="sum")
+        loss_xy = F.mse_loss(
+            F.sigmoid(pred_xy_logits) * sw, tgt_xy_off * sw, reduction="sum"
+        )
+        loss_wh = F.mse_loss(pred_wh_logits * sw, tgt_wh_log * sw, reduction="sum")
 
         num_obj = lucid.maximum(obj_mask.sum(), 1.0)
 
@@ -273,7 +321,6 @@ class YOLO_V3(nn.Module):
         loss_noobj = F.binary_cross_entropy(
             obj_prob, lucid.zeros_like(obj_prob), weight=noobj_mask, reduction="sum"
         )
-
         loss_cls = F.binary_cross_entropy(
             cls_prob, tgt_cls, weight=obj_mask, reduction="sum"
         )
@@ -293,12 +340,12 @@ class YOLO_V3(nn.Module):
     @lucid.no_grad()
     def predict(
         self, x: Tensor, conf_thresh: float = 0.5, iou_thresh: float = 0.5
-    ) -> list[list[dict[str, Tensor | int]]]:
+    ) -> list[list[DetectionDict]]:
         N = x.shape[0]
         C = self.num_classes
         preds = self.forward(x)
 
-        results: list[list[dict[str, Tensor | int]]] = []
+        results: list[list[DetectionDict]] = []
         for i in range(N):
             boxes_list = []
             scores_list = []
@@ -324,7 +371,7 @@ class YOLO_V3(nn.Module):
                 box_wh = pred_wh * stride
 
                 box_xy1 = box_xy - box_wh / 2
-                box_xy2 = box_wh + box_wh / 2
+                box_xy2 = box_xy + box_wh / 2
 
                 box_xy1 = lucid.clip(box_xy1, 0.0, self.image_size - 1)
                 box_xy2 = lucid.clip(box_xy2, 0.0, self.image_size - 1)
@@ -338,7 +385,7 @@ class YOLO_V3(nn.Module):
             boxes_img = lucid.concatenate(boxes_list, axis=0)
             scores_img = lucid.concatenate(scores_list, axis=0)
 
-            image_preds = []
+            image_preds: list[DetectionDict] = []
             for cl in range(C):
                 cls_scores = scores_img[:, cl]
                 mask = cls_scores > conf_thresh
@@ -351,7 +398,11 @@ class YOLO_V3(nn.Module):
                 keep = nms(cls_boxes, cls_scores, iou_thresh)
                 for j in keep:
                     image_preds.append(
-                        {"box": cls_boxes[j], "score": cls_scores[j], "class": cl}
+                        {
+                            "box": cls_boxes[j].tolist(),
+                            "score": cls_scores[j].item(),
+                            "class_id": cl,
+                        }
                     )
 
             results.append(image_preds)
@@ -362,3 +413,14 @@ class YOLO_V3(nn.Module):
 @register_model
 def yolo_v3(num_classes: int = 80, **kwargs) -> YOLO_V3:
     return YOLO_V3(num_classes=num_classes, image_size=416, **kwargs)
+
+
+@register_model
+def yolo_v3_tiny(num_classes: int = 80, **kwargs) -> YOLO_V3:
+    return YOLO_V3(
+        num_classes=num_classes,
+        image_size=416,
+        darknet=_DarkNet_53_Tiny(),
+        darknet_out_channels_arr=[128, 256, 512],
+        **kwargs,
+    )

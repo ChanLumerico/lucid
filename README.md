@@ -11,17 +11,16 @@
 
 Whether you're a student, educator, or an advanced researcher seeking to demystify deep learning internals, Lucid provides a transparent and highly introspectable API that faithfully replicates key behaviors of major frameworks like PyTorch, yet in a form simple enough to study line by line.
 
-[📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
-
+[📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html) | 
 [🤗 Lucid Huggingface](https://huggingface.co/ChanLumerico/lucid)
 
 ### 🔥 What's New
 
-- Now supports [**`🤗 Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
+- Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
+
+- Implemented **YOLO-v3**: `lucid.models.YOLO_V3` with variants `yolo_v3`, `yolo_v3_tiny`
 - Implemented **YOLO-v2**: `lucid.models.YOLO_V2` with variants `yolo_v2`, `yolo_v2_tiny`
 - Implemented **YOLO-v1**: `lucid.models.YOLO_V1` with variants `yolo_v1`, `yolo_v1_tiny`
-- **DDPM** implemented: `lucid.models.DDPM`
-- Added `lucid.cumprod` and `lucid.cumsum`
 
 ## 🔧 How to Install
 

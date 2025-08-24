@@ -6,7 +6,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.models.objdet.util import nms
+from lucid.models.objdet.util import nms, DetectionDict
 
 
 __all__ = ["YOLO_V2", "yolo_v2", "yolo_v2_tiny"]
@@ -312,7 +312,7 @@ class YOLO_V2(nn.Module):
     @lucid.no_grad()
     def predict(
         self, x: Tensor, conf_thresh: float = 0.5, iou_thresh: float = 0.5
-    ) -> list[list[dict[str, Tensor | int]]]:
+    ) -> list[list[DetectionDict]]:
         N, _, H, W = x.shape
         B, C = self.num_anchors, self.num_classes
         stride = self.img_size / H
@@ -339,7 +339,7 @@ class YOLO_V2(nn.Module):
             boxes_i = boxes[i].reshape(-1, 4)
             scores_i = pred_obj[i].reshape(-1, 1) * pred_cls[i].reshape(-1, C)
 
-            image_preds = []
+            image_preds: list[DetectionDict] = []
             for cl in range(C):
                 cls_scores = scores_i[:, cl]
                 mask = cls_scores > conf_thresh
@@ -353,8 +353,8 @@ class YOLO_V2(nn.Module):
                 for j in keep:
                     image_preds.append(
                         {
-                            "box": cls_boxes[j],
-                            "score": cls_scores[j],
+                            "box": cls_boxes[j].tolist(),
+                            "score": cls_scores[j].item(),
                             "class_id": cl,
                         }
                     )
