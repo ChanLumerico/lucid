@@ -298,7 +298,7 @@ def iou(boxes_a: Tensor, boxes_b: Tensor) -> Tensor:
     area_a = (x2a - x1a + 1) * (y2a - y1a + 1)
     area_b = (x2b - x1b + 1) * (y2b - y1b + 1)
 
-    return inter / (area_a.unsqueeze(1) + area_b - inter)
+    return inter / (area_a.unsqueeze(1) + area_b - inter + 1e-9)
 
 
 def bbox_to_delta(src: Tensor, target: Tensor, add_one: float = 1.0) -> Tensor:
