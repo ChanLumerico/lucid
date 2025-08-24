@@ -1101,16 +1101,16 @@ large objects by upsampling and concatenating intermediate features:</p>
 <li><p><cite>B</cite> is the number of anchors (typically 3 per scale),</p></li>
 <li><p><cite>C</cite> is number of classes.</p></li>
 </ul>
-<p>Each vector at <cite>(i, j)</cite> of shape <cite>(B * (5 + C))</cite> contains:</p>
+<p>Each vector at <span class="math notranslate nohighlight">\((i, j)\)</span> of shape <span class="math notranslate nohighlight">\((B * (5 + C))\)</span> contains:</p>
 <ul class="simple">
-<li><p>For each box <cite>b</cite>: <cite>(t_x, t_y, t_w, t_h, obj, cls_1, …, cls_C)</cite></p></li>
+<li><p>For each box <span class="math notranslate nohighlight">\(b\)</span>: <span class="math notranslate nohighlight">\((t_x, t_y, t_w, t_h, obj, cls_1, \cdots, cls_C)\)</span></p></li>
 </ul>
 <p>Where:</p>
 <ul class="simple">
-<li><p><cite>t_x, t_y</cite>: offset of box center within the cell (<span class="math notranslate nohighlight">\(\in[0,1]\)</span>)</p></li>
-<li><p><cite>t_w, t_h</cite>: log-scale of box size relative to anchor (<cite>log((gw/s)/aw)</cite>) (canonical YOLO-v3 form)</p></li>
-<li><p><cite>obj</cite>: 1 if anchor is responsible for object, else 0</p></li>
-<li><p><cite>cls_1..C</cite>: one-hot class vector</p></li>
+<li><p><span class="math notranslate nohighlight">\(t_x, t_y\)</span>: offset of box center within the cell (<span class="math notranslate nohighlight">\(\in [0,1]\)</span>)</p></li>
+<li><p><span class="math notranslate nohighlight">\(t_w, t_h\)</span>: log-scale of box size relative to anchor (<cite>log((gw/s)/aw)</cite>) (canonical YOLO-v3 form)</p></li>
+<li><p><span class="math notranslate nohighlight">\(obj\)</span>: 1 if anchor is responsible for object, else 0</p></li>
+<li><p><span class="math notranslate nohighlight">\(cls_{1\ldots }C\)</span>: one-hot class vector</p></li>
 </ul>
 </section>
 <section id="yolo-v3-loss">
@@ -1124,25 +1124,25 @@ and class probabilities.</p>
 \mathcal{L} &amp;=
 \sum_{i,j,b} \mathbb{1}_{ijb}^{obj} \alpha_{ijb} \left[
     (\sigma(\hat{t}_{x,ijb}) - t_{x,ijb})^2 +
-    (\sigma(\hat{t}_{y,ijb}) - t_{y,ijb})^2 \\
-    &amp;\quad+
+    (\sigma(\hat{t}_{y,ijb}) - t_{y,ijb})^2 \right. \\
+&amp;\quad \left. +
     (\hat{t}_{w,ijb} - t_{w,ijb})^2 +
     (\hat{t}_{h,ijb} - t_{h,ijb})^2
-\right] \\
-&amp;+ \sum_{i,j,b} \left[
+\right] \\\\
+&amp;\quad+ \sum_{i,j,b} \left[
     \mathbb{1}_{ijb}^{obj}(\hat{C}_{ijb} - 1)^2 +
     \mathbb{1}_{ijb}^{noobj}\hat{C}_{ijb}^2
-\right] \\
-&amp;+ \sum_{i,j,b} \mathbb{1}_{ijb}^{obj} \sum_c \text{BCE}(\hat{p}_{ijb}(c), p_{ijb}(c))
+\right] \\\\
+&amp;\quad+ \sum_{i,j,b} \mathbb{1}_{ijb}^{obj} \sum_c \text{BCE}(\hat{p}_{ijb}(c), p_{ijb}(c))
 \end{aligned}\end{split}\]</div>
 </div>
 <p>Where:</p>
 <ul class="simple">
-<li><p><cite>hat{t}_{x,y,w,h}</cite> are raw outputs</p></li>
-<li><p><cite>t_{x,y}</cite> are cell-relative offsets</p></li>
-<li><p><cite>t_{w,h}</cite> are log-ratio targets (canonical encoding)</p></li>
-<li><p><cite>hat{C}</cite> is objectness after sigmoid</p></li>
-<li><p><cite>hat{p}(c)</cite> is predicted class prob after sigmoid</p></li>
+<li><p><span class="math notranslate nohighlight">\(\hat{t}_{x,y,w,h}\)</span> are raw outputs</p></li>
+<li><p><span class="math notranslate nohighlight">\(t_{x,y}\)</span> are cell-relative offsets</p></li>
+<li><p><span class="math notranslate nohighlight">\(t_{w,h}\)</span> are log-ratio targets (canonical encoding)</p></li>
+<li><p><span class="math notranslate nohighlight">\(\hat{C}\)</span> is objectness after sigmoid</p></li>
+<li><p><span class="math notranslate nohighlight">\(\hat{p}(c)\)</span> is predicted class prob after sigmoid</p></li>
 </ul>
 </section>
 <section id="prediction-output">

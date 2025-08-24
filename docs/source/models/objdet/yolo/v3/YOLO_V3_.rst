@@ -89,16 +89,16 @@ Where:
 - `B` is the number of anchors (typically 3 per scale),
 - `C` is number of classes.
 
-Each vector at `(i, j)` of shape `(B * (5 + C))` contains:
+Each vector at :math:`(i, j)` of shape :math:`(B * (5 + C))` contains:
 
-- For each box `b`: `(t_x, t_y, t_w, t_h, obj, cls_1, ..., cls_C)`
+- For each box :math:`b`: :math:`(t_x, t_y, t_w, t_h, obj, cls_1, \cdots, cls_C)`
 
 Where:
 
-- `t_x, t_y`: offset of box center within the cell (:math:`\in[0,1]`)
-- `t_w, t_h`: log-scale of box size relative to anchor (`log((gw/s)/aw)`) (canonical YOLO-v3 form)
-- `obj`: 1 if anchor is responsible for object, else 0
-- `cls_1..C`: one-hot class vector
+- :math:`t_x, t_y`: offset of box center within the cell (:math:`\in [0,1]`)
+- :math:`t_w, t_h`: log-scale of box size relative to anchor (`log((gw/s)/aw)`) (canonical YOLO-v3 form)
+- :math:`obj`: 1 if anchor is responsible for object, else 0
+- :math:`cls_{1\ldots }C`: one-hot class vector
 
 YOLO-v3 Loss
 ------------
@@ -112,25 +112,25 @@ and class probabilities.
     \mathcal{L} &=
     \sum_{i,j,b} \mathbb{1}_{ijb}^{obj} \alpha_{ijb} \left[
         (\sigma(\hat{t}_{x,ijb}) - t_{x,ijb})^2 +
-        (\sigma(\hat{t}_{y,ijb}) - t_{y,ijb})^2 \\
-        &\quad+
+        (\sigma(\hat{t}_{y,ijb}) - t_{y,ijb})^2 \right. \\
+    &\quad \left. +
         (\hat{t}_{w,ijb} - t_{w,ijb})^2 +
         (\hat{t}_{h,ijb} - t_{h,ijb})^2
-    \right] \\
-    &+ \sum_{i,j,b} \left[
+    \right] \\\\
+    &\quad+ \sum_{i,j,b} \left[
         \mathbb{1}_{ijb}^{obj}(\hat{C}_{ijb} - 1)^2 +
         \mathbb{1}_{ijb}^{noobj}\hat{C}_{ijb}^2
-    \right] \\
-    &+ \sum_{i,j,b} \mathbb{1}_{ijb}^{obj} \sum_c \text{BCE}(\hat{p}_{ijb}(c), p_{ijb}(c))
+    \right] \\\\
+    &\quad+ \sum_{i,j,b} \mathbb{1}_{ijb}^{obj} \sum_c \text{BCE}(\hat{p}_{ijb}(c), p_{ijb}(c))
     \end{aligned}
 
 Where:
 
-- `\hat{t}_{x,y,w,h}` are raw outputs
-- `t_{x,y}` are cell-relative offsets
-- `t_{w,h}` are log-ratio targets (canonical encoding)
-- `\hat{C}` is objectness after sigmoid
-- `\hat{p}(c)` is predicted class prob after sigmoid
+- :math:`\hat{t}_{x,y,w,h}` are raw outputs
+- :math:`t_{x,y}` are cell-relative offsets
+- :math:`t_{w,h}` are log-ratio targets (canonical encoding)
+- :math:`\hat{C}` is objectness after sigmoid
+- :math:`\hat{p}(c)` is predicted class prob after sigmoid
 
 Prediction Output
 -----------------
