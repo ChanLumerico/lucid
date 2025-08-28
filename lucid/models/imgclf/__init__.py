@@ -2,6 +2,7 @@ from .alex import *
 from .coatnet import *
 from .convnext import *
 from .crossvit import *
+from .cspnet import *
 from .cvt import *
 from .dense import *
 from .efficient import *

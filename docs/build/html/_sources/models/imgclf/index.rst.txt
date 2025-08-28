@@ -1286,6 +1286,10 @@ CoAtNet achieves superior efficiency and performance across various vision tasks
       - 364.71B
       - ❌
 
+CSPNet
+------
+|wip-badge|
+
 Visual Transformer (ViT)
 ------------------------
 |transformer-badge| |vision-transformer-badge| |imgclf-badge|
