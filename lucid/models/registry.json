@@ -952,5 +952,11 @@
         "family": "YOLO_V3",
         "param_size": 23450997,
         "task": "objdet"
+    },
+    "csp_resnet_50": {
+        "name": "csp_resnet_50",
+        "family": "CSPNet",
+        "param_size": 22463016,
+        "task": "imgclf"
     }
 }

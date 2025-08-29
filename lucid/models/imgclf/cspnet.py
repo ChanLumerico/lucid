@@ -1,4 +1,5 @@
-from typing import Callable, ClassVar, NamedTuple
+import math
+from typing import Callable, ClassVar, Literal, NamedTuple
 
 import lucid
 import lucid.nn as nn
@@ -6,6 +7,9 @@ import lucid.nn.functional as F
 
 from lucid import register_model
 from lucid._tensor import Tensor
+
+
+__all__ = ["CSPNet", "csp_resnet_50"]
 
 
 class _ConvBNAct(nn.Module):
@@ -88,11 +92,12 @@ class _ResNetBasicBlock(nn.Module):
         out = self.conv1(x)
         out = self.conv2(out)
         out = self.norm2(out)
-        out = self.act(out)
 
         if self.downsample is not None:
             identity = self.downsample(x)
+
         out += identity
+        out = self.act(out)
         return out
 
 
@@ -211,7 +216,7 @@ def _resnet_stack_factory(
     def make_stack(
         in_channels: int, num_layers: int, stride_first: int = 1
     ) -> _StackOut:
-        channels = in_channels // expansion
+        channels = math.ceil(in_channels / expansion)
         layers = []
 
         down = None
@@ -241,6 +246,7 @@ def _resnet_stack_factory(
 
         return _StackOut(nn.Sequential(*layers), in_channels)
 
+    make_stack.required_multiple = expansion
     return make_stack
 
 
@@ -277,15 +283,154 @@ class _CSPStage(nn.Module):
         act: type[nn.Module] = nn.ReLU,
     ) -> None:
         super().__init__()
-        self.stage_width = stage_width
-        self.split_c1 = int(stage_width * split_ratio)
-        self.split_c2 = stage_width - self.split_c1
-        assert self.split_c1 > 0 and self.split_c2 > 0
-
-        self.base_align = (
-            nn.Identity()
-            if in_channels == stage_width
-            else _ConvBNAct(in_channels, stage_width, k=1, s=1, p=0, norm=norm, act=act)
+        self.pre = _ConvBNAct(
+            in_channels,
+            stage_width,
+            k=1,
+            s=(2 if downsample else 1),
+            p=0,
+            norm=norm,
+            act=act,
         )
 
-        # TODO: Continue from here
+        c1 = int(round(stage_width * split_ratio))
+        c2 = stage_width - c1
+        assert c1 > 0 and c2 > 0
+
+        req = getattr(block_stack_fn, "required_multiple", 1)
+        if c2 % req != 0:
+            c2 = max(req, (c2 // req) * req)
+            c1 = stage_width - c2
+        self.c1, self.c2 = c1, c2
+
+        self.part1_proj = _ConvBNAct(stage_width, c1, k=1, s=1, p=0, norm=norm, act=act)
+        self.part2_proj = _ConvBNAct(stage_width, c2, k=1, s=1, p=0, norm=norm, act=act)
+
+        stack_out = block_stack_fn(c2, num_layers, stride_first=1)
+        self.block_stack = stack_out.module
+        self.block_out = stack_out.out_channels
+
+        self.merge = _ConvBNAct(
+            c1 + self.block_out, stage_width, k=1, s=1, p=0, norm=norm, act=act
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.pre(x)
+        y1 = self.part1_proj(x)
+        y2 = self.part2_proj(x)
+        y2 = self.block_stack(y2)
+
+        y = lucid.concatenate([y1, y2], axis=1)
+        y = self.merge(y)
+        return y
+
+
+class CSPNet(nn.Module):
+    def __init__(
+        self,
+        in_channels: int = 3,
+        stem_channels: int = 64,
+        stage_defs: list[tuple[int, int, Callable, bool]] | None = None,
+        num_classes: int = 1000,
+        norm: type[nn.Module] = nn.BatchNorm2d,
+        act: type[nn.Module] = nn.ReLU,
+        split_ratio: float = 0.5,
+        global_pool: Literal["avg", "max"] = "avg",
+        dropout: float = 0.0,
+        feature_channels: int | None = None,
+    ) -> None:
+        super().__init__()
+        if stage_defs is None:
+            stage_defs = []
+
+        self.stem = nn.Sequential(
+            _ConvBNAct(in_channels, stem_channels, k=3, s=2, norm=norm, act=act),
+            _ConvBNAct(stem_channels, stem_channels, k=3, s=1, norm=norm, act=act),
+        )
+
+        stages = []
+        in_ch = stem_channels
+        for stage_width, num_layers, stack_fn, downsample in stage_defs:
+            stages.append(
+                _CSPStage(
+                    in_ch,
+                    stage_width,
+                    num_layers,
+                    stack_fn,
+                    split_ratio=split_ratio,
+                    downsample=downsample,
+                    norm=norm,
+                    act=act,
+                )
+            )
+            in_ch = stage_width
+        self.stages = nn.Sequential(*stages)
+
+        if feature_channels is not None and feature_channels != in_ch:
+            self.pre_head = _ConvBNAct(
+                in_ch, feature_channels, k=1, s=1, p=0, norm=norm, act=act
+            )
+            in_ch = feature_channels
+        else:
+            self.pre_head = nn.Identity()
+
+        self.num_classes = num_classes
+        self.head_pool = (
+            nn.AdaptiveAvgPool2d((1, 1))
+            if global_pool == "avg"
+            else nn.AdaptiveMaxPool2d((1, 1))
+        )
+        self.head = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(dropout) if dropout > 0.0 else nn.Identity(),
+            nn.Linear(in_ch, num_classes),
+        )
+
+        self.apply(self.init_weights)
+
+    def init_weights(self, m: nn.Module):
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal(m.weight, mode="fan_out")
+        elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+            nn.init.constant(m.weight, 1.0)
+            nn.init.constant(m.bias, 0.0)
+
+    def forward_features(
+        self, x: Tensor, return_stage_out: bool = False
+    ) -> Tensor | list[Tensor]:
+        feats = []
+        x = self.stem(x)
+        for stage in self.stages:
+            x = stage(x)
+            if return_stage_out:
+                feats.append(x)
+
+        return feats if return_stage_out else x
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.forward_features(x, return_stage_out=False)
+        x = self.pre_head(x)
+        x = self.head_pool(x)
+        x = self.head(x)
+        return x
+
+
+@register_model
+def csp_resnet_50(
+    num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 64, **kwargs
+) -> CSPNet:
+    res_stack = _resnet_stack_factory(_Bottleneck, groups=1, base_width=64)
+    stage_defs = [
+        (256, 3, res_stack, False),
+        (512, 4, res_stack, True),
+        (1024, 6, res_stack, True),
+        (2048, 3, res_stack, True),
+    ]
+    return CSPNet(
+        stem_channels=stem_channels,
+        stage_defs=stage_defs,
+        num_classes=num_classes,
+        split_ratio=split_ratio,
+        feature_channels=1024,
+        **kwargs,
+    )
