@@ -958,5 +958,11 @@
         "family": "CSPNet",
         "param_size": 22463016,
         "task": "imgclf"
+    },
+    "csp_resnext_50_32x4d": {
+        "name": "csp_resnext_50_32x4d",
+        "family": "CSPNet",
+        "param_size": 22509864,
+        "task": "imgclf"
     }
 }

@@ -9,7 +9,7 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["CSPNet", "csp_resnet_50"]
+__all__ = ["CSPNet", "csp_resnet_50", "csp_resnext_50_32x4d"]
 
 
 class _ConvBNAct(nn.Module):
@@ -142,63 +142,6 @@ class _Bottleneck(nn.Module):
         return self.act(out)
 
 
-class _DenseLayer(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        growth_rate: int,
-        bn_size: int = 4,
-        drop_rate: float = 0.0,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        act: type[nn.Module] = nn.ReLU,
-    ) -> None:
-        super().__init__()
-        inter = bn_size * growth_rate
-
-        self.norm1 = norm(in_channels)
-        self.act1 = act()
-        self.conv1 = nn.Conv2d(in_channels, inter, kernel_size=1, bias=False)
-
-        self.norm2 = norm(inter)
-        self.act2 = act()
-        self.conv2 = nn.Conv2d(inter, growth_rate, kernel_size=3, padding=1, bias=False)
-        self.drop_rate = drop_rate
-
-    def forward(self, x: Tensor) -> Tensor:
-        out = self.conv1(self.act1(self.norm1(x)))
-        out = self.conv2(self.act2(self.norm2(out)))
-
-        if self.drop_rate > 0.0:
-            out = F.dropout(out, p=self.drop_rate, training=self.training)
-        return lucid.concatenate([x, out], axis=1)
-
-
-class _DenseBlock(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        num_layers: int,
-        growth_rate: int = 32,
-        bn_size: int = 4,
-        drop_rate: float = 0.0,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        act: type[nn.Module] = nn.ReLU,
-    ) -> None:
-        super().__init__()
-        ch = in_channels
-        layers = []
-        for _ in range(num_layers):
-            layer = _DenseLayer(ch, growth_rate, bn_size, drop_rate, norm, act)
-            layers.append(layer)
-            ch += growth_rate
-
-        self.block = nn.Sequential(*layers)
-        self.out_channels = ch
-
-    def forward(self, x: Tensor) -> Tensor:
-        return self.block(x)
-
-
 class _StackOut(NamedTuple):
     module: nn.Module
     out_channels: int
@@ -247,26 +190,6 @@ def _resnet_stack_factory(
         return _StackOut(nn.Sequential(*layers), in_channels)
 
     make_stack.required_multiple = expansion
-    return make_stack
-
-
-def densenet_stack_factory(
-    growth_rate: int = 32,
-    bn_size: int = 4,
-    drop_rate: float = 0.0,
-    norm: type[nn.Module] = nn.BatchNorm2d,
-    act: type[nn.Module] = nn.ReLU,
-) -> Callable[[int, int, int], _StackOut]:
-
-    def make_stack(
-        in_channels: int, num_layers: int, stride_first: int = 1
-    ) -> _StackOut:
-        _ = stride_first
-        block = _DenseBlock(
-            in_channels, num_layers, growth_rate, bn_size, drop_rate, norm, act
-        )
-        return _StackOut(block, block.out_channels)
-
     return make_stack
 
 
@@ -425,6 +348,27 @@ def csp_resnet_50(
         (512, 4, res_stack, True),
         (1024, 6, res_stack, True),
         (2048, 3, res_stack, True),
+    ]
+    return CSPNet(
+        stem_channels=stem_channels,
+        stage_defs=stage_defs,
+        num_classes=num_classes,
+        split_ratio=split_ratio,
+        feature_channels=1024,
+        **kwargs,
+    )
+
+
+@register_model
+def csp_resnext_50_32x4d(
+    num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 64, **kwargs
+) -> CSPNet:
+    resnext_stack = _resnet_stack_factory(_Bottleneck, groups=32, base_width=4)
+    stage_defs = [
+        (256, 3, resnext_stack, False),
+        (512, 4, resnext_stack, True),
+        (1024, 6, resnext_stack, True),
+        (2048, 3, resnext_stack, True),
     ]
     return CSPNet(
         stem_channels=stem_channels,
