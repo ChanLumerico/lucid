@@ -964,5 +964,11 @@
         "family": "CSPNet",
         "param_size": 22509864,
         "task": "imgclf"
+    },
+    "csp_darknet_53": {
+        "name": "csp_darknet_53",
+        "family": "CSPNet",
+        "param_size": 27278536,
+        "task": "imgclf"
     }
 }

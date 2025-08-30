@@ -1,4 +1,5 @@
 import math
+from functools import partial
 from typing import Callable, ClassVar, Literal, NamedTuple
 
 import lucid
@@ -9,7 +10,7 @@ from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["CSPNet", "csp_resnet_50", "csp_resnext_50_32x4d"]
+__all__ = ["CSPNet", "csp_resnet_50", "csp_resnext_50_32x4d", "csp_darknet_53"]
 
 
 class _ConvBNAct(nn.Module):
@@ -142,6 +143,48 @@ class _Bottleneck(nn.Module):
         return self.act(out)
 
 
+class _DarknetBottleneck(nn.Module):
+    expansion: ClassVar[int] = 1
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        stride: int = 1,
+        norm: type[nn.Module] = nn.BatchNorm2d,
+        act: type[nn.Module] = partial(nn.LeakyReLU, negative_slope=0.1),
+        **kwargs,
+    ) -> None:
+        super().__init__()
+        self.conv1 = _ConvBNAct(
+            in_channels, out_channels, k=1, s=1, p=0, norm=norm, act=act
+        )
+        self.conv2 = _ConvBNAct(
+            out_channels, out_channels, k=3, s=stride, p=1, norm=norm, act=act
+        )
+
+        self.use_proj = not (stride == 1 and in_channels == out_channels)
+        self.downsample = (
+            nn.Identity()
+            if not self.use_proj
+            else nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+                norm(out_channels),
+            )
+        )
+        self.act = act()
+
+    def forward(self, x: Tensor) -> Tensor:
+        identity = x
+        out = self.conv1(x)
+        out = self.conv2(out)
+        if self.use_proj:
+            identity = self.downsample(x)
+
+        out += identity
+        return self.act(out)
+
+
 class _StackOut(NamedTuple):
     module: nn.Module
     out_channels: int
@@ -193,6 +236,37 @@ def _resnet_stack_factory(
     return make_stack
 
 
+def _darknet_stack_factory(
+    block_cls: type[nn.Module],
+    norm: type[nn.Module] = nn.BatchNorm2d,
+    act: type[nn.Module] = partial(nn.LeakyReLU, negative_slope=0.1),
+) -> Callable[[int, int, int], _StackOut]:
+    expansion = getattr(block_cls, "expansion", 1)
+
+    def make_stack(
+        in_channels: int, num_layers: int, stride_first: int = 1
+    ) -> _StackOut:
+        channels = in_channels // expansion
+        base_kwargs = dict(downsample=None, norm=norm, act=act)
+
+        layers = []
+        layers.append(
+            block_cls(
+                in_channels, channels * expansion, stride=stride_first, **base_kwargs
+            )
+        )
+        in_ch = channels * expansion
+        for _ in range(1, num_layers):
+            layers.append(
+                block_cls(in_ch, channels * expansion, stride=1, **base_kwargs)
+            )
+
+        return _StackOut(nn.Sequential(*layers), in_ch)
+
+    make_stack.required_multiple = expansion
+    return make_stack
+
+
 class _CSPStage(nn.Module):
     def __init__(
         self,
@@ -204,14 +278,15 @@ class _CSPStage(nn.Module):
         downsample: bool = False,
         norm: type[nn.Module] = nn.BatchNorm2d,
         act: type[nn.Module] = nn.ReLU,
+        pre_kernel_size: int = 1,
     ) -> None:
         super().__init__()
         self.pre = _ConvBNAct(
             in_channels,
             stage_width,
-            k=1,
+            k=pre_kernel_size,
             s=(2 if downsample else 1),
-            p=0,
+            p=(pre_kernel_size - 1) // 2,
             norm=norm,
             act=act,
         )
@@ -261,6 +336,7 @@ class CSPNet(nn.Module):
         global_pool: Literal["avg", "max"] = "avg",
         dropout: float = 0.0,
         feature_channels: int | None = None,
+        pre_kernel_size: int = 1,
     ) -> None:
         super().__init__()
         if stage_defs is None:
@@ -284,6 +360,7 @@ class CSPNet(nn.Module):
                     downsample=downsample,
                     norm=norm,
                     act=act,
+                    pre_kernel_size=pre_kernel_size,
                 )
             )
             in_ch = stage_width
@@ -376,5 +453,28 @@ def csp_resnext_50_32x4d(
         num_classes=num_classes,
         split_ratio=split_ratio,
         feature_channels=1024,
+        **kwargs,
+    )
+
+
+@register_model
+def csp_darknet_53(
+    num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 32, **kwargs
+) -> CSPNet:
+    dark_stack = _darknet_stack_factory(_DarknetBottleneck)
+    stage_defs = [
+        (64, 1, dark_stack, True),
+        (128, 2, dark_stack, True),
+        (256, 8, dark_stack, True),
+        (512, 8, dark_stack, True),
+        (1024, 4, dark_stack, True),
+    ]
+    return CSPNet(
+        stem_channels=stem_channels,
+        stage_defs=stage_defs,
+        num_classes=num_classes,
+        split_ratio=split_ratio,
+        feature_channels=1024,
+        pre_kernel_size=3,
         **kwargs,
     )
