@@ -43,65 +43,6 @@ class _ConvBNAct(nn.Module):
         return self.act(self.norm(self.conv(x)))
 
 
-class _TransitionPreAct(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        pool: bool = False,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        act: type[nn.Module] = nn.ReLU,
-    ) -> None:
-        super().__init__()
-        self.norm = norm(in_channels)
-        self.act = act()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
-        self.pool = nn.AvgPool2d(kernel_size=2, stride=2) if pool else nn.Identity()
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.conv(self.act(self.norm(x)))
-        x = self.pool(x)
-        return x
-
-
-class _ResNetBasicBlock(nn.Module):
-    expansion: ClassVar[int] = 1
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        stride: int = 1,
-        downsample: nn.Module | None = None,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        act: type[nn.Module] = nn.ReLU,
-        **kwargs,
-    ) -> None:
-        super().__init__()
-        self.conv1 = _ConvBNAct(
-            in_channels, out_channels, k=3, s=stride, p=1, norm=norm, act=act
-        )
-        self.conv2 = nn.Conv2d(
-            out_channels, out_channels, kernel_size=3, padding=1, bias=False
-        )
-        self.norm2 = norm(out_channels)
-        self.act = act()
-        self.downsample = downsample
-
-    def forward(self, x: Tensor) -> Tensor:
-        identity = x
-        out = self.conv1(x)
-        out = self.conv2(out)
-        out = self.norm2(out)
-
-        if self.downsample is not None:
-            identity = self.downsample(x)
-
-        out += identity
-        out = self.act(out)
-        return out
-
-
 class _Bottleneck(nn.Module):
     expansion: ClassVar[int] = 4
 

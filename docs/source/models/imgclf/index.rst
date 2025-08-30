@@ -28,6 +28,7 @@ Image Classification
     ConvNeXt-v2 <convnext/ConvNeXt_V2.rst>
     InceptionNeXt <inception_next/InceptionNeXt.rst>
     CoAtNet <coatnet/CoAtNet.rst>
+    CSPNet <cspnet/CSPNet.rst>
 
     ViT <vit/ViT.rst>
     Swin Transformer <swin/SwinTransformer.rst>
@@ -1288,7 +1289,50 @@ CoAtNet achieves superior efficiency and performance across various vision tasks
 
 CSPNet
 ------
-|wip-badge|
+|convnet-badge| |imgclf-badge|
+
+CSPNet (Cross Stage Partial Network) introduces a split-transform-merge strategy 
+to optimize gradient flow and reduce computational redundancy in deep convolutional 
+architectures. By partitioning feature maps into two parts—one passing through 
+a transformation block and the other bypassing it—CSPNet improves parameter efficiency 
+and learning dynamics without sacrificing representational power.
+
+ Wang, Chien-Yao, et al. "CSPNet: A new backbone that can enhance learning capability 
+ of CNN." *Proceedings of the IEEE/CVF conference on computer vision and pattern 
+ recognition workshops*. 2020.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - FLOPs
+      - Pre-Trained
+    
+    * - CSP-ResNet-50
+      - `csp_resnet_50 <cspnet/csp_resnet_50>`_
+      - :math:`(N,3,224,224)`
+      - 22,463,016
+      - 376.71M
+      - ❌
+    
+    * - CSP-ResNeXt-50-32x4d
+      - `csp_resnext_50_32x4d <cspnet/csp_resnext_50_32x4d>`_
+      - :math:`(N,3,224,224)`
+      - 22,509,864
+      - 431.93M
+      - ❌
+    
+    * - CSP-DarkNet-53
+      - `csp_darknet_53 <cspnet/csp_darknet_53>`_
+      - :math:`(N,3,224,224)`
+      - 27,278,536
+      - 39.14M
+      - ❌
+
 
 Visual Transformer (ViT)
 ------------------------
