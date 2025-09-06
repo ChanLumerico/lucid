@@ -189,4 +189,8 @@ YOLO-v3
       - 23,106,933
       - 147.93M
 
+YOLO-v4
+~~~~~~~
+|wip-badge|
+
 *To be implemented...🔮*
