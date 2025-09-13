@@ -287,12 +287,60 @@ class YOLO_V4(nn.Module):
 
     def _decode_outputs(
         self, preds: list[Tensor], img_size: tuple[int, int]
-    ) -> list[Tensor]: ...
+    ) -> list[Tensor]:
+        device = preds[0].device
+        B = preds[0].shape[0]
+        outputs = [[] for _ in range(B)]
+
+        for s, p in enumerate(preds):
+            A = len(self.anchors[s])
+            C = self.num_classes
+            B_, _, H, W = p.shape
+            assert B == B_
+
+            p = p.reshape(B, A, 6 + C, H, W).transpose((0, 1, 3, 4, 2))
+            yv, xv = lucid.meshgrid(
+                lucid.arange(H, device=device),
+                lucid.arange(W, device=device),
+                indexing="ij",
+            )
+
+            grid = lucid.stack([xv, yv], axis=2).reshape(1, 1, H, W, 2)
+            anc = lucid.tensor(self.anchors[s], device=device).reshape(1, A, 1, 1, 2)
+            stride = self.strides[s]
+
+            xy = (F.sigmoid(p[..., 0:2]) + grid) * stride
+            wh = F.exp(p[..., 2:4]) * anc
+            objp = F.sigmoid(p[..., 4])
+            ioup = F.sigmoid(p[..., 5])
+            cl = F.sigmoid(p[..., 6:])
+
+            alpha = self.iou_aware_alpha
+            fused = (objp ** (1 - alpha)) * (ioup**alpha)
+
+            x1y1 = xy - wh * 0.5
+            x2y2 = xy + wh * 0.5
+            x1y1[..., 0] = x1y1[..., 0].clip(0, img_size[1] - 1)
+            x1y1[..., 1] = x1y1[..., 1].clip(0, img_size[0] - 1)
+            x2y2[..., 0] = x2y2[..., 0].clip(0, img_size[1] - 1)
+            x2y2[..., 1] = x2y2[..., 1].clip(0, img_size[0] - 1)
+
+            out = lucid.concatenate([x1y1, x2y2, fused.unsqueeze(-1), cl], axis=-1)
+            out = out.reshape(B, -1, 5 + C)
+
+            for b in range(B):
+                outputs[b].append(out[b])
+
+        return [lucid.concatenate(o, axis=0) for o in outputs]
 
     @lucid.no_grad()
     def _diou_nms_per_img(
         self, det: Tensor, conf_thresh: float, iou_thresh: float, max_det: int = 300
-    ) -> Tensor: ...
+    ) -> Tensor:
+        if det.size == 0:
+            return lucid.zeros(0, 6, requires_grad=det.requires_grad, device=det.device)
+
+        # TODO: Implement DIoU NMS
 
     def _build_targets(
         self,
