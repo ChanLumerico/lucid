@@ -2,7 +2,7 @@ import lucid
 import lucid.nn.functional
 
 from lucid._tensor import Tensor
-from lucid.types import _Scalar
+from lucid.types import _Scalar, Numeric
 
 
 def _interpolate_bilinear(
@@ -140,3 +140,27 @@ def embedding(
         output *= scaling
 
     return output
+
+
+def one_hot(
+    input_: Tensor, num_classes: int = -1, dtype: Numeric | bool | None = None
+) -> Tensor:
+    if input_.dtype.base_dtype is not int:
+        raise TypeError("one_hot only supports integer input.")
+    if num_classes == -1:
+        num_classes = lucid.max(input_).item() + 1
+
+    input_flat = input_.reshape(-1)
+    N = input_flat.shape[0]
+
+    out_shape = (*input_.shape, num_classes)
+    out = lucid.zeros(N, num_classes, device=input_.device, dtype=lucid.Int8)
+
+    arange = lucid.arange(N, device=input_.device, dtype=lucid.Int32)
+    out[arange, input_flat.astype(lucid.Int)] = 1
+
+    return (
+        out.reshape(out_shape).astype(dtype)
+        if dtype is not None
+        else out.reshape(out_shape)
+    )

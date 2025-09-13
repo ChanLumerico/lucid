@@ -428,16 +428,20 @@ class Tensor(_TensorOps):
             )
         return bool(self.data.item())
 
-    def any(self) -> bool:
+    def any(self, axis: int | None = None, keepdims: bool = False) -> bool | Self:
         if self.is_cpu():
-            return bool(np.any(self.data))
+            result = np.any(self.data, axis=axis, keepdims=keepdims)
+            return bool(result) if axis is None else Tensor(result, device="cpu")
         else:
             mx.eval(self.data)
-            return bool(mx.any(self.data).item())
+            result = mx.any(self.data, axis=axis, keepdims=keepdims)
+            return bool(result.item()) if axis is None else Tensor(result, device="gpu")
 
-    def all(self) -> bool:
+    def all(self, axis=None, keepdims=False) -> bool | Self:
         if self.is_cpu():
-            return bool(np.all(self.data))
+            result = np.all(self.data, axis=axis, keepdims=keepdims)
+            return bool(result) if axis is None else Tensor(result, device="cpu")
         else:
             mx.eval(self.data)
-            return bool(mx.all(self.data).item())
+            result = mx.all(self.data, axis=axis, keepdims=keepdims)
+            return bool(result.item()) if axis is None else Tensor(result, device="gpu")

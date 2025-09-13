@@ -277,7 +277,7 @@ class YOLO_V4(nn.Module):
         self.iou_aware_alpha = iou_aware_alpha
         self.iou_branch_weight = iou_branch_weight
 
-        self._bce = nn.BCELoss(reduction=None)
+        self._bce = nn.BCEWithLogitsLoss(reduction=None)
 
     def foward(self, x: Tensor) -> list[Tensor]:
         c3, c4, c5 = self.backbone(x)
@@ -340,19 +340,231 @@ class YOLO_V4(nn.Module):
         if det.size == 0:
             return lucid.zeros(0, 6, requires_grad=det.requires_grad, device=det.device)
 
-        # TODO: Implement DIoU NMS
+        obj, cl = det[:, 4:5], det[:, 5:]
+        conf, cl_id = (obj * cl).max(axis=1)
+        mask = conf > conf_thresh
+        if mask.sum() == 0:
+            return lucid.zeros(0, 6, requires_grad=det.requires_grad, device=det.device)
+
+        boxes = det[mask, :4]
+        conf = conf[mask]
+        cl_id = cl_id[mask].astype(lucid.Float)
+
+        keep_idx = []
+        for c in lucid.unique(cl_id):
+            idx = lucid.nonzero(cl_id == c).squeeze(axis=1)
+            b = boxes[idx]
+            s = conf[idx]
+
+            order = lucid.argsort(s, descending=True)
+            idx = idx[order]
+            b = b[order]
+
+            while idx.size > 0:
+                i = idx[0]
+                keep_idx.append(i.item())
+                if idx.size == 1:
+                    break
+
+                diou = _diou_xyxy(b[:1], b[1:]).squeeze(axis=0)
+                mask_ = diou <= iou_thresh
+                idx = idx[1:][mask_]
+                b = b[1:][mask_]
+
+        keep = lucid.tensor(keep_idx, device=det.device, dtype=lucid.Int32)[:max_det]
+        return lucid.concatenate(
+            [boxes[keep], conf[keep, None], cl_id[keep, None]], axis=1
+        )
 
     def _build_targets(
         self,
         targets: list[Tensor],
         feat_shapes: list[tuple[int, int]],
         device: _DeviceType,
-        img_size: tuple[int, int],
-    ) -> tuple[Tensor, ...]: ...
+    ) -> tuple[list[Tensor], ...]:
+        B = len(targets)
+        tcls, tbox, tindices, tobj, ignore = [], [], [], [], []
+        for s in range(3):
+            na = len(self.anchors[s])
+            H, W = feat_shapes[s]
 
-    def get_loss(self, x: Tensor, targets: list[Tensor]) -> Tensor: ...
+            tcls.append([])
+            tbox.append([])
+            tindices.append([])
+
+            tobj.append(lucid.zeros(B, na, H, W, device=device))
+            ignore.append(lucid.zeros(B, na, H, W, dtype=bool, device=device))
+
+        all_anc = lucid.tensor([a for sc in self.anchors for a in sc], device=device)
+
+        for b, tgt in enumerate(targets):
+            if tgt.size == 0:
+                continue
+
+            cl = tgt[:, 0].astype(lucid.Int32)
+            boxes = tgt[:, 1:5].astype(lucid.Float)
+
+            gtw, gth = boxes[:, 2], boxes[:, 3]
+            inter = lucid.minimum(gtw[:, None], all_anc[None, :, 0])
+            inter *= lucid.minimum(gth[:, None], all_anc[None, :, 1])
+            union = (
+                (gtw[:, None] * gth[:, None])
+                + (all_anc[None, :, 0] * all_anc[None, :, 1])
+                - inter
+                + 1e-9
+            )
+            wh_iou = inter / union
+
+            pos_mask_all = wh_iou >= self.pos_iou_thr
+            best_idx = lucid.argmax(wh_iou, axis=1, keepdims=True)
+            pos_mask_all = lucid.where(
+                pos_mask_all.any(axis=1, keepdims=True),
+                pos_mask_all,
+                F.one_hot(best_idx.squeeze(axis=1), wh_iou.shape[1], dtype=bool),
+            )
+
+            for i in range(boxes.shape[0]):
+                gx, gy, gw, gh = boxes[i]
+                gi_s, gj_s = [], []
+                for s in range(3):
+                    stride = self.strides[s]
+                    gi_s.append((gx / stride).clip(0, feat_shapes[s][1] - 1).item())
+                    gj_s.append((gy / stride).clip(0, feat_shapes[s][0] - 1).item())
+
+                for a_global in lucid.nonzero(pos_mask_all[i]).flatten().tolist():
+                    s = a_global // 3
+                    a_local = a_global % 3
+                    gi, gj = gi_s[s], gj_s[s]
+
+                    tobj[s][b, a_local, gj, gi] = 1.0
+                    tbox[s].append(lucid.tensor([gx, gy, gw, gh], device=device))
+                    tcls[s].append(cl[i])
+                    tindices[s].append((b, a_local, gj, gi))
+
+                for a_global in range(9):
+                    s = a_global // 3
+                    a_local = a_global % 3
+                    if (
+                        wh_iou[i, a_global] > self.ignore_iou_thr
+                        and not pos_mask_all[i, a_global]
+                    ):
+                        gi, gj = gi_s[s], gj_s[s]
+                        ignore[s][b, a_local, gj, gi] = True
+
+        for s in range(3):
+            if len(tbox[s]) == 0:
+                tbox[s] = lucid.zeros(0, 4, device=device)
+                tcls[s] = lucid.zeros(0, dtype=lucid.Int32, device=device)
+                tindices[s] = lucid.zeros(0, 4, dtype=lucid.Int32, device=device)
+            else:
+                tbox[s] = lucid.stack(tbox[s], axis=0)
+                tcls[s] = lucid.stack(tcls[s], axis=0)
+                tindices[s] = lucid.tensor(
+                    tindices[s], dtype=lucid.Int32, device=device
+                )
+
+        return tcls, tbox, tindices, tobj, ignore
+
+    def get_loss(self, x: Tensor, targets: list[Tensor]) -> Tensor:
+        B, _, H, W = x.shape
+        device = x.device
+        preds = self.foward(x)
+
+        C = self.num_classes
+        feat_shapes = [(p.shape[2], p.shape[3]) for p in preds]
+
+        tcls, tbox, tindices, tobj, ignore = self._build_targets(
+            targets, feat_shapes, device
+        )
+        pos_t, neg_t = _smooth_bce(self.cls_eps)
+
+        lbox = lucid.zeros(1, device=device)
+        lobj = lucid.zeros(1, device=device)
+        lcls = lucid.zeros(1, device=device)
+        liou = lucid.zeros(1, device=device)
+
+        img_area = float(H * W)
+        for s, p in enumerate(preds):
+            na = len(self.anchors[s])
+            Hs, Ws = feat_shapes[s]
+
+            p = p.reshape(B, na, 6 + C, Hs, Ws).transpose((0, 1, 3, 4, 2))
+            obj_logit = p[..., 4]
+            iou_logit = p[..., 5]
+
+            pos_mask = tobj[s] > 0
+            neg_mask = (~pos_mask) & (~ignore[s])
+
+            if pos_mask.any():
+                lobj_pos = self._bce(
+                    obj_logit[pos_mask], lucid.ones_like(obj_logit[pos_mask])
+                )
+                lobk += self.obj_balance[s] * lobj_pos.mean()
+
+            if neg_mask.any():
+                lobj_neg = self._bce(
+                    obj_logit[neg_mask], lucid.zeros_like(obj_logit[neg_mask])
+                )
+                lobj += self.obj_balance[s] * lobj_neg.mean()
+
+            if tindices[s].shape[0] == 0:
+                continue
+            b, a, gj, gi = (
+                tindices[s][:, 0],
+                tindices[s][:, 1],
+                tindices[s][:, 2],
+                tindices[s][:, 3],
+            )
+            ps = p[b, a, gj, gi]
+
+            stride = self.strides[s]
+            anc = lucid.tensor(self.anchors[s], device=device, dtype=lucid.Float32)[a]
+
+            px = (F.sigmoid(ps[:, 0]) + gi.astype(lucid.Float32)) * stride
+            py = (F.sigmoid(ps[:, 1]) + gj.astype(lucid.Float32)) * stride
+            pw = F.exp(ps[:, 2]) * anc[:, 0]
+            ph = F.exp(ps[:, 3]) * anc[:, 1]
+
+            pred_xywh = lucid.stack([px, py, pw, ph], axis=1)
+
+            gw, gh = tbox[s][:, 2], tbox[s][:, 3]
+            box_w = 2.0 - (gw * gh) / max(img_area, 1.0)
+            ciou = _bbox_iou_ciou(pred_xywh, tbox[s])
+            lbox += (box_w * (1.0 - ciou)).mean()
+
+            with lucid.no_grad():
+                iou_target = _bbox_iou_xywh(pred_xywh, tbox[s]).clip(0.0, 1.0)
+            liou += self._bce(ps[:, 5], iou_target).mean() * self.iou_branch_weight
+
+            if C > 1:
+                t = lucid.full((ps.shape[0], C), neg_t, device=device)
+                t[lucid.arange(ps.shape[0], device=device), tcls[s]] = pos_t
+                lcls += F.binary_cross_entropy_with_logits(
+                    ps[:, 6:], t, reduction="mean"
+                )
+
+        return lbox + lobj + lcls + liou
 
     @lucid.no_grad()
     def predict(
         self, x: Tensor, conf_thresh: float = 0.25, iou_thresh: float = 0.5
-    ) -> list[list[DetectionDict]]: ...
+    ) -> list[list[DetectionDict]]:
+        self.eval()
+        H, W = x.shape[2:]
+        preds = self.foward(x)
+        decoded = self._decode_outputs(preds, (H, W))
+
+        results: list[list[DetectionDict]] = []
+        for det in decoded:
+            kept = self._diou_nms_per_img(det, conf_thresh, iou_thresh)
+            objs = [
+                {
+                    "box": row[:4].tolist(),
+                    "score": row[4].item(),
+                    "clsss_id": int(row[5].item()),
+                }
+                for row in kept
+            ]
+            results.append(objs)
+
+        return results

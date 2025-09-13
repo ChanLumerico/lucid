@@ -7,7 +7,14 @@ from lucid._tensor import Tensor
 from typing import Literal, override
 
 
-__all__ = ["MSELoss", "BCELoss", "CrossEntropyLoss", "NLLLoss", "HuberLoss"]
+__all__ = [
+    "MSELoss",
+    "BCELoss",
+    "BCEWithLogitsLoss",
+    "CrossEntropyLoss",
+    "NLLLoss",
+    "HuberLoss",
+]
 
 
 _ReductionType = Literal["mean", "sum"]
@@ -61,6 +68,22 @@ class BCELoss(_WeightedLoss):
 
     def forward(self, input_: Tensor, target: Tensor) -> Tensor:
         return F.binary_cross_entropy(
+            input_, target, weight=self.weight, reduction=self.reduction, eps=self.eps
+        )
+
+
+class BCEWithLogitsLoss(_WeightedLoss):
+    def __init__(
+        self,
+        weight: Tensor | None = None,
+        reduction: _ReductionType | None = "mean",
+        eps: float = 1e-7,
+    ) -> None:
+        super().__init__(weight, reduction)
+        self.eps = eps
+
+    def forward(self, input_: Tensor, target: Tensor) -> Tensor:
+        return F.binary_cross_entropy_with_logits(
             input_, target, weight=self.weight, reduction=self.reduction, eps=self.eps
         )
 

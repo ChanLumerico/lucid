@@ -43,6 +43,25 @@ def binary_cross_entropy(
     return _loss_reduction(loss, reduction)
 
 
+def binary_cross_entropy_with_logits(
+    input_: Tensor,
+    target: Tensor,
+    weights: Tensor | None = None,
+    reduction: _ReductionType | None = "mean",
+    eps: float = 1e-7,
+) -> Tensor:
+    max_val = lucid.clip(-input_, eps, 1 - eps)
+    loss = (
+        (1 - target) * input_
+        + max_val
+        + lucid.log(lucid.exp(-max_val) + lucid.exp(-input_ - max_val))
+    )
+    if weights is not None:
+        loss *= weights
+
+    return _loss_reduction(loss, reduction)
+
+
 def cross_entropy(
     input_: Tensor,
     target: Tensor,

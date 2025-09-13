@@ -1,6 +1,6 @@
 from typing import Literal
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _Scalar
+from lucid.types import _ShapeLike, _Scalar, Numeric
 
 from lucid.nn.functional import (
     _activation,
@@ -392,6 +392,18 @@ def binary_cross_entropy(
     return _loss.binary_cross_entropy(input_, target, weight, reduction, eps)
 
 
+def binary_cross_entropy_with_logits(
+    input_: Tensor,
+    target: Tensor,
+    weights: Tensor | None = None,
+    reduction: _ReductionType | None = "mean",
+    eps: float = 1e-7,
+) -> Tensor:
+    return _loss.binary_cross_entropy_with_logits(
+        input_, target, weights, reduction, eps
+    )
+
+
 def cross_entropy(
     input_: Tensor,
     target: Tensor,
@@ -487,3 +499,9 @@ def grid_sample(
     align_corners: bool = True,
 ) -> Tensor:
     return _spatial.grid_sample(input_, grid, mode, padding_mode, align_corners)
+
+
+def one_hot(
+    input_: Tensor, num_classes: int = -1, dtype: Numeric | bool | None = None
+) -> Tensor:
+    return _util.one_hot(input_, num_classes, dtype)
