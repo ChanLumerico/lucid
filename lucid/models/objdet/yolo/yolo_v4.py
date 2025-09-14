@@ -11,7 +11,7 @@ from lucid.models.imgclf.cspnet import csp_darknet_53
 from lucid.models.objdet.util import DetectionDict
 
 
-__all__ = ["YOLO_V4"]
+__all__ = ["YOLO_V4", "yolo_v4"]
 
 
 DEFAULT_ANCHORS: list[list[tuple[int, int]]] = [
@@ -105,8 +105,21 @@ class _DefaultCSPDarkNet53(nn.Module):
         super().__init__()
         self.net = csp_darknet_53()
 
-    def forward(self, x: Tensor) -> list[Tensor]:
-        return self.net.forward_features(x, return_stage_out=True)[-3:]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        outs = self.net.forward_features(x, return_stage_out=True)
+        H, W = x.shape[-2:]
+
+        chosen: dict[int, Tensor] = {}
+        for f in outs:
+            fh, fw = f.shape[-2], f.shape[-1]
+
+            sh = int(round(H / max(fh, 1)))
+            sw = int(round(W / max(fw, 1)))
+            s = max(sh, sw)
+            if s in (8, 16, 32):
+                chosen[s] = f
+
+        return chosen[8], chosen[16], chosen[32]
 
 
 class _ConvBNAct(nn.Module):
@@ -124,7 +137,7 @@ class _ConvBNAct(nn.Module):
             p = k // 2
         self.conv = nn.Conv2d(c_in, c_out, k, s, p, bias=False)
         self.bn = nn.BatchNorm2d(c_out)
-        self.act = nn.LeakyReLU(0.1, inplace=True) if act else nn.Identity()
+        self.act = nn.LeakyReLU(0.1) if act else nn.Identity()
 
     def forward(self, x: Tensor) -> Tensor:
         return self.act(self.bn(self.conv(x)))
@@ -241,8 +254,8 @@ class _YOLOHead(nn.Module):
                 )
             )
 
-    def forward(self, feats: tuple[Tensor]) -> list[Tensor]:
-        return [self.detect[i](f) for i, f in enumerate(feats)]
+    def forward(self, feats: tuple[Tensor]) -> tuple[Tensor, ...]:
+        return tuple(self.detect[i](f) for i, f in enumerate(feats))
 
 
 class YOLO_V4(nn.Module):
@@ -252,6 +265,7 @@ class YOLO_V4(nn.Module):
         anchors: list[list[tuple[int, int]]] | None = None,
         strides: list[int] | None = None,
         backbone: nn.Module | None = None,
+        backbone_out_channels: tuple[int, int, int] | None = None,
         in_channels: tuple[int, int, int] = (256, 512, 1024),
         pos_iou_thr: float = 0.25,
         ignore_iou_thr: float = 0.5,
@@ -269,6 +283,19 @@ class YOLO_V4(nn.Module):
         self.neck = _PANetNeck(in_channels, in_channels)
         self.head = _YOLOHead(in_channels, len(self.anchors[0]), num_classes)
 
+        if backbone is None:
+            assert backbone_out_channels is None
+            backbone_out_channels = (128, 256, 512)
+        else:
+            assert backbone_out_channels is not None
+
+        self.backbone_out_channels = backbone_out_channels
+        self.in_channels = in_channels
+
+        self.c3_conv = _ConvBNAct(backbone_out_channels[0], in_channels[0], k=1)
+        self.c4_conv = _ConvBNAct(backbone_out_channels[1], in_channels[1], k=1)
+        self.c5_conv = _ConvBNAct(backbone_out_channels[2], in_channels[2], k=1)
+
         self.pos_iou_thr = pos_iou_thr
         self.ignore_iou_thr = ignore_iou_thr
         self.obj_balance = obj_balance
@@ -277,10 +304,17 @@ class YOLO_V4(nn.Module):
         self.iou_aware_alpha = iou_aware_alpha
         self.iou_branch_weight = iou_branch_weight
 
-        self._bce = nn.BCEWithLogitsLoss(reduction=None)
+        self._bce = nn.BCEWithLogitsLoss(reduction="mean")
 
-    def foward(self, x: Tensor) -> list[Tensor]:
+    def forward(self, x: Tensor) -> tuple[Tensor, ...]:
         c3, c4, c5 = self.backbone(x)
+        if (c3.shape[1], c4.shape[1], c5.shape[1]) != self.in_channels:
+            c3, c4, c5 = (
+                self.c3_conv(c3),
+                self.c4_conv(c4),
+                self.c5_conv(c5),
+            )
+
         p3, p4, p5 = self.neck((c3, c4, c5))
         outs = self.head((p3, p4, p5))
         return outs
@@ -306,7 +340,11 @@ class YOLO_V4(nn.Module):
             )
 
             grid = lucid.stack([xv, yv], axis=2).reshape(1, 1, H, W, 2)
-            anc = lucid.tensor(self.anchors[s], device=device).reshape(1, A, 1, 1, 2)
+            anc = (
+                lucid.tensor(self.anchors[s], device=device)
+                .astype(lucid.Float)
+                .reshape(1, A, 1, 1, 2)
+            )
             stride = self.strides[s]
 
             xy = (F.sigmoid(p[..., 0:2]) + grid) * stride
@@ -335,7 +373,7 @@ class YOLO_V4(nn.Module):
 
     @lucid.no_grad()
     def _diou_nms_per_img(
-        self, det: Tensor, conf_thresh: float, iou_thresh: float, max_det: int = 300
+        self, det: Tensor, conf_thresh: float, diou_thresh: float, max_det: int = 300
     ) -> Tensor:
         if det.size == 0:
             return lucid.zeros(0, 6, requires_grad=det.requires_grad, device=det.device)
@@ -348,7 +386,7 @@ class YOLO_V4(nn.Module):
 
         boxes = det[mask, :4]
         conf = conf[mask]
-        cl_id = cl_id[mask].astype(lucid.Float)
+        cl_id = cl_id[mask].astype(lucid.Int)
 
         keep_idx = []
         for c in lucid.unique(cl_id):
@@ -367,7 +405,7 @@ class YOLO_V4(nn.Module):
                     break
 
                 diou = _diou_xyxy(b[:1], b[1:]).squeeze(axis=0)
-                mask_ = diou <= iou_thresh
+                mask_ = diou <= diou_thresh
                 idx = idx[1:][mask_]
                 b = b[1:][mask_]
 
@@ -395,7 +433,9 @@ class YOLO_V4(nn.Module):
             tobj.append(lucid.zeros(B, na, H, W, device=device))
             ignore.append(lucid.zeros(B, na, H, W, dtype=bool, device=device))
 
-        all_anc = lucid.tensor([a for sc in self.anchors for a in sc], device=device)
+        all_anc = lucid.tensor(
+            [a for sc in self.anchors for a in sc], device=device, dtype=lucid.Float32
+        )
 
         for b, tgt in enumerate(targets):
             if tgt.size == 0:
@@ -428,8 +468,12 @@ class YOLO_V4(nn.Module):
                 gi_s, gj_s = [], []
                 for s in range(3):
                     stride = self.strides[s]
-                    gi_s.append((gx / stride).clip(0, feat_shapes[s][1] - 1).item())
-                    gj_s.append((gy / stride).clip(0, feat_shapes[s][0] - 1).item())
+                    gi_s.append(
+                        int((gx / stride).clip(0, feat_shapes[s][1] - 1).item())
+                    )
+                    gj_s.append(
+                        int((gy / stride).clip(0, feat_shapes[s][0] - 1).item())
+                    )
 
                 for a_global in lucid.nonzero(pos_mask_all[i]).flatten().tolist():
                     s = a_global // 3
@@ -445,7 +489,7 @@ class YOLO_V4(nn.Module):
                     s = a_global // 3
                     a_local = a_global % 3
                     if (
-                        wh_iou[i, a_global] > self.ignore_iou_thr
+                        wh_iou[i, a_global] >= self.ignore_iou_thr
                         and not pos_mask_all[i, a_global]
                     ):
                         gi, gj = gi_s[s], gj_s[s]
@@ -468,7 +512,7 @@ class YOLO_V4(nn.Module):
     def get_loss(self, x: Tensor, targets: list[Tensor]) -> Tensor:
         B, _, H, W = x.shape
         device = x.device
-        preds = self.foward(x)
+        preds = self.forward(x)
 
         C = self.num_classes
         feat_shapes = [(p.shape[2], p.shape[3]) for p in preds]
@@ -490,7 +534,6 @@ class YOLO_V4(nn.Module):
 
             p = p.reshape(B, na, 6 + C, Hs, Ws).transpose((0, 1, 3, 4, 2))
             obj_logit = p[..., 4]
-            iou_logit = p[..., 5]
 
             pos_mask = tobj[s] > 0
             neg_mask = (~pos_mask) & (~ignore[s])
@@ -499,13 +542,13 @@ class YOLO_V4(nn.Module):
                 lobj_pos = self._bce(
                     obj_logit[pos_mask], lucid.ones_like(obj_logit[pos_mask])
                 )
-                lobk += self.obj_balance[s] * lobj_pos.mean()
+                lobj += self.obj_balance[s] * lobj_pos
 
             if neg_mask.any():
                 lobj_neg = self._bce(
                     obj_logit[neg_mask], lucid.zeros_like(obj_logit[neg_mask])
                 )
-                lobj += self.obj_balance[s] * lobj_neg.mean()
+                lobj += self.obj_balance[s] * lobj_neg
 
             if tindices[s].shape[0] == 0:
                 continue
@@ -534,7 +577,7 @@ class YOLO_V4(nn.Module):
 
             with lucid.no_grad():
                 iou_target = _bbox_iou_xywh(pred_xywh, tbox[s]).clip(0.0, 1.0)
-            liou += self._bce(ps[:, 5], iou_target).mean() * self.iou_branch_weight
+            liou += self._bce(ps[:, 5], iou_target) * self.iou_branch_weight
 
             if C > 1:
                 t = lucid.full((ps.shape[0], C), neg_t, device=device)
@@ -547,24 +590,38 @@ class YOLO_V4(nn.Module):
 
     @lucid.no_grad()
     def predict(
-        self, x: Tensor, conf_thresh: float = 0.25, iou_thresh: float = 0.5
+        self, x: Tensor, conf_thresh: float = 0.25, diou_thresh: float = 0.5
     ) -> list[list[DetectionDict]]:
         self.eval()
         H, W = x.shape[2:]
-        preds = self.foward(x)
+        preds = self.forward(x)
         decoded = self._decode_outputs(preds, (H, W))
 
         results: list[list[DetectionDict]] = []
         for det in decoded:
-            kept = self._diou_nms_per_img(det, conf_thresh, iou_thresh)
+            kept = self._diou_nms_per_img(det, conf_thresh, diou_thresh)
             objs = [
                 {
                     "box": row[:4].tolist(),
                     "score": row[4].item(),
-                    "clsss_id": int(row[5].item()),
+                    "class_id": int(row[5].item()),
                 }
                 for row in kept
             ]
             results.append(objs)
 
         return results
+
+
+# @register_model
+def yolo_v4(num_classes: int = 80, **kwargs) -> YOLO_V4:
+    return YOLO_V4(
+        num_classes=num_classes,
+        pos_iou_thr=0.213,
+        ignore_iou_thr=0.7,
+        obj_balance=(1.0, 1.0, 1.0),
+        cls_label_smoothing=0.0,
+        iou_aware_alpha=0.0,
+        iou_branch_weight=0.0,
+        **kwargs,
+    )
