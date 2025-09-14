@@ -7,3 +7,4 @@ Utility Functions
     interpolate.rst
     rotate.rst
     embedding.rst
+    one_hot.rst

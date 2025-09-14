@@ -16,3 +16,4 @@ Activation Layers
     Softmax.rst
     Swish.rst
     HardSwish.rst
+    Mish.rst

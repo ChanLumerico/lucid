@@ -137,6 +137,7 @@ def _resnet_stack_factory(
     act: type[nn.Module] = nn.ReLU,
     groups: int = 1,
     base_width: int = 64,
+    **kwargs,
 ) -> Callable[[int, int, int], _StackOut]:
     expansion = getattr(block_cls, "expansion", 1)
 
@@ -181,6 +182,7 @@ def _darknet_stack_factory(
     block_cls: type[nn.Module],
     norm: type[nn.Module] = nn.BatchNorm2d,
     act: type[nn.Module] = partial(nn.LeakyReLU, negative_slope=0.1),
+    **kwargs,
 ) -> Callable[[int, int, int], _StackOut]:
     expansion = getattr(block_cls, "expansion", 1)
 
@@ -360,7 +362,7 @@ class CSPNet(nn.Module):
 def csp_resnet_50(
     num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 64, **kwargs
 ) -> CSPNet:
-    res_stack = _resnet_stack_factory(_Bottleneck, groups=1, base_width=64)
+    res_stack = _resnet_stack_factory(_Bottleneck, groups=1, base_width=64, **kwargs)
     stage_defs = [
         (256, 3, res_stack, False),
         (512, 4, res_stack, True),
@@ -381,7 +383,9 @@ def csp_resnet_50(
 def csp_resnext_50_32x4d(
     num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 64, **kwargs
 ) -> CSPNet:
-    resnext_stack = _resnet_stack_factory(_Bottleneck, groups=32, base_width=4)
+    resnext_stack = _resnet_stack_factory(
+        _Bottleneck, groups=32, base_width=4, **kwargs
+    )
     stage_defs = [
         (256, 3, resnext_stack, False),
         (512, 4, resnext_stack, True),
@@ -402,7 +406,7 @@ def csp_resnext_50_32x4d(
 def csp_darknet_53(
     num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 32, **kwargs
 ) -> CSPNet:
-    dark_stack = _darknet_stack_factory(_DarknetBottleneck)
+    dark_stack = _darknet_stack_factory(_DarknetBottleneck, **kwargs)
     stage_defs = [
         (64, 1, dark_stack, True),
         (128, 2, dark_stack, True),

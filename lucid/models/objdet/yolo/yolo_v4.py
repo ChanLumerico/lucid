@@ -103,7 +103,7 @@ def _smooth_bce(eps: float = 0.0) -> tuple[float, float]:
 class _DefaultCSPDarkNet53(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.net = csp_darknet_53()
+        self.net = csp_darknet_53(act=nn.Mish)
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         outs = self.net.forward_features(x, return_stage_out=True)
@@ -144,31 +144,48 @@ class _ConvBNAct(nn.Module):
 
 
 class _SPPBlock(nn.Module):
-    def __init__(self, c_in: int, c_mid: int, c_out: int) -> None:
+    def __init__(self, c_in: int, c_mid: int | None = None) -> None:
         super().__init__()
+        c_mid = c_mid if c_mid is not None else c_in // 2
         self.conv1 = _ConvBNAct(c_in, c_mid, k=1)
-        self.conv2 = _ConvBNAct(c_mid, c_mid * 2, k=3)
-        self.conv3 = _ConvBNAct(c_mid * 2, c_mid, k=1)
+        self.conv2 = _ConvBNAct(c_mid, c_in, k=3)
+        self.conv3 = _ConvBNAct(c_in, c_mid, k=1)
 
-        self.pool = nn.ModuleList(
+        self.pools = nn.ModuleList(
             [nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2) for k in (5, 9, 13)]
         )
+
         self.conv4 = _ConvBNAct(c_mid * 4, c_mid, k=1)
-        self.conv5 = _ConvBNAct(c_mid, c_mid * 2, k=3)
-        self.conv6 = _ConvBNAct(c_mid * 2, c_out, k=1)
+        self.conv5 = _ConvBNAct(c_mid, c_in, k=3)
+        self.conv6 = _ConvBNAct(c_in, c_mid, k=1)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
 
-        pooled = [x] + [pool(x) for pool in self.pool]
+        pooled = [x] + [pool(x) for pool in self.pools]
         x = lucid.concatenate(pooled, axis=1)
 
         x = self.conv4(x)
         x = self.conv5(x)
         x = self.conv6(x)
         return x
+
+
+class _FiveConv(nn.Module):
+    def __init__(self, in_ch: int, mid_ch: int, out_ch: int) -> None:
+        super().__init__()
+        self.seq = nn.Sequential(
+            _ConvBNAct(in_ch, mid_ch, k=1),
+            _ConvBNAct(mid_ch, mid_ch * 2, k=3),
+            _ConvBNAct(mid_ch * 2, mid_ch, k=1),
+            _ConvBNAct(mid_ch, mid_ch * 2, k=3),
+            _ConvBNAct(mid_ch * 2, out_ch, k=1),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.seq(x)
 
 
 class _PANetNeck(nn.Module):
@@ -180,81 +197,77 @@ class _PANetNeck(nn.Module):
         super().__init__()
         c3, c4, c5 = in_channels
         o3, o4, o5 = out_channels
+        assert c3 == o3 and c4 == o4 and c5 == o5
 
-        self.spp = _SPPBlock(c5, c5 // 2, o5)
+        self.spp = _SPPBlock(c5)
 
-        self.reduce_c5 = _ConvBNAct(c5, c4, k=1)
+        self.reduce_c5 = _ConvBNAct(c5 // 2, c4, k=1)
         self.c4_lat = _ConvBNAct(c4, c4, k=1)
-        self.up = nn.Upsample(scale_factor=2, mode="nearest")
-        self.c4_td = nn.Sequential(
-            _ConvBNAct(c4 * 2, c4, k=1),
-            _ConvBNAct(c4, c4, k=3),
-            _ConvBNAct(c4, c4, k=1),
-            _ConvBNAct(c4, c4, k=3),
-            _ConvBNAct(c4, c4, k=1),
-        )
+        self.c4_td = _FiveConv(c4 * 2, c4, c4)
 
         self.reduce_c4 = _ConvBNAct(c4, c3, k=1)
         self.c3_lat = _ConvBNAct(c3, c3, k=1)
-        self.c3_out = nn.Sequential(
-            _ConvBNAct(c3 * 2, c3, k=1),
-            _ConvBNAct(c3, c3, k=3),
-            _ConvBNAct(c3, c3, k=1),
-            _ConvBNAct(c3, c3, k=3),
-            _ConvBNAct(c3, o3, k=1),
-        )
+        self.c3_out = _FiveConv(c3 * 2, c3, c3)
 
         self.down_c3 = _ConvBNAct(o3, c4, k=3, s=2)
-        self.c4_out = nn.Sequential(
-            _ConvBNAct(c4 * 2, c4, k=1),
-            _ConvBNAct(c4, c4, k=3),
-            _ConvBNAct(c4, c4, k=1),
-            _ConvBNAct(c4, c4, k=3),
-            _ConvBNAct(c4, o4, k=1),
+        self.c4_out = _FiveConv(c4 * 2, c4, o4)
+
+        self.down_c4 = _ConvBNAct(o4, c4, k=3, s=2)
+        self.c5_out = _FiveConv(c4 + c5 // 2, c5 // 2, o5)
+
+    @staticmethod
+    def _upsample(x: Tensor, ref: Tensor) -> Tensor:
+        return F.interpolate(x, size=ref.shape[-2:], mode="nearest")
+
+    @staticmethod
+    def _match_hw(x: Tensor, ref: Tensor) -> Tensor:
+        return (
+            x
+            if x.shape[-2:] == ref.shape[-2:]
+            else F.interpolate(x, size=ref.shape[-2:], mode="nearest")
         )
 
-        self.down_c4 = _ConvBNAct(o4, c5, k=3, s=2)
-        self.c5_out = nn.Sequential(
-            _ConvBNAct(c5 * 2, c5, k=1),
-            _ConvBNAct(c5, c5, k=3),
-            _ConvBNAct(c5, c5, k=1),
-            _ConvBNAct(c5, c5, k=3),
-            _ConvBNAct(c5, o5, k=1),
-        )
-
-    def forward(self, feats: tuple[Tensor]) -> tuple[Tensor]:
+    def forward(self, feats: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
         c3, c4, c5 = feats
+        p5_spp = self.spp(c5)
 
-        p5 = self.spp(c5)
-        p4_td = self.c4_td(
-            lucid.concatenate([self.c4_lat(c4), self.up(self.reduce_c5(p5))], axis=1)
-        )
-        p3 = self.c3_out(
-            lucid.concatenate([self.c3_lat(c3), self.up(self.reduce_c4(p4_td))], axis=1)
-        )
-        p4 = self.c4_out(lucid.concatenate([self.down_c3(p3), p4_td], axis=1))
-        p5 = self.c5_out(lucid.concatenate([self.down_c4(p4), p5], axis=1))
+        u5 = self._upsample(self.reduce_c5(p5_spp), c4)
+        p4_td = self.c4_td(lucid.concatenate([self.c4_lat(c4), u5], axis=1))
+
+        u4 = self._upsample(self.reduce_c4(p4_td), c3)
+        p3 = self.c3_out(lucid.concatenate([self.c3_lat(c3), u4], axis=1))
+
+        d3 = self._match_hw(self.down_c3(p3), p4_td)
+        p4 = self.c4_out(lucid.concatenate([d3, p4_td], axis=1))
+
+        d4 = self._match_hw(self.down_c4(p4), p5_spp)
+        p5 = self.c5_out(lucid.concatenate([d4, p5_spp], axis=1))
+
         return p3, p4, p5
 
 
 class _YOLOHead(nn.Module):
     def __init__(
-        self, in_channels: tuple[int, int, int], num_anchors: int, num_classes: int
+        self,
+        in_channels: tuple[int, int, int],
+        num_anchors: int,
+        num_classes: int,
+        iou_aware_alpha: float = 0.0,
     ) -> None:
         super().__init__()
         self.num_classes = num_classes
         self.detect = nn.ModuleList()
 
-        out_per_anchor = 6 + num_classes
+        out_per_anchor = 6 + num_classes + (1 if iou_aware_alpha > 0 else 0)
         for c in in_channels:
             self.detect.append(
                 nn.Sequential(
-                    _ConvBNAct(c, c * 2, k=3),
-                    nn.Conv2d(c * 2, num_anchors * out_per_anchor, kernel_size=1),
+                    _ConvBNAct(c, c, k=3),
+                    nn.Conv2d(c, num_anchors * out_per_anchor, kernel_size=1),
                 )
             )
 
-    def forward(self, feats: tuple[Tensor]) -> tuple[Tensor, ...]:
+    def forward(self, feats: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
         return tuple(self.detect[i](f) for i, f in enumerate(feats))
 
 
@@ -320,8 +333,8 @@ class YOLO_V4(nn.Module):
         return outs
 
     def _decode_outputs(
-        self, preds: list[Tensor], img_size: tuple[int, int]
-    ) -> list[Tensor]:
+        self, preds: tuple[Tensor, ...], img_size: tuple[int, int]
+    ) -> tuple[Tensor, ...]:
         device = preds[0].device
         B = preds[0].shape[0]
         outputs = [[] for _ in range(B)]
@@ -369,7 +382,7 @@ class YOLO_V4(nn.Module):
             for b in range(B):
                 outputs[b].append(out[b])
 
-        return [lucid.concatenate(o, axis=0) for o in outputs]
+        return tuple(lucid.concatenate(o, axis=0) for o in outputs)
 
     @lucid.no_grad()
     def _diou_nms_per_img(
@@ -613,7 +626,7 @@ class YOLO_V4(nn.Module):
         return results
 
 
-# @register_model
+@register_model
 def yolo_v4(num_classes: int = 80, **kwargs) -> YOLO_V4:
     return YOLO_V4(
         num_classes=num_classes,

@@ -18,6 +18,7 @@ __all__ = [
     "Softmax",
     "Swish",
     "HardSwish",
+    "Mish",
 ]
 
 
@@ -119,3 +120,11 @@ class HardSwish(nn.Module):
     def forward(self, input_: Tensor) -> Tensor:
         hard_sigmoid = ((input_ / 6.0) + 0.5).clip(0, 1)
         return input_ * hard_sigmoid
+
+
+class Mish(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return input_ * lucid.tanh(lucid.log(1 + lucid.exp(input_)))

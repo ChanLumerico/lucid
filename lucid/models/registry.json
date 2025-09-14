@@ -970,5 +970,11 @@
         "family": "CSPNet",
         "param_size": 27278536,
         "task": "imgclf"
+    },
+    "yolo_v4": {
+        "name": "yolo_v4",
+        "family": "YOLO_V4",
+        "param_size": 93488078,
+        "task": "objdet"
     }
 }
