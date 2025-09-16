@@ -5,9 +5,11 @@ LeNet
 -----
 |convnet-badge| |imgclf-badge|
 
-.. autoclass:: lucid.weights.LeNet_1_Weights
-.. autoclass:: lucid.weights.LeNet_4_Weights
-.. autoclass:: lucid.weights.LeNet_5_Weights
+.. code-block:: python
+
+    class lucid.weights.LeNet_1_Weights(Enum)
+    class lucid.weights.LeNet_4_Weights(Enum)
+    class lucid.weights.LeNet_5_Weights(Enum)
 
 .. list-table::
     :header-rows: 1
@@ -45,7 +47,9 @@ AlexNet
 -------
 |convnet-badge| |imgclf-badge|
 
-.. autoclass:: lucid.weights.AlexNet_Weights
+.. code-block:: python
+
+    class lucid.weights.AlexNet_Weights(Enum)
 
 .. list-table::
     :header-rows: 1
@@ -71,10 +75,12 @@ VGGNet
 ------
 |convnet-badge| |imgclf-badge|
 
-.. autoclass:: lucid.weights.VGGNet_11_Weights
-.. autoclass:: lucid.weights.VGGNet_13_Weights
-.. autoclass:: lucid.weights.VGGNet_16_Weights
-.. autoclass:: lucid.weights.VGGNet_19_Weights
+.. code-block:: python
+
+    class lucid.weights.VGGNet_11_Weights(Enum)
+    class lucid.weights.VGGNet_13_Weights(Enum)
+    class lucid.weights.VGGNet_16_Weights(Enum)
+    class lucid.weights.VGGNet_19_Weights(Enum)
 
 .. list-table::
     :header-rows: 1
@@ -124,11 +130,13 @@ ResNet
 ------
 |convnet-badge| |imgclf-badge|
 
-.. autoclass:: lucid.weights.ResNet_18_Weights
-.. autoclass:: lucid.weights.ResNet_34_Weights
-.. autoclass:: lucid.weights.ResNet_50_Weights
-.. autoclass:: lucid.weights.ResNet_101_Weights
-.. autoclass:: lucid.weights.ResNet_152_Weights
+.. code-block:: python
+
+    class lucid.weights.ResNet_18_Weights(Enum)
+    class lucid.weights.ResNet_34_Weights(Enum)
+    class lucid.weights.ResNet_50_Weights(Enum)
+    class lucid.weights.ResNet_101_Weights(Enum)
+    class lucid.weights.ResNet_152_Weights(Enum)
 
 .. list-table::
     :header-rows: 1
@@ -182,8 +190,10 @@ ResNet
       - 0.7831
       - 0.9600
 
-.. autoclass:: lucid.weights.Wide_ResNet_50_Weights
-.. autoclass:: lucid.weights.Wide_ResNet_101_Weights
+.. code-block:: python
+
+    class lucid.weights.Wide_ResNet_50_Weights(Enum)
+    class lucid.weights.Wide_ResNet_101_Weights(Enum)
 
 .. list-table::
     :header-rows: 1
@@ -217,9 +227,11 @@ ResNeXt
 -------
 |convnet-badge| |imgclf-badge|
 
-.. autoclass:: lucid.weights.ResNeXt_50_32X4D_Weights
-.. autoclass:: lucid.weights.ResNeXt_101_32X8D_Weights
-.. autoclass:: lucid.weights.ResNeXt_101_64X4D_Weights
+.. code-block:: python
+
+    class lucid.weights.ResNeXt_50_32X4D_Weights(Enum)
+    class lucid.weights.ResNeXt_101_32X8D_Weights(Enum)
+    class lucid.weights.ResNeXt_101_64X4D_Weights(Enum)
 
 .. list-table::
     :header-rows: 1
@@ -261,9 +273,11 @@ DenseNet
 --------
 |convnet-badge| |imgclf-badge|
 
-.. autoclass:: lucid.weights.DenseNet_121_Weights
-.. autoclass:: lucid.weights.DenseNet_169_Weights
-.. autoclass:: lucid.weights.DenseNet_201_Weights
+.. code-block:: python
+
+    class lucid.weights.DenseNet_121_Weights(Enum)
+    class lucid.weights.DenseNet_169_Weights(Enum)
+    class lucid.weights.DenseNet_201_Weights(Enum)
 
 .. list-table::
     :header-rows: 1
@@ -305,9 +319,11 @@ MobileNet
 ---------
 |convnet-badge| |imgclf-badge|
 
-.. autoclass:: lucid.weights.MobileNet_V2_Weights
-.. autoclass:: lucid.weights.MobileNet_V3_Small_Weights
-.. autoclass:: lucid.weights.MobileNet_V3_Large_Weights
+.. code-block:: python
+
+    class lucid.weights.MobileNet_V2_Weights(Enum)
+    class lucid.weights.MobileNet_V3_Small_Weights(Enum)
+    class lucid.weights.MobileNet_V3_Large_Weights(Enum)
 
 .. list-table::
     :header-rows: 1

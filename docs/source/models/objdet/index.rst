@@ -191,6 +191,24 @@ YOLO-v3
 
 YOLO-v4
 ~~~~~~~
-|wip-badge|
+
+ Bochkovskiy, Alexey, Chien-Yao Wang, and Hong-Yuan Mark Liao. 
+ YOLOv4: Optimal Speed and Accuracy of Object Detection. 2020, arXiv:2004.10934.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - FLOPs
+
+    * - YOLO-v4
+      - `yolo_v4 <yolo/v4/yolo_v4>`_
+      - :math:`(N,3,608,608)`
+      - 93,488,078
+      - 1.41B
 
 *To be implemented...🔮*
