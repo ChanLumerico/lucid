@@ -211,4 +211,8 @@ YOLO-v4
       - 93,488,078
       - 1.41B
 
+EfficientDet
+------------
+|wip-badge|
+
 *To be implemented...🔮*
