@@ -57,21 +57,54 @@ class _BiFPN(nn.Module):
             }
         )
 
-    def norm_weight(self, weight: Tensor) -> Tensor:
+    def _norm_weight(self, weight: Tensor) -> Tensor:
         return weight / (weight.sum(axis=0) + self.eps)
 
     def forward(self, feats: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
         p3_in, p4_in, p5_in, p6_in, p7_in = feats
 
-        w_p6_up = self.norm_weight(self.relus["6_w1"](self.weights["6_w1"]))
-        p6_up = self.convs["6_up"](
-            w_p6_up[0] * p6_in + w_p6_up[1] * self.ups["6"](p7_in)
-        )
+        w1_p6_up = self._norm_weight(self.relus["6_w1"](self.weights["6_w1"]))
+        p6_up_in = w1_p6_up[0] * p6_in + w1_p6_up[1] * self.ups["6"](p7_in)
+        p6_up = self.convs["6_up"](p6_up_in)
 
-        w_p5_up = self.norm_weight(self.relus["5_w1"](self.weights["5_w1"]))
-        p5_up = self.convs["5_up"](
-            w_p5_up[0] * p5_in + w_p5_up[1] * self.ups["5"](p6_up)
-        )
+        w1_p5_up = self._norm_weight(self.relus["5_w1"](self.weights["5_w1"]))
+        p5_up_in = w1_p5_up[0] * p5_in + w1_p5_up[1] * self.ups["5"](p6_up)
+        p5_up = self.convs["5_up"](p5_up_in)
 
-        # TODO: Continue from here
-        NotImplemented
+        w1_p4_up = self._norm_weight(self.relus["4_w1"](self.weights["4_w1"]))
+        p4_up_in = w1_p4_up[0] * p4_in + w1_p4_up[1] * self.ups["4"](p5_up)
+        p4_up = self.convs["4_up"](p4_up_in)
+
+        w1_p3_up = self._norm_weight(self.relus["3_w1"](self.weights["3_w1"]))
+        p3_up_in = w1_p3_up[0] * p3_in + w1_p3_up[1] * self.ups["3"](p4_up)
+        p3_out = self.convs["3_up"](p3_up_in)
+
+        w2_p4_down = self._norm_weight(self.relus["4_w2"](self.weights["4_w2"]))
+        p4_down_in = (
+            w2_p4_down[0] * p4_in
+            + w2_p4_down[1] * p4_up
+            + w2_p4_down[2] * self.downs["4"](p3_out)
+        )
+        p4_out = self.convs["4_down"](p4_down_in)
+
+        w2_p5_down = self._norm_weight(self.relus["5_w2"](self.weights["5_w2"]))
+        p5_down_in = (
+            w2_p5_down[0] * p5_in
+            + w2_p5_down[1] * p5_up
+            + w2_p5_down[2] * self.downs["5"](p4_out)
+        )
+        p5_out = self.convs["5_down"](p5_down_in)
+
+        w2_p6_down = self._norm_weight(self.relus["6_w2"](self.weights["6_w2"]))
+        p6_down_in = (
+            w2_p6_down[0] * p6_in
+            + w2_p6_down[1] * p6_up
+            + w2_p6_down[2] * self.downs["6"](p5_out)
+        )
+        p6_out = self.convs["6_down"](p6_down_in)
+
+        w2_p7_down = self._norm_weight(self.relus["7_w2"](self.weights["7_w2"]))
+        p7_down_in = w2_p7_down[0] * p7_in + w2_p7_down[1] * self.downs["7"](p6_out)
+        p7_out = self.convs["7_down"](p7_down_in)
+
+        return p3_out, p4_out, p5_out, p6_out, p7_out
