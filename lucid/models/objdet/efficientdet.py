@@ -60,7 +60,7 @@ class _BiFPN(nn.Module):
     def _norm_weight(self, weight: Tensor) -> Tensor:
         return weight / (weight.sum(axis=0) + self.eps)
 
-    def forward(self, feats: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
+    def _forward_up(self, feats: tuple[Tensor]) -> tuple[Tensor]:
         p3_in, p4_in, p5_in, p6_in, p7_in = feats
 
         w1_p6_up = self._norm_weight(self.relus["6_w1"](self.weights["6_w1"]))
@@ -78,6 +78,14 @@ class _BiFPN(nn.Module):
         w1_p3_up = self._norm_weight(self.relus["3_w1"](self.weights["3_w1"]))
         p3_up_in = w1_p3_up[0] * p3_in + w1_p3_up[1] * self.ups["3"](p4_up)
         p3_out = self.convs["3_up"](p3_up_in)
+
+        return p3_out, p4_up, p5_up, p6_up
+
+    def _forward_down(
+        self, feats: tuple[Tensor], up_feats: tuple[Tensor]
+    ) -> tuple[Tensor]:
+        _, p4_in, p5_in, p6_in, p7_in = feats
+        p3_out, p4_up, p5_up, p6_up = up_feats
 
         w2_p4_down = self._norm_weight(self.relus["4_w2"](self.weights["4_w2"]))
         p4_down_in = (
@@ -108,3 +116,28 @@ class _BiFPN(nn.Module):
         p7_out = self.convs["7_down"](p7_down_in)
 
         return p3_out, p4_out, p5_out, p6_out, p7_out
+
+    def forward(self, feats: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
+        up_feats = self._forward_up(feats)
+        down_feats = self._forward_down(feats, up_feats)
+
+        return down_feats
+
+
+class _BBoxRegresor(nn.Module):
+    def __init__(self, in_channels: int, num_anchors: int, num_layers: int) -> None:
+        super().__init__()
+        layers: list[nn.Module] = []
+        for _ in range(num_layers):
+            layers.append(nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1))
+            layers.append(nn.ReLU)
+
+        self.layers = nn.Sequential(*layers)
+        self.header = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=3, padding=1)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.layers(x)
+        x = self.header(x)
+
+        out = x.transpose((0, 2, 3, 1))
+        return out.reshape(out.shape[0], -1, 4)
