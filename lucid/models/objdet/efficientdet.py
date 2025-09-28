@@ -5,6 +5,10 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+import lucid.models.imgclf.efficient as effnet
+
+
+__all__ = ["EfficientDet"]
 
 
 class _ConvBlock(nn.Module):
@@ -141,3 +145,37 @@ class _BBoxRegresor(nn.Module):
 
         out = x.transpose((0, 2, 3, 1))
         return out.reshape(out.shape[0], -1, 4)
+
+
+class _Classifier(nn.Module):
+    def __init__(
+        self, in_channels: int, num_anchors: int, num_classes: int, num_layers: int
+    ) -> None:
+        super().__init__()
+        self.num_anchors = num_anchors
+        self.num_classes = num_classes
+
+        layers: list[nn.Module] = []
+        for _ in range(num_layers):
+            layers.append(nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1))
+            layers.append(nn.ReLU())
+
+        self.layers = nn.Sequential(*layers)
+        self.header = nn.Conv2d(
+            in_channels, num_anchors * num_classes, kernel_size=3, padding=1
+        )
+        self.act = nn.Sigmoid()
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.layers(x)
+        x = self.header(x)
+        x = self.act(x)
+
+        x = x.transpose((0, 2, 3, 1))
+        out = x.reshape(*x.shape[:3], self.num_anchors, self.num_classes)
+        return out.reshape(out.shape[0], -1, self.num_classes)
+
+
+class EfficientDet(nn.Module):
+    def __init__(self):
+        super().__init__()
