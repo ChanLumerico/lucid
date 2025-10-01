@@ -5,7 +5,7 @@
 ![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-31.0k-yellow)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&label=Lines%20of%20Code&color=purple&cacheSeconds=5)
+![Lines of Code](https://img.shields.io/badge/lines%20of%20code-25.0k-purple)
 
 **Lucid** is a minimalist deep learning framework built entirely from scratch in Python. It offers a pedagogically rich environment to explore the foundations of modern deep learning systems, including autodiff, neural network modules, and GPU acceleration — all while staying lightweight, readable, and free of complex dependencies.
 
