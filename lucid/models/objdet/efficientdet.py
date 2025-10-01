@@ -1,10 +1,13 @@
-from lucid import register_model
+import math
 
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+from lucid import register_model
+from lucid.types import _Scalar, _ShapeLike, _DeviceType
+
 import lucid.models.imgclf.efficient as effnet
 
 
@@ -176,6 +179,200 @@ class _Classifier(nn.Module):
         return out.reshape(out.shape[0], -1, self.num_classes)
 
 
-class EfficientDet(nn.Module):
-    def __init__(self):
+def _generate_anchors(
+    base_size: int, ratios: list[_Scalar], scales: list[_Scalar], device: _DeviceType
+) -> Tensor:
+    num_anchors = len(ratios) * len(scales)
+    anchors = lucid.zeros(num_anchors, 4)
+    anchors[:, 2:] = base_size * lucid.tile(scales, reps=(2, len(ratios))).T
+
+    areas = anchors[:, 2] * anchors[:, 3]
+
+    anchors[:, 2] = lucid.sqrt(areas / lucid.repeat(ratios, len(scales)))
+    anchors[:, 3] = anchors[:, 2] * lucid.repeat(ratios, len(scales))
+
+    anchors[:, 0::2] -= lucid.tile(anchors[:, 2] * 0.5, reps=(2, 1)).T
+    anchors[:, 1::2] -= lucid.tile(anchors[:, 3] * 0.5, reps=(2, 1)).T
+
+    return anchors.to(device)
+
+
+def _shift_anchors(shape: _ShapeLike, stride: int, anchors: Tensor) -> Tensor:
+    shift_x = (lucid.arange(0, shape[1]) + 0.5) * stride
+    shift_y = (lucid.arange(0, shape[0]) + 0.5) * stride
+
+    shift_x, shift_y = lucid.meshgrid(shift_x, shift_y, indexing="xy")
+    shifts = lucid.vstack(
+        (shift_x.ravel(), shift_y.ravel(), shift_x.ravel(), shift_y.ravel())
+    ).T
+
+    A = anchors.shape[0]
+    K = shifts.shape[0]
+
+    all_anchors = anchors.reshape(1, A, 4) + shifts.reshape(1, K, 4)
+    all_anchors = all_anchors.transpose((1, 0, 2)).reshape(K * A, 4)
+
+    return all_anchors
+
+
+class _Anchors(nn.Module):
+    def __init__(
+        self,
+        pyramid_levels: list[int] | None = None,
+        strides: list[int] | None = None,
+        sizes: list[int] | None = None,
+        ratios: list[int] | None = None,
+        scales: list[int] | None = None,
+    ) -> None:
         super().__init__()
+        self.pyramid_levels = (
+            [3, 4, 5, 6, 7] if pyramid_levels is None else pyramid_levels
+        )
+        self.strides = (
+            [2**x for x in self.pyramid_levels] if strides is None else strides
+        )
+        self.sizes = (
+            [2 ** (x + 2) for x in self.pyramid_levels] if sizes is None else sizes
+        )
+        self.ratios = [0.5, 1.0, 2.0] if ratios is None else ratios
+        self.scales = [2**i for i in (0, 1 / 3, 2 / 3)] if scales is None else scales
+
+    def forward(self, x: Tensor) -> Tensor:
+        img_shape = Tensor(x.shape[2:], dtype=lucid.Int16, device=x.device)
+        img_shapes: list[Tensor] = [
+            (img_shape + 2**x - 1) // (2**x) for x in self.pyramid_levels
+        ]
+        all_anchors = lucid.zeros(
+            len(self.pyramid_levels), 4, dtype=lucid.Float32, device=x.device
+        )
+
+        for idx, _ in enumerate(self.pyramid_levels):
+            anchors = _generate_anchors(
+                self.sizes[idx], self.ratios, self.scales, device=x.device
+            )
+            shifted_anchors = _shift_anchors(
+                img_shapes[idx].tolist(), self.strides[idx], anchors
+            )
+            all_anchors[idx, :] += shifted_anchors.flatten()
+
+        return all_anchors
+
+
+class _BBoxTransform(nn.Module):
+    def __init__(self, mean: Tensor | None, std: Tensor | None = None) -> None:
+        super().__init__()
+        self.mean = lucid.zeros(4) if mean is None else mean
+        self.std = Tensor([0.1, 0.1, 0.2, 0.2]) if std is None else std
+
+    def forward(self, boxes: Tensor, deltas: Tensor) -> Tensor:
+        widths = boxes[:, :, 2] - boxes[:, :, 0]
+        heights = boxes[:, :, 3] - boxes[:, :, 1]
+
+        ctr_x = boxes[:, :, 0] + 0.5 * widths
+        ctr_y = boxes[:, :, 1] + 0.5 * heights
+
+        def _inv_norm(d: Tensor, s: Tensor, m: Tensor) -> Tensor:
+            return d * s + m
+
+        dx, dy, dw, dh = (
+            _inv_norm(deltas[:, :, i], self.std[i], self.mean[i]) for i in range(4)
+        )
+
+        pred_ctr_x = ctr_x + dx * widths
+        pred_ctr_y = ctr_y + dy * heights
+        pred_w = lucid.exp(dw) * widths
+        pred_h = lucid.exp(dh) * heights
+
+        pred_box_x1 = pred_ctr_x - 0.5 * pred_w
+        pred_box_y1 = pred_ctr_y - 0.5 * pred_h
+        pred_box_x2 = pred_ctr_x + 0.5 * pred_w
+        pred_box_y2 = pred_ctr_y + 0.5 * pred_h
+
+        pred_boxes = lucid.stack(
+            [pred_box_x1, pred_box_y1, pred_box_x2, pred_box_y2], axis=2
+        )
+        return pred_boxes
+
+
+class _ClipBoxes(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, boxes: Tensor, images: Tensor) -> Tensor:
+        boxes[:, :, 0] = lucid.clip(boxes[:, :, 0], min_value=0)
+        boxes[:, :, 1] = lucid.clip(boxes[:, :, 1], min_value=0)
+
+        boxes[:, :, 2] = lucid.clip(boxes[:, :, 2], min_value=images.shape[3])
+        boxes[:, :, 3] = lucid.clip(boxes[:, :, 3], min_value=images.shape[2])
+
+        return boxes
+
+
+class EfficientDet(nn.Module):
+    def __init__(
+        self, num_anchors: int = 9, num_classes: int = 80, compound_coef: int = 0.0
+    ) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        self.compound_coef = compound_coef
+
+        self.num_channels = [64, 88, 112, 160, 224, 288, 384, 384][self.compound_coef]
+
+        self.conv3 = nn.Conv2d(40, self.num_channels, kernel_size=1, padding=0)
+        self.conv4 = nn.Conv2d(80, self.num_channels, kernel_size=1, padding=0)
+        self.conv5 = nn.Conv2d(192, self.num_channels, kernel_size=1, padding=0)
+        self.conv6 = nn.Conv2d(
+            192, self.num_channels, kernel_size=3, stride=2, padding=1
+        )
+        self.conv7 = nn.Sequential(
+            nn.ReLU(),
+            nn.Conv2d(
+                self.num_channels, self.num_channels, kernel_size=3, stride=2, padding=1
+            ),
+        )
+
+        self.bifpn = nn.Sequential(
+            *[_BiFPN(self.num_channels) for _ in range(min(2 + self.compound_coef, 8))]
+        )
+        self.regressor = _BBoxRegresor(
+            self.num_channels, num_anchors, num_layers=3 + self.compound_coef // 3
+        )
+        self.classifier = _Classifier(
+            self.num_channels,
+            num_anchors,
+            num_classes,
+            num_layers=3 + self.compound_coef // 3,
+        )
+
+        self.anchors = _Anchors()
+        self.boxtrans = _BBoxTransform()
+        self.clipbox = _ClipBoxes()
+        self.loss = ...  # TODO: Implement general `nn.FocalLoss`
+
+        self.apply(self.init_weights)
+
+        prior = 0.01
+        self._header_weights_post_init(
+            self.classifier.header, w_val=0.0, b_val=-math.log((1.0 - prior) / prior)
+        )
+        self._header_weights_post_init(self.regressor.header, w_val=0.0, b_val=0.0)
+
+        self.backbone = ...  # NOTE: Assign appropriate variant of EfficientNet
+
+    def init_weights(self, m: nn.Module) -> None:
+        if isinstance(m, nn.Conv2d):
+            n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            nn.init.normal(m.weight, 0.0, math.sqrt(2 / n))
+
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant(m.weight, 1.0)
+            nn.init.constant(m.bias, 0.0)
+
+    @staticmethod
+    def _header_weights_post_init(m: nn.Module, w_val: float, b_val: float) -> None:
+        assert isinstance(m, nn.Conv2d)
+        nn.init.constant(m.weight, w_val)
+        nn.init.constant(m.bias, b_val)
+
+    # TODO: Continue from here
+    NotImplemented
