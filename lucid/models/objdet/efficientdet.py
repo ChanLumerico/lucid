@@ -416,6 +416,14 @@ class _FocalLoss(nn.Module):
         )
 
 
+class _EfficientNetBackbone(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+        # TODO: Continue from here
+        NotImplemented
+
+
 class EfficientDet(nn.Module):
     def __init__(
         self, num_anchors: int = 9, num_classes: int = 80, compound_coef: int = 0.0
