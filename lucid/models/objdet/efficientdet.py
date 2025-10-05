@@ -9,6 +9,7 @@ from lucid import register_model
 from lucid.types import _Scalar, _ShapeLike, _DeviceType
 
 import lucid.models.imgclf.efficient as effnet
+from lucid.models.objdet.util import iou
 
 
 __all__ = ["EfficientDet"]
@@ -308,6 +309,113 @@ class _ClipBoxes(nn.Module):
         return boxes
 
 
+class _FocalLoss(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.alpha = 0.25
+        self.gamma = 2.0
+
+    def forward(
+        self, clfs: Tensor, regs: Tensor, anchors: Tensor, annotations: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        N = clfs.shape[0]
+        clf_losses = []
+        reg_losses = []
+
+        anchor = anchors[0, :, :]
+        anchor_w = anchor[:, 2] - anchor[:, 0]
+        anchor_h = anchor[:, 3] - anchor[:, 1]
+
+        anchor_ctr_x = anchor[:, 0] + 0.5 * anchor_w
+        anchor_ctr_y = anchor[:, 1] + 0.5 * anchor_h
+
+        for i in range(N):
+            clf = clfs[i, :, :]
+            reg = regs[i, :, :]
+
+            box_annot = annotations[i, :, :]
+            box_annot = box_annot[box_annot[:, 4] != 1]
+
+            if len(box_annot) == 0:
+                reg_losses.append(lucid.zeros(1, dtype=lucid.Float32))
+                clf_losses.append(lucid.zeros(1, dtype=lucid.Float32))
+                continue
+
+            clf = lucid.clip(clf, 1e-4, 1.0 - 1e-4)
+
+            iou_val = iou(anchor[0, :, :], box_annot[:, :4])
+            iou_max = lucid.max(iou_val, axis=1)
+            iou_argmax = lucid.argmax(iou_val, axis=1)
+
+            targets = lucid.ones(*clf.shape) * -1
+            targets[iou_max < 0.4, :] = 0
+
+            pos_indices = iou_max >= 0.5
+            num_pos_anchors = pos_indices.sum()
+            assigned_annot = box_annot[iou_argmax, :]
+
+            targets[pos_indices, :] = 0
+            targets[pos_indices, assigned_annot[pos_indices, 4].astype(lucid.Int)] = 1
+
+            alpha_factor = lucid.ones(*targets.shape) * self.alpha
+            alpha_factor = lucid.where(targets == 1.0, alpha_factor, 1.0 - alpha_factor)
+
+            focal_weight = lucid.where(targets == 1.0, 1.0 - clf, clf)
+            focal_weight = alpha_factor * focal_weight**self.gamma
+
+            bce = F.binary_cross_entropy(clf, targets, reduction=None)
+
+            cls_loss = focal_weight * bce
+            cls_loss = lucid.where(
+                targets != -1.0, cls_loss, lucid.zeros(*cls_loss.shape)
+            )
+
+            clf_losses.append(
+                cls_loss.sum() / lucid.clip(num_pos_anchors, min_value=1.0)
+            )
+
+            if pos_indices.sum() > 0:
+                assigned_annot = assigned_annot[pos_indices, :]
+
+                anchor_w_pi = anchor_w[pos_indices]
+                anchor_h_pi = anchor_h[pos_indices]
+
+                anchor_ctr_x_pi = anchor_ctr_x[pos_indices]
+                anchor_ctr_y_pi = anchor_ctr_y[pos_indices]
+
+                gt_widths = assigned_annot[:, 2] - assigned_annot[:, 0]
+                gt_heights = assigned_annot[:, 3] - assigned_annot[:, 1]
+
+                gt_ctr_x = assigned_annot[:, 0] + 0.5 * gt_widths
+                gt_ctr_y = assigned_annot[:, 1] + 0.5 * gt_heights
+
+                gt_widths = lucid.clip(gt_widths, min_value=1)
+                gt_heights = lucid.clip(gt_heights, min_value=1)
+
+                targets_dx = (gt_ctr_x - anchor_ctr_x_pi) / anchor_w_pi
+                targets_dy = (gt_ctr_y - anchor_ctr_y_pi) / anchor_h_pi
+                targets_dw = lucid.log(gt_widths / anchor_w_pi)
+                targets_dh = lucid.log(gt_heights / anchor_h_pi)
+
+                targets = lucid.stack(
+                    [targets_dx, targets_dy, targets_dw, targets_dh]
+                ).T / Tensor([0.1, 0.1, 0.2, 0.2])
+
+                reg_diff = lucid.abs(targets - reg[pos_indices, :])
+                reg_loss = lucid.where(
+                    reg_diff <= 1 / 9, 0.5 * 9.0 * reg_diff**2, reg_diff - 0.5 / 9.0
+                )
+                reg_losses.append(reg_loss.mean())
+
+            else:
+                reg_losses.append(lucid.zeros(1, dtype=lucid.Float32))
+
+        return (
+            lucid.stack(clf_losses).mean(axis=0, keepdims=True),
+            lucid.stack(reg_losses).mean(axis=0, keepdims=True),
+        )
+
+
 class EfficientDet(nn.Module):
     def __init__(
         self, num_anchors: int = 9, num_classes: int = 80, compound_coef: int = 0.0
@@ -347,7 +455,7 @@ class EfficientDet(nn.Module):
         self.anchors = _Anchors()
         self.boxtrans = _BBoxTransform()
         self.clipbox = _ClipBoxes()
-        self.loss = ...  # TODO: Implement general `nn.FocalLoss`
+        self.loss = _FocalLoss()
 
         self.apply(self.init_weights)
 
