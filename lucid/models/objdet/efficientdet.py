@@ -1,4 +1,5 @@
 import math
+from typing import Literal
 
 import lucid
 import lucid.nn as nn
@@ -9,10 +10,13 @@ from lucid import register_model
 from lucid.types import _Scalar, _ShapeLike, _DeviceType
 
 import lucid.models.imgclf.efficient as effnet
-from lucid.models.objdet.util import iou
+from lucid.models.objdet.util import iou, nms, DetectionDict
 
 
 __all__ = ["EfficientDet"]
+
+
+_ScaleCoefIntLiteral = Literal[0, 1, 2, 3, 4, 5, 6, 7]
 
 
 class _ConvBlock(nn.Module):
@@ -58,10 +62,10 @@ class _BiFPN(nn.Module):
                 **{f"{i}_w2": nn.Parameter(lucid.ones(3)) for i in range(4, 8)},
             }
         )
-        self.relus = nn.ModuleDict(
+        self.acts = nn.ModuleDict(
             {
-                **{f"{i}_w1": nn.ReLU() for i in range(3, 7)},
-                **{f"{i}_w2": nn.ReLU() for i in range(4, 8)},
+                **{f"{i}_w1": nn.Swish() for i in range(3, 7)},
+                **{f"{i}_w2": nn.Swish() for i in range(4, 8)},
             }
         )
 
@@ -71,19 +75,19 @@ class _BiFPN(nn.Module):
     def _forward_up(self, feats: tuple[Tensor]) -> tuple[Tensor]:
         p3_in, p4_in, p5_in, p6_in, p7_in = feats
 
-        w1_p6_up = self._norm_weight(self.relus["6_w1"](self.weights["6_w1"]))
+        w1_p6_up = self._norm_weight(self.acts["6_w1"](self.weights["6_w1"]))
         p6_up_in = w1_p6_up[0] * p6_in + w1_p6_up[1] * self.ups["6"](p7_in)
         p6_up = self.convs["6_up"](p6_up_in)
 
-        w1_p5_up = self._norm_weight(self.relus["5_w1"](self.weights["5_w1"]))
+        w1_p5_up = self._norm_weight(self.acts["5_w1"](self.weights["5_w1"]))
         p5_up_in = w1_p5_up[0] * p5_in + w1_p5_up[1] * self.ups["5"](p6_up)
         p5_up = self.convs["5_up"](p5_up_in)
 
-        w1_p4_up = self._norm_weight(self.relus["4_w1"](self.weights["4_w1"]))
+        w1_p4_up = self._norm_weight(self.acts["4_w1"](self.weights["4_w1"]))
         p4_up_in = w1_p4_up[0] * p4_in + w1_p4_up[1] * self.ups["4"](p5_up)
         p4_up = self.convs["4_up"](p4_up_in)
 
-        w1_p3_up = self._norm_weight(self.relus["3_w1"](self.weights["3_w1"]))
+        w1_p3_up = self._norm_weight(self.acts["3_w1"](self.weights["3_w1"]))
         p3_up_in = w1_p3_up[0] * p3_in + w1_p3_up[1] * self.ups["3"](p4_up)
         p3_out = self.convs["3_up"](p3_up_in)
 
@@ -95,7 +99,7 @@ class _BiFPN(nn.Module):
         _, p4_in, p5_in, p6_in, p7_in = feats
         p3_out, p4_up, p5_up, p6_up = up_feats
 
-        w2_p4_down = self._norm_weight(self.relus["4_w2"](self.weights["4_w2"]))
+        w2_p4_down = self._norm_weight(self.acts["4_w2"](self.weights["4_w2"]))
         p4_down_in = (
             w2_p4_down[0] * p4_in
             + w2_p4_down[1] * p4_up
@@ -103,7 +107,7 @@ class _BiFPN(nn.Module):
         )
         p4_out = self.convs["4_down"](p4_down_in)
 
-        w2_p5_down = self._norm_weight(self.relus["5_w2"](self.weights["5_w2"]))
+        w2_p5_down = self._norm_weight(self.acts["5_w2"](self.weights["5_w2"]))
         p5_down_in = (
             w2_p5_down[0] * p5_in
             + w2_p5_down[1] * p5_up
@@ -111,7 +115,7 @@ class _BiFPN(nn.Module):
         )
         p5_out = self.convs["5_down"](p5_down_in)
 
-        w2_p6_down = self._norm_weight(self.relus["6_w2"](self.weights["6_w2"]))
+        w2_p6_down = self._norm_weight(self.acts["6_w2"](self.weights["6_w2"]))
         p6_down_in = (
             w2_p6_down[0] * p6_in
             + w2_p6_down[1] * p6_up
@@ -119,7 +123,7 @@ class _BiFPN(nn.Module):
         )
         p6_out = self.convs["6_down"](p6_down_in)
 
-        w2_p7_down = self._norm_weight(self.relus["7_w2"](self.weights["7_w2"]))
+        w2_p7_down = self._norm_weight(self.acts["7_w2"](self.weights["7_w2"]))
         p7_down_in = w2_p7_down[0] * p7_in + w2_p7_down[1] * self.downs["7"](p6_out)
         p7_out = self.convs["7_down"](p7_down_in)
 
@@ -417,18 +421,31 @@ class _FocalLoss(nn.Module):
 
 
 class _EfficientNetBackbone(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, scale_coef: _ScaleCoefIntLiteral) -> None:
         super().__init__()
+        model = getattr(effnet, f"efficientnet_b{scale_coef}")
+        self.model = nn.Sequential(*[getattr(model, f"stage{i}") for i in range(1, 7)])
 
-        # TODO: Continue from here
-        NotImplemented
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        out: list[Tensor] = []
+        for idx, stage in enumerate(self.model):
+            x = stage(x)
+            if idx in {2, 3, 5}:
+                out.append(x)
+
+        return tuple(out)
 
 
 class EfficientDet(nn.Module):
     def __init__(
-        self, num_anchors: int = 9, num_classes: int = 80, compound_coef: int = 0.0
+        self,
+        scale_coef: _ScaleCoefIntLiteral,
+        num_anchors: int = 9,
+        num_classes: int = 80,
+        compound_coef: int = 0.0,
     ) -> None:
         super().__init__()
+        self.scale_coef = scale_coef
         self.num_classes = num_classes
         self.compound_coef = compound_coef
 
@@ -473,7 +490,7 @@ class EfficientDet(nn.Module):
         )
         self._header_weights_post_init(self.regressor.header, w_val=0.0, b_val=0.0)
 
-        self.backbone = ...  # NOTE: Assign appropriate variant of EfficientNet
+        self.backbone = _EfficientNetBackbone(scale_coef=self.scale_coef)
 
     def init_weights(self, m: nn.Module) -> None:
         if isinstance(m, nn.Conv2d):
@@ -490,5 +507,72 @@ class EfficientDet(nn.Module):
         nn.init.constant(m.weight, w_val)
         nn.init.constant(m.bias, b_val)
 
-    # TODO: Continue from here
-    NotImplemented
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        c3, c4, c5 = self.backbone(x)
+
+        p3 = self.conv3(c3)
+        p4 = self.conv4(c4)
+        p5 = self.conv5(c5)
+        p6 = self.conv6(c5)
+        p7 = self.conv7(p6)
+
+        feats = (p3, p4, p5, p6, p7)
+        feats = self.bifpn(feats)
+
+        cls_preds = [self.classifier(f) for f in feats]
+        box_preds = [self.regressor(f) for f in feats]
+
+        cls_preds = lucid.concat(cls_preds, axis=1)
+        box_preds = lucid.concat(box_preds, axis=1)
+        anchors = self.anchors(x)
+
+        return cls_preds, box_preds, anchors
+
+    @lucid.no_grad()
+    def predict(self, x: Tensor) -> list[list[DetectionDict]]:
+        cls_preds, box_preds, anchors = self.forward(x)
+
+        boxes = self.boxtrans(anchors, box_preds)
+        boxes = self.clipbox(boxes, x)
+
+        B = x.shape[0]
+        results: list[list[DetectionDict]] = []
+
+        for i in range(B):
+            cls_i = cls_preds[i]
+            box_i = boxes[i]
+
+            scores = lucid.max(cls_i, axis=1)
+            labels = lucid.argmax(cls_i, axis=1)
+
+            keep = scores > 0.05
+            scores, labels, box_i = scores[keep], labels[keep], box_i[keep]
+
+            if scores.size == 0:
+                results.append([])
+                continue
+
+            keep_idx = nms(box_i, scores, iou_thresh=0.3)
+            scores, labels, box_i = scores[keep_idx], labels[keep_idx], box_i[keep_idx]
+
+            dets: list[DetectionDict] = []
+            for s, l, b in zip(scores, labels, box_i):
+                dets.append({"boxes": b, "scores": s, "labels": l})
+            results.append(dets)
+
+        return results
+
+    def get_loss(self, x: Tensor, target: list[Tensor]) -> Tensor:
+        cls_preds, box_preds, anchors = self.forward(x)
+
+        max_n = max(t.shape[0] for t in target)
+        padded = lucid.zeros(
+            (len(target), max_n, 5), dtype=lucid.Float32, device=x.device
+        )
+        for i, t in enumerate(target):
+            padded[i, : t.shape[0]] = t
+
+        cls_loss, reg_loss = self.loss(cls_preds, box_preds, anchors, padded)
+        total_loss = cls_loss + reg_loss
+
+        return total_loss
