@@ -16,7 +16,7 @@ from lucid.models.objdet.util import iou, nms, DetectionDict
 __all__ = ["EfficientDet"]
 
 
-_ScaleCoefIntLiteral = Literal[0, 1, 2, 3, 4, 5, 6, 7]
+_CompoundCoefLiteral = Literal[0, 1, 2, 3, 4, 5, 6, 7]
 
 
 class _ConvBlock(nn.Module):
@@ -136,23 +136,35 @@ class _BiFPN(nn.Module):
         return down_feats
 
 
-class _BBoxRegresor(nn.Module):
+class _BBoxRegressor(nn.Module):
     def __init__(self, in_channels: int, num_anchors: int, num_layers: int) -> None:
         super().__init__()
         layers: list[nn.Module] = []
         for _ in range(num_layers):
-            layers.append(nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1))
-            layers.append(nn.ReLU)
+            layers.extend(
+                [
+                    nn.DepthSeparableConv2d(
+                        in_channels, in_channels, kernel_size=3, padding=1
+                    ),
+                    nn.BatchNorm2d(in_channels, momentum=0.99, eps=1e-3),
+                    nn.Swish(),
+                ]
+            )
 
         self.layers = nn.Sequential(*layers)
-        self.header = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=3, padding=1)
+        self.header = nn.Conv2d(
+            in_channels,
+            num_anchors * 4,
+            kernel_size=3,
+            padding=1,
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.layers(x)
         x = self.header(x)
 
-        out = x.transpose((0, 2, 3, 1))
-        return out.reshape(out.shape[0], -1, 4)
+        x = x.transpose((0, 2, 3, 1))
+        return x.reshape(x.shape[0], -1, 4)
 
 
 class _Classifier(nn.Module):
@@ -165,12 +177,22 @@ class _Classifier(nn.Module):
 
         layers: list[nn.Module] = []
         for _ in range(num_layers):
-            layers.append(nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1))
-            layers.append(nn.ReLU())
+            layers.extend(
+                [
+                    nn.DepthSeparableConv2d(
+                        in_channels, in_channels, kernel_size=3, padding=1
+                    ),
+                    nn.BatchNorm2d(in_channels, momentum=0.99, eps=1e-3),
+                    nn.Swish(),
+                ]
+            )
 
         self.layers = nn.Sequential(*layers)
         self.header = nn.Conv2d(
-            in_channels, num_anchors * num_classes, kernel_size=3, padding=1
+            in_channels,
+            num_anchors * num_classes,
+            kernel_size=3,
+            padding=1,
         )
         self.act = nn.Sigmoid()
 
@@ -180,8 +202,7 @@ class _Classifier(nn.Module):
         x = self.act(x)
 
         x = x.transpose((0, 2, 3, 1))
-        out = x.reshape(*x.shape[:3], self.num_anchors, self.num_classes)
-        return out.reshape(out.shape[0], -1, self.num_classes)
+        return x.reshape(x.shape[0], -1, self.num_classes)
 
 
 def _generate_anchors(
@@ -421,9 +442,9 @@ class _FocalLoss(nn.Module):
 
 
 class _EfficientNetBackbone(nn.Module):
-    def __init__(self, scale_coef: _ScaleCoefIntLiteral) -> None:
+    def __init__(self, compound_coef: _CompoundCoefLiteral) -> None:
         super().__init__()
-        model = getattr(effnet, f"efficientnet_b{scale_coef}")
+        model = getattr(effnet, f"efficientnet_b{compound_coef}")
         self.model = nn.Sequential(*[getattr(model, f"stage{i}") for i in range(1, 7)])
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
@@ -436,26 +457,40 @@ class _EfficientNetBackbone(nn.Module):
         return tuple(out)
 
 
+_backbone_channels: dict[int, tuple[int]] = {
+    0: (40, 80, 192),
+    1: (40, 80, 192),
+    2: (48, 88, 208),
+    3: (48, 88, 208),
+    4: (56, 112, 224),
+    5: (64, 160, 288),
+    6: (72, 192, 384),
+    7: (72, 192, 384),
+}
+
+
 class EfficientDet(nn.Module):
     def __init__(
         self,
-        scale_coef: _ScaleCoefIntLiteral,
+        compound_coef: _CompoundCoefLiteral,
         num_anchors: int = 9,
         num_classes: int = 80,
-        compound_coef: int = 0.0,
     ) -> None:
         super().__init__()
-        self.scale_coef = scale_coef
         self.num_classes = num_classes
         self.compound_coef = compound_coef
 
-        self.num_channels = [64, 88, 112, 160, 224, 288, 384, 384][self.compound_coef]
+        base_channels = 64
+        self.num_channels = int(round(base_channels * (1.4**self.compound_coef)))
+        self.num_channels = int(math.ceil(self.num_channels / 8) * 8)
 
-        self.conv3 = nn.Conv2d(40, self.num_channels, kernel_size=1, padding=0)
-        self.conv4 = nn.Conv2d(80, self.num_channels, kernel_size=1, padding=0)
-        self.conv5 = nn.Conv2d(192, self.num_channels, kernel_size=1, padding=0)
+        c3_in, c4_in, c5_in = _backbone_channels[self.compound_coef]
+
+        self.conv3 = nn.Conv2d(c3_in, self.num_channels, kernel_size=1, padding=0)
+        self.conv4 = nn.Conv2d(c4_in, self.num_channels, kernel_size=1, padding=0)
+        self.conv5 = nn.Conv2d(c5_in, self.num_channels, kernel_size=1, padding=0)
         self.conv6 = nn.Conv2d(
-            192, self.num_channels, kernel_size=3, stride=2, padding=1
+            c5_in, self.num_channels, kernel_size=3, stride=2, padding=1
         )
         self.conv7 = nn.Sequential(
             nn.ReLU(),
@@ -467,7 +502,7 @@ class EfficientDet(nn.Module):
         self.bifpn = nn.Sequential(
             *[_BiFPN(self.num_channels) for _ in range(min(2 + self.compound_coef, 8))]
         )
-        self.regressor = _BBoxRegresor(
+        self.regressor = _BBoxRegressor(
             self.num_channels, num_anchors, num_layers=3 + self.compound_coef // 3
         )
         self.classifier = _Classifier(
@@ -490,7 +525,7 @@ class EfficientDet(nn.Module):
         )
         self._header_weights_post_init(self.regressor.header, w_val=0.0, b_val=0.0)
 
-        self.backbone = _EfficientNetBackbone(scale_coef=self.scale_coef)
+        self.backbone = _EfficientNetBackbone(...)
 
     def init_weights(self, m: nn.Module) -> None:
         if isinstance(m, nn.Conv2d):
