@@ -108,6 +108,27 @@ class truediv(operation):
         return _broadcast_flops(a, b)
 
 
+class floordiv(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @binary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data // b.data).astype(lucid.Int)
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @binary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(a.data // b.data).astype(lucid.Int)
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0), lib_.array(0.0)
+
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        return _broadcast_flops(a, b)
+
+
 class _equal(operation):
     def __init__(self) -> None:
         super().__init__()

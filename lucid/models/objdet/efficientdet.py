@@ -53,10 +53,10 @@ class _BiFPN(nn.Module):
             {f"{i}": nn.Upsample(scale_factor=2, mode="nearest") for i in range(3, 7)}
         )
         self.downs = nn.ModuleDict(
-            {f"{i}": nn.AvgPool2d(kernel_size=2) for i in range(4, 8)}
+            {f"{i}": nn.AvgPool2d(kernel_size=2, stride=2) for i in range(4, 8)}
         )
 
-        self.weights = nn.ModuleDict(
+        self.weights = nn.ParameterDict(
             {
                 **{f"{i}_w1": nn.Parameter(lucid.ones(2)) for i in range(3, 7)},
                 **{f"{i}_w2": nn.Parameter(lucid.ones(3)) for i in range(4, 8)},
@@ -224,8 +224,8 @@ def _generate_anchors(
 
 
 def _shift_anchors(shape: _ShapeLike, stride: int, anchors: Tensor) -> Tensor:
-    shift_x = (lucid.arange(0, shape[1]) + 0.5) * stride
-    shift_y = (lucid.arange(0, shape[0]) + 0.5) * stride
+    shift_x = (lucid.arange(0, shape[1], device=anchors.device) + 0.5) * stride
+    shift_y = (lucid.arange(0, shape[0], device=anchors.device) + 0.5) * stride
 
     shift_x, shift_y = lucid.meshgrid(shift_x, shift_y, indexing="xy")
     shifts = lucid.vstack(
@@ -235,12 +235,13 @@ def _shift_anchors(shape: _ShapeLike, stride: int, anchors: Tensor) -> Tensor:
     A = anchors.shape[0]
     K = shifts.shape[0]
 
-    all_anchors = anchors.reshape(1, A, 4) + shifts.reshape(1, K, 4)
-    all_anchors = all_anchors.transpose((1, 0, 2)).reshape(K * A, 4)
+    all_anchors = anchors.reshape(1, A, 4) + shifts.reshape(K, 1, 4)
+    all_anchors = all_anchors.reshape(K * A, 4)
 
     return all_anchors
 
 
+@nn.auto_repr("pyramid_levels")
 class _Anchors(nn.Module):
     def __init__(
         self,
@@ -266,12 +267,10 @@ class _Anchors(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         img_shape = Tensor(x.shape[2:], dtype=lucid.Int16, device=x.device)
         img_shapes: list[Tensor] = [
-            (img_shape + 2**x - 1) // (2**x) for x in self.pyramid_levels
+            (img_shape + 2**i - 1) // (2**i) for i in self.pyramid_levels
         ]
-        all_anchors = lucid.zeros(
-            len(self.pyramid_levels), 4, dtype=lucid.Float32, device=x.device
-        )
 
+        anchors_per_level: list[Tensor] = []
         for idx, _ in enumerate(self.pyramid_levels):
             anchors = _generate_anchors(
                 self.sizes[idx], self.ratios, self.scales, device=x.device
@@ -279,13 +278,16 @@ class _Anchors(nn.Module):
             shifted_anchors = _shift_anchors(
                 img_shapes[idx].tolist(), self.strides[idx], anchors
             )
-            all_anchors[idx, :] += shifted_anchors.flatten()
+            anchors_per_level.append(shifted_anchors)
+
+        all_anchors = lucid.concatenate(anchors_per_level, axis=0)
+        all_anchors = all_anchors.unsqueeze(axis=0)
 
         return all_anchors
 
 
 class _BBoxTransform(nn.Module):
-    def __init__(self, mean: Tensor | None, std: Tensor | None = None) -> None:
+    def __init__(self, mean: Tensor | None = None, std: Tensor | None = None) -> None:
         super().__init__()
         self.mean = lucid.zeros(4) if mean is None else mean
         self.std = Tensor([0.1, 0.1, 0.2, 0.2]) if std is None else std
@@ -344,6 +346,7 @@ class _FocalLoss(nn.Module):
         self, clfs: Tensor, regs: Tensor, anchors: Tensor, annotations: Tensor
     ) -> tuple[Tensor, Tensor]:
         N = clfs.shape[0]
+        device = clfs.device
         clf_losses = []
         reg_losses = []
 
@@ -362,17 +365,17 @@ class _FocalLoss(nn.Module):
             box_annot = box_annot[box_annot[:, 4] != 1]
 
             if len(box_annot) == 0:
-                reg_losses.append(lucid.zeros(1, dtype=lucid.Float32))
-                clf_losses.append(lucid.zeros(1, dtype=lucid.Float32))
+                reg_losses.append(lucid.zeros(1, dtype=lucid.Float32, device=device))
+                clf_losses.append(lucid.zeros(1, dtype=lucid.Float32, device=device))
                 continue
 
             clf = lucid.clip(clf, 1e-4, 1.0 - 1e-4)
 
-            iou_val = iou(anchor[0, :, :], box_annot[:, :4])
+            iou_val = iou(anchor, box_annot[:, :4])
             iou_max = lucid.max(iou_val, axis=1)
             iou_argmax = lucid.argmax(iou_val, axis=1)
 
-            targets = lucid.ones(*clf.shape) * -1
+            targets = lucid.ones(*clf.shape, device=device) * -1
             targets[iou_max < 0.4, :] = 0
 
             pos_indices = iou_max >= 0.5
@@ -382,7 +385,7 @@ class _FocalLoss(nn.Module):
             targets[pos_indices, :] = 0
             targets[pos_indices, assigned_annot[pos_indices, 4].astype(lucid.Int)] = 1
 
-            alpha_factor = lucid.ones(*targets.shape) * self.alpha
+            alpha_factor = lucid.ones(*targets.shape, device=device) * self.alpha
             alpha_factor = lucid.where(targets == 1.0, alpha_factor, 1.0 - alpha_factor)
 
             focal_weight = lucid.where(targets == 1.0, 1.0 - clf, clf)
@@ -392,7 +395,9 @@ class _FocalLoss(nn.Module):
 
             cls_loss = focal_weight * bce
             cls_loss = lucid.where(
-                targets != -1.0, cls_loss, lucid.zeros(*cls_loss.shape)
+                targets != -1.0,
+                cls_loss,
+                lucid.zeros(*cls_loss.shape, device=device),
             )
 
             clf_losses.append(
@@ -433,7 +438,7 @@ class _FocalLoss(nn.Module):
                 reg_losses.append(reg_loss.mean())
 
             else:
-                reg_losses.append(lucid.zeros(1, dtype=lucid.Float32))
+                reg_losses.append(lucid.zeros(1, dtype=lucid.Float32, device=device))
 
         return (
             lucid.stack(clf_losses).mean(axis=0, keepdims=True),
@@ -444,14 +449,14 @@ class _FocalLoss(nn.Module):
 class _EfficientNetBackbone(nn.Module):
     def __init__(self, compound_coef: _CompoundCoefLiteral) -> None:
         super().__init__()
-        model = getattr(effnet, f"efficientnet_b{compound_coef}")
-        self.model = nn.Sequential(*[getattr(model, f"stage{i}") for i in range(1, 7)])
+        model = getattr(effnet, f"efficientnet_b{compound_coef}")()
+        self.model = nn.Sequential(*[getattr(model, f"stage{i}") for i in range(1, 8)])
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         out: list[Tensor] = []
         for idx, stage in enumerate(self.model):
             x = stage(x)
-            if idx in {2, 3, 5}:
+            if idx in {3, 4, 6}:
                 out.append(x)
 
         return tuple(out)
@@ -472,7 +477,7 @@ _backbone_channels: dict[int, tuple[int]] = {
 class EfficientDet(nn.Module):
     def __init__(
         self,
-        compound_coef: _CompoundCoefLiteral,
+        compound_coef: _CompoundCoefLiteral = 0,
         num_anchors: int = 9,
         num_classes: int = 80,
     ) -> None:
@@ -525,7 +530,7 @@ class EfficientDet(nn.Module):
         )
         self._header_weights_post_init(self.regressor.header, w_val=0.0, b_val=0.0)
 
-        self.backbone = _EfficientNetBackbone(...)
+        self.backbone = _EfficientNetBackbone(self.compound_coef)
 
     def init_weights(self, m: nn.Module) -> None:
         if isinstance(m, nn.Conv2d):
@@ -557,8 +562,8 @@ class EfficientDet(nn.Module):
         cls_preds = [self.classifier(f) for f in feats]
         box_preds = [self.regressor(f) for f in feats]
 
-        cls_preds = lucid.concat(cls_preds, axis=1)
-        box_preds = lucid.concat(box_preds, axis=1)
+        cls_preds = lucid.concatenate(cls_preds, axis=1)
+        box_preds = lucid.concatenate(box_preds, axis=1)
         anchors = self.anchors(x)
 
         return cls_preds, box_preds, anchors
@@ -597,14 +602,14 @@ class EfficientDet(nn.Module):
 
         return results
 
-    def get_loss(self, x: Tensor, target: list[Tensor]) -> Tensor:
+    def get_loss(self, x: Tensor, targets: list[Tensor]) -> Tensor:
         cls_preds, box_preds, anchors = self.forward(x)
 
-        max_n = max(t.shape[0] for t in target)
+        max_n = max(t.shape[0] for t in targets)
         padded = lucid.zeros(
-            (len(target), max_n, 5), dtype=lucid.Float32, device=x.device
+            (len(targets), max_n, 5), dtype=lucid.Float32, device=x.device
         )
-        for i, t in enumerate(target):
+        for i, t in enumerate(targets):
             padded[i, : t.shape[0]] = t
 
         cls_loss, reg_loss = self.loss(cls_preds, box_preds, anchors, padded)

@@ -919,7 +919,7 @@ class argmax(operation):
 
     @unary_func_op(has_gradient=False, device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        axis = self.aixs if self.axis is not None else 0
+        axis = self.axis if self.axis is not None else 0
         indices = mx.argmax(a.data, axis=axis)
         if self.keepdims:
             indices = mx.expand_dims(indices, axis)

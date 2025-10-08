@@ -42,8 +42,8 @@ def multiply(a: Tensor, b: Tensor, /) -> Tensor:
     return bfunc.multiply()(a, b)
 
 
-def div(a: Tensor, b: Tensor, /) -> Tensor:
-    return bfunc.truediv()(a, b)
+def div(a: Tensor, b: Tensor, /, floor: bool = False) -> Tensor:
+    return bfunc.truediv()(a, b) if not floor else bfunc.floordiv()(a, b)
 
 
 def _equal(a: Tensor, b: Tensor, /) -> Tensor:
@@ -129,6 +129,8 @@ _radd: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: add(a, b)
 _rsub: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: sub(b, a)
 _rmul: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: multiply(a, b)
 _rtruediv: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: div(b, a)
+_floordiv: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: div(a, b, floor=True)
+_rfloordiv: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: div(b, a, floor=True)
 _rbitwise_and: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: _bitwise_and(b, a)
 _rbitwise_or: Callable[[Tensor, Tensor], Tensor] = lambda a, b, /: _bitwise_or(b, a)
 
@@ -551,6 +553,8 @@ Tensor.__mul__ = multiply
 Tensor.__rmul__ = _rmul
 Tensor.__truediv__ = div
 Tensor.__rtruediv__ = _rtruediv
+Tensor.__floordiv__ = _floordiv
+Tensor.__rfloordiv__ = _rfloordiv
 Tensor.__matmul__ = matmul
 
 Tensor.__eq__ = _equal
