@@ -11,6 +11,7 @@ Object detection
     Fast R-CNN <rcnn/FastRCNN.rst>
     Faster R-CNN <faster_rcnn/FasterRCNN.rst>
     YOLO <yolo/index.rst>
+    EfficientDet <efficientdet/EfficientDet.rst>
 
 R-CNN
 -----
@@ -213,6 +214,72 @@ YOLO-v4
 
 EfficientDet
 ------------
-|wip-badge|
+|convnet-badge| |one-stage-det-badge| |objdet-badge|
+
+EfficientDet is a family of object detectors that use EfficientNet backbones 
+and a BiFPN for multi-scale feature fusion, applying compound scaling to balance 
+accuracy and efficiency across models D0-D7, achieving strong performance with 
+fewer parameters.
+
+ Tan, Mingxing, Ruoming Pang, and Quoc V. Le. EfficientDet: Scalable and Efficient 
+ Object Detection. *CVPR 2020*, 2020.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - FLOPs
+    
+    * - EfficientDet-D0
+      - `efficientdet_d0 <efficientdet/efficientdet_d0>`_
+      - :math:`(N,3,512,512)`
+      - 3,591,656
+      - 2.50B
+    
+    * - EfficientDet-D1
+      - `efficientdet_d1 <efficientdet/efficientdet_d1>`_
+      - :math:`(N,3,640,640)`
+      - 5,068,752
+      - 6.10B
+    
+    * - EfficientDet-D2
+      - `efficientdet_d2 <efficientdet/efficientdet_d2>`_
+      - :math:`(N,3,768,768)`
+      - 6,457,434
+      - 11.00B
+    
+    * - EfficientDet-D3
+      - `efficientdet_d3 <efficientdet/efficientdet_d3>`_
+      - :math:`(N,3,896,896)`
+      - 10,286,134
+      - 24.90B
+    
+    * - EfficientDet-D4
+      - `efficientdet_d4 <efficientdet/efficientdet_d4>`_
+      - :math:`(N,3,1024,1024)`
+      - 18,740,232
+      - 55.20B
+    
+    * - EfficientDet-D5
+      - `efficientdet_d5 <efficientdet/efficientdet_d5>`_
+      - :math:`(N,3,1280,1280)`
+      - 29,882,556
+      - 136.00B
+    
+    * - EfficientDet-D6
+      - `efficientdet_d6 <efficientdet/efficientdet_d6>`_
+      - :math:`(N,3,1280,1280)`
+      - 52,634,622
+      - 222.00B
+    
+    * - EfficientDet-D7
+      - `efficientdet_d7 <efficientdet/efficientdet_d7>`_
+      - :math:`(N,3,1536,1536)`
+      - 87,173,148
+      - 325.00B
 
 *To be implemented...🔮*

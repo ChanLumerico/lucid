@@ -1,6 +1,5 @@
 yolo_v3_tiny
 ============
-|convnet-badge| |one-stage-det-badge| |objdet-badge|
 
 .. autofunction:: lucid.models.yolo_v3_tiny
 

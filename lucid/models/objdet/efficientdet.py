@@ -607,7 +607,9 @@ class EfficientDet(nn.Module):
 
             dets: list[DetectionDict] = []
             for s, l, b in zip(scores, labels, box_i):
-                dets.append({"boxes": b, "scores": s, "labels": l})
+                dets.append(
+                    {"box": b.tolist(), "score": s.item(), "class_id": int(l.item())}
+                )
             results.append(dets)
 
         return results

@@ -1,11 +1,11 @@
 # Lucid² 💎
 
-![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
-![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-31.0k-yellow)
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid)
+![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red.svg)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl.svg)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-32.0k-yellow.svg)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Code](https://img.shields.io/badge/lines%20of%20code-25.0k-purple)
+![Lines of Code](https://img.shields.io/badge/lines%20of%20code-25.3k-purple.svg)
 
 **Lucid** is a minimalist deep learning framework built entirely from scratch in Python. It offers a pedagogically rich environment to explore the foundations of modern deep learning systems, including autodiff, neural network modules, and GPU acceleration — all while staying lightweight, readable, and free of complex dependencies.
 
@@ -18,10 +18,10 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 - Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
 
+- Implemented **EfficientDet**: `lucid.models.EfficientDet` with variants from `D0` to `D7`
 - Implemented **YOLO-v4**: `lucid.models.YOLO_V4` with variant `yolo_v4`
 - Implemented **CSPNet** with members of `csp_resnet_50`, `csp_resnext_50_32x4d`, and `csp_darknet_53`
 - Implemented **YOLO-v3**: `lucid.models.YOLO_V3` with variants `yolo_v3`, `yolo_v3_tiny`
-- Implemented **YOLO-v2**: `lucid.models.YOLO_V2` with variants `yolo_v2`, `yolo_v2_tiny`
 
 ## 🔧 How to Install
 
