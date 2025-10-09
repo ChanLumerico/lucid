@@ -58,8 +58,8 @@ def manual_convert(torch_dict, lucid_dict, torch_key_arr, lucid_key_arr, verbose
 import torch
 import torchvision.models as models
 
-torch_model = models.mobilenet_v3_large(
-    weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1
+torch_model = models.efficientnet_b0(
+    weights=models.EfficientNet_B0_Weights.IMAGENET1K_V1
 )
 torch_model.eval()
 torch_dict = torch_model.state_dict()
@@ -71,7 +71,7 @@ import lucid.models as models
 lucid.random.seed(42)
 
 
-lucid_model = models.mobilenet_v3_large()
+lucid_model = models.efficientnet_b0()
 lucid_dict = lucid_model.state_dict()
 
 convert_torch_to_lucid(
@@ -84,30 +84,8 @@ convert_torch_to_lucid(
 manual_convert(
     torch_dict,
     lucid_dict,
-    torch_key_arr=[
-        "features.11.block.2.fc1.weight",
-        "features.11.block.2.fc2.weight",
-        "features.12.block.2.fc1.weight",
-        "features.12.block.2.fc2.weight",
-        "features.13.block.2.fc1.weight",
-        "features.13.block.2.fc2.weight",
-        "features.14.block.2.fc1.weight",
-        "features.14.block.2.fc2.weight",
-        "features.15.block.2.fc1.weight",
-        "features.15.block.2.fc2.weight",
-    ],
-    lucid_key_arr=[
-        "bottlenecks.10.residual.2.fc1.weight",
-        "bottlenecks.10.residual.2.fc2.weight",
-        "bottlenecks.11.residual.2.fc1.weight",
-        "bottlenecks.11.residual.2.fc2.weight",
-        "bottlenecks.12.residual.2.fc1.weight",
-        "bottlenecks.12.residual.2.fc2.weight",
-        "bottlenecks.13.residual.2.fc1.weight",
-        "bottlenecks.13.residual.2.fc2.weight",
-        "bottlenecks.14.residual.2.fc1.weight",
-        "bottlenecks.14.residual.2.fc2.weight",
-    ],
+    torch_key_arr=[],
+    lucid_key_arr=[],
     verbose=True,
 )
 
