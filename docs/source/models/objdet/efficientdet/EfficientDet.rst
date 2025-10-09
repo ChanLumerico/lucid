@@ -51,6 +51,35 @@ Parameters
 - **num_classes** (*int*):  
   Number of target object classes.
 
+Backbone Network
+----------------
+
+The backbone network of EfficientDet, a truncated EfficientNet model can be accessed via
+`.backbone` attribute of an instance of the class `EfficientDet`.
+
+.. warning::
+
+    EfficientNet backbone for EfficientDet model is **not** pre-trained by default.
+    
+    The user should pre-train the corresponding separate EfficientNet variant model
+    for image classification task and then migrate the weights of **stage 1-7** to
+    `EfficientDet.backbone.model`.
+
+    Weight migration can be easily done with `state_dict` and `load_state_dict` methods.
+
+    .. code-block:: python
+        
+        pretrained = efficientnet_b0(...)  # Pre-trained for Image Classification
+        model = EfficientDet(...)
+
+        # Migrate Weights Stage-by-Stage
+        for i in range(7):
+            # Save state-dict of individual pre-trained model stage
+            st_dict = getattr(pretrained, f"stage{i + 1}").state_dict()
+
+            # model.backbone.model is an nn.Sequential module with 7 stages
+            model.backbone.model[i].load_state_dict(st_dict)
+
 Input Format
 ------------
 

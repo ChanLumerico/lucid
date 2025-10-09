@@ -1070,6 +1070,31 @@ Number of anchor boxes per feature level, typically <cite>9</cite>.</p></li>
 Number of target object classes.</p></li>
 </ul>
 </section>
+<section id="backbone-network">
+<h2>Backbone Network<a class="headerlink" href="#backbone-network" title="Link to this heading">¶</a></h2>
+<p>The backbone network of EfficientDet, a truncated EfficientNet model can be accessed via
+<cite>.backbone</cite> attribute of an instance of the class <cite>EfficientDet</cite>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>EfficientNet backbone for EfficientDet model is <strong>not</strong> pre-trained by default.</p>
+<p>The user should pre-train the corresponding separate EfficientNet variant model
+for image classification task and then migrate the weights of <strong>stage 1-7</strong> to
+<cite>EfficientDet.backbone.model</cite>.</p>
+<p>Weight migration can be easily done with <cite>state_dict</cite> and <cite>load_state_dict</cite> methods.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pretrained</span> <span class="o">=</span> <span class="n">efficientnet_b0</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>  <span class="c1"># Pre-trained for Image Classification</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">EfficientDet</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+
+<span class="c1"># Migrate Weights Stage-by-Stage</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">):</span>
+    <span class="c1"># Save state-dict of individual pre-trained model stage</span>
+    <span class="n">st_dict</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">pretrained</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;stage</span><span class="si">{</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">state_dict</span><span class="p">()</span>
+
+    <span class="c1"># model.backbone.model is an nn.Sequential module with 7 stages</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">backbone</span><span class="o">.</span><span class="n">model</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">st_dict</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
 <section id="input-format">
 <h2>Input Format<a class="headerlink" href="#input-format" title="Link to this heading">¶</a></h2>
 <p>The model expects a 4D input tensor of shape:</p>
@@ -1249,6 +1274,7 @@ for all objects in that image.</p>
 <li><a class="reference internal" href="#lucid.models.EfficientDet"><code class="docutils literal notranslate"><span class="pre">EfficientDet</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#backbone-network">Backbone Network</a></li>
 <li><a class="reference internal" href="#input-format">Input Format</a></li>
 <li><a class="reference internal" href="#target-format">Target Format</a></li>
 <li><a class="reference internal" href="#loss-computation">Loss Computation</a></li>
