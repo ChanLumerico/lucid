@@ -976,5 +976,53 @@
         "family": "YOLO_V4",
         "param_size": 93488078,
         "task": "objdet"
+    },
+    "efficientdet_d0": {
+        "name": "efficientdet_d0",
+        "family": "EfficientDet",
+        "param_size": 3591656,
+        "task": "objdet"
+    },
+    "efficientdet_d1": {
+        "name": "efficientdet_d1",
+        "family": "EfficientDet",
+        "param_size": 5068752,
+        "task": "objdet"
+    },
+    "efficientdet_d2": {
+        "name": "efficientdet_d2",
+        "family": "EfficientDet",
+        "param_size": 6457434,
+        "task": "objdet"
+    },
+    "efficientdet_d3": {
+        "name": "efficientdet_d3",
+        "family": "EfficientDet",
+        "param_size": 10286134,
+        "task": "objdet"
+    },
+    "efficientdet_d4": {
+        "name": "efficientdet_d4",
+        "family": "EfficientDet",
+        "param_size": 18740232,
+        "task": "objdet"
+    },
+    "efficientdet_d5": {
+        "name": "efficientdet_d5",
+        "family": "EfficientDet",
+        "param_size": 29882556,
+        "task": "objdet"
+    },
+    "efficientdet_d6": {
+        "name": "efficientdet_d6",
+        "family": "EfficientDet",
+        "param_size": 52634622,
+        "task": "objdet"
+    },
+    "efficientdet_d7": {
+        "name": "efficientdet_d7",
+        "family": "EfficientDet",
+        "param_size": 87173148,
+        "task": "objdet"
     }
 }

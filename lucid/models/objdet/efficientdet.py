@@ -13,7 +13,17 @@ import lucid.models.imgclf.efficient as effnet
 from lucid.models.objdet.util import iou, nms, DetectionDict
 
 
-__all__ = ["EfficientDet"]
+__all__ = [
+    "EfficientDet",
+    "efficientdet_d0",
+    "efficientdet_d1",
+    "efficientdet_d2",
+    "efficientdet_d3",
+    "efficientdet_d4",
+    "efficientdet_d5",
+    "efficientdet_d6",
+    "efficientdet_d7",
+]
 
 
 _CompoundCoefLiteral = Literal[0, 1, 2, 3, 4, 5, 6, 7]
@@ -616,3 +626,43 @@ class EfficientDet(nn.Module):
         total_loss = cls_loss + reg_loss
 
         return total_loss
+
+
+@register_model
+def efficientdet_d0(num_classes: int = 80, **kwargs) -> EfficientDet:
+    return EfficientDet(compound_coef=0, num_classes=num_classes, **kwargs)
+
+
+@register_model
+def efficientdet_d1(num_classes: int = 80, **kwargs) -> EfficientDet:
+    return EfficientDet(compound_coef=1, num_classes=num_classes, **kwargs)
+
+
+@register_model
+def efficientdet_d2(num_classes: int = 80, **kwargs) -> EfficientDet:
+    return EfficientDet(compound_coef=2, num_classes=num_classes, **kwargs)
+
+
+@register_model
+def efficientdet_d3(num_classes: int = 80, **kwargs) -> EfficientDet:
+    return EfficientDet(compound_coef=3, num_classes=num_classes, **kwargs)
+
+
+@register_model
+def efficientdet_d4(num_classes: int = 80, **kwargs) -> EfficientDet:
+    return EfficientDet(compound_coef=4, num_classes=num_classes, **kwargs)
+
+
+@register_model
+def efficientdet_d5(num_classes: int = 80, **kwargs) -> EfficientDet:
+    return EfficientDet(compound_coef=5, num_classes=num_classes, **kwargs)
+
+
+@register_model
+def efficientdet_d6(num_classes: int = 80, **kwargs) -> EfficientDet:
+    return EfficientDet(compound_coef=6, num_classes=num_classes, **kwargs)
+
+
+@register_model
+def efficientdet_d7(num_classes: int = 80, **kwargs) -> EfficientDet:
+    return EfficientDet(compound_coef=7, num_classes=num_classes, **kwargs)
