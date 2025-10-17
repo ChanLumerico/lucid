@@ -19,9 +19,6 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 - Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
 
 - Implemented **EfficientDet**: `lucid.models.EfficientDet` with variants from `D0` to `D7`
-- Implemented **YOLO-v4**: `lucid.models.YOLO_V4` with variant `yolo_v4`
-- Implemented **CSPNet** with members of `csp_resnet_50`, `csp_resnext_50_32x4d`, and `csp_darknet_53`
-- Implemented **YOLO-v3**: `lucid.models.YOLO_V3` with variants `yolo_v3`, `yolo_v3_tiny`
 
 ## 🔧 How to Install
 
