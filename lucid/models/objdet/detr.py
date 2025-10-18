@@ -7,6 +7,8 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid import register_model
 
+from lucid.models.objdet.util import iou
+
 
 class _MLP(nn.Module):
     def __init__(
@@ -92,6 +94,7 @@ class _TransformerEncoderLayer(nn.Module):
 
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
+
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
@@ -366,5 +369,60 @@ class _Transformer(nn.Module):
         return hs, memory
 
 
-# TODO: Continue implementation of DETR model
-NotImplemented
+def box_cxcywh_to_xyxy(boxes: Tensor) -> Tensor:
+    cx, cy, w, h = boxes.unbind(axis=-1)
+    b_x1 = cx - 0.5 * w
+    b_y1 = cy - 0.5 * h
+    b_x2 = cx + 0.5 * w
+    b_y2 = cy + 0.5 * h
+    return lucid.stack([b_x1, b_y1, b_x2, b_y2], axis=-1)
+
+
+def box_xyxy_to_cxcywh(boxes: Tensor) -> Tensor:
+    x1, y1, x2, y2 = boxes.unbind(axis=-1)
+    cx = (x1 + x2) / 2
+    cy = (y1 + y2) / 2
+    w = x2 - x1
+    h = y2 - y1
+    return lucid.stack([cx, cy, w, h], axis=-1)
+
+
+def box_area(boxes: Tensor) -> Tensor:
+    x1, y1, x2, y2 = boxes.unbind(axis=-1)
+    return (x2 - x1).clip(min_value=0) * (y2 - y1).clip(min_value=0)
+
+
+def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
+    x1 = lucid.maximum(boxes1[:, None, 0], boxes2[None, :, 0])
+    y1 = lucid.maximum(boxes1[:, None, 1], boxes2[None, :, 1])
+    x2 = lucid.minimum(boxes1[:, None, 2], boxes2[None, :, 2])
+    y2 = lucid.minimum(boxes1[:, None, 3], boxes2[None, :, 3])
+
+    inter = (x2 - x1).clip(min_value=0) * (y2 - y1).clip(min_value=0)
+    area1 = box_area(boxes1)
+    area2 = box_area(boxes2)
+
+    union = area1[:, None] + area2[None, :] - inter
+    iou = inter / (union + 1e-7)
+
+    x1_c = lucid.minimum(boxes1[:, None, 0], boxes2[None, :, 0])
+    y1_c = lucid.minimum(boxes1[:, None, 1], boxes2[None, :, 1])
+    x2_c = lucid.maximum(boxes1[:, None, 2], boxes2[None, :, 2])
+    y2_c = lucid.maximum(boxes1[:, None, 3], boxes2[None, :, 3])
+
+    area_c = (x2_c - x1_c).clip(min_value=0) * (y2_c - y1_c).clip(min_value=0)
+    return iou - (area_c - union) / (area_c + 1e-7)
+
+
+class _HungarianMatcher(nn.Module):
+    def __init__(
+        self, cost_class: float = 1.0, cost_bbox: float = 1.0, cost_giou: float = 1.0
+    ) -> None:
+        super().__init__()
+        self.cost_class = cost_class
+        self.cost_bbox = cost_bbox
+        self.cost_giou = cost_giou
+
+    @staticmethod
+    @lucid.no_grad()
+    def _linear_sum_assignment(cost_matrix: Tensor) -> tuple[Tensor, Tensor]: ...
