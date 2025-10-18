@@ -1,4 +1,5 @@
 import math
+from typing import Sequence
 
 import lucid
 import lucid.nn as nn
@@ -7,7 +8,8 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid import register_model
 
-from lucid.models.objdet.util import iou
+from lucid.models.objdet.util import iou, DetectionDict
+from lucid.models.imgclf.resnet import ResNet
 
 
 class _MLP(nn.Module):
@@ -425,4 +427,311 @@ class _HungarianMatcher(nn.Module):
 
     @staticmethod
     @lucid.no_grad()
-    def _linear_sum_assignment(cost_matrix: Tensor) -> tuple[Tensor, Tensor]: ...
+    def _linear_sum_assignment(cost_matrix: Tensor) -> tuple[Tensor, Tensor]:
+        cost = Tensor(Tensor.copy_data(cost_matrix.data))
+        n_rows, n_cols = cost.shape
+
+        size = max(n_rows, n_cols)
+        padded = lucid.zeros((size, size), dtype=cost.dtype)
+        padded[:n_rows, :n_cols] = cost
+
+        mask = lucid.zeros((size, size), dtype=lucid.Int8)
+        row_cover = lucid.zeros(size, dtype=bool)
+        col_cover = lucid.zeros(size, dtype=bool)
+
+        path = lucid.zeros((size * 2, 2), dtype=lucid.Int32)
+
+        def _step1() -> None:
+            padded -= padded.min(axis=1, keepdims=True)
+
+        def _step2() -> None:
+            padded -= padded.min(axis=0)
+
+        def _step3() -> None:
+            for i in range(size):
+                for j in range(size):
+                    if (
+                        lucid.abs(padded[i, j]) < 1e-9
+                        and not col_cover[j]
+                        and not row_cover[i]
+                    ):
+                        mask[i, j] = 1
+                        col_cover[j] = True
+                        row_cover[i] = True
+
+            row_cover[:] = False
+            col_cover[:] = False
+
+        def _step4() -> bool:
+            for j in range(size):
+                if lucid.any(mask[:, j] == 1):
+                    col_cover[j] = True
+            return int(col_cover.sum().item()) >= n_rows
+
+        def _find_zero() -> tuple[int, int]:
+            for i in range(size):
+                if row_cover[i]:
+                    continue
+                for j in range(size):
+                    if lucid.abs(padded[i, j]) < 1e-9 and not col_cover[j]:
+                        return i, j
+            return -1, -1
+
+        def _find_star_in_row(row: int) -> int:
+            cols = lucid.nonzero(mask[row] == 1)
+            return cols[0].item() if cols.size else -1
+
+        def _find_star_in_col(col: int) -> int:
+            rows = lucid.nonzero(mask[:, col] == 1)
+            return rows[0].item() if rows.size else -1
+
+        def _find_prime_in_row(row: int) -> int:
+            cols = lucid.nonzero(mask[row] == 2)
+            return cols[0].item() if cols.size else -1
+
+        def _augment_path(count: int) -> None:
+            for i in range(count + 1):
+                r, c = path[i]
+                mask[r, c] = 0 if mask[r, c] == 1 else 1
+
+        def _clear_covers() -> None:
+            row_cover[:] = False
+            col_cover[:] = False
+
+        def _erase_primes() -> None:
+            mask[mask == 2] = 0
+
+        def _step6() -> None:
+            uncovered_rows = ~row_cover
+            uncovered_cols = ~col_cover
+            if not lucid.any(uncovered_rows) or not lucid.any(uncovered_cols):
+                return
+
+            min_val = lucid.min(padded[uncovered_rows][:, uncovered_cols])
+            padded[row_cover] += min_val
+            padded[:, ~col_cover] -= min_val
+
+        _step1()
+        _step2()
+        _step3()
+
+        max_iters = mask.size * 4
+        for _ in range(max_iters):
+            if _step4():
+                break
+            row, col = _find_zero()
+            if row == -1:
+                _step6()
+                continue
+
+            mask[row, col] = 2
+            star_col = _find_star_in_row(row)
+            if star_col != -1:
+                row_cover[row] = True
+                col_cover[star_col] = False
+                continue
+
+            path_count = 0
+            path[path_count] = (row, col)
+            for _ in range(mask.shape[0] * 2):
+                star_row = _find_star_in_col(path[path_count, 1])
+                if star_row == -1:
+                    break
+
+                path_count += 1
+                path[path_count] = (star_row, path[path_count - 1, 1])
+
+                prime_col = _find_prime_in_row(star_row)
+                path_count += 1
+                path[path_count] = (star_row, prime_col)
+
+            _augment_path(path_count)
+            _clear_covers()
+            _erase_primes()
+            break
+
+        row_ind, col_ind = [], []
+        for i in range(n_rows):
+            j = lucid.nonzero(mask[i] == 1)
+            if j.size:
+                col = j[0].item()
+                if col < n_cols:
+                    row_ind.append(i)
+                    col_ind.append(col)
+
+        return Tensor(row_ind, dtype=lucid.Int32), Tensor(col_ind, dtype=lucid.Int32)
+
+    def forward(
+        self, outputs: tuple[Tensor, Tensor], targets: Sequence[dict[str, Tensor]]
+    ) -> list[tuple[Tensor, Tensor]]:
+        pred_logits, pred_boxes = outputs
+
+        prob = F.softmax(pred_logits, axis=-1)
+        out_bbox = pred_boxes
+
+        results: list[tuple[Tensor, Tensor]] = []
+        for b, target in enumerate(targets):
+            tgt_ids = target["labels"]
+            tgt_bbox = target["boxes"]
+
+            if tgt_ids.size == 0:
+                empty = lucid.empty(0, dtype=lucid.Int32, device=pred_logits.device)
+                results.append((empty, empty))
+                continue
+
+            cost_class = -prob[b][:, tgt_ids]
+            bbox_cost = lucid.sum(
+                lucid.abs(out_bbox[b][:, None, :] - tgt_bbox[None, :, :]), axis=2
+            )
+            cost_giou = -generalized_box_iou(
+                box_cxcywh_to_xyxy(out_bbox[b]), box_cxcywh_to_xyxy(tgt_bbox)
+            )
+
+            total_cost = (
+                self.cost_bbox * bbox_cost
+                + self.cost_class * cost_class
+                + self.cost_giou * cost_giou
+            )
+            total_cost_cpu = Tensor(Tensor.copy_data(total_cost.data), device="cpu")
+
+            row_ind, col_ind = self._linear_sum_assignment(total_cost_cpu)
+            results.append(
+                (
+                    Tensor(row_ind, dtype=lucid.Int32, device=pred_logits.device),
+                    Tensor(col_ind, dtype=lucid.Int32, device=pred_logits.device),
+                )
+            )
+
+        return results
+
+
+class _BackboneBase(nn.Module):
+    def __init__(self, backbone: ResNet) -> None:
+        super().__init__()
+        self.body = nn.ModuleDict(
+            {
+                "stem": backbone.stem,
+                "maxpool": backbone.maxpool,
+                "layer1": backbone.layer1,
+                "layer2": backbone.layer2,
+                "layer3": backbone.layer3,
+                "layer4": backbone.layer4,
+            }
+        )
+        self.num_channels = backbone.layer4[-1].conv3[0].out_channels
+
+    def forward(self, x: Tensor) -> Tensor:
+        for key in ["stem", "maxpool", "layer1", "layer2", "layer3", "layer4"]:
+            x = self.body[key](x)
+        return x
+
+
+class DETR(nn.Module):
+    def __init__(
+        self,
+        backbone: _BackboneBase,
+        transformer: _Transformer,
+        num_classes: int,
+        num_queries: int = 100,
+        aux_loss: bool = True,
+        matcher: _HungarianMatcher | None = None,
+        class_loss_coef: float = 1.0,
+        bbox_loss_coef: float = 5.0,
+        giou_loss_coef: float = 2.0,
+    ) -> None:
+        super().__init__()
+        self.backbone = backbone
+        self.position_embedding = _SpatialPosEncoding(backbone.num_channels // 2)
+
+        self.transformer = transformer
+        self.num_queries = num_queries
+        self.num_classes = num_classes
+        self.aux_loss = aux_loss
+
+        hidden_dim = transformer.d_model
+        self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
+        self.class_embed = nn.Linear(hidden_dim, num_classes + 1)
+        self.bbox_embed = _MLP(hidden_dim, hidden_dim, 4, num_layers=3)
+
+        self.matcher = (
+            matcher
+            if matcher is not None
+            else _HungarianMatcher(
+                cost_class=class_loss_coef,
+                cost_bbox=bbox_loss_coef,
+                cost_giou=giou_loss_coef,
+            )
+        )
+        self.class_loss_coef = class_loss_coef
+        self.bbox_loss_coef = bbox_loss_coef
+        self.giou_loss_coef = giou_loss_coef
+
+    def _get_permutation_idx(
+        self, indices: Sequence[tuple[Tensor, Tensor]]
+    ) -> tuple[Tensor, Tensor]:
+        batch_idx = []
+        idx = []
+        for i, (dat, _) in enumerate(indices):
+            if dat.size == 0:
+                continue
+            batch_idx.append(lucid.full(dat.shape, i, dtype=lucid.Int32))
+            idx.append(dat)
+
+        if not idx:
+            return lucid.empty(0, dtype=lucid.Int32), lucid.empty(0, dtype=lucid.Int32)
+
+        return lucid.concatenate(batch_idx), lucid.concatenate(idx)
+
+    def forward(
+        self, x: Tensor, mask: Tensor | None = None
+    ) -> tuple[Tensor, Tensor] | list[tuple[Tensor, Tensor]]:
+        features = self.backbone(x)
+        B, _, H, W = features.shape
+
+        if mask is None:
+            mask = lucid.zeros(B, H, W, dtype=lucid.Float32, device=x.device)
+        pos_embed = self.position_embedding(mask)
+
+        src = self.input_proj(features)
+        src_flat = src.flatten(2).transpose((0, 2, 1))
+        pos_flat = pos_embed.flatten(2).transpose((0, 2, 1))
+        mask_flat = mask.reshape(B, -1)
+
+        query_embed = self.query_embed.weight.unsqueeze(axis=0).repeat(B, axis=0)
+        hs, _ = self.transformer(src_flat, mask_flat, query_embed, pos_flat)
+
+        outputs_class = self.class_embed(hs[-1])
+        outputs_coord = F.sigmoid(self.bbox_embed(hs[-1]))
+
+        out: list[tuple[Tensor, Tensor]] = [(outputs_class, outputs_coord)]
+        if self.aux_loss:
+            aux_outputs: list[tuple[Tensor, Tensor]] = []
+            for layer_out in hs[:-1]:
+                aux_outputs.append(
+                    (self.class_embed(layer_out), F.sigmoid(self.bbox_embed(layer_out)))
+                )
+
+            return aux_outputs + out
+
+        final_out = out[0]
+        return final_out
+
+    @lucid.no_grad()
+    def predict(
+        self, x: Tensor, score_thresh: float = 0.5
+    ) -> list[list[DetectionDict]]: ...
+
+    def _compute_losses(
+        self, outputs: tuple[Tensor, Tensor], targets: Sequence[dict[str, Tensor]]
+    ) -> dict[str, Tensor]: ...
+
+    def get_loss(
+        self,
+        x: Tensor,
+        targets: Sequence[dict[str, Tensor]],
+        mask: Tensor | None = None,
+    ) -> Tensor: ...
+
+    # TODO: Implement `predict`, `_compute_losses`, and `get_loss` methods
+    NotImplemented

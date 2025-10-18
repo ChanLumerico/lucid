@@ -59,6 +59,24 @@ class _neg(operation):
         return a.size
 
 
+class _invert(operation):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @unary_func_op(has_gradient=False)
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(~a.data)
+        return self.result, partial(self.__grad__, lib_=np)
+
+    @unary_func_op(has_gradient=False, device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(mx.bitwise_invert(a.data))
+        return self.result, partial(self.__grad__, lib_=mx)
+
+    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+        return lib_.array(0.0)
+
+
 class exp(operation):
     def __init__(self) -> None:
         super().__init__()

@@ -143,6 +143,10 @@ def _neg(a: Tensor, /) -> Tensor:
     return ufunc._neg()(a)
 
 
+def _invert(a: Tensor, /) -> Tensor:
+    return ufunc._invert()(a)
+
+
 def exp(a: Tensor, /) -> Tensor:
     return ufunc.exp()(a)
 
@@ -566,6 +570,7 @@ Tensor.__le__ = _less_or_equal
 
 Tensor.__pow__ = _pow
 Tensor.__neg__ = _neg
+Tensor.__invert__ = _invert
 
 Tensor.__and__ = _bitwise_and
 Tensor.__rand__ = _rbitwise_and
