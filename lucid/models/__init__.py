@@ -1,3 +1,4 @@
+from .gpt import *
 from .imgclf import *
 from .imggen import *
 from .objdet import *
