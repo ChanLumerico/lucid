@@ -12,6 +12,7 @@ Object detection
     Faster R-CNN <faster_rcnn/FasterRCNN.rst>
     YOLO <yolo/index.rst>
     EfficientDet <efficientdet/EfficientDet.rst>
+    DETR <detr/DETR.rst>
 
 R-CNN
 -----
@@ -281,5 +282,38 @@ fewer parameters.
       - :math:`(N,3,1536,1536)`
       - 87,173,148
       - 325.00B
+
+DETR
+----
+|transformer-badge| |detection-transformer-badge| |objdet-badge|
+
+DETR (DEtection TRansformer) is a fully end-to-end object detector that replaces 
+hand-crafted components like anchor generation and NMS with a Transformer architecture. 
+It directly predicts a fixed set of objects using bipartite matching and set-based 
+global loss, unifying object detection with sequence modeling.
+
+ Carion, Nicolas, et al. End-to-End Object Detection with Transformers. *ECCV 2020*, 2020.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - FLOPs
+    
+    * - DETR-R50
+      - `detr_r50 <detr/detr_r50>`_
+      - :math:`(N,3,800,\le 1312)`
+      - 41,578,400
+      - 88.13B
+    
+    * - DETR-R101
+      - `detr_r101 <detr/detr_r101>`_
+      - :math:`(N,3,800,\le 1312)`
+      - 60,570,528
+      - 167.21B
 
 *To be implemented...🔮*

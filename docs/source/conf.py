@@ -15,7 +15,7 @@ os.environ["SPHINX_BUILD"] = "1"
 project = "Lucid"
 copyright = "2025, ChanLumerico"
 author = "ChanLumerico"
-release = "2.7.0"
+release = "2.7.2"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -75,6 +75,10 @@ ARCH_EP = """
 .. |vision-transformer-badge| raw:: html
 
     <span class="badge vision_transformer">Vision Transformer</span>
+
+.. |detection-transformer-badge| raw:: html
+
+    <span class="badge detection_transformer">Detection Transformer</span>
 
 .. |autoencoder-badge| raw:: html
 
