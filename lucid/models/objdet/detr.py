@@ -38,13 +38,13 @@ class _MLP(nn.Module):
 class _SpatialPosEncoding(nn.Module):
     def __init__(
         self,
-        num_pos_feats: int = 128,
+        d_model: int = 256,
         temperature: float = 10000.0,
         normalize: bool = True,
         scale: float | None = None,
     ) -> None:
         super().__init__()
-        self.num_pos_feats = num_pos_feats
+        self.num_pos_feats = d_model // 2
         self.temperature = temperature
         self.normalize = normalize
         self.scale = scale if scale is not None else 2 * math.pi
@@ -62,7 +62,9 @@ class _SpatialPosEncoding(nn.Module):
             y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
             x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
-        dim_t = lucid.arange(self.num_pos_feats, dtype=lucid.Float32)
+        dim_t = lucid.arange(
+            self.num_pos_feats, dtype=lucid.Float32, device=mask.device
+        )
         dim_t = self.temperature ** (2 * (dim_t // 2) / self.num_pos_feats)
 
         pos_x = x_embed[:, :, :, None] / dim_t
@@ -160,7 +162,7 @@ class _TransformerEncoder(nn.Module):
         mask: Tensor | None = None,
         src_key_padding_mask: Tensor | None = None,
         pos: Tensor | None = None,
-    ) -> None:
+    ) -> Tensor:
         output = src
         for layer in self.layers:
             output = layer(
@@ -551,7 +553,6 @@ class _HungarianMatcher(nn.Module):
             _augment_path(path_count)
             _clear_covers()
             _erase_primes()
-            break
 
         row_ind, col_ind = [], []
         for i in range(n_rows):
@@ -574,8 +575,8 @@ class _HungarianMatcher(nn.Module):
 
         results: list[tuple[Tensor, Tensor]] = []
         for b, target in enumerate(targets):
-            tgt_ids = target["labels"]
-            tgt_bbox = target["boxes"]
+            tgt_ids = target["class_id"]
+            tgt_bbox = target["box"]
 
             if tgt_ids.size == 0:
                 empty = lucid.empty(0, dtype=lucid.Int32, device=pred_logits.device)
@@ -641,10 +642,11 @@ class DETR(nn.Module):
         class_loss_coef: float = 1.0,
         bbox_loss_coef: float = 5.0,
         giou_loss_coef: float = 2.0,
+        eos_coef: float = 0.1,
     ) -> None:
         super().__init__()
         self.backbone = backbone
-        self.position_embedding = _SpatialPosEncoding(backbone.num_channels // 2)
+        self.position_embedding = _SpatialPosEncoding(transformer.d_model)
 
         self.transformer = transformer
         self.num_queries = num_queries
@@ -666,9 +668,11 @@ class DETR(nn.Module):
                 cost_giou=giou_loss_coef,
             )
         )
+
         self.class_loss_coef = class_loss_coef
         self.bbox_loss_coef = bbox_loss_coef
         self.giou_loss_coef = giou_loss_coef
+        self.eos_coef = eos_coef
 
     def _get_src_permutation_idx(
         self, indices: Sequence[tuple[Tensor, Tensor]]
@@ -678,11 +682,16 @@ class DETR(nn.Module):
         for i, (src, _) in enumerate(indices):
             if src.size == 0:
                 continue
-            batch_idx.append(lucid.full(src.shape, i, dtype=lucid.Int32))
+            batch_idx.append(
+                lucid.full(src.shape, i, dtype=lucid.Int32, device=self.device)
+            )
             src_idx.append(src)
 
         if not src_idx:
-            return lucid.empty(0, dtype=lucid.Int32), lucid.empty(0, dtype=lucid.Int32)
+            return (
+                lucid.empty(0, dtype=lucid.Int32, device=self.device),
+                lucid.empty(0, dtype=lucid.Int32, device=self.device),
+            )
 
         return lucid.concatenate(batch_idx), lucid.concatenate(src_idx)
 
@@ -694,11 +703,16 @@ class DETR(nn.Module):
         for i, (_, tgt) in enumerate(indices):
             if tgt.size == 0:
                 continue
-            batch_idx.append(lucid.full(tgt.shape, i, dtype=lucid.Int32))
+            batch_idx.append(
+                lucid.full(tgt.shape, i, dtype=lucid.Int32, device=self.device)
+            )
             tgt_idx.append(tgt)
 
         if not tgt_idx:
-            return lucid.empty(0, dtype=lucid.Int32), lucid.empty(0, dtype=lucid.Int32)
+            return (
+                lucid.empty(0, dtype=lucid.Int32, device=self.device),
+                lucid.empty(0, dtype=lucid.Int32, device=self.device),
+            )
 
         return lucid.concatenate(batch_idx), lucid.concatenate(tgt_idx)
 
@@ -715,7 +729,7 @@ class DETR(nn.Module):
         src = self.input_proj(features)
         src_flat = src.flatten(2).transpose((0, 2, 1))
         pos_flat = pos_embed.flatten(2).transpose((0, 2, 1))
-        mask_flat = mask.reshape(B, -1)
+        mask_flat = mask.reshape(B, -1).astype(bool)
 
         query_embed = self.query_embed.weight.unsqueeze(axis=0).repeat(B, axis=0)
         hs, _ = self.transformer(src_flat, mask_flat, query_embed, pos_flat)
@@ -737,25 +751,22 @@ class DETR(nn.Module):
         return final_out
 
     @lucid.no_grad()
-    def predict(
-        self, x: Tensor, score_thresh: float = 0.5
-    ) -> list[list[DetectionDict]]:
+    def predict(self, x: Tensor, k: int = 100) -> list[list[DetectionDict]]:
         outputs = self.forward(x)
         if isinstance(outputs, list):
             outputs = outputs[-1]
 
         logits, boxes = outputs
         probs = F.softmax(logits, axis=-1)[..., :-1]
+        boxes = boxes.clip(min_value=0.0, max_value=1.0)
+
         scores = lucid.max(probs, axis=-1)
         labels = lucid.argmax(probs, axis=-1)
 
         results: list[list[DetectionDict]] = []
         B, _, H, W = x.shape
         for b in range(B):
-            keep = scores[b] >= score_thresh
-            if lucid.sum(keep).item() == 0:
-                results.append([])
-                continue
+            _, keep = lucid.topk(scores[b], k=k)
 
             image_boxes = boxes[b][keep]
             image_scores = scores[b][keep]
@@ -765,6 +776,8 @@ class DETR(nn.Module):
             abs_boxes = abs_boxes * Tensor(
                 [W, H, W, H], dtype=abs_boxes.dtype, device=abs_boxes.device
             )
+            abs_boxes[..., 0::2] = abs_boxes[..., 0::2].clip(0, W - 1)
+            abs_boxes[..., 1::2] = abs_boxes[..., 1::2].clip(0, H - 1)
 
             detections: list[DetectionDict] = []
             for box, score, label in zip(abs_boxes, image_scores, image_labels):
@@ -801,14 +814,21 @@ class DETR(nn.Module):
                 [t["class_id"][j] for t, (_, j) in zip(targets, indices)]
             )
 
+        empty_weight = lucid.ones(
+            pred_logits.shape[-1], dtype=lucid.Float32, device=pred_logits.device
+        )
+        empty_weight[-1] = self.eos_coef
+
         loss_ce = F.cross_entropy(
-            pred_logits.reshape(-1, pred_logits.shape[-1]), target_classes.reshape(-1)
+            pred_logits.reshape(-1, pred_logits.shape[-1]),
+            target_classes.reshape(-1),
+            weight=empty_weight,
         )
 
         if idx[0].size > 0:
             src_boxes = pred_boxes[idx]
             target_boxes = lucid.concatenate(
-                [t["boxes"][j] for t, (_, j) in zip(targets, indices)]
+                [t["box"][j] for t, (_, j) in zip(targets, indices)]
             )
             loss_bbox = lucid.sum(lucid.abs(src_boxes - target_boxes), axis=1)
             loss_bbox = loss_bbox.sum() / num_boxes
@@ -881,15 +901,21 @@ def _build_backbone(name: str, pretrained: bool) -> _BackboneBase:
 
     back = _BackboneBase(backbone)
     if pretrained:
-        for param in back.parameters():
-            param.requires_grad = False
+        for m in back.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()
+                m.weight.requires_grad = False
+                m.bias.requires_grad = False
 
     return back
 
 
 @register_model
 def detr_r50(
-    num_classes: int = 91, num_queries: int = 100, pretrained_backbone: bool = False
+    num_classes: int = 91,
+    num_queries: int = 100,
+    pretrained_backbone: bool = False,
+    **kwargs,
 ) -> DETR:
     backbone = _build_backbone("resnet_50", pretrained_backbone)
     transformer = _Transformer(
@@ -900,12 +926,15 @@ def detr_r50(
         dim_feedforward=2048,
         dropout=0.1,
     )
-    return DETR(backbone, transformer, num_classes, num_queries)
+    return DETR(backbone, transformer, num_classes, num_queries, **kwargs)
 
 
 @register_model
 def detr_r101(
-    num_classes: int = 91, num_queries: int = 100, pretrained_backbone: bool = False
+    num_classes: int = 91,
+    num_queries: int = 100,
+    pretrained_backbone: bool = False,
+    **kwargs,
 ) -> DETR:
     backbone = _build_backbone("resnet_101", pretrained_backbone)
     transformer = _Transformer(
@@ -916,4 +945,4 @@ def detr_r101(
         dim_feedforward=2048,
         dropout=0.1,
     )
-    return DETR(backbone, transformer, num_classes, num_queries)
+    return DETR(backbone, transformer, num_classes, num_queries, **kwargs)

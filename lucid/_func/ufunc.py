@@ -38,6 +38,28 @@ class _pow(operation):
         return 11 * a.size
 
 
+class _rpow(operation):
+    def __init__(self, base: _Scalar) -> None:
+        super().__init__()
+        self.base = base
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(self.base**a.data)
+        return self.result, partial(self.__grad__, a=a)
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.result = Tensor(self.base**a.data)
+        return self.result, partial(self.__grad__, a=a)
+
+    def __grad__(self, a: Tensor) -> _GradFuncType:
+        return (math.log(self.base) * self.base**a.data) * self.result.grad
+
+    def __flops__(self, a: Tensor) -> int:
+        return 11 * a.size
+
+
 class _neg(operation):
     def __init__(self) -> None:
         super().__init__()

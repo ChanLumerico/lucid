@@ -139,6 +139,10 @@ def _pow(a: Tensor, /, exp: _Scalar) -> Tensor:
     return ufunc._pow(exp)(a)
 
 
+def _rpow(a: Tensor, /, base: _Scalar) -> Tensor:
+    return ufunc._rpow(base)(a)
+
+
 def _neg(a: Tensor, /) -> Tensor:
     return ufunc._neg()(a)
 
@@ -569,6 +573,7 @@ Tensor.__lt__ = _less
 Tensor.__le__ = _less_or_equal
 
 Tensor.__pow__ = _pow
+Tensor.__rpow__ = _rpow
 Tensor.__neg__ = _neg
 Tensor.__invert__ = _invert
 

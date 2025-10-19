@@ -1030,5 +1030,11 @@
         "family": "DETR",
         "param_size": 41578400,
         "task": "objdet"
+    },
+    "detr_r101": {
+        "name": "detr_r101",
+        "family": "DETR",
+        "param_size": 60570528,
+        "task": "objdet"
     }
 }
