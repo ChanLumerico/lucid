@@ -8,8 +8,11 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid import register_model
 
-from lucid.models.objdet.util import iou, DetectionDict
-from lucid.models.imgclf.resnet import ResNet
+from lucid.models.objdet.util import DetectionDict
+from lucid.models.imgclf.resnet import ResNet, resnet_50, resnet_101
+
+
+__all__ = ["DETR", "detr_r50", "detr_r101"]
 
 
 class _MLP(nn.Module):
@@ -667,21 +670,37 @@ class DETR(nn.Module):
         self.bbox_loss_coef = bbox_loss_coef
         self.giou_loss_coef = giou_loss_coef
 
-    def _get_permutation_idx(
+    def _get_src_permutation_idx(
         self, indices: Sequence[tuple[Tensor, Tensor]]
     ) -> tuple[Tensor, Tensor]:
         batch_idx = []
-        idx = []
-        for i, (dat, _) in enumerate(indices):
-            if dat.size == 0:
+        src_idx = []
+        for i, (src, _) in enumerate(indices):
+            if src.size == 0:
                 continue
-            batch_idx.append(lucid.full(dat.shape, i, dtype=lucid.Int32))
-            idx.append(dat)
+            batch_idx.append(lucid.full(src.shape, i, dtype=lucid.Int32))
+            src_idx.append(src)
 
-        if not idx:
+        if not src_idx:
             return lucid.empty(0, dtype=lucid.Int32), lucid.empty(0, dtype=lucid.Int32)
 
-        return lucid.concatenate(batch_idx), lucid.concatenate(idx)
+        return lucid.concatenate(batch_idx), lucid.concatenate(src_idx)
+
+    def _get_tgt_permutation_idx(
+        self, indices: Sequence[tuple[Tensor, Tensor]]
+    ) -> tuple[Tensor, Tensor]:
+        batch_idx = []
+        tgt_idx = []
+        for i, (_, tgt) in enumerate(indices):
+            if tgt.size == 0:
+                continue
+            batch_idx.append(lucid.full(tgt.shape, i, dtype=lucid.Int32))
+            tgt_idx.append(tgt)
+
+        if not tgt_idx:
+            return lucid.empty(0, dtype=lucid.Int32), lucid.empty(0, dtype=lucid.Int32)
+
+        return lucid.concatenate(batch_idx), lucid.concatenate(tgt_idx)
 
     def forward(
         self, x: Tensor, mask: Tensor | None = None
@@ -720,18 +739,181 @@ class DETR(nn.Module):
     @lucid.no_grad()
     def predict(
         self, x: Tensor, score_thresh: float = 0.5
-    ) -> list[list[DetectionDict]]: ...
+    ) -> list[list[DetectionDict]]:
+        outputs = self.forward(x)
+        if isinstance(outputs, list):
+            outputs = outputs[-1]
+
+        logits, boxes = outputs
+        probs = F.softmax(logits, axis=-1)[..., :-1]
+        scores = lucid.max(probs, axis=-1)
+        labels = lucid.argmax(probs, axis=-1)
+
+        results: list[list[DetectionDict]] = []
+        B, _, H, W = x.shape
+        for b in range(B):
+            keep = scores[b] >= score_thresh
+            if lucid.sum(keep).item() == 0:
+                results.append([])
+                continue
+
+            image_boxes = boxes[b][keep]
+            image_scores = scores[b][keep]
+            image_labels = labels[b][keep]
+
+            abs_boxes = box_cxcywh_to_xyxy(image_boxes)
+            abs_boxes = abs_boxes * Tensor(
+                [W, H, W, H], dtype=abs_boxes.dtype, device=abs_boxes.device
+            )
+
+            detections: list[DetectionDict] = []
+            for box, score, label in zip(abs_boxes, image_scores, image_labels):
+                detections.append(
+                    {
+                        "box": box.tolist(),
+                        "score": float(score.item()),
+                        "class_id": int(label.item()),
+                    }
+                )
+            results.append(detections)
+
+        return results
 
     def _compute_losses(
         self, outputs: tuple[Tensor, Tensor], targets: Sequence[dict[str, Tensor]]
-    ) -> dict[str, Tensor]: ...
+    ) -> dict[str, Tensor]:
+        pred_logits, pred_boxes = outputs
+
+        indices = self.matcher(outputs, targets)
+        idx = self._get_src_permutation_idx(indices)
+
+        num_boxes = sum(t["class_id"].shape[0] for t in targets)
+        num_boxes = max(num_boxes, 1)
+
+        target_classes = lucid.full(
+            pred_logits.shape[:2],
+            self.num_classes,
+            dtype=lucid.Int32,
+            device=pred_logits.device,
+        )
+        if idx[0].size > 0:
+            target_classes[idx] = lucid.concatenate(
+                [t["class_id"][j] for t, (_, j) in zip(targets, indices)]
+            )
+
+        loss_ce = F.cross_entropy(
+            pred_logits.reshape(-1, pred_logits.shape[-1]), target_classes.reshape(-1)
+        )
+
+        if idx[0].size > 0:
+            src_boxes = pred_boxes[idx]
+            target_boxes = lucid.concatenate(
+                [t["boxes"][j] for t, (_, j) in zip(targets, indices)]
+            )
+            loss_bbox = lucid.sum(lucid.abs(src_boxes - target_boxes), axis=1)
+            loss_bbox = loss_bbox.sum() / num_boxes
+
+            giou = generalized_box_iou(
+                box_cxcywh_to_xyxy(src_boxes), box_cxcywh_to_xyxy(target_boxes)
+            )
+            loss_giou = (1 - giou.diagonal()).sum() / num_boxes
+
+        else:
+            loss_bbox = lucid.zeros(
+                (), dtype=pred_boxes.dtype, device=pred_boxes.device
+            )
+            loss_giou = lucid.zeros(
+                (), dtype=pred_boxes.dtype, device=pred_boxes.device
+            )
+
+        return {
+            "loss_ce": loss_ce,
+            "loss_bbox": loss_bbox,
+            "loss_giou": loss_giou,
+            "indices": indices,
+        }
 
     def get_loss(
         self,
         x: Tensor,
         targets: Sequence[dict[str, Tensor]],
         mask: Tensor | None = None,
-    ) -> Tensor: ...
+    ) -> Tensor:
+        outputs = self.forward(x, mask)
+        aux_outputs = outputs[:-1] if isinstance(outputs, list) else []
+        main_outputs = outputs[-1] if isinstance(outputs, list) else outputs
 
-    # TODO: Implement `predict`, `_compute_losses`, and `get_loss` methods
-    NotImplemented
+        losses = self._compute_losses(main_outputs, targets)
+        total_loss = (
+            self.class_loss_coef * losses["loss_ce"]
+            + self.bbox_loss_coef * losses["loss_bbox"]
+            + self.giou_loss_coef * losses["loss_giou"]
+        )
+
+        if self.aux_loss:
+            for aux_output in aux_outputs:
+                aux_losses = self._compute_losses(aux_output, targets)
+                total_loss += (
+                    self.class_loss_coef * aux_losses["loss_ce"]
+                    + self.bbox_loss_coef * aux_losses["loss_bbox"]
+                    + self.giou_loss_coef * aux_losses["loss_giou"]
+                )
+
+        return total_loss
+
+
+def _build_backbone(name: str, pretrained: bool) -> _BackboneBase:
+    import lucid.weights as W
+
+    weight_prefix = {
+        "resnet_50": "ResNet_50_Weights",
+        "resnet_101": "ResNet_101_Weights",
+    }
+
+    if name == "resnet_50":
+        weights = getattr(W, weight_prefix[name]).DEFAULT if pretrained else None
+        backbone = resnet_50(weights=weights)
+    elif name == "resnet_101":
+        weights = getattr(W, weight_prefix[name]).DEFAULT if pretrained else None
+        backbone = resnet_101(weights=weights)
+    else:
+        raise ValueError(f"Unsupported backbone '{name}'")
+
+    back = _BackboneBase(backbone)
+    if pretrained:
+        for param in back.parameters():
+            param.requires_grad = False
+
+    return back
+
+
+@register_model
+def detr_r50(
+    num_classes: int = 91, num_queries: int = 100, pretrained_backbone: bool = False
+) -> DETR:
+    backbone = _build_backbone("resnet_50", pretrained_backbone)
+    transformer = _Transformer(
+        d_model=256,
+        n_head=8,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
+        dim_feedforward=2048,
+        dropout=0.1,
+    )
+    return DETR(backbone, transformer, num_classes, num_queries)
+
+
+@register_model
+def detr_r101(
+    num_classes: int = 91, num_queries: int = 100, pretrained_backbone: bool = False
+) -> DETR:
+    backbone = _build_backbone("resnet_101", pretrained_backbone)
+    transformer = _Transformer(
+        d_model=256,
+        n_head=8,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
+        dim_feedforward=2048,
+        dropout=0.1,
+    )
+    return DETR(backbone, transformer, num_classes, num_queries)

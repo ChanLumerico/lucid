@@ -1024,5 +1024,11 @@
         "family": "EfficientDet",
         "param_size": 87173148,
         "task": "objdet"
+    },
+    "detr_r50": {
+        "name": "detr_r50",
+        "family": "DETR",
+        "param_size": 41578400,
+        "task": "objdet"
     }
 }
