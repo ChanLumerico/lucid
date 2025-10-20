@@ -1,4 +1,4 @@
-Object detection
+Object Detection
 ================
 
 .. toctree::

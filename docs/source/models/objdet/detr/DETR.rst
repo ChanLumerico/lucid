@@ -9,6 +9,8 @@ DETR
     detr_r50.rst
     detr_r101.rst
 
+.. autoclass:: lucid.models.DETR
+
 DETR (DEtection TRansformer) is a fully end-to-end object detector that replaces
 hand-crafted components (anchors, NMS) with a Transformer encoder-decoder. It
 predicts a fixed set of objects via **learned object queries** and trains with
