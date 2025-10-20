@@ -181,7 +181,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -943,15 +943,6 @@
 <li class="toctree-l3"><a class="reference internal" href="detr_r101.html">detr_r101</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#class-signature">Class Signature</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#parameters">Parameters</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#inputs">Inputs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#targets-training">Targets (Training)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#returns">Returns</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#loss-matching">Loss &amp; Matching</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#details">Details</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#methods">Methods</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../seq2seq/index.html">Sequence-to-Sequence</a><input class="toctree-checkbox" id="toctree-checkbox-81" name="toctree-checkbox-81" role="switch" type="checkbox"/><label for="toctree-checkbox-81"><div class="visually-hidden">Toggle navigation of Sequence-to-Sequence</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -1041,7 +1032,7 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
@@ -1064,9 +1055,8 @@ It supports <strong>auxiliary losses</strong> from intermediate decoder layers.<
 </div>
 <a class="reference internal image-reference" href="../../../_images/detr.png"><img alt="DETR architecture" class="align-center" src="../../../_images/detr.png" style="width: 600px;" />
 </a>
-</section>
 <section id="class-signature">
-<h1>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h1>
+<h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">DETR</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1085,7 +1075,7 @@ It supports <strong>auxiliary losses</strong> from intermediate decoder layers.<
 </div>
 </section>
 <section id="parameters">
-<h1>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h1>
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><strong>backbone</strong> (<cite>_BackboneBase</cite>): CNN feature extractor (e.g., ResNet-50/101).
 Outputs a single stride-32 feature map <cite>(B, C_backbone, H, W)</cite> and a padding mask <cite>(B, H, W)</cite>.</p></li>
@@ -1103,7 +1093,7 @@ Defaults to standard DETR costs if <cite>None</cite>.</p></li>
 </ul>
 </section>
 <section id="inputs">
-<h1>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">¶</a></h1>
+<h2>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><strong>x</strong> (<cite>Tensor</cite>): Input image batch of shape <cite>(B, 3, H, W)</cite>.
 Images are typically resized so the <strong>short side</strong> ~ 800 and <strong>long side</strong> <span class="math notranslate nohighlight">\(\le\)</span> 1312,
@@ -1113,7 +1103,7 @@ If omitted, an all-False mask is assumed.</p></li>
 </ul>
 </section>
 <section id="targets-training">
-<h1>Targets (Training)<a class="headerlink" href="#targets-training" title="Link to this heading">¶</a></h1>
+<h2>Targets (Training)<a class="headerlink" href="#targets-training" title="Link to this heading">¶</a></h2>
 <p>Provide a <strong>list</strong> of <strong>length B</strong>. Each element is a <em>dict</em> with:</p>
 <ul class="simple">
 <li><p><strong>“class_id”</strong>: <cite>Tensor[int64]</cite> of shape <cite>(N_i,)</cite> with class indices in <cite>[0, num_classes-1]</cite>.</p></li>
@@ -1127,7 +1117,7 @@ If your dataset is in pixels and/or <cite>xyxy</cite>, convert before passing ta
 </div>
 </section>
 <section id="returns">
-<h1>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h1>
+<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <p><strong>Evaluation / Inference (`aux_loss=False`)</strong></p>
 <ul class="simple">
 <li><p><strong>pred_logits</strong>: <cite>(B, num_queries, num_classes + 1)</cite> - raw class scores;
@@ -1141,7 +1131,7 @@ the last channel is <strong>“no-object”</strong>.</p></li>
 </ul>
 </section>
 <section id="loss-matching">
-<h1>Loss &amp; Matching<a class="headerlink" href="#loss-matching" title="Link to this heading">¶</a></h1>
+<h2>Loss &amp; Matching<a class="headerlink" href="#loss-matching" title="Link to this heading">¶</a></h2>
 <p>Training uses Hungarian matching between predictions and ground-truth objects with the following costs:</p>
 <ul class="simple">
 <li><p>Classification (CE) with “no-object” <strong>eos_coef</strong> (e.g., 0.1).</p></li>
@@ -1152,7 +1142,7 @@ the last channel is <strong>“no-object”</strong>.</p></li>
 unmatched queries are trained toward “no-object”.</p>
 </section>
 <section id="details">
-<h1>Details<a class="headerlink" href="#details" title="Link to this heading">¶</a></h1>
+<h2>Details<a class="headerlink" href="#details" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><strong>Backbone projection</strong>: a 1x1 conv maps backbone channels to <cite>d_model</cite> before flattening.</p></li>
 <li><p><strong>Positional encoding</strong>: sine-cosine 2D encoding with <cite>num_pos_feats = d_model // 2</cite>; shape <cite>(B, d_model, H, W)</cite>.</p></li>
@@ -1162,7 +1152,7 @@ unmatched queries are trained toward “no-object”.</p>
 </ul>
 </section>
 <section id="methods">
-<h1>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h1>
+<h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
 <dl class="py method">
 <dt class="sig sig-object py" id="lucid.models.objdet.DETR.forward">
 <span class="sig-prename descclassname"><span class="pre">DETR.</span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.objdet.DETR.forward" title="Link to this definition">¶</a></dt>
@@ -1180,9 +1170,9 @@ unmatched queries are trained toward “no-object”.</p>
 
 </section>
 <section id="examples">
-<h1>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h1>
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
 <section id="forward-inference">
-<h2><strong>Forward (inference)</strong><a class="headerlink" href="#forward-inference" title="Link to this heading">¶</a></h2>
+<h3><strong>Forward (inference)</strong><a class="headerlink" href="#forward-inference" title="Link to this heading">¶</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">lucid</span>
 <span class="kn">from</span> <span class="nn">lucid.models</span> <span class="kn">import</span> <span class="n">detr_r50</span>
 
@@ -1195,7 +1185,7 @@ unmatched queries are trained toward “no-object”.</p>
 </div>
 </section>
 <section id="targets-format">
-<h2><strong>Targets format</strong><a class="headerlink" href="#targets-format" title="Link to this heading">¶</a></h2>
+<h3><strong>Targets format</strong><a class="headerlink" href="#targets-format" title="Link to this heading">¶</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Single image example (B=1) with two objects</span>
 <span class="n">target</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">&quot;class_id&quot;</span><span class="p">:</span> <span class="n">lucid</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mi">5</span><span class="p">,</span> <span class="mi">17</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">lucid</span><span class="o">.</span><span class="n">Int64</span><span class="p">),</span>
@@ -1207,7 +1197,7 @@ unmatched queries are trained toward “no-object”.</p>
 </div>
 </section>
 <section id="training-step-sketch">
-<h2><strong>Training step (sketch)</strong><a class="headerlink" href="#training-step-sketch" title="Link to this heading">¶</a></h2>
+<h3><strong>Training step (sketch)</strong><a class="headerlink" href="#training-step-sketch" title="Link to this heading">¶</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
 
 <span class="c1"># Example loss call</span>
@@ -1223,6 +1213,7 @@ unmatched queries are trained toward “no-object”.</p>
 The model supports arbitrary sizes.</p></li>
 </ul>
 </div>
+</section>
 </section>
 </section>
 
@@ -1269,8 +1260,45 @@ The model supports arbitrary sizes.</p></li>
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">DETR</a><ul>
+<li><a class="reference internal" href="#class-signature">Class Signature</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#inputs">Inputs</a></li>
+<li><a class="reference internal" href="#targets-training">Targets (Training)</a></li>
+<li><a class="reference internal" href="#returns">Returns</a></li>
+<li><a class="reference internal" href="#loss-matching">Loss &amp; Matching</a></li>
+<li><a class="reference internal" href="#details">Details</a></li>
+<li><a class="reference internal" href="#methods">Methods</a><ul>
+<li><a class="reference internal" href="#lucid.models.objdet.DETR.forward"><code class="docutils literal notranslate"><span class="pre">DETR.forward()</span></code></a></li>
+<li><a class="reference internal" href="#lucid.models.objdet.DETR.predict"><code class="docutils literal notranslate"><span class="pre">DETR.predict()</span></code></a></li>
+<li><a class="reference internal" href="#lucid.models.objdet.DETR.get_loss"><code class="docutils literal notranslate"><span class="pre">DETR.get_loss()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#examples">Examples</a><ul>
+<li><a class="reference internal" href="#forward-inference"><strong>Forward (inference)</strong></a></li>
+<li><a class="reference internal" href="#targets-format"><strong>Targets format</strong></a></li>
+<li><a class="reference internal" href="#training-step-sketch"><strong>Training step (sketch)</strong></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>

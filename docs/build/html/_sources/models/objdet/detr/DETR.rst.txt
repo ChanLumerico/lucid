@@ -1,5 +1,5 @@
 DETR
-----
+====
 |transformer-badge| |detection-transformer-badge| |objdet-badge|
 
 .. toctree::
