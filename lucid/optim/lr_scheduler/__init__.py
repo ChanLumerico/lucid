@@ -1,2 +1,2 @@
-from .base import LRScheduler
-from ._sched import *
+from ._base import LRScheduler
+from ._schedulers import *

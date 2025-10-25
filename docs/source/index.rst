@@ -76,9 +76,12 @@
 
     data/data.rst
     data/Dataset.rst
+    data/Subset.rst
     data/TensorDataset.rst
     data/ConcatDataset.rst
     data/DataLoader.rst
+
+    Utilities <data/utilities/index.rst>
 
 .. toctree::
     :maxdepth: 2
@@ -172,7 +175,7 @@ Lucid² 💎
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg
    :alt: Code Style
 
-.. image:: https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DChanLumerico%2Flucid%26branch%3Dmain%26ignored%3Ddocs%26stat%3DlinesOfCode&label=Lines%20of%20Code&color=purple
+.. image:: https://img.shields.io/badge/lines%20of%20code-26.1k-purple.svg
    :alt: Lines of Code
 
 **Lucid** is a minimalist deep learning framework built entirely from scratch in Python.

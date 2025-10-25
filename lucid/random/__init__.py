@@ -1,4 +1,5 @@
 from typing import overload
+import random
 
 import lucid
 from lucid.random import _func
@@ -13,15 +14,29 @@ from lucid.types import (
 )
 
 
-# fmt: off
 __all__ = [
-    "seed", "rand", "randint", "randn", "uniform", "bernoulli", "permutation"
+    "seed",
+    "get_seed",
+    "rand",
+    "randint",
+    "randn",
+    "uniform",
+    "bernoulli",
+    "permutation",
 ]
-# fmt: on
+
+_seed: int = random.randint(0, 2**32 - 1)
+_func.seed(_seed)
 
 
 def seed(seed: int) -> None:
+    global _seed
+    _seed = seed
     return _func.seed(seed)
+
+
+def get_seed() -> None:
+    return _seed
 
 
 @overload

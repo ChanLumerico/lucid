@@ -1,8 +1,8 @@
-from lucid.optim.base import Optimizer
+from lucid.optim._base import Optimizer
 
-from lucid.optim._sgd import *
-from lucid.optim._prop import *
-from lucid.optim._adam import *
-from lucid.optim._ada import *
+from lucid.optim.sgd import *
+from lucid.optim.prop import *
+from lucid.optim.adam import *
+from lucid.optim.ada import *
 
 from lucid.optim import lr_scheduler

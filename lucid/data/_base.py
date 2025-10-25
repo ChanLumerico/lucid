@@ -24,6 +24,33 @@ class Dataset(ABC):
         for i in range(len(self)):
             yield self[i]
 
+    def __repr__(self) -> str:
+        return f"Dataset(n={len(self)})"
+
+
+class Subset(Dataset):
+    def __init__(self, dataset: Dataset, indices: list[int]) -> None:
+        super().__init__()
+        self.dataset = dataset
+        self.indices = indices
+
+    def __getitem__(self, idx: _IndexLike) -> Any:
+        return self.dataset[self.indices[idx]]
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    @override
+    def __iter__(self) -> Iterator[Any]:
+        for i in self.indices:
+            yield self.dataset[i]
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.dataset, name)
+
+    def __repr__(self) -> str:
+        return f"Subset(n={len(self)})"
+
 
 class TensorDataset(Dataset):
     def __init__(self, *tensors_or_arrays: Tensor | _ArrayLike) -> None:
@@ -73,6 +100,7 @@ class TensorDataset(Dataset):
     def __iter__(self) -> Iterator[tuple[Tensor, ...]]:
         return super().__iter__()
 
+    @override
     def __repr__(self) -> str:
         shapes = ", ".join(str(t.shape) for t in self._tensors)
         devices = {t.device for t in self._tensors}
