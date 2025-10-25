@@ -76,6 +76,7 @@
 
     data/data.rst
     data/Dataset.rst
+    data/TensorDataset.rst
     data/ConcatDataset.rst
     data/DataLoader.rst
 

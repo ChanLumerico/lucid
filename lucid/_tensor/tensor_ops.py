@@ -3,7 +3,7 @@ from typing import Self, Sequence
 from lucid.types import _Scalar, _ArrayOrScalar, _ShapeLike, _ArrayLikeInt
 
 
-class _TensorOps:
+class _TensorBase:
     def __add__(self, other: Self | _ArrayOrScalar) -> Self: ...
 
     def __radd__(self, other: Self | _ArrayOrScalar) -> Self: ...

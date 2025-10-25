@@ -20,6 +20,8 @@ _BuiltinNumeric = type[bool | int | float | complex]
 
 _ShapeLike = list[int] | tuple[int]
 
+_IndexLike = int | slice | Sequence[int]
+
 _ArrayLike = list | _NumPyArray | _MLXArray
 _ArrayLikeInt = int | Sequence[int | tuple[int, int]]
 

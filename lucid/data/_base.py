@@ -1,15 +1,16 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Self, Any
+from typing import Callable, Iterator, Self, Any, override
 import random
 import math
 
 import lucid
 from lucid._tensor import Tensor
+from lucid.types import _ArrayLike, _IndexLike, _DeviceType
 
 
 class Dataset(ABC):
     @abstractmethod
-    def __getitem__(self, index: int) -> None:
+    def __getitem__(self, idx: _IndexLike) -> None:
         raise NotImplementedError("Subclasses must implement __getitem__.")
 
     @abstractmethod
@@ -18,6 +19,64 @@ class Dataset(ABC):
 
     def __add__(self, other: Self) -> Self:
         return ConcatDataset([self, other])
+
+    def __iter__(self) -> Iterator[Any]:
+        for i in range(len(self)):
+            yield self[i]
+
+
+class TensorDataset(Dataset):
+    def __init__(self, *tensors_or_arrays: Tensor | _ArrayLike) -> None:
+        super().__init__()
+        if len(tensors_or_arrays) == 0:
+            raise ValueError(
+                "TensorDataset requires at least one tensor/array-like object."
+            )
+        try:
+            self._tensors: tuple[Tensor, ...] = tuple(
+                lucid._check_is_tensor(t) for t in tensors_or_arrays
+            )
+        except Exception as e:
+            raise RuntimeError(
+                "Failed to convert array-like object(s) to tensor."
+            ) from e
+
+        n0 = len(self._tensors[0])
+        for i, t in enumerate(self._tensors):
+            if t.ndim == 0 or len(t) == 0:
+                raise RuntimeError(
+                    "All tensors must be at least 1D. "
+                    f"Tensor at index {i} has no length."
+                )
+            if len(t) != n0:
+                raise ValueError(
+                    "All tensors must have the same length along dim 0: "
+                    f"got {n0} and {len(t)} at index {i}."
+                )
+
+    def __len__(self) -> int:
+        return len(self._tensors[0])
+
+    @override
+    def __getitem__(self, idx: _IndexLike | Tensor) -> tuple[Tensor, ...]:
+        return tuple(t[idx] for t in self._tensors)
+
+    def to(self, device: _DeviceType) -> Self:
+        self._tensors = tuple(t.to(device) for t in self._tensors)
+        return self
+
+    @property
+    def tensors(self) -> tuple[Tensor, ...]:
+        return self._tensors
+
+    @override
+    def __iter__(self) -> Iterator[tuple[Tensor, ...]]:
+        return super().__iter__()
+
+    def __repr__(self) -> str:
+        shapes = ", ".join(str(t.shape) for t in self._tensors)
+        devices = {t.device for t in self._tensors}
+        return f"TensorDataset(n={len(self)}, shapes=({shapes}), devices={devices})"
 
 
 class ConcatDataset(Dataset):
@@ -38,7 +97,7 @@ class ConcatDataset(Dataset):
     def __len__(self) -> int:
         return self.cumulative_sizes[-1] if self.cumulative_sizes else 0
 
-    def __getitem__(self, idx: int) -> Any:
+    def __getitem__(self, idx: _IndexLike) -> Any:
         if idx < 0:
             if -idx > len(self):
                 raise IndexError("Index out of range.")
@@ -101,6 +160,7 @@ class DataLoader:
         if isinstance(batch[0], (tuple, list)):
             transposed = list(zip(*batch))
             return tuple(lucid.stack(tuple(x), axis=0) for x in transposed)
+
         elif isinstance(batch[0], Tensor):
             return lucid.stack(tuple(batch), axis=0)
         else:

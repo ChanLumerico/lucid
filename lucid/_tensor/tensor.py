@@ -15,7 +15,7 @@ from lucid.types import (
     Numeric,
 )
 
-from lucid._tensor.tensor_ops import _TensorOps
+from lucid._tensor.tensor_ops import _TensorBase
 from lucid._backend.metal import mx, parse_mlx_indexing, check_metal_availability
 
 
@@ -27,7 +27,7 @@ _dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
 def _noop() -> None: ...
 
 
-class Tensor(_TensorOps):
+class Tensor(_TensorBase):
     def __init__(
         self,
         data: _ArrayOrScalar | _MLXArray,
