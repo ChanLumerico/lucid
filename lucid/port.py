@@ -5,14 +5,13 @@ from typing import Literal
 
 from lucid._tensor import Tensor
 from lucid.nn import Module
-from lucid.types import _NumPyArray
 
 
 __all__ = ["save", "load"]
 
-_LucidPortable = Tensor | Module | OrderedDict
+_LucidPortable = Tensor | Module | OrderedDict | dict
 
-FORMAT_VERSION: float = 1.0
+FORMAT_VERSION: float = 1.1
 
 EXTENSIONS = Literal[".lct", ".lcd", ".safetensors"]
 
@@ -30,7 +29,7 @@ def save(obj: _LucidPortable, path: Path | str, safetensors: bool = False) -> Pa
     if path.suffix == "":
         if isinstance(obj, Tensor):
             path = path.with_suffix(".lct")
-        elif isinstance(obj, (Module, OrderedDict)):
+        elif isinstance(obj, (Module, OrderedDict, dict)):
             path = (
                 path.with_suffix(".safetensors")
                 if safetensors
@@ -56,10 +55,14 @@ def save(obj: _LucidPortable, path: Path | str, safetensors: bool = False) -> Pa
     elif suffix == ".lcd":
         if isinstance(obj, Module):
             obj = obj.state_dict()
-        if not isinstance(obj, OrderedDict):
-            raise TypeError("Expected a state_dict (OrderedDict) for .lcd file.")
+        if not isinstance(obj, (OrderedDict, dict)):
+            raise TypeError("Expected a state_dict for .lcd file.")
 
-        data = {"type": "OrderedDict", "format_version": FORMAT_VERSION, "content": obj}
+        data = {
+            "type": type(obj).__name__,
+            "format_version": FORMAT_VERSION,
+            "content": obj,
+        }
 
     elif suffix == ".safetensors":
         try:
@@ -72,10 +75,8 @@ def save(obj: _LucidPortable, path: Path | str, safetensors: bool = False) -> Pa
 
         if isinstance(obj, Module):
             obj = obj.state_dict()
-        if not isinstance(obj, OrderedDict):
-            raise TypeError(
-                "Expected a state_dict (OrderedDict) for .safetensors file."
-            )
+        if not isinstance(obj, (OrderedDict, dict)):
+            raise TypeError("Expected a state_dict for .safetensors file.")
 
         save_file(obj, str(path))
         return path.resolve()
@@ -122,7 +123,7 @@ def load(path: Path | str) -> _LucidPortable:
         array = data["content"]
         return Tensor(array)
 
-    elif file_type == "OrderedDict":
+    elif file_type in {"OrderedDict", "dict"}:
         return data["content"]
 
     else:

@@ -118,7 +118,7 @@ class Module:
         for param in self.parameters():
             param.zero()
 
-    def forward(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
+    def forward(self) -> Tensor | tuple[Tensor, ...]:
         raise NotImplementedError(
             "The forward method must be implemented by the subclass."
         )
@@ -204,7 +204,7 @@ class Module:
                 destination=destination, prefix=prefix + name + ".", keep_vars=keep_vars
             )
 
-        for key in destination.keys():
+        for key in list(destination.keys()):
             if key in self._state_dict_pass_attr:
                 del destination[key]
 
@@ -229,10 +229,8 @@ class Module:
             if key in own_state:
                 attr = own_state[key]
                 if isinstance(attr, (nn.Parameter, nn.Buffer)):
-                    if isinstance(value, Tensor):
-                        attr.data = value.data
-                    else:
-                        attr.data = value
+                    value_t = Tensor(value, device=self.device)
+                    attr.data = value_t.data
                 else:
                     setattr(self, key, value)
             elif strict:
