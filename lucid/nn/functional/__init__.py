@@ -395,12 +395,12 @@ def binary_cross_entropy(
 def binary_cross_entropy_with_logits(
     input_: Tensor,
     target: Tensor,
-    weights: Tensor | None = None,
+    weight: Tensor | None = None,
+    pos_weight: Tensor | None = None,
     reduction: _ReductionType | None = "mean",
-    eps: float = 1e-7,
 ) -> Tensor:
     return _loss.binary_cross_entropy_with_logits(
-        input_, target, weights, reduction, eps
+        input_, target, weight, pos_weight, reduction
     )
 
 
@@ -410,8 +410,9 @@ def cross_entropy(
     weight: Tensor | None = None,
     reduction: _ReductionType | None = "mean",
     eps: float = 1e-7,
+    ignore_index: int | None = None,
 ) -> Tensor:
-    return _loss.cross_entropy(input_, target, weight, reduction, eps)
+    return _loss.cross_entropy(input_, target, weight, reduction, eps, ignore_index)
 
 
 def nll_loss(
@@ -419,8 +420,9 @@ def nll_loss(
     target: Tensor,
     weight: Tensor | None = None,
     reduction: _ReductionType | None = "mean",
+    ignore_index: int | None = None,
 ) -> Tensor:
-    return _loss.nll_loss(input_, target, weight, reduction)
+    return _loss.nll_loss(input_, target, weight, reduction, ignore_index)
 
 
 def huber_loss(
