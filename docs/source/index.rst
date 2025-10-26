@@ -56,6 +56,7 @@
    Modules <nn/modules/index.rst>
    Fused Modules <nn/fused/index.rst>
    Containers <nn/containers/index.rst>
+   Utilities <nn/utilities/index.rst>
 
 .. toctree::
     :maxdepth: 2

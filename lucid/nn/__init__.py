@@ -4,3 +4,4 @@ from lucid.nn.modules import *
 from lucid.nn.fused import *
 
 import lucid.nn.init as init
+import lucid.nn.util as util
