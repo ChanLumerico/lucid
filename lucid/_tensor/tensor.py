@@ -397,28 +397,33 @@ class Tensor(_TensorBase):
         return hash(id(self))
 
     def __deepcopy__(self, *args: Any) -> Self:
+        cls = self.__class__
         copied_data = Tensor.copy_data(self.data)
 
-        new_tensor = Tensor(
-            copied_data,
-            requires_grad=self.requires_grad,
-            keep_grad=self.keep_grad,
-            dtype=self.dtype,
-            device=self.device,
-        )
+        if cls is Tensor:
+            new = Tensor(
+                copied_data, self.requires_grad, self.keep_grad, self.dtype, self.device
+            )
+        else:
+            base = Tensor(copied_data, dtype=self.dtype, device=self.device)
+            new = cls(base)
 
-        if self.grad is not None:
-            new_tensor.grad = Tensor.copy_grad(self.grad)
+        if self.grad is not None and (
+            self.keep_grad or getattr(new, "keep_grad", False)
+        ):
+            new.grad = Tensor.copy_grad(self.grad)
+        else:
+            new.grad = None
 
-        new_tensor._op = self._op
-        new_tensor._backward_op = self._backward_op
-        new_tensor._prev = self._prev.copy()
-        new_tensor._backward_hooks = self._backward_hooks.copy()
+        new._op = None
+        new._backward_op = _noop
+        new._prev = []
+        new._backward_hooks = []
 
-        new_tensor._is_free = self._is_free
-        new_tensor._is_bool_tensor = self._is_bool_tensor
+        new._is_free = self._is_free
+        new._is_bool_tensor = self._is_bool_tensor
 
-        return new_tensor
+        return new
 
     def __bool__(self) -> bool:
         if self.data.size != 1:

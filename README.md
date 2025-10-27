@@ -18,6 +18,12 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 - Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
 
+- Added multiple `nn` utilities:
+
+  - `nn.util.grad_norm` - Returns the global norm of the gradients
+  - `nn.util.clip_grad_norm` - Rescales the gradients based on the global norm
+  - `nn.util.clip_grad_value` - Rescales the gradients based on their values.
+
 - Implemented **EfficientDet**: `lucid.models.EfficientDet` with variants from `D0` to `D7`
 
 ## 🔧 How to Install
