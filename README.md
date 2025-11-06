@@ -2,7 +2,7 @@
 
 ![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl.svg)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-32.0k-yellow.svg)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-33.2k-yellow.svg)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 ![Lines of Code](https://img.shields.io/badge/lines%20of%20code-26.4k-purple.svg)
