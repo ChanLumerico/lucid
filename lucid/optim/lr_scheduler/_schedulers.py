@@ -298,4 +298,6 @@ class NoamScheduler(LRScheduler):
         decay_term = step_num**-0.5
         lr_factor = scale * min(decay_term, warmup_term)
 
-        return [base_lr * lr_factor for base_lr in self.base_lrs]
+        # Noam's schedule computes the absolute learning rate, so we ignore
+        # the optimizer's initial lr (base_lr) when returning the new values.
+        return [lr_factor for _ in self.base_lrs]
