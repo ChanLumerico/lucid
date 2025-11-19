@@ -13,6 +13,7 @@ __all__ = [
     "CosineAnnealingLR",
     "ReduceLROnPlateau",
     "CyclicLR",
+    "NoamScheduler",
 ]
 
 
@@ -265,3 +266,36 @@ class CyclicLR(LRScheduler):
             for _ in self.base_lrs
         ]
         return new_lrs
+
+
+class NoamScheduler(LRScheduler):
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        model_size: int,
+        warmup_steps: int,
+        factor: float = 1.0,
+        last_epoch: int = -1,
+        verbose: bool = False,
+    ) -> None:
+        if model_size <= 0:
+            raise ValueError("model_size must be a positive integer.")
+        if warmup_steps <= 0:
+            raise ValueError("warmup_steps must be a positive integer.")
+        if factor <= 0:
+            raise ValueError("factor must be a positive float.")
+
+        self.model_size = model_size
+        self.warmup_steps = warmup_steps
+        self.factor = factor
+        super().__init__(optimizer, last_epoch, verbose)
+
+    def get_lr(self) -> list[float]:
+        step_num = max(self.last_epoch, 1)
+        scale = self.factor * (self.model_size**-0.5)
+
+        warmup_term = step_num * (self.warmup_steps**-1.5)
+        decay_term = step_num**-0.5
+        lr_factor = scale * min(decay_term, warmup_term)
+
+        return [base_lr * lr_factor for base_lr in self.base_lrs]

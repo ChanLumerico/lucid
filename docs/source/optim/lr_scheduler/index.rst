@@ -18,3 +18,4 @@ LR Schedulers
     CosineAnnealingLR.rst
     ReduceLROnPlateau.rst
     CyclicLR.rst
+    NoamScheduler.rst
