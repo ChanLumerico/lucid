@@ -10,3 +10,4 @@ from .attention import *
 from .transformer import *
 from .sparse import *
 from .einops import *
+from .rnn import *
