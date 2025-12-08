@@ -2,10 +2,10 @@
 
 ![PyPI - Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/lucid-dl.svg)
-![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-33.2k-yellow.svg)
+![PyPI - Total Downloads](https://img.shields.io/badge/total%20downloads-34.0k-yellow.svg)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Code](https://img.shields.io/badge/lines%20of%20code-26.4k-purple.svg)
+![Lines of Code](https://img.shields.io/badge/lines%20of%20code-26.5k-purple.svg)
 
 **Lucid** is a minimalist deep learning framework built entirely from scratch in Python. It offers a pedagogically rich environment to explore the foundations of modern deep learning systems, including autodiff, neural network modules, and GPU acceleration — all while staying lightweight, readable, and free of complex dependencies.
 
@@ -18,13 +18,13 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 - Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
 
+- Developing recurrent neural modules in `nn.rnn`, starting with `nn.RNNCell`
+
 - Added multiple `nn` utilities:
 
   - `nn.util.grad_norm` - Returns the global norm of the gradients
   - `nn.util.clip_grad_norm` - Rescales the gradients based on the global norm
   - `nn.util.clip_grad_value` - Rescales the gradients based on their values.
-
-- Implemented **EfficientDet**: `lucid.models.EfficientDet` with variants from `D0` to `D7`
 
 ## 🔧 How to Install
 
