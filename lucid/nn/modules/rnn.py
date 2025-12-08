@@ -10,7 +10,7 @@ from lucid.types import Numeric, _DeviceType
 from .activation import Tanh, ReLU
 
 
-__all__ = ["RNNCell", "RNNBase"]
+__all__ = ["RNNCell", "RNNBase", "RNN"]
 
 
 def _get_activation(nonlinearity: str) -> type[nn.Module]:
@@ -208,3 +208,35 @@ class RNNBase(nn.Module):
             output = output.swapaxes(0, 1)
 
         return output, h_n
+
+
+class RNN(RNNBase):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        nonlinearity: Literal["tanh", "relu"] = "tanh",
+        bias: bool = True,
+        batch_first: bool = False,
+        dropout: float = 0.0,
+    ) -> None:
+        if nonlinearity == "tanh":
+            mode = "RNN_TANH"
+        elif nonlinearity == "relu":
+            mode = "RNN_RELU"
+        else:
+            raise ValueError(
+                f"Invalid nonlinearity '{nonlinearity}'. "
+                "Supported nonlinearities are 'tanh' and 'relu'."
+            )
+
+        super().__init__(
+            mode=mode,
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            bias=bias,
+            batch_first=batch_first,
+            dropout=dropout,
+        )
