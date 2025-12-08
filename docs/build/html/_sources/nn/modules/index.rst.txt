@@ -57,6 +57,12 @@ Modules
 
 .. toctree::
     :maxdepth: 2
+    :caption: Recurrent Layers
+
+    Recurrent Layers <rnn/index.rst>
+
+.. toctree::
+    :maxdepth: 2
     :caption: Attention Layers
 
     Attention Layers <attention/index.rst>
