@@ -1,11 +1,27 @@
+from typing import Literal
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
+from .activation import Tanh, ReLU
+
 
 __all__ = ["RNNCell"]
+
+
+def _get_activation(nonlinearity: str) -> type[nn.Module]:
+    if nonlinearity == "tanh":
+        return Tanh
+    elif nonlinearity == "relu":
+        return ReLU
+    else:
+        raise ValueError(
+            f"Invalid nonlinearity '{nonlinearity}'. "
+            "Supported nonlinearities are 'tanh' and 'relu'."
+        )
 
 
 class RNNCell(nn.Module):
@@ -14,13 +30,13 @@ class RNNCell(nn.Module):
         input_size: int,
         hidden_size: int,
         bias: bool = True,
-        nonlinearity: type[nn.Module] = nn.Tanh,
+        nonlinearity: Literal["tanh", "relu"] = "tanh",
     ) -> None:
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
-        self.nonlinearity = nonlinearity()
+        self.nonlinearity = _get_activation(nonlinearity)()
 
         sqrt_k = 1.0 / (hidden_size**0.5)
         self.weight_ih = nn.Parameter(
