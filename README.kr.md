@@ -7,11 +7,6 @@
 [📑 Lucid 문서](https://chanlumerico.github.io/lucid/build/html/index.html) | 
 [🤗 Lucid Huggingface](https://huggingface.co/ChanLumerico/lucid)
 
-### 🔥 새로운 소식
-
-- [**`Safetensors`**](https://github.com/huggingface/safetensors)를 지원하여 기존 `.lcd` 포맷과 함께 Lucid 신경 모듈 포팅에 활용할 수 있다.
-- 신경 모듈 카테고리 `nn.rnn`을 추가했다: `nn.RNNBase`, `nn.RNN`, `nn.LSTM`, `nn.GRU`, `nn.RNNCell`, `nn.LSTMCell`, `nn.GRUCell`
-
 ## 🔧 설치 방법
 
 Lucid는 가볍고 이식성이 높으며 어떤 환경에서도 쉽게 사용할 수 있도록 설계되었다.
