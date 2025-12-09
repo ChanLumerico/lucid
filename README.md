@@ -11,8 +11,12 @@
 
 Whether you're a student, educator, or an advanced researcher seeking to demystify deep learning internals, Lucid provides a transparent and highly introspectable API that faithfully replicates key behaviors of major frameworks like PyTorch, yet in a form simple enough to study line by line.
 
-[📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html) | 
+[📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html) | [✏️ Lucid DevLog](https://velog.io/@lumerico284/series/Lucid-Development) | 
 [🤗 Lucid Huggingface](https://huggingface.co/ChanLumerico/lucid)
+
+#### Other Languages
+
+[🇰🇷 README.md in Korean](https://github.com/ChanLumerico/lucid/blob/main/README.kr.md)
 
 ### 🔥 What's New
 
