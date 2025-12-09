@@ -18,13 +18,9 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 - Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
 
-- Developing recurrent neural modules in `nn.rnn`, starting with `nn.RNNCell`
+- Added new neural module category `nn.rnn`, including:
 
-- Added multiple `nn` utilities:
-
-  - `nn.util.grad_norm` - Returns the global norm of the gradients
-  - `nn.util.clip_grad_norm` - Rescales the gradients based on the global norm
-  - `nn.util.clip_grad_value` - Rescales the gradients based on their values.
+  `nn.RNNBase`, `nn.RNN`, `nn.LSTM`, `nn.GRU`, `nn.RNNCell`, `nn.LSTMCell`, `nn.GRUCell`
 
 ## 🔧 How to Install
 
