@@ -142,7 +142,6 @@ class cholesky(operation):
         return int((1 / 3) * a.shape[-1] ** 3)
 
 
-@fallback
 class norm(operation):
     def __init__(
         self,
@@ -168,20 +167,10 @@ class norm(operation):
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        fallback_ = self.axis is None or (
-            isinstance(self.axis, (tuple, list)) and a.ndim > 1
+        mx_ord = self.ord if not (self.ord == 2 and a.ndim > 2) else None
+        self.result = Tensor(
+            mx.linalg.norm(a.data, ord=mx_ord, axis=self.axis, keepdims=self.keepdims)
         )
-        if fallback_:
-            result_data = np.linalg.norm(
-                a.data, ord=self.ord, axis=self.axis, keepdims=self.keepdims
-            )
-            self.result = Tensor(result_data, device="gpu")
-        else:
-            result_data = mx.linalg.norm(
-                a.data, ord=self.ord, axis=self.axis, keepdims=self.keepdims
-            )
-            self.result = Tensor(result_data)
-
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:

@@ -69,6 +69,13 @@ Raises
     - **ValueError**: If the value of `ord` is not supported.
     - **LinAlgError**: If the input tensor does not support norm computation for the specified `ord`.
 
+
+.. note::
+
+    On MLX/Metal, `ord=2` for tensors with more than two dimensions is internally passed to 
+    `mx.linalg.norm` as `ord=None` (Frobenius norm) to follow MLX's expected signature and avoid CPU fallback. 
+    This keeps the behavior aligned with NumPy while staying on GPU.
+
 Example
 -------
 
@@ -83,4 +90,3 @@ Example
     >>> n1 = lucid.linalg.norm(a, ord=1)
     >>> print(n1)
     Tensor(7.0)
-
