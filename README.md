@@ -16,7 +16,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 #### Other Languages
 
-[🇰🇷 README.md in Korean](https://github.com/ChanLumerico/lucid/blob/main/README.kr.md)
+[🇰🇷 Korean](https://github.com/ChanLumerico/lucid/blob/main/README.kr.md)
 
 ### 🔥 What's New
 
