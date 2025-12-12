@@ -1,5 +1,5 @@
 {
     "python.REPL.enableREPLSmartSend": false,
     "remote.autoForwardPortsFallback": 0,
-    "editor.fontSize": 13
+    "editor.fontSize": 12
 }
