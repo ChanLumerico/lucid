@@ -4,7 +4,7 @@
 
 학생, 교육자, 연구자가 딥러닝 내부 동작을 투명하게 살펴볼 수 있도록, PyTorch와 같은 주요 프레임워크의 핵심 동작을 충실히 재현하면서도 줄 단위로 따라 읽을 만큼 단순한 API를 제공한다.
 
-[📑 Lucid 문서](https://chanlumerico.github.io/lucid/build/html/index.html) | 
+[📑 Lucid 공식문서](https://chanlumerico.github.io/lucid/build/html/index.html) | [✏️ Lucid 개발일지](https://velog.io/@lumerico284/series/Lucid-Development) | 
 [🤗 Lucid Huggingface](https://huggingface.co/ChanLumerico/lucid)
 
 ## 🔧 설치 방법
