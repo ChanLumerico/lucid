@@ -177,11 +177,18 @@ def _set_tensor_grad(
 
 
 def _check_is_tensor(
-    any: Tensor | _ArrayOrScalar, device: _DeviceType = "cpu"
+    any: Tensor | _ArrayOrScalar,
+    device: _DeviceType = "cpu",
+    dtype: _BuiltinNumeric | Numeric | None = None,
 ) -> Tensor:
-    if not isinstance(any, Tensor):
-        return Tensor(any, device=device)
-    return any
+    if isinstance(any, Tensor):
+        return any
+
+    is_scalar = not isinstance(any, (_NumPyArray, _MLXArray, list, tuple))
+    if dtype is not None and is_scalar:
+        return Tensor(any, device=device, dtype=dtype)
+
+    return Tensor(any, device=device)
 
 
 def _match_grad_shape(

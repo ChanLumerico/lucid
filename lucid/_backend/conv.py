@@ -1,8 +1,9 @@
 from functools import partial
-import itertools
-import numpy as np
 from types import ModuleType
 from typing import TypeAlias
+import itertools
+
+import numpy as np
 
 from lucid._tensor import Tensor
 from lucid._backend.core import (
@@ -12,6 +13,7 @@ from lucid._backend.core import (
     _GradFuncType,
 )
 from lucid._backend.metal import mx
+
 from lucid.types import _NumPyArray, _MLXArray
 
 
@@ -355,6 +357,7 @@ class conv_nd(operation):
         _validate_conv_shapes(a, b, self.groups)
         stride, padding, dilation = self._normalize(b)
         out = _conv_forward(np, a.data, b.data, stride, padding, dilation, self.groups)
+
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
 
@@ -363,6 +366,7 @@ class conv_nd(operation):
         _validate_conv_shapes(a, b, self.groups)
         stride, padding, dilation = self._normalize(b)
         out = _conv_forward(mx, a.data, b.data, stride, padding, dilation, self.groups)
+
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 

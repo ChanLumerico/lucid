@@ -138,7 +138,7 @@ class Tensor(_TensorBase):
             mx.stop_gradient(self.data)
         return self
 
-    def backward(self, keep_grad: bool = False) -> None:
+    def backward(self, keep_grad: bool = False, retain_graph: bool = False) -> None:
         if self.grad is None:
             self.grad = (
                 np.ones_like(self.data) if self.is_cpu() else mx.ones_like(self.data)
@@ -146,6 +146,7 @@ class Tensor(_TensorBase):
         visited = set()
         topo_order: list[Self] = []
         stack = [self]
+        ops_to_clear = set()
 
         while stack:
             tensor = stack[-1]
@@ -168,8 +169,23 @@ class Tensor(_TensorBase):
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
 
+            if tensor._op is not None:
+                ops_to_clear.add(tensor._op)
+
             if not (tensor.is_leaf or keep_grad or tensor.keep_grad):
                 tensor.grad = None
+
+        if not retain_graph:
+            for tensor in topo_order:
+                tensor._prev = []
+                tensor._backward_op = _noop
+                if not tensor.is_leaf:
+                    tensor._op = None
+            for op in ops_to_clear:
+                try:
+                    op.result = None
+                except Exception:
+                    pass
 
     def register_hook(self, hook: _HookType) -> Callable:
         self._backward_hooks.append(hook)

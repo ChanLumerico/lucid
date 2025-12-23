@@ -4,7 +4,7 @@ import functools
 
 import lucid
 import lucid.types as types
-from lucid.types import _DeviceType, _NumPyArray, _MLXArray
+from lucid.types import _DeviceType, _NumPyArray, _MLXArray, _BuiltinNumeric
 
 from lucid._tensor import Tensor
 from lucid._backend.metal import is_gpu_op
@@ -29,6 +29,7 @@ def func_op(
             tensors: Tuple[Tensor, ...] = tuple()
             requires_grad = False
             is_free = True
+            dtype_hint: _BuiltinNumeric | types.Numeric | None = None
 
             if n_in is None:
                 tensor_args = args
@@ -40,7 +41,16 @@ def func_op(
                 tensor_args = args[:n_in]
 
             for arg in tensor_args:
-                tensor = lucid._check_is_tensor(arg, device=device)
+                if isinstance(arg, Tensor):
+                    dtype_hint = arg.dtype
+                    break
+
+            grad_enabled = lucid.grad_enabled()
+            flops_enabled = lucid.flops_enabled()
+            track_graph = grad_enabled or flops_enabled
+
+            for arg in tensor_args:
+                tensor = lucid._check_is_tensor(arg, device=device, dtype=dtype_hint)
                 tensors += (tensor,)
                 requires_grad = requires_grad or tensor.requires_grad
 
@@ -59,7 +69,7 @@ def func_op(
             new_args = (*tensors, *non_tensor_args)
             func_return_pairs = func(op_self, *new_args, **kwargs)
 
-            if lucid.flops_enabled():
+            if flops_enabled:
                 op_self.flops = op_self.__flops__(*new_args, **kwargs)
 
             if n_ret is None:
@@ -76,14 +86,15 @@ def func_op(
 
             results: Tuple[Tensor, ...] = tuple()
             for result, compute_grad in func_return_pairs:
-                result.requires_grad = requires_grad and has_gradient
-                result._op = op_self
+                result.requires_grad = requires_grad and has_gradient and grad_enabled
+                if track_graph:
+                    result._op = op_self
                 result.to(device)
                 if is_free:
                     result.free()
 
                 results += (result,)
-                if not lucid.grad_enabled() and not lucid.flops_enabled():
+                if not track_graph:
                     continue
 
                 def _backward_op(*, _func: Callable = compute_grad) -> None:
@@ -107,6 +118,12 @@ def func_op(
                     result._backward_op = (
                         _backward_op if result.requires_grad else lambda: None
                     )
+
+            if not track_graph:
+                try:
+                    op_self.result = None
+                except Exception:
+                    pass
 
             return results if num_returns > 1 else results[0]
 

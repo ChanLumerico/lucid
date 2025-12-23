@@ -1,10 +1,12 @@
 import copy
 from typing import Any, Iterable
 
+import lucid
 import lucid.nn as nn
 import lucid.optim as optim
 
 from lucid._tensor import Tensor
+from lucid._backend.metal import post_step_eval
 from lucid.types import _OptimClosure
 
 
@@ -27,33 +29,36 @@ class SGD(optim.Optimizer):
         if closure is not None:
             loss = closure()
 
-        for group in self.param_groups:
-            lr = group.get("lr", self.defaults["lr"])
-            momentum = group.get("momentum", self.defaults["momentum"])
-            weight_decay = group.get("weight_decay", self.defaults["weight_decay"])
+        with lucid.no_grad():
+            for group in self.param_groups:
+                lr = group.get("lr", self.defaults["lr"])
+                momentum = group.get("momentum", self.defaults["momentum"])
+                weight_decay = group.get("weight_decay", self.defaults["weight_decay"])
 
-            for param in group["params"]:
-                if param.grad is None:
-                    continue
+                for param in group["params"]:
+                    if param.grad is None:
+                        continue
 
-                grad = Tensor.copy_grad(param.grad)
-                if weight_decay != 0:
-                    grad = grad + weight_decay * param.data
+                    grad = Tensor.copy_grad(param.grad)
+                    if weight_decay != 0:
+                        grad = grad + weight_decay * param.data
 
-                if momentum != 0:
-                    param_state = self.state[param]
-                    if "momentum_buffer" not in param_state:
-                        buf = param_state["momentum_buffer"] = Tensor.copy_grad(
-                            param.grad
-                        )
-                    else:
-                        buf = param_state["momentum_buffer"]
-                        buf = momentum * buf + grad
-                        param_state["momentum_buffer"] = buf
+                    if momentum != 0:
+                        param_state = self.state[param]
+                        if "momentum_buffer" not in param_state:
+                            buf = param_state["momentum_buffer"] = Tensor.copy_grad(
+                                param.grad
+                            )
+                        else:
+                            buf = param_state["momentum_buffer"]
+                            buf = momentum * buf + grad
+                            param_state["momentum_buffer"] = buf
 
-                    grad = buf
+                        grad = buf
 
-                param.data = param.data - lr * grad
+                    param.data = param.data - lr * grad
+
+                    post_step_eval(param, self.state.get(param))
 
         return loss
 
@@ -84,44 +89,47 @@ class ASGD(optim.Optimizer):
         if closure is not None:
             loss = closure()
 
-        for group in self.param_groups:
-            lr = group.get("lr", self.defaults["lr"])
-            momentum = group.get("momentum", self.defaults["momentum"])
-            weight_decay = group.get("weight_decay", self.defaults["weight_decay"])
-            alpha = group.get("alpha", self.defaults["alpha"])
-            t0 = group.get("t0", self.defaults["t0"])
-            lambd = group.get("lambd", self.defaults["lambd"])
+        with lucid.no_grad():
+            for group in self.param_groups:
+                lr = group.get("lr", self.defaults["lr"])
+                momentum = group.get("momentum", self.defaults["momentum"])
+                weight_decay = group.get("weight_decay", self.defaults["weight_decay"])
+                alpha = group.get("alpha", self.defaults["alpha"])
+                t0 = group.get("t0", self.defaults["t0"])
+                lambd = group.get("lambd", self.defaults["lambd"])
 
-            for param in group["params"]:
-                if param.grad is None:
-                    continue
+                for param in group["params"]:
+                    if param.grad is None:
+                        continue
 
-                grad = Tensor.copy_grad(param.grad)
-                if weight_decay != 0:
-                    grad = grad + weight_decay * param.data
-                state = self.state[param]
+                    grad = Tensor.copy_grad(param.grad)
+                    if weight_decay != 0:
+                        grad = grad + weight_decay * param.data
+                    state = self.state[param]
 
-                if len(state) == 0:
-                    state["step"] = 0
+                    if len(state) == 0:
+                        state["step"] = 0
+                        if momentum != 0:
+                            state["momentum_buffer"] = Tensor.copy_grad(grad)
+                        state["ax"] = Tensor.copy_data(param.data)
+
+                    state["step"] += 1
                     if momentum != 0:
-                        state["momentum_buffer"] = Tensor.copy_grad(grad)
-                    state["ax"] = Tensor.copy_data(param.data)
+                        buf = state["momentum_buffer"]
+                        buf = momentum * buf + grad
+                        state["momentum_buffer"] = buf
+                        grad = buf
 
-                state["step"] += 1
-                if momentum != 0:
-                    buf = state["momentum_buffer"]
-                    buf = momentum * buf + grad
-                    state["momentum_buffer"] = buf
-                    grad = buf
+                    param.data = param.data - lr * grad
 
-                param.data = param.data - lr * grad
+                    step = state["step"]
+                    if step >= t0:
+                        ax = state["ax"]
+                        coef = 1.0 / (alpha * step + 1)
+                        ax = (1.0 - coef) * ax + coef * param.data - lambd * ax
+                        state["ax"] = ax
 
-                step = state["step"]
-                if step >= t0:
-                    ax = state["ax"]
-                    coef = 1.0 / (alpha * step + 1)
-                    ax = (1.0 - coef) * ax + coef * param.data - lambd * ax
-                    state["ax"] = ax
+                    post_step_eval(param, self.state.get(param))
 
         return loss
 
