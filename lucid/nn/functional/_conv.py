@@ -1,5 +1,6 @@
 import itertools
 from typing import Tuple, Optional
+from deprecated import deprecated
 
 import lucid
 from lucid._tensor import Tensor
@@ -64,6 +65,7 @@ def unfold(
     return col.reshape((N_out, C_filt))
 
 
+@deprecated(version="2.8.5")
 def _im2col_conv(
     input_: Tensor,
     weight: Tensor,
@@ -125,6 +127,72 @@ def _im2col_conv(
     return out_final
 
 
+def _conv_out_dims(
+    input_spatial: list[int],
+    filter_size: list[int],
+    stride: Tuple[int, ...],
+    padding: Tuple[int, ...],
+    dilation: Tuple[int, ...],
+) -> list[int]:
+    out_dims = []
+    for i in range(len(filter_size)):
+        eff = dilation[i] * (filter_size[i] - 1) + 1
+        o = (input_spatial[i] + 2 * padding[i] - eff) // stride[i] + 1
+        if o <= 0:
+            raise ValueError(f"Non-positive output dim for axis {i}: {o}")
+        out_dims.append(o)
+    return out_dims
+
+
+def _conv_tensor(
+    input_: Tensor,
+    weight: Tensor,
+    stride: Tuple[int, ...],
+    padding: Tuple[int, ...],
+    dilation: Tuple[int, ...],
+    groups: int,
+) -> Tensor:
+    N, C_in, *input_spatial = input_.shape
+    C_out, C_in_div_g, *filter_size = weight.shape
+    D = len(filter_size)
+
+    if C_in % groups != 0 or C_out % groups != 0 or C_in_div_g * groups != C_in:
+        raise ValueError("Inconsistent channel/group configuration.")
+
+    out_dims = _conv_out_dims(input_spatial, filter_size, stride, padding, dilation)
+
+    if any(padding):
+        pad_config = [(0, 0), (0, 0)] + [(padding[i], padding[i]) for i in range(D)]
+        x = lucid.pad(input_, pad_config)
+    else:
+        x = input_
+
+    C_in_g = C_in // groups
+    C_out_g = C_out // groups
+
+    outputs = []
+    for g in range(groups):
+        x_g = x[:, g * C_in_g : (g + 1) * C_in_g]
+        w_g = weight[g * C_out_g : (g + 1) * C_out_g]
+
+        out_g = None
+        for k_idx in itertools.product(*[range(k) for k in filter_size]):
+            slices = [slice(None), slice(None)]
+            for d in range(D):
+                start = k_idx[d] * dilation[d]
+                end = start + stride[d] * out_dims[d]
+                slices.append(slice(start, end, stride[d]))
+
+            x_slice = x_g[tuple(slices)]
+            w_slice = w_g[(slice(None), slice(None)) + k_idx]
+            contrib = lucid.einops.einsum("nc...,oc->no...", x_slice, w_slice)
+            out_g = contrib if out_g is None else out_g + contrib
+
+        outputs.append(out_g)
+
+    return outputs[0] if len(outputs) == 1 else lucid.concatenate(outputs, axis=1)
+
+
 def conv(
     input_: Tensor,
     weight: Tensor,
@@ -140,7 +208,11 @@ def conv(
     if len(stride) != len(padding) or len(stride) != len(dilation):
         raise ValueError("Stride, padding, and dilation must have the same length.")
 
-    return _im2col_conv(input_, weight, bias, stride, padding, dilation, groups)
+    out = _conv_tensor(input_, weight, stride, padding, dilation, groups)
+    if bias is not None:
+        bias_sh = [1, weight.shape[0]] + [1] * (input_.ndim - 2)
+        out = out + bias.reshape(tuple(bias_sh))
+    return out
 
 
 def _upsample_nd(input_: Tensor, stride: Tuple[int, ...]) -> Tensor:
@@ -222,14 +294,8 @@ def conv_transpose(
                     zeros = lucid.zeros(*zero_shape, dtype=ups.dtype, device=ups.device)
                     ups = lucid.concatenate([ups, zeros], axis=axis)
 
-        out_g = _im2col_conv(
-            ups,
-            w_t,
-            bias=None,
-            stride=(1,) * D,
-            padding=pad_,
-            dilation=dilation,
-            groups=1,
+        out_g = _conv_tensor(
+            ups, w_t, stride=(1,) * D, padding=pad_, dilation=dilation, groups=1
         )
         outputs.append(out_g)
 
