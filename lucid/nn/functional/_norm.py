@@ -26,7 +26,6 @@ def batch_norm(
 ) -> Tensor:
     C = input_.shape[1]
     spatial_dim = input_.ndim - 2
-
     use_batch_stats = training or running_mean is None or running_var is None
 
     if use_batch_stats:
@@ -107,13 +106,14 @@ def instance_norm(
 ) -> Tensor:
     C = input_.shape[1]
     spatial_dims = input_.shape[2:]
+    use_instance_stats = training or running_mean is None or running_var is None
+    axes = tuple(range(2, input_.ndim))
 
-    if training:
-        axes = tuple(range(2, input_.ndim))
+    if use_instance_stats:
         instance_mean = input_.mean(axis=axes, keepdims=True)
         instance_var = input_.var(axis=axes, keepdims=True)
 
-        if running_mean is not None and running_var is not None:
+        if training and running_mean is not None and running_var is not None:
             running_stats_ = (
                 momentum * instance_mean.mean(axis=0).flatten()
                 + (1 - momentum) * running_mean,

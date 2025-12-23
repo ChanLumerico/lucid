@@ -49,15 +49,15 @@ class _NormBase(nn.Module):
             self.running_mean: nn.Buffer
             self.running_var: nn.Buffer
 
-            self.register_buffer("running_mean", lucid.ones((num_features,)))
-            self.register_buffer("running_var", lucid.zeros((num_features,)))
+            self.register_buffer("running_mean", lucid.zeros((num_features,)))
+            self.register_buffer("running_var", lucid.ones((num_features,)))
         else:
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
 
     def reset_running_stats(self) -> None:
         if self.track_running_stats:
-            self.running_mean.zero()
+            self.running_mean.data = lucid.zeros((self.num_features,)).data
             self.running_var.data = lucid.ones((self.num_features,)).data
 
     def reset_parameters(self) -> None:

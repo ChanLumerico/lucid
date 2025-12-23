@@ -15,7 +15,7 @@ algorithms and operations without the complexity of high-level frameworks.
 
 from contextlib import contextmanager, AbstractContextManager
 from typing import Any, Generator, SupportsIndex, Callable, Self, Optional, Type
-from types import TracebackType
+from types import TracebackType, ModuleType
 from functools import wraps
 from pathlib import Path
 
@@ -300,3 +300,33 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
         return model
 
     return wrapper
+
+
+def _conv_view_limit_mb() -> int:
+    from lucid._backend import conv as _conv_backend
+
+    return _conv_backend.get_conv_view_limit_mb()
+
+
+def __getattr__(name: str) -> Any:
+    if name == "CONV_VIEW_LIMIT_MB":
+        return _conv_view_limit_mb()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
+def __dir__() -> list[str]:
+    return sorted(list(globals().keys()) + ["CONV_VIEW_LIMIT_MB"])
+
+
+class _LucidModule(ModuleType):
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "CONV_VIEW_LIMIT_MB":
+            raise AttributeError(
+                "CONV_VIEW_LIMIT_MB is read-only; set LUCID_CONV_VIEW_LIMIT_MB "
+                "before importing lucid."
+            )
+        super().__setattr__(name, value)
+
+
+if not isinstance(sys.modules[__name__], _LucidModule):
+    sys.modules[__name__].__class__ = _LucidModule

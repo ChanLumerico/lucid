@@ -28,15 +28,79 @@ _Dilation: TypeAlias = tuple[int, ...]
 def _load_view_limit_bytes() -> int:
     env = os.getenv("LUCID_CONV_VIEW_LIMIT_MB")
     if env is None:
-        return 256 * 1024 * 1024
+        return _default_view_limit_bytes()
     try:
         value = int(env)
     except ValueError:
+        return _default_view_limit_bytes()
+    return value * 1024 * 1024
+
+
+def _sysconf_value(name: str) -> int | None:
+    try:
+        value = int(os.sysconf(name))
+    except (ValueError, AttributeError, OSError):
+        return None
+    if value <= 0:
+        return None
+    return value
+
+
+def _get_total_memory_bytes() -> int | None:
+    page_size = _sysconf_value("SC_PAGE_SIZE") or _sysconf_value("SC_PAGESIZE")
+    phys_pages = _sysconf_value("SC_PHYS_PAGES")
+    if page_size and phys_pages:
+        return page_size * phys_pages
+    try:
+        import ctypes
+
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+
+        stat = MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+            return int(stat.ullTotalPhys)
+
+    except Exception:
+        return None
+
+
+def _round_to_step(value: int, step: int) -> int:
+    return ((value + step // 2) // step) * step
+
+
+def _default_view_limit_bytes() -> int:
+    total = _get_total_memory_bytes()
+    if not total:
         return 256 * 1024 * 1024
-    return max(value, 0) * 1024 * 1024
+
+    mb = 1024 * 1024
+    min_bytes = 64 * mb
+    max_bytes = 1024 * mb
+    step = 64 * mb
+
+    target = (total * 15) // 1000
+    target = max(min_bytes, min(max_bytes, target))
+    target = _round_to_step(target, step)
+    return max(min_bytes, min(max_bytes, target))
 
 
 _CONV_VIEW_LIMIT_BYTES = _load_view_limit_bytes()
+
+
+def get_conv_view_limit_mb() -> int:
+    return int(_CONV_VIEW_LIMIT_BYTES // (1024 * 1024))
 
 
 def _dtype_itemsize(data: _Array) -> int:
