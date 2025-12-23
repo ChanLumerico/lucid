@@ -8,8 +8,8 @@ from lucid.types import _Scalar
 
 def _calculate_fan_in_and_fan_out(tensor: Tensor) -> tuple[int, int]:
     if tensor.ndim == 2:
-        fan_in = tensor.shape[0]
-        fan_out = tensor.shape[1]
+        fan_in = tensor.shape[1]
+        fan_out = tensor.shape[0]
 
     elif tensor.ndim in {3, 4, 5}:
         kernel_prod = reduce(lambda x, y: x * y, tensor.shape[2:], 1)
