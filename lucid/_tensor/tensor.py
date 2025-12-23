@@ -1,6 +1,7 @@
 from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
 from types import NoneType
 from collections import deque
+
 import numpy as np
 
 import lucid
@@ -135,7 +136,9 @@ class Tensor(_TensorBase):
     def eval(self) -> Self:
         if self.is_gpu():
             mx.eval(self.data)
-            mx.stop_gradient(self.data)
+            stopped = mx.stop_gradient(self.data)
+            if stopped is not None:
+                self.data = stopped
         return self
 
     def backward(self, keep_grad: bool = False, retain_graph: bool = False) -> None:
@@ -179,8 +182,7 @@ class Tensor(_TensorBase):
             for tensor in topo_order:
                 tensor._prev = []
                 tensor._backward_op = _noop
-                if not tensor.is_leaf:
-                    tensor._op = None
+                tensor._op = None
             for op in ops_to_clear:
                 try:
                     op.result = None

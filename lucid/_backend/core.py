@@ -45,10 +45,6 @@ def func_op(
                     dtype_hint = arg.dtype
                     break
 
-            grad_enabled = lucid.grad_enabled()
-            flops_enabled = lucid.flops_enabled()
-            track_graph = grad_enabled or flops_enabled
-
             for arg in tensor_args:
                 tensor = lucid._check_is_tensor(arg, device=device, dtype=dtype_hint)
                 tensors += (tensor,)
@@ -68,6 +64,10 @@ def func_op(
             non_tensor_args = args[n_in:] if n_in is not None else ()
             new_args = (*tensors, *non_tensor_args)
             func_return_pairs = func(op_self, *new_args, **kwargs)
+
+            grad_enabled = lucid.grad_enabled()
+            flops_enabled = lucid.flops_enabled()
+            track_graph = flops_enabled or (grad_enabled and requires_grad)
 
             if flops_enabled:
                 op_self.flops = op_self.__flops__(*new_args, **kwargs)

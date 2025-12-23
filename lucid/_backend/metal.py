@@ -1,6 +1,7 @@
 from typing import Any, ClassVar, Mapping
 import warnings
 import platform
+
 import numpy as np
 
 try:
@@ -118,17 +119,23 @@ def post_step_eval(param: Any, state: Mapping[str, Any] | None = None) -> None:
     data = getattr(param, "data", None)
     if data is not None:
         mx.eval(data)
-        mx.stop_gradient(data)
+        stopped = mx.stop_gradient(data)
+        if stopped is not None:
+            param.data = stopped
 
     grad = getattr(param, "grad", None)
     if grad is not None:
         mx.eval(grad)
-        mx.stop_gradient(grad)
+        stopped = mx.stop_gradient(grad)
+        if stopped is not None:
+            param.grad = stopped
 
     if not state:
         return
 
-    for value in state.values():
+    for key, value in state.items():
         if isinstance(value, mx.array):
             mx.eval(value)
-            mx.stop_gradient(value)
+            stopped = mx.stop_gradient(value)
+            if stopped is not None:
+                state[key] = stopped

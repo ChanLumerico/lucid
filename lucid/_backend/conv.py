@@ -2,6 +2,7 @@ from functools import partial
 from types import ModuleType
 from typing import TypeAlias
 import itertools
+import os
 
 import numpy as np
 
@@ -22,6 +23,50 @@ _Shape: TypeAlias = tuple[int, ...]
 _Stride: TypeAlias = tuple[int, ...]
 _Padding: TypeAlias = tuple[int, ...]
 _Dilation: TypeAlias = tuple[int, ...]
+
+
+def _load_view_limit_bytes() -> int:
+    env = os.getenv("LUCID_CONV_VIEW_LIMIT_MB")
+    if env is None:
+        return 256 * 1024 * 1024
+    try:
+        value = int(env)
+    except ValueError:
+        return 256 * 1024 * 1024
+    return max(value, 0) * 1024 * 1024
+
+
+_CONV_VIEW_LIMIT_BYTES = _load_view_limit_bytes()
+
+
+def _dtype_itemsize(data: _Array) -> int:
+    dtype = getattr(data, "dtype", None)
+    if dtype is None:
+        return 0
+    try:
+        return int(np.dtype(dtype).itemsize)
+    except TypeError:
+        return int(getattr(dtype, "size", 0) or 0)
+
+
+def _prod(shape: _Shape) -> int:
+    total = 1
+    for v in shape:
+        total *= int(v)
+    return total
+
+
+def _view_exceeds_limit(data: _Array, out_dims: _Shape, kernel_size: _Shape) -> bool:
+    if _CONV_VIEW_LIMIT_BYTES == 0:
+        return True
+    if _CONV_VIEW_LIMIT_BYTES < 0:
+        return False
+    itemsize = _dtype_itemsize(data)
+    if itemsize == 0:
+        return False
+    view_elems = data.shape[0] * data.shape[1] * _prod(out_dims) * _prod(kernel_size)
+    view_bytes = view_elems * itemsize
+    return view_bytes > _CONV_VIEW_LIMIT_BYTES
 
 
 def _to_tuple(value: int | tuple[int, ...] | list[int], dim: int, name: str) -> _Shape:
@@ -181,8 +226,10 @@ def _conv_fallback(
 
             x_slice = x_g[tuple(slices)]
             w_slice = w_g[(slice(None), slice(None)) + k_idx]
+
             contrib = lib_.tensordot(x_slice, w_slice, axes=([1], [1]))
             perm = [0, contrib.ndim - 1] + list(range(1, contrib.ndim - 1))
+
             contrib = lib_.transpose(contrib, axes=perm)
             out_g = contrib if out_g is None else out_g + contrib
 
@@ -208,6 +255,11 @@ def _conv_forward(
     out_dims = tuple(
         _conv_out_dims(input_spatial, kernel_size, stride, padding, dilation)
     )
+
+    if _view_exceeds_limit(input_, out_dims, kernel_size):
+        return _conv_fallback(
+            lib_, input_, weight, stride, padding, dilation, groups, out_dims
+        )
 
     x = _pad_input(lib_, input_, padding)
     x_view = _make_input_view(lib_, x, out_dims, kernel_size, stride, dilation)
@@ -237,6 +289,8 @@ def _conv_backward_weight(
     C_out_g = C_out // groups
 
     x_view = _make_input_view(lib_, x_pad, out_dims, kernel_size, stride, dilation)
+    if x_view is not None and _view_exceeds_limit(x_pad, out_dims, kernel_size):
+        x_view = None
     axes_out = [0] + list(range(2, 2 + D))
     axes_x = [0] + list(range(2, 2 + D))
 
@@ -337,6 +391,7 @@ class conv_nd(operation):
         self.padding = padding
         self.dilation = dilation
         self.groups = groups
+
         self._stride: _Stride | None = None
         self._padding: _Padding | None = None
         self._dilation: _Dilation | None = None
@@ -346,6 +401,7 @@ class conv_nd(operation):
         stride = _to_tuple(self.stride, D, "stride")
         padding = _to_tuple(self.padding, D, "padding")
         dilation = _to_tuple(self.dilation, D, "dilation")
+
         self._stride = stride
         self._padding = padding
         self._dilation = dilation
@@ -374,6 +430,7 @@ class conv_nd(operation):
         stride = self._stride
         padding = self._padding
         dilation = self._dilation
+
         if stride is None or padding is None or dilation is None:
             raise RuntimeError("conv_nd backward called before forward.")
 
