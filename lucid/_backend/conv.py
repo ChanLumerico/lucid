@@ -64,8 +64,10 @@ def _view_exceeds_limit(data: _Array, out_dims: _Shape, kernel_size: _Shape) -> 
     itemsize = _dtype_itemsize(data)
     if itemsize == 0:
         return False
+
     view_elems = data.shape[0] * data.shape[1] * _prod(out_dims) * _prod(kernel_size)
     view_bytes = view_elems * itemsize
+
     return view_bytes > _CONV_VIEW_LIMIT_BYTES
 
 
@@ -183,6 +185,7 @@ def _conv_from_view(
     for g in range(groups):
         x_g = x_view[:, g * C_in_g : (g + 1) * C_in_g, ...]
         w_g = weight[g * C_out_g : (g + 1) * C_out_g, ...]
+
         out = lib_.tensordot(x_g, w_g, axes=(axes_x, axes_w))
         out = lib_.transpose(out, axes=perm)
         outputs.append(out)
@@ -219,6 +222,7 @@ def _conv_fallback(
         out_g = None
         for k_idx in itertools.product(*[range(k) for k in kernel_size]):
             slices = [slice(None), slice(None)]
+
             for d in range(D):
                 start = k_idx[d] * dilation[d]
                 end = start + stride[d] * out_dims[d]
@@ -301,8 +305,10 @@ def _conv_backward_weight(
         if x_view is None:
             x_g = x_pad[:, g * C_in_g : (g + 1) * C_in_g]
             grad_w = lib_.zeros((C_out_g, C_in_g, *kernel_size), dtype=weight.dtype)
+
             for k_idx in itertools.product(*[range(k) for k in kernel_size]):
                 slices = [slice(None), slice(None)]
+
                 for d in range(D):
                     start = k_idx[d] * dilation[d]
                     end = start + stride[d] * out_dims[d]
@@ -310,11 +316,13 @@ def _conv_backward_weight(
 
                 x_slice = x_g[tuple(slices)]
                 w_grad = lib_.tensordot(grad_out_g, x_slice, axes=(axes_out, axes_x))
+
                 if lib_ is np:
                     grad_w[(slice(None), slice(None)) + k_idx] = w_grad
                 else:
                     grad_w = grad_w.at[(slice(None), slice(None)) + k_idx].add(w_grad)
             grad_parts.append(grad_w)
+
         else:
             x_view_g = x_view[:, g * C_in_g : (g + 1) * C_in_g, ...]
             grad_w = lib_.tensordot(grad_out_g, x_view_g, axes=(axes_out, axes_x))
@@ -354,6 +362,7 @@ def _conv_backward_input(
         for k_idx in itertools.product(*[range(k) for k in kernel_size]):
             w_slice = w_g[(slice(None), slice(None)) + k_idx]
             contrib = lib_.tensordot(grad_out_g, w_slice, axes=([1], [0]))
+
             perm = [0, contrib.ndim - 1] + list(range(1, contrib.ndim - 1))
             contrib = lib_.transpose(contrib, axes=perm)
 

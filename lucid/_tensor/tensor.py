@@ -185,9 +185,12 @@ class Tensor(_TensorBase):
                 tensor._op = None
             for op in ops_to_clear:
                 try:
-                    op.result = None
+                    op.clear()
                 except Exception:
-                    pass
+                    try:
+                        op.result = None
+                    except Exception:
+                        pass
 
     def register_hook(self, hook: _HookType) -> Callable:
         self._backward_hooks.append(hook)
