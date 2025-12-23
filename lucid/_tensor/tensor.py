@@ -1,6 +1,7 @@
 from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
 from types import NoneType
 from collections import deque
+
 import numpy as np
 
 import lucid
@@ -135,10 +136,12 @@ class Tensor(_TensorBase):
     def eval(self) -> Self:
         if self.is_gpu():
             mx.eval(self.data)
-            mx.stop_gradient(self.data)
+            stopped = mx.stop_gradient(self.data)
+            if stopped is not None:
+                self.data = stopped
         return self
 
-    def backward(self, keep_grad: bool = False) -> None:
+    def backward(self, keep_grad: bool = False, retain_graph: bool = False) -> None:
         if self.grad is None:
             self.grad = (
                 np.ones_like(self.data) if self.is_cpu() else mx.ones_like(self.data)
@@ -146,6 +149,7 @@ class Tensor(_TensorBase):
         visited = set()
         topo_order: list[Self] = []
         stack = [self]
+        ops_to_clear = set()
 
         while stack:
             tensor = stack[-1]
@@ -168,8 +172,25 @@ class Tensor(_TensorBase):
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
 
+            if tensor._op is not None:
+                ops_to_clear.add(tensor._op)
+
             if not (tensor.is_leaf or keep_grad or tensor.keep_grad):
                 tensor.grad = None
+
+        if not retain_graph:
+            for tensor in topo_order:
+                tensor._prev = []
+                tensor._backward_op = _noop
+                tensor._op = None
+            for op in ops_to_clear:
+                try:
+                    op.clear()
+                except Exception:
+                    try:
+                        op.result = None
+                    except Exception:
+                        pass
 
     def register_hook(self, hook: _HookType) -> Callable:
         self._backward_hooks.append(hook)

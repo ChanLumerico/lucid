@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Tuple, ClassVar
 import functools
+import weakref
 
 import lucid
 import lucid.types as types
-from lucid.types import _DeviceType, _NumPyArray, _MLXArray
+from lucid.types import _DeviceType, _NumPyArray, _MLXArray, _BuiltinNumeric
 
 from lucid._tensor import Tensor
 from lucid._backend.metal import is_gpu_op
@@ -29,6 +30,7 @@ def func_op(
             tensors: Tuple[Tensor, ...] = tuple()
             requires_grad = False
             is_free = True
+            dtype_hint: _BuiltinNumeric | types.Numeric | None = None
 
             if n_in is None:
                 tensor_args = args
@@ -40,7 +42,12 @@ def func_op(
                 tensor_args = args[:n_in]
 
             for arg in tensor_args:
-                tensor = lucid._check_is_tensor(arg, device=device)
+                if isinstance(arg, Tensor):
+                    dtype_hint = arg.dtype
+                    break
+
+            for arg in tensor_args:
+                tensor = lucid._check_is_tensor(arg, device=device, dtype=dtype_hint)
                 tensors += (tensor,)
                 requires_grad = requires_grad or tensor.requires_grad
 
@@ -59,7 +66,13 @@ def func_op(
             new_args = (*tensors, *non_tensor_args)
             func_return_pairs = func(op_self, *new_args, **kwargs)
 
-            if lucid.flops_enabled():
+            tensor_refs = tuple(weakref.ref(t) for t in tensors)
+
+            grad_enabled = lucid.grad_enabled()
+            flops_enabled = lucid.flops_enabled()
+            track_graph = flops_enabled or (grad_enabled and requires_grad)
+
+            if flops_enabled:
                 op_self.flops = op_self.__flops__(*new_args, **kwargs)
 
             if n_ret is None:
@@ -76,27 +89,34 @@ def func_op(
 
             results: Tuple[Tensor, ...] = tuple()
             for result, compute_grad in func_return_pairs:
-                result.requires_grad = requires_grad and has_gradient
-                result._op = op_self
+                result.requires_grad = requires_grad and has_gradient and grad_enabled
+                if track_graph:
+                    result._op = op_self
                 result.to(device)
                 if is_free:
                     result.free()
 
                 results += (result,)
-                if not lucid.grad_enabled() and not lucid.flops_enabled():
+                if not track_graph:
                     continue
 
-                def _backward_op(*, _func: Callable = compute_grad) -> None:
+                def _backward_op(
+                    *, _func: Callable = compute_grad, _tensor_refs=tensor_refs
+                ) -> None:
                     grads = _func()
                     if n_in == 1 or not isinstance(grads, tuple):
                         grads = (grads,)
 
-                    if len(grads) != len(tensors):
+                    live_tensors = tuple(ref() for ref in _tensor_refs)
+                    if any(t is None for t in live_tensors):
+                        return
+
+                    if len(grads) != len(live_tensors):
                         raise ValueError(
-                            f"Expected {len(tensors)} gradients, got {len(grads)}."
+                            f"Expected {len(live_tensors)} gradients, got {len(grads)}."
                         )
 
-                    for tensor, grad in zip(tensors, grads):
+                    for tensor, grad in zip(live_tensors, grads):
                         new_grad = lucid._match_grad_shape(
                             tensor.data, grad, device=device
                         )
@@ -107,6 +127,20 @@ def func_op(
                     result._backward_op = (
                         _backward_op if result.requires_grad else lambda: None
                     )
+
+            if track_graph:
+                try:
+                    op_self.result = results if num_returns > 1 else results[0]
+                except Exception:
+                    pass
+            else:
+                try:
+                    op_self.clear()
+                except Exception:
+                    try:
+                        op_self.result = None
+                    except Exception:
+                        pass
 
             return results if num_returns > 1 else results[0]
 
@@ -133,6 +167,9 @@ class operation(ABC):
     def __init__(self) -> None:
         self.result: Tensor | tuple[Tensor, ...] | None = None
         self._flops: int | None = None
+
+    def clear(self) -> None:
+        self.result = None
 
     @abstractmethod
     def cpu(self, *args, **kwargs) -> _FuncOpReturnType: ...

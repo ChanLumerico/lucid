@@ -1,6 +1,7 @@
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Mapping
 import warnings
 import platform
+
 import numpy as np
 
 try:
@@ -102,3 +103,39 @@ def parse_mlx_indexing(index: Any) -> Any:
         return mx.array(index, dtype=mx.int32)
 
     return index
+
+
+def post_step_eval(param: Any, state: Mapping[str, Any] | None = None) -> None:
+    is_gpu = False
+    if hasattr(param, "is_gpu"):
+        try:
+            is_gpu = bool(param.is_gpu())
+        except Exception:
+            is_gpu = False
+
+    if not is_gpu:
+        return
+
+    data = getattr(param, "data", None)
+    if data is not None:
+        mx.eval(data)
+        stopped = mx.stop_gradient(data)
+        if stopped is not None:
+            param.data = stopped
+
+    grad = getattr(param, "grad", None)
+    if grad is not None:
+        mx.eval(grad)
+        stopped = mx.stop_gradient(grad)
+        if stopped is not None:
+            param.grad = stopped
+
+    if not state:
+        return
+
+    for key, value in state.items():
+        if isinstance(value, mx.array):
+            mx.eval(value)
+            stopped = mx.stop_gradient(value)
+            if stopped is not None:
+                state[key] = stopped
