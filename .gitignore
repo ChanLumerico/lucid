@@ -11,3 +11,4 @@ _pip_macro.sh
 *.DS_Store
 
 mypy_report.txt
+.mypy_cache/
