@@ -9,3 +9,5 @@ _pip_macro.sh
 *.lcd
 *.safetensors
 *.DS_Store
+
+mypy_report.txt
