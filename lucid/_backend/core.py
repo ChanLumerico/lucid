@@ -24,8 +24,8 @@ def func_op(
     has_gradient: bool = True,
     device: _DeviceType = "cpu",
 ) -> Callable:
-    def decorator(func: Callable[..., _FuncOpReturnType]) -> Callable:
-        @functools.wraps(func)
+    def decorator(forward_func: Callable[..., _FuncOpReturnType]) -> Callable:
+        @functools.wraps(forward_func)
         def wrapper(op_self: operation, *args, **kwargs) -> Tuple[Tensor, ...]:
             tensors: Tuple[Tensor, ...] = tuple()
             requires_grad = False
@@ -64,7 +64,7 @@ def func_op(
 
             non_tensor_args = args[n_in:] if n_in is not None else ()
             new_args = (*tensors, *non_tensor_args)
-            func_return_pairs = func(op_self, *new_args, **kwargs)
+            func_return_pairs = forward_func(op_self, *new_args, **kwargs)
 
             tensor_refs = tuple(weakref.ref(t) for t in tensors)
 
@@ -78,7 +78,7 @@ def func_op(
             if n_ret is None:
                 if not isinstance(func_return_pairs, tuple):
                     raise ValueError(
-                        f"{func.__name__} should return multiple '_ReturnGradFuncPair'."
+                        f"{forward_func.__name__} should return multiple '_ReturnGradFuncPair'."
                     )
                 num_returns = len(func_return_pairs)
             else:
@@ -100,7 +100,8 @@ def func_op(
                 if not track_graph:
                     continue
 
-                def _backward_op(
+                # NOTE: Bakcward Fusion: Needs to be modified in the future
+                def _backward_func(
                     *, _func: Callable = compute_grad, _tensor_refs=tensor_refs
                 ) -> None:
                     grads = _func()
@@ -124,8 +125,8 @@ def func_op(
 
                 if result.requires_grad or lucid.flops_enabled():
                     result._prev = list(tensors)
-                    result._backward_op = (
-                        _backward_op if result.requires_grad else lambda: None
+                    result._backward_func = (
+                        _backward_func if result.requires_grad else lambda: None
                     )
 
             if track_graph:

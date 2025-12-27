@@ -1,6 +1,7 @@
 from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
 from types import NoneType
 from collections import deque
+from weakref import WeakKeyDictionary
 
 import numpy as np
 
@@ -86,8 +87,8 @@ class Tensor(_TensorBase):
                 self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
 
         self._op: object | None = None
-        self._backward_op: Callable = _noop
         self._prev: list[Tensor] = []
+        self._backward_func: Callable = _noop
         self._backward_hooks: list[_HookType] = []
 
         self.grad: Optional[_NumPyArray | _MLXArray] = None
@@ -141,7 +142,7 @@ class Tensor(_TensorBase):
                 self.data = stopped
         return self
 
-    def backward(self, keep_grad: bool = False, retain_graph: bool = False) -> None:
+    def backward(self, retain_grad: bool = False, retain_graph: bool = False) -> None:
         if self.grad is None:
             self.grad = (
                 np.ones_like(self.data) if self.is_cpu() else mx.ones_like(self.data)
@@ -163,9 +164,18 @@ class Tensor(_TensorBase):
                 if parent not in visited:
                     stack.append(parent)
 
+        # NOTE: Backward Fusion: Count how many times each tensor is used
+        use_count_weakdict = WeakKeyDictionary()
+        for tensor in topo_order:
+            use_count_weakdict[tensor] = 0
+
+        for tensor in topo_order:
+            for parent in tensor._prev:
+                use_count_weakdict[parent] = use_count_weakdict.get(parent, 0) + 1
+
         for tensor in reversed(topo_order):
             try:
-                tensor._backward_op()
+                tensor._backward_func()
             except Exception as e:
                 raise lucid.BackwardError(shape=tensor.shape, op=self._op) from e
 
@@ -175,13 +185,13 @@ class Tensor(_TensorBase):
             if tensor._op is not None:
                 ops_to_clear.add(tensor._op)
 
-            if not (tensor.is_leaf or keep_grad or tensor.keep_grad):
+            if not (tensor.is_leaf or retain_grad or tensor.keep_grad):
                 tensor.grad = None
 
         if not retain_graph:
             for tensor in topo_order:
                 tensor._prev = []
-                tensor._backward_op = _noop
+                tensor._backward_func = _noop
                 tensor._op = None
             for op in ops_to_clear:
                 try:
@@ -342,7 +352,7 @@ class Tensor(_TensorBase):
             sliced_data, self.requires_grad, self.keep_grad, self.dtype, self.device
         )
 
-        def _backward_op() -> None:
+        def _backward_func() -> None:
             if self.grad is None:
                 self.grad = (
                     np.zeros_like(self.data)
@@ -356,7 +366,7 @@ class Tensor(_TensorBase):
             lucid._set_tensor_grad(self, new_grad, at=new_idx)
 
         if self.requires_grad and lucid.grad_enabled():
-            new_tensor._backward_op = _backward_op
+            new_tensor._backward_func = _backward_func
             new_tensor._prev = [self]
 
         if self.is_free:
@@ -437,7 +447,7 @@ class Tensor(_TensorBase):
             new.grad = None
 
         new._op = None
-        new._backward_op = _noop
+        new._backward_func = _noop
         new._prev = []
         new._backward_hooks = []
 
