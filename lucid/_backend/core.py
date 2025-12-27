@@ -103,13 +103,12 @@ def func_op(
                 if result.requires_grad or lucid.flops_enabled():
                     result._prev = list(tensors)
                     if result.requires_grad:
-                        backward_op = BackwardOperation(
+                        result._backward_func = BackwardOperation(
                             forward_op_ref=weakref.ref(op_self),
                             grad_func=grad_func,
                             tensor_refs=tensor_refs,
                             device=device,
                         )
-                        result._backward_func = backward_op
 
             if track_graph:
                 try:
