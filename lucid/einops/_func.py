@@ -9,11 +9,11 @@ from lucid._tensor import Tensor
 from lucid.types import _EinopsPattern, _NumPyArray, _MLXArray, _ShapeLike
 
 from lucid._backend.core import (
-    operation,
+    Operation,
     unary_func_op,
     poly_func_op,
     _FuncOpReturnType,
-    _GradFuncType,
+    _GradType,
 )
 from lucid._backend.metal import mx
 
@@ -76,7 +76,7 @@ def _build_intermediate(
     return inter_tokens, inter_shape
 
 
-class rearrange(operation):
+class rearrange(Operation):
     def __init__(
         self, pattern: _EinopsPattern, t_shape: _ShapeLike, **shapes: int
     ) -> None:
@@ -184,7 +184,7 @@ class rearrange(operation):
         self.result = Tensor(transposed.reshape(self.final_shape))
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         unmerged_shape = tuple(dim for group in self.group_splits for dim in group)
         grad_unmerged = self.result.grad.reshape(unmerged_shape)
 
@@ -194,7 +194,7 @@ class rearrange(operation):
         return grad_interm.reshape(a.shape)
 
 
-class reduce(operation):
+class reduce(Operation):
     def __init__(
         self,
         pattern: _EinopsPattern,
@@ -327,7 +327,7 @@ class reduce(operation):
         self.result = Tensor(self._unified(a.data))
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         grad_kept = self.result.grad.reshape(self.kept_flat_shape)
         new_shape = self.kept_flat_shape + (1,) * len(self.reduced_shape)
 
@@ -359,7 +359,7 @@ class reduce(operation):
             raise ValueError(f"Unsupported reduction type: {self.reduction}")
 
 
-class repeat(operation):
+class repeat(Operation):
     def __init__(
         self, pattern: _EinopsPattern, t_shape: _ShapeLike, **shapes: int
     ) -> None:
@@ -508,7 +508,7 @@ class repeat(operation):
         self.result = Tensor(self._unified(a.data, lib_=mx))
         return self.result, partial(self.__grad__, a=a)
 
-    def __grad__(self, a: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor) -> _GradType:
         grad = self.result.grad
         for i, (b, o) in enumerate(zip(self.base_shape, self.out_shape)):
             if b == 1 and o != 1:
@@ -520,7 +520,7 @@ class repeat(operation):
         return int(np.prod(self.out_shape))
 
 
-class einsum(operation):
+class einsum(Operation):
     def __init__(self, pattern: str) -> None:
         super().__init__()
         self.pattern = pattern
@@ -564,7 +564,7 @@ class einsum(operation):
         self.result = Tensor(mx.einsum(self.pattern, *data_arr))
         return self.result, partial(self.__grad__, arr=arr, lib_=mx)
 
-    def __grad__(self, arr: tuple[Tensor, ...], lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, arr: tuple[Tensor, ...], lib_: ModuleType) -> _GradType:
         grads = []
         for i in range(len(arr)):
             other = [t.data for j, t in enumerate(arr) if j != i]

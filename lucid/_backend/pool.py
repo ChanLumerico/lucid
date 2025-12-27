@@ -7,10 +7,10 @@ import numpy as np
 
 from lucid._tensor import Tensor
 from lucid._backend.core import (
-    operation,
+    Operation,
     unary_func_op,
     _FuncOpReturnType,
-    _GradFuncType,
+    _GradType,
 )
 from lucid._backend.metal import mx
 from lucid.types import _NumPyArray, _MLXArray
@@ -211,7 +211,7 @@ def _pool_backward_max(
     return _crop_padding(grad_input_pad, padding)
 
 
-class pool_nd(operation):
+class pool_nd(Operation):
     def __init__(
         self,
         kernel_size: int | tuple[int, ...] | list[int],
@@ -295,7 +295,7 @@ class pool_nd(operation):
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         if (
             self._kernel_size is None
             or self._stride is None
