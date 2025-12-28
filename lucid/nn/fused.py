@@ -1,4 +1,4 @@
-from typing import Literal, ClassVar, Type
+from typing import Literal, ClassVar
 
 import lucid
 import lucid.nn as nn

@@ -164,14 +164,13 @@ class Tensor(_TensorBase):
                 if parent not in visited:
                     stack.append(parent)
 
-        # NOTE: Backward Fusion: Count how many times each tensor is used
-        # use_count_weakdict = WeakKeyDictionary()
-        # for tensor in topo_order:
-        #     use_count_weakdict[tensor] = 0
+        use_count_weakdict = WeakKeyDictionary()
+        for tensor in topo_order:
+            use_count_weakdict[tensor] = 0
 
-        # for tensor in topo_order:
-        #     for parent in tensor._prev:
-        #         use_count_weakdict[parent] = use_count_weakdict.get(parent, 0) + 1
+        for tensor in topo_order:
+            for parent in tensor._prev:
+                use_count_weakdict[parent] = use_count_weakdict.get(parent, 0) + 1
 
         for tensor in reversed(topo_order):
             try:
