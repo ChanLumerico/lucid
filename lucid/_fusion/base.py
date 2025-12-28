@@ -1,12 +1,21 @@
 from abc import ABC, abstractmethod
-from typing import ClassVar, Callable, Sequence, overload
+from typing import ClassVar, Callable, Never, Sequence, overload
 from types import ModuleType
 
 from functools import partial
 import inspect
+import numpy as np
 
 from lucid._tensor.tensor import Tensor
 from lucid._backend.core import Operation, _GradType
+from lucid._backend.metal import mx
+from lucid.types import _DeviceType
+
+
+__all__ = ["FusedBackwardOp", "match_fusion_table"]
+
+
+_lib_mapping: dict[_DeviceType, ModuleType] = {"cpu": np, "metal": mx}
 
 
 class FusedBackwardOp(ABC):
@@ -18,7 +27,7 @@ class FusedBackwardOp(ABC):
         cls,
         inputs: Tensor | Sequence[Tensor],
         results: Tensor | Sequence[Tensor],
-        lib_: ModuleType,
+        device: _DeviceType = "cpu",
     ) -> Callable[[], _GradType]:
         if isinstance(inputs, Sequence) and not isinstance(inputs, Tensor):
             ins: tuple[Tensor, ...] = tuple(inputs)
@@ -38,8 +47,11 @@ class FusedBackwardOp(ABC):
         if "rets" in params:
             bound["rets"] = rets
         if "lib_" in params:
-            bound["lib_"] = lib_
+            bound["lib_"] = _lib_mapping[device]
 
+        # NOTE (typing/robustness): This required-argument check is intentionally simple.
+        # If you see false positives, consider narrowing this to required KEYWORD_ONLY params only
+        # (p.kind is KEYWORD_ONLY and default is empty), since we bind by keyword names.
         accepts_var_kw = any(
             p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
         )
@@ -81,3 +93,23 @@ class FusedBackwardOp(ABC):
     @classmethod
     @abstractmethod
     def __grad__(cls, *args, **kwargs) -> _GradType: ...
+
+    def __new__(cls, *args, **kwargs) -> Never:
+        raise TypeError(f"{cls.__name__} cannot be instantiated.")
+
+
+_FusionTableEntry = tuple[type[Operation], type[Operation]]
+
+# NOTE (registration): `_fusion_table` is built at import time from current subclasses.
+# If fused-rule subclasses are imported after this module, they won't appear here.
+# Recommended: build lazily inside `match_fusion_table` OR register via `__init_subclass__`.
+_fusion_table: dict[_FusionTableEntry, type[FusedBackwardOp]] = {
+    (fused_op.op1, fused_op.op2): fused_op
+    for fused_op in FusedBackwardOp.__subclasses__()
+}
+
+
+def match_fusion_table(
+    op1: type[Operation], op2: type[Operation]
+) -> type[FusedBackwardOp] | None:
+    return _fusion_table.get((op1, op2), None)

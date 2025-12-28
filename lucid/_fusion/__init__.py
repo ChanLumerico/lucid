@@ -1,1 +1,2 @@
-from .base import FusedBackwardOp
+from .base import *
+from .func import *

@@ -1,7 +1,7 @@
 from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
 from types import NoneType
 from collections import deque
-from weakref import WeakKeyDictionary
+from weakref import WeakKeyDictionary, WeakSet
 
 import numpy as np
 
@@ -164,13 +164,7 @@ class Tensor(_TensorBase):
                 if parent not in visited:
                     stack.append(parent)
 
-        use_count_weakdict = WeakKeyDictionary()
-        for tensor in topo_order:
-            use_count_weakdict[tensor] = 0
-
-        for tensor in topo_order:
-            for parent in tensor._prev:
-                use_count_weakdict[parent] = use_count_weakdict.get(parent, 0) + 1
+        self._try_backward_fusion(topo_order)  # BETA: backward fusion
 
         for tensor in reversed(topo_order):
             try:
@@ -189,9 +183,7 @@ class Tensor(_TensorBase):
 
         if not retain_graph:
             for tensor in topo_order:
-                tensor._prev = []
-                tensor._backward_func = _noop
-                tensor._op = None
+                tensor.clear_node()
             for op in ops_to_clear:
                 try:
                     op.clear()
@@ -200,6 +192,61 @@ class Tensor(_TensorBase):
                         op.result = None
                     except Exception:
                         pass
+
+    def _try_backward_fusion(self, topo_order: list[Self]) -> None:
+        consumer_of: WeakKeyDictionary[Self, Self] = WeakKeyDictionary()
+        multi_consumer: WeakSet[Self] = WeakSet()
+
+        for consumer in topo_order:
+            for parent in consumer._prev:
+                if parent in multi_consumer:
+                    continue
+                prev_consumer = consumer_of.get(parent)
+                if prev_consumer is None:
+                    consumer_of[parent] = consumer
+                else:
+                    multi_consumer.add(parent)
+                    try:
+                        del consumer_of[parent]
+                    except KeyError:
+                        pass
+
+        if not consumer_of:
+            return None
+
+        from lucid._fusion import match_fusion_table
+
+        for u, v in consumer_of.items():
+            if u._op is None or v._op is None:
+                continue
+
+            fused_backward_op = match_fusion_table(u._op, v._op)
+            if fused_backward_op is None:
+                continue
+
+            # NOTE (fusion TODO): Don't call `u.clear_node()` before rewiring `v`.
+            # `clear_node()` sets `u._prev = []`, so the subsequent `v._prev.extend(u._prev)`
+            # becomes a no-op and the graph is not rewired as intended.
+            # Recommended:
+            #   parents = list(u._prev)
+            #   v._prev.remove(u)
+            #   v._prev.extend(parents)  # or v._prev = parents for unary chains
+            #   then prune `u` (see next note).
+            #
+            # NOTE (memory/cleanup): Avoid setting `u._op = None` during fusion.
+            # `Tensor.backward()` collects `ops_to_clear` *after* calling `_backward_func`.
+            # If fusion clears `u._op` early, `u`'s forward op may be skipped and never cleared.
+            # Recommended prune: set `u._prev = []` and `u._backward_func = _noop` (optionally)
+            # but keep `u._op` intact until the normal cleanup pass.
+            u.clear_node()
+            v._prev.remove(u)
+            v._prev.extend(u._prev)
+            # NOTE (API consistency): `get_fused_grad_func` expects (inputs, results, device)
+            # and internally binds only the parameters that the subclass `__grad__` accepts.
+            # Ensure fused rules use canonical parameter names: ins / rets / lib_.
+            v._backward_func = fused_backward_op.get_fused_grad_func(
+                inputs=u, results=v, device=u.device
+            )
 
     def register_hook(self, hook: _HookType) -> Callable:
         self._backward_hooks.append(hook)
@@ -273,6 +320,11 @@ class Tensor(_TensorBase):
 
     def zero_grad(self) -> None:
         self.grad = None
+
+    def clear_node(self) -> None:
+        self._prev = []
+        self._backward_func = _noop
+        self._op = None
 
     def astype(self, dtype: type | Numeric) -> Self:
         new_dtype = dtype

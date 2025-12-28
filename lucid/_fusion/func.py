@@ -5,6 +5,9 @@ from lucid._backend.core import _GradType
 from .base import FusedBackwardOp
 
 
+__all__ = ["NegNeg"]
+
+
 class NegNeg(FusedBackwardOp):
     op1 = ufunc._neg
     op2 = ufunc._neg
