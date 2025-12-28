@@ -8,10 +8,10 @@ from lucid._tensor import Tensor
 from lucid.types import _Gradient, _ShapeLike
 
 from lucid._backend.core import (
-    operation,
+    Operation,
     binary_func_op,
     _FuncOpReturnType,
-    _GradFuncType,
+    _GradType,
 )
 from lucid._backend.metal import mx
 
@@ -21,7 +21,7 @@ def _broadcast_flops(a: Tensor, b: Tensor) -> int:
     return int(np.prod(out_shape))
 
 
-class add(operation):
+class add(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -35,14 +35,14 @@ class add(operation):
         self.result = Tensor(mx.add(a.data, b.data))
         return self.result, self.__grad__
 
-    def __grad__(self) -> _GradFuncType:
+    def __grad__(self) -> _GradType:
         return self.result.grad, self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
         return _broadcast_flops(a, b)
 
 
-class sub(operation):
+class sub(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -56,14 +56,14 @@ class sub(operation):
         self.result = Tensor(mx.subtract(a.data, b.data))
         return self.result, self.__grad__
 
-    def __grad__(self) -> _GradFuncType:
+    def __grad__(self) -> _GradType:
         return self.result.grad, -self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
         return _broadcast_flops(a, b)
 
 
-class multiply(operation):
+class multiply(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -77,14 +77,14 @@ class multiply(operation):
         self.result = Tensor(mx.multiply(a.data, b.data))
         return self.result, partial(self.__grad__, a=a, b=b)
 
-    def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor) -> _GradType:
         return b.data * self.result.grad, a.data * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
         return _broadcast_flops(a, b)
 
 
-class truediv(operation):
+class truediv(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -98,7 +98,7 @@ class truediv(operation):
         self.result = Tensor(mx.divide(a.data, b.data))
         return self.result, partial(self.__grad__, a=a, b=b)
 
-    def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor) -> _GradType:
         return (
             (1 / b.data) * self.result.grad,
             (-a.data / (b.data**2)) * self.result.grad,
@@ -108,7 +108,7 @@ class truediv(operation):
         return _broadcast_flops(a, b)
 
 
-class floordiv(operation):
+class floordiv(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -122,14 +122,14 @@ class floordiv(operation):
         self.result = Tensor(a.data // b.data).astype(lucid.Int)
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
         return _broadcast_flops(a, b)
 
 
-class _equal(operation):
+class _equal(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -143,11 +143,11 @@ class _equal(operation):
         self.result = Tensor(a.data == b.data).astype(bool)
         return self.result, partial(self.__grad__, lib=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
-class _not_equal(operation):
+class _not_equal(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -161,11 +161,11 @@ class _not_equal(operation):
         self.result = Tensor(a.data != b.data).astype(bool)
         return self.result, partial(self.__grad__, lib=np)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
-class _greater(operation):
+class _greater(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -179,11 +179,11 @@ class _greater(operation):
         self.result = Tensor(a.data > b.data).astype(bool)
         return self.result, partial(self.__grad__, lib=np)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
-class _greater_or_equal(operation):
+class _greater_or_equal(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -197,11 +197,11 @@ class _greater_or_equal(operation):
         self.result = Tensor(a.data >= b.data).astype(bool)
         return self.result, partial(self.__grad__, lib=np)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
-class _less(operation):
+class _less(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -215,11 +215,11 @@ class _less(operation):
         self.result = Tensor(a.data < b.data).astype(bool)
         return self.result, partial(self.__grad__, lib=np)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
-class _less_or_equal(operation):
+class _less_or_equal(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -233,11 +233,11 @@ class _less_or_equal(operation):
         self.result = Tensor(a.data <= b.data).astype(bool)
         return self.result, partial(self.__grad__, lib=np)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
-class minimum(operation):
+class minimum(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -251,7 +251,7 @@ class minimum(operation):
         self.result = Tensor(mx.minimum(a.data, b.data))
         return self.result, partial(self.__grad__, a=a, b=b)
 
-    def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor) -> _GradType:
         a_grad = (a.data <= b.data).astype(a.data.dtype)
         b_grad = (a.data > b.data).astype(b.data.dtype)
 
@@ -261,7 +261,7 @@ class minimum(operation):
         return _broadcast_flops(a, b)
 
 
-class maximum(operation):
+class maximum(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -275,7 +275,7 @@ class maximum(operation):
         self.result = Tensor(mx.maximum(a.data, b.data))
         return self.result, partial(self.__grad__, a=a, b=b)
 
-    def __grad__(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor) -> _GradType:
         a_grad = (a.data >= b.data).astype(a.data.dtype)
         b_grad = (a.data < b.data).astype(b.data.dtype)
 
@@ -285,7 +285,7 @@ class maximum(operation):
         return _broadcast_flops(a, b)
 
 
-class power(operation):
+class power(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -299,7 +299,7 @@ class power(operation):
         self.result = Tensor(mx.power(a.data, b.data))
         return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
-    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         a_grad = b.data * lib_.power(a.data, b.data - 1)
         b_grad = lib_.power(a.data, b.data) * lib_.log(a.data)
 
@@ -309,7 +309,7 @@ class power(operation):
         return _broadcast_flops(a, b)
 
 
-class dot(operation):
+class dot(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -326,10 +326,10 @@ class dot(operation):
         self.result = Tensor(mx.sum(a.data * b.data))
         return self.result, partial(self.__grad_gpu__, a=a, b=b)
 
-    def __grad_cpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad_cpu__(self, a: Tensor, b: Tensor) -> _GradType:
         return self.result.grad.dot(b.data.mT), a.data.mT.dot(self.result.grad)
 
-    def __grad_gpu__(self, a: Tensor, b: Tensor) -> _GradFuncType:
+    def __grad_gpu__(self, a: Tensor, b: Tensor) -> _GradType:
         return b.data * self.result.grad, a.data * self.result.grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
@@ -359,7 +359,7 @@ class dot(operation):
         return batch_size * m * n * (2 * k - 1)
 
 
-class inner(operation):
+class inner(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -373,7 +373,7 @@ class inner(operation):
         self.result = Tensor(mx.inner(a.data, b.data))
         return self.result, partial(self.__grad__, a=a, b=b, lib=mx)
 
-    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         return (
             lib_.tensordot(self.result.grad, b.data, axes=([-1], [-1])),
             lib_.tensordot(a.data, self.result.grad, axes=([-1], [-1])),
@@ -394,7 +394,7 @@ class inner(operation):
             return output_size * (2 * n - 1)
 
 
-class outer(operation):
+class outer(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -408,7 +408,7 @@ class outer(operation):
         self.result = Tensor(mx.outer(a.data, b.data))
         return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
-    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         return (
             lib_.tensordot(self.result.grad, b.data, axes=([1], [0])),
             lib_.tensordot(self.result.grad, a.data, axes=([0], [0])),
@@ -418,7 +418,7 @@ class outer(operation):
         return a.size * b.size
 
 
-class matmul(operation):
+class matmul(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -434,7 +434,7 @@ class matmul(operation):
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
-    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         grad = self.result.grad
         if grad.ndim == 0:
             grad = lib_.reshape(grad, (1, 1))
@@ -483,7 +483,7 @@ class matmul(operation):
         return batch_size * m * n * k
 
 
-class tensordot(operation):
+class tensordot(Operation):
     def __init__(
         self, axes: int | tuple[int, int] | tuple[list[int], list[int]]
     ) -> None:
@@ -514,7 +514,7 @@ class tensordot(operation):
         self.result = Tensor(mx.tensordot(a.data, b.data, axes=(axes_a, axes_b)))
         return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
-    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         axes_a, axes_b = self._get_axes_lists()
         grad = self.result.grad
 
@@ -546,7 +546,7 @@ class tensordot(operation):
         return num_out * (2 * m - 1)
 
 
-class _bitwise_and(operation):
+class _bitwise_and(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -560,11 +560,11 @@ class _bitwise_and(operation):
         self.result = Tensor(mx.bitwise_and(a.data, b.data))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)
 
 
-class _bitwise_or(operation):
+class _bitwise_or(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -578,5 +578,5 @@ class _bitwise_or(operation):
         self.result = Tensor(mx.bitwise_or(a.data, b.data))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0), lib_.array(0.0)

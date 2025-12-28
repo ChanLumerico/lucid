@@ -8,10 +8,10 @@ import numpy as np
 
 from lucid._tensor import Tensor
 from lucid._backend.core import (
-    operation,
+    Operation,
     binary_func_op,
     _FuncOpReturnType,
-    _GradFuncType,
+    _GradType,
 )
 from lucid._backend.metal import mx
 
@@ -451,7 +451,7 @@ def _conv_backward_input(
     return grad_input
 
 
-class conv_nd(operation):
+class conv_nd(Operation):
     def __init__(
         self,
         stride: int | tuple[int, ...] | list[int],
@@ -499,7 +499,7 @@ class conv_nd(operation):
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
-    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         stride = self._stride
         padding = self._padding
         dilation = self._dilation

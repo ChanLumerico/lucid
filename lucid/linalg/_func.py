@@ -6,18 +6,18 @@ from lucid.types import _NumPyArray, _MLXArray
 from lucid._tensor import Tensor
 
 from lucid._backend.core import (
-    operation,
+    Operation,
     fallback,
     func_op,
     binary_func_op,
     unary_func_op,
-    _GradFuncType,
+    _GradType,
     _FuncOpReturnType,
 )
 from lucid._backend.metal import mx
 
 
-class inv(operation):
+class inv(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -31,10 +31,10 @@ class inv(operation):
         self.result = Tensor(mx.linalg.inv(a.data))
         return self.result, self.__grad_gpu__
 
-    def __grad_cpu__(self) -> _GradFuncType:
+    def __grad_cpu__(self) -> _GradType:
         return -np.dot(np.dot(self.result.data.T, self.result.grad), self.result.data)
 
-    def __grad_gpu__(self) -> _GradFuncType:
+    def __grad_gpu__(self) -> _GradType:
         return -mx.matmul(
             mx.matmul(self.result.data.T, self.result.grad), self.result.data
         )
@@ -43,7 +43,7 @@ class inv(operation):
         return int((2 / 3) * a.shape[-1] ** 3)
 
 
-class det(operation):
+class det(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -60,12 +60,12 @@ class det(operation):
         self.result = Tensor(mx.prod(diag))
         return self.result, partial(self.__grad_gpu__, a=a)
 
-    def __grad_cpu__(self, a: Tensor) -> _GradFuncType:
+    def __grad_cpu__(self, a: Tensor) -> _GradType:
         grad = self.result.grad
         invA_T = np.transpose(np.linalg.inv(a.data))
         return grad * invA_T
 
-    def __grad_gpu__(self, a: Tensor) -> _GradFuncType:
+    def __grad_gpu__(self, a: Tensor) -> _GradType:
         grad = self.result.grad
         invA_T = mx.transpose(mx.linalg.inv(a.data))
         return grad * invA_T
@@ -74,7 +74,7 @@ class det(operation):
         return int((1 / 3) * a.shape[-1] ** 3)
 
 
-class solve(operation):
+class solve(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -88,7 +88,7 @@ class solve(operation):
         self.result = Tensor(mx.linalg.solve(a.data, b.data))
         return self.result, partial(self.__grad_gpu__, a=a)
 
-    def __grad_cpu__(self, a: Tensor) -> _GradFuncType:
+    def __grad_cpu__(self, a: Tensor) -> _GradType:
         grad = self.result.grad
         x = self.result.data
         inv_a = np.linalg.inv(a.data)
@@ -98,7 +98,7 @@ class solve(operation):
 
         return a_grad, b_grad
 
-    def __grad_gpu__(self, a: Tensor) -> _GradFuncType:
+    def __grad_gpu__(self, a: Tensor) -> _GradType:
         grad = self.result.grad
         x = self.result.data
         inv_a = mx.linalg.inv(a.data)
@@ -114,7 +114,7 @@ class solve(operation):
         return int((2 / 3) * n**3 + 2 * n**2 * m)
 
 
-class cholesky(operation):
+class cholesky(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -128,7 +128,7 @@ class cholesky(operation):
         self.result = Tensor(mx.linalg.cholesky(a.data))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         L = self.result.data
         grad_L = self.result.grad
 
@@ -142,7 +142,7 @@ class cholesky(operation):
         return int((1 / 3) * a.shape[-1] ** 3)
 
 
-class norm(operation):
+class norm(Operation):
     def __init__(
         self,
         ord: int = 2,
@@ -173,7 +173,7 @@ class norm(operation):
         )
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         x = a.data
         r = self.result.data
         grad_output = self.result.grad
@@ -228,7 +228,7 @@ class norm(operation):
 
 
 @fallback
-class eig(operation):
+class eig(Operation):
     def __init__(self, eps: float) -> None:
         super().__init__()
         self.eps = eps
@@ -263,7 +263,7 @@ class eig(operation):
             (self.result[1], partial(self.__grad_eigvecs__, _fallback=True)),
         )
 
-    def __grad_eigvals__(self, _fallback: bool = False) -> _GradFuncType:
+    def __grad_eigvals__(self, _fallback: bool = False) -> _GradType:
         eigvals = self.result[0]
         grad = np.einsum(
             "...k,...ki,...kj->...ij",
@@ -273,7 +273,7 @@ class eig(operation):
         )
         return grad if not _fallback else mx.array(grad)
 
-    def __grad_eigvecs__(self, _fallback: bool = False) -> _GradFuncType:
+    def __grad_eigvecs__(self, _fallback: bool = False) -> _GradType:
         eigvals, eigvecs = self._eigvals, self._eigvecs
         eigvecs_t = self.result[1]
 
@@ -296,7 +296,7 @@ class eig(operation):
         return 9 * a.shape[-1] ** 3
 
 
-class qr(operation):
+class qr(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -320,7 +320,7 @@ class qr(operation):
             (self.result[1], partial(self.__grad_r__, lib_=mx)),
         )
 
-    def __grad_q__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_q__(self, lib_: ModuleType) -> _GradType:
         grad_q = self.result[0].grad
         qt_grad_q = lib_.einsum("...ik,...kj->...ij", self.Q.swapaxes(-1, -2), grad_q)
         qt_grad_q_r = lib_.einsum("...ij,...jk->...ik", qt_grad_q, self.R)
@@ -329,7 +329,7 @@ class qr(operation):
             "...ij,...jk->...ik", self.Q, qt_grad_q_r
         )
 
-    def __grad_r__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_r__(self, lib_: ModuleType) -> _GradType:
         grad_r = self.result[1].grad
         return lib_.einsum("...ij,...jk->...ik", self.Q, grad_r)
 
@@ -339,7 +339,7 @@ class qr(operation):
 
 
 @fallback
-class svd(operation):
+class svd(Operation):
     def __init__(self, full_matrices: bool) -> None:
         super().__init__()
         self.full_matrices = full_matrices
@@ -371,7 +371,7 @@ class svd(operation):
             (self.result[2], partial(self.__grad_vt__, lib_=mx)),
         )
 
-    def __grad_u__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_u__(self, lib_: ModuleType) -> _GradType:
         return lib_.einsum(
             "...ik,...k,...jk->...ij",
             self.result[0].grad,
@@ -379,7 +379,7 @@ class svd(operation):
             self.VT.swapaxes(-1, -2),
         )
 
-    def __grad_s__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_s__(self, lib_: ModuleType) -> _GradType:
         return lib_.einsum(
             "...ik,...k,...jk->...ij",
             self.U,
@@ -387,7 +387,7 @@ class svd(operation):
             self.VT.swapaxes(-1, -2),
         )
 
-    def __grad_vt__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad_vt__(self, lib_: ModuleType) -> _GradType:
         return lib_.einsum(
             "...ik,...k,...jk->...ij",
             self.U,
@@ -402,7 +402,7 @@ class svd(operation):
         return int(4 * m**2 * n + 8 * m * n**2 + 9 * n**3)
 
 
-class matrix_power(operation):
+class matrix_power(Operation):
     def __init__(self, n: int) -> None:
         super().__init__()
         self.n = n
@@ -429,7 +429,7 @@ class matrix_power(operation):
         self.result = Tensor(self._gpu_matrix_pow(a.data, n=self.n))
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         grad = lib_.zeros_like(a.data)
         if self.n == 0:
             return grad
@@ -461,7 +461,7 @@ class matrix_power(operation):
         return 2 * num_mults * d**3
 
 
-class pinv(operation):
+class pinv(Operation):
     def __init__(self, rcond: float) -> None:
         super().__init__()
         self.rcond = rcond
@@ -480,7 +480,7 @@ class pinv(operation):
         self.result = Tensor(VT.T @ S_inv_mat @ U.T)
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         U, S, Vh = (
             np.linalg.svd(a.data, full_matrices=False)
             if lib_ is np

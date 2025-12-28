@@ -11,11 +11,11 @@ from lucid._tensor import Tensor
 from lucid._backend.metal import is_gpu_op
 
 
-_GradFuncType = Callable[[None], Tuple[_NumPyArray | _MLXArray, ...]]
+_GradType = _NumPyArray | _MLXArray | Tuple[_NumPyArray | _MLXArray, ...]
+_GradFuncType = Callable[[], _GradType]
 
 _ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
-
-_FuncOpReturnType = Tuple[_ReturnGradFuncPair, ...]
+_FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
 
 
 def func_op(
@@ -26,7 +26,7 @@ def func_op(
 ) -> Callable:
     def decorator(forward_func: Callable[..., _FuncOpReturnType]) -> Callable:
         @functools.wraps(forward_func)
-        def wrapper(op_self: operation, *args, **kwargs) -> Tuple[Tensor, ...]:
+        def wrapper(op_self: Operation, *args, **kwargs) -> Tuple[Tensor, ...]:
             tensors: Tuple[Tensor, ...] = tuple()
             requires_grad = False
             is_free = True
@@ -88,7 +88,7 @@ def func_op(
                 func_return_pairs: _FuncOpReturnType = (func_return_pairs,)
 
             results: Tuple[Tensor, ...] = tuple()
-            for result, compute_grad in func_return_pairs:
+            for result, grad_func in func_return_pairs:
                 result.requires_grad = requires_grad and has_gradient and grad_enabled
                 if track_graph:
                     result._op = op_self
@@ -100,34 +100,15 @@ def func_op(
                 if not track_graph:
                     continue
 
-                # NOTE: Bakcward Fusion: Needs to be modified in the future
-                def _backward_func(
-                    *, _func: Callable = compute_grad, _tensor_refs=tensor_refs
-                ) -> None:
-                    grads = _func()
-                    if n_in == 1 or not isinstance(grads, tuple):
-                        grads = (grads,)
-
-                    live_tensors = tuple(ref() for ref in _tensor_refs)
-                    if any(t is None for t in live_tensors):
-                        return
-
-                    if len(grads) != len(live_tensors):
-                        raise ValueError(
-                            f"Expected {len(live_tensors)} gradients, got {len(grads)}."
-                        )
-
-                    for tensor, grad in zip(live_tensors, grads):
-                        new_grad = lucid._match_grad_shape(
-                            tensor.data, grad, device=device
-                        )
-                        lucid._set_tensor_grad(tensor, new_grad)
-
                 if result.requires_grad or lucid.flops_enabled():
                     result._prev = list(tensors)
-                    result._backward_func = (
-                        _backward_func if result.requires_grad else lambda: None
-                    )
+                    if result.requires_grad:
+                        result._backward_func = BackwardOperation(
+                            forward_op_ref=weakref.ref(op_self),
+                            grad_func=grad_func,
+                            tensor_refs=tensor_refs,
+                            device=device,
+                        )
 
             if track_graph:
                 try:
@@ -162,7 +143,7 @@ def poly_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Call
     return func_op(None, 1, has_gradient=has_gradient, device=device)
 
 
-class operation(ABC):
+class Operation(ABC):
     __fallback__: ClassVar[bool] = False
 
     def __init__(self) -> None:
@@ -178,11 +159,11 @@ class operation(ABC):
     @abstractmethod
     def gpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
 
-    def __grad__(self, *args, **kwargs) -> _GradFuncType: ...
+    def __grad__(self, *args, **kwargs) -> _GradType: ...
 
-    def __grad_cpu__(self, *args, **kwargs) -> _GradFuncType: ...
+    def __grad_cpu__(self, *args, **kwargs) -> _GradType: ...
 
-    def __grad_gpu__(self, *args, **kwargs) -> _GradFuncType: ...
+    def __grad_gpu__(self, *args, **kwargs) -> _GradType: ...
 
     @property
     def flops(self) -> int:
@@ -203,6 +184,42 @@ class operation(ABC):
         return self.cpu(*args, **kwargs)
 
 
-def fallback(cls: type[operation]) -> type[operation]:
+def fallback(cls: type[Operation]) -> type[Operation]:
     cls.__fallback__ = True
     return cls
+
+
+class BackwardOperation:
+    def __init__(
+        self,
+        forward_op_ref: weakref.ref[Operation],
+        grad_func: _GradFuncType,
+        tensor_refs: tuple[weakref.ref[Tensor]],
+        device: _DeviceType,
+    ) -> None:
+        self.forward_op_ref = forward_op_ref
+        self.grad_func = grad_func
+        self.tensor_refs = tensor_refs
+        self.device = device
+        self.num_inputs = len(tensor_refs)
+
+    def override_grad_func(self, new_grad_func: _GradFuncType) -> None:
+        self.grad_func = new_grad_func
+
+    def __call__(self) -> None:
+        grads = self.grad_func()
+        if self.num_inputs == 1 or not isinstance(grads, tuple):
+            grads = (grads,)
+
+        live_tensors = tuple(ref() for ref in self.tensor_refs)
+        if any(t is None for t in live_tensors):
+            return
+
+        if len(grads) != len(live_tensors):
+            raise ValueError(
+                f"Expected {len(live_tensors)} gradients, got {len(grads)}."
+            )
+
+        for tensor, grad in zip(live_tensors, grads):
+            new_grad = lucid._match_grad_shape(tensor.data, grad, device=self.device)
+            lucid._set_tensor_grad(tensor, new_grad)

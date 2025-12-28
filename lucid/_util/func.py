@@ -10,18 +10,18 @@ from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike, _NumPyAr
 
 from lucid._backend.core import (
     fallback,
-    operation,
+    Operation,
     func_op,
     binary_func_op,
     unary_func_op,
     poly_func_op,
     _FuncOpReturnType,
-    _GradFuncType,
+    _GradType,
 )
 from lucid._backend.metal import mx
 
 
-class reshape(operation):
+class reshape(Operation):
     def __init__(self, shape: _ShapeLike) -> None:
         super().__init__()
         self.shape = shape
@@ -36,11 +36,11 @@ class reshape(operation):
         self.result = Tensor(mx.reshape(a.data, self.shape))
         return self.result, partial(self.__grad__, a=a)
 
-    def __grad__(self, a: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor) -> _GradType:
         return self.result.grad.reshape(*a.shape)
 
 
-class _reshape_immediate(operation):
+class _reshape_immediate(Operation):
     def __init__(self, shape: _ShapeLike) -> None:
         super().__init__()
         self.shape = shape
@@ -55,11 +55,11 @@ class _reshape_immediate(operation):
         self.result = Tensor(mx.reshape(a.data, self.shape))
         return self.result, partial(self.__grad__, a=a)
 
-    def __grad__(self, a: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor) -> _GradType:
         return self.result.grad.reshape(a.shape)
 
 
-class squeeze(operation):
+class squeeze(Operation):
     def __init__(self, axis: _ShapeLike | None = None) -> None:
         super().__init__()
         self.axis = axis
@@ -74,11 +74,11 @@ class squeeze(operation):
         self.result = Tensor(mx.squeeze(a.data, axis=self.axis))
         return self.result, partial(self.__grad__, a=a)
 
-    def __grad__(self, a: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor) -> _GradType:
         return self.result.grad.reshape(a.shape)
 
 
-class unsqueeze(operation):
+class unsqueeze(Operation):
     def __init__(self, axis: _ShapeLike) -> None:
         super().__init__()
         self.axis = axis
@@ -93,14 +93,14 @@ class unsqueeze(operation):
         self.result = Tensor(mx.expand_dims(a.data, axis=self.axis))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.squeeze(self.result.grad, axis=self.axis)
 
 
 class expand_dims(unsqueeze): ...
 
 
-class ravel(operation):
+class ravel(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -114,11 +114,11 @@ class ravel(operation):
         self.result = Tensor(mx.reshape(a.data, (-1,)))
         return self.result, partial(self.__grad__, a=a)
 
-    def __grad__(self, a: Tensor) -> _GradFuncType:
+    def __grad__(self, a: Tensor) -> _GradType:
         return self.result.grad.reshape(a.shape)
 
 
-class stack(operation):
+class stack(Operation):
     def __init__(self, axis: int) -> None:
         super().__init__()
         self.axis = axis
@@ -137,7 +137,7 @@ class stack(operation):
 
         return self.result, partial(self.__grad__, arr=arr, lib_=mx)
 
-    def __grad__(self, arr: tuple[Tensor], lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, arr: tuple[Tensor], lib_: ModuleType) -> _GradType:
         split_grads = lib_.split(self.result.grad, len(arr), axis=self.axis)
         return tuple(split_grads)
 
@@ -184,7 +184,7 @@ class vstack(stack):
         return self.result, partial(self.__grad__, arr=arr, lib_=mx)
 
 
-class concatenate(operation):
+class concatenate(Operation):
     def __init__(self, axis: int) -> None:
         super().__init__()
         self.axis = axis
@@ -218,7 +218,7 @@ class concatenate(operation):
         return tuple(outputs)
 
 
-class pad(operation):
+class pad(Operation):
     def __init__(self, pad_width: _ArrayLikeInt, ndim: int) -> None:
         super().__init__()
         self.pad_width = pad_width
@@ -260,7 +260,7 @@ class pad(operation):
         self.result = Tensor(mx.pad(a.data, self.pad_width))
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         grad_input = lib_.zeros_like(a.data)
         slices = []
         for pw in self.pad_with_norm:
@@ -273,7 +273,7 @@ class pad(operation):
         return grad_input
 
 
-class repeat(operation):
+class repeat(Operation):
     def __init__(self, repeats: int | Sequence[int], axis: int | None) -> None:
         super().__init__()
         self.repeats = repeats
@@ -289,7 +289,7 @@ class repeat(operation):
         self.result = Tensor(mx.repeat(a.data, self.repeats, axis=self.axis))
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         grad_input = lib_.zeros_like(a.data)
         repeats_arr = lib_.array(self.repeats)
 
@@ -370,7 +370,7 @@ class repeat(operation):
         return grad_input
 
 
-class tile(operation):
+class tile(Operation):
     def __init__(self, reps: int | Sequence[int]) -> None:
         super().__init__()
         self.reps = reps
@@ -385,7 +385,7 @@ class tile(operation):
         self.result = Tensor(mx.tile(a.data, self.reps))
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         if a.ndim == 0:
             input_shape = (1,)
             if isinstance(self.reps, int):
@@ -422,7 +422,7 @@ class tile(operation):
         return grad_output_reshape.sum(axis=axes_to_sum)
 
 
-class flatten(operation):
+class flatten(Operation):
     def __init__(self, start_axis: int = 0, end_axis: int = -1) -> None:
         super().__init__()
         self.start_axis = start_axis
@@ -450,11 +450,11 @@ class flatten(operation):
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         return self._unified(a)
 
-    def __grad__(self) -> _GradFuncType:
+    def __grad__(self) -> _GradType:
         return self.result.grad.reshape(self.original_shape)
 
 
-class meshgrid(operation):
+class meshgrid(Operation):
     def __init__(self, indexing: Literal["xy", "ij"]) -> None:
         super().__init__()
         if indexing not in {"xy", "ij"}:
@@ -489,14 +489,14 @@ class meshgrid(operation):
         compute_grad = partial(self.__grad__, lib_=mx)
         return (self.X, compute_grad), (self.Y, compute_grad)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         grad_x = lib_.sum(self.X.grad, axis=0)
         grad_y = lib_.sum(self.Y.grad, axis=1)
 
         return grad_x, grad_y
 
 
-class split(operation):
+class split(Operation):
     def __init__(
         self, size_or_sections: int | list[int] | tuple[int], axis: int
     ) -> None:
@@ -536,7 +536,7 @@ class split(operation):
         return self.result
 
 
-class tril(operation):
+class tril(Operation):
     def __init__(self, diagonal: int) -> None:
         super().__init__()
         self.diagonal = diagonal
@@ -551,11 +551,11 @@ class tril(operation):
         self.result = Tensor(mx.tril(a.data, k=self.diagonal))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.tril(self.result.grad, k=self.diagonal)
 
 
-class triu(operation):
+class triu(Operation):
     def __init__(self, diagonal: int) -> None:
         super().__init__()
         self.diagonal = diagonal
@@ -570,11 +570,11 @@ class triu(operation):
         self.result = Tensor(mx.triu(a.data, k=self.diagonal))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.triu(self.result.grad, k=self.diagonal)
 
 
-class broadcast_to(operation):
+class broadcast_to(Operation):
     def __init__(self, shape: _ShapeLike) -> None:
         super().__init__()
         self.shape = shape
@@ -593,7 +593,7 @@ class broadcast_to(operation):
 
         return self.result, self.__grad__
 
-    def __grad__(self) -> _GradFuncType:
+    def __grad__(self) -> _GradType:
         input_shape = self.original_shape
         ndim_diff = len(self.shape) - len(input_shape)
         if ndim_diff > 0:
@@ -606,7 +606,7 @@ class broadcast_to(operation):
         return self.result.grad.reshape(self.original_shape)
 
 
-class chunk(operation):
+class chunk(Operation):
     def __init__(self, chunks: int, axis: int) -> None:
         super().__init__()
         self.chunks = chunks
@@ -627,7 +627,7 @@ class chunk(operation):
         for arr in chunked_arrays:
             chunk_t = Tensor(arr)
 
-            def compute_grad(_a: Tensor = chunk_t, _idx=start_idx) -> _GradFuncType:
+            def compute_grad(_a: Tensor = chunk_t, _idx=start_idx) -> _GradType:
                 slices = [slice(None)] * a.ndim
                 slices[self.axis] = slice(_idx, _idx + _a.shape[self.axis])
 
@@ -650,7 +650,7 @@ class chunk(operation):
         return self._unified(a, lib_=mx)
 
 
-class masked_fill(operation):
+class masked_fill(Operation):
     def __init__(self, mask: Tensor, value: _Scalar) -> None:
         super().__init__()
         self.mask = mask
@@ -666,18 +666,18 @@ class masked_fill(operation):
         self.result = Tensor(mx.where(self.mask.data.astype(bool), self.value, a.data))
         return self.result, self.__grad_gpu__
 
-    def __grad_cpu__(self) -> _GradFuncType:
+    def __grad_cpu__(self) -> _GradType:
         grad = self.result.grad.copy()
         grad[self.mask.data] = 0
         return grad
 
-    def __grad_gpu__(self) -> _GradFuncType:
+    def __grad_gpu__(self) -> _GradType:
         grad = mx.array(self.result.grad)
         grad = mx.where(self.mask.data.astype(bool), 0, grad)
         return grad
 
 
-class roll(operation):
+class roll(Operation):
     def __init__(
         self, shifts: int | tuple[int, ...], axis: int | tuple[int, ...] | None
     ) -> None:
@@ -695,7 +695,7 @@ class roll(operation):
         self.result = Tensor(mx.roll(a.data, shift=self.shifts, axis=self.axis))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         if isinstance(self.shifts, int):
             neg_shift = -self.shifts
         elif isinstance(self.shifts, tuple):
@@ -704,7 +704,7 @@ class roll(operation):
         return lib_.roll(self.result.grad, shift=neg_shift, axis=self.axis)
 
 
-class unbind(operation):
+class unbind(Operation):
     def __init__(self, axis: int = 0) -> None:
         super().__init__()
         self.axis = axis
@@ -722,7 +722,7 @@ class unbind(operation):
             arr = self._take_along_axis(a.data, idx)
             ten = Tensor(arr)
 
-            def compute_grad(_a: Tensor = ten, _idx: int = idx) -> _GradFuncType:
+            def compute_grad(_a: Tensor = ten, _idx: int = idx) -> _GradType:
                 idx_slices = [slice(None)] * a.ndim
                 idx_slices[self.axis] = _idx
 
@@ -746,7 +746,7 @@ class unbind(operation):
 _SortKind = Literal["quicksort", "mergesort", "heapsort", "stable"]
 
 
-class sort(operation):
+class sort(Operation):
     def __init__(
         self,
         axis: int = -1,
@@ -807,7 +807,7 @@ class sort(operation):
             (indices_t, lambda: mx.zeros_like(indices)),
         )
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         grad = self.result[0].grad
         reverse_indices = lib_.argsort(self.result[1].data, axis=self.axis)
 
@@ -822,7 +822,7 @@ class sort(operation):
         return int(num_slices * n * math.log2(max(n, 2)))
 
 
-class argsort(operation):
+class argsort(Operation):
     def __init__(
         self,
         axis: int = -1,
@@ -858,7 +858,7 @@ class argsort(operation):
         self.result = Tensor(indices.astype(mx.int32))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0)
 
     def __flops__(self, a: Tensor) -> int:
@@ -868,7 +868,7 @@ class argsort(operation):
         return int(num_slices * n * math.log2(max(n, 2)))
 
 
-class argmin(operation):
+class argmin(Operation):
     def __init__(self, axis: int = None, keepdims: bool = False) -> None:
         super().__init__()
         self.axis = axis
@@ -892,7 +892,7 @@ class argmin(operation):
         self.result = Tensor(indices.astype(mx.int32))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0)
 
     def __flops__(self, a: Tensor) -> int:
@@ -901,7 +901,7 @@ class argmin(operation):
         return num_slices * a.shape[axis]
 
 
-class argmax(operation):
+class argmax(Operation):
     def __init__(self, axis: int | None = None, keepdims: bool = False) -> None:
         super().__init__()
         self.axis = axis
@@ -927,7 +927,7 @@ class argmax(operation):
         self.result = Tensor(indices.astype(mx.int32))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0)
 
     def __flops__(self, a: Tensor) -> int:
@@ -936,7 +936,7 @@ class argmax(operation):
         return num_slices * a.shape[axis]
 
 
-class nonzero(operation):
+class nonzero(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -976,7 +976,7 @@ class nonzero(operation):
         self.result = Tensor(coords)
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0)
 
     def __flops__(self, a: Tensor) -> int:
@@ -985,7 +985,7 @@ class nonzero(operation):
 
 
 @fallback
-class unique(operation):
+class unique(Operation):
     def __init__(self, sorted: bool = True, axis: int | None = None) -> None:
         super().__init__()
         self.sorted = sorted
@@ -1026,14 +1026,14 @@ class unique(operation):
             self.inverse_ = Tensor(mx.array(self.inverse_.data))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0)
 
     def __flops__(self, a: Tensor) -> int:
         return int(a.size * math.log2(max(a.size, 2)))
 
 
-class topk(operation):
+class topk(Operation):
     def __init__(
         self, k: int, axis: int = -1, largest: bool = True, sorted: bool = True
     ) -> None:
@@ -1112,7 +1112,7 @@ class topk(operation):
             (indices_t, lambda: mx.zeros_like(indices)),
         )
 
-    def __grad_cpu__(self, a: Tensor) -> _GradFuncType:
+    def __grad_cpu__(self, a: Tensor) -> _GradType:
         grad = self.result[0].grad
         axis = self.axis if self.axis >= 0 else grad.ndim + self.axis
 
@@ -1120,7 +1120,7 @@ class topk(operation):
         np.put_along_axis(output_grad, self.result[1].data, grad, axis=axis)
         return output_grad
 
-    def __grad_gpu__(self, a: Tensor) -> _GradFuncType:
+    def __grad_gpu__(self, a: Tensor) -> _GradType:
         grad = self.result[0].grad
         axis = self.axis if self.axis >= 0 else grad.ndim + self.axis
 
@@ -1156,7 +1156,7 @@ class topk(operation):
             return int(num_slices * n)
 
 
-class histogramdd(operation):
+class histogramdd(Operation):
     def __init__(
         self,
         bins: int | list[int],
@@ -1223,14 +1223,14 @@ class histogramdd(operation):
             (edges_t, partial(self.__grad__, lib_=np)),
         )
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         return lib_.array(0.0)
 
     def __flops__(self, a: Tensor) -> int:
         return int(math.prod(a.shape) + math.prod(self.bins))
 
 
-class where(operation):
+class where(Operation):
     def __init__(self) -> None:
         super().__init__()
 
@@ -1246,7 +1246,7 @@ class where(operation):
         self.result = Tensor(mx.where(condition.data, a.data, b.data))
         return self.result, partial(self.__grad__, lib_=mx)
 
-    def __grad__(self, lib_: ModuleType) -> _GradFuncType:
+    def __grad__(self, lib_: ModuleType) -> _GradType:
         cond = self.cond_.data
         grad = self.result.grad
 
@@ -1260,7 +1260,7 @@ class where(operation):
         return max(condition.size, a.size, b.size)
 
 
-class diagonal(operation):
+class diagonal(Operation):
     def __init__(self, offset: int = 0, axis1: int = 0, axis2: int = 1) -> None:
         super().__init__()
         self.offset = offset
@@ -1277,7 +1277,7 @@ class diagonal(operation):
         self.result = Tensor(mx.diagonal(a.data, self.offset, self.axis1, self.axis2))
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def __grad__(self, a: Tensor, lib_) -> _GradFuncType:
+    def __grad__(self, a: Tensor, lib_) -> _GradType:
         grad_out = self.result.grad
         grad_in = lib_.zeros_like(a.data)
 
