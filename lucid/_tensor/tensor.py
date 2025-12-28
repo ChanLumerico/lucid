@@ -1,9 +1,11 @@
+from functools import partial
 from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
-from types import NoneType
+from types import ModuleType, NoneType
 from collections import deque
 from weakref import WeakKeyDictionary, WeakSet
 
 import numpy as np
+import weakref
 
 import lucid
 import lucid.types as types
@@ -18,15 +20,13 @@ from lucid.types import (
 )
 
 from lucid._tensor.tensor_ops import _TensorBase
+from lucid._backend.core import BackwardOperation, noop, _GradType
 from lucid._backend.metal import mx, parse_mlx_indexing, check_metal_availability
 
 
 _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
 
 _dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
-
-
-def _noop() -> None: ...
 
 
 class Tensor(_TensorBase):
@@ -87,12 +87,11 @@ class Tensor(_TensorBase):
                 self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
 
         self._op: object | None = None
+        self._backward_op: BackwardOperation = noop
         self._prev: list[Tensor] = []
-        self._backward_func: Callable = _noop
         self._backward_hooks: list[_HookType] = []
 
         self.grad: Optional[_NumPyArray | _MLXArray] = None
-
         self.device = device
         self.requires_grad = requires_grad and lucid.grad_enabled()
         self.keep_grad = keep_grad
@@ -164,13 +163,13 @@ class Tensor(_TensorBase):
                 if parent not in visited:
                     stack.append(parent)
 
-        self._try_backward_fusion(topo_order)  # BETA: backward fusion
+        # self._try_backward_fusion(topo_order)  # BETA: backward fusion
 
         for tensor in reversed(topo_order):
             try:
-                tensor._backward_func()
+                tensor._backward_op()
             except Exception as e:
-                raise lucid.BackwardError(shape=tensor.shape, op=self._op) from e
+                raise lucid.BackwardError(shape=tensor.shape, op=tensor._op) from e
 
             for hook in tensor._backward_hooks:
                 hook(tensor, tensor.grad)
@@ -216,36 +215,22 @@ class Tensor(_TensorBase):
 
         from lucid._fusion import match_fusion_table
 
-        for u, v in consumer_of.items():
-            if u._op is None or v._op is None:
+        for p, v in list(consumer_of.items()):
+            if p._op is None or v._op is None:
                 continue
-
-            fused_backward_op = match_fusion_table(u._op, v._op)
+            fused_backward_op = match_fusion_table(p._op, v._op)
             if fused_backward_op is None:
                 continue
 
-            # NOTE (fusion TODO): Don't call `u.clear_node()` before rewiring `v`.
-            # `clear_node()` sets `u._prev = []`, so the subsequent `v._prev.extend(u._prev)`
-            # becomes a no-op and the graph is not rewired as intended.
-            # Recommended:
-            #   parents = list(u._prev)
-            #   v._prev.remove(u)
-            #   v._prev.extend(parents)  # or v._prev = parents for unary chains
-            #   then prune `u` (see next note).
-            #
-            # NOTE (memory/cleanup): Avoid setting `u._op = None` during fusion.
-            # `Tensor.backward()` collects `ops_to_clear` *after* calling `_backward_func`.
-            # If fusion clears `u._op` early, `u`'s forward op may be skipped and never cleared.
-            # Recommended prune: set `u._prev = []` and `u._backward_func = _noop` (optionally)
-            # but keep `u._op` intact until the normal cleanup pass.
-            u.clear_node()
-            v._prev.remove(u)
-            v._prev.extend(u._prev)
-            # NOTE (API consistency): `get_fused_grad_func` expects (inputs, results, device)
-            # and internally binds only the parameters that the subclass `__grad__` accepts.
-            # Ensure fused rules use canonical parameter names: ins / rets / lib_.
-            v._backward_func = fused_backward_op.get_fused_grad_func(
-                inputs=u, results=v, device=u.device
+            p_parents = tuple(p._prev)
+            v._prev.remove(p)
+            v._prev.extend(p_parents)
+            p.clear_node(clear_op=False)
+
+            v._backward_op.override_grad_func(
+                fused_backward_op.get_fused_grad_func(
+                    inputs=p_parents, results=v, device=v.device
+                )
             )
 
     def register_hook(self, hook: _HookType) -> Callable:
@@ -321,10 +306,11 @@ class Tensor(_TensorBase):
     def zero_grad(self) -> None:
         self.grad = None
 
-    def clear_node(self) -> None:
+    def clear_node(self, clear_op: bool = True) -> None:
         self._prev = []
-        self._backward_func = _noop
-        self._op = None
+        self._backward_op = noop
+        if clear_op:
+            self._op = None
 
     def astype(self, dtype: type | Numeric) -> Self:
         new_dtype = dtype
@@ -403,22 +389,29 @@ class Tensor(_TensorBase):
             sliced_data, self.requires_grad, self.keep_grad, self.dtype, self.device
         )
 
-        def _backward_func() -> None:
+        def _grad_func() -> None:
             if self.grad is None:
                 self.grad = (
                     np.zeros_like(self.data)
                     if self.is_cpu()
                     else mx.zeros_like(self.data)
                 )
-
+            if new_tensor.grad is None:
+                return
             new_grad = lucid._match_grad_shape(
                 self.data[new_idx], new_tensor.grad, device=self.device
             )
             lucid._set_tensor_grad(self, new_grad, at=new_idx)
 
         if self.requires_grad and lucid.grad_enabled():
-            new_tensor._backward_func = _backward_func
             new_tensor._prev = [self]
+            new_tensor._backward_op = BackwardOperation(
+                forward_op_ref=None,
+                grad_func=None,
+                tensor_refs=(weakref.ref(self),),
+                device=self.device,
+                custom_closure=_grad_func,
+            )
 
         if self.is_free:
             new_tensor.free()
@@ -498,7 +491,7 @@ class Tensor(_TensorBase):
             new.grad = None
 
         new._op = None
-        new._backward_func = _noop
+        new._backward_op = noop
         new._prev = []
         new._backward_hooks = []
 

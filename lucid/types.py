@@ -1,4 +1,12 @@
-from typing import Any, Callable, Dict, Sequence, Literal, TypeAlias
+from typing import (
+    Any,
+    Callable,
+    Protocol,
+    Sequence,
+    Literal,
+    TypeAlias,
+    runtime_checkable,
+)
 import re
 
 # NOTE: This module retains module independency.
@@ -28,6 +36,23 @@ _ArrayLikeInt = int | Sequence[int | tuple[int, int]]
 _OptimClosure = Callable[[], Any]
 
 _EinopsPattern = str
+
+
+@runtime_checkable
+class _TensorLike(Protocol):
+    dtype: Any
+    requires_grad: bool
+    is_free: bool
+    device: _DeviceType
+    shape: Any
+    data: Any
+
+    _op: object | None
+    _prev: list[_TensorLike]
+    _backward_op: Any
+
+    def to(self, device: _DeviceType) -> None: ...
+    def free(self) -> None: ...
 
 
 class Numeric:

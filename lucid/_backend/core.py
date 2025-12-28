@@ -1,20 +1,26 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Tuple, ClassVar
+from typing import Any, Callable, Tuple, ClassVar
 import functools
 import weakref
 
 import lucid
-import lucid.types as types
-from lucid.types import _DeviceType, _NumPyArray, _MLXArray, _BuiltinNumeric
+from lucid.types import (
+    Numeric,
+    _DeviceType,
+    _NumPyArray,
+    _MLXArray,
+    _BuiltinNumeric,
+    _TensorLike,
+)
 
-from lucid._tensor import Tensor
 from lucid._backend.metal import is_gpu_op
 
 
 _GradType = _NumPyArray | _MLXArray | Tuple[_NumPyArray | _MLXArray, ...]
 _GradFuncType = Callable[[], _GradType]
 
-_ReturnGradFuncPair = Tuple[Tensor, _GradFuncType]
+
+_ReturnGradFuncPair = Tuple[_TensorLike, _GradFuncType]
 _FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
 
 
@@ -26,11 +32,11 @@ def func_op(
 ) -> Callable:
     def decorator(forward_func: Callable[..., _FuncOpReturnType]) -> Callable:
         @functools.wraps(forward_func)
-        def wrapper(op_self: Operation, *args, **kwargs) -> Tuple[Tensor, ...]:
-            tensors: Tuple[Tensor, ...] = tuple()
+        def wrapper(op_self: Operation, *args, **kwargs) -> Tuple[_TensorLike, ...]:
+            tensors: Tuple[_TensorLike, ...] = tuple()
             requires_grad = False
             is_free = True
-            dtype_hint: _BuiltinNumeric | types.Numeric | None = None
+            dtype_hint: _BuiltinNumeric | Numeric | None = None
 
             if n_in is None:
                 tensor_args = args
@@ -42,7 +48,7 @@ def func_op(
                 tensor_args = args[:n_in]
 
             for arg in tensor_args:
-                if isinstance(arg, Tensor):
+                if isinstance(arg, _TensorLike):
                     dtype_hint = arg.dtype
                     break
 
@@ -87,7 +93,7 @@ def func_op(
             if num_returns == 1:
                 func_return_pairs: _FuncOpReturnType = (func_return_pairs,)
 
-            results: Tuple[Tensor, ...] = tuple()
+            results: Tuple[_TensorLike, ...] = tuple()
             for result, grad_func in func_return_pairs:
                 result.requires_grad = requires_grad and has_gradient and grad_enabled
                 if track_graph:
@@ -104,7 +110,7 @@ def func_op(
                     result._prev = list(tensors)
                     if not result.requires_grad:
                         continue
-                    result._backward_func = BackwardOperation(
+                    result._backward_op = BackwardOperation(
                         forward_op_ref=weakref.ref(op_self),
                         grad_func=grad_func,
                         tensor_refs=tensor_refs,
@@ -148,7 +154,7 @@ class Operation(ABC):
     __fallback__: ClassVar[bool] = False
 
     def __init__(self) -> None:
-        self.result: Tensor | tuple[Tensor, ...] | None = None
+        self.result: _TensorLike | tuple[_TensorLike, ...] | None = None
         self._flops: int | None = None
 
     def clear(self) -> None:
@@ -179,7 +185,7 @@ class Operation(ABC):
     def __flops__(self, *args, **kwargs) -> int:
         return 0
 
-    def __call__(self, *args, **kwargs) -> Tensor | tuple[Tensor, ...]:
+    def __call__(self, *args, **kwargs) -> _TensorLike | tuple[_TensorLike, ...]:
         if is_gpu_op(*args):
             return self.gpu(*args, **kwargs)
         return self.cpu(*args, **kwargs)
@@ -193,21 +199,38 @@ def fallback(cls: type[Operation]) -> type[Operation]:
 class BackwardOperation:
     def __init__(
         self,
-        forward_op_ref: weakref.ref[Operation],
-        grad_func: _GradFuncType,
-        tensor_refs: tuple[weakref.ref[Tensor]],
-        device: _DeviceType,
+        forward_op_ref: weakref.ref[Operation] | None,
+        grad_func: _GradFuncType | None,
+        tensor_refs: tuple[weakref.ref[_TensorLike]],
+        device: _DeviceType | None = "cpu",
+        custom_closure: Callable[..., None] | None = None,
     ) -> None:
         self.forward_op_ref = forward_op_ref
         self.grad_func = grad_func
         self.tensor_refs = tensor_refs
         self.device = device
+
+        self.custom_closure = custom_closure
         self.num_inputs = len(tensor_refs)
 
+        if self.grad_func is None and self.custom_closure is None:
+            raise ValueError("Either 'grad_func' or 'custom_closure' must be provided.")
+
     def override_grad_func(self, new_grad_func: _GradFuncType) -> None:
+        if self.custom_closure is not None:
+            return
         self.grad_func = new_grad_func
 
     def __call__(self) -> None:
+        if self.custom_closure is not None:
+            self.custom_closure()
+            return
+
+        if self.device is None and self.forward_op_ref is not None:
+            raise RuntimeError(
+                "Only 'noop' BackwardOperation can be called without device."
+            )
+
         grads = self.grad_func()
         if self.num_inputs == 1 or not isinstance(grads, tuple):
             grads = (grads,)
@@ -224,3 +247,8 @@ class BackwardOperation:
         for tensor, grad in zip(live_tensors, grads):
             new_grad = lucid._match_grad_shape(tensor.data, grad, device=self.device)
             lucid._set_tensor_grad(tensor, new_grad)
+
+
+noop = BackwardOperation(
+    forward_op_ref=None, grad_func=lambda: (), tensor_refs=(), device=None
+)
