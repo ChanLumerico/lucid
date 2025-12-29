@@ -2,7 +2,7 @@ from functools import partial
 from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
 from types import ModuleType, NoneType
 from collections import deque
-from weakref import WeakKeyDictionary, WeakSet
+from weakref import WeakSet
 
 import numpy as np
 import weakref
@@ -163,7 +163,7 @@ class Tensor(_TensorBase):
                 if parent not in visited:
                     stack.append(parent)
 
-        # self._try_backward_fusion(topo_order)  # BETA: backward fusion
+        self._try_backward_fusion(topo_order)  # BETA: backward fusion
 
         for tensor in reversed(topo_order):
             try:
@@ -193,29 +193,31 @@ class Tensor(_TensorBase):
                         pass
 
     def _try_backward_fusion(self, topo_order: list[Self]) -> None:
-        consumer_of: WeakKeyDictionary[Self, Self] = WeakKeyDictionary()
-        multi_consumer: WeakSet[Self] = WeakSet()
+        consumer_of: dict[int, Self] = {}
+        multi_consumer: set[int] = set()
 
         for consumer in topo_order:
             for parent in consumer._prev:
-                if parent in multi_consumer:
+                pid = id(parent)
+                if pid in multi_consumer:
                     continue
-                prev_consumer = consumer_of.get(parent)
+
+                prev_consumer = consumer_of.get(pid)
                 if prev_consumer is None:
-                    consumer_of[parent] = consumer
+                    consumer_of[pid] = consumer
                 else:
-                    multi_consumer.add(parent)
-                    try:
-                        del consumer_of[parent]
-                    except KeyError:
-                        pass
+                    multi_consumer.add(pid)
+                    consumer_of.pop(pid, None)
 
         if not consumer_of:
             return None
 
         from lucid._fusion import match_fusion_table
 
-        for p, v in list(consumer_of.items()):
+        for pid, v in list(consumer_of.items()):
+            p = next((t for t in v._prev if id(t) == pid), None)
+            if p is None:
+                continue
             if p._op is None or v._op is None:
                 continue
             fused_backward_op = match_fusion_table(p._op, v._op)
