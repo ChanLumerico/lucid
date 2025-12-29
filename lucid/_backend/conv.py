@@ -519,6 +519,25 @@ class conv_nd(operation):
 
         return grad_input, grad_weight
 
+    def __flops__(self, a: Tensor, b: Tensor) -> int:
+        stride = self._stride
+        padding = self._padding
+        dilation = self._dilation
+        if stride is None or padding is None or dilation is None:
+            stride, padding, dilation = self._normalize(b)
+
+        N = int(a.shape[0])
+        C_out = int(b.shape[0])
+        C_in_g = int(b.shape[1])
+        kernel_size = tuple(int(v) for v in b.shape[2:])
+        out_dims = _conv_out_dims(
+            tuple(int(v) for v in a.shape[2:]), kernel_size, stride, padding, dilation
+        )
+
+        macs_per_out = C_in_g * _prod(kernel_size)
+        out_elems = N * C_out * _prod(tuple(out_dims))
+        return out_elems * macs_per_out
+
 
 def conv_nd_op(
     stride: int | tuple[int, ...] | list[int],

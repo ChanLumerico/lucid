@@ -333,6 +333,24 @@ class pool_nd(operation):
         )
         return grad_input
 
+    def __flops__(self, a: Tensor) -> int:
+        if self._kernel_size is None or self._out_dims is None:
+            kernel, stride, padding = self._normalize(a)
+            out_dims = _pool_out_dims(a.shape[2:], kernel, stride, padding)
+        else:
+            kernel = self._kernel_size
+            out_dims = self._out_dims
+
+        kernel_elems = _prod(kernel)
+        out_elems = int(a.shape[0]) * int(a.shape[1]) * _prod(out_dims)
+
+        if kernel_elems <= 0 or out_elems <= 0:
+            return 0
+
+        if self.mode == "avg":
+            return out_elems * kernel_elems
+        return out_elems * max(kernel_elems - 1, 0)
+
 
 def avg_pool_nd_op(
     kernel_size: int | tuple[int, ...] | list[int],
