@@ -1,14 +1,12 @@
-from functools import partial
 from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
-from types import ModuleType, NoneType
+from types import NoneType
 from collections import deque
-from weakref import WeakSet
 
 import numpy as np
 import weakref
 
 import lucid
-import lucid.types as types
+from lucid import types
 from lucid.types import (
     _ArrayOrScalar,
     _NumPyArray,
@@ -20,7 +18,7 @@ from lucid.types import (
 )
 
 from lucid._tensor.tensor_ops import _TensorBase
-from lucid._backend.core import BackwardOperation, noop, _GradType
+from lucid._backend.core import BackwardOperation, Operation, noop
 from lucid._backend.metal import mx, parse_mlx_indexing, check_metal_availability
 
 
@@ -86,7 +84,7 @@ class Tensor(_TensorBase):
             if self._is_bool_tensor:
                 self.data = self.data.astype(bool if device == "cpu" else mx.bool_)
 
-        self._op: object | None = None
+        self._op: Operation | None = None
         self._backward_op: BackwardOperation = noop
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
@@ -163,7 +161,8 @@ class Tensor(_TensorBase):
                 if parent not in visited:
                     stack.append(parent)
 
-        self._try_backward_fusion(topo_order)  # BETA: backward fusion
+        if lucid.ENABLE_FUSION:
+            self._try_backward_fusion(topo_order)
 
         for tensor in reversed(topo_order):
             try:
@@ -220,8 +219,22 @@ class Tensor(_TensorBase):
                 continue
             if p._op is None or v._op is None:
                 continue
+
             fused_backward_op = match_fusion_table(p._op, v._op)
             if fused_backward_op is None:
+                continue
+
+            # DEBUG LOG
+            print(
+                f"Fusion occurred: {fused_backward_op.__name__} for "
+                f"{type(p._op).__name__} -> {type(v._op).__name__}"
+            )
+
+            # NOTE (fusion limitation): --- IGNORE ---
+            # TEMP: only fuse simple unary chains p -> v.
+            # If v has multiple parents (e.g., binary ops), a fused grad func would
+            # need to account for all inputs; skip for now.
+            if len(v._prev) != 1 or v._prev[0] is not p:
                 continue
 
             p_parents = tuple(p._prev)
@@ -229,6 +242,7 @@ class Tensor(_TensorBase):
             v._prev.extend(p_parents)
             p.clear_node(clear_op=False)
 
+            v._backward_op.override_tensor_refs(tuple(weakref.ref(t) for t in v._prev))
             v._backward_op.override_grad_func(
                 fused_backward_op.get_fused_grad_func(
                     inputs=p_parents, results=v, device=v.device

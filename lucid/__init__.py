@@ -50,6 +50,8 @@ import lucid.einops as einops
 import lucid.nn as nn
 import lucid.types as types
 
+from lucid._fusion import ENABLE_FUSION
+
 
 _grad_enabled: bool = True
 _flops_enabled: bool = False

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Tuple, ClassVar
+from typing import Callable, Tuple, ClassVar
 import functools
 import weakref
 
@@ -96,20 +96,19 @@ def func_op(
             results: Tuple[_TensorLike, ...] = tuple()
             for result, grad_func in func_return_pairs:
                 result.requires_grad = requires_grad and has_gradient and grad_enabled
-                if track_graph:
-                    result._op = op_self
                 result.to(device)
-                if is_free:
-                    result.free()
-
+                result.free() if is_free else ...
                 results += (result,)
+
                 if not track_graph:
                     continue
+                result._op = op_self
 
                 if result.requires_grad or lucid.flops_enabled():
                     result._prev = list(tensors)
                     if not result.requires_grad:
                         continue
+
                     result._backward_op = BackwardOperation(
                         forward_op_ref=weakref.ref(op_self),
                         grad_func=grad_func,
@@ -203,7 +202,7 @@ class BackwardOperation:
         grad_func: _GradFuncType | None,
         tensor_refs: tuple[weakref.ref[_TensorLike]],
         device: _DeviceType | None = "cpu",
-        custom_closure: Callable[..., None] | None = None,
+        custom_closure: Callable[[], None] | None = None,
     ) -> None:
         self.forward_op_ref = forward_op_ref
         self.grad_func = grad_func
@@ -220,6 +219,12 @@ class BackwardOperation:
         if self.custom_closure is not None:
             return
         self.grad_func = new_grad_func
+
+    def override_tensor_refs(
+        self, new_tensor_refs: tuple[weakref.ref[_TensorLike]]
+    ) -> None:
+        self.tensor_refs = new_tensor_refs
+        self.num_inputs = len(new_tensor_refs)
 
     def __call__(self) -> None:
         if self.custom_closure is not None:

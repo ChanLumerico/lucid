@@ -52,6 +52,7 @@ class _TensorLike(Protocol):
     _backward_op: Any
 
     def to(self, device: _DeviceType) -> None: ...
+
     def free(self) -> None: ...
 
 

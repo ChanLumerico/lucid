@@ -5,14 +5,35 @@ from lucid._backend.core import _GradType
 from .base import FusedBackwardOp
 
 
-__all__ = ["NegNeg"]
+__all__ = ["DoubleNeg", "DoubleReciprocal", "LogExp", "DoubleT", "DoubleMT"]
 
 
-class NegNeg(FusedBackwardOp):
+class _IdentityFusion(FusedBackwardOp):
+    @classmethod
+    def __grad__(cls, rets: tuple[Tensor]) -> _GradType:
+        return rets[0].grad
+
+
+class DoubleNeg(_IdentityFusion):
     op1 = ufunc._neg
     op2 = ufunc._neg
 
-    @classmethod
-    def __grad__(cls, rets: tuple[Tensor]) -> _GradType:
-        ret = rets[0]
-        return ret.grad
+
+class DoubleReciprocal(_IdentityFusion):
+    op1 = ufunc.reciprocal
+    op2 = ufunc.reciprocal
+
+
+class LogExp(_IdentityFusion):
+    op1 = ufunc.exp
+    op2 = ufunc.log
+
+
+class DoubleT(_IdentityFusion):
+    op1 = ufunc._T
+    op2 = ufunc._T
+
+
+class DoubleMT(_IdentityFusion):
+    op1 = ufunc._mT
+    op2 = ufunc._mT
