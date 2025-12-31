@@ -22,6 +22,8 @@ class FusedBackwardOp(ABC):
     op1: ClassVar[type[Operation] | None] = None
     op2: ClassVar[type[Operation] | None] = None
 
+    heuristic_thresh: ClassVar[int] = 0
+
     @classmethod
     def get_fused_grad_func(
         cls,

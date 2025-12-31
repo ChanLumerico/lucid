@@ -28,6 +28,8 @@ class LogExp(_IdentityFusion):
     op1 = ufunc.exp
     op2 = ufunc.log
 
+    heuristic_thresh = 10_000
+
 
 class DoubleT(_IdentityFusion):
     op1 = ufunc._T

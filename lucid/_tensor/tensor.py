@@ -161,7 +161,7 @@ class Tensor(_TensorBase):
                 if parent not in visited:
                     stack.append(parent)
 
-        if lucid.ENABLE_FUSION:
+        if lucid.ENABLE_FUSION and self.is_cpu():
             self._try_backward_fusion(topo_order)
 
         for tensor in reversed(topo_order):
@@ -209,7 +209,7 @@ class Tensor(_TensorBase):
                     consumer_of.pop(pid, None)
 
         if not consumer_of:
-            return None
+            return
 
         from lucid._fusion import match_fusion_table
 
@@ -223,12 +223,8 @@ class Tensor(_TensorBase):
             fused_backward_op = match_fusion_table(p._op, v._op)
             if fused_backward_op is None:
                 continue
-
-            # DEBUG LOG
-            print(
-                f"Fusion occurred: {fused_backward_op.__name__} for "
-                f"{type(p._op).__name__} -> {type(v._op).__name__}"
-            )
+            if v.size < fused_backward_op.heuristic_thresh:
+                continue
 
             # NOTE (fusion limitation): --- IGNORE ---
             # TEMP: only fuse simple unary chains p -> v.
