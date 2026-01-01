@@ -22,9 +22,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 - Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
 
-- Added new neural module category `nn.rnn`, including:
-
-  `nn.RNNBase`, `nn.RNN`, `nn.LSTM`, `nn.GRU`, `nn.RNNCell`, `nn.LSTMCell`, `nn.GRUCell`
+- Introduced **Backward Fusion** for CPU execution:
+  - Automatically fuses selected operation patterns during backpropagation to reduce graph overhead
+  - Supports identity/unary fusion (e.g. `log∘exp`, double negation, and view-like ops such as reshape/squeeze)
+  - Uses heuristic thresholds to avoid fusion overhead on small tensors
+  - Disabled by default on GPU paths to ensure stable performance
 
 ## 🔧 How to Install
 
