@@ -12,7 +12,6 @@ from lucid._backend.core import (
     fallback,
     Operation,
     func_op,
-    binary_func_op,
     unary_func_op,
     poly_func_op,
     _FuncOpReturnType,
