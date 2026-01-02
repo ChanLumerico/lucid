@@ -1,0 +1,3 @@
+[submodule "devlog"]
+	path = devlog
+	url = git@github.com:ChanLumerico/lucid-devlog.git
