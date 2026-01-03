@@ -1,3 +1,7 @@
 [submodule "devlog"]
 	path = devlog
 	url = git@github.com:ChanLumerico/lucid-devlog.git
+[submodule "review"]
+	path = review
+	url = git@github.com:ChanLumerico/lucid-paper-review.git
+	branch = main
