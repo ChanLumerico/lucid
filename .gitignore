@@ -12,3 +12,6 @@ _pip_macro.sh
 
 mypy_report.txt
 .mypy_cache/
+
+review/INSTRUCTION.txt
+review/_sources
