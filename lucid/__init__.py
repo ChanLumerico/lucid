@@ -44,6 +44,7 @@ from lucid.types import (
 from lucid.error import *
 from lucid.port import *
 
+import lucid.autograd as autograd
 import lucid.linalg as linalg
 import lucid.random as random
 import lucid.einops as einops
