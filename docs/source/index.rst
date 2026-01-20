@@ -15,6 +15,15 @@
    Tensor Utilities <tensor/utilities/index.rst>
 
 .. toctree::
+   :maxdepth: 1
+   :caption: Autograd
+   :hidden:
+
+   autograd/autograd.rst
+   
+   Autograd APIs <autograd/index.rst>
+
+.. toctree::
    :maxdepth: 2
    :caption: Linear Algebra
    :hidden:

@@ -49,6 +49,7 @@ import lucid.random as random
 import lucid.einops as einops
 import lucid.nn as nn
 import lucid.types as types
+import lucid.autograd as autograd
 
 from lucid._fusion import ENABLE_FUSION
 

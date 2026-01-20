@@ -22,6 +22,17 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 - Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
 
+- Branched a Stand-alone Autograd Engine as `lucid.autograd`
+
+  - Provides a generalized API of computing gradients:
+    
+    ```python
+    import lucid.autograd as autograd
+    x = lucid.Tensor([1., 2.], requires_grad=True)
+    y = (x ** 2).sum()
+    autograd.grad(y, x)  # ∂y/∂x
+    ```
+
 - Introduced **Backward Fusion** for CPU execution:
   - Automatically fuses selected operation patterns during backpropagation to reduce graph overhead
   - Supports identity/unary fusion (e.g. `log∘exp`, double negation, and view-like ops such as reshape/squeeze)

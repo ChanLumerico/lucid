@@ -46,14 +46,29 @@ class _TensorLike(Protocol):
     device: _DeviceType
     shape: Any
     data: Any
+    grad: Any
+    keep_grad: bool
+    is_leaf: bool
+    size: Any
 
     _op: object | None
     _prev: list[_TensorLike]
     _backward_op: Any
+    _backward_hooks: Any
 
     def to(self, device: _DeviceType) -> None: ...
 
     def free(self) -> None: ...
+
+    def is_cpu(self) -> bool: ...
+
+    def is_gpu(self) -> bool: ...
+
+    def clear_node(self, clear_op: bool = True) -> None: ...
+
+    def backward(
+        self, retain_grad: bool = False, retain_graph: bool = False
+    ) -> None: ...
 
 
 class Numeric:
