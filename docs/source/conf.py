@@ -91,6 +91,10 @@ ARCH_EP = """
 .. |diffusion-badge| raw:: html
 
     <span class="badge diffusion">Diffusion</span>
+
+.. |score-diffusion-badge| raw:: html
+
+    <span class="badge score_based_diffusion">Score-Based Diffusion</span>
 """
 
 TASK_EP = """    
