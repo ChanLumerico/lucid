@@ -88,6 +88,7 @@ class Tensor(_TensorBase):
         self._backward_op: BackwardOperation = noop
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
+        self._version: int = 0
 
         self.grad: Optional[_NumPyArray | _MLXArray] = None
         self.device = device

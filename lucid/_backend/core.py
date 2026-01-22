@@ -11,6 +11,7 @@ from lucid.types import (
     _MLXArray,
     _BuiltinNumeric,
     _TensorLike,
+    _TensorData,
 )
 
 from lucid._backend.metal import is_gpu_op
@@ -28,6 +29,8 @@ def func_op(
     n_in: int | None,
     n_ret: int | None,
     has_gradient: bool = True,
+    inplace: bool = False,
+    inplace_target: int = 0,
     device: _DeviceType = "cpu",
 ) -> Callable:
     def decorator(forward_func: Callable[..., _FuncOpReturnType]) -> Callable:
@@ -70,6 +73,20 @@ def func_op(
 
             non_tensor_args = args[n_in:] if n_in is not None else ()
             new_args = (*tensors, *non_tensor_args)
+
+            if inplace:
+                if n_ret not in (None, 1):
+                    raise ValueError("inplace op must have a single return value.")
+                if not (0 <= inplace_target < len(tensors)):
+                    raise ValueError("inplace_target is out of range.")
+
+                target = tensors[inplace_target]
+                if lucid.grad_enabled() and target.requires_grad and target.is_leaf:
+                    raise RuntimeError(
+                        "A leaf tensor with 'requires_grad=True' "
+                        "cannot be subjected to inplace operations."
+                    )
+
             func_return_pairs = forward_func(op_self, *new_args, **kwargs)
 
             tensor_refs = tuple(weakref.ref(t) for t in tensors)
@@ -92,6 +109,15 @@ def func_op(
 
             if num_returns == 1:
                 func_return_pairs: _FuncOpReturnType = (func_return_pairs,)
+            elif inplace:
+                raise ValueError("inplace op must have a single return value.")
+
+            if inplace:
+                (ret_value, grad_func) = func_return_pairs[0]
+                target = tensors[inplace_target]
+                target.data = ret_value.data
+                target._version += 1
+                func_return_pairs = ((target, grad_func),)
 
             results: Tuple[_TensorLike, ...] = tuple()
             for result, grad_func in func_return_pairs:
@@ -113,6 +139,7 @@ def func_op(
                         forward_op_ref=weakref.ref(op_self),
                         grad_func=grad_func,
                         tensor_refs=tensor_refs,
+                        versions=(t._version for t in tensors),
                         device=device,
                     )
 
@@ -137,16 +164,31 @@ def func_op(
     return decorator
 
 
-def unary_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
-    return func_op(1, 1, has_gradient=has_gradient, device=device)
+def unary_func_op(
+    has_gradient: bool = True,
+    device: _DeviceType = "cpu",
+    inplace: bool = False,
+    inplace_target: int = 0,
+) -> Callable:
+    return func_op(1, 1, has_gradient, inplace, inplace_target, device)
 
 
-def binary_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
-    return func_op(2, 1, has_gradient=has_gradient, device=device)
+def binary_func_op(
+    has_gradient: bool = True,
+    device: _DeviceType = "cpu",
+    inplace: bool = False,
+    inplace_target: int = 0,
+) -> Callable:
+    return func_op(2, 1, has_gradient, inplace, inplace_target, device)
 
 
-def poly_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
-    return func_op(None, 1, has_gradient=has_gradient, device=device)
+def poly_func_op(
+    has_gradient: bool = True,
+    device: _DeviceType = "cpu",
+    inplace: bool = False,
+    inplace_target: int = 0,
+) -> Callable:
+    return func_op(None, 1, has_gradient, inplace, inplace_target, device)
 
 
 class Operation(ABC):
@@ -164,6 +206,8 @@ class Operation(ABC):
 
     @abstractmethod
     def gpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
+
+    def inplace(self, *args) -> _TensorData: ...
 
     def __grad__(self, *args, **kwargs) -> _GradType: ...
 
@@ -201,12 +245,14 @@ class BackwardOperation:
         forward_op_ref: weakref.ref[Operation] | None,
         grad_func: _GradFuncType | None,
         tensor_refs: tuple[weakref.ref[_TensorLike]],
+        versions: tuple[int] = (),
         device: _DeviceType | None = "cpu",
         custom_closure: Callable[[], None] | None = None,
     ) -> None:
         self.forward_op_ref = forward_op_ref
         self.grad_func = grad_func
         self.tensor_refs = tensor_refs
+        self.versions = versions
         self.device = device
 
         self.custom_closure = custom_closure
@@ -214,6 +260,9 @@ class BackwardOperation:
 
         if self.grad_func is None and self.custom_closure is None:
             raise ValueError("Either 'grad_func' or 'custom_closure' must be provided.")
+
+        if len(tensor_refs) != len(versions):
+            raise ValueError("Numbers of 'tensor_refs' and 'versions' do not match.")
 
     def override_grad_func(self, new_grad_func: _GradFuncType) -> None:
         if self.custom_closure is not None:

@@ -5,11 +5,12 @@ import numpy as np
 
 import lucid
 from lucid._tensor import Tensor
-from lucid.types import _Gradient, _ShapeLike
+from lucid.types import _Gradient, _ShapeLike, _TensorData
 
 from lucid._backend.core import (
     Operation,
     binary_func_op,
+    inplace_op,
     _FuncOpReturnType,
     _GradType,
 )
