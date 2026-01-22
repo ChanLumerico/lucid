@@ -8,6 +8,9 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 
+__all__ = ["NCSN"]
+
+
 class _CondInstanceNorm(nn.Module):
     def __init__(self, num_features: int, num_classes: int, eps: float = 1e-5) -> None:
         super().__init__()
