@@ -64,9 +64,11 @@ inf = math.inf
 
 Int = types.Int
 Int8, Int16, Int32, Int64 = (types.Int8, types.Int16, types.Int32, types.Int64)
+Char, Short, Long = (Int8, Int16, Int64)
 
 Float = types.Float
 Float16, Float32, Float64 = (types.Float16, types.Float32, types.Float64)
+Half, Double = (Float16, Float64)
 
 Complex = types.Complex
 Complex64 = types.Complex64

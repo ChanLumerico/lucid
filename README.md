@@ -20,7 +20,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Now supports [**`Safetensors`**](https://github.com/huggingface/safetensors) for Lucid neural module porting along with the legacy `.lcd` format
+- Added **Noise Conditional Score Network(NCSN)** to `lucid.models.NCSN`
 
 - Branched a Stand-alone Autograd Engine as `lucid.autograd`
 
