@@ -58,25 +58,25 @@ class _ResidualConvUnit(nn.Module):
         self.conv1 = _Conv3x3(channels, channels, dilation=dilation)
 
         self.norm2 = _CondInstanceNorm(channels, num_classes)
-        self.conc2 = _Conv3x3(channels, channels, dilation=dilation)
+        self.conv2 = _Conv3x3(channels, channels, dilation=dilation)
 
         self.act = nn.ELU()
 
     def forward(self, x: Tensor, y: Tensor) -> Tensor:
         h = self.conv1(self.act(self.norm1(x, y)))
-        h = self.conv2(self.act(self.norm2(x, y)))
+        h = self.conv2(self.act(self.norm2(h, y)))
 
         return x + h
 
 
 class _RCUBlock(nn.Module):
     def __init__(
-        self, channels: int, num_classes: int, num_units: int = 2, diltation: int = 1
+        self, channels: int, num_classes: int, num_units: int = 2, dilation: int = 1
     ) -> None:
         super().__init__()
         self.units = nn.ModuleList(
             [
-                _ResidualConvUnit(channels, num_classes, dilation=diltation)
+                _ResidualConvUnit(channels, num_classes, dilation=dilation)
                 for _ in range(num_units)
             ]
         )
@@ -129,7 +129,7 @@ class _MultiResFusion(nn.Module):
 
     def forward(self, xs: Sequence[Tensor], y: Tensor) -> Tensor:
         if len(xs) != len(self.convs):
-            raise ValueError(f"Expected {len(self.conv)} inputs, got {len(xs)}")
+            raise ValueError(f"Expected {len(self.convs)} inputs, got {len(xs)}")
 
         target_h = max(x.shape[-2] for x in xs)
         target_w = max(x.shape[-1] for x in xs)
@@ -229,15 +229,15 @@ class NCSN(nn.Module):
 
         self.begin_conv = nn.Conv2d(in_channels, nf, kernel_size=3, stride=1, padding=1)
 
-        self.stage1 = _RCUBlock(nf, num_classes, num_units=2, diltation=dilations[0])
-        self.stage2 = _RCUBlock(nf, num_classes, num_units=2, diltation=dilations[1])
-        self.stage3 = _RCUBlock(nf, num_classes, num_units=2, diltation=dilations[2])
-        self.stage4 = _RCUBlock(nf, num_classes, num_units=2, diltation=dilations[3])
+        self.stage1 = _RCUBlock(nf, num_classes, num_units=2, dilation=dilations[0])
+        self.stage2 = _RCUBlock(nf, num_classes, num_units=2, dilation=dilations[1])
+        self.stage3 = _RCUBlock(nf, num_classes, num_units=2, dilation=dilations[2])
+        self.stage4 = _RCUBlock(nf, num_classes, num_units=2, dilation=dilations[3])
 
-        self.refine1 = _RefineBlock([nf], nf, num_classes)
-        self.refine2 = _RefineBlock([nf, nf], nf, num_classes)
+        self.refine4 = _RefineBlock([nf], nf, num_classes)
         self.refine3 = _RefineBlock([nf, nf], nf, num_classes)
-        self.refine4 = _RefineBlock([nf, nf], nf, num_classes)
+        self.refine2 = _RefineBlock([nf, nf], nf, num_classes)
+        self.refine1 = _RefineBlock([nf, nf], nf, num_classes)
 
         self.end_norm = _CondInstanceNorm(nf, num_classes)
         self.end_act = nn.ELU()
@@ -275,7 +275,7 @@ class NCSN(nn.Module):
                     f"expected ({self.num_classes},). Call 'set_sigmas(...)'."
                 )
 
-            used_sigmas = self.sigmas[labels].shape(-1, 1, 1, 1)
+            used_sigmas = self.sigmas[labels].reshape(-1, 1, 1, 1)
             out = out / used_sigmas
 
         return out
@@ -286,12 +286,13 @@ class NCSN(nn.Module):
             raise ValueError("sigmas must be 1D.")
         if sigmas.size != self.num_classes:
             raise ValueError(
-                f"sigams length ({sigmas.size}) must match "
+                f"sigmas length ({sigmas.size}) must match "
                 f"num_classes ({self.num_classes})."
             )
-        self.sigmas.data = sigmas.data
-        self.sigmas.to(sigmas.device)
-        self.sigmas.to(dtype=sigmas.dtype)
+        tmp = sigmas.detach()
+        tmp.to(self.sigmas.device)
+        tmp.to(self.sigmas.dtype)
+        self.sigmas.data = tmp.data
 
     @staticmethod
     @lucid.no_grad()
