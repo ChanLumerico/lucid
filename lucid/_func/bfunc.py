@@ -10,7 +10,6 @@ from lucid.types import _Gradient, _ShapeLike, _TensorData
 from lucid._backend.core import (
     Operation,
     binary_func_op,
-    inplace_op,
     _FuncOpReturnType,
     _GradType,
 )
@@ -35,6 +34,14 @@ class add(Operation):
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.add(a.data, b.data))
         return self.result, self.__grad__
+
+    @binary_func_op(inplace=True)
+    def inplace_cpu(self, a: Tensor, b: Tensor) -> _TensorData:
+        return np.add(a.data, b.data)
+
+    @binary_func_op(inplace=True, device="gpu")
+    def inplace_gpu(self, a: Tensor, b: Tensor) -> _TensorData:
+        return mx.add(a.data, b.data)
 
     def __grad__(self) -> _GradType:
         return self.result.grad, self.result.grad

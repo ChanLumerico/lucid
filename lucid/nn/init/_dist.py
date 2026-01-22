@@ -26,6 +26,7 @@ def _calculate_fan_in_and_fan_out(tensor: Tensor) -> tuple[int, int]:
 
 
 def _assign_like(tensor: Tensor, data: np.ndarray) -> None:
+    tensor._version += 1
     if tensor.is_cpu():
         tensor.data = np.asarray(data, dtype=tensor.data.dtype)
     else:

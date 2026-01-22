@@ -210,6 +210,7 @@ class Tensor(_TensorBase):
         )
 
     def zero(self) -> None:
+        self._version += 1
         if self.is_cpu():
             self.data = np.zeros_like(self.data)
         else:
@@ -244,6 +245,7 @@ class Tensor(_TensorBase):
         else:
             self.dtype = types.to_numeric_type(self.data.dtype)
 
+        self._version += 1
         return self
 
     def to(self, device: _DeviceType) -> Self:
@@ -265,6 +267,7 @@ class Tensor(_TensorBase):
             raise lucid.UnknownDeviceError(device)
 
         self.device = device
+        self._version += 1
         return self
 
     def is_cpu(self) -> bool:
@@ -322,6 +325,7 @@ class Tensor(_TensorBase):
                 grad_func=None,
                 tensor_refs=(weakref.ref(self),),
                 device=self.device,
+                versions=(self._version,),
                 custom_closure=_grad_func,
             )
 

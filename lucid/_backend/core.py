@@ -116,6 +116,14 @@ def func_op(
                 (ret_value, grad_func) = func_return_pairs[0]
                 target = tensors[inplace_target]
                 target.data = ret_value.data
+
+                if ret_value.dtype is bool:
+                    target._is_bool_tensor = True
+                    target.dtype = bool
+                else:
+                    target._is_bool_tensor = False
+                    target.dtype = ret_value.dtype
+
                 target._version += 1
                 func_return_pairs = ((target, grad_func),)
 
@@ -139,7 +147,7 @@ def func_op(
                         forward_op_ref=weakref.ref(op_self),
                         grad_func=grad_func,
                         tensor_refs=tensor_refs,
-                        versions=(t._version for t in tensors),
+                        versions=tuple(t._version for t in tensors),
                         device=device,
                     )
 
@@ -207,7 +215,9 @@ class Operation(ABC):
     @abstractmethod
     def gpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
 
-    def inplace(self, *args) -> _TensorData: ...
+    def inplace_cpu(self, *args) -> _TensorData: ...
+
+    def inplace_gpu(self, *args) -> _TensorData: ...
 
     def __grad__(self, *args, **kwargs) -> _GradType: ...
 
@@ -245,7 +255,7 @@ class BackwardOperation:
         forward_op_ref: weakref.ref[Operation] | None,
         grad_func: _GradFuncType | None,
         tensor_refs: tuple[weakref.ref[_TensorLike]],
-        versions: tuple[int] = (),
+        versions: tuple[int, ...] = (),
         device: _DeviceType | None = "cpu",
         custom_closure: Callable[[], None] | None = None,
     ) -> None:
@@ -270,12 +280,27 @@ class BackwardOperation:
         self.grad_func = new_grad_func
 
     def override_tensor_refs(
-        self, new_tensor_refs: tuple[weakref.ref[_TensorLike]]
+        self,
+        new_tensor_refs: tuple[weakref.ref[_TensorLike]],
+        new_versions: tuple[int, ...] | None = None,
     ) -> None:
         self.tensor_refs = new_tensor_refs
         self.num_inputs = len(new_tensor_refs)
+        if new_versions is not None:
+            if len(new_versions) != len(new_tensor_refs):
+                raise ValueError(
+                    "Numbers of 'tensor_refs' and 'versions' do not match."
+                )
+            self.versions = new_versions
 
     def __call__(self) -> None:
+        live_tensors = tuple(ref() for ref in self.tensor_refs)
+        if not live_tensors or any(t is None for t in live_tensors):
+            return
+
+        if any(ver != t._version for ver, t in zip(self.versions, live_tensors)):
+            raise RuntimeError(f"Tensor version mismatch detected.")
+
         if self.custom_closure is not None:
             self.custom_closure()
             return
@@ -288,10 +313,6 @@ class BackwardOperation:
         grads = self.grad_func()
         if self.num_inputs == 1 or not isinstance(grads, tuple):
             grads = (grads,)
-
-        live_tensors = tuple(ref() for ref in self.tensor_refs)
-        if any(t is None for t in live_tensors):
-            return
 
         if len(grads) != len(live_tensors):
             raise ValueError(
