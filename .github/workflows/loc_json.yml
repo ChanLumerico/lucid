@@ -1,0 +1,25 @@
+name: Update LOC JSON
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  loc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch LOC from CodeTabs
+        run: |
+          curl "https://api.codetabs.com/v1/loc?github=ChanLumerico/lucid&branch=main&ignored=docs,devlog,review" > loc.json
+
+      - name: Commit loc.json
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/ChanLumerico/lucid.git repo
+          mv loc.json repo/loc.json
+          cd repo
+          git add loc.json
+          git commit -m "Update loc.json" || echo "No changes"
+          git push
