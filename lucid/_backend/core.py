@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Tuple, ClassVar
+from typing import Callable, Self, Tuple, ClassVar
 import functools
 import weakref
 
@@ -37,6 +37,7 @@ def func_op(
             requires_grad = False
             is_free = True
             dtype_hint: _BuiltinNumeric | Numeric | None = None
+            inplace_target: _TensorLike | None = None
 
             if n_in is None:
                 tensor_args = args
@@ -68,8 +69,47 @@ def func_op(
                             + f"('{type(op_self).__name__}')."
                         )
 
+            if op_self._inplace:
+                if n_ret != 1:
+                    raise ValueError("inplace op must have a single return value.")
+                if not (0 <= op_self._inplace_target < len(tensors)):
+                    raise ValueError("inplace_target is out of range.")
+
+                target = tensors[op_self._inplace_target]
+                if lucid.grad_enabled() and target.requires_grad and target.is_leaf:
+                    raise RuntimeError(
+                        "A leaf tensor with 'requires_grad=True' "
+                        "cannot be subjected to inplace operations."
+                    )
+                inplace_target = target
+
+                proxy = target.__class__(  # NOTE: Looks unpretty
+                    target.data,
+                    requires_grad=target.requires_grad,
+                    keep_grad=target.keep_grad,
+                    dtype=target.dtype,
+                    device=target.device,
+                )
+                proxy._op = target._op
+                proxy._prev = list(target._prev)
+                proxy._backward_op = target._backward_op
+                proxy._backward_hooks = list(target._backward_hooks)
+                proxy.grad = None
+                proxy._version = target._version
+                if hasattr(target, "_is_free"):
+                    proxy._is_free = target._is_free
+                if hasattr(target, "_is_bool_tensor"):
+                    proxy._is_bool_tensor = target._is_bool_tensor
+
+                tensors = (
+                    tensors[: op_self._inplace_target]
+                    + (proxy,)
+                    + tensors[op_self._inplace_target + 1 :]
+                )
+
             non_tensor_args = args[n_in:] if n_in is not None else ()
             new_args = (*tensors, *non_tensor_args)
+
             func_return_pairs = forward_func(op_self, *new_args, **kwargs)
 
             tensor_refs = tuple(weakref.ref(t) for t in tensors)
@@ -92,6 +132,25 @@ def func_op(
 
             if num_returns == 1:
                 func_return_pairs: _FuncOpReturnType = (func_return_pairs,)
+            elif op_self._inplace:
+                raise ValueError("inplace op must have a single return value.")
+
+            if op_self._inplace:
+                (ret_value, grad_func) = func_return_pairs[0]
+                target = inplace_target
+                if target is None:
+                    raise RuntimeError("Missing inplace target tensor.")
+                target.data = ret_value.data
+
+                if ret_value.dtype is bool:
+                    target._is_bool_tensor = True
+                    target.dtype = bool
+                else:
+                    target._is_bool_tensor = False
+                    target.dtype = ret_value.dtype
+
+                target._version += 1
+                func_return_pairs = ((target, grad_func),)
 
             results: Tuple[_TensorLike, ...] = tuple()
             for result, grad_func in func_return_pairs:
@@ -113,6 +172,7 @@ def func_op(
                         forward_op_ref=weakref.ref(op_self),
                         grad_func=grad_func,
                         tensor_refs=tensor_refs,
+                        versions=tuple(t._version for t in tensors),
                         device=device,
                     )
 
@@ -138,15 +198,15 @@ def func_op(
 
 
 def unary_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
-    return func_op(1, 1, has_gradient=has_gradient, device=device)
+    return func_op(1, 1, has_gradient, device)
 
 
 def binary_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
-    return func_op(2, 1, has_gradient=has_gradient, device=device)
+    return func_op(2, 1, has_gradient, device)
 
 
 def poly_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
-    return func_op(None, 1, has_gradient=has_gradient, device=device)
+    return func_op(None, 1, has_gradient, device)
 
 
 class Operation(ABC):
@@ -154,10 +214,17 @@ class Operation(ABC):
 
     def __init__(self) -> None:
         self.result: _TensorLike | tuple[_TensorLike, ...] | None = None
+        self._inplace: bool = False
+        self._inplace_target: int = 0
         self._flops: int | None = None
 
     def clear(self) -> None:
         self.result = None
+
+    def inplace(self, target: int = 0) -> Self:
+        self._inplace = True
+        self._inplace_target = target
+        return self
 
     @abstractmethod
     def cpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
@@ -201,12 +268,14 @@ class BackwardOperation:
         forward_op_ref: weakref.ref[Operation] | None,
         grad_func: _GradFuncType | None,
         tensor_refs: tuple[weakref.ref[_TensorLike]],
+        versions: tuple[int, ...] = (),
         device: _DeviceType | None = "cpu",
         custom_closure: Callable[[], None] | None = None,
     ) -> None:
         self.forward_op_ref = forward_op_ref
         self.grad_func = grad_func
         self.tensor_refs = tensor_refs
+        self.versions = versions
         self.device = device
 
         self.custom_closure = custom_closure
@@ -215,18 +284,36 @@ class BackwardOperation:
         if self.grad_func is None and self.custom_closure is None:
             raise ValueError("Either 'grad_func' or 'custom_closure' must be provided.")
 
+        if len(tensor_refs) != len(versions):
+            raise ValueError("Numbers of 'tensor_refs' and 'versions' do not match.")
+
     def override_grad_func(self, new_grad_func: _GradFuncType) -> None:
         if self.custom_closure is not None:
             return
         self.grad_func = new_grad_func
 
     def override_tensor_refs(
-        self, new_tensor_refs: tuple[weakref.ref[_TensorLike]]
+        self,
+        new_tensor_refs: tuple[weakref.ref[_TensorLike]],
+        new_versions: tuple[int, ...] | None = None,
     ) -> None:
         self.tensor_refs = new_tensor_refs
         self.num_inputs = len(new_tensor_refs)
+        if new_versions is not None:
+            if len(new_versions) != len(new_tensor_refs):
+                raise ValueError(
+                    "Numbers of 'tensor_refs' and 'versions' do not match."
+                )
+            self.versions = new_versions
 
     def __call__(self) -> None:
+        live_tensors = tuple(ref() for ref in self.tensor_refs)
+        if not live_tensors or any(t is None for t in live_tensors):
+            return
+
+        if any(ver != t._version for ver, t in zip(self.versions, live_tensors)):
+            raise RuntimeError(f"Tensor version mismatch detected.")
+
         if self.custom_closure is not None:
             self.custom_closure()
             return
@@ -239,10 +326,6 @@ class BackwardOperation:
         grads = self.grad_func()
         if self.num_inputs == 1 or not isinstance(grads, tuple):
             grads = (grads,)
-
-        live_tensors = tuple(ref() for ref in self.tensor_refs)
-        if any(t is None for t in live_tensors):
-            return
 
         if len(grads) != len(live_tensors):
             raise ValueError(

@@ -211,7 +211,10 @@ def _try_backward_fusion(topo_order: list[_TensorLike]) -> None:
         v._prev.extend(p_parents)
         p.clear_node(clear_op=False)
 
-        v._backward_op.override_tensor_refs(tuple(weakref.ref(t) for t in v._prev))
+        v._backward_op.override_tensor_refs(
+            new_tensor_refs=tuple(weakref.ref(t) for t in v._prev),
+            new_versions=tuple(t._version for t in v._prev),
+        )
         v._backward_op.override_grad_func(
             fused_backward_op.get_fused_grad_func(
                 inputs=p_parents, results=v, device=v.device

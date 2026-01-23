@@ -20,6 +20,8 @@ _Scalar = int | float | complex
 _NumPyArray: TypeAlias = np.ndarray
 _MLXArray: TypeAlias = mx.array
 
+_TensorData = _NumPyArray | _MLXArray
+
 _Gradient = _NumPyArray | _MLXArray | None
 
 _ArrayOrScalar = _Scalar | list[_Scalar] | _NumPyArray | _MLXArray
@@ -55,6 +57,7 @@ class _TensorLike(Protocol):
     _prev: list[_TensorLike]
     _backward_op: Any
     _backward_hooks: Any
+    _version: int
 
     def to(self, device: _DeviceType) -> None: ...
 

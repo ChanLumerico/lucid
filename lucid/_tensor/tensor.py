@@ -17,7 +17,7 @@ from lucid.types import (
     Numeric,
 )
 
-from lucid._tensor.tensor_ops import _TensorBase
+from lucid._tensor.base import _TensorBase, _TensorInplace
 from lucid._backend.core import BackwardOperation, Operation, noop
 from lucid._backend.metal import mx, parse_mlx_indexing, check_metal_availability
 
@@ -27,7 +27,7 @@ _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
 _dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
 
 
-class Tensor(_TensorBase):
+class Tensor(_TensorBase, _TensorInplace):
     def __init__(
         self,
         data: _ArrayOrScalar | _MLXArray,
@@ -88,6 +88,7 @@ class Tensor(_TensorBase):
         self._backward_op: BackwardOperation = noop
         self._prev: list[Tensor] = []
         self._backward_hooks: list[_HookType] = []
+        self._version: int = 0
 
         self.grad: Optional[_NumPyArray | _MLXArray] = None
         self.device = device
@@ -209,6 +210,7 @@ class Tensor(_TensorBase):
         )
 
     def zero(self) -> None:
+        self._version += 1
         if self.is_cpu():
             self.data = np.zeros_like(self.data)
         else:
@@ -243,6 +245,7 @@ class Tensor(_TensorBase):
         else:
             self.dtype = types.to_numeric_type(self.data.dtype)
 
+        self._version += 1
         return self
 
     @overload
@@ -332,6 +335,7 @@ class Tensor(_TensorBase):
                 grad_func=None,
                 tensor_refs=(weakref.ref(self),),
                 device=self.device,
+                versions=(self._version,),
                 custom_closure=_grad_func,
             )
 
