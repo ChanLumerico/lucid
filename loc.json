@@ -18,10 +18,10 @@
  {
   "language": "JSON",
   "files": 4,
-  "lines": 2085,
-  "blanks": 1,
+  "lines": 2141,
+  "blanks": 0,
   "comments": 0,
-  "linesOfCode": 2084
+  "linesOfCode": 2141
  },
  {
   "language": "Markdown",
@@ -34,10 +34,10 @@
  {
   "language": "YAML",
   "files": 2,
-  "lines": 108,
-  "blanks": 16,
-  "comments": 7,
-  "linesOfCode": 85
+  "lines": 118,
+  "blanks": 17,
+  "comments": 5,
+  "linesOfCode": 96
  },
  {
   "language": "License",
@@ -50,9 +50,9 @@
  {
   "language": "Total",
   "files": 150,
-  "lines": 35625,
+  "lines": 35691,
   "blanks": 6838,
-  "comments": 46,
-  "linesOfCode": 28741
+  "comments": 44,
+  "linesOfCode": 28809
  }
 ]
