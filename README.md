@@ -5,7 +5,7 @@
 [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Codes](https://img.shields.io/badge/dynamic/json?label=lines%20of%20codes&suffix=%20lines&color=violet&url=https%3A%2F%2Fraw.githubusercontent.com%2FChanLumerico%2Flucid%2Fmain%2Floc_badge.json&query=%24.lines&cacheSeconds=3600)
+![Total lines](https://img.shields.io/badge/dynamic/json?label=lines%20of%20codes&color=violet&suffix=%20lines&url=https%3A%2F%2Fraw.githubusercontent.com%2FChanLumerico%2Flucid%2Fmain%2Floc%2Floc_badge.json&query=%24.lines&cacheSeconds=3600)
 
 **Lucid** is a minimalist deep learning framework built entirely from scratch in Python. It offers a pedagogically rich environment to explore the foundations of modern deep learning systems, including autodiff, neural network modules, and GPU acceleration — all while staying lightweight, readable, and free of complex dependencies.
 

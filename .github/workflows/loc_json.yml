@@ -1,4 +1,4 @@
-name: Update LOC Badge JSON
+name: Update LOC JSONs
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  update-loc-badge:
+  update-loc:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,34 +20,53 @@ jobs:
           COMMIT_MSG="${{ github.event.head_commit.message }}"
           echo "Commit message: $COMMIT_MSG"
           if [[ ! "$COMMIT_MSG" =~ ^release-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Not a release commit. Skipping LOC badge update."
+            echo "Not a release commit. Skipping LOC update."
             exit 1
           fi
 
       - name: Checkout
         uses: actions/checkout@v4
 
-      # CodeTabs → Total lines만 추출 → loc_badge.json 생성
-      - name: Fetch LOC and build badge JSON
+      # loc/ 폴더 생성 + CodeTabs에서 원본 JSON 저장 + 배지용 JSON 생성
+      - name: Fetch LOC and build loc/ files
         run: |
-          curl -sL "https://api.codetabs.com/v1/loc/?github=ChanLumerico/lucid&branch=main&ignored=docs,devlog,review" > tmp.json
+          mkdir -p loc
+          curl -sL "https://api.codetabs.com/v1/loc/?github=ChanLumerico/lucid&branch=main&ignored=docs,devlog,review" > loc/loc.json
 
           python - <<'PY'
           import json
-          data = json.load(open("tmp.json","r",encoding="utf-8"))
+          path = "loc/loc.json"
+          data = json.load(open(path, "r", encoding="utf-8"))
           total = next(x for x in data if x.get("language") == "Total")
-          out = {"lines": total["lines"]}
-          with open("loc_badge.json","w",encoding="utf-8") as f:
+
+          out = {
+              "lines": total["lines"],
+              "linesOfCode": total["linesOfCode"],
+              "files": total["files"],
+              "blanks": total["blanks"],
+              "comments": total["comments"],
+          }
+
+          with open("loc/loc_badge.json", "w", encoding="utf-8") as f:
               json.dump(out, f)
-          print("loc_badge.json:", out)
+
+          print("Total:", total)
+          print("Badge:", out)
           PY
 
-          rm tmp.json
+      # 혹시 HTML(리다이렉트 페이지) 저장됐을 때 바로 실패하도록 JSON 유효성 검사
+      - name: Validate loc/loc.json
+        run: |
+          python - <<'PY'
+          import json
+          json.load(open("loc/loc.json", "r", encoding="utf-8"))
+          print("loc/loc.json is valid JSON")
+          PY
 
-      - name: Commit & push loc_badge.json
+      - name: Commit & push loc/loc.json and loc/loc_badge.json
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add loc_badge.json
-          git commit -m "chore: update loc badge json" || exit 0
+          git add loc/loc.json loc/loc_badge.json
+          git commit -m "chore: update loc jsons" || exit 0
           git push
