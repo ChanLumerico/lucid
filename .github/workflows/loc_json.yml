@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1) release-x.y.z 커밋일 때만 진행 (push일 경우에만 검사)
       - name: Check commit message matches release-x.y.z
         if: github.event_name == 'push'
         run: |
@@ -23,13 +24,25 @@ jobs:
             exit 1
           fi
 
+      # 2) 코드 체크아웃
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch LOC from CodeTabs (exclude dirs)
+      # 3) CodeTabs에서 JSON 받아오기 (301 리다이렉트 대응)
+      - name: Fetch LOC from CodeTabs (exclude docs/devlog/review)
         run: |
-          curl -s "https://api.codetabs.com/v1/loc?github=ChanLumerico/lucid&branch=main&ignored=docs,devlog,review" > loc.json
+          curl -sL "https://api.codetabs.com/v1/loc/?github=ChanLumerico/lucid&branch=main&ignored=docs,devlog,review" > loc.json
 
+      # 4) JSON 유효성 확인 (HTML 저장되는 문제 방지)
+      - name: Validate JSON
+        run: |
+          python - <<'PY'
+          import json
+          json.load(open("loc.json","r",encoding="utf-8"))
+          print("loc.json is valid JSON")
+          PY
+
+      # 5) loc.json 커밋 & 푸시
       - name: Commit & push loc.json
         run: |
           git config user.name "github-actions"
