@@ -1,4 +1,4 @@
-name: Update LOC JSON
+name: Update LOC Badge JSON
 
 on:
   push:
@@ -9,54 +9,45 @@ permissions:
   contents: write
 
 jobs:
-  update-loc:
+  update-loc-badge:
     runs-on: ubuntu-latest
 
     steps:
-      # push일 때만 커밋 메시지 검사: release-x.y.z 형식 아니면 종료
+      # push일 때만 release-x.y.z 형식 검사
       - name: Check commit message matches release-x.y.z
         if: github.event_name == 'push'
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
           echo "Commit message: $COMMIT_MSG"
           if [[ ! "$COMMIT_MSG" =~ ^release-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Not a release commit. Skipping LOC update."
+            echo "Not a release commit. Skipping LOC badge update."
             exit 1
           fi
 
       - name: Checkout
         uses: actions/checkout@v4
 
-      # CodeTabs가 301 리다이렉트 줄 수 있으니 -L 필수
-      - name: Fetch LOC from CodeTabs (exclude docs/devlog/review)
+      # CodeTabs → Total lines만 추출 → loc_badge.json 생성
+      - name: Fetch LOC and build badge JSON
         run: |
-          curl -sL "https://api.codetabs.com/v1/loc/?github=ChanLumerico/lucid&branch=main&ignored=docs,devlog,review" > loc.json
+          curl -sL "https://api.codetabs.com/v1/loc/?github=ChanLumerico/lucid&branch=main&ignored=docs,devlog,review" > tmp.json
 
-      - name: Validate loc.json
-        run: |
           python - <<'PY'
           import json
-          json.load(open("loc.json","r",encoding="utf-8"))
-          print("loc.json is valid JSON")
-          PY
-
-      # Shields 쿼리 제한 때문에, 배지용 단일 JSON로 가공
-      - name: Build badge JSON (Total lines only)
-        run: |
-          python - <<'PY'
-          import json
-          data = json.load(open("loc.json","r",encoding="utf-8"))
+          data = json.load(open("tmp.json","r",encoding="utf-8"))
           total = next(x for x in data if x.get("language") == "Total")
-          out = {"lines": total["lines"], "linesOfCode": total["linesOfCode"], "files": total["files"]}
+          out = {"lines": total["lines"]}
           with open("loc_badge.json","w",encoding="utf-8") as f:
-            json.dump(out, f)
-          print(out)
+              json.dump(out, f)
+          print("loc_badge.json:", out)
           PY
 
-      - name: Commit & push loc.json and loc_badge.json
+          rm tmp.json
+
+      - name: Commit & push loc_badge.json
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add loc.json loc_badge.json
+          git add loc_badge.json
           git commit -m "chore: update loc badge json" || exit 0
           git push
