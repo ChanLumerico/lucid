@@ -128,6 +128,11 @@ class Tensor(_TensorBase, _TensorInplace):
     def copy_grad(cls, grad: _NumPyArray | _MLXArray) -> _NumPyArray | _MLXArray:
         return cls.copy_data(data=grad)
 
+    def new_tensor(self) -> Tensor:
+        return Tensor(
+            self.data, self.requires_grad, self.keep_grad, self.dtype, self.device
+        )
+
     def free(self) -> Self:
         self._is_free = True
         return self

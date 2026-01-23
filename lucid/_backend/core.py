@@ -83,19 +83,14 @@ def func_op(
                     )
                 inplace_target = target
 
-                proxy = target.__class__(  # NOTE: Looks unpretty
-                    target.data,
-                    requires_grad=target.requires_grad,
-                    keep_grad=target.keep_grad,
-                    dtype=target.dtype,
-                    device=target.device,
-                )
+                proxy = target.new_tensor()
                 proxy._op = target._op
                 proxy._prev = list(target._prev)
                 proxy._backward_op = target._backward_op
                 proxy._backward_hooks = list(target._backward_hooks)
                 proxy.grad = None
                 proxy._version = target._version
+
                 if hasattr(target, "_is_free"):
                     proxy._is_free = target._is_free
                 if hasattr(target, "_is_bool_tensor"):

@@ -42,6 +42,10 @@ def sub(a: Tensor, b: Tensor, /) -> Tensor:
     return bfunc.sub()(a, b)
 
 
+def sub_(a: Tensor, b: Tensor, /) -> Tensor:
+    return bfunc.sub().inplace()(a, b)
+
+
 def multiply(a: Tensor, b: Tensor, /) -> Tensor:
     return bfunc.multiply()(a, b)
 
