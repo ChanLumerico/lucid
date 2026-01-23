@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1) release-x.y.z 커밋일 때만 진행 (push일 경우에만 검사)
+      # push일 때만 커밋 메시지 검사: release-x.y.z 형식 아니면 종료
       - name: Check commit message matches release-x.y.z
         if: github.event_name == 'push'
         run: |
@@ -24,17 +24,15 @@ jobs:
             exit 1
           fi
 
-      # 2) 코드 체크아웃
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 3) CodeTabs에서 JSON 받아오기 (301 리다이렉트 대응)
+      # CodeTabs가 301 리다이렉트 줄 수 있으니 -L 필수
       - name: Fetch LOC from CodeTabs (exclude docs/devlog/review)
         run: |
           curl -sL "https://api.codetabs.com/v1/loc/?github=ChanLumerico/lucid&branch=main&ignored=docs,devlog,review" > loc.json
 
-      # 4) JSON 유효성 확인 (HTML 저장되는 문제 방지)
-      - name: Validate JSON
+      - name: Validate loc.json
         run: |
           python - <<'PY'
           import json
@@ -42,11 +40,23 @@ jobs:
           print("loc.json is valid JSON")
           PY
 
-      # 5) loc.json 커밋 & 푸시
-      - name: Commit & push loc.json
+      # Shields 쿼리 제한 때문에, 배지용 단일 JSON로 가공
+      - name: Build badge JSON (Total lines only)
+        run: |
+          python - <<'PY'
+          import json
+          data = json.load(open("loc.json","r",encoding="utf-8"))
+          total = next(x for x in data if x.get("language") == "Total")
+          out = {"lines": total["lines"], "linesOfCode": total["linesOfCode"], "files": total["files"]}
+          with open("loc_badge.json","w",encoding="utf-8") as f:
+            json.dump(out, f)
+          print(out)
+          PY
+
+      - name: Commit & push loc.json and loc_badge.json
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add loc.json
-          git commit -m "chore: update loc.json" || exit 0
+          git add loc.json loc_badge.json
+          git commit -m "chore: update loc badge json" || exit 0
           git push
