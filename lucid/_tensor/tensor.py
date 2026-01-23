@@ -17,7 +17,7 @@ from lucid.types import (
     Numeric,
 )
 
-from lucid._tensor.tensor_ops import _TensorBase
+from lucid._tensor.base import _TensorBase, _TensorInplace
 from lucid._backend.core import BackwardOperation, Operation, noop
 from lucid._backend.metal import mx, parse_mlx_indexing, check_metal_availability
 
@@ -27,7 +27,7 @@ _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
 _dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
 
 
-class Tensor(_TensorBase):
+class Tensor(_TensorBase, _TensorInplace):
     def __init__(
         self,
         data: _ArrayOrScalar | _MLXArray,

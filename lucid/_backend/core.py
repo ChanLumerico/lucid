@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Tuple, ClassVar
+from typing import Callable, Self, Tuple, ClassVar
 import functools
 import weakref
 
@@ -11,7 +11,6 @@ from lucid.types import (
     _MLXArray,
     _BuiltinNumeric,
     _TensorLike,
-    _TensorData,
 )
 
 from lucid._backend.metal import is_gpu_op
@@ -29,8 +28,6 @@ def func_op(
     n_in: int | None,
     n_ret: int | None,
     has_gradient: bool = True,
-    inplace: bool = False,
-    inplace_target: int = 0,
     device: _DeviceType = "cpu",
 ) -> Callable:
     def decorator(forward_func: Callable[..., _FuncOpReturnType]) -> Callable:
@@ -40,6 +37,7 @@ def func_op(
             requires_grad = False
             is_free = True
             dtype_hint: _BuiltinNumeric | Numeric | None = None
+            inplace_target: _TensorLike | None = None
 
             if n_in is None:
                 tensor_args = args
@@ -71,21 +69,46 @@ def func_op(
                             + f"('{type(op_self).__name__}')."
                         )
 
-            non_tensor_args = args[n_in:] if n_in is not None else ()
-            new_args = (*tensors, *non_tensor_args)
-
-            if inplace:
-                if n_ret not in (None, 1):
+            if op_self._inplace:
+                if n_ret != 1:
                     raise ValueError("inplace op must have a single return value.")
-                if not (0 <= inplace_target < len(tensors)):
+                if not (0 <= op_self._inplace_target < len(tensors)):
                     raise ValueError("inplace_target is out of range.")
 
-                target = tensors[inplace_target]
+                target = tensors[op_self._inplace_target]
                 if lucid.grad_enabled() and target.requires_grad and target.is_leaf:
                     raise RuntimeError(
                         "A leaf tensor with 'requires_grad=True' "
                         "cannot be subjected to inplace operations."
                     )
+                inplace_target = target
+
+                proxy = target.__class__(  # NOTE: Looks unpretty
+                    target.data,
+                    requires_grad=target.requires_grad,
+                    keep_grad=target.keep_grad,
+                    dtype=target.dtype,
+                    device=target.device,
+                )
+                proxy._op = target._op
+                proxy._prev = list(target._prev)
+                proxy._backward_op = target._backward_op
+                proxy._backward_hooks = list(target._backward_hooks)
+                proxy.grad = None
+                proxy._version = target._version
+                if hasattr(target, "_is_free"):
+                    proxy._is_free = target._is_free
+                if hasattr(target, "_is_bool_tensor"):
+                    proxy._is_bool_tensor = target._is_bool_tensor
+
+                tensors = (
+                    tensors[: op_self._inplace_target]
+                    + (proxy,)
+                    + tensors[op_self._inplace_target + 1 :]
+                )
+
+            non_tensor_args = args[n_in:] if n_in is not None else ()
+            new_args = (*tensors, *non_tensor_args)
 
             func_return_pairs = forward_func(op_self, *new_args, **kwargs)
 
@@ -109,12 +132,14 @@ def func_op(
 
             if num_returns == 1:
                 func_return_pairs: _FuncOpReturnType = (func_return_pairs,)
-            elif inplace:
+            elif op_self._inplace:
                 raise ValueError("inplace op must have a single return value.")
 
-            if inplace:
+            if op_self._inplace:
                 (ret_value, grad_func) = func_return_pairs[0]
-                target = tensors[inplace_target]
+                target = inplace_target
+                if target is None:
+                    raise RuntimeError("Missing inplace target tensor.")
                 target.data = ret_value.data
 
                 if ret_value.dtype is bool:
@@ -172,31 +197,16 @@ def func_op(
     return decorator
 
 
-def unary_func_op(
-    has_gradient: bool = True,
-    device: _DeviceType = "cpu",
-    inplace: bool = False,
-    inplace_target: int = 0,
-) -> Callable:
-    return func_op(1, 1, has_gradient, inplace, inplace_target, device)
+def unary_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
+    return func_op(1, 1, has_gradient, device)
 
 
-def binary_func_op(
-    has_gradient: bool = True,
-    device: _DeviceType = "cpu",
-    inplace: bool = False,
-    inplace_target: int = 0,
-) -> Callable:
-    return func_op(2, 1, has_gradient, inplace, inplace_target, device)
+def binary_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
+    return func_op(2, 1, has_gradient, device)
 
 
-def poly_func_op(
-    has_gradient: bool = True,
-    device: _DeviceType = "cpu",
-    inplace: bool = False,
-    inplace_target: int = 0,
-) -> Callable:
-    return func_op(None, 1, has_gradient, inplace, inplace_target, device)
+def poly_func_op(has_gradient: bool = True, device: _DeviceType = "cpu") -> Callable:
+    return func_op(None, 1, has_gradient, device)
 
 
 class Operation(ABC):
@@ -204,20 +214,23 @@ class Operation(ABC):
 
     def __init__(self) -> None:
         self.result: _TensorLike | tuple[_TensorLike, ...] | None = None
+        self._inplace: bool = False
+        self._inplace_target: int = 0
         self._flops: int | None = None
 
     def clear(self) -> None:
         self.result = None
+
+    def inplace(self, target: int = 0) -> Self:
+        self._inplace = True
+        self._inplace_target = target
+        return self
 
     @abstractmethod
     def cpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
 
     @abstractmethod
     def gpu(self, *args, **kwargs) -> _FuncOpReturnType: ...
-
-    def inplace_cpu(self, *args) -> _TensorData: ...
-
-    def inplace_gpu(self, *args) -> _TensorData: ...
 
     def __grad__(self, *args, **kwargs) -> _GradType: ...
 

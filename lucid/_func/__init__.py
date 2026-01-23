@@ -34,6 +34,10 @@ def add(a: Tensor, b: Tensor, /) -> Tensor:
     return bfunc.add()(a, b)
 
 
+def add_(a: Tensor, b: Tensor) -> Tensor:
+    return bfunc.add().inplace()(a, b)
+
+
 def sub(a: Tensor, b: Tensor, /) -> Tensor:
     return bfunc.sub()(a, b)
 
@@ -595,3 +599,5 @@ Tensor.swapaxes = swapaxes
 Tensor.round = round
 Tensor.floor = floor
 Tensor.ceil = ceil
+
+Tensor.add_ = add_
