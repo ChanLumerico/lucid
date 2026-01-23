@@ -1,4 +1,4 @@
-from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any
+from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any, overload
 from types import NoneType
 from collections import deque
 
@@ -248,27 +248,37 @@ class Tensor(_TensorBase, _TensorInplace):
         self._version += 1
         return self
 
-    def to(self, device: _DeviceType) -> Self:
-        if self.device == device:
+    @overload
+    def to(self, device: _DeviceType) -> Self: ...
+
+    @overload
+    def to(self, dtype: type | Numeric) -> Self: ...
+
+    def to(self, device_or_dtype: _DeviceType | type | Numeric) -> Self:
+        if isinstance(device_or_dtype, str):
+            device = device_or_dtype
+            if self.device == device:
+                return self
+
+            if device == "cpu":
+                self.data = np.array(self.data)
+                if self.grad is not None:
+                    self.grad = np.array(self.grad)
+
+            elif device == "gpu":
+                check_metal_availability()
+                self.data = mx.array(self.data)
+                if self.grad is not None:
+                    self.grad = mx.array(self.grad)
+
+            else:
+                raise lucid.UnknownDeviceError(device)
+
+            self.device = device
             return self
-
-        if device == "cpu":
-            self.data = np.array(self.data)
-            if self.grad is not None:
-                self.grad = np.array(self.grad)
-
-        elif device == "gpu":
-            check_metal_availability()
-            self.data = mx.array(self.data)
-            if self.grad is not None:
-                self.grad = mx.array(self.grad)
-
         else:
-            raise lucid.UnknownDeviceError(device)
-
-        self.device = device
-        self._version += 1
-        return self
+            dtype = device_or_dtype
+            return self.astype(dtype)
 
     def is_cpu(self) -> bool:
         return self.device == "cpu"
@@ -441,3 +451,27 @@ class Tensor(_TensorBase, _TensorInplace):
             mx.eval(self.data)
             result = mx.all(self.data, axis=axis, keepdims=keepdims)
             return bool(result.item()) if axis is None else Tensor(result, device="gpu")
+
+    def char(self) -> Self:
+        return self.astype(lucid.Char)
+
+    def short(self) -> Self:
+        return self.astype(lucid.Short)
+
+    def int(self) -> Self:
+        return self.astype(lucid.Int)
+
+    def long(self) -> Self:
+        return self.astype(lucid.Long)
+
+    def half(self) -> Self:
+        return self.astype(lucid.Half)
+
+    def float(self) -> Self:
+        return self.astype(lucid.Float)
+
+    def double(self) -> Self:
+        return self.astype(lucid.Double)
+
+    def bool(self) -> Self:
+        return self.astype(bool)

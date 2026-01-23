@@ -7,6 +7,7 @@ Image Generation
 
     VAE <autoencoder/VAE.rst>
     DDPM <diffusion/DDPM.rst>
+    NCSN <diffusion/NCSN.rst>
 
 Variational Autoencoder (VAE)
 -----------------------------
@@ -58,4 +59,28 @@ data distribution through a Markovian process.
       - :math:`(N,C,H,W)`
       - 20,907,649 (Default)
 
-*To be implemented...🔮*
+NCSN
+----
+|diffusion-badge| |score-diffusion-badge| |imggen-badge|
+
+A Noise Conditional Score Network (NCSN) is a score-based generative model trained
+to predict the score of noise-perturbed data across multiple noise levels, and it
+generates samples using annealed Langevin dynamics over a descending noise schedule.
+
+ Song, Yang, and Stefano Ermon. "Generative Modeling by Estimating Gradients of 
+ the Data Distribution." *Advances in Neural Information Processing Systems (NeurIPS)*, 
+ 2019, arXiv:1907.05600.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+
+    * - NCSN
+      - `NCSN <diffusion/NCSN>`_
+      - :math:`(N,C,H,W)`
+      - 12,471,555 (Default)

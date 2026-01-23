@@ -66,3 +66,8 @@
     color: #1896fd;
     border-color: #1896fd;
 }
+
+.badge.score_based_diffusion {
+    color: #52b1ff;
+    border-color: #52b1ff;
+}

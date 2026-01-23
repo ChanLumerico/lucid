@@ -9,14 +9,14 @@ def relu(input_: Tensor) -> Tensor:
 
 def leaky_relu(input_: Tensor, negative_slope: float = 0.01) -> Tensor:
     mask = input_ > 0
-    out = input_ * mask + input_ * negative_slope * (1 - mask)
+    out = input_ * mask + input_ * negative_slope * (~mask)
     return out
 
 
 def elu(input_: Tensor, alpha: float = 1.0) -> Tensor:
     mask = input_ >= 0
     pos = input_ * mask
-    neg = alpha * (lucid.exp(input_) - 1) * (1 - mask)
+    neg = alpha * (lucid.exp(input_) - 1) * (~mask)
     return pos + neg
 
 
@@ -26,7 +26,7 @@ def selu(input_: Tensor) -> Tensor:
 
     mask = input_ >= 0
     pos = _scale * input_ * mask
-    neg = _scale * _alpha * (lucid.exp(input_) - 1) * (1 - mask)
+    neg = _scale * _alpha * (lucid.exp(input_) - 1) * (~mask)
     return pos + neg
 
 

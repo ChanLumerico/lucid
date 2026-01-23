@@ -2,6 +2,7 @@ from typing import (
     Any,
     Callable,
     Protocol,
+    Self,
     Sequence,
     Literal,
     TypeAlias,
@@ -9,7 +10,6 @@ from typing import (
 )
 import re
 
-# NOTE: This module retains module independency.
 import numpy as np
 import mlx.core as mx
 
@@ -135,8 +135,18 @@ class Numeric:
 
         raise TypeError(f"Unsupported dtype: {dtype}")
 
+    def __eq__(self, other: Self) -> bool:
+        if self.base_dtype is not other.base_dtype:
+            return False
+        if self.is_bit_free:
+            return True if other.is_bit_free else False
+        return True if other.is_bit_free or self.bits == other.bits else False
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
     def __str__(self) -> str:
-        return self.base_dtype.__name__ + str(self.bits)
+        return self.base_dtype.__name__ + (str(self.bits) if self.bits else "")
 
     def __repr__(self) -> str:
         return (
@@ -151,10 +161,17 @@ Int16 = Numeric(int, bits=16)
 Int32 = Numeric(int, bits=32)
 Int64 = Numeric(int, bits=64)
 
+Char = Int8
+Short = Int16
+Long = Int64
+
 Float = Numeric(float, None)
 Float16 = Numeric(float, bits=16)
 Float32 = Numeric(float, bits=32)
 Float64 = Numeric(float, bits=64)
+
+Half = Float16
+Double = Float64
 
 Complex = Numeric(complex, None)
 Complex64 = Numeric(complex, bits=64)
