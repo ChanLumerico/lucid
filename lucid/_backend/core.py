@@ -328,6 +328,8 @@ class BackwardOperation:
             )
 
         for tensor, grad in zip(live_tensors, grads):
+            if not tensor.requires_grad and grad is None:
+                continue
             new_grad = lucid._match_grad_shape(tensor.data, grad, device=self.device)
             lucid._set_tensor_grad(tensor, new_grad)
 

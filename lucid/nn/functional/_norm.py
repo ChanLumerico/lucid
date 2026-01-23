@@ -1,8 +1,10 @@
 import lucid
 import lucid.nn as nn
-from lucid._tensor import Tensor
 
 from lucid.types import _ShapeLike
+
+from lucid._tensor import Tensor
+from lucid._kernel.norm import layer_norm_kernel, batch_norm_kernel, group_norm_kernel
 
 
 def normalize(
@@ -25,44 +27,34 @@ def batch_norm(
     eps: float = 1e-5,
 ) -> Tensor:
     C = input_.shape[1]
-    spatial_dim = input_.ndim - 2
-    use_batch_stats = training or running_mean is None or running_var is None
-
-    if use_batch_stats:
-        batch_mean = input_.mean(axis=(0, *range(2, input_.ndim)), keepdims=True)
-        batch_var = input_.var(axis=(0, *range(2, input_.ndim)), keepdims=True)
-
-        if running_mean is not None and running_var is not None:
-            running_stats_ = (
-                momentum * batch_mean.flatten() + (1 - momentum) * running_mean,
-                momentum * batch_var.flatten() + (1 - momentum) * running_var,
-            )
-
-            if isinstance(running_mean, nn.Buffer) and isinstance(
-                running_var, nn.Buffer
-            ):
-                running_mean.data = running_stats_[0].data
-                running_var.data = running_stats_[1].data
-            else:
-                running_mean, running_var = running_stats_
-
-        mean = batch_mean
-        var = batch_var
+    if running_mean is None or running_var is None:
+        running_mean = lucid.zeros((C,), device=input_.device)
+        running_var = lucid.ones((C,), device=input_.device)
+        has_running = False
     else:
-        mean = running_mean.reshape(1, C, *(1,) * spatial_dim)
-        var = running_var.reshape(1, C, *(1,) * spatial_dim)
+        has_running = True
 
-    normalized = (input_ - mean) / lucid.sqrt(var + eps)
+    if weight is None:
+        weight = lucid.ones((C,), device=input_.device)
+        has_weight = False
+    else:
+        has_weight = True
 
-    if weight is not None:
-        weight = weight.reshape((1, C) + (1,) * spatial_dim)
-        normalized *= weight
+    if bias is None:
+        bias = lucid.zeros((C,), device=input_.device)
+        has_bias = False
+    else:
+        has_bias = True
 
-    if bias is not None:
-        bias = bias.reshape((1, C) + (1,) * spatial_dim)
-        normalized += bias
-
-    return normalized
+    op = batch_norm_kernel(
+        eps=eps,
+        momentum=momentum,
+        training=training,
+        has_running=has_running,
+        has_weight=has_weight,
+        has_bias=has_bias,
+    )
+    return op(input_, running_mean, running_var, weight, bias)
 
 
 def layer_norm(
@@ -77,21 +69,22 @@ def layer_norm(
             "Input tensor's normalized shape must match "
             + "the provided `normalized_shape`."
         )
+    if weight is None:
+        weight = lucid.ones(normalized_shape, device=input_.device)
+        has_weight = False
+    else:
+        has_weight = True
 
-    mean = input_.mean(axis=tuple(range(-len(normalized_shape), 0)), keepdims=True)
-    var = input_.var(axis=tuple(range(-len(normalized_shape), 0)), keepdims=True)
+    if bias is None:
+        bias = lucid.zeros(normalized_shape, device=input_.device)
+        has_bias = False
+    else:
+        has_bias = True
 
-    normalized = (input_ - mean) / lucid.sqrt(var + eps)
-    if weight is not None:
-        normalized *= weight.reshape(
-            (1,) * (input_.ndim - len(normalized_shape)) + normalized_shape
-        )
-    if bias is not None:
-        normalized += bias.reshape(
-            (1,) * (input_.ndim - len(normalized_shape)) + normalized_shape
-        )
-
-    return normalized
+    op = layer_norm_kernel(
+        normalized_shape, eps=eps, has_weight=has_weight, has_bias=has_bias
+    )
+    return op(input_, weight, bias)
 
 
 def instance_norm(
@@ -155,29 +148,23 @@ def group_norm(
     bias: Tensor | None,
     eps: float = 1e-5,
 ) -> Tensor:
-    N, C, *spatial_dims = input_.shape
-    assert C % num_groups == 0, "Number of channels must be divisible by num_groups"
+    C = input_.shape[1]
+    if weight is None:
+        weight = lucid.ones((C,), device=input_.device)
+        has_weight = False
+    else:
+        has_weight = True
 
-    group_size = C // num_groups
-    new_shape = (N, num_groups, group_size, *spatial_dims)
-    reshaped = input_.reshape(*new_shape)
+    if bias is None:
+        bias = lucid.zeros((C,), device=input_.device)
+        has_bias = False
+    else:
+        has_bias = True
 
-    axes = (2,) + tuple(range(3, reshaped.ndim))
-    mean = reshaped.mean(axis=axes, keepdims=True)
-    var = reshaped.var(axis=axes, keepdims=True)
-
-    normalized = (reshaped - mean) / lucid.sqrt(var + eps)
-    normalized = normalized.reshape(N, C, *spatial_dims)
-
-    if weight is not None:
-        weight = weight.reshape(1, C, *(1,) * len(spatial_dims))
-        normalized *= weight
-
-    if bias is not None:
-        bias = bias.reshape(1, C, *(1,) * len(spatial_dims))
-        normalized += bias
-
-    return normalized
+    op = group_norm_kernel(
+        num_groups=num_groups, eps=eps, has_weight=has_weight, has_bias=has_bias
+    )
+    return op(input_, weight, bias)
 
 
 def global_response_norm(

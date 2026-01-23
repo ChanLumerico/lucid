@@ -451,7 +451,7 @@ def _conv_backward_input(
     return grad_input
 
 
-class conv_nd(Operation):
+class conv_nd_kernel(Operation):
     def __init__(
         self,
         stride: int | tuple[int, ...] | list[int],
@@ -537,12 +537,3 @@ class conv_nd(Operation):
         macs_per_out = C_in_g * _prod(kernel_size)
         out_elems = N * C_out * _prod(tuple(out_dims))
         return out_elems * macs_per_out
-
-
-def conv_nd_op(
-    stride: int | tuple[int, ...] | list[int],
-    padding: int | tuple[int, ...] | list[int],
-    dilation: int | tuple[int, ...] | list[int],
-    groups: int,
-) -> conv_nd:
-    return conv_nd(stride, padding, dilation, groups)
