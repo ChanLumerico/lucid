@@ -20,9 +20,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Added various inplace tensor operations (e.g. `a.add_(b)`, `a.mul_(b)`)
+
 - Added **Noise Conditional Score Network(NCSN)** to `lucid.models.NCSN`
 
-- Branched a Stand-alone Autograd Engine as `lucid.autograd`
+- Branched a Stand-Alone Autograd Engine as `lucid.autograd`
 
   - Provides a generalized API of computing gradients:
     

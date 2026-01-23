@@ -50,8 +50,32 @@ def multiply(a: Tensor, b: Tensor, /) -> Tensor:
     return bfunc.multiply()(a, b)
 
 
+def mul_(a: Tensor, b: Tensor, /) -> Tensor:
+    return bfunc.multiply().inplace()(a, b)
+
+
 def div(a: Tensor, b: Tensor, /, floor: bool = False) -> Tensor:
     return bfunc.truediv()(a, b) if not floor else bfunc.floordiv()(a, b)
+
+
+def div_(a: Tensor, b: Tensor, /, floor: bool = False) -> Tensor:
+    return (
+        bfunc.truediv().inplace()(a, b)
+        if not floor
+        else bfunc.floordiv().inplace()(a, b)
+    )
+
+
+def minimum_(a: Tensor, b: Tensor, /) -> Tensor:
+    return bfunc.minimum().inplace()(a, b)
+
+
+def maximum_(a: Tensor, b: Tensor, /) -> Tensor:
+    return bfunc.maximum().inplace()(a, b)
+
+
+def power_(a: Tensor, b: Tensor, /) -> Tensor:
+    return bfunc.power().inplace()(a, b)
 
 
 def _equal(a: Tensor, b: Tensor, /) -> Tensor:
@@ -245,6 +269,92 @@ def cube(a: Tensor, /) -> Tensor:
     return ufunc.cube()(a)
 
 
+def neg_(a: Tensor, /) -> Tensor:
+    return ufunc._neg().inplace()(a)
+
+
+def exp_(a: Tensor, /) -> Tensor:
+    return ufunc.exp().inplace()(a)
+
+
+def log_(a: Tensor, /) -> Tensor:
+    return ufunc.log().inplace()(a)
+
+
+def log2_(a: Tensor, /) -> Tensor:
+    return ufunc.log2().inplace()(a)
+
+
+def sqrt_(a: Tensor, /) -> Tensor:
+    return ufunc.sqrt().inplace()(a)
+
+
+def sin_(a: Tensor, /) -> Tensor:
+    return ufunc.sin().inplace()(a)
+
+
+def cos_(a: Tensor, /) -> Tensor:
+    return ufunc.cos().inplace()(a)
+
+
+def tan_(a: Tensor, /) -> Tensor:
+    return ufunc.tan().inplace()(a)
+
+
+def arcsin_(a: Tensor, /) -> Tensor:
+    return ufunc.arcsin().inplace()(a)
+
+
+def arccos_(a: Tensor, /) -> Tensor:
+    return ufunc.arccos().inplace()(a)
+
+
+def arctan_(a: Tensor, /) -> Tensor:
+    return ufunc.arctan().inplace()(a)
+
+
+def sinh_(a: Tensor, /) -> Tensor:
+    return ufunc.sinh().inplace()(a)
+
+
+def cosh_(a: Tensor, /) -> Tensor:
+    return ufunc.cosh().inplace()(a)
+
+
+def tanh_(a: Tensor, /) -> Tensor:
+    return ufunc.tanh().inplace()(a)
+
+
+def clip_(
+    a: Tensor, /, min_value: _Scalar | None = None, max_value: _Scalar | None = None
+) -> Tensor:
+    if min_value is None:
+        min_value = lucid.min(a).item()
+    if max_value is None:
+        max_value = lucid.max(a).item()
+    return ufunc.clip(min_value, max_value).inplace()(a)
+
+
+def abs_(a: Tensor, /) -> Tensor:
+    return ufunc._abs().inplace()(a)
+
+
+def sign_(a: Tensor, /) -> Tensor:
+    return ufunc.sign().inplace()(a)
+
+
+def reciprocal_(a: Tensor, /) -> Tensor:
+    return ufunc.reciprocal().inplace()(a)
+
+
+def square_(a: Tensor, /) -> Tensor:
+    return ufunc.square().inplace()(a)
+
+
+def cube_(a: Tensor, /) -> Tensor:
+    return ufunc.cube().inplace()(a)
+
+
 @property
 def _T(a: Tensor, /) -> Tensor:
     return ufunc._T()(a)
@@ -307,6 +417,18 @@ def floor(a: Tensor) -> Tensor:
 
 def ceil(a: Tensor) -> Tensor:
     return ufunc.ceil()(a)
+
+
+def round_(a: Tensor, /, decimals: int = 0) -> Tensor:
+    return ufunc.round(decimals).inplace()(a)
+
+
+def floor_(a: Tensor) -> Tensor:
+    return ufunc.floor().inplace()(a)
+
+
+def ceil_(a: Tensor) -> Tensor:
+    return ufunc.ceil().inplace()(a)
 
 
 def cumprod(a: Tensor, axis: int = -1) -> Tensor:
@@ -605,3 +727,33 @@ Tensor.floor = floor
 Tensor.ceil = ceil
 
 Tensor.add_ = add_
+Tensor.sub_ = sub_
+Tensor.mul_ = mul_
+Tensor.div_ = div_
+Tensor.minimum_ = minimum_
+Tensor.maximum_ = maximum_
+Tensor.power_ = power_
+
+Tensor.neg_ = neg_
+Tensor.exp_ = exp_
+Tensor.log_ = log_
+Tensor.log2_ = log2_
+Tensor.sqrt_ = sqrt_
+Tensor.sin_ = sin_
+Tensor.cos_ = cos_
+Tensor.tan_ = tan_
+Tensor.arcsin_ = arcsin_
+Tensor.arccos_ = arccos_
+Tensor.arctan_ = arctan_
+Tensor.sinh_ = sinh_
+Tensor.cosh_ = cosh_
+Tensor.tanh_ = tanh_
+Tensor.clip_ = clip_
+Tensor.abs_ = abs_
+Tensor.sign_ = sign_
+Tensor.reciprocal_ = reciprocal_
+Tensor.square_ = square_
+Tensor.cube_ = cube_
+Tensor.round_ = round_
+Tensor.floor_ = floor_
+Tensor.ceil_ = ceil_
