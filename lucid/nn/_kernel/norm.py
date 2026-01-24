@@ -1,9 +1,9 @@
 import functools
+from types import ModuleType
 from typing import Sequence
 
 import numpy as np
 
-import lucid.nn as nn
 from lucid._backend.core import Operation, func_op, _FuncOpReturnType, _GradType
 from lucid._backend.metal import mx
 
@@ -45,11 +45,11 @@ class layer_norm_kernel(Operation):
         self._norm_axes = None
         self._n = None
 
-    @func_op(n_in=3, n_ret=1, has_gradient=True, device="cpu")
+    @func_op(n_in=3, n_ret=1, device="cpu")
     def cpu(self, a: Tensor, w: Tensor, b: Tensor) -> _FuncOpReturnType:
         return self._forward(a, w, b, lib_=np, device="cpu")
 
-    @func_op(n_in=3, n_ret=1, has_gradient=True, device="gpu")
+    @func_op(n_in=3, n_ret=1, device="gpu")
     def gpu(self, a: Tensor, w: Tensor, b: Tensor) -> _FuncOpReturnType:
         return self._forward(a, w, b, lib_=mx, device="gpu")
 
@@ -58,7 +58,7 @@ class layer_norm_kernel(Operation):
         a: Tensor,
         w: Tensor,
         b: Tensor,
-        lib_: object,
+        lib_: ModuleType,
         device: _DeviceType,
     ) -> _FuncOpReturnType:
         norm_axes = _norm_axes(a.ndim, self.normalized_shape)
@@ -82,7 +82,7 @@ class layer_norm_kernel(Operation):
         self.result = Tensor(out, device=device)
         return self.result, functools.partial(self.__grad__, a=a, w=w, lib_=lib_)
 
-    def __grad__(self, a: Tensor, w: Tensor, lib_: object) -> _GradType:
+    def __grad__(self, a: Tensor, w: Tensor, lib_: ModuleType) -> _GradType:
         if self.result is None or self.result.grad is None:
             raise RuntimeError("layer_norm backward called before forward.")
 
@@ -151,13 +151,13 @@ class batch_norm_kernel(Operation):
         self._m = None
         self._use_batch_stats = None
 
-    @func_op(n_in=5, n_ret=1, has_gradient=True, device="cpu")
+    @func_op(n_in=5, n_ret=1, device="cpu")
     def cpu(
         self, a: Tensor, running_mean: Tensor, running_var: Tensor, w: Tensor, b: Tensor
     ) -> _FuncOpReturnType:
         return self._forward(a, running_mean, running_var, w, b, lib_=np, device="cpu")
 
-    @func_op(n_in=5, n_ret=1, has_gradient=True, device="gpu")
+    @func_op(n_in=5, n_ret=1, device="gpu")
     def gpu(
         self, a: Tensor, running_mean: Tensor, running_var: Tensor, w: Tensor, b: Tensor
     ) -> _FuncOpReturnType:
@@ -170,7 +170,7 @@ class batch_norm_kernel(Operation):
         running_var: Tensor,
         w: Tensor,
         b: Tensor,
-        lib_: object,
+        lib_: ModuleType,
         device: _DeviceType,
     ) -> _FuncOpReturnType:
         axes = (0,) + tuple(range(2, a.ndim))
@@ -215,7 +215,7 @@ class batch_norm_kernel(Operation):
         self.result = Tensor(out, device=device)
         return self.result, functools.partial(self.__grad__, a=a, w=w, lib_=lib_)
 
-    def __grad__(self, a: Tensor, w: Tensor, lib_: object) -> _GradType:
+    def __grad__(self, a: Tensor, w: Tensor, lib_: ModuleType) -> _GradType:
         if self.result is None or self.result.grad is None:
             raise RuntimeError("batch_norm backward called before forward.")
 
@@ -279,11 +279,11 @@ class group_norm_kernel(Operation):
         self._reduce_axes = None
         self._m = None
 
-    @func_op(n_in=3, n_ret=1, has_gradient=True, device="cpu")
+    @func_op(n_in=3, n_ret=1, device="cpu")
     def cpu(self, a: Tensor, w: Tensor, b: Tensor) -> _FuncOpReturnType:
         return self._forward(a, w, b, lib_=np, device="cpu")
 
-    @func_op(n_in=3, n_ret=1, has_gradient=True, device="gpu")
+    @func_op(n_in=3, n_ret=1, device="gpu")
     def gpu(self, a: Tensor, w: Tensor, b: Tensor) -> _FuncOpReturnType:
         return self._forward(a, w, b, lib_=mx, device="gpu")
 
@@ -292,7 +292,7 @@ class group_norm_kernel(Operation):
         a: Tensor,
         w: Tensor,
         b: Tensor,
-        lib_: object,
+        lib_: ModuleType,
         device: _DeviceType,
     ) -> _FuncOpReturnType:
         N, C, *spatial = a.shape
@@ -325,7 +325,7 @@ class group_norm_kernel(Operation):
         self.result = Tensor(out, device=device)
         return self.result, functools.partial(self.__grad__, a=a, w=w, b=b, lib_=lib_)
 
-    def __grad__(self, a: Tensor, w: Tensor, b: Tensor, lib_: object) -> _GradType:
+    def __grad__(self, a: Tensor, w: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         if self.result is None or self.result.grad is None:
             raise RuntimeError("group_norm backward called before forward.")
 

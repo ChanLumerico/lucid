@@ -9,7 +9,7 @@ import numpy as np
 from lucid._tensor import Tensor
 from lucid._backend.core import (
     Operation,
-    binary_func_op,
+    func_op,
     _FuncOpReturnType,
     _GradType,
 )
@@ -481,7 +481,7 @@ class conv_nd_kernel(Operation):
 
         return stride, padding, dilation
 
-    @binary_func_op()
+    @func_op(n_in=2, n_ret=1)
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         _validate_conv_shapes(a, b, self.groups)
         stride, padding, dilation = self._normalize(b)
@@ -490,7 +490,7 @@ class conv_nd_kernel(Operation):
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
 
-    @binary_func_op(device="gpu")
+    @func_op(n_in=2, n_ret=1, device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         _validate_conv_shapes(a, b, self.groups)
         stride, padding, dilation = self._normalize(b)

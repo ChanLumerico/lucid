@@ -4,7 +4,11 @@ import lucid.nn as nn
 from lucid.types import _ShapeLike
 
 from lucid._tensor import Tensor
-from lucid._kernel.norm import layer_norm_kernel, batch_norm_kernel, group_norm_kernel
+from lucid.nn._kernel.norm import (
+    layer_norm_kernel,
+    batch_norm_kernel,
+    group_norm_kernel,
+)
 
 
 def normalize(

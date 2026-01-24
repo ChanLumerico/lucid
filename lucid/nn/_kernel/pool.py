@@ -8,7 +8,7 @@ import numpy as np
 from lucid._tensor import Tensor
 from lucid._backend.core import (
     Operation,
-    unary_func_op,
+    func_op,
     _FuncOpReturnType,
     _GradType,
 )
@@ -255,7 +255,7 @@ class pool_nd_kernel(Operation):
 
         return kernel, stride, padding
 
-    @unary_func_op()
+    @func_op(n_in=1, n_ret=1)
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
         kernel, stride, padding = self._normalize(a)
         out_dims = _pool_out_dims(a.shape[2:], kernel, stride, padding)
@@ -273,7 +273,7 @@ class pool_nd_kernel(Operation):
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, lib_=np)
 
-    @unary_func_op(device="gpu")
+    @func_op(n_in=1, n_ret=1, device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         kernel, stride, padding = self._normalize(a)
         out_dims = _pool_out_dims(a.shape[2:], kernel, stride, padding)

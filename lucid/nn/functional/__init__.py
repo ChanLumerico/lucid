@@ -54,6 +54,10 @@ def tanh(input_: Tensor) -> Tensor:
     return _activation.tanh(input_)
 
 
+def silu(input_: Tensor) -> Tensor:
+    return _activation.silu(input_)
+
+
 def softmax(input_: Tensor, axis: int = -1) -> Tensor:
     return _activation.softmax(input_, axis)
 

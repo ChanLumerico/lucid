@@ -2,7 +2,7 @@ import math
 from typing import Literal
 
 from lucid._tensor import Tensor
-from lucid._kernel.pool import pool_nd_kernel
+from lucid.nn._kernel.pool import pool_nd_kernel
 
 
 def avg_pool1d(

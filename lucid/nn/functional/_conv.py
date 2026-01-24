@@ -3,7 +3,7 @@ from typing import Tuple, Optional
 
 import lucid
 from lucid._tensor import Tensor
-from lucid._kernel.conv import conv_nd_kernel
+from lucid.nn._kernel.conv import conv_nd_kernel
 
 
 def unfold(
