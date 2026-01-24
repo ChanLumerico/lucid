@@ -1,6 +1,9 @@
 import math
+
 import lucid
 import lucid.nn.functional as F
+
+from lucid.nn._kernel.attention import scaled_dot_product_attention_kernel
 
 from lucid._tensor import Tensor
 
@@ -14,6 +17,12 @@ def scaled_dot_product_attention(
     is_causal: bool = False,
     scale: float | None = None,
 ) -> Tensor:
+    if dropout_p == 0.0:
+        op = scaled_dot_product_attention_kernel(
+            attn_mask=attn_mask, is_causal=is_causal, scale=scale
+        )
+        return op(query, key, value)
+
     L, S = query.shape[-2], key.shape[-2]
     scale_factor = 1 / math.sqrt(query.shape[-1]) if scale is None else scale
     attn_bias = lucid.zeros(L, S, dtype=query.dtype).free()
