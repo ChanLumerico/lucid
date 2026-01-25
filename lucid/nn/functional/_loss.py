@@ -3,6 +3,12 @@ from typing import Literal
 import lucid
 from lucid._tensor import Tensor
 
+from lucid.nn._kernel.loss import (
+    cross_entropy_kernel,
+    binary_cross_entropy_kernel,
+    binary_cross_entropy_with_logits_kernel,
+)
+
 _ReductionType = Literal["mean", "sum"]
 
 
@@ -55,13 +61,14 @@ def binary_cross_entropy(
     reduction: _ReductionType | None = "mean",
     eps: float = 1e-7,
 ) -> Tensor:
-    input_ = lucid.clip(input_, eps, 1 - eps)
-    loss = -target * lucid.log(input_) - (1 - target) * lucid.log(1 - input_)
+    has_weight = weight is not None
+    if weight is None:
+        weight = lucid.ones_like(input_, device=input_.device)
 
-    if weight is not None:
-        loss *= weight
-
-    return _loss_reduction(loss, reduction)
+    op = binary_cross_entropy_kernel(
+        reduction=reduction, eps=eps, has_weight=has_weight
+    )
+    return op(input_, target, weight)
 
 
 def binary_cross_entropy_with_logits(
@@ -71,19 +78,17 @@ def binary_cross_entropy_with_logits(
     pos_weight: Tensor | None = None,
     reduction: _ReductionType | None = "mean",
 ) -> Tensor:
-    max_val = lucid.maximum(-input_, 0)
-    sp = max_val + lucid.log(lucid.exp(-max_val) + lucid.exp(-input_ - max_val))
+    has_weight = weight is not None
+    has_pos_weight = pos_weight is not None
+    if weight is None:
+        weight = lucid.ones_like(input_, device=input_.device)
+    if pos_weight is None:
+        pos_weight = lucid.ones_like(input_, device=input_.device)
 
-    if pos_weight is not None:
-        coeff = 1 + (pos_weight - 1) * target
-        loss = (1 - target) * input_ + coeff * sp
-    else:
-        loss = lucid.maximum(input_, 0) - input_ * target + sp
-
-    if weight is not None:
-        loss *= weight
-
-    return _loss_reduction(loss, reduction)
+    op = binary_cross_entropy_with_logits_kernel(
+        reduction=reduction, has_weight=has_weight, has_pos_weight=has_pos_weight
+    )
+    return op(input_, target, weight, pos_weight)
 
 
 def cross_entropy(
@@ -94,20 +99,14 @@ def cross_entropy(
     eps: float = 1e-7,
     ignore_index: int | None = None,
 ) -> Tensor:
-    exp_logits = lucid.exp(input_ - lucid.max(input_, axis=1, keepdims=True))
-    prob = exp_logits / lucid.sum(exp_logits, axis=1, keepdims=True)
+    has_weight = weight is not None
+    if weight is None:
+        weight = lucid.ones((input_.shape[1],), device=input_.device)
 
-    indices = lucid.arange(input_.shape[0], device=input_.device).astype(lucid.Int)
-    target_int = target.astype(lucid.Int)
-
-    loss = -lucid.log(prob[indices, target_int] + eps)
-    if weight is not None:
-        loss *= weight[target_int]
-
-    if ignore_index is not None:
-        return _ignore_index_loss(loss, target_int, ignore_index, reduction)
-
-    return _loss_reduction(loss, reduction)
+    op = cross_entropy_kernel(
+        reduction=reduction, eps=eps, ignore_index=ignore_index, has_weight=has_weight
+    )
+    return op(input_, target, weight)
 
 
 def nll_loss(

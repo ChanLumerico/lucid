@@ -4,6 +4,8 @@ import platform
 
 import numpy as np
 
+from lucid.types import _TensorLike
+
 try:
     import mlx.core as mx
 except ModuleNotFoundError as e:
@@ -105,7 +107,9 @@ def parse_mlx_indexing(index: Any) -> Any:
     return index
 
 
-def post_step_eval(param: Any, state: Mapping[str, Any] | None = None) -> None:
+def post_step_eval(
+    param: _TensorLike | Any, state: Mapping[str, Any] | None = None
+) -> None:
     is_gpu = False
     if hasattr(param, "is_gpu"):
         try:

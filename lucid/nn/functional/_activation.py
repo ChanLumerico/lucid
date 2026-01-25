@@ -1,6 +1,12 @@
 import lucid
 
 from lucid._tensor import Tensor
+from lucid.nn._kernel.activation import (
+    softmax_kernel,
+    sigmoid_kernel,
+    gelu_kernel,
+    silu_kernel,
+)
 
 
 def relu(input_: Tensor) -> Tensor:
@@ -31,24 +37,24 @@ def selu(input_: Tensor) -> Tensor:
 
 
 def gelu(input_: Tensor) -> Tensor:
-    c = lucid.sqrt(2 / lucid.pi).free()
-    return 0.5 * input_ * (1 + lucid.tanh(c * (input_ + 0.044715 * input_**3)))
+    op = gelu_kernel()
+    return op(input_)
 
 
 def sigmoid(input_: Tensor) -> Tensor:
-    return 1 / (1 + lucid.exp(-input_))
+    op = sigmoid_kernel()
+    return op(input_)
 
 
 def tanh(input_: Tensor) -> Tensor:
     return lucid.tanh(input_)
 
 
+def silu(input_: Tensor) -> Tensor:
+    op = silu_kernel()
+    return op(input_)
+
+
 def softmax(input_: Tensor, axis: int = -1) -> Tensor:
-    input_max = lucid.max(input_, axis=axis, keepdims=True)
-    input_stable = input_ - input_max
-
-    e_input = lucid.exp(input_stable)
-    sum_e_input = e_input.sum(axis=axis, keepdims=True)
-
-    output = e_input / sum_e_input
-    return output
+    op = softmax_kernel(axis=axis)
+    return op(input_)

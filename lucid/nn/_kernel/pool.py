@@ -8,7 +8,7 @@ import numpy as np
 from lucid._tensor import Tensor
 from lucid._backend.core import (
     Operation,
-    unary_func_op,
+    func_op,
     _FuncOpReturnType,
     _GradType,
 )
@@ -92,11 +92,7 @@ def _where(lib_: ModuleType, cond: _Array, x: _Array, y: _Array) -> _Array:
 
 
 def _pool_forward_sum(
-    lib_: ModuleType,
-    x_pad: _Array,
-    out_dims: _Shape,
-    kernel_size: _Shape,
-    stride: _Shape,
+    x_pad: _Array, out_dims: _Shape, kernel_size: _Shape, stride: _Shape
 ) -> _Array:
     out = None
     for k_idx in itertools.product(*[range(k) for k in kernel_size]):
@@ -211,7 +207,7 @@ def _pool_backward_max(
     return _crop_padding(grad_input_pad, padding)
 
 
-class pool_nd(Operation):
+class pool_nd_kernel(Operation):
     def __init__(
         self,
         kernel_size: int | tuple[int, ...] | list[int],
@@ -259,7 +255,7 @@ class pool_nd(Operation):
 
         return kernel, stride, padding
 
-    @unary_func_op()
+    @func_op(n_in=1, n_ret=1)
     def cpu(self, a: Tensor) -> _FuncOpReturnType:
         kernel, stride, padding = self._normalize(a)
         out_dims = _pool_out_dims(a.shape[2:], kernel, stride, padding)
@@ -268,7 +264,7 @@ class pool_nd(Operation):
 
         x_pad = _pad_input(np, a.data, padding)
         if self.mode == "avg":
-            out_sum = _pool_forward_sum(np, x_pad, out_dims, kernel, stride)
+            out_sum = _pool_forward_sum(x_pad, out_dims, kernel, stride)
             out = out_sum / _prod(kernel)
         else:
             out, max_idx = _pool_forward_max(np, x_pad, out_dims, kernel, stride)
@@ -277,7 +273,7 @@ class pool_nd(Operation):
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, lib_=np)
 
-    @unary_func_op(device="gpu")
+    @func_op(n_in=1, n_ret=1, device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
         kernel, stride, padding = self._normalize(a)
         out_dims = _pool_out_dims(a.shape[2:], kernel, stride, padding)
@@ -286,7 +282,7 @@ class pool_nd(Operation):
 
         x_pad = _pad_input(mx, a.data, padding)
         if self.mode == "avg":
-            out_sum = _pool_forward_sum(mx, x_pad, out_dims, kernel, stride)
+            out_sum = _pool_forward_sum(x_pad, out_dims, kernel, stride)
             out = out_sum / _prod(kernel)
         else:
             out, max_idx = _pool_forward_max(mx, x_pad, out_dims, kernel, stride)
@@ -350,19 +346,3 @@ class pool_nd(Operation):
         if self.mode == "avg":
             return out_elems * kernel_elems
         return out_elems * max(kernel_elems - 1, 0)
-
-
-def avg_pool_nd_op(
-    kernel_size: int | tuple[int, ...] | list[int],
-    stride: int | tuple[int, ...] | list[int],
-    padding: int | tuple[int, ...] | list[int],
-) -> pool_nd:
-    return pool_nd(kernel_size, stride, padding, mode="avg")
-
-
-def max_pool_nd_op(
-    kernel_size: int | tuple[int, ...] | list[int],
-    stride: int | tuple[int, ...] | list[int],
-    padding: int | tuple[int, ...] | list[int],
-) -> pool_nd:
-    return pool_nd(kernel_size, stride, padding, mode="max")

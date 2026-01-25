@@ -308,9 +308,9 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
 
 
 def _conv_view_limit_mb() -> int:
-    from lucid._backend import conv as _conv_backend
+    from lucid._kernel import conv as _conv_kernel
 
-    return _conv_backend.get_conv_view_limit_mb()
+    return _conv_kernel.get_conv_view_limit_mb()
 
 
 def __getattr__(name: str) -> Any:

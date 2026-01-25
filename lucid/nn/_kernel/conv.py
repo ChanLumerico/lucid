@@ -9,7 +9,7 @@ import numpy as np
 from lucid._tensor import Tensor
 from lucid._backend.core import (
     Operation,
-    binary_func_op,
+    func_op,
     _FuncOpReturnType,
     _GradType,
 )
@@ -451,7 +451,7 @@ def _conv_backward_input(
     return grad_input
 
 
-class conv_nd(Operation):
+class conv_nd_kernel(Operation):
     def __init__(
         self,
         stride: int | tuple[int, ...] | list[int],
@@ -481,7 +481,7 @@ class conv_nd(Operation):
 
         return stride, padding, dilation
 
-    @binary_func_op()
+    @func_op(n_in=2, n_ret=1)
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         _validate_conv_shapes(a, b, self.groups)
         stride, padding, dilation = self._normalize(b)
@@ -490,7 +490,7 @@ class conv_nd(Operation):
         self.result = Tensor(out)
         return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
 
-    @binary_func_op(device="gpu")
+    @func_op(n_in=2, n_ret=1, device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         _validate_conv_shapes(a, b, self.groups)
         stride, padding, dilation = self._normalize(b)
@@ -537,12 +537,3 @@ class conv_nd(Operation):
         macs_per_out = C_in_g * _prod(kernel_size)
         out_elems = N * C_out * _prod(tuple(out_dims))
         return out_elems * macs_per_out
-
-
-def conv_nd_op(
-    stride: int | tuple[int, ...] | list[int],
-    padding: int | tuple[int, ...] | list[int],
-    dilation: int | tuple[int, ...] | list[int],
-    groups: int,
-) -> conv_nd:
-    return conv_nd(stride, padding, dilation, groups)

@@ -3,7 +3,7 @@ from typing import Tuple, Optional
 
 import lucid
 from lucid._tensor import Tensor
-from lucid._backend.conv import conv_nd_op
+from lucid.nn._kernel.conv import conv_nd_kernel
 
 
 def unfold(
@@ -66,17 +66,6 @@ def unfold(
     return col.reshape((N_out, C_filt))
 
 
-def _conv_tensor(
-    input_: Tensor,
-    weight: Tensor,
-    stride: Tuple[int, ...],
-    padding: Tuple[int, ...],
-    dilation: Tuple[int, ...],
-    groups: int,
-) -> Tensor:
-    return conv_nd_op(stride, padding, dilation, groups)(input_, weight)
-
-
 def conv(
     input_: Tensor,
     weight: Tensor,
@@ -92,7 +81,7 @@ def conv(
     if len(stride) != len(padding) or len(stride) != len(dilation):
         raise ValueError("Stride, padding, and dilation must have the same length.")
 
-    out = _conv_tensor(input_, weight, stride, padding, dilation, groups)
+    out = conv_nd_kernel(stride, padding, dilation, groups)(input_, weight)
 
     if bias is not None:
         bias_sh = [1, weight.shape[0]] + [1] * (input_.ndim - 2)
@@ -181,9 +170,9 @@ def conv_transpose(
                     zeros = lucid.zeros(*zero_shape, dtype=ups.dtype, device=ups.device)
                     ups = lucid.concatenate([ups, zeros], axis=axis)
 
-        out_g = _conv_tensor(
-            ups, w_t, stride=(1,) * D, padding=pad_, dilation=dilation, groups=1
-        )
+        out_g = conv_nd_kernel(
+            stride=(1,) * D, padding=pad_, dilation=dilation, groups=1
+        )(ups, w_t)
         outputs.append(out_g)
 
     output = lucid.concatenate(outputs, axis=1)

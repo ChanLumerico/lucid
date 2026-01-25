@@ -2,7 +2,7 @@ import math
 from typing import Literal
 
 from lucid._tensor import Tensor
-from lucid._backend.pool import avg_pool_nd_op, max_pool_nd_op
+from lucid.nn._kernel.pool import pool_nd_kernel
 
 
 def avg_pool1d(
@@ -11,7 +11,7 @@ def avg_pool1d(
     stride: int | tuple[int] = 1,
     padding: int | tuple[int] = 0,
 ) -> Tensor:
-    return avg_pool_nd_op(kernel_size, stride, padding)(input_)
+    return pool_nd_kernel(kernel_size, stride, padding, mode="avg")(input_)
 
 
 def avg_pool2d(
@@ -20,7 +20,7 @@ def avg_pool2d(
     stride: int | tuple[int, int] = 1,
     padding: int | tuple[int, int] = 0,
 ) -> Tensor:
-    return avg_pool_nd_op(kernel_size, stride, padding)(input_)
+    return pool_nd_kernel(kernel_size, stride, padding, mode="avg")(input_)
 
 
 def avg_pool3d(
@@ -29,7 +29,7 @@ def avg_pool3d(
     stride: int | tuple[int, int, int] = 1,
     padding: int | tuple[int, int, int] = 0,
 ) -> Tensor:
-    return avg_pool_nd_op(kernel_size, stride, padding)(input_)
+    return pool_nd_kernel(kernel_size, stride, padding, mode="avg")(input_)
 
 
 def max_pool1d(
@@ -38,7 +38,7 @@ def max_pool1d(
     stride: int | tuple[int] = 1,
     padding: int | tuple[int] = 0,
 ) -> Tensor:
-    return max_pool_nd_op(kernel_size, stride, padding)(input_)
+    return pool_nd_kernel(kernel_size, stride, padding, mode="max")(input_)
 
 
 def max_pool2d(
@@ -47,7 +47,7 @@ def max_pool2d(
     stride: int | tuple[int, int] = 1,
     padding: int | tuple[int, int] = 0,
 ) -> Tensor:
-    return max_pool_nd_op(kernel_size, stride, padding)(input_)
+    return pool_nd_kernel(kernel_size, stride, padding, mode="max")(input_)
 
 
 def max_pool3d(
@@ -56,7 +56,7 @@ def max_pool3d(
     stride: int | tuple[int, int, int] = 1,
     padding: int | tuple[int, int, int] = 0,
 ) -> Tensor:
-    return max_pool_nd_op(kernel_size, stride, padding)(input_)
+    return pool_nd_kernel(kernel_size, stride, padding, mode="max")(input_)
 
 
 def adaptive_pool1d(
