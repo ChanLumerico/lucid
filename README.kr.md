@@ -1,5 +1,12 @@
 # Lucid² 💎
 
+![PyPI Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
+![PyPI Downloads](https://img.shields.io/pypi/dm/lucid-dl.svg)
+[![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
+![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
+![Lines of Code](https://img.shields.io/badge/dynamic/json?label=Lines%20of%20Code&color=purple&url=https%3A%2F%2Fraw.githubusercontent.com%2FChanLumerico%2Flucid%2Fmain%2Floc%2Floc_badge.json&query=%24.linesOfCode&cacheSeconds=3600)
+
 **Lucid**는 순수 파이썬으로 처음부터 구현한 미니멀리스트 딥러닝 프레임워크이다. 오토디프, 신경망 모듈, GPU 가속까지 현대 딥러닝 시스템의 토대를 가볍고 읽기 쉬운 코드로 탐구할 수 있는 교육 친화적인 환경을 제공한다.
 
 학생, 교육자, 연구자가 딥러닝 내부 동작을 투명하게 살펴볼 수 있도록, PyTorch와 같은 주요 프레임워크의 핵심 동작을 충실히 재현하면서도 줄 단위로 따라 읽을 만큼 단순한 API를 제공한다.
