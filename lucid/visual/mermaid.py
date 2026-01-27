@@ -285,7 +285,7 @@ def build_mermaid_chart(
     subgraph_stroke: str = "#000000",
     subgraph_stroke_opacity: float = 0.75,
     force_text_color: str | None = None,
-    edge_curve: Literal["basis", "linear", "step"] = "step",
+    edge_curve: Literal["basis", "linear", "step", "round"] = "round",
     node_spacing: int = 50,
     rank_spacing: int = 50,
     **forward_kwargs,
@@ -478,18 +478,25 @@ def build_mermaid_chart(
     lines: list[str] = []
     init_cfg: dict[str, object] = {
         "flowchart": {
-            "curve": edge_curve,
+            "curve": "step" if edge_curve == "round" else edge_curve,
             "nodeSpacing": node_spacing,
             "rankSpacing": rank_spacing,
         }
     }
+    css_parts: list[str] = []
+    if edge_curve == "round":
+        css_parts.append(
+            ".edgePath path { stroke-linecap: round; stroke-linejoin: round; }"
+        )
     if force_text_color:
-        init_cfg["themeCSS"] = (
+        css_parts.append(
             f".nodeLabel, .edgeLabel, .cluster text, .node text "
             f"{{ fill: {force_text_color} !important; }} "
             f".node foreignObject *, .cluster foreignObject * "
             f"{{ color: {force_text_color} !important; }}"
         )
+    if css_parts:
+        init_cfg["themeCSS"] = " ".join(css_parts)
 
     lines.append(f"%%{{init: {json.dumps(init_cfg, separators=(',', ':'))} }}%%")
     lines.append(f"flowchart {direction}")
