@@ -1,0 +1,6 @@
+# Documentation dependencies
+sphinx
+shibuya
+sphinx-design
+sphinxcontrib-mermaid
+

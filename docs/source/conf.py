@@ -34,19 +34,11 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "furo"
+# Theme
+# Requires: `pip install shibuya`
+html_theme = "shibuya"
 html_static_path = ["_static"]
 html_css_files = ["badges.css"]
-
-html_theme_options = {
-    "source_repository": "https://github.com/ChanLumerico/lucid/",
-    "source_branch": "main",
-    "source_directory": "docs/",
-}
-
-pygments_style = "xcode"
-pygments_dark_style = "github-dark"
-
 
 # -- RST Epilogs -------------------------------------------------------------
 
