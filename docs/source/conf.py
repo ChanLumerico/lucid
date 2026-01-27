@@ -38,7 +38,7 @@ exclude_patterns = []
 # Requires: `pip install shibuya`
 html_theme = "shibuya"
 html_static_path = ["_static"]
-html_css_files = ["badges.css"]
+html_css_files = ["badges.css", "mermaid.css"]
 
 # -- RST Epilogs -------------------------------------------------------------
 

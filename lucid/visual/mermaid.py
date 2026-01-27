@@ -283,7 +283,7 @@ def build_mermaid_chart(
     subgraph_fill_opacity: float = 0.05,
     subgraph_stroke: str = "",
     subgraph_stroke_opacity: float = 1.0,
-    force_text_color: str | None = "#000000",
+    force_text_color: str | None = None,
     **forward_kwargs,
 ) -> str | list[str]:
     if inputs is None and input_shape is None:
@@ -524,7 +524,7 @@ def build_mermaid_chart(
                 label_text = (
                     f"{label_text}<br/>"
                     f"<span style='font-size:11px;{color_css}font-weight:400'>"
-                    f"{ins} → {outs}"
+                    f"{ins} \u2192 {outs}"
                     f"</span>"
                 )
 

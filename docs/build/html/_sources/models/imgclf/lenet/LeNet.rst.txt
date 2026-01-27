@@ -23,8 +23,8 @@ It allows the configuration of convolutional and fully connected layers through 
 making it adaptable for different use cases.
 
 .. mermaid::
+  :name: LeNet
 
-    %%{init: {"themeCSS":".nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }"} }%%
     flowchart LR
       linkStyle default stroke-width:2.0px
       subgraph sg_m0["<span style='font-size:20px;font-weight:700'>lenet_5</span>"]

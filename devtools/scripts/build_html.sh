@@ -3,6 +3,6 @@ cd devtools/scripts
 ./rm_pyc.sh ../../lucid
 python --version
 cd ../../docs
-rm -r build/
-make html
+# rm -r build/
+# make html
 make html

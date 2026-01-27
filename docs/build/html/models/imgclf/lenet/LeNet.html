@@ -11,6 +11,7 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link media="print" rel="stylesheet" type="text/css" href="../../../_static/print.css?v=20ff2c19" />
     <link rel="stylesheet" type="text/css" href="../../../_static/badges.css?v=94ab1542" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/mermaid.css?v=f931f899" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -990,55 +991,54 @@ data-aria-dark="Switch to auto color mode">
 various versions of the LeNet architecture, including LeNet-1, LeNet-4, and LeNet-5.</p>
 <p>It allows the configuration of convolutional and fully connected layers through arguments,
 making it adaptable for different use cases.</p>
-<pre  class="mermaid">
-        %%{init: {&quot;themeCSS&quot;:&quot;.nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }&quot;} }%%
-flowchart LR
-  linkStyle default stroke-width:2.0px
-  subgraph sg_m0[&quot;&lt;span style='font-size:20px;font-weight:700'&gt;lenet_5&lt;/span&gt;&quot;]
-  style sg_m0 fill:#000000,fill-opacity:0.05
-    subgraph sg_m1[&quot;conv1 x 2&quot;]
-    style sg_m1 fill:#000000,fill-opacity:0.05
-      m1_in([&quot;Input&quot;]);
-      m1_out([&quot;Output&quot;]);
-  style m1_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
-  style m1_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
-      m2[&quot;Conv2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,1,32,32) → (1,6,28,28)&lt;/span&gt;&quot;];
-      m3[&quot;Tanh&quot;];
-      m4[&quot;AvgPool2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,6,28,28) → (1,6,14,14)&lt;/span&gt;&quot;];
+<pre id="id1" class="mermaid">
+          flowchart LR
+    linkStyle default stroke-width:2.0px
+    subgraph sg_m0[&quot;&lt;span style='font-size:20px;font-weight:700'&gt;lenet_5&lt;/span&gt;&quot;]
+    style sg_m0 fill:#000000,fill-opacity:0.05
+      subgraph sg_m1[&quot;conv1 x 2&quot;]
+      style sg_m1 fill:#000000,fill-opacity:0.05
+        m1_in([&quot;Input&quot;]);
+        m1_out([&quot;Output&quot;]);
+    style m1_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+    style m1_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+        m2[&quot;Conv2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,1,32,32) → (1,6,28,28)&lt;/span&gt;&quot;];
+        m3[&quot;Tanh&quot;];
+        m4[&quot;AvgPool2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,6,28,28) → (1,6,14,14)&lt;/span&gt;&quot;];
+      end
+      m5[&quot;Linear&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,400) → (1,120)&lt;/span&gt;&quot;];
+      m6[&quot;Tanh&quot;];
+      m7[&quot;Linear&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,120) → (1,84)&lt;/span&gt;&quot;];
+      m8[&quot;Tanh&quot;];
+      m9[&quot;Linear&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,84) → (1,10)&lt;/span&gt;&quot;];
+      m10[&quot;Tanh&quot;];
     end
-    m5[&quot;Linear&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,400) → (1,120)&lt;/span&gt;&quot;];
-    m6[&quot;Tanh&quot;];
-    m7[&quot;Linear&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,120) → (1,84)&lt;/span&gt;&quot;];
-    m8[&quot;Tanh&quot;];
-    m9[&quot;Linear&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,84) → (1,10)&lt;/span&gt;&quot;];
-    m10[&quot;Tanh&quot;];
-  end
-  input[&quot;Input&lt;br/&gt;&lt;span style='font-size:11px;color:#000000;font-weight:400'&gt;(1,1,32,32)&lt;/span&gt;&quot;];
-  output[&quot;Output&lt;br/&gt;&lt;span style='font-size:11px;color:#000000;font-weight:400'&gt;(1,10)&lt;/span&gt;&quot;];
-  style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
-  style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
-  style m2 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
-  style m3 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
-  style m4 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
-  style m5 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
-  style m6 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
-  style m7 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
-  style m8 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
-  style m9 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
-  style m10 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
-  input -.-&gt; m2;
-  m10 --&gt; output;
-  m1_in -.-&gt; m2;
-  m1_out --&gt; m5;
-  m2 --&gt; m3;
-  m3 --&gt; m4;
-  m4 --&gt; m1_in;
-  m4 --&gt; m1_out;
-  m5 --&gt; m6;
-  m6 --&gt; m7;
-  m7 --&gt; m8;
-  m8 --&gt; m9;
-  m9 --&gt; m10;
+    input[&quot;Input&lt;br/&gt;&lt;span style='font-size:11px;color:#000000;font-weight:400'&gt;(1,1,32,32)&lt;/span&gt;&quot;];
+    output[&quot;Output&lt;br/&gt;&lt;span style='font-size:11px;color:#000000;font-weight:400'&gt;(1,10)&lt;/span&gt;&quot;];
+    style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style m2 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m3 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m4 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+    style m5 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+    style m6 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m7 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+    style m8 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m9 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+    style m10 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    input -.-&gt; m2;
+    m10 --&gt; output;
+    m1_in -.-&gt; m2;
+    m1_out --&gt; m5;
+    m2 --&gt; m3;
+    m3 --&gt; m4;
+    m4 --&gt; m1_in;
+    m4 --&gt; m1_out;
+    m5 --&gt; m6;
+    m6 --&gt; m7;
+    m7 --&gt; m8;
+    m8 --&gt; m9;
+    m9 --&gt; m10;
     </pre></section>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>

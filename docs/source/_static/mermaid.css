@@ -1,0 +1,8 @@
+/* sphinxcontrib-mermaid defaults to a fixed 500px SVG height, which leaves a large
+   empty block for small charts. Override to let SVG height fit its content. */
+
+pre.mermaid > svg,
+.mermaid-container > pre > svg {
+  height: auto !important;
+}
+
