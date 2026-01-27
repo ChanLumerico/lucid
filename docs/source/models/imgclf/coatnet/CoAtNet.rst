@@ -30,7 +30,7 @@ and pre-normalization to enhance training stability and performance.
 .. mermaid::
     :name: CoAtNet
 
-    %%{init: {"flowchart":{"curve":"step","nodeSpacing":50,"rankSpacing":50},"themeCSS":".edgePath path { stroke-linecap: round; stroke-linejoin: round; } .nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }"} }%%
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50},"themeCSS":".nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }"} }%%
     flowchart LR
       linkStyle default stroke-width:2.0px
       subgraph sg_m0["<span style='font-size:20px;font-weight:700'>coatnet_0</span>"]

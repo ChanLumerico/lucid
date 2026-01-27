@@ -285,7 +285,7 @@ def build_mermaid_chart(
     subgraph_stroke: str = "#000000",
     subgraph_stroke_opacity: float = 0.75,
     force_text_color: str | None = None,
-    edge_curve: Literal["basis", "linear", "step", "round"] = "round",
+    edge_curve: str = "natural",
     node_spacing: int = 50,
     rank_spacing: int = 50,
     **forward_kwargs,
@@ -393,11 +393,11 @@ def build_mermaid_chart(
         if inputs is None:
             if isinstance(input_shape, list):
                 input_tensors = [
-                    lucid.random.rand(shape, device=module.device)
+                    lucid.random.randn(shape, device=module.device)
                     for shape in input_shape
                 ]
             else:
-                input_tensors = [lucid.random.rand(input_shape, device=module.device)]
+                input_tensors = [lucid.random.randn(input_shape, device=module.device)]
         else:
             if isinstance(inputs, Tensor):
                 input_tensors = [inputs]
