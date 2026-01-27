@@ -19,13 +19,13 @@ activations and dropout for regularization.
 .. mermaid::
     :name: AlexNet
 
-    %%{init: {"themeCSS":".nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }"} }%%
+    %%{init: {"flowchart":{"curve":"step","nodeSpacing":50,"rankSpacing":50},"themeCSS":".nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }"} }%%
     flowchart LR
       linkStyle default stroke-width:2.0px
       subgraph sg_m0["<span style='font-size:20px;font-weight:700'>alexnet</span>"]
-      style sg_m0 fill:#000000,fill-opacity:0.05
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
         subgraph sg_m1["conv"]
-        style sg_m1 fill:#000000,fill-opacity:0.05
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
           m2["Conv2d<br/><span style='font-size:11px;font-weight:400'>(1,3,224,224) → (1,64,55,55)</span>"];
           m3["ReLU"];
           m4["MaxPool2d<br/><span style='font-size:11px;font-weight:400'>(1,64,55,55) → (1,64,27,27)</span>"];
@@ -42,7 +42,7 @@ activations and dropout for regularization.
         end
         m15["AdaptiveAvgPool2d"];
         subgraph sg_m16["fc"]
-        style sg_m16 fill:#000000,fill-opacity:0.05
+        style sg_m16 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
           m17["Dropout"];
           m18["Linear<br/><span style='font-size:11px;font-weight:400'>(1,9216) → (1,4096)</span>"];
           m19["ReLU"];

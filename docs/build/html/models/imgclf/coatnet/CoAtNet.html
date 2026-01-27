@@ -991,15 +991,15 @@ classification tasks.</p>
 <p>CoAtNet utilizes depthwise convolutions, relative position encoding,
 and pre-normalization to enhance training stability and performance.</p>
 <pre id="id1" class="mermaid">
-        %%{init: {&quot;themeCSS&quot;:&quot;.nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }&quot;} }%%
+        %%{init: {&quot;flowchart&quot;:{&quot;curve&quot;:&quot;step&quot;,&quot;nodeSpacing&quot;:50,&quot;rankSpacing&quot;:50},&quot;themeCSS&quot;:&quot;.nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }&quot;} }%%
 flowchart LR
   linkStyle default stroke-width:2.0px
   subgraph sg_m0[&quot;&lt;span style='font-size:20px;font-weight:700'&gt;coatnet_0&lt;/span&gt;&quot;]
-  style sg_m0 fill:#000000,fill-opacity:0.05
+  style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
     subgraph sg_m1[&quot;s0&quot;]
-    style sg_m1 fill:#000000,fill-opacity:0.05
+    style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
       subgraph sg_m2[&quot;Sequential x 2&quot;]
-      style sg_m2 fill:#000000,fill-opacity:0.05
+      style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
         m2_in([&quot;Input&quot;]);
         m2_out([&quot;Output&quot;]);
   style m2_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
@@ -1010,36 +1010,36 @@ flowchart LR
       end
     end
     subgraph sg_m6[&quot;s1 x 2&quot;]
-    style sg_m6 fill:#000000,fill-opacity:0.05
+    style sg_m6 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
       m6_in([&quot;Input&quot;]);
       m6_out([&quot;Output&quot;]);
   style m6_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
   style m6_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
       subgraph sg_m7[&quot;_MBConv&quot;]
-      style sg_m7 fill:#000000,fill-opacity:0.05
+      style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
         m8[&quot;MaxPool2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,64,112,112) → (1,64,56,56)&lt;/span&gt;&quot;];
         m9[&quot;Conv2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,64,56,56) → (1,96,56,56)&lt;/span&gt;&quot;];
         m10[&quot;_PreNorm&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,64,112,112) → (1,96,56,56)&lt;/span&gt;&quot;];
       end
       subgraph sg_m11[&quot;_MBConv&quot;]
-      style sg_m11 fill:#000000,fill-opacity:0.05
+      style sg_m11 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
         m12[&quot;_PreNorm&quot;];
       end
     end
     subgraph sg_m13[&quot;s3 x 2&quot;]
-    style sg_m13 fill:#000000,fill-opacity:0.05
+    style sg_m13 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
       m13_in([&quot;Input&quot;]);
       m13_out([&quot;Output&quot;]);
   style m13_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
   style m13_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
       subgraph sg_m14[&quot;_Transformer&quot;]
-      style sg_m14 fill:#000000,fill-opacity:0.05
+      style sg_m14 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
         m15([&quot;MaxPool2d x 2&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,192,28,28) → (1,192,14,14)&lt;/span&gt;&quot;]);
         m16[&quot;Conv2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,192,14,14) → (1,384,14,14)&lt;/span&gt;&quot;];
         m17([&quot;Sequential x 2&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,192,14,14) → (1,384,14,14)&lt;/span&gt;&quot;]);
       end
       subgraph sg_m18[&quot;_Transformer x 4&quot;]
-      style sg_m18 fill:#000000,fill-opacity:0.05
+      style sg_m18 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
         m18_in([&quot;Input&quot;]);
         m18_out([&quot;Output&quot;]);
   style m18_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;

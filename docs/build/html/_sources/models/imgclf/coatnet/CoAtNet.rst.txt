@@ -29,16 +29,16 @@ and pre-normalization to enhance training stability and performance.
 
 .. mermaid::
     :name: CoAtNet
-    
-    %%{init: {"themeCSS":".nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }"} }%%
+
+    %%{init: {"flowchart":{"curve":"step","nodeSpacing":50,"rankSpacing":50},"themeCSS":".nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }"} }%%
     flowchart LR
       linkStyle default stroke-width:2.0px
       subgraph sg_m0["<span style='font-size:20px;font-weight:700'>coatnet_0</span>"]
-      style sg_m0 fill:#000000,fill-opacity:0.05
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
         subgraph sg_m1["s0"]
-        style sg_m1 fill:#000000,fill-opacity:0.05
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
           subgraph sg_m2["Sequential x 2"]
-          style sg_m2 fill:#000000,fill-opacity:0.05
+          style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
             m2_in(["Input"]);
             m2_out(["Output"]);
       style m2_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
@@ -49,36 +49,36 @@ and pre-normalization to enhance training stability and performance.
           end
         end
         subgraph sg_m6["s1 x 2"]
-        style sg_m6 fill:#000000,fill-opacity:0.05
+        style sg_m6 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
           m6_in(["Input"]);
           m6_out(["Output"]);
       style m6_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
       style m6_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
           subgraph sg_m7["_MBConv"]
-          style sg_m7 fill:#000000,fill-opacity:0.05
+          style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
             m8["MaxPool2d<br/><span style='font-size:11px;font-weight:400'>(1,64,112,112) → (1,64,56,56)</span>"];
             m9["Conv2d<br/><span style='font-size:11px;font-weight:400'>(1,64,56,56) → (1,96,56,56)</span>"];
             m10["_PreNorm<br/><span style='font-size:11px;font-weight:400'>(1,64,112,112) → (1,96,56,56)</span>"];
           end
           subgraph sg_m11["_MBConv"]
-          style sg_m11 fill:#000000,fill-opacity:0.05
+          style sg_m11 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
             m12["_PreNorm"];
           end
         end
         subgraph sg_m13["s3 x 2"]
-        style sg_m13 fill:#000000,fill-opacity:0.05
+        style sg_m13 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
           m13_in(["Input"]);
           m13_out(["Output"]);
       style m13_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
       style m13_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
           subgraph sg_m14["_Transformer"]
-          style sg_m14 fill:#000000,fill-opacity:0.05
+          style sg_m14 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
             m15(["MaxPool2d x 2<br/><span style='font-size:11px;font-weight:400'>(1,192,28,28) → (1,192,14,14)</span>"]);
             m16["Conv2d<br/><span style='font-size:11px;font-weight:400'>(1,192,14,14) → (1,384,14,14)</span>"];
             m17(["Sequential x 2<br/><span style='font-size:11px;font-weight:400'>(1,192,14,14) → (1,384,14,14)</span>"]);
           end
           subgraph sg_m18["_Transformer x 4"]
-          style sg_m18 fill:#000000,fill-opacity:0.05
+          style sg_m18 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
             m18_in(["Input"]);
             m18_out(["Output"]);
       style m18_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;

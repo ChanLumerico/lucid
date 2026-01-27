@@ -989,13 +989,13 @@ a convolutional neural network designed for image classification tasks.
 It consists of multiple convolutional and fully connected layers with ReLU
 activations and dropout for regularization.</p>
 <pre id="id1" class="mermaid">
-        %%{init: {&quot;themeCSS&quot;:&quot;.nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }&quot;} }%%
+        %%{init: {&quot;flowchart&quot;:{&quot;curve&quot;:&quot;step&quot;,&quot;nodeSpacing&quot;:50,&quot;rankSpacing&quot;:50},&quot;themeCSS&quot;:&quot;.nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }&quot;} }%%
 flowchart LR
   linkStyle default stroke-width:2.0px
   subgraph sg_m0[&quot;&lt;span style='font-size:20px;font-weight:700'&gt;alexnet&lt;/span&gt;&quot;]
-  style sg_m0 fill:#000000,fill-opacity:0.05
+  style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
     subgraph sg_m1[&quot;conv&quot;]
-    style sg_m1 fill:#000000,fill-opacity:0.05
+    style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
       m2[&quot;Conv2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,3,224,224) → (1,64,55,55)&lt;/span&gt;&quot;];
       m3[&quot;ReLU&quot;];
       m4[&quot;MaxPool2d&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,64,55,55) → (1,64,27,27)&lt;/span&gt;&quot;];
@@ -1012,7 +1012,7 @@ flowchart LR
     end
     m15[&quot;AdaptiveAvgPool2d&quot;];
     subgraph sg_m16[&quot;fc&quot;]
-    style sg_m16 fill:#000000,fill-opacity:0.05
+    style sg_m16 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
       m17[&quot;Dropout&quot;];
       m18[&quot;Linear&lt;br/&gt;&lt;span style='font-size:11px;font-weight:400'&gt;(1,9216) → (1,4096)&lt;/span&gt;&quot;];
       m19[&quot;ReLU&quot;];

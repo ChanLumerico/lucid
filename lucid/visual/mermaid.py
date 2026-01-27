@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import json
 from typing import Iterable, Literal
 
 import lucid
@@ -281,9 +282,12 @@ def build_mermaid_chart(
     dash_multi_input_edges: bool = True,
     subgraph_fill: str = "#000000",
     subgraph_fill_opacity: float = 0.05,
-    subgraph_stroke: str = "",
-    subgraph_stroke_opacity: float = 1.0,
+    subgraph_stroke: str = "#000000",
+    subgraph_stroke_opacity: float = 0.75,
     force_text_color: str | None = None,
+    edge_curve: Literal["basis", "linear", "step"] = "step",
+    node_spacing: int = 50,
+    rank_spacing: int = 50,
     **forward_kwargs,
 ) -> str | list[str]:
     if inputs is None and input_shape is None:
@@ -472,16 +476,22 @@ def build_mermaid_chart(
         return module_to_id[cur.module]
 
     lines: list[str] = []
+    init_cfg: dict[str, object] = {
+        "flowchart": {
+            "curve": edge_curve,
+            "nodeSpacing": node_spacing,
+            "rankSpacing": rank_spacing,
+        }
+    }
     if force_text_color:
-        css = (
+        init_cfg["themeCSS"] = (
             f".nodeLabel, .edgeLabel, .cluster text, .node text "
             f"{{ fill: {force_text_color} !important; }} "
             f".node foreignObject *, .cluster foreignObject * "
             f"{{ color: {force_text_color} !important; }}"
         )
-        css = css.replace("\\", "\\\\").replace('"', '\\"')
-        # Must appear before `flowchart ...`
-        lines.append(f'%%{{init: {{"themeCSS":"{css}"}} }}%%')
+
+    lines.append(f"%%{{init: {json.dumps(init_cfg, separators=(',', ':'))} }}%%")
     lines.append(f"flowchart {direction}")
 
     if edge_stroke_width and edge_stroke_width != 1.0:
