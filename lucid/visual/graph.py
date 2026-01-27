@@ -1,4 +1,6 @@
 from typing import Union
+from warnings import deprecated
+
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -9,6 +11,7 @@ from lucid._tensor import Tensor
 __all__ = ["draw_tensor_graph"]
 
 
+@deprecated("This feature will be re-written with Mermaid in future relases.")
 def draw_tensor_graph(
     tensor: Tensor,
     horizontal: bool = False,
