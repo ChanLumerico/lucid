@@ -40,6 +40,10 @@ html_theme = "shibuya"
 html_static_path = ["_static"]
 html_css_files = ["badges.css", "mermaid.css"]
 
+html_theme_options = {
+    "accent_color": "indigo",
+}
+
 # -- RST Epilogs -------------------------------------------------------------
 
 MISC_EP = """
