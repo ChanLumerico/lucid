@@ -16,6 +16,10 @@ Currently Available
   Renders the computation graph of a Lucid tensor, helping users understand the 
   flow of operations and how gradients propagate.
 
+- **build_mermaid_chart**:
+  Generates Mermaid flowcharts from ``nn.Module`` objects for lightweight model
+  diagrams in docs or notebooks.
+
 Future extensions to this module may include tools for:
 
 - Visualizing weights and activations across layers  

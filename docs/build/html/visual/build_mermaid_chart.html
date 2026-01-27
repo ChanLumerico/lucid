@@ -3,11 +3,11 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="visual.draw_tensor_graph" href="draw_tensor_graph.html"><link rel="prev" title="transforms.RandomGrayscale" href="../transforms/image/RandomGrayscale.html">
-        <link rel="canonical" href="https://chanlumerico.github.io/lucid/visual/visual.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="lucid.save" href="../porting/save.html"><link rel="prev" title="visual.draw_tensor_graph" href="draw_tensor_graph.html">
+        <link rel="canonical" href="https://chanlumerico.github.io/lucid/visual/build_mermaid_chart.html">
 
     <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
-        <title>lucid.visual - Lucid 2.11.2 documentation</title>
+        <title>visual.build_mermaid_chart - Lucid 2.11.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d8a2add5" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -1003,9 +1003,9 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Visualization</span></p>
 <ul class="current">
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">lucid.visual</a></li>
+<li class="toctree-l1"><a class="reference internal" href="visual.html">lucid.visual</a></li>
 <li class="toctree-l1"><a class="reference internal" href="draw_tensor_graph.html">visual.draw_tensor_graph</a></li>
-<li class="toctree-l1"><a class="reference internal" href="build_mermaid_chart.html">visual.build_mermaid_chart</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">visual.build_mermaid_chart</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Porting</span></p>
 <ul>
@@ -1040,12 +1040,12 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/visual/visual.rst?plain=true" title="View this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/blob/main/docs/visual/build_mermaid_chart.rst?plain=true" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
 </div><div class="edit-this-page">
-  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/visual/visual.rst" rel="edit" title="Edit this page">
+  <a class="muted-link" href="https://github.com/ChanLumerico/lucid/edit/main/docs/visual/build_mermaid_chart.rst" rel="edit" title="Edit this page">
     <svg><use href="#svg-pencil"></use></svg>
     <span class="visually-hidden">Edit this page</span>
   </a>
@@ -1062,36 +1062,69 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="lucid-visual">
-<h1>lucid.visual<a class="headerlink" href="#lucid-visual" title="Link to this heading">¶</a></h1>
-<p>The <cite>lucid.visual</cite> package provides visualization utilities for inspecting tensors,
-operations, and neural networks built with Lucid. These tools are designed to support
-intuitive understanding of model structures and training behaviors, especially
-in educational or debugging contexts.</p>
-<p>The goal of this module is to make abstract concepts like computation graphs
-and data flows more accessible through visual representations.</p>
-<section id="currently-available">
-<h2>Currently Available<a class="headerlink" href="#currently-available" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><strong>draw_tensor_graph</strong>:
-Renders the computation graph of a Lucid tensor, helping users understand the
-flow of operations and how gradients propagate.</p></li>
-<li><p><strong>build_mermaid_chart</strong>:
-Generates Mermaid flowcharts from <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> objects for lightweight model
-diagrams in docs or notebooks.</p></li>
-</ul>
-<p>Future extensions to this module may include tools for:</p>
-<ul class="simple">
-<li><p>Visualizing weights and activations across layers</p></li>
-<li><p>Showing parameter distributions and gradient norms</p></li>
-<li><p>Generating architecture diagrams for Lucid models</p></li>
-</ul>
-<div class="admonition tip">
-<p class="admonition-title">Tip</p>
-<p>Visual tools are best used in combination with interactive environments such as
-Jupyter Notebooks for quick feedback and inspection.
-(<em>will be supported in future releases</em>)</p>
+          <section id="visual-build-mermaid-chart">
+<h1>visual.build_mermaid_chart<a class="headerlink" href="#visual-build-mermaid-chart" title="Link to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="lucid.visual.build_mermaid_chart">
+<span class="sig-prename descclassname"><span class="pre">lucid.visual.</span></span><span class="sig-name descname"><span class="pre">build_mermaid_chart</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inputs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">direction</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'LR'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_io</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_lines</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy_to_clipboard</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compact</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_class_defs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_semicolons</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'dataflow'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'execution'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'execution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">collapse_repeats</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeat_min</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">color_by_subpackage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">container_name_from_attr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_stroke_width</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emphasize_model_title</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_title_font_px</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_shapes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hide_subpackages</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hide_module_names</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dash_multi_input_edges</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subgraph_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'#000000'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subgraph_fill_opacity</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subgraph_stroke</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subgraph_stroke_opacity</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_text_color</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'#000000'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">forward_kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.visual.build_mermaid_chart" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>Generates a Mermaid <strong>flowchart</strong> diagram from a <cite>lucid.nn.Module</cite> by running a
+forward pass (using the provided inputs or a randomly generated tensor matching
+<cite>input_shape</cite>) and recording the execution or dataflow between modules.</p>
+<p>This is intended for quick architecture inspection and for embedding lightweight
+model diagrams in documentation.</p>
+<section id="basic-example">
+<h2>Basic Example<a class="headerlink" href="#basic-example" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">lucid.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lucid.visual</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_mermaid_chart</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Tiny</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(),</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">Tiny</span><span class="p">()</span>
+<span class="n">chart</span> <span class="o">=</span> <span class="n">build_mermaid_chart</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span>
+    <span class="n">depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">edge_mode</span><span class="o">=</span><span class="s2">&quot;execution&quot;</span><span class="p">,</span>
+    <span class="n">show_shapes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">collapse_repeats</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">chart</span><span class="p">)</span>
+</pre></div>
 </div>
+</section>
+<section id="key-parameters">
+<h2>Key Parameters<a class="headerlink" href="#key-parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>inputs / input_shape</strong>:
+Provide explicit inputs (<cite>Tensor</cite> or iterable of <cite>Tensor</cite>) or let the function
+generate random inputs from <cite>input_shape</cite>.</p></li>
+<li><p><strong>depth</strong>:
+Limits how deep the module tree is expanded for grouping (subgraphs).</p></li>
+<li><p><strong>edge_mode</strong>:
+<cite>“execution”</cite> records sequential execution order; <cite>“dataflow”</cite> attempts to connect
+producers and consumers via intermediate tensors.</p></li>
+<li><p><strong>show_shapes</strong>:
+Adds input/output shape hints to node labels (when a shape change is detected).</p></li>
+<li><p><strong>collapse_repeats / repeat_min</strong>:
+Collapses repeated sibling structures into a single node like <cite>Layer x N</cite>.</p></li>
+<li><p><strong>hide_subpackages / hide_module_names</strong>:
+Allows filtering out modules by Lucid builtin subpackage (e.g. <cite>activation</cite>, <cite>drop</cite>)
+or by class name (e.g. <cite>ReLU</cite>).</p></li>
+</ul>
 </section>
 </section>
 
@@ -1100,23 +1133,23 @@ Jupyter Notebooks for quick feedback and inspection.
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="draw_tensor_graph.html">
+          <a class="next-page" href="../porting/save.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">visual.draw_tensor_graph</div>
+                <div class="title">lucid.save</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../transforms/image/RandomGrayscale.html">
+          <a class="prev-page" href="draw_tensor_graph.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">transforms.RandomGrayscale</div>
+                <div class="title">visual.draw_tensor_graph</div>
                 
               </div>
             </a>
@@ -1150,8 +1183,10 @@ Jupyter Notebooks for quick feedback and inspection.
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">lucid.visual</a><ul>
-<li><a class="reference internal" href="#currently-available">Currently Available</a></li>
+<li><a class="reference internal" href="#">visual.build_mermaid_chart</a><ul>
+<li><a class="reference internal" href="#lucid.visual.build_mermaid_chart"><code class="docutils literal notranslate"><span class="pre">build_mermaid_chart()</span></code></a></li>
+<li><a class="reference internal" href="#basic-example">Basic Example</a></li>
+<li><a class="reference internal" href="#key-parameters">Key Parameters</a></li>
 </ul>
 </li>
 </ul>

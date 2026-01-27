@@ -283,6 +283,7 @@ def build_mermaid_chart(
     subgraph_fill_opacity: float = 0.05,
     subgraph_stroke: str = "",
     subgraph_stroke_opacity: float = 1.0,
+    force_text_color: str | None = "#000000",
     **forward_kwargs,
 ) -> str | list[str]:
     if inputs is None and input_shape is None:
@@ -471,6 +472,16 @@ def build_mermaid_chart(
         return module_to_id[cur.module]
 
     lines: list[str] = []
+    if force_text_color:
+        css = (
+            f".nodeLabel, .edgeLabel, .cluster text, .node text "
+            f"{{ fill: {force_text_color} !important; }} "
+            f".node foreignObject *, .cluster foreignObject * "
+            f"{{ color: {force_text_color} !important; }}"
+        )
+        css = css.replace("\\", "\\\\").replace('"', '\\"')
+        # Must appear before `flowchart ...`
+        lines.append(f'%%{{init: {{"themeCSS":"{css}"}} }}%%')
     lines.append(f"flowchart {direction}")
 
     if edge_stroke_width and edge_stroke_width != 1.0:
@@ -506,8 +517,10 @@ def build_mermaid_chart(
             if in_shapes != out_shapes and (in_shapes or out_shapes):
                 ins = _shapes_brief(in_shapes)
                 outs = _shapes_brief(out_shapes)
-                color = _shape_text_color(n.module)
-                color_css = f"color:{color};" if color else ""
+                color_css = ""
+                if not force_text_color:
+                    color = _shape_text_color(n.module)
+                    color_css = f"color:{color};" if color else ""
                 label_text = (
                     f"{label_text}<br/>"
                     f"<span style='font-size:11px;{color_css}font-weight:400'>"
@@ -608,13 +621,14 @@ def build_mermaid_chart(
         if show_shapes:
             in_s = _shapes_brief(model_input_shapes)
             out_s = _shapes_brief(model_output_shapes)
+            io_color = force_text_color or "#a67c00"
             input_label = (
                 f"{input_label}<br/>"
-                f"<span style='font-size:11px;color:#a67c00;font-weight:400'>{in_s}</span>"
+                f"<span style='font-size:11px;color:{io_color};font-weight:400'>{in_s}</span>"
             )
             output_label = (
                 f"{output_label}<br/>"
-                f"<span style='font-size:11px;color:#a67c00;font-weight:400'>{out_s}</span>"
+                f"<span style='font-size:11px;color:{io_color};font-weight:400'>{out_s}</span>"
             )
         if use_class_defs:
             lines.append(f'  {input_node_id}["{input_label}"]:::modelio')
