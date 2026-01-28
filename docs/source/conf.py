@@ -39,6 +39,7 @@ exclude_patterns = []
 html_theme = "shibuya"
 html_static_path = ["_static"]
 html_css_files = ["badges.css", "mermaid.css"]
+html_js_files = ["mermaid-zoom.js"]
 
 html_theme_options = {
     "accent_color": "indigo",
