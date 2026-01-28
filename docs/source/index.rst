@@ -177,7 +177,7 @@ Lucid² 💎
 .. image:: https://img.shields.io/pypi/dm/lucid-dl
    :alt: PyPI - Downloads
 
-.. image:: https://img.shields.io/badge/total%20downloads-30.0k-yellow
+.. image:: https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads
    :alt: PyPI - Total Downloads
 
 .. image:: https://img.shields.io/github/languages/code-size/ChanLumerico/lucid
@@ -186,7 +186,7 @@ Lucid² 💎
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg
    :alt: Code Style
 
-.. image:: https://img.shields.io/badge/lines%20of%20code-26.1k-purple.svg
+.. image:: https://img.shields.io/badge/dynamic/json?label=Lines%20of%20Code&color=purple&url=https%3A%2F%2Fraw.githubusercontent.com%2FChanLumerico%2Flucid%2Fmain%2Floc%2Floc_badge.json&query=%24.linesOfCode&cacheSeconds=3600
    :alt: Lines of Code
 
 **Lucid** is a minimalist deep learning framework built entirely from scratch in Python.

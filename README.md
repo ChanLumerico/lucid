@@ -20,26 +20,19 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Added various inplace tensor operations (e.g. `a.add_(b)`, `a.mul_(b)`)
+- Added additional `nn.Module` hooks for richer introspection during training:
 
-- Added **Noise Conditional Score Network(NCSN)** to `lucid.models.NCSN`
+  ```python
+  def register_forward_pre_hook(self, hook: Callable, *, with_kwargs: bool = False)
 
-- Branched a Stand-Alone Autograd Engine as `lucid.autograd`
+  def register_forward_hook(self, hook: Callable, *, with_kwargs: bool = False)
 
-  - Provides a generalized API of computing gradients:
-    
-    ```python
-    import lucid.autograd as autograd
-    x = lucid.Tensor([1., 2.], requires_grad=True)
-    y = (x ** 2).sum()
-    autograd.grad(y, x)  # ∂y/∂x
-    ```
+  def register_backward_hook(self, hook: Callable)
 
-- Introduced **Backward Fusion** for CPU execution:
-  - Automatically fuses selected operation patterns during backpropagation to reduce graph overhead
-  - Supports identity/unary fusion (e.g. `log∘exp`, double negation, and view-like ops such as reshape/squeeze)
-  - Uses heuristic thresholds to avoid fusion overhead on small tensors
-  - Disabled by default on GPU paths to ensure stable performance
+  def register_full_backward_pre_hook(self, hook: Callable)
+
+  def register_full_backward_hook(self, hook: Callable)
+  ```
 
 ## 🔧 How to Install
 

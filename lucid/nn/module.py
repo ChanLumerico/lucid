@@ -29,8 +29,25 @@ __all__ = [
     "set_state_dict_pass_attr",
 ]
 
-_ForwardHookType = Callable[["Module", tuple[Tensor], tuple[Tensor]], None]
-_BackwardHookType = Callable[[Tensor, _NumPyArray], None]
+
+_ForwardPreHook = Callable[["Module", tuple[Any, ...]], tuple[Any, ...] | None]
+_ForwardPreHookKwargs = Callable[
+    ["Module", tuple[Any, ...], dict[str, Any]],
+    tuple[tuple[Any, ...], dict[str, Any]] | None,
+]
+_ForwardHook = Callable[["Module", tuple[Any, ...], Any], Any | None]
+_ForwardHookKwargs = Callable[
+    ["Module", tuple[Any, ...], dict[str, Any], Any], Any | None
+]
+
+_BackwardHook = Callable[[Tensor, _NumPyArray], None]
+_FullBackwardPreHook = Callable[
+    ["Module", tuple[_NumPyArray | None, ...]], tuple[_NumPyArray | None, ...] | None
+]
+_FullBackwardHook = Callable[
+    ["Module", tuple[_NumPyArray | None, ...], tuple[_NumPyArray | None, ...]],
+    tuple[_NumPyArray | None, ...] | None,
+]
 
 
 class Module:
@@ -49,8 +66,13 @@ class Module:
         self.training = True
         self.device: _DeviceType = "cpu"
 
-        self._forward_hooks: list[_ForwardHookType] = []
-        self._backward_hooks: list[_BackwardHookType] = []
+        self._forward_pre_hooks: list[
+            tuple[_ForwardPreHook | _ForwardPreHookKwargs, bool]
+        ] = []
+        self._forward_hooks: list[tuple[_ForwardHook | _ForwardHookKwargs, bool]] = []
+        self._backward_hooks: list[_BackwardHook] = []
+        self._full_backward_pre_hooks: list[_FullBackwardPreHook] = []
+        self._full_backward_hooks: list[_FullBackwardHook] = []
 
         self._state_dict_pass_attr = set()
 
@@ -106,13 +128,32 @@ class Module:
 
         self.__setattr__(name, buffer)
 
-    def register_forward_hook(self, hook: _ForwardHookType) -> Callable:
-        self._forward_hooks.append(hook)
-        return lambda: self._forward_hooks.remove(hook)
+    def register_forward_pre_hook(
+        self,
+        hook: _ForwardPreHook | _ForwardPreHookKwargs,
+        *,
+        with_kwargs: bool = False,
+    ) -> Callable:
+        self._forward_pre_hooks.append((hook, with_kwargs))
+        return lambda: self._forward_pre_hooks.remove((hook, with_kwargs))
 
-    def register_backward_hook(self, hook: _BackwardHookType) -> Callable:
+    def register_forward_hook(
+        self, hook: _ForwardHook | _ForwardHookKwargs, *, with_kwargs: bool = False
+    ) -> Callable:
+        self._forward_hooks.append((hook, with_kwargs))
+        return lambda: self._forward_hooks.remove((hook, with_kwargs))
+
+    def register_backward_hook(self, hook: _BackwardHook) -> Callable:
         self._backward_hooks.append(hook)
         return lambda: self._backward_hooks.remove(hook)
+
+    def register_full_backward_pre_hook(self, hook: _FullBackwardPreHook) -> Callable:
+        self._full_backward_pre_hooks.append(hook)
+        return lambda: self._full_backward_pre_hooks.remove(hook)
+
+    def register_full_backward_hook(self, hook: _FullBackwardHook) -> Callable:
+        self._full_backward_hooks.append(hook)
+        return lambda: self._full_backward_hooks.remove(hook)
 
     def reset_parameters(self) -> None:
         for param in self.parameters():
@@ -237,13 +278,67 @@ class Module:
                 raise KeyError(f"Unexpected key '{key}' in state_dict.")
 
     def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
+        for hook, with_kwargs in self._forward_pre_hooks:
+            if with_kwargs:
+                result = hook(self, args, kwargs)
+                if result is not None:
+                    args, kwargs = result
+            else:
+                result = hook(self, args)
+                if result is not None:
+                    args = result
+
         output = self.forward(*args, **kwargs)
-        for hook in self._forward_hooks:
-            hook(self, args, output)
+
+        for hook, with_kwargs in self._forward_hooks:
+            if with_kwargs:
+                result = hook(self, args, kwargs, output)
+            else:
+                result = hook(self, args, output)
+            if result is not None:
+                output = result
 
         if isinstance(output, Tensor) and self._backward_hooks:
             for hook in self._backward_hooks:
                 output.register_hook(hook)
+
+        if self._full_backward_pre_hooks or self._full_backward_hooks:
+            outputs = output if isinstance(output, tuple) else (output,)
+            output_tensors = [out for out in outputs if isinstance(out, Tensor)]
+
+            if output_tensors:
+                grad_outputs: list[_NumPyArray | None] = [None] * len(output_tensors)
+                called = False
+
+                def _call_full_backward_hooks() -> None:
+                    nonlocal called, grad_outputs
+                    if called:
+                        return
+                    called = True
+
+                    grad_output_tuple = tuple(grad_outputs)
+                    for hook in self._full_backward_pre_hooks:
+                        result = hook(self, grad_output_tuple)
+                        if result is not None:
+                            grad_output_tuple = result
+
+                    grad_input_tuple = tuple(
+                        arg.grad if isinstance(arg, Tensor) else None for arg in args
+                    )
+                    for hook in self._full_backward_hooks:
+                        hook(self, grad_input_tuple, grad_output_tuple)
+
+                for idx, out in enumerate(output_tensors):
+
+                    def _make_hook(index: int) -> Callable:
+                        def _hook(_, grad: _NumPyArray) -> None:
+                            grad_outputs[index] = grad
+                            if all(g is not None for g in grad_outputs):
+                                _call_full_backward_hooks()
+
+                        return _hook
+
+                    out.register_hook(_make_hook(idx))
 
         return output
 
