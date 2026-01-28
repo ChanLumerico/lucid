@@ -515,6 +515,10 @@ def build_mermaid_chart(
         )
         lines.append("  classDef repeat fill:#e8f1ff,stroke:#2b6cb0,stroke-width:1px;")
 
+    vertical_levels: set[int] = set()
+    if depth >= 3:
+        vertical_levels = {depth - 2, depth - 1}
+
     def _render(n: _ModuleNode, indent: str = "  ") -> None:
         node_id = module_to_id[n.module]
         base_label = _module_label(n.module, show_params)
@@ -560,6 +564,8 @@ def build_mermaid_chart(
 
         if n.children:
             lines.append(f'{indent}subgraph sg_{node_id}["{label}"]')
+            if n.depth in vertical_levels:
+                lines.append(f"{indent}  direction TB")
             if subgraph_fill or subgraph_stroke:
                 parts: list[str] = []
 

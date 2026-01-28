@@ -80,7 +80,7 @@ class _Attention(nn.Module):
         y, x = lucid.meshgrid(
             lucid.arange(resolution[0]), lucid.arange(resolution[1]), indexing="ij"
         )
-        pos = lucid.stack([y, x]).flatten(axis=1)
+        pos = lucid.stack([y, x]).flatten(start_axis=1)
         rel_pos = lucid.abs(pos[..., :, None] - pos[..., None, :])
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
 
@@ -159,7 +159,7 @@ class _Downsample(nn.Module):
 
 class _Flatten(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
-        x = x.flatten(axis=2).swapaxes(1, 2)
+        x = x.flatten(start_axis=2).swapaxes(1, 2)
         return x
 
 

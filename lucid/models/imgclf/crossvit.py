@@ -79,7 +79,7 @@ class _PatchEmbed(nn.Module):
                 f"Input image size {(H, W)} does not match with {self.img_size}."
             )
 
-        x = self.proj(x).flatten(axis=2).swapaxes(1, 2)
+        x = self.proj(x).flatten(start_axis=2).swapaxes(1, 2)
         return x
 
 

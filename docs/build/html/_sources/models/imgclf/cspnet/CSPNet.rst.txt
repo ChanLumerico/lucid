@@ -28,10 +28,89 @@ This implementation allows flexible injection of various backbone block types
 (e.g., `ResNetBottleneck`, `DarknetBottleneck`, etc.) into the CSP structure, 
 making it suitable for building CSPResNet, CSPDarknet, CSPResNeXt, and more.
 
-.. image:: cspnet.png
-    :width: 600
-    :alt: CSPNet architecture
-    :align: center
+.. mermaid::
+    :name: CSPNet
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+      linkStyle default stroke-width:2.0px
+      subgraph sg_m0["<span style='font-size:20px;font-weight:700'>csp_resnet_50</span>"]
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m1["stem"]
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m2["_ConvBNAct x 2"]
+          style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m2_in(["Input"]);
+            m2_out(["Output"]);
+      style m2_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m2_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+            m3["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,3,224,224) → (1,64,112,112)</span>"];
+            m4["BatchNorm2d"];
+            m5["ReLU"];
+          end
+        end
+        subgraph sg_m6["stages"]
+        style sg_m6 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m7["_CSPStage x 4"]
+          style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m7_in(["Input"]);
+            m7_out(["Output"]);
+      style m7_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m7_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+            m8(["_ConvBNAct x 3<br/><span style='font-size:11px;font-weight:400'>(1,64,112,112) → (1,256,112,112)</span>"]);
+            m9["Sequential"];
+            m10["_ConvBNAct"];
+          end
+        end
+        subgraph sg_m11["_ConvBNAct"]
+        style sg_m11 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m12["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,2048,14,14) → (1,1024,14,14)</span>"];
+          m13["BatchNorm2d"];
+          m14["ReLU"];
+        end
+        m15["AdaptiveAvgPool2d<br/><span style='font-size:11px;color:#b7791f;font-weight:400'>(1,1024,14,14) → (1,1024,1,1)</span>"];
+        subgraph sg_m16["head"]
+        style sg_m16 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m17["Flatten<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,1024,1,1) → (1,1024)</span>"];
+          m18["Identity"];
+          m19["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,1024) → (1,1000)</span>"];
+        end
+      end
+      input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,224,224)</span>"];
+      output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,1000)</span>"];
+      style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style m3 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m4 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m5 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m12 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m13 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m14 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m15 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+      style m17 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      style m18 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      style m19 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      input -.-> m3;
+      m10 -.-> m7_in;
+      m10 --> m7_out;
+      m12 --> m13;
+      m13 --> m14;
+      m14 --> m15;
+      m15 --> m17;
+      m17 --> m18;
+      m18 --> m19;
+      m19 --> output;
+      m2_in -.-> m3;
+      m2_out -.-> m8;
+      m3 --> m4;
+      m4 --> m5;
+      m5 --> m2_in;
+      m5 --> m2_out;
+      m7_in -.-> m8;
+      m7_out --> m12;
+      m7_out -.-> m7_in;
+      m8 --> m9;
+      m9 --> m10;
 
 Class Signature
 ---------------

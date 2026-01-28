@@ -22,10 +22,66 @@ The `EfficientNet` class implements a scalable and efficient convolutional
 neural network architecture that can be configured to encompass all EfficientNet-B0 
 to B7 variants.
 
-.. image:: efficientnet.png
-    :width: 600
-    :alt: EfficientNet architecture
-    :align: center
+.. mermaid::
+    :name: EfficientNet
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+      linkStyle default stroke-width:2.0px
+      subgraph sg_m0["<span style='font-size:20px;font-weight:700'>efficientnet_b0</span>"]
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m1["Upsample"];
+        subgraph sg_m2["stage1"]
+        style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m3["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,3,224,224) → (1,32,112,112)</span>"];
+          m4["BatchNorm2d"];
+        end
+        subgraph sg_m5["stage2 x 7"]
+        style sg_m5 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m5_in(["Input"]);
+          m5_out(["Output"]);
+      style m5_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m5_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+          m6["_MBConv<br/><span style='font-size:11px;font-weight:400'>(1,32,112,112) → (1,16,112,112)</span>"];
+        end
+        subgraph sg_m7["stage9"]
+        style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m8["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,320,7,7) → (1,1280,7,7)</span>"];
+          m9["BatchNorm2d"];
+          m10["Swish"];
+        end
+        m11["AdaptiveAvgPool2d<br/><span style='font-size:11px;color:#b7791f;font-weight:400'>(1,1280,7,7) → (1,1280,1,1)</span>"];
+        m12["Dropout"];
+        m13["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,1280) → (1,1000)</span>"];
+      end
+      input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,224,224)</span>"];
+      output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,1000)</span>"];
+      style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style m1 fill:#fdf2f8,stroke:#b83280,stroke-width:1px;
+      style m3 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m4 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m8 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m9 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m10 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m11 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+      style m12 fill:#edf2f7,stroke:#4a5568,stroke-width:1px;
+      style m13 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      input --> m1;
+      m1 --> m3;
+      m10 --> m11;
+      m11 --> m12;
+      m12 --> m13;
+      m13 --> output;
+      m3 --> m4;
+      m4 -.-> m6;
+      m5_in -.-> m6;
+      m5_out -.-> m5_in;
+      m5_out --> m8;
+      m6 -.-> m5_in;
+      m6 --> m5_out;
+      m8 --> m9;
+      m9 --> m10;
 
 Class Signature
 ---------------
