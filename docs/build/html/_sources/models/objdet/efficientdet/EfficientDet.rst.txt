@@ -23,10 +23,215 @@ based on the architecture proposed by Tan et al. (2020).
 It combines EfficientNet backbones with **BiFPN (Bidirectional Feature Pyramid Networks)** 
 for scalable and efficient multi-scale detection.
 
-.. image:: efficientdet.png
-    :width: 600
-    :alt: EfficientDet architecture
-    :align: center
+.. mermaid::
+    :name: EfficientDet
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+    linkStyle default stroke-width:2.0px
+    subgraph sg_m0["<span style='font-size:20px;font-weight:700'>efficientdet_d0</span>"]
+    style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m1(["Conv2d x 4<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,40,28,28) → (1,64,28,28)</span>"]);
+        subgraph sg_m2["conv7"]
+        style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m3["ReLU"];
+        m4["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,64,4,4) → (1,64,2,2)</span>"];
+        end
+        subgraph sg_m5["bifpn"]
+        style sg_m5 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m6["_BiFPN x 2"]
+            direction TB;
+        style sg_m6 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m6_in(["Input"]);
+            m6_out(["Output"]);
+    style m6_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+    style m6_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+            subgraph sg_m7["convs"]
+            direction TB;
+            style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m8(["_ConvBlock x 8"]);
+            end
+            subgraph sg_m9["ups"]
+            direction TB;
+            style sg_m9 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m10(["Upsample x 4<br/><span style='font-size:11px;color:#b83280;font-weight:400'>(1,64,14,14) → (1,64,28,28)</span>"]);
+            end
+            subgraph sg_m11["downs"]
+            direction TB;
+            style sg_m11 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m12(["AvgPool2d x 4<br/><span style='font-size:11px;color:#b7791f;font-weight:400'>(1,64,28,28) → (1,64,14,14)</span>"]);
+            end
+            m13["ParameterDict"];
+            subgraph sg_m14["acts"]
+            direction TB;
+            style sg_m14 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m15(["Swish x 8"]);
+            end
+        end
+        end
+        subgraph sg_m16["_BBoxRegressor"]
+        style sg_m16 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m17["layers"]
+            direction TB;
+        style sg_m17 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m18["DepthSeparableConv2d"]
+            direction TB;
+            style sg_m18 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m19(["Conv2d x 2"]);
+            end
+            m20["BatchNorm2d"];
+            m21["Swish"];
+            subgraph sg_m22["DepthSeparableConv2d"]
+            direction TB;
+            style sg_m22 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m23(["Conv2d x 2"]);
+            end
+            m24["BatchNorm2d"];
+            m25["Swish"];
+            subgraph sg_m26["DepthSeparableConv2d"]
+            direction TB;
+            style sg_m26 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m27(["Conv2d x 2"]);
+            end
+            m28["BatchNorm2d"];
+            m29["Swish"];
+        end
+        m30["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,64,2,2) → (1,36,2,2)</span>"];
+        end
+        subgraph sg_m31["_Classifier"]
+        style sg_m31 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m32["layers"]
+            direction TB;
+        style sg_m32 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m33["DepthSeparableConv2d"]
+            direction TB;
+            style sg_m33 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m34(["Conv2d x 2"]);
+            end
+            m35["BatchNorm2d"];
+            m36["Swish"];
+            subgraph sg_m37["DepthSeparableConv2d"]
+            direction TB;
+            style sg_m37 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m38(["Conv2d x 2"]);
+            end
+            m39["BatchNorm2d"];
+            m40["Swish"];
+            subgraph sg_m41["DepthSeparableConv2d"]
+            direction TB;
+            style sg_m41 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m42(["Conv2d x 2"]);
+            end
+            m43["BatchNorm2d"];
+            m44["Swish"];
+        end
+        m45["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,64,2,2) → (1,720,2,2)</span>"];
+        m46["Sigmoid"];
+        end
+        m47["_Anchors<br/><span style='font-size:11px;font-weight:400'>(1,3,224,224) → (1,9441,4)</span>"];
+        m48["_BBoxTransform"];
+        m49["_ClipBoxes"];
+        m50["_FocalLoss"];
+        subgraph sg_m51["_EfficientNetBackbone"]
+        style sg_m51 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m52["model"]
+            direction TB;
+        style sg_m52 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m53["Sequential"]
+            direction TB;
+            style sg_m53 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m54["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,3,224,224) → (1,32,112,112)</span>"];
+            m55["BatchNorm2d"];
+            end
+            subgraph sg_m56["Sequential x 6"]
+            direction TB;
+            style sg_m56 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m56_in(["Input"]);
+            m56_out(["Output"]);
+    style m56_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+    style m56_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+            m57["_MBConv<br/><span style='font-size:11px;font-weight:400'>(1,32,112,112) → (1,16,112,112)</span>"];
+            end
+        end
+        end
+    end
+    input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,224,224)</span>"];
+    output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,9441,80)x3</span>"];
+    style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style m1 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m3 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m4 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m10 fill:#fdf2f8,stroke:#b83280,stroke-width:1px;
+    style m12 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+    style m15 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m19 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m20 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    style m21 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m23 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m24 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    style m25 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m27 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m28 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    style m29 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m30 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m34 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m35 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    style m36 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m38 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m39 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    style m40 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m42 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m43 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    style m44 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m45 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m46 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m54 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m55 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    input --> m54;
+    m1 --> m3;
+    m10 -.-> m8;
+    m12 -.-> m8;
+    m15 --> m10;
+    m15 --> m12;
+    m15 --> m6_out;
+    m19 --> m20;
+    m20 --> m21;
+    m21 --> m23;
+    m23 --> m24;
+    m24 --> m25;
+    m25 --> m27;
+    m27 --> m28;
+    m28 --> m29;
+    m29 --> m30;
+    m3 --> m4;
+    m30 -.-> m19;
+    m30 --> m47;
+    m34 --> m35;
+    m35 --> m36;
+    m36 --> m38;
+    m38 --> m39;
+    m39 --> m40;
+    m4 -.-> m15;
+    m40 --> m42;
+    m42 --> m43;
+    m43 --> m44;
+    m44 --> m45;
+    m45 --> m46;
+    m46 -.-> m19;
+    m46 -.-> m34;
+    m47 --> output;
+    m54 --> m55;
+    m55 -.-> m57;
+    m56_in -.-> m57;
+    m56_out --> m1;
+    m56_out -.-> m56_in;
+    m57 -.-> m56_in;
+    m57 --> m56_out;
+    m6_in -.-> m8;
+    m6_out -.-> m34;
+    m8 -.-> m15;
+    m8 --> m6_in;
 
 Class Signature
 ---------------

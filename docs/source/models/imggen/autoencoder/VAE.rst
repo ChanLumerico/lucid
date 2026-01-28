@@ -12,10 +12,54 @@ This model is modular, allowing users to define multiple layers of latent variab
 and optionally plug in learnable prior modules for deep hierarchies. It is designed 
 to support :math:`\beta`-scheduling and flexible loss configurations.
 
-.. image:: vae.png
-    :width: 600
-    :alt: VAE architecture
-    :align: center
+.. mermaid::
+    :name: VAE
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+      linkStyle default stroke-width:2.0px
+      subgraph sg_m0["<span style='font-size:20px;font-weight:700'>VAE</span>"]
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m1["encoders"]
+          direction TB;
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m2["Sequential"]
+            direction TB;
+          style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m3["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,784) → (1,512)</span>"];
+            m4["ReLU"];
+            m5["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,512) → (1,128)</span>"];
+          end
+        end
+        subgraph sg_m6["decoders"]
+          direction TB;
+        style sg_m6 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m7["Sequential"]
+            direction TB;
+          style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m8["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,64) → (1,512)</span>"];
+            m9["ReLU"];
+            m10["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,512) → (1,784)</span>"];
+          end
+        end
+      end
+      input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,784)</span>"];
+      output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,784)x4</span>"];
+      style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style m3 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      style m4 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m5 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      style m8 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      style m9 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m10 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      input --> m3;
+      m10 --> output;
+      m3 --> m4;
+      m4 --> m5;
+      m5 --> m8;
+      m8 --> m9;
+      m9 --> m10;
 
 Class Signature
 ---------------

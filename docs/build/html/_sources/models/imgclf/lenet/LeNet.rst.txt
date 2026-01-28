@@ -25,30 +25,31 @@ making it adaptable for different use cases.
 .. mermaid::
     :name: LeNet
 
-    %%{init: {"themeCSS":".nodeLabel, .edgeLabel, .cluster text, .node text { fill: #000000 !important; } .node foreignObject *, .cluster foreignObject * { color: #000000 !important; }"} }%%
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
     flowchart LR
       linkStyle default stroke-width:2.0px
       subgraph sg_m0["<span style='font-size:20px;font-weight:700'>lenet_5</span>"]
-      style sg_m0 fill:#000000,fill-opacity:0.05
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
         subgraph sg_m1["conv1 x 2"]
-        style sg_m1 fill:#000000,fill-opacity:0.05
+          direction TB;
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
           m1_in(["Input"]);
           m1_out(["Output"]);
       style m1_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
       style m1_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
-          m2["Conv2d<br/><span style='font-size:11px;font-weight:400'>(1,1,32,32) → (1,6,28,28)</span>"];
+          m2["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,1,32,32) → (1,6,28,28)</span>"];
           m3["Tanh"];
-          m4["AvgPool2d<br/><span style='font-size:11px;font-weight:400'>(1,6,28,28) → (1,6,14,14)</span>"];
+          m4["AvgPool2d<br/><span style='font-size:11px;color:#b7791f;font-weight:400'>(1,6,28,28) → (1,6,14,14)</span>"];
         end
-        m5["Linear<br/><span style='font-size:11px;font-weight:400'>(1,400) → (1,120)</span>"];
+        m5["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,400) → (1,120)</span>"];
         m6["Tanh"];
-        m7["Linear<br/><span style='font-size:11px;font-weight:400'>(1,120) → (1,84)</span>"];
+        m7["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,120) → (1,84)</span>"];
         m8["Tanh"];
-        m9["Linear<br/><span style='font-size:11px;font-weight:400'>(1,84) → (1,10)</span>"];
+        m9["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,84) → (1,10)</span>"];
         m10["Tanh"];
       end
-      input["Input<br/><span style='font-size:11px;color:#000000;font-weight:400'>(1,1,32,32)</span>"];
-      output["Output<br/><span style='font-size:11px;color:#000000;font-weight:400'>(1,10)</span>"];
+      input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,1,32,32)</span>"];
+      output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,10)</span>"];
       style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
       style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
       style m2 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;

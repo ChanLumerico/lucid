@@ -15,10 +15,32 @@ The `YOLO_V2` class implements the YOLO-v2 object detection model.
 It is an improvement over YOLO-v1, designed to detect objects in images using 
 anchor-based bounding boxes, batch normalization, and a stronger backbone (Darknet-19).
 
-.. image:: yolo_v2.png
-    :width: 600
-    :alt: YOLO-v2 architecture
-    :align: center
+.. mermaid::
+    :name: YOLO-V2
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+      linkStyle default stroke-width:2.0px
+      subgraph sg_m0["<span style='font-size:20px;font-weight:700'>yolo_v2</span>"]
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m1(["Sequential x 2"]);
+        m2["MaxPool2d<br/><span style='font-size:11px;color:#b7791f;font-weight:400'>(1,512,28,28) → (1,512,14,14)</span>"];
+        m3(["Sequential x 2<br/><span style='font-size:11px;font-weight:400'>(1,512,14,14) → (1,1024,14,14)</span>"]);
+        m4["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,1024,14,14) → (1,525,14,14)</span>"];
+      end
+      input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,448,448)</span>"];
+      output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,525,14,14)</span>"];
+      style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style m2 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+      style m4 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      input -.-> m1;
+      m1 --> m2;
+      m1 -.-> m3;
+      m2 -.-> m3;
+      m3 -.-> m1;
+      m3 --> m4;
+      m4 --> output;
 
 Class Signature
 ---------------

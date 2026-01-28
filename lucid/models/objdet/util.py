@@ -283,6 +283,11 @@ class SelectiveSearch(nn.Module):
 
 
 def iou(boxes_a: Tensor, boxes_b: Tensor) -> Tensor:
+    if boxes_a.ndim == 1:
+        boxes_a = boxes_a.unsqueeze(0)
+    if boxes_b.ndim == 1:
+        boxes_b = boxes_b.unsqueeze(0)
+
     x1a, y1a, x2a, y2a = boxes_a.unbind(axis=1)
     x1b, y1b, x2b, y2b = boxes_b.unbind(axis=1)
 

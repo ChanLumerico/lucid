@@ -51,7 +51,7 @@ class VAE(nn.Module):
         h = x
         for encoder in self.encoders:
             h = encoder(h)
-            mu, logvar = lucid.split(h, 2, axis=1)
+            mu, logvar = lucid.chunk(h, 2, axis=1)
             z = self.reparameterize(mu, logvar)
 
             mus.append(mu)

@@ -986,9 +986,120 @@ data-aria-dark="Switch to auto color mode">
 <p>The <cite>Transformer</cite> class in <cite>model</cite> provides a full implementation of the Transformer model,
 including positional encoding and the final vocabulary projection. This is distinct from <cite>nn.Transformer</cite>,
 which serves as a generic module template for building Transformer components.</p>
-<a class="reference internal image-reference" href="../../../_images/transformer.png"><img alt="Transformer architecture" class="align-center" src="../../../_images/transformer.png" style="width: 600px;" />
-</a>
-<section id="class-signature">
+<pre id="id1" class="mermaid">
+        %%{init: {&quot;flowchart&quot;:{&quot;curve&quot;:&quot;monotoneX&quot;,&quot;nodeSpacing&quot;:50,&quot;rankSpacing&quot;:50}} }%%
+flowchart LR
+  linkStyle default stroke-width:2.0px
+  subgraph sg_m0[&quot;&lt;span style='font-size:20px;font-weight:700'&gt;transformer_base&lt;/span&gt;&quot;]
+  style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+    m1([&quot;Embedding x 2&lt;br/&gt;&lt;span style='font-size:11px;color:#475569;font-weight:400'&gt;(1,100) → (1,100,512)&lt;/span&gt;&quot;]);
+    subgraph sg_m2[&quot;_PositionalEncoding&quot;]
+    style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+      m3[&quot;Dropout&quot;];
+    end
+    subgraph sg_m4[&quot;Transformer&quot;]
+    style sg_m4 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+      subgraph sg_m5[&quot;TransformerEncoder&quot;]
+      style sg_m5 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m6[&quot;layers&quot;]
+        style sg_m6 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m7[&quot;TransformerEncoderLayer x 6&quot;]
+            direction TB;
+          style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m7_in([&quot;Input&quot;]);
+            m7_out([&quot;Output&quot;]);
+  style m7_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+  style m7_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+            subgraph sg_m8[&quot;MultiHeadAttention&quot;]
+              direction TB;
+            style sg_m8 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m9([&quot;Linear x 4&quot;]);
+            end
+            m10([&quot;Linear x 2&lt;br/&gt;&lt;span style='font-size:11px;color:#2b6cb0;font-weight:400'&gt;(1,100,512) → (1,100,2048)&lt;/span&gt;&quot;]);
+            m11([&quot;Dropout x 3&quot;]);
+            m12([&quot;LayerNorm x 2&quot;]);
+          end
+        end
+        m13[&quot;LayerNorm&quot;];
+      end
+      subgraph sg_m14[&quot;TransformerDecoder&quot;]
+      style sg_m14 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m15[&quot;layers&quot;]
+        style sg_m15 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m16[&quot;TransformerDecoderLayer x 6&quot;]
+            direction TB;
+          style sg_m16 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m16_in([&quot;Input&quot;]);
+            m16_out([&quot;Output&quot;]);
+  style m16_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+  style m16_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+            subgraph sg_m17[&quot;MultiHeadAttention x 2&quot;]
+              direction TB;
+            style sg_m17 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m17_in([&quot;Input&quot;]);
+              m17_out([&quot;Output&quot;]);
+  style m17_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+  style m17_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+              m18([&quot;Linear x 4&quot;]);
+            end
+            m19([&quot;Linear x 2&lt;br/&gt;&lt;span style='font-size:11px;color:#2b6cb0;font-weight:400'&gt;(1,100,512) → (1,100,2048)&lt;/span&gt;&quot;]);
+            m20([&quot;Dropout x 4&quot;]);
+            m21([&quot;LayerNorm x 3&quot;]);
+          end
+        end
+        m22[&quot;LayerNorm&quot;];
+      end
+    end
+    m23[&quot;Linear&lt;br/&gt;&lt;span style='font-size:11px;color:#2b6cb0;font-weight:400'&gt;(1,100,512) → (1,100,12000)&lt;/span&gt;&quot;];
+  end
+  input[&quot;Input&lt;br/&gt;&lt;span style='font-size:11px;color:#a67c00;font-weight:400'&gt;(1,100)x2&lt;/span&gt;&quot;];
+  output[&quot;Output&lt;br/&gt;&lt;span style='font-size:11px;color:#a67c00;font-weight:400'&gt;(1,100,12000)&lt;/span&gt;&quot;];
+  style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+  style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+  style m1 fill:#f1f5f9,stroke:#475569,stroke-width:1px;
+  style m3 fill:#edf2f7,stroke:#4a5568,stroke-width:1px;
+  style m9 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+  style m10 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+  style m11 fill:#edf2f7,stroke:#4a5568,stroke-width:1px;
+  style m12 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+  style m13 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+  style m18 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+  style m19 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+  style m20 fill:#edf2f7,stroke:#4a5568,stroke-width:1px;
+  style m21 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+  style m22 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+  style m23 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+  input --&gt; m1;
+  m1 --&gt; m3;
+  m10 -.-&gt; m11;
+  m11 -.-&gt; m10;
+  m11 --&gt; m12;
+  m12 -.-&gt; m10;
+  m12 -.-&gt; m7_in;
+  m12 --&gt; m7_out;
+  m13 -.-&gt; m18;
+  m16_in -.-&gt; m18;
+  m16_out -.-&gt; m16_in;
+  m16_out --&gt; m22;
+  m17_in -.-&gt; m18;
+  m17_out -.-&gt; m20;
+  m18 --&gt; m17_out;
+  m18 -.-&gt; m20;
+  m19 -.-&gt; m20;
+  m20 -.-&gt; m19;
+  m20 --&gt; m21;
+  m21 -.-&gt; m16_in;
+  m21 --&gt; m16_out;
+  m21 --&gt; m17_in;
+  m21 -.-&gt; m19;
+  m22 --&gt; m23;
+  m23 --&gt; output;
+  m3 -.-&gt; m9;
+  m7_in -.-&gt; m9;
+  m7_out --&gt; m13;
+  m7_out -.-&gt; m7_in;
+  m9 -.-&gt; m11;
+    </pre><section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">class</span><span class="w"> </span><span class="nc">Transformer</span><span class="p">(</span>
 </span><span data-line="2">    <span class="n">src_vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
@@ -1100,5 +1211,440 @@ constructing Transformer components but does not include full integration.</p></
       <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
       <script src="../../../_static/shibuya.js?v=cac61aee"></script>
+      <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+      <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+
+
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = `pre.mermaid {
+    /* Same as .mermaid-container > pre */
+    display: block;
+    width: 100%;
+}
+
+pre.mermaid > svg {
+    /* Same as .mermaid-container > pre > svg */
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}`;
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = `.mermaid-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+}
+
+.mermaid-container > pre {
+    display: block;
+    width: 100%;
+}
+
+.mermaid-container > pre > svg {
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}
+
+.mermaid-fullscreen-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 95vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-container-fullscreen pre.mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen .mermaid svg {
+    height: 100% !important;
+    width: 100% !important;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}`;
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        all_mermaids.forEach((el) => {
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+        await mermaid.run();
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if ("False" === "True") {
+        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("");
+            if(all_mermaids.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else if(svgs.size() !== mermaids_to_add_zoom) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else {
+                svgs.each(function() {
+                    var svg = d3.select(this);
+                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+                    var inner = svg.select("g");
+                    var zoom = d3.zoom().on("zoom", function(event) {
+                        inner.attr("transform", event.transform);
+                    });
+                    svg.call(zoom);
+                });
+            }
+        }
+    } else if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if ("True" !== "True") return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.style.opacity = '50%';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scroll, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.sdisplay = 'block';
+
+                if ("False" === "True") {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+const load = async () => {
+    initStyles();
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...JSON.parse(
+                    `{"startOnLoad": false}`
+                ),
+                ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...JSON.parse(
+        `{"startOnLoad": false}`
+    ),
+    ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+    }
+);
+
+window.addEventListener("load", load);</script>
       <script src="../../../_static/mermaid-zoom.js?v=0408cfdf"></script></body>
 </html>

@@ -216,7 +216,7 @@ def _grid_reverse(
 
 def _get_relative_position_index(win_h: int, win_w: int) -> Tensor:
     coords = lucid.stack(lucid.meshgrid(lucid.arange(win_h), lucid.arange(win_w)))
-    coords_flatten = lucid.flatten(coords, axis=1)
+    coords_flatten = lucid.flatten(coords, start_axis=1)
 
     relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
     relative_coords = relative_coords.transpose((1, 2, 0))

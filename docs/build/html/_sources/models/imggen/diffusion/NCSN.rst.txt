@@ -13,10 +13,155 @@ annealed Langevin dynamics over a descending noise schedule.
 
 **Total Parameters**: 12,471,555 (Default)
 
-.. image:: ncsn.png
-    :width: 600
-    :alt: NCSN architecture
-    :align: center
+.. mermaid::
+    :name: NCSN
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+      linkStyle default stroke-width:2.0px
+      subgraph sg_m0["<span style='font-size:20px;font-weight:700'>NCSN</span>"]
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m1["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,3,64,64) → (1,128,64,64)</span>"];
+        subgraph sg_m2["_RCUBlock x 4"]
+        style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m2_in(["Input"]);
+          m2_out(["Output"]);
+      style m2_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m2_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+          subgraph sg_m3["units"]
+            direction TB;
+          style sg_m3 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m4["_ResidualConvUnit x 2"]
+              direction TB;
+            style sg_m4 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m4_in(["Input"]);
+              m4_out(["Output"]);
+      style m4_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m4_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+              m5["_CondInstanceNorm<br/><span style='font-size:11px;font-weight:400'>(1,128,64,64)x2 → (1,128,64,64)</span>"];
+              m6["_Conv3x3"];
+              m7["_CondInstanceNorm<br/><span style='font-size:11px;font-weight:400'>(1,128,64,64)x2 → (1,128,64,64)</span>"];
+              m8["_Conv3x3"];
+              m9["ELU"];
+            end
+          end
+        end
+        subgraph sg_m10["_RefineBlock x 4"]
+        style sg_m10 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m10_in(["Input"]);
+          m10_out(["Output"]);
+      style m10_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m10_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+          subgraph sg_m11["adapters"]
+            direction TB;
+          style sg_m11 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m12["_CondAdapter"]
+              direction TB;
+            style sg_m12 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m13["ELU"];
+            end
+          end
+          subgraph sg_m14["rcu_in"]
+            direction TB;
+          style sg_m14 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m15["_RCUBlock"]
+              direction TB;
+            style sg_m15 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m16["ModuleList<br/><span style='font-size:11px;font-weight:400'>(1,128,64,64)x2 → (1,128,64,64)</span>"];
+            end
+          end
+          subgraph sg_m17["_MultiResFusion"]
+            direction TB;
+          style sg_m17 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m18["norms"]
+              direction TB;
+            style sg_m18 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m19["_CondInstanceNorm"];
+            end
+            subgraph sg_m20["convs"]
+              direction TB;
+            style sg_m20 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m21["Conv2d"];
+            end
+            m22["ELU"];
+          end
+          subgraph sg_m23["_ChainedResPooling"]
+            direction TB;
+          style sg_m23 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m24["norms"]
+              direction TB;
+            style sg_m24 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m25(["_CondInstanceNorm x 4<br/><span style='font-size:11px;font-weight:400'>(1,128,64,64)x2 → (1,128,64,64)</span>"]);
+            end
+            subgraph sg_m26["convs"]
+              direction TB;
+            style sg_m26 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m27(["Conv2d x 4"]);
+            end
+            m28["ELU"];
+          end
+          subgraph sg_m29["_RCUBlock"]
+            direction TB;
+          style sg_m29 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m30["units"]
+              direction TB;
+            style sg_m30 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+              m31(["_ResidualConvUnit x 2<br/><span style='font-size:11px;font-weight:400'>(1,128,64,64)x2 → (1,128,64,64)</span>"]);
+            end
+          end
+        end
+        subgraph sg_m32["_CondInstanceNorm"]
+        style sg_m32 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m33["InstanceNorm2d"];
+          m34["Embedding<br/><span style='font-size:11px;color:#475569;font-weight:400'>(1) → (1,256)</span>"];
+        end
+        m35["ELU"];
+        m36["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,128,64,64) → (1,3,64,64)</span>"];
+      end
+      input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,64,64)</span>"];
+      output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,64,64)</span>"];
+      style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style m1 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m9 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m13 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m21 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m22 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m27 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m28 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m33 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m34 fill:#f1f5f9,stroke:#475569,stroke-width:1px;
+      style m35 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m36 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      input --> m1;
+      m1 -.-> m5;
+      m10_in --> m13;
+      m10_out -.-> m10_in;
+      m10_out --> m33;
+      m16 -.-> m25;
+      m25 --> m28;
+      m27 -.-> m25;
+      m27 --> m31;
+      m28 --> m27;
+      m2_in -.-> m5;
+      m2_out --> m16;
+      m2_out -.-> m2_in;
+      m31 -.-> m10_in;
+      m31 --> m10_out;
+      m33 --> m34;
+      m34 --> m35;
+      m35 --> m36;
+      m36 --> output;
+      m4_in -.-> m5;
+      m4_out -.-> m2_in;
+      m5 -.-> m9;
+      m6 --> m7;
+      m7 -.-> m9;
+      m8 --> m4_in;
+      m9 --> m2_out;
+      m9 --> m4_out;
+      m9 --> m6;
+      m9 --> m8;
 
 Class Signature
 ---------------

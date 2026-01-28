@@ -15,10 +15,172 @@ extending YOLO-v3 with architectural and training improvements for better
 accuracy and speed. It includes CSP-DarkNet-53 as a backbone, SPP and PANet as necks, 
 and enhancements like Mish activation and label smoothing.
 
-.. image:: yolo_v4.png
-    :width: 600
-    :alt: YOLO-v4 architecture
-    :align: center
+.. mermaid::
+    :name: YOLO-V4
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+      linkStyle default stroke-width:2.0px
+      subgraph sg_m0["<span style='font-size:20px;font-weight:700'>yolo_v4</span>"]
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m1["_DefaultCSPDarkNet53"]
+          direction TB;
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m2["csp_darknet_53"]
+            direction TB;
+          style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m3(["Sequential x 2<br/><span style='font-size:11px;font-weight:400'>(1,3,448,448) → (1,32,224,224)</span>"]);
+            m4["Identity"];
+            m5["AdaptiveAvgPool2d"];
+            m6["Sequential"];
+          end
+        end
+        subgraph sg_m7["_PANetNeck"]
+          direction TB;
+        style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m8["_SPPBlock"]
+            direction TB;
+          style sg_m8 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m9(["_ConvBNAct x 3<br/><span style='font-size:11px;font-weight:400'>(1,1024,14,14) → (1,512,14,14)</span>"]);
+            m10["ModuleList"];
+            m11(["_ConvBNAct x 3<br/><span style='font-size:11px;font-weight:400'>(1,2048,14,14) → (1,512,14,14)</span>"]);
+          end
+          subgraph sg_m12["_ConvBNAct x 2"]
+            direction TB;
+          style sg_m12 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m12_in(["Input"]);
+            m12_out(["Output"]);
+      style m12_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m12_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+            m13["Conv2d"];
+            m14["BatchNorm2d"];
+            m15["LeakyReLU"];
+          end
+          subgraph sg_m16["_FiveConv"]
+            direction TB;
+          style sg_m16 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m17["Sequential<br/><span style='font-size:11px;font-weight:400'>(1,1024,28,28) → (1,512,28,28)</span>"];
+          end
+          subgraph sg_m18["_ConvBNAct x 2"]
+            direction TB;
+          style sg_m18 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m18_in(["Input"]);
+            m18_out(["Output"]);
+      style m18_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m18_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+            m19["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,512,28,28) → (1,256,28,28)</span>"];
+            m20["BatchNorm2d"];
+            m21["LeakyReLU"];
+          end
+          subgraph sg_m22["_FiveConv"]
+            direction TB;
+          style sg_m22 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m23["Sequential<br/><span style='font-size:11px;font-weight:400'>(1,512,56,56) → (1,256,56,56)</span>"];
+          end
+          subgraph sg_m24["_ConvBNAct"]
+            direction TB;
+          style sg_m24 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m25["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,256,56,56) → (1,512,28,28)</span>"];
+            m26["BatchNorm2d"];
+            m27["LeakyReLU"];
+          end
+          subgraph sg_m28["_FiveConv"]
+            direction TB;
+          style sg_m28 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m29["Sequential<br/><span style='font-size:11px;font-weight:400'>(1,1024,28,28) → (1,512,28,28)</span>"];
+          end
+          subgraph sg_m30["_ConvBNAct"]
+            direction TB;
+          style sg_m30 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m31["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,512,28,28) → (1,512,14,14)</span>"];
+            m32["BatchNorm2d"];
+            m33["LeakyReLU"];
+          end
+          subgraph sg_m34["_FiveConv"]
+            direction TB;
+          style sg_m34 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m35["Sequential"];
+          end
+        end
+        subgraph sg_m36["_YOLOHead"]
+          direction TB;
+        style sg_m36 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          subgraph sg_m37["detect"]
+            direction TB;
+          style sg_m37 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m38(["Sequential x 3<br/><span style='font-size:11px;font-weight:400'>(1,256,56,56) → (1,318,56,56)</span>"]);
+          end
+        end
+        subgraph sg_m39["_ConvBNAct x 3"]
+          direction TB;
+        style sg_m39 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m39_in(["Input"]);
+          m39_out(["Output"]);
+      style m39_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m39_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+          m40["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,128,56,56) → (1,256,56,56)</span>"];
+          m41["BatchNorm2d"];
+          m42["LeakyReLU"];
+        end
+        m43["BCEWithLogitsLoss"];
+      end
+      input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,448,448)</span>"];
+      output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,318,56,56)x3</span>"];
+      style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style m4 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      style m5 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+      style m13 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m14 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m15 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m19 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m20 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m21 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m25 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m26 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m27 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m31 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m32 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m33 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m40 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m41 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+      style m42 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+      style m43 fill:#fffbeb,stroke:#d97706,stroke-width:1px;
+      input --> m3;
+      m10 --> m11;
+      m11 -.-> m13;
+      m12_in -.-> m13;
+      m12_out --> m17;
+      m13 --> m14;
+      m14 --> m15;
+      m15 --> m12_in;
+      m15 --> m12_out;
+      m17 -.-> m19;
+      m18_in -.-> m19;
+      m18_out --> m23;
+      m19 --> m20;
+      m20 --> m21;
+      m21 --> m18_in;
+      m21 --> m18_out;
+      m23 --> m25;
+      m25 --> m26;
+      m26 --> m27;
+      m27 --> m29;
+      m29 --> m31;
+      m3 -.-> m40;
+      m31 --> m32;
+      m32 --> m33;
+      m33 --> m35;
+      m35 --> m38;
+      m38 --> output;
+      m39_in -.-> m40;
+      m39_out -.-> m39_in;
+      m39_out --> m9;
+      m40 --> m41;
+      m41 --> m42;
+      m42 -.-> m39_in;
+      m42 --> m39_out;
+      m9 --> m10;
 
 Class Signature
 ---------------

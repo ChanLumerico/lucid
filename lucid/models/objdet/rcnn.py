@@ -120,7 +120,7 @@ class RCNN(nn.Module):
 
         if isinstance(feats, (tuple, list)):
             feats = feats[-1]
-        feats = feats.flatten(axis=1)
+        feats = feats.flatten(start_axis=1)
 
         cls_scores = self.svm(feats)
         bbox_deltas = self.bbox_reg(feats)

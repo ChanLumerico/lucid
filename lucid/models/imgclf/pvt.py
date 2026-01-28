@@ -328,7 +328,7 @@ class _DWConv(nn.Module):
         B, _, C = x.shape
         x = x.swapaxes(1, 2).reshape(B, C, H, W)
         x = self.dwconv(x)
-        x = x.flatten(axis=2).swapaxes(1, 2)
+        x = x.flatten(start_axis=2).swapaxes(1, 2)
 
         return x
 
@@ -548,7 +548,7 @@ class _OverlapPatchEmbed(nn.Module):
     def forward(self, x: Tensor) -> tuple[Tensor, int, int]:
         x = self.proj(x)
         H, W = x.shape[2:]
-        x = x.flatten(axis=2).swapaxes(1, 2)
+        x = x.flatten(start_axis=2).swapaxes(1, 2)
         x = self.norm(x)
 
         return x, H, W

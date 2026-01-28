@@ -14,10 +14,24 @@ YOLO-v3
 The `YOLO_V3` class implements the YOLO-v3 object detection model, extending YOLO-v2 
 by using multi-scale feature maps, residual connections, and deeper backbones (Darknet-53).
 
-.. image:: yolo_v3.png
-    :width: 600
-    :alt: YOLO-v3 architecture
-    :align: center
+.. mermaid::
+    :name: YOLO-V3
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+    linkStyle default stroke-width:2.0px
+    subgraph sg_m0["<span style='font-size:20px;font-weight:700'>yolo_v3</span>"]
+    style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m1["_DarkNet_53<br/><span style='font-size:11px;font-weight:400'>(1,3,448,448) → (1,256,56,56)x3</span>"];
+        m2(["Sequential x 8<br/><span style='font-size:11px;font-weight:400'>(1,1024,14,14) → (1,512,14,14)</span>"]);
+    end
+    input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,448,448)</span>"];
+    output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,315,14,14)x3</span>"];
+    style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    input --> m1;
+    m1 --> m2;
+    m2 --> output;
 
 Class Signature
 ---------------

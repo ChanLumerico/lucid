@@ -25,10 +25,54 @@ The `ResNet` class provides an implementation of the ResNet architecture. It all
 in specifying custom block types, layer configurations, and hyperparameters, making it suitable
 for a wide range of tasks in computer vision.
 
-.. image:: resnet.png
-    :width: 600
-    :alt: ResNet architecture
-    :align: center
+.. mermaid::
+    :name: ResNet
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+    linkStyle default stroke-width:2.0px
+    subgraph sg_m0["<span style='font-size:20px;font-weight:700'>resnet_101</span>"]
+    style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m1["stem"]
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m2["Conv2d<br/><span style='font-size:11px;color:#c53030;font-weight:400'>(1,3,224,224) → (1,64,112,112)</span>"];
+        m3["BatchNorm2d"];
+        m4["ReLU"];
+        end
+        m5["MaxPool2d<br/><span style='font-size:11px;color:#b7791f;font-weight:400'>(1,64,112,112) → (1,64,56,56)</span>"];
+        subgraph sg_m6["layer1 x 4"]
+        style sg_m6 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m6_in(["Input"]);
+        m6_out(["Output"]);
+    style m6_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+    style m6_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+        m7(["_Bottleneck x 3<br/><span style='font-size:11px;font-weight:400'>(1,64,56,56) → (1,256,56,56)</span>"]);
+        end
+        m8["AdaptiveAvgPool2d<br/><span style='font-size:11px;color:#b7791f;font-weight:400'>(1,2048,7,7) → (1,2048,1,1)</span>"];
+        m9["Linear<br/><span style='font-size:11px;color:#2b6cb0;font-weight:400'>(1,2048) → (1,1000)</span>"];
+    end
+    input["Input<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,3,224,224)</span>"];
+    output["Output<br/><span style='font-size:11px;color:#a67c00;font-weight:400'>(1,1000)</span>"];
+    style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style m2 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m3 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    style m4 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
+    style m5 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+    style m8 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+    style m9 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+    input --> m2;
+    m2 --> m3;
+    m3 --> m4;
+    m4 --> m5;
+    m5 -.-> m7;
+    m6_in -.-> m7;
+    m6_out -.-> m6_in;
+    m6_out --> m8;
+    m7 -.-> m6_in;
+    m7 --> m6_out;
+    m8 --> m9;
+    m9 --> output;
 
 Class Signature
 ---------------
