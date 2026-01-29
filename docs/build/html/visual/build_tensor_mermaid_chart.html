@@ -2,8 +2,8 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>lucid.autograd.grad - Lucid 2.11.5 documentation</title><link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.linalg" href="../linalg/linalg.html" /><link rel="prev" title="lucid.autograd.backward" href="backward.html" />
-      <link rel="canonical" href="https://chanlumerico.github.io/lucid/autograd/grad.html" /><script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>visual.build_tensor_mermaid_chart - Lucid 2.11.5 documentation</title><link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="visual.build_module_mermaid_chart" href="build_module_mermaid_chart.html" /><link rel="prev" title="Mermaid Charts" href="Mermaid.html" />
+      <link rel="canonical" href="https://chanlumerico.github.io/lucid/visual/build_tensor_mermaid_chart.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
   </script><link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=e1a1ceaf" />
@@ -22,8 +22,8 @@
 }
 </style>
     <meta property="og:type" content="website"/>
-  <meta property="og:url" content="https://chanlumerico.github.io/lucid/autograd/grad.html"/>
-  <meta property="og:title" content="lucid.autograd.grad"/>
+  <meta property="og:url" content="https://chanlumerico.github.io/lucid/visual/build_tensor_mermaid_chart.html"/>
+  <meta property="og:title" content="visual.build_tensor_mermaid_chart"/>
     <meta name="twitter:card" content="summary"/>
   </head>
 <body><div class="sy-head">
@@ -161,11 +161,11 @@ data-aria-dark="Switch to auto color mode">
 </li>
 </ul>
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Autograd</span></p>
-<ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="autograd.html">lucid.autograd</a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="index.html">Autograd APIs</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="backward.html">lucid.autograd.backward</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">lucid.autograd.grad</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../autograd/autograd.html">lucid.autograd</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../autograd/index.html">Autograd APIs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../autograd/backward.html">lucid.autograd.backward</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../autograd/grad.html">lucid.autograd.grad</a></li>
 </ul>
 </li>
 </ul>
@@ -870,9 +870,11 @@ data-aria-dark="Switch to auto color mode">
 </li>
 </ul>
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Visualization</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../visual/visual.html">lucid.visual</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../visual/Mermaid.html">Mermaid Charts</a><ul class="simple">
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="visual.html">lucid.visual</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="Mermaid.html">Mermaid Charts</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">visual.build_tensor_mermaid_chart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build_module_mermaid_chart.html">visual.build_module_mermaid_chart</a></li>
 </ul>
 </li>
 </ul>
@@ -901,13 +903,9 @@ data-aria-dark="Switch to auto color mode">
       <i class="i-lucide close"></i>
     </button>
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#lucid.autograd.grad"><code class="docutils literal notranslate"><span class="pre">grad()</span></code></a></li>
-<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
-<li><a class="reference internal" href="#parameters">Parameters</a></li>
-<li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#behavior-notes">Behavior Notes</a></li>
-<li><a class="reference internal" href="#example">Example</a></li>
-<li><a class="reference internal" href="#multiple-outputs">Multiple Outputs</a></li>
+<li><a class="reference internal" href="#lucid.visual.build_tensor_mermaid_chart"><code class="docutils literal notranslate"><span class="pre">build_tensor_mermaid_chart()</span></code></a></li>
+<li><a class="reference internal" href="#basic-example">Basic Example</a></li>
+<li><a class="reference internal" href="#key-parameters">Key Parameters</a></li>
 </ul>
 </div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
   </aside>
@@ -925,11 +923,11 @@ data-aria-dark="Switch to auto color mode">
         <span>/</span>
         <meta itemprop="position" content="1" />
       </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-        <a itemprop="item" href="index.html"><span itemprop="name">Autograd APIs</span></a>
+        <a itemprop="item" href="Mermaid.html"><span itemprop="name">Mermaid Charts</span></a>
         <span>/</span>
         <meta itemprop="position" content="2" />
       </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-        <strong itemprop="name">lucid.autograd.grad</strong>
+        <strong itemprop="name">visual.build_tensor_mermaid_chart</strong>
         <meta itemprop="position" content="3" />
       </li></ol>
     <div class="xl:hidden ml-1">
@@ -946,7 +944,7 @@ data-aria-dark="Switch to auto color mode">
     <button
       type="button"
       class="js-copy px-3 py-1 inline-flex items-center gap-1"
-      data-url="https://chanlumerico.github.io/lucid/_sources/autograd/grad.rst.txt"
+      data-url="https://chanlumerico.github.io/lucid/_sources/visual/build_tensor_mermaid_chart.rst.txt"
     >
       <i class="i-lucide" data-icon="copy"></i>
       <span>Copy page</span>
@@ -960,98 +958,65 @@ data-aria-dark="Switch to auto color mode">
     <div role="presentation">
       <div class="flex flex-col" role="group">
         <button class="js-copy" type="button" role="menuitem"
-          data-url="https://chanlumerico.github.io/lucid/_sources/autograd/grad.rst.txt">
+          data-url="https://chanlumerico.github.io/lucid/_sources/visual/build_tensor_mermaid_chart.rst.txt">
           <span class="iconify-icon">
             <i class="i-lucide" data-icon="copy"></i>
           </span>
           <span>Copy page</span>
         </button>
-        <a role="menuitem" href="https://chanlumerico.github.io/lucid/_sources/autograd/grad.rst.txt" target="_blank" rel="nofollow"><iconify-icon icon="bi:code-slash"></iconify-icon>
-            <span>View Source</span></a><a role="menuitem" href="https://chatgpt.com/?hints=search&q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/autograd/grad.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
+        <a role="menuitem" href="https://chanlumerico.github.io/lucid/_sources/visual/build_tensor_mermaid_chart.rst.txt" target="_blank" rel="nofollow"><iconify-icon icon="bi:code-slash"></iconify-icon>
+            <span>View Source</span></a><a role="menuitem" href="https://chatgpt.com/?hints=search&q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/visual/build_tensor_mermaid_chart.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
           <iconify-icon icon="bi:openai"></iconify-icon>
           <span>Open in ChatGPT</span>
-        </a><a role="menuitem" href="https://claude.ai/new?q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/autograd/grad.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
+        </a><a role="menuitem" href="https://claude.ai/new?q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/visual/build_tensor_mermaid_chart.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
           <iconify-icon icon="bi:claude"></iconify-icon>
           <span>Open in Claude</span>
         </a></div>
     </div>
   </div>
 </div><article class="yue" role="main">
-          <section id="lucid-autograd-grad">
-<h1>lucid.autograd.grad<a class="headerlink" href="#lucid-autograd-grad" title="Link to this heading">¶</a></h1>
+          <section id="visual-build-tensor-mermaid-chart">
+<h1>visual.build_tensor_mermaid_chart<a class="headerlink" href="#visual-build-tensor-mermaid-chart" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.autograd.grad">
-<span class="sig-prename descclassname"><span class="pre">lucid.autograd.</span></span><span class="sig-name descname"><span class="pre">grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">outputs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">_TensorLike</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><span class="pre">_TensorLike</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inputs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">_TensorLike</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><span class="pre">_TensorLike</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_outputs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">_TensorLike</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><span class="pre">_TensorLike</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">complex</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retain_graph</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_unused</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">array</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">array</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#lucid.autograd.grad" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.visual.build_tensor_mermaid_chart">
+<span class="sig-prename descclassname"><span class="pre">lucid.visual.</span></span><span class="sig-name descname"><span class="pre">build_tensor_mermaid_chart</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">horizontal</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_semicolons</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy_to_clipboard</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_class_defs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'lightgreen'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">param_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'plum'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'lightcoral'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">leaf_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'lightgray'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'lightblue'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'gold'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stroke_color</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'#666'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stroke_width_px</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#lucid.visual.build_tensor_mermaid_chart" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p><cite>lucid.autograd.grad</cite> computes gradients of one or more outputs with respect
-to one or more inputs, without permanently storing gradients on the inputs.
-This enables functional gradient workflows and simplifies custom training
-loops.</p>
-<section id="function-signature">
-<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">grad</span><span class="p">(</span>
-</span><span data-line="2">    <span class="n">outputs</span><span class="p">:</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Tensor</span><span class="p">],</span>
-</span><span data-line="3">    <span class="n">inputs</span><span class="p">:</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Tensor</span><span class="p">],</span>
-</span><span data-line="4">    <span class="n">grad_outputs</span><span class="p">:</span> <span class="n">Tensor</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">_Scalar</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span data-line="5">    <span class="n">retain_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-</span><span data-line="6">    <span class="n">allow_unused</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-</span><span data-line="7"><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">_Gradient</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="n">_Gradient</span>
+<p>Generates a Mermaid <strong>flowchart</strong> diagram from a computation graph rooted at a
+<cite>Tensor</cite>. This is useful for inspecting how tensors and operations connect during
+forward computation and for embedding lightweight graphs in docs or notebooks.</p>
+<section id="basic-example">
+<h2>Basic Example<a class="headerlink" href="#basic-example" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
+</span><span data-line="2"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+</span><span data-line="3"><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.visual</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_tensor_mermaid_chart</span>
+</span><span data-line="4">
+</span><span data-line="5"><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span data-line="6"><span class="n">w</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span data-line="7"><span class="n">b</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span data-line="8">
+</span><span data-line="9"><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">conv2d</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</span><span data-line="10"><span class="n">chart</span> <span class="o">=</span> <span class="n">build_tensor_mermaid_chart</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">horizontal</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">copy_to_clipboard</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span data-line="11"><span class="nb">print</span><span class="p">(</span><span class="n">chart</span><span class="p">)</span>
 </span></pre></div>
 </div>
 </section>
-<section id="parameters">
-<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<section id="key-parameters">
+<h2>Key Parameters<a class="headerlink" href="#key-parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>outputs</strong>: A Tensor or iterable of Tensors representing the outputs.</p></li>
-<li><p><strong>inputs</strong>: A Tensor or iterable of Tensors to differentiate with respect to.</p></li>
-<li><p><strong>grad_outputs</strong>: Optional seed gradients for each output. If omitted, ones
-are used.</p></li>
-<li><p><strong>retain_graph</strong>: Whether to retain the graph after backward passes.</p></li>
-<li><p><strong>allow_unused</strong>: If <cite>True</cite>, returns <cite>None</cite> for inputs that are not connected.</p></li>
+<li><p><strong>tensor</strong>:
+The root output tensor from which to traverse the computation graph.</p></li>
+<li><p><strong>horizontal</strong>:
+If <cite>True</cite>, the graph is left-to-right; default is top-down.</p></li>
+<li><p><strong>title</strong>:
+Optional Mermaid comment title (rendering depends on viewer).</p></li>
+<li><p><strong>start_id</strong>:
+Highlights a tensor node by ID (useful for pinpointing a specific tensor).</p></li>
+<li><p><strong>copy_to_clipboard</strong>:
+If <cite>True</cite>, copies the Mermaid text to the system clipboard.</p></li>
+<li><p><strong>use_class_defs</strong> and color args:
+Control node color coding for ops, params, outputs, leaves, grads, and start node.</p></li>
 </ul>
-</section>
-<section id="returns">
-<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p>Gradients for each input. Returns a single gradient if a single input is
-provided; otherwise returns a tuple aligned with <cite>inputs</cite>.</p></li>
-</ul>
-</section>
-<section id="behavior-notes">
-<h2>Behavior Notes<a class="headerlink" href="#behavior-notes" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p>Any existing <cite>.grad</cite> values on inputs are restored after computation.</p></li>
-<li><p>Multiple outputs are handled by sequential backward passes while optionally
-retaining the graph.</p></li>
-<li><p>If an output does not require gradients and <cite>allow_unused=False</cite>, an error is
-raised.</p></li>
-</ul>
-</section>
-<section id="example">
-<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
-</span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span data-line="3"><span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">x</span><span class="p">)</span>
-</span><span data-line="4"><span class="gp">&gt;&gt;&gt; </span><span class="n">dx</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">autograd</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
-</span><span data-line="5"><span class="gp">&gt;&gt;&gt; </span><span class="n">dx</span>
-</span><span data-line="6"><span class="go">array([ 2., -4.,  6.])</span>
-</span></pre></div>
-</div>
-</section>
-<section id="multiple-outputs">
-<h2>Multiple Outputs<a class="headerlink" href="#multiple-outputs" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">2.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.0</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span data-line="3"><span class="gp">&gt;&gt;&gt; </span><span class="n">out1</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">)</span>
-</span><span data-line="4"><span class="gp">&gt;&gt;&gt; </span><span class="n">out2</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">a</span><span class="p">)</span>
-</span><span data-line="5"><span class="gp">&gt;&gt;&gt; </span><span class="n">da</span><span class="p">,</span> <span class="n">db</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">autograd</span><span class="o">.</span><span class="n">grad</span><span class="p">((</span><span class="n">out1</span><span class="p">,</span> <span class="n">out2</span><span class="p">),</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">))</span>
-</span><span data-line="6"><span class="gp">&gt;&gt;&gt; </span><span class="n">da</span>
-</span><span data-line="7"><span class="go">array([ 7. ,  2. , -1. ])</span>
-</span><span data-line="8"><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span>
-</span><span data-line="9"><span class="go">array([ 2. , -1. ,  0.5])</span>
-</span></pre></div>
-</div>
 </section>
 </section>
 
@@ -1061,16 +1026,16 @@ raised.</p></li>
   </svg>
   <span>Back to top</span>
 </button><div class="navigation flex print:hidden"><div class="navigation-prev">
-    <a href="backward.html">
+    <a href="Mermaid.html">
       <i class="i-lucide chevron-left"></i>
       <div class="page-info">
-        <span>Previous</span><div class="title">lucid.autograd.backward</div></div>
+        <span>Previous</span><div class="title">Mermaid Charts</div></div>
     </a>
   </div><div class="navigation-next">
-    <a href="../linalg/linalg.html">
+    <a href="build_module_mermaid_chart.html">
       <div class="page-info">
         <span>Next</span>
-        <div class="title">lucid.linalg</div>
+        <div class="title">visual.build_module_mermaid_chart</div>
       </div>
       <i class="i-lucide chevron-right"></i>
     </a>

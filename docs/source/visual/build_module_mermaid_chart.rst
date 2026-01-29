@@ -1,7 +1,7 @@
-visual.build_mermaid_chart
-==========================
+visual.build_module_mermaid_chart
+=================================
 
-.. autofunction:: lucid.visual.build_mermaid_chart
+.. autofunction:: lucid.visual.build_module_mermaid_chart
 
 Generates a Mermaid **flowchart** diagram from a `lucid.nn.Module` by running a
 forward pass (using the provided inputs or a randomly generated tensor matching
@@ -17,7 +17,7 @@ Basic Example
 
    import lucid
    import lucid.nn as nn
-   from lucid.visual import build_mermaid_chart
+   from lucid.visual import build_module_mermaid_chart
 
    class Tiny(nn.Module):
        def __init__(self):
@@ -32,7 +32,7 @@ Basic Example
            return self.net(x)
 
    model = Tiny()
-   chart = build_mermaid_chart(
+   chart = build_module_mermaid_chart(
        model,
        input_shape=(1, 3, 32, 32),
        depth=3,

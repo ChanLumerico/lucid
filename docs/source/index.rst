@@ -143,8 +143,7 @@
 
    visual/visual.rst
    
-   visual/draw_tensor_graph.rst
-   visual/build_mermaid_chart.rst
+   Mermaid Charts <visual/Mermaid.rst>
 
 .. toctree::
    :maxdepth: 1

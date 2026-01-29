@@ -12,12 +12,11 @@ and data flows more accessible through visual representations.
 Currently Available
 -------------------
 
-- **draw_tensor_graph**:  
-  Renders the computation graph of a Lucid tensor, helping users understand the 
-  flow of operations and how gradients propagate.
+- **build_tensor_mermaid_chart**:
+  Generates Mermaid flowcharts from a computation graph rooted at a `Tensor`.
 
-- **build_mermaid_chart**:
-  Generates Mermaid flowcharts from ``nn.Module`` objects for lightweight model
+- **build_module_mermaid_chart**:
+  Generates Mermaid flowcharts from `nn.Module` objects for lightweight model
   diagrams in docs or notebooks.
 
 Future extensions to this module may include tools for:

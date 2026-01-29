@@ -9,7 +9,7 @@ from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
 
 
-__all__ = ["build_mermaid_chart"]
+__all__ = ["build_tensor_mermaid_chart", "build_module_mermaid_chart"]
 
 
 _NN_MODULES_PREFIX = "lucid.nn.modules."
@@ -255,7 +255,7 @@ def _collapse_repeated_children(
     return out
 
 
-def build_mermaid_chart(
+def build_module_mermaid_chart(
     module: nn.Module,
     input_shape: _ShapeLike | list[_ShapeLike] | None = None,
     inputs: Iterable[Tensor] | Tensor | None = None,
@@ -748,6 +748,192 @@ def build_mermaid_chart(
 
     if return_lines:
         return final_lines
+    return text
+
+
+def build_mermaid_chart(
+    module: nn.Module,
+    input_shape: _ShapeLike | list[_ShapeLike] | None = None,
+    inputs: Iterable[Tensor] | Tensor | None = None,
+    depth: int = 2,
+    direction: str = "LR",
+    include_io: bool = True,
+    show_params: bool = False,
+    return_lines: bool = False,
+    copy_to_clipboard: bool = False,
+    compact: bool = False,
+    use_class_defs: bool = False,
+    end_semicolons: bool = True,
+    edge_mode: Literal["dataflow", "execution"] = "execution",
+    collapse_repeats: bool = True,
+    repeat_min: int = 2,
+    color_by_subpackage: bool = True,
+    container_name_from_attr: bool = True,
+    edge_stroke_width: float = 2.0,
+    emphasize_model_title: bool = True,
+    model_title_font_px: int = 20,
+    show_shapes: bool = False,
+    hide_subpackages: Iterable[str] = (),
+    hide_module_names: Iterable[str] = (),
+    dash_multi_input_edges: bool = True,
+    subgraph_fill: str = "#000000",
+    subgraph_fill_opacity: float = 0.05,
+    subgraph_stroke: str = "#000000",
+    subgraph_stroke_opacity: float = 0.75,
+    force_text_color: str | None = None,
+    edge_curve: str = "natural",
+    node_spacing: int = 50,
+    rank_spacing: int = 50,
+    **forward_kwargs,
+) -> str | list[str]:
+    return build_module_mermaid_chart(
+        module,
+        input_shape=input_shape,
+        inputs=inputs,
+        depth=depth,
+        direction=direction,
+        include_io=include_io,
+        show_params=show_params,
+        return_lines=return_lines,
+        copy_to_clipboard=copy_to_clipboard,
+        compact=compact,
+        use_class_defs=use_class_defs,
+        end_semicolons=end_semicolons,
+        edge_mode=edge_mode,
+        collapse_repeats=collapse_repeats,
+        repeat_min=repeat_min,
+        color_by_subpackage=color_by_subpackage,
+        container_name_from_attr=container_name_from_attr,
+        edge_stroke_width=edge_stroke_width,
+        emphasize_model_title=emphasize_model_title,
+        model_title_font_px=model_title_font_px,
+        show_shapes=show_shapes,
+        hide_subpackages=hide_subpackages,
+        hide_module_names=hide_module_names,
+        dash_multi_input_edges=dash_multi_input_edges,
+        subgraph_fill=subgraph_fill,
+        subgraph_fill_opacity=subgraph_fill_opacity,
+        subgraph_stroke=subgraph_stroke,
+        subgraph_stroke_opacity=subgraph_stroke_opacity,
+        force_text_color=force_text_color,
+        edge_curve=edge_curve,
+        node_spacing=node_spacing,
+        rank_spacing=rank_spacing,
+        **forward_kwargs,
+    )
+
+
+def build_tensor_mermaid_chart(
+    tensor: Tensor,
+    horizontal: bool = False,
+    title: str | None = None,
+    start_id: int | None = None,
+    end_semicolons: bool = True,
+    copy_to_clipboard: bool = False,
+    use_class_defs: bool = True,
+    op_fill: str = "lightgreen",
+    param_fill: str = "plum",
+    result_fill: str = "lightcoral",
+    leaf_fill: str = "lightgray",
+    grad_fill: str = "lightblue",
+    start_fill: str = "gold",
+    stroke_color: str = "#666",
+    stroke_width_px: int = 1,
+) -> str:
+    direction = "LR" if horizontal else "TD"
+    lines: list[str] = [f"flowchart {direction}"]
+    if title:
+        lines.append(f"%% {title}")
+
+    result_id: int = id(tensor)
+    visited: set[int] = set()
+    nodes_to_draw: list[Tensor] = []
+
+    def dfs(t: Tensor) -> None:
+        if id(t) in visited:
+            return
+        visited.add(id(t))
+        for p in t._prev:
+            dfs(p)
+        nodes_to_draw.append(t)
+
+    def tensor_node_id(t: Tensor) -> str:
+        return f"t_{id(t)}"
+
+    def op_node_id(op: object) -> str:
+        return f"op_{id(op)}"
+
+    def add_node(node_id: str, label: str, kind: str) -> None:
+        if node_id in defined_nodes:
+            return
+        defined_nodes.add(node_id)
+        if kind == "op":
+            lines.append(f'{node_id}(("{label}"))')
+        else:
+            lines.append(f'{node_id}["{label}"]')
+
+    dfs(tensor)
+
+    defined_nodes: set[str] = set()
+    edge_lines: list[str] = []
+    class_lines: list[str] = []
+
+    for t in nodes_to_draw:
+        t_id = tensor_node_id(t)
+
+        if not t.is_leaf and t._op is not None:
+            op_id = op_node_id(t._op)
+            op_label = type(t._op).__name__
+            add_node(op_id, op_label, "op")
+            edge_lines.append(f"{op_id} --> {t_id}")
+            class_lines.append(f"class {op_id} op")
+            for inp in t._prev:
+                edge_lines.append(f"{tensor_node_id(inp)} --> {op_id}")
+
+        shape_label = str(t.shape) if t.ndim > 0 else str(t.item())
+        add_node(t_id, shape_label, "tensor")
+
+        if start_id is not None and id(t) == start_id:
+            class_lines.append(f"class {t_id} start")
+        elif isinstance(t, nn.Parameter):
+            class_lines.append(f"class {t_id} param")
+        elif id(t) == result_id:
+            class_lines.append(f"class {t_id} result")
+        elif not t.requires_grad:
+            class_lines.append(f"class {t_id} leaf")
+        else:
+            class_lines.append(f"class {t_id} grad")
+
+    lines.extend(edge_lines)
+    if use_class_defs:
+        lines.append(
+            f"classDef op fill:{op_fill},stroke:{stroke_color},stroke-width:{stroke_width_px}px;"
+        )
+        lines.append(
+            f"classDef param fill:{param_fill},stroke:{stroke_color},stroke-width:{stroke_width_px}px;"
+        )
+        lines.append(
+            f"classDef result fill:{result_fill},stroke:{stroke_color},stroke-width:{stroke_width_px}px;"
+        )
+        lines.append(
+            f"classDef leaf fill:{leaf_fill},stroke:{stroke_color},stroke-width:{stroke_width_px}px;"
+        )
+        lines.append(
+            f"classDef grad fill:{grad_fill},stroke:{stroke_color},stroke-width:{stroke_width_px}px;"
+        )
+        lines.append(
+            f"classDef start fill:{start_fill},stroke:{stroke_color},stroke-width:{stroke_width_px}px;"
+        )
+        lines.extend(class_lines)
+
+    if end_semicolons:
+        lines = [
+            f"{line};" if line and not line.endswith(";") else line for line in lines
+        ]
+
+    text = "\n".join(lines)
+    if copy_to_clipboard:
+        _copy_to_clipboard(text)
     return text
 
 

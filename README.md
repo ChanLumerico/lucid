@@ -20,35 +20,9 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Added additional `nn.Module` hooks for richer introspection during training:
+- Added new visual tool: `lucid.visual.build_tensor_mermaid_chart` which builds a Mermaid chart of given tensor's computatoinal graph
 
-  ```python
-  def register_forward_pre_hook(self, hook: Callable, *, with_kwargs: bool = False)
-  ```
-  ```python
-  def register_forward_hook(self, hook: Callable, *, with_kwargs: bool = False)
-  ```
-  ```python
-  def register_backward_hook(self, hook: Callable)
-  ```
-  ```python
-  def register_full_backward_pre_hook(self, hook: Callable)
-  ```
-  ```python
-  def register_full_backward_hook(self, hook: Callable)
-  ```
-  ```python
-  def register_state_dict_pre_hook(self, hook: Callable)
-  ```
-  ```python
-  def register_state_dict_hook(self, hook: Callable)
-  ```
-  ```python
-  def register_load_state_dict_pre_hook(self, hook: Callable)
-  ```
-  ```python
-  def register_load_state_dict_post_hook(self, hook: Callable)
-  ```
+- Added additional `nn.Module` hooks for richer introspection during training:
 
 ## 🔧 How to Install
 
