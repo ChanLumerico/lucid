@@ -6,8 +6,10 @@ from typing import (
     Sequence,
     Literal,
     TypeAlias,
+    TYPE_CHECKING,
     runtime_checkable,
 )
+from collections import OrderedDict
 import re
 
 import numpy as np
@@ -74,6 +76,62 @@ class _TensorLike(Protocol):
     def backward(
         self, retain_grad: bool = False, retain_graph: bool = False
     ) -> None: ...
+
+
+@runtime_checkable
+class _ModuleHookable(Protocol):
+    def register_forward_pre_hook(
+        self, hook: Callable, *, with_kwargs: bool = False
+    ) -> Callable: ...
+
+    def register_forward_hook(
+        self, hook: Callable, *, with_kwargs: bool = False
+    ) -> Callable: ...
+
+    def register_backward_hook(self, hook: Callable) -> Callable: ...
+
+    def register_full_backward_pre_hook(self, hook: Callable) -> Callable: ...
+
+    def register_full_backward_hook(self, hook: Callable) -> Callable: ...
+
+    def register_state_dict_pre_hook(self, hook: Callable) -> Callable: ...
+
+    def register_state_dict_hook(self, hook: Callable) -> Callable: ...
+
+    def register_load_state_dict_pre_hook(self, hook: Callable) -> Callable: ...
+
+    def register_load_state_dict_post_hook(self, hook: Callable) -> Callable: ...
+
+
+_ForwardPreHook: TypeAlias = Callable[
+    [_ModuleHookable, tuple[Any, ...]], tuple[Any, ...] | None
+]
+_ForwardPreHookKwargs: TypeAlias = Callable[
+    [_ModuleHookable, tuple[Any, ...], dict[str, Any]],
+    tuple[tuple[Any, ...], dict[str, Any]] | None,
+]
+_ForwardHook: TypeAlias = Callable[[_ModuleHookable, tuple[Any, ...], Any], Any | None]
+_ForwardHookKwargs: TypeAlias = Callable[
+    [_ModuleHookable, tuple[Any, ...], dict[str, Any], Any], Any | None
+]
+
+_BackwardHook: TypeAlias = Callable[[_TensorLike, _NumPyArray], None]
+_FullBackwardPreHook: TypeAlias = Callable[
+    [_ModuleHookable, tuple[_NumPyArray | None, ...]],
+    tuple[_NumPyArray | None, ...] | None,
+]
+_FullBackwardHook: TypeAlias = Callable[
+    [_ModuleHookable, tuple[_NumPyArray | None, ...], tuple[_NumPyArray | None, ...]],
+    tuple[_NumPyArray | None, ...] | None,
+]
+
+_StateDictPreHook: TypeAlias = Callable[[_ModuleHookable, str, bool], None]
+_StateDictHook: TypeAlias = Callable[[_ModuleHookable, OrderedDict, str, bool], None]
+
+_LoadStateDictPreHook: TypeAlias = Callable[[_ModuleHookable, OrderedDict, bool], None]
+_LoadStateDictPostHook: TypeAlias = Callable[
+    [_ModuleHookable, set[str], set[str], bool], None
+]
 
 
 class Numeric:

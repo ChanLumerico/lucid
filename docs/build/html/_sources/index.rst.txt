@@ -59,6 +59,8 @@
    nn/Parameter.rst
    nn/Buffer.rst
    nn/Module.rst
+   
+   Module Hooks <nn/ModuleHooks.rst>
 
    Neural Functions <nn/functions/index.rst>
    Weight Initializations <nn/init/index.rst>

@@ -13,7 +13,22 @@ from typing import (
 from collections import OrderedDict
 
 from lucid._tensor import Tensor
-from lucid.types import _ArrayOrScalar, _NumPyArray, _DeviceType
+from lucid.types import (
+    _ArrayOrScalar,
+    _BackwardHook,
+    _DeviceType,
+    _ForwardHook,
+    _ForwardHookKwargs,
+    _ForwardPreHook,
+    _ForwardPreHookKwargs,
+    _FullBackwardHook,
+    _FullBackwardPreHook,
+    _LoadStateDictPostHook,
+    _LoadStateDictPreHook,
+    _NumPyArray,
+    _StateDictHook,
+    _StateDictPreHook,
+)
 
 import lucid.nn as nn
 
@@ -27,26 +42,6 @@ __all__ = [
     "ParameterDict",
     "auto_repr",
     "set_state_dict_pass_attr",
-]
-
-
-_ForwardPreHook = Callable[["Module", tuple[Any, ...]], tuple[Any, ...] | None]
-_ForwardPreHookKwargs = Callable[
-    ["Module", tuple[Any, ...], dict[str, Any]],
-    tuple[tuple[Any, ...], dict[str, Any]] | None,
-]
-_ForwardHook = Callable[["Module", tuple[Any, ...], Any], Any | None]
-_ForwardHookKwargs = Callable[
-    ["Module", tuple[Any, ...], dict[str, Any], Any], Any | None
-]
-
-_BackwardHook = Callable[[Tensor, _NumPyArray], None]
-_FullBackwardPreHook = Callable[
-    ["Module", tuple[_NumPyArray | None, ...]], tuple[_NumPyArray | None, ...] | None
-]
-_FullBackwardHook = Callable[
-    ["Module", tuple[_NumPyArray | None, ...], tuple[_NumPyArray | None, ...]],
-    tuple[_NumPyArray | None, ...] | None,
 ]
 
 
@@ -70,9 +65,16 @@ class Module:
             tuple[_ForwardPreHook | _ForwardPreHookKwargs, bool]
         ] = []
         self._forward_hooks: list[tuple[_ForwardHook | _ForwardHookKwargs, bool]] = []
+
         self._backward_hooks: list[_BackwardHook] = []
         self._full_backward_pre_hooks: list[_FullBackwardPreHook] = []
         self._full_backward_hooks: list[_FullBackwardHook] = []
+
+        self._state_dict_pre_hooks: list[_StateDictPreHook] = []
+        self._state_dict_hooks: list[_StateDictHook] = []
+
+        self._load_state_dict_pre_hooks: list[_LoadStateDictPreHook] = []
+        self._load_state_dict_post_hooks: list[_LoadStateDictPostHook] = []
 
         self._state_dict_pass_attr = set()
 
@@ -155,6 +157,26 @@ class Module:
         self._full_backward_hooks.append(hook)
         return lambda: self._full_backward_hooks.remove(hook)
 
+    def register_state_dict_pre_hook(self, hook: _StateDictPreHook) -> Callable:
+        self._state_dict_pre_hooks.append(hook)
+        return lambda: self._state_dict_pre_hooks.remove(hook)
+
+    def register_state_dict_hook(self, hook: _StateDictHook) -> Callable:
+        self._state_dict_hooks.append(hook)
+        return lambda: self._state_dict_hooks.remove(hook)
+
+    def register_load_state_dict_pre_hook(
+        self, hook: _LoadStateDictPreHook
+    ) -> Callable:
+        self._load_state_dict_pre_hooks.append(hook)
+        return lambda: self._load_state_dict_pre_hooks.remove(hook)
+
+    def register_load_state_dict_post_hook(
+        self, hook: _LoadStateDictPostHook
+    ) -> Callable:
+        self._load_state_dict_post_hooks.append(hook)
+        return lambda: self._load_state_dict_post_hooks.remove(hook)
+
     def reset_parameters(self) -> None:
         for param in self.parameters():
             param.zero()
@@ -231,6 +253,9 @@ class Module:
         prefix: str = "",
         keep_vars: bool = False,
     ) -> OrderedDict:
+        for hook in self._state_dict_pre_hooks:
+            hook(self, prefix, keep_vars)
+
         if destination is None:
             destination = OrderedDict()
 
@@ -249,9 +274,15 @@ class Module:
             if key in self._state_dict_pass_attr:
                 del destination[key]
 
+        for hook in self._state_dict_hooks:
+            hook(self, destination, prefix, keep_vars)
+
         return destination
 
     def load_state_dict(self, state_dict: OrderedDict, strict: bool = True) -> None:
+        for hook in self._load_state_dict_pre_hooks:
+            hook(self, state_dict, strict)
+
         own_state = self.state_dict(keep_vars=True)
 
         missing_keys = set(own_state.keys()) - set(state_dict.keys())
@@ -276,6 +307,9 @@ class Module:
                     setattr(self, key, value)
             elif strict:
                 raise KeyError(f"Unexpected key '{key}' in state_dict.")
+
+        for hook in self._load_state_dict_post_hooks:
+            hook(self, missing_keys, unexpected_keys, strict)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
         for hook, with_kwargs in self._forward_pre_hooks:

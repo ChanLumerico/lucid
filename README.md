@@ -24,14 +24,30 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
   ```python
   def register_forward_pre_hook(self, hook: Callable, *, with_kwargs: bool = False)
-
+  ```
+  ```python
   def register_forward_hook(self, hook: Callable, *, with_kwargs: bool = False)
-
+  ```
+  ```python
   def register_backward_hook(self, hook: Callable)
-
+  ```
+  ```python
   def register_full_backward_pre_hook(self, hook: Callable)
-
+  ```
+  ```python
   def register_full_backward_hook(self, hook: Callable)
+  ```
+  ```python
+  def register_state_dict_pre_hook(self, hook: Callable)
+  ```
+  ```python
+  def register_state_dict_hook(self, hook: Callable)
+  ```
+  ```python
+  def register_load_state_dict_pre_hook(self, hook: Callable)
+  ```
+  ```python
+  def register_load_state_dict_post_hook(self, hook: Callable)
   ```
 
 ## 🔧 How to Install

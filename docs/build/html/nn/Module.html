@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.Module - Lucid 2.11.3 documentation</title><link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="lucid.nn.functional" href="functions/index.html" /><link rel="prev" title="nn.Buffer" href="Buffer.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.Module - Lucid 2.11.4 documentation</title><link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Module Hooks" href="ModuleHooks.html" /><link rel="prev" title="nn.Buffer" href="Buffer.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/Module.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -217,6 +217,7 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l1"><a class="reference internal" href="Parameter.html">nn.Parameter</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Buffer.html">nn.Buffer</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">nn.Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ModuleHooks.html">Module Hooks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="functions/index.html">Neural Functions</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="functions/linear/index.html">Linear Functions</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="functions/linear/linear.html">nn.functional.linear</a></li>
@@ -1113,65 +1114,6 @@ Includes parameters from submodules if <cite>recurse</cite> is <cite>True</cite>
 <ul class="simple">
 <li><p><strong>Tensor | tuple[Tensor, …]</strong>: The result of the <cite>forward</cite> method.</p></li>
 </ul>
-<p><strong>Hooks</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">register_forward_pre_hook</span><span class="p">(</span>
-</span><span data-line="2">    <span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">with_kwargs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span data-line="3"><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span>
-</span></pre></div>
-</div>
-<p>Registers a hook to be executed before <cite>forward</cite>. The hook can optionally return
-new inputs.</p>
-<p><strong>Hook signature</strong>:</p>
-<ul class="simple">
-<li><p><cite>hook(module, args) -&gt; args | None</cite></p></li>
-<li><p>If <cite>with_kwargs=True</cite>: <cite>hook(module, args, kwargs) -&gt; (args, kwargs) | None</cite></p></li>
-</ul>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">register_forward_hook</span><span class="p">(</span>
-</span><span data-line="2">    <span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">with_kwargs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span data-line="3"><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span>
-</span></pre></div>
-</div>
-<p>Registers a hook to be executed after <cite>forward</cite>. The hook can optionally return
-a new output.</p>
-<p><strong>Hook signature</strong>:</p>
-<ul class="simple">
-<li><p><cite>hook(module, args, output) -&gt; output | None</cite></p></li>
-<li><p>If <cite>with_kwargs=True</cite>: <cite>hook(module, args, kwargs, output) -&gt; output | None</cite></p></li>
-</ul>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">register_backward_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span>
-</span></pre></div>
-</div>
-<p>Registers a gradient hook on the output <cite>Tensor</cite> (only when the module returns
-a single <cite>Tensor</cite>).</p>
-<p><strong>Hook signature</strong>:</p>
-<ul class="simple">
-<li><p><cite>hook(tensor, grad) -&gt; None</cite></p></li>
-</ul>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">register_full_backward_pre_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span>
-</span></pre></div>
-</div>
-<p>Registers a hook that runs when output gradients are ready, before full backward
-hooks.</p>
-<p><strong>Hook signature</strong>:</p>
-<ul class="simple">
-<li><p><cite>hook(module, grad_output_tuple) -&gt; grad_output_tuple | None</cite></p></li>
-</ul>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">register_full_backward_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span>
-</span></pre></div>
-</div>
-<p>Registers a hook that runs with both input and output gradients.</p>
-<p><strong>Hook signature</strong>:</p>
-<ul class="simple">
-<li><p><cite>hook(module, grad_input_tuple, grad_output_tuple) -&gt; None</cite></p></li>
-</ul>
-<p><strong>Notes</strong>:</p>
-<ul class="simple">
-<li><p><cite>grad_input_tuple</cite> is aligned with positional <cite>args</cite> only. Non-<cite>Tensor</cite> inputs
-are <cite>None</cite>. Keyword-only inputs are not included.</p></li>
-<li><p><cite>grad_output_tuple</cite> contains gradients for each <cite>Tensor</cite> in the output (non-
-<cite>Tensor</cite> outputs are skipped).</p></li>
-<li><p>All hook registration methods return a callable that removes the hook.</p></li>
-</ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
@@ -1231,10 +1173,10 @@ If <cite>strict=True</cite>, mismatched keys will raise an error.</p>
         <span>Previous</span><div class="title">nn.Buffer</div></div>
     </a>
   </div><div class="navigation-next">
-    <a href="functions/index.html">
+    <a href="ModuleHooks.html">
       <div class="page-info">
         <span>Next</span>
-        <div class="title">lucid.nn.functional</div>
+        <div class="title">Module Hooks</div>
       </div>
       <i class="i-lucide chevron-right"></i>
     </a>
@@ -1259,7 +1201,7 @@ If <cite>strict=True</cite>, mismatched keys will raise an error.</p>
     </div>
   </div>
 </footer>
-      <script src="../_static/documentation_options.js?v=21bfca05"></script>
+      <script src="../_static/documentation_options.js?v=ea365ac8"></script>
       <script src="../_static/doctools.js?v=9bcbadda"></script>
       <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../_static/design-tabs.js?v=f930bc37"></script>
