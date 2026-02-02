@@ -35,8 +35,8 @@ def add_batch_dim(func: Callable[..., Tensor]) -> Callable:
 class Normalize(nn.Module):
     def __init__(self, mean: tuple[float, ...], std: tuple[float, ...]) -> None:
         super().__init__()
-        self.mean = lucid.tensor(mean)
-        self.std = lucid.tensor(std)
+        self.mean = lucid.tensor(mean).reshape(1, len(mean), 1, 1)
+        self.std = lucid.tensor(std).reshape(1, len(std), 1, 1)
 
     @add_batch_dim
     def forward(self, img: Tensor) -> Tensor:

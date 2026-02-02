@@ -32,10 +32,12 @@ class ViT(nn.Module):
             in_channels, embedding_dim, kernel_size=patch_size, stride=patch_size
         )
 
-        self.cls_token = nn.Parameter(lucid.random.randn(1, 1, embedding_dim))
-        self.pos_emb = nn.Parameter(
-            lucid.random.randn(1, 1 + self.num_patches, embedding_dim)
-        )
+        self.cls_token = nn.Parameter(lucid.zeros(1, 1, embedding_dim))
+        self.pos_emb = nn.Parameter(lucid.zeros(1, 1 + self.num_patches, embedding_dim))
+
+        nn.init.normal(self.cls_token, std=0.02)
+        nn.init.normal(self.pos_emb, std=0.02)
+
         self.dropout = nn.Dropout(dropout_rate)
 
         encoder_layer = nn.TransformerEncoderLayer(
