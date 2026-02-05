@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.util.grad_norm - Lucid 2.11.4 documentation</title><link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="nn.util.clip_grad_norm" href="clip_grad_norm.html" /><link rel="prev" title="Neural Network Utilities" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.utils.grad_norm - Lucid 2.12.0 documentation</title><link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="nn.utils.get_total_norm" href="get_total_norm.html" /><link rel="prev" title="Neural Network Utilities" href="index.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/utilities/grad_norm.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -23,7 +23,7 @@
 </style>
     <meta property="og:type" content="website"/>
   <meta property="og:url" content="https://chanlumerico.github.io/lucid/nn/utilities/grad_norm.html"/>
-  <meta property="og:title" content="nn.util.grad_norm"/>
+  <meta property="og:title" content="nn.utils.grad_norm"/>
     <meta name="twitter:card" content="summary"/>
   </head>
 <body><div class="sy-head">
@@ -453,9 +453,19 @@ data-aria-dark="Switch to auto color mode">
 </ul>
 </li>
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">Utilities</a><ul class="current">
-<li class="toctree-l2 current"><a class="current reference internal" href="#">nn.util.grad_norm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="clip_grad_norm.html">nn.util.clip_grad_norm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="clip_grad_value.html">nn.util.clip_grad_value</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">nn.utils.grad_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="get_total_norm.html">nn.utils.get_total_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="clip_grad_norm.html">nn.utils.clip_grad_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="clip_grad_value.html">nn.utils.clip_grad_value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="rnn/index.html">RNN Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="rnn/pad_sequence.html">nn.utils.rnn.pad_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="rnn/PackedSequence.html">nn.utils.rnn.PackedSequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="rnn/pack_padded_sequence.html">nn.utils.rnn.pack_padded_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="rnn/pad_packed_sequence.html">nn.utils.rnn.pad_packed_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="rnn/pack_sequence.html">nn.utils.rnn.pack_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="rnn/unpack_sequence.html">nn.utils.rnn.unpack_sequence</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -872,8 +882,11 @@ data-aria-dark="Switch to auto color mode">
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Visualization</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../visual/visual.html">lucid.visual</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../visual/draw_tensor_graph.html">visual.draw_tensor_graph</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../visual/build_mermaid_chart.html">visual.build_mermaid_chart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../visual/Mermaid.html">Mermaid Charts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../visual/build_tensor_mermaid_chart.html">visual.build_tensor_mermaid_chart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../visual/build_module_mermaid_chart.html">visual.build_module_mermaid_chart</a></li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Porting</span></p>
 <ul>
@@ -900,7 +913,7 @@ data-aria-dark="Switch to auto color mode">
       <i class="i-lucide close"></i>
     </button>
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#lucid.nn.util.grad_norm"><code class="docutils literal notranslate"><span class="pre">grad_norm()</span></code></a></li>
+<li><a class="reference internal" href="#lucid.nn.utils.grad_norm"><code class="docutils literal notranslate"><span class="pre">grad_norm()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#return-value">Return Value</a></li>
@@ -928,7 +941,7 @@ data-aria-dark="Switch to auto color mode">
         <span>/</span>
         <meta itemprop="position" content="2" />
       </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-        <strong itemprop="name">nn.util.grad_norm</strong>
+        <strong itemprop="name">nn.utils.grad_norm</strong>
         <meta itemprop="position" content="3" />
       </li></ol>
     <div class="xl:hidden ml-1">
@@ -976,11 +989,11 @@ data-aria-dark="Switch to auto color mode">
     </div>
   </div>
 </div><article class="yue" role="main">
-          <section id="nn-util-grad-norm">
-<h1>nn.util.grad_norm<a class="headerlink" href="#nn-util-grad-norm" title="Link to this heading">¶</a></h1>
+          <section id="nn-utils-grad-norm">
+<h1>nn.utils.grad_norm<a class="headerlink" href="#nn-utils-grad-norm" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.util.grad_norm">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.util.</span></span><span class="sig-name descname"><span class="pre">grad_norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.util.grad_norm" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.nn.utils.grad_norm">
+<span class="sig-prename descclassname"><span class="pre">lucid.nn.utils.</span></span><span class="sig-name descname"><span class="pre">grad_norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Iterable</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.utils.grad_norm" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <section id="function-signature">
@@ -1056,7 +1069,7 @@ it only measures the global magnitude.</p>
 </span><span data-line="18"><span class="n">loss</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">cross_entropy</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
 </span><span data-line="19"><span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 </span><span data-line="20">
-</span><span data-line="21"><span class="n">n2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">grad_norm</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">norm_type</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># L2 norm</span>
+</span><span data-line="21"><span class="n">n2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">grad_norm</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">norm_type</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># L2 norm</span>
 </span><span data-line="22"><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;L2:&quot;</span><span class="p">,</span> <span class="n">n2</span><span class="p">)</span>
 </span></pre></div>
 </div>
@@ -1066,7 +1079,7 @@ it only measures the global magnitude.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
 <p>Use <code class="xref py py-func docutils literal notranslate"><span class="pre">grad_norm()</span></code> to <em>monitor</em> training stability. If the reported norm spikes,
-consider applying <a class="reference internal" href="clip_grad_norm.html#lucid.nn.util.clip_grad_norm" title="lucid.nn.util.clip_grad_norm"><code class="xref py py-func docutils literal notranslate"><span class="pre">lucid.nn.util.clip_grad_norm()</span></code></a> right after <cite>backward()</cite>.</p>
+consider applying <a class="reference internal" href="clip_grad_norm.html#lucid.nn.utils.clip_grad_norm" title="lucid.nn.utils.clip_grad_norm"><code class="xref py py-func docutils literal notranslate"><span class="pre">lucid.nn.utils.clip_grad_norm()</span></code></a> right after <cite>backward()</cite>.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
@@ -1088,10 +1101,10 @@ for device-sensitive logic.</p>
         <span>Previous</span><div class="title">Neural Network Utilities</div></div>
     </a>
   </div><div class="navigation-next">
-    <a href="clip_grad_norm.html">
+    <a href="get_total_norm.html">
       <div class="page-info">
         <span>Next</span>
-        <div class="title">nn.util.clip_grad_norm</div>
+        <div class="title">nn.utils.get_total_norm</div>
       </div>
       <i class="i-lucide chevron-right"></i>
     </a>
@@ -1116,7 +1129,7 @@ for device-sensitive logic.</p>
     </div>
   </div>
 </footer>
-      <script src="../../_static/documentation_options.js?v=ea365ac8"></script>
+      <script src="../../_static/documentation_options.js?v=84389e84"></script>
       <script src="../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../_static/design-tabs.js?v=f930bc37"></script>

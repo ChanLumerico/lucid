@@ -46,12 +46,15 @@ Inputs and Outputs
 ------------------
 - **Input**: `(seq_len, batch, input_size)` or `(batch, seq_len, input_size)` when
   `batch_first=True`.
+- **Packed input**: `PackedSequence` with `data` shaped
+  `(sum(batch_sizes), input_size)`. When packed, `batch_first` has no effect.
 - **Initial state `(h_0, c_0)`**: each shaped `(num_layers, batch, hidden_size)`. If
   omitted, zero-initialized states are created. 2D tensors are accepted and expanded
   to the first layer.
 - **Returns**: `(output, (h_n, c_n))`
 
   - `output`: same leading dimensions as the input, with feature size `hidden_size`.
+  - `output` is a `PackedSequence` when the input is packed.
   - `h_n` and `c_n`: final hidden and cell states for each layer, each shaped
     `(num_layers, batch, hidden_size)`.
 

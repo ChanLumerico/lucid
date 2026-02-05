@@ -5,6 +5,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+from lucid.nn.utils.rnn import PackedSequence
 from lucid.types import Numeric, _DeviceType
 
 from .activation import Tanh, ReLU
@@ -351,21 +352,47 @@ class RNNBase(nn.Module):
         )
 
     def forward(
-        self, input_: Tensor, hx: Tensor | tuple[Tensor, Tensor] | None = None
-    ) -> tuple[Tensor, Tensor] | tuple[Tensor, tuple[Tensor, Tensor]]:
-        if input_.ndim != 3:
-            raise ValueError(
-                f"RNNBase expected input with 3 dimensions, got {input_.ndim} dimensions"
-            )
+        self,
+        input_: Tensor | PackedSequence,
+        hx: Tensor | tuple[Tensor, Tensor] | None = None,
+    ) -> (
+        tuple[Tensor | PackedSequence, Tensor]
+        | tuple[Tensor | PackedSequence, tuple[Tensor, Tensor]]
+    ):
+        is_packed = isinstance(input_, PackedSequence)
+        if is_packed:
+            data = input_.data
+            batch_sizes = input_.batch_sizes
+            if data.ndim != 2:
+                raise ValueError(
+                    "RNNBase expected packed data with 2 dimensions, "
+                    f"got {data.ndim} dimensions"
+                )
+            if batch_sizes.ndim != 1 or batch_sizes.shape[0] == 0:
+                raise ValueError(
+                    "PackedSequence batch_sizes must be a non-empty 1D tensor"
+                )
 
-        if self.batch_first:
-            input_ = input_.swapaxes(0, 1)
+            batch_size = int(batch_sizes[0].item())
+            feat = data.shape[1]
+            if feat != self.input_size:
+                raise ValueError(
+                    f"RNNBase expected input with feature size {self.input_size}, got {feat}"
+                )
+        else:
+            if input_.ndim != 3:
+                raise ValueError(
+                    f"RNNBase expected input with 3 dimensions, got {input_.ndim} dimensions"
+                )
 
-        seq_len, batch_size, feat = input_.shape
-        if feat != self.input_size:
-            raise ValueError(
-                f"RNNBase expected input with feature size {self.input_size}, got {feat}"
-            )
+            if self.batch_first:
+                input_ = input_.swapaxes(0, 1)
+
+            seq_len, batch_size, feat = input_.shape
+            if feat != self.input_size:
+                raise ValueError(
+                    f"RNNBase expected input with feature size {self.input_size}, got {feat}"
+                )
 
         if self.is_lstm:
             if hx is None:
@@ -410,7 +437,7 @@ class RNNBase(nn.Module):
             if hx.shape[2] != self.hidden_size:
                 raise ValueError("Incorrect hidden size in hx")
 
-        layer_input = input_
+        layer_input = data if is_packed else input_
         h_n_list: list[Tensor] = []
         c_n_list: list[Tensor] | None = [] if self.is_lstm else None
 
@@ -420,33 +447,111 @@ class RNNBase(nn.Module):
                 c_t = hx_c[layer_idx]
             else:
                 h_t = hx[layer_idx]
+
             outputs = []
+            if is_packed:
+                final_h: list[Tensor] = []
+                final_c: list[Tensor] | None = [] if self.is_lstm else None
+                offset = 0
 
-            for t in range(seq_len):
-                if self.is_lstm:
-                    h_t, c_t = cell(layer_input[t], (h_t, c_t))
-                    outputs.append(h_t.unsqueeze(axis=0))
-                else:
-                    h_t = cell(layer_input[t], h_t)
-                    outputs.append(h_t.unsqueeze(axis=0))
+                prev_bs: int | None = None
+                max_len = int(batch_sizes.shape[0])
+                for t in range(max_len):
+                    bs = int(batch_sizes[t].item())
+                    if bs == 0:
+                        break
 
-            layer_output = lucid.concatenate(tuple(outputs), axis=0)
+                    if prev_bs is None:
+                        prev_bs = bs
+                    if bs > prev_bs:
+                        raise ValueError(
+                            "PackedSequence batch_sizes must be non-increasing"
+                        )
+
+                    if bs < prev_bs:
+                        final_h.append(h_t[bs:prev_bs])
+                        if self.is_lstm and final_c is not None:
+                            final_c.append(c_t[bs:prev_bs])
+
+                        h_t = h_t[:bs]
+                        if self.is_lstm:
+                            c_t = c_t[:bs]
+
+                    step_input = layer_input[offset : offset + bs]
+                    offset += bs
+
+                    if self.is_lstm:
+                        h_t, c_t = cell(step_input, (h_t, c_t))
+                    else:
+                        h_t = cell(step_input, h_t)
+
+                    outputs.append(h_t)
+                    prev_bs = bs
+
+                final_h.append(h_t)
+                if self.is_lstm and final_c is not None:
+                    final_c.append(c_t)
+
+                h_n_list.append(
+                    lucid.concatenate(tuple(reversed(final_h)), axis=0).unsqueeze(
+                        axis=0
+                    )
+                )
+                if self.is_lstm and final_c is not None and c_n_list is not None:
+                    c_n_list.append(
+                        lucid.concatenate(tuple(reversed(final_c)), axis=0).unsqueeze(
+                            axis=0
+                        )
+                    )
+
+                layer_output = (
+                    lucid.concatenate(tuple(outputs), axis=0)
+                    if outputs
+                    else layer_input[:0]
+                )
+
+            else:
+                for t in range(seq_len):
+                    if self.is_lstm:
+                        h_t, c_t = cell(layer_input[t], (h_t, c_t))
+                        outputs.append(h_t.unsqueeze(axis=0))
+                    else:
+                        h_t = cell(layer_input[t], h_t)
+                        outputs.append(h_t.unsqueeze(axis=0))
+
+                layer_output = lucid.concatenate(tuple(outputs), axis=0)
 
             if self.training and self.dropout > 0.0 and layer_idx < self.num_layers - 1:
                 layer_output = F.dropout(layer_output, p=self.dropout)
 
-            h_n_list.append(h_t.unsqueeze(axis=0))
-            if self.is_lstm and c_n_list is not None:
-                c_n_list.append(c_t.unsqueeze(axis=0))
+            if not is_packed:
+                h_n_list.append(h_t.unsqueeze(axis=0))
+                if self.is_lstm and c_n_list is not None:
+                    c_n_list.append(c_t.unsqueeze(axis=0))
             layer_input = layer_output
 
-        output = layer_input
+        if is_packed:
+            output = PackedSequence(
+                data=layer_input,
+                batch_sizes=batch_sizes,
+                sorted_indices=input_.sorted_indices,
+                unsorted_indices=input_.unsorted_indices,
+            )
+        else:
+            output = layer_input
+
         h_n = lucid.concatenate(tuple(h_n_list), axis=0)
         if self.is_lstm and c_n_list is not None:
             c_n = lucid.concatenate(tuple(c_n_list), axis=0)
 
-        if self.batch_first:
-            output = output.swapaxes(0, 1)
+        if is_packed:
+            if input_.unsorted_indices is not None:
+                h_n = h_n[:, input_.unsorted_indices]
+                if self.is_lstm and c_n_list is not None:
+                    c_n = c_n[:, input_.unsorted_indices]
+        else:
+            if self.batch_first:
+                output = output.swapaxes(0, 1)
 
         if self.is_lstm and c_n_list is not None:
             return output, (h_n, c_n)

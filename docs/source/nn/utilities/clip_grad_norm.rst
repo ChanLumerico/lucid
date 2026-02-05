@@ -1,7 +1,7 @@
-nn.util.clip_grad_norm
-======================
+nn.utils.clip_grad_norm
+=======================
 
-.. autofunction:: lucid.nn.util.clip_grad_norm
+.. autofunction:: lucid.nn.utils.clip_grad_norm
 
 Function Signature
 ------------------
@@ -108,7 +108,7 @@ Examples
     loss.backward()
 
     # Clip gradient norms to have a maximum L2 norm of 1.0
-    total_norm = nn.util.clip_grad_norm(model.parameters(), max_norm=1.0)
+    total_norm = nn.utils.clip_grad_norm(model.parameters(), max_norm=1.0)
     print("Pre-clipping norm:", total_norm)
 
 
@@ -129,4 +129,4 @@ Usage Tips
 .. admonition:: Common Practice
 
    Gradient clipping is often combined with monitoring the norm via
-   :func:`lucid.nn.util.grad_norm` to decide when clipping is necessary.
+   :func:`lucid.nn.utils.grad_norm` to decide when clipping is necessary.

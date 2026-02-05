@@ -1,7 +1,7 @@
-nn.util.clip_grad_value
-=======================
+nn.utils.clip_grad_value
+========================
 
-.. autofunction:: lucid.nn.util.clip_grad_value
+.. autofunction:: lucid.nn.utils.clip_grad_value
 
 Function Signature
 ------------------
@@ -83,7 +83,7 @@ Examples
     loss.backward()
 
     # Clip each gradient value individually to [-0.1, 0.1]
-    nn.util.clip_grad_value(model.parameters(), clip_value=0.1)
+    nn.utils.clip_grad_value(model.parameters(), clip_value=0.1)
 
 Usage Tips
 ----------

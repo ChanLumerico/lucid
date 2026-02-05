@@ -1,7 +1,7 @@
-nn.util.grad_norm
-=================
+nn.utils.grad_norm
+==================
 
-.. autofunction:: lucid.nn.util.grad_norm
+.. autofunction:: lucid.nn.utils.grad_norm
 
 Function Signature
 ------------------
@@ -82,7 +82,7 @@ Examples
     loss = lucid.nn.functional.cross_entropy(out, y)
     loss.backward()
 
-    n2 = nn.util.grad_norm(model.parameters(), norm_type=2)  # L2 norm
+    n2 = nn.utils.grad_norm(model.parameters(), norm_type=2)  # L2 norm
     print("L2:", n2)
 
 Usage Tips
@@ -91,7 +91,7 @@ Usage Tips
 .. tip::
 
    Use :func:`grad_norm` to *monitor* training stability. If the reported norm spikes,
-   consider applying :func:`lucid.nn.util.clip_grad_norm` right after `backward()`.
+   consider applying :func:`lucid.nn.utils.clip_grad_norm` right after `backward()`.
 
 .. warning::
 

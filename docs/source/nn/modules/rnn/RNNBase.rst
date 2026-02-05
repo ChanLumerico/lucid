@@ -7,7 +7,8 @@ nn.RNNBase
 or `nn.LSTMCell` depending on the selected mode. It runs full sequences and returns
 per-time-step outputs along with the final hidden state(s) for each layer. Both
 sequence-first (`(seq_len, batch, input_size)`) and batch-first
-(`(batch, seq_len, input_size)`) layouts are supported.
+(`(batch, seq_len, input_size)`) layouts are supported, and packed inputs are
+accepted via `nn.utils.rnn.PackedSequence`.
 
 Class Signature
 ---------------
@@ -88,6 +89,9 @@ Input and Output Shapes
 -----------------------
 - **Input**: `(seq_len, batch, input_size)` or `(batch, seq_len, input_size)` when
   `batch_first=True`.
+- **Packed input**: `PackedSequence` with `data` shaped
+  `(sum(batch_sizes), input_size)` and a 1D `batch_sizes` tensor. When a packed
+  input is provided, `batch_first` has no effect.
 - **Initial hidden state `hx`**:
     - For `RNN_TANH` / `RNN_RELU`: `(num_layers, batch, hidden_size)`. If omitted, a
       zero tensor is created. A 2D `(batch, hidden_size)` tensor is allowed and
@@ -95,6 +99,8 @@ Input and Output Shapes
     - For `LSTM`: tuple `(h_0, c_0)`, each shaped `(num_layers, batch, hidden_size)`.
       A 2D tensor for either element is expanded similarly.
 - **Output**: same leading dimensions as the input, with feature size `hidden_size`.
+- **Packed output**: `PackedSequence` with the same `batch_sizes` and index metadata
+  as the input.
 - **Final hidden state**:
     - For simple RNN modes and GRU: `h_n` shaped `(num_layers, batch, hidden_size)`.
     - For `LSTM`: tuple `(h_n, c_n)`, each shaped `(num_layers, batch, hidden_size)`.

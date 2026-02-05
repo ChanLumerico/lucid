@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.RNNBase - Lucid 2.11.4 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.RNN" href="RNN.html" /><link rel="prev" title="Recurrent Layers" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.RNNBase - Lucid 2.12.0 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.RNN" href="RNN.html" /><link rel="prev" title="Recurrent Layers" href="index.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/rnn/RNNBase.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -453,9 +453,19 @@ data-aria-dark="Switch to auto color mode">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../utilities/index.html">Utilities</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../utilities/grad_norm.html">nn.util.grad_norm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../utilities/clip_grad_norm.html">nn.util.clip_grad_norm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../utilities/clip_grad_value.html">nn.util.clip_grad_value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../utilities/grad_norm.html">nn.utils.grad_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../utilities/get_total_norm.html">nn.utils.get_total_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../utilities/clip_grad_norm.html">nn.utils.clip_grad_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../utilities/clip_grad_value.html">nn.utils.clip_grad_value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../utilities/rnn/index.html">RNN Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../utilities/rnn/pad_sequence.html">nn.utils.rnn.pad_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../utilities/rnn/PackedSequence.html">nn.utils.rnn.PackedSequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../utilities/rnn/pack_padded_sequence.html">nn.utils.rnn.pack_padded_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../utilities/rnn/pad_packed_sequence.html">nn.utils.rnn.pad_packed_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../utilities/rnn/pack_sequence.html">nn.utils.rnn.pack_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../utilities/rnn/unpack_sequence.html">nn.utils.rnn.unpack_sequence</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -872,8 +882,11 @@ data-aria-dark="Switch to auto color mode">
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Visualization</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../visual/visual.html">lucid.visual</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../visual/draw_tensor_graph.html">visual.draw_tensor_graph</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../visual/build_mermaid_chart.html">visual.build_mermaid_chart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../visual/Mermaid.html">Mermaid Charts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../visual/build_tensor_mermaid_chart.html">visual.build_tensor_mermaid_chart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../visual/build_module_mermaid_chart.html">visual.build_module_mermaid_chart</a></li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Porting</span></p>
 <ul>
@@ -991,7 +1004,8 @@ data-aria-dark="Switch to auto color mode">
 or <cite>nn.LSTMCell</cite> depending on the selected mode. It runs full sequences and returns
 per-time-step outputs along with the final hidden state(s) for each layer. Both
 sequence-first (<cite>(seq_len, batch, input_size)</cite>) and batch-first
-(<cite>(batch, seq_len, input_size)</cite>) layouts are supported.</p>
+(<cite>(batch, seq_len, input_size)</cite>) layouts are supported, and packed inputs are
+accepted via <cite>nn.utils.rnn.PackedSequence</cite>.</p>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">class</span><span class="w"> </span><span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">RNNBase</span><span class="p">(</span>
@@ -1073,6 +1087,9 @@ it is fed into the next layer.</p></li>
 <ul class="simple">
 <li><p><strong>Input</strong>: <cite>(seq_len, batch, input_size)</cite> or <cite>(batch, seq_len, input_size)</cite> when
 <cite>batch_first=True</cite>.</p></li>
+<li><p><strong>Packed input</strong>: <cite>PackedSequence</cite> with <cite>data</cite> shaped
+<cite>(sum(batch_sizes), input_size)</cite> and a 1D <cite>batch_sizes</cite> tensor. When a packed
+input is provided, <cite>batch_first</cite> has no effect.</p></li>
 <li><dl class="simple">
 <dt><strong>Initial hidden state `hx`</strong>:</dt><dd><ul>
 <li><p>For <cite>RNN_TANH</cite> / <cite>RNN_RELU</cite>: <cite>(num_layers, batch, hidden_size)</cite>. If omitted, a
@@ -1085,6 +1102,8 @@ A 2D tensor for either element is expanded similarly.</p></li>
 </dl>
 </li>
 <li><p><strong>Output</strong>: same leading dimensions as the input, with feature size <cite>hidden_size</cite>.</p></li>
+<li><p><strong>Packed output</strong>: <cite>PackedSequence</cite> with the same <cite>batch_sizes</cite> and index metadata
+as the input.</p></li>
 <li><dl class="simple">
 <dt><strong>Final hidden state</strong>:</dt><dd><ul>
 <li><p>For simple RNN modes and GRU: <cite>h_n</cite> shaped <cite>(num_layers, batch, hidden_size)</cite>.</p></li>
@@ -1196,7 +1215,7 @@ A 2D tensor for either element is expanded similarly.</p></li>
     </div>
   </div>
 </footer>
-      <script src="../../../_static/documentation_options.js?v=ea365ac8"></script>
+      <script src="../../../_static/documentation_options.js?v=84389e84"></script>
       <script src="../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../_static/design-tabs.js?v=f930bc37"></script>

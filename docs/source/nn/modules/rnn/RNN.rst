@@ -51,12 +51,15 @@ Inputs and Outputs
 ------------------
 - **Input**: `(seq_len, batch, input_size)` or `(batch, seq_len, input_size)` when
   `batch_first=True`.
+- **Packed input**: `PackedSequence` with `data` shaped
+  `(sum(batch_sizes), input_size)`. When packed, `batch_first` has no effect.
 - **Initial hidden state `hx`**: `(num_layers, batch, hidden_size)`. If omitted,
   zero-initialized hidden states are created. A 2D `(batch, hidden_size)` tensor
   is accepted and expanded to the first layer.
 - **Returns**: `(output, h_n)`
 
   - `output`: same leading dimensions as the input, with feature size `hidden_size`.
+  - `output` is a `PackedSequence` when the input is packed.
   - `h_n`: final hidden state for each layer with shape `(num_layers, batch, hidden_size)`.
 
 Examples
@@ -91,4 +94,3 @@ Examples
     >>> output, h_n = rnn(seq, h0)
     >>> (output.shape, h_n.shape)
     ((5, 3, 6), (2, 3, 6))
-

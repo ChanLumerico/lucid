@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>efficientnet_v2_xl - Lucid 2.11.4 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="ConvNeXt" href="../convnext/ConvNeXt.html" /><link rel="prev" title="efficientnet_v2_l" href="efficientnet_v2_l.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>efficientnet_v2_xl - Lucid 2.12.0 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="ConvNeXt" href="../convnext/ConvNeXt.html" /><link rel="prev" title="efficientnet_v2_l" href="efficientnet_v2_l.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/imgclf/efficient/efficientnet_v2_xl.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -453,9 +453,19 @@ data-aria-dark="Switch to auto color mode">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../nn/utilities/index.html">Utilities</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/grad_norm.html">nn.util.grad_norm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/clip_grad_norm.html">nn.util.clip_grad_norm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/clip_grad_value.html">nn.util.clip_grad_value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/grad_norm.html">nn.utils.grad_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/get_total_norm.html">nn.utils.get_total_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/clip_grad_norm.html">nn.utils.clip_grad_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/clip_grad_value.html">nn.utils.clip_grad_value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/rnn/index.html">RNN Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../nn/utilities/rnn/pad_sequence.html">nn.utils.rnn.pad_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../nn/utilities/rnn/PackedSequence.html">nn.utils.rnn.PackedSequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../nn/utilities/rnn/pack_padded_sequence.html">nn.utils.rnn.pack_padded_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../nn/utilities/rnn/pad_packed_sequence.html">nn.utils.rnn.pad_packed_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../nn/utilities/rnn/pack_sequence.html">nn.utils.rnn.pack_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../nn/utilities/rnn/unpack_sequence.html">nn.utils.rnn.unpack_sequence</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -872,8 +882,11 @@ data-aria-dark="Switch to auto color mode">
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Visualization</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../visual/visual.html">lucid.visual</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../visual/draw_tensor_graph.html">visual.draw_tensor_graph</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../visual/build_mermaid_chart.html">visual.build_mermaid_chart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../visual/Mermaid.html">Mermaid Charts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../visual/build_tensor_mermaid_chart.html">visual.build_tensor_mermaid_chart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../visual/build_module_mermaid_chart.html">visual.build_module_mermaid_chart</a></li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Porting</span></p>
 <ul>
@@ -1080,7 +1093,7 @@ between efficiency and accuracy.</p>
     </div>
   </div>
 </footer>
-      <script src="../../../_static/documentation_options.js?v=ea365ac8"></script>
+      <script src="../../../_static/documentation_options.js?v=84389e84"></script>
       <script src="../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
