@@ -1,11 +1,11 @@
 [
  {
   "language": "Python",
-  "files": 141,
-  "lines": 34971,
-  "blanks": 7063,
-  "comments": 25,
-  "linesOfCode": 27883
+  "files": 143,
+  "lines": 35588,
+  "blanks": 7170,
+  "comments": 24,
+  "linesOfCode": 28394
  },
  {
   "language": "JSON",
@@ -49,10 +49,10 @@
  },
  {
   "language": "Total",
-  "files": 157,
-  "lines": 38157,
-  "blanks": 7321,
-  "comments": 47,
-  "linesOfCode": 30789
+  "files": 159,
+  "lines": 38774,
+  "blanks": 7428,
+  "comments": 46,
+  "linesOfCode": 31300
  }
 ]
