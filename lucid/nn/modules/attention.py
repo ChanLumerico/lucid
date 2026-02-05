@@ -1,3 +1,5 @@
+import math
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -41,6 +43,7 @@ class ScaledDotProductAttention(nn.Module):
     "num_heads",
     "dropout",
     "bias",
+    "use_separate_proj_weight",
     "add_bias_kv",
     "add_zero_attn",
 )
@@ -51,6 +54,7 @@ class MultiHeadAttention(nn.Module):
         num_heads: int,
         dropout: float = 0.0,
         bias: bool = True,
+        use_separate_proj_weight: bool = True,
         add_bias_kv: bool = False,
         add_zero_attn: bool = False,
         kdim: int | None = None,
@@ -60,6 +64,7 @@ class MultiHeadAttention(nn.Module):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.dropout = dropout
+        self.use_separate_proj_weight = use_separate_proj_weight
         self.add_bias_kv = add_bias_kv
         self.add_zero_attn = add_zero_attn
 
@@ -70,9 +75,30 @@ class MultiHeadAttention(nn.Module):
         kdim = kdim if kdim is not None else embed_dim
         vdim = vdim if vdim is not None else embed_dim
 
-        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
-        self.k_proj = nn.Linear(kdim, embed_dim, bias=bias)
-        self.v_proj = nn.Linear(vdim, embed_dim, bias=bias)
+        if use_separate_proj_weight:
+            self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+            self.k_proj = nn.Linear(kdim, embed_dim, bias=bias)
+            self.v_proj = nn.Linear(vdim, embed_dim, bias=bias)
+
+            self.register_parameter("in_proj_weight", None)
+            self.register_parameter("in_proj_bias", None)
+        else:
+            if kdim != embed_dim or vdim != embed_dim:
+                raise ValueError(
+                    "in_proj_weight requires kdim and vdim to equal embed_dim."
+                )
+
+            weight_ = lucid.empty(3 * embed_dim, embed_dim)
+            self.in_proj_weight = nn.Parameter(weight_)
+            if bias:
+                bias_ = lucid.empty(3 * embed_dim)
+                self.in_proj_bias = nn.Parameter(bias_)
+            else:
+                self.register_parameter("in_proj_bias", None)
+
+            self.q_proj = None
+            self.k_proj = None
+            self.v_proj = None
 
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
 
@@ -84,6 +110,17 @@ class MultiHeadAttention(nn.Module):
             self.bias_v = None
 
         self.scale: _Scalar = self.head_dim**-0.5
+        self._reset_parameters()
+
+    def _reset_parameters(self) -> None:
+        if self.in_proj_weight is None:
+            return
+
+        nn.init.kaiming_uniform(self.in_proj_weight)
+        if self.in_proj_bias is not None:
+            fan_in, _ = nn.init._dist._calculate_fan_in_and_fan_out(self.in_proj_weight)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            nn.init.uniform(self.in_proj_bias, -bound, bound)
 
     def forward(
         self,
@@ -97,9 +134,24 @@ class MultiHeadAttention(nn.Module):
         N, q_len = query.shape[:2]
         k_len, v_len = key.shape[1], value.shape[1]
 
-        q = self.q_proj(query)
-        k = self.k_proj(key)
-        v = self.v_proj(value)
+        if self.in_proj_weight is None:
+            q = self.q_proj(query)
+            k = self.k_proj(key)
+            v = self.v_proj(value)
+        else:
+            if query is key and key is value:
+                qkv = F.linear(query, self.in_proj_weight, self.in_proj_bias)
+                q, k, v = lucid.chunk(qkv, 3, axis=-1)
+            else:
+                w_q, w_k, w_v = lucid.chunk(self.in_proj_weight, 3, axis=0)
+                if self.in_proj_bias is not None:
+                    b_q, b_k, b_v = lucid.chunk(self.in_proj_bias, 3, axis=0)
+                else:
+                    b_q = b_k = b_v = None
+
+                q = F.linear(query, w_q, b_q)
+                k = F.linear(key, w_k, b_k)
+                v = F.linear(value, w_v, b_v)
 
         q = q.reshape(N, self.num_heads, q_len, self.head_dim)
         k = k.reshape(N, self.num_heads, k_len, self.head_dim)

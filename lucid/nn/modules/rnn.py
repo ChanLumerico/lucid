@@ -284,21 +284,16 @@ class RNNBase(nn.Module):
     ) -> None:
         super().__init__()
         self.is_lstm = False
-        cell_kwargs = {}
         nonlinearity = "tanh"
 
         if mode == "RNN_TANH":
-            cell_cls = RNNCell
-            cell_kwargs: dict[str, object] = {"nonlinearity": nonlinearity}
+            pass
         elif mode == "RNN_RELU":
             nonlinearity = "relu"
-            cell_cls = RNNCell
-            cell_kwargs = {"nonlinearity": nonlinearity}
         elif mode == "LSTM":
-            cell_cls = LSTMCell
             self.is_lstm = True
         elif mode == "GRU":
-            cell_cls = GRUCell
+            pass
         else:
             raise ValueError(
                 f"Invalid mode '{mode}'. Supported modes are 'RNN_TANH', "
@@ -315,18 +310,120 @@ class RNNBase(nn.Module):
         self.batch_first = batch_first
         self.dropout = float(dropout)
 
-        layers: list[nn.Module] = []
         for layer in range(num_layers):
             layer_input_size = input_size if layer == 0 else hidden_size
-            layers.append(
-                cell_cls(
-                    input_size=layer_input_size,
-                    hidden_size=hidden_size,
-                    bias=bias,
-                    **cell_kwargs,
+            sqrt_k = 1.0 / (hidden_size**0.5)
+
+            if mode in ("RNN_TANH", "RNN_RELU"):
+                w_ih = nn.Parameter(
+                    lucid.random.uniform(
+                        -sqrt_k, sqrt_k, (hidden_size, layer_input_size)
+                    )
                 )
-            )
-        self.layers = nn.ModuleList(layers)
+                w_hh = nn.Parameter(
+                    lucid.random.uniform(-sqrt_k, sqrt_k, (hidden_size, hidden_size))
+                )
+            elif mode == "LSTM":
+                w_ih = nn.Parameter(
+                    lucid.random.uniform(
+                        -sqrt_k, sqrt_k, (4 * hidden_size, layer_input_size)
+                    )
+                )
+                w_hh = nn.Parameter(
+                    lucid.random.uniform(
+                        -sqrt_k, sqrt_k, (4 * hidden_size, hidden_size)
+                    )
+                )
+            else:
+                w_ih = nn.Parameter(
+                    lucid.random.uniform(
+                        -sqrt_k, sqrt_k, (3 * hidden_size, layer_input_size)
+                    )
+                )
+                w_hh = nn.Parameter(
+                    lucid.random.uniform(
+                        -sqrt_k, sqrt_k, (3 * hidden_size, hidden_size)
+                    )
+                )
+
+            self.register_parameter(f"weight_ih_l{layer}", w_ih)
+            self.register_parameter(f"weight_hh_l{layer}", w_hh)
+
+            if bias:
+                b_ih = nn.Parameter(
+                    lucid.random.uniform(-sqrt_k, sqrt_k, w_ih.shape[0])
+                )
+                b_hh = nn.Parameter(
+                    lucid.random.uniform(-sqrt_k, sqrt_k, w_hh.shape[0])
+                )
+                self.register_parameter(f"bias_ih_l{layer}", b_ih)
+                self.register_parameter(f"bias_hh_l{layer}", b_hh)
+            else:
+                self.register_parameter(f"bias_ih_l{layer}", None)
+                self.register_parameter(f"bias_hh_l{layer}", None)
+
+    def _rnn_cell(
+        self,
+        input_: Tensor,
+        hx: Tensor,
+        w_ih: Tensor,
+        w_hh: Tensor,
+        b_ih: Tensor | None,
+        b_hh: Tensor | None,
+    ) -> Tensor:
+        hy = F.linear(input_, w_ih, b_ih)
+        hy += F.linear(hx, w_hh, b_hh)
+
+        if self.mode == "RNN_TANH":
+            return F.tanh(hy)
+
+        return F.relu(hy)
+
+    def _lstm_cell(
+        self,
+        input_: Tensor,
+        hx: Tensor,
+        cx: Tensor,
+        w_ih: Tensor,
+        w_hh: Tensor,
+        b_ih: Tensor | None,
+        b_hh: Tensor | None,
+    ) -> tuple[Tensor, Tensor]:
+        gates = F.linear(input_, w_ih, b_ih)
+        gates += F.linear(hx, w_hh, b_hh)
+
+        i_t, f_t, g_t, o_t = lucid.split(gates, 4, axis=1)
+        i_t = F.sigmoid(i_t)
+        f_t = F.sigmoid(f_t)
+        g_t = F.tanh(g_t)
+        o_t = F.sigmoid(o_t)
+
+        c_t = f_t * cx + i_t * g_t
+        h_t = o_t * F.tanh(c_t)
+
+        return h_t, c_t
+
+    def _gru_cell(
+        self,
+        input_: Tensor,
+        hx: Tensor,
+        w_ih: Tensor,
+        w_hh: Tensor,
+        b_ih: Tensor | None,
+        b_hh: Tensor | None,
+    ) -> Tensor:
+        input_gates = F.linear(input_, w_ih, b_ih)
+        hidden_gates = F.linear(hx, w_hh, b_hh)
+
+        i_r, i_z, i_n = lucid.split(input_gates, 3, axis=1)
+        h_r, h_z, h_n = lucid.split(hidden_gates, 3, axis=1)
+
+        r_t = F.sigmoid(i_r + h_r)
+        z_t = F.sigmoid(i_z + h_z)
+        n_t = F.tanh(i_n + r_t * h_n)
+        h_t = (1 - z_t) * n_t + z_t * hx
+
+        return h_t
 
     def _init_hidden(
         self, batch_size: int, dtype: Numeric, device: _DeviceType
@@ -441,7 +538,12 @@ class RNNBase(nn.Module):
         h_n_list: list[Tensor] = []
         c_n_list: list[Tensor] | None = [] if self.is_lstm else None
 
-        for layer_idx, cell in enumerate(self.layers):
+        for layer_idx in range(self.num_layers):
+            w_ih = getattr(self, f"weight_ih_l{layer_idx}")
+            w_hh = getattr(self, f"weight_hh_l{layer_idx}")
+            b_ih = getattr(self, f"bias_ih_l{layer_idx}")
+            b_hh = getattr(self, f"bias_hh_l{layer_idx}")
+
             if self.is_lstm:
                 h_t = hx_h[layer_idx]
                 c_t = hx_c[layer_idx]
@@ -481,9 +583,13 @@ class RNNBase(nn.Module):
                     offset += bs
 
                     if self.is_lstm:
-                        h_t, c_t = cell(step_input, (h_t, c_t))
+                        h_t, c_t = self._lstm_cell(
+                            step_input, h_t, c_t, w_ih, w_hh, b_ih, b_hh
+                        )
+                    elif self.mode == "GRU":
+                        h_t = self._gru_cell(step_input, h_t, w_ih, w_hh, b_ih, b_hh)
                     else:
-                        h_t = cell(step_input, h_t)
+                        h_t = self._rnn_cell(step_input, h_t, w_ih, w_hh, b_ih, b_hh)
 
                     outputs.append(h_t)
                     prev_bs = bs
@@ -512,11 +618,17 @@ class RNNBase(nn.Module):
 
             else:
                 for t in range(seq_len):
+                    step_input = layer_input[t]
                     if self.is_lstm:
-                        h_t, c_t = cell(layer_input[t], (h_t, c_t))
+                        h_t, c_t = self._lstm_cell(
+                            step_input, h_t, c_t, w_ih, w_hh, b_ih, b_hh
+                        )
+                        outputs.append(h_t.unsqueeze(axis=0))
+                    elif self.mode == "GRU":
+                        h_t = self._gru_cell(step_input, h_t, w_ih, w_hh, b_ih, b_hh)
                         outputs.append(h_t.unsqueeze(axis=0))
                     else:
-                        h_t = cell(layer_input[t], h_t)
+                        h_t = self._rnn_cell(step_input, h_t, w_ih, w_hh, b_ih, b_hh)
                         outputs.append(h_t.unsqueeze(axis=0))
 
                 layer_output = lucid.concatenate(tuple(outputs), axis=0)
