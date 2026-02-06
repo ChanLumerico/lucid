@@ -1,4 +1,15 @@
-from typing import Callable, Iterator, Optional, Self, SupportsIndex, Any, overload
+from typing import (
+    Callable,
+    Iterator,
+    Optional,
+    Self,
+    SupportsIndex,
+    Any,
+    overload,
+    Generic,
+    TypeVar,
+    ClassVar,
+)
 from types import NoneType
 from collections import deque
 
@@ -22,15 +33,32 @@ from lucid._backend.core import BackwardOperation, Operation, noop
 from lucid._backend.metal import mx, parse_mlx_indexing, check_metal_availability
 
 
+__all__ = [
+    "Tensor",
+    "FloatTensor",
+    "DoubleTensor",
+    "HalfTensor",
+    "CharTensor",
+    "ShortTensor",
+    "IntTensor",
+    "LongTensor",
+    "BoolTensor",
+]
+
+
+DType = TypeVar("DType", bound=Numeric | bool)
+
 _HookType = Callable[["Tensor", _NumPyArray | _MLXArray], None]
 
 _dtype_map = {int: types.Int64, float: types.Float64, complex: types.Complex64}
 
 
-class Tensor(_TensorBase, _TensorInplace):
+class Tensor(Generic[DType], _TensorBase, _TensorInplace):
+    _fixed_dtype: ClassVar[Numeric | None] = None
+
     def __init__(
         self,
-        data: _ArrayOrScalar | _MLXArray,
+        data: _ArrayOrScalar,
         requires_grad: bool = False,
         keep_grad: bool = False,
         dtype: _BuiltinNumeric | Numeric | None = None,
@@ -38,6 +66,9 @@ class Tensor(_TensorBase, _TensorInplace):
     ) -> None:
         self._is_free = False
         self._is_bool_tensor = False
+
+        if self._fixed_dtype is not None:
+            dtype = self._fixed_dtype
 
         if dtype is bool:
             self._is_bool_tensor = True
@@ -285,6 +316,12 @@ class Tensor(_TensorBase, _TensorInplace):
             dtype = device_or_dtype
             return self.astype(dtype)
 
+    def cpu(self) -> Self:
+        return self.to(device="cpu")
+
+    def gpu(self) -> Self:
+        return self.to(device="gpu")
+
     def is_cpu(self) -> bool:
         return self.device == "cpu"
 
@@ -480,3 +517,155 @@ class Tensor(_TensorBase, _TensorInplace):
 
     def bool(self) -> Self:
         return self.astype(bool)
+
+
+class LongTensor(Tensor[types.Int64]):
+    _fixed_dtype: ClassVar[Numeric | None] = types.Int64
+
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> None:
+        super().__init__(
+            data=data,
+            requires_grad=requires_grad,
+            keep_grad=keep_grad,
+            dtype=types.Int64,
+            device=device,
+        )
+
+
+class IntTensor(Tensor[types.Int32]):
+    _fixed_dtype: ClassVar[Numeric | None] = types.Int32
+
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> None:
+        super().__init__(
+            data=data,
+            requires_grad=requires_grad,
+            keep_grad=keep_grad,
+            dtype=types.Int32,
+            device=device,
+        )
+
+
+class ShortTensor(Tensor[types.Int16]):
+    _fixed_dtype: ClassVar[Numeric | None] = types.Int16
+
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> None:
+        super().__init__(
+            data=data,
+            requires_grad=requires_grad,
+            keep_grad=keep_grad,
+            dtype=types.Int16,
+            device=device,
+        )
+
+
+class CharTensor(Tensor[types.Int8]):
+    _fixed_dtype: ClassVar[Numeric | None] = types.Int8
+
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> None:
+        super().__init__(
+            data=data,
+            requires_grad=requires_grad,
+            keep_grad=keep_grad,
+            dtype=types.Int8,
+            device=device,
+        )
+
+
+class HalfTensor(Tensor[types.Float16]):
+    _fixed_dtype: ClassVar[Numeric | None] = types.Float16
+
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> None:
+        super().__init__(
+            data=data,
+            requires_grad=requires_grad,
+            keep_grad=keep_grad,
+            dtype=types.Float16,
+            device=device,
+        )
+
+
+class FloatTensor(Tensor[types.Float32]):
+    _fixed_dtype: ClassVar[Numeric | None] = types.Float32
+
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> None:
+        super().__init__(
+            data=data,
+            requires_grad=requires_grad,
+            keep_grad=keep_grad,
+            dtype=types.Float32,
+            device=device,
+        )
+
+
+class DoubleTensor(Tensor[types.Float64]):
+    _fixed_dtype: ClassVar[Numeric | None] = types.Float64
+
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> None:
+        super().__init__(
+            data=data,
+            requires_grad=requires_grad,
+            keep_grad=keep_grad,
+            dtype=types.Float64,
+            device=device,
+        )
+
+
+class BoolTensor(Tensor[bool]):
+    _fixed_dtype: ClassVar[Numeric | None] = None
+
+    def __init__(
+        self,
+        data: _ArrayOrScalar,
+        requires_grad: bool = False,
+        keep_grad: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> None:
+        super().__init__(
+            data=data,
+            requires_grad=requires_grad,
+            keep_grad=keep_grad,
+            dtype=bool,
+            device=device,
+        )

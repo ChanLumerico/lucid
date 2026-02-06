@@ -21,7 +21,17 @@ class Embedding(nn.Module):
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
-        self.padding_idx = padding_idx
+
+        if padding_idx is None:
+            self.padding_idx = None
+        else:
+            pad = int(padding_idx)
+            if pad < 0:
+                pad += num_embeddings
+            if pad < 0 or pad >= num_embeddings:
+                raise IndexError("padding_idx out of range.")
+            self.padding_idx = pad
+
         self.max_norm = max_norm
         self.norm_type = norm_type
 
@@ -32,6 +42,9 @@ class Embedding(nn.Module):
         else:
             self.weight = nn.Parameter(_weight)
 
+        if self.padding_idx is not None:
+            self.weight.data[self.padding_idx] = 0
+
     def forward(self, input_: Tensor) -> Tensor:
         return F.embedding(
             input_, self.weight, self.padding_idx, self.max_norm, self.norm_type
@@ -39,3 +52,5 @@ class Embedding(nn.Module):
 
     def reset_parameters(self) -> None:
         self.weight.data = lucid.random.uniform(-0.1, 0.1, self.weight.shape)
+        if self.padding_idx is not None:
+            self.weight.data[self.padding_idx] = 0

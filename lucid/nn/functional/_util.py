@@ -1,3 +1,5 @@
+import numpy as np
+
 import lucid
 import lucid.nn.functional
 
@@ -5,6 +7,7 @@ from lucid._tensor import Tensor
 from lucid.types import _Scalar, Numeric
 
 from lucid.nn._kernel.embedding import embedding_kernel
+from lucid._backend.metal import mx
 
 
 def _interpolate_bilinear(
@@ -131,17 +134,46 @@ def embedding(
     max_norm: float | None = None,
     norm_type: float = 2.0,
 ) -> Tensor:
+    num_embeddings = int(weight.shape[0])
+    if padding_idx is None:
+        pad = -1
+    else:
+        pad = int(padding_idx)
+        if pad < 0:
+            pad += num_embeddings
+        if pad < 0 or pad >= num_embeddings:
+            raise IndexError("padding_idx out of range.")
+
     indices = input_.astype(lucid.Int)
-    op = embedding_kernel()
-    output = op(indices, weight)
-    if padding_idx is not None:
-        mask = input_.data == padding_idx
-        output *= 1 - mask[..., None]
+    idx_data = indices.data
+
+    if (idx_data < 0).any() or (idx_data >= num_embeddings).any():
+        raise IndexError("embedding indices out of range.")
 
     if max_norm is not None:
-        norm = (output**norm_type).sum(axis=-1, keepdims=True) ** (1 / norm_type)
-        scaling = max_norm / (norm + (norm == 0))
-        output *= scaling
+        lib_ = np if weight.is_cpu() else mx
+        flat = idx_data.reshape(-1)
+
+        w = weight.data[flat]
+        if norm_type <= 0:
+            raise ValueError("norm_type must be positive.")
+
+        norms = (lib_.abs(w) ** norm_type).sum(axis=1) ** (1.0 / norm_type)
+        scale = lib_.minimum(1.0, max_norm / (norms + (norms == 0)))
+
+        if pad >= 0:
+            mask = flat == pad
+            mask_f = mask.astype(scale.dtype)
+            scale = scale * (1 - mask_f) + mask_f
+
+        weight.data[flat] = w * scale[:, None]
+
+    op = embedding_kernel(padding_idx=pad)
+    output = op(indices, weight)
+
+    if pad >= 0:
+        mask = input_.data == pad
+        output *= 1 - mask[..., None]
 
     return output
 

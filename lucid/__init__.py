@@ -25,7 +25,7 @@ import json
 import math
 import numpy as np
 
-from lucid._tensor import Tensor
+from lucid._tensor import *
 from lucid._func import *
 from lucid._util import *
 
@@ -308,7 +308,7 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
 
 
 def _conv_view_limit_mb() -> int:
-    from lucid._kernel import conv as _conv_kernel
+    from lucid.nn._kernel import conv as _conv_kernel
 
     return _conv_kernel.get_conv_view_limit_mb()
 
