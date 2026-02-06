@@ -9,11 +9,11 @@ from lucid._util import func
 # fmt: off
 __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
-    "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid", 
-    "split", "tril", "triu", "broadcast_to", "chunk", "masked_fill", "roll", 
-    "unbind", "sort", "nonzero", "unique", "topk", "argsort", "histogramdd", 
-    "histogram", "histogram2d", "where", "nonzero", "argmin", "argmax", 
-    "diagonal",
+    "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid",
+    "split", "tril", "triu", "broadcast_to", "expand", "chunk", "masked_fill",
+    "roll", "unbind", "sort", "nonzero", "unique", "topk", "argsort",
+    "histogramdd", "histogram", "histogram2d", "where", "nonzero", "argmin",
+    "argmax", "diagonal",
 ]
 # fmt: on
 
@@ -104,6 +104,14 @@ def triu(a: Tensor, /, diagonal: int = 0) -> Tensor:
 
 def broadcast_to(a: Tensor, /, shape: _ShapeLike) -> Tensor:
     return func.broadcast_to(shape)(a)
+
+
+def expand(a: Tensor, /, *sizes: int | _ShapeLike) -> Tensor:
+    if len(sizes) == 1 and isinstance(sizes[0], (tuple, list)):
+        shape = sizes[0]
+    else:
+        shape = sizes
+    return func.expand(shape)(a)
 
 
 def chunk(a: Tensor, /, chunks: int, axis: int = 0) -> tuple[Tensor, ...]:
@@ -257,6 +265,7 @@ Tensor.split = split
 Tensor.tril = tril
 Tensor.triu = triu
 Tensor.broadcast_to = broadcast_to
+Tensor.expand = expand
 Tensor.chunk = chunk
 Tensor.masked_fill = masked_fill
 Tensor.roll = roll

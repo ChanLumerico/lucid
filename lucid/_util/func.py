@@ -605,6 +605,79 @@ class broadcast_to(Operation):
         return self.result.grad.reshape(self.original_shape)
 
 
+class expand(Operation):
+    def __init__(self, shape: _ShapeLike) -> None:
+        super().__init__()
+        self.shape = shape
+
+    def _resolve_shape(self, input_shape: tuple[int, ...]) -> tuple[int, ...]:
+        shape = tuple(int(dim) for dim in self.shape)
+        if len(shape) == 0:
+            raise ValueError("expand() expects at least one dimension.")
+
+        if len(shape) < len(input_shape):
+            raise ValueError(
+                "expand() cannot shrink the number of dimensions from "
+                f"{len(input_shape)} to {len(shape)}."
+            )
+
+        ndim_diff = len(shape) - len(input_shape)
+        padded_input = (1,) * ndim_diff + input_shape
+
+        resolved: list[int] = []
+        for axis, (target_dim, input_dim) in enumerate(zip(shape, padded_input)):
+            if target_dim == -1:
+                if axis < ndim_diff:
+                    raise ValueError(
+                        "expand() cannot use -1 in a leading, "
+                        "non-existing dimension."
+                    )
+                target_dim = input_dim
+
+            elif target_dim < -1:
+                raise ValueError("expand() size must be >= -1.")
+
+            if input_dim == target_dim:
+                resolved.append(target_dim)
+            elif input_dim == 1 and target_dim >= 0:
+                resolved.append(target_dim)
+            else:
+                raise ValueError(
+                    "expand() cannot expand dimension "
+                    f"{axis} from {input_dim} to {target_dim}."
+                )
+
+        return tuple(resolved)
+
+    @unary_func_op()
+    def cpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.original_shape = a.shape
+        self.expanded_shape = self._resolve_shape(a.shape)
+
+        self.result = Tensor(np.broadcast_to(a.data, self.expanded_shape))
+        return self.result, self.__grad__
+
+    @unary_func_op(device="gpu")
+    def gpu(self, a: Tensor) -> _FuncOpReturnType:
+        self.original_shape = a.shape
+        self.expanded_shape = self._resolve_shape(a.shape)
+
+        self.result = Tensor(mx.broadcast_to(a.data, self.expanded_shape))
+        return self.result, self.__grad__
+
+    def __grad__(self) -> _GradType:
+        input_shape = self.original_shape
+        ndim_diff = len(self.expanded_shape) - len(input_shape)
+        if ndim_diff > 0:
+            input_shape = (1,) * ndim_diff + input_shape
+
+        for axis, (in_dim, out_dim) in enumerate(zip(input_shape, self.expanded_shape)):
+            if in_dim == 1 and out_dim > 1:
+                self.result.grad = self.result.grad.sum(axis=axis, keepdims=True)
+
+        return self.result.grad.reshape(self.original_shape)
+
+
 class chunk(Operation):
     def __init__(self, chunks: int, axis: int) -> None:
         super().__init__()

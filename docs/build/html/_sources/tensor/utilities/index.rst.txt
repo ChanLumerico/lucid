@@ -21,6 +21,7 @@ Tensor Utilities
    tril.rst
    triu.rst
    broadcast_to.rst
+   expand.rst
    chunk.rst
    masked_fill.rst
    roll.rst

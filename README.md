@@ -20,6 +20,10 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- New Tensor utility function added: `lucid.Tensor.expand`
+
+- Added Type-Generic Tensors: `lucid.LongTensor`, `lucid.DoubleTensor`, etc.
+
 - Added new visual tool: `lucid.visual.build_tensor_mermaid_chart` which builds a Mermaid chart of given tensor's computatoinal graph
 
 - Added additional `nn.Module` hooks for richer introspection during training:
