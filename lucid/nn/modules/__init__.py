@@ -11,3 +11,4 @@ from .transformer import *
 from .sparse import *
 from .einops import *
 from .rnn import *
+from .cache import *
