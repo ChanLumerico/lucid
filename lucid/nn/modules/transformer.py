@@ -63,8 +63,23 @@ class TransformerEncoderLayer(nn.Module):
         src_mask: Tensor | None,
         src_key_padding_mask: Tensor | None,
         is_causal: bool,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_layer_idx: int | None = None,
     ) -> Tensor:
-        attn_output = self.self_attn(x, x, x, src_key_padding_mask, src_mask, is_causal)
+        attn_output = self.self_attn(
+            x,
+            x,
+            x,
+            src_key_padding_mask,
+            src_mask,
+            is_causal,
+            kv_cache=kv_cache,
+            use_cache=use_cache,
+            cache_position=cache_position,
+            cache_layer_idx=cache_layer_idx,
+        )
         attn_output = self.dropout1(attn_output)
 
         return attn_output
@@ -84,15 +99,36 @@ class TransformerEncoderLayer(nn.Module):
         src_mask: Tensor | None = None,
         src_key_padding_mask: Tensor | None = None,
         is_causal: bool = False,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_layer_idx: int | None = None,
     ) -> Tensor:
         if self.norm_first:
             x = src + self._sa_block(
-                self.norm1(src), src_mask, src_key_padding_mask, is_causal
+                self.norm1(src),
+                src_mask,
+                src_key_padding_mask,
+                is_causal,
+                kv_cache=kv_cache,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                cache_layer_idx=cache_layer_idx,
             )
             x += self._ff_block(self.norm2(x))
         else:
             x = self.norm1(
-                src + self._sa_block(src, src_mask, src_key_padding_mask, is_causal)
+                src
+                + self._sa_block(
+                    src,
+                    src_mask,
+                    src_key_padding_mask,
+                    is_causal,
+                    kv_cache=kv_cache,
+                    use_cache=use_cache,
+                    cache_position=cache_position,
+                    cache_layer_idx=cache_layer_idx,
+                )
             )
             x = self.norm2(x + self._ff_block(x))
 
@@ -150,8 +186,23 @@ class TransformerDecoderLayer(nn.Module):
         tgt_mask: Tensor | None,
         tgt_key_padding_mask: Tensor | None,
         is_causal: bool,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_layer_idx: int | None = None,
     ) -> Tensor:
-        attn_output = self.self_attn(x, x, x, tgt_key_padding_mask, tgt_mask, is_causal)
+        attn_output = self.self_attn(
+            x,
+            x,
+            x,
+            tgt_key_padding_mask,
+            tgt_mask,
+            is_causal,
+            kv_cache=kv_cache,
+            use_cache=use_cache,
+            cache_position=cache_position,
+            cache_layer_idx=cache_layer_idx,
+        )
         attn_output = self.dropout1(attn_output)
 
         return attn_output
@@ -190,10 +241,21 @@ class TransformerDecoderLayer(nn.Module):
         mem_key_padding_mask: Tensor | None = None,
         tgt_is_causal: bool = False,
         mem_is_causal: bool = False,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_layer_idx: int | None = None,
     ) -> Tensor:
         if self.norm_first:
             x = tgt + self._sa_block(
-                self.norm1(tgt), tgt_mask, tgt_key_padding_mask, tgt_is_causal
+                self.norm1(tgt),
+                tgt_mask,
+                tgt_key_padding_mask,
+                tgt_is_causal,
+                kv_cache=kv_cache,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                cache_layer_idx=cache_layer_idx,
             )
             x += self._mha_block(
                 self.norm2(x), memory, mem_mask, mem_key_padding_mask, mem_is_causal
@@ -201,7 +263,17 @@ class TransformerDecoderLayer(nn.Module):
             x += self._ff_block(self.norm3(x))
         else:
             x = self.norm1(
-                tgt + self._sa_block(tgt, tgt_mask, tgt_key_padding_mask, tgt_is_causal)
+                tgt
+                + self._sa_block(
+                    tgt,
+                    tgt_mask,
+                    tgt_key_padding_mask,
+                    tgt_is_causal,
+                    kv_cache=kv_cache,
+                    use_cache=use_cache,
+                    cache_position=cache_position,
+                    cache_layer_idx=cache_layer_idx,
+                )
             )
             x = self.norm2(
                 x
@@ -234,14 +306,22 @@ class TransformerEncoder(nn.Module):
         src_mask: Tensor | None = None,
         src_key_padding_mask: Tensor | None = None,
         is_causal: bool = False,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_start_layer_idx: int = 0,
     ) -> Tensor:
         output = src
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
             output = layer(
                 output,
                 src_mask=src_mask,
                 src_key_padding_mask=src_key_padding_mask,
                 is_causal=is_causal,
+                kv_cache=kv_cache,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                cache_layer_idx=cache_start_layer_idx + i,
             )
         if self.norm is not None:
             output = self.norm(output)
@@ -276,9 +356,13 @@ class TransformerDecoder(nn.Module):
         mem_key_padding_mask: Tensor | None = None,
         tgt_is_causal: bool = False,
         mem_is_causal: bool = False,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_start_layer_idx: int = 0,
     ) -> Tensor:
         output = tgt
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
             output = layer(
                 output,
                 memory,
@@ -288,6 +372,10 @@ class TransformerDecoder(nn.Module):
                 mem_key_padding_mask=mem_key_padding_mask,
                 tgt_is_causal=tgt_is_causal,
                 mem_is_causal=mem_is_causal,
+                kv_cache=kv_cache,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                cache_layer_idx=cache_start_layer_idx + i,
             )
         if self.norm is not None:
             output = self.norm(output)
@@ -375,12 +463,24 @@ class Transformer(nn.Module):
         src_key_padding_mask: Tensor | None = None,
         tgt_key_padding_mask: Tensor | None = None,
         mem_key_padding_mask: Tensor | None = None,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_start_layer_idx: int = 0,
+        encoder_kv_cache: nn.KVCache | None = None,
+        use_encoder_cache: bool = False,
+        encoder_cache_position: Tensor | None = None,
+        encoder_cache_start_layer_idx: int = 0,
     ) -> Tensor:
         memory = self.encoder(
             src,
             src_mask=src_mask,
             src_key_padding_mask=src_key_padding_mask,
             is_causal=False,
+            kv_cache=encoder_kv_cache,
+            use_cache=use_encoder_cache,
+            cache_position=encoder_cache_position,
+            cache_start_layer_idx=encoder_cache_start_layer_idx,
         )
         output = self.decoder(
             tgt,
@@ -391,5 +491,9 @@ class Transformer(nn.Module):
             mem_key_padding_mask=mem_key_padding_mask,
             tgt_is_causal=False,
             mem_is_causal=False,
+            kv_cache=kv_cache,
+            use_cache=use_cache,
+            cache_position=cache_position,
+            cache_start_layer_idx=cache_start_layer_idx,
         )
         return output

@@ -20,13 +20,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Now lucid supports **KV-Cache** system for transformer-like models: `nn.DynamicKVCache`, `nn.StaticKVCache` based on the super class `nn.KVCache`
+
 - New Tensor utility functions added: `lucid.Tensor.expand` and `lucid.Tensor.gather` (also `lucid.gather`)
 
 - Added Type-Generic Tensors: `lucid.LongTensor`, `lucid.DoubleTensor`, etc.
-
-- Added new visual tool: `lucid.visual.build_tensor_mermaid_chart` which builds a Mermaid chart of given tensor's computatoinal graph
-
-- Added additional `nn.Module` hooks for richer introspection during training:
 
 ## 🔧 How to Install
 

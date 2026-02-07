@@ -130,6 +130,10 @@ class MultiHeadAttention(nn.Module):
         key_padding_mask: Tensor | None = None,
         attn_mask: Tensor | None = None,
         is_causal: bool = False,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_layer_idx: int | None = None,
     ) -> Tensor:
         N, q_len = query.shape[:2]
         k_len, v_len = key.shape[1], value.shape[1]
@@ -156,6 +160,13 @@ class MultiHeadAttention(nn.Module):
         q = q.reshape(N, self.num_heads, q_len, self.head_dim)
         k = k.reshape(N, self.num_heads, k_len, self.head_dim)
         v = v.reshape(N, self.num_heads, v_len, self.head_dim)
+
+        if use_cache:
+            if kv_cache is None:
+                raise ValueError("use_cache=True requires kv_cache.")
+            if cache_layer_idx is None:
+                raise ValueError("use_cache=True requires cache_layer_idx.")
+            k, v = kv_cache.update(k, v, cache_layer_idx, cache_position)
 
         if self.add_bias_kv:
             bias_k = self.bias_k.reshape(1, self.num_heads, 1, self.head_dim).repeat(

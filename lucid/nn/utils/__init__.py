@@ -1,2 +1,2 @@
-from ._grad import *
+from ._base import *
 from . import rnn as rnn

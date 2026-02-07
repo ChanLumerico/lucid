@@ -72,6 +72,14 @@ class Transformer(nn.Module):
         src_key_padding_mask: Tensor | None = None,
         tgt_key_padding_mask: Tensor | None = None,
         mem_key_padding_mask: Tensor | None = None,
+        kv_cache: nn.KVCache | None = None,
+        use_cache: bool = False,
+        cache_position: Tensor | None = None,
+        cache_start_layer_idx: int = 0,
+        encoder_kv_cache: nn.KVCache | None = None,
+        use_encoder_cache: bool = False,
+        encoder_cache_position: Tensor | None = None,
+        encoder_cache_start_layer_idx: int = 0,
     ) -> Tensor:
         src_emb = self.src_tok_emb(src) * math.sqrt(self.d_model)
         tgt_emb = self.tgt_tok_emb(tgt) * math.sqrt(self.d_model)
@@ -88,6 +96,14 @@ class Transformer(nn.Module):
             src_key_padding_mask=src_key_padding_mask,
             tgt_key_padding_mask=tgt_key_padding_mask,
             mem_key_padding_mask=mem_key_padding_mask,
+            kv_cache=kv_cache,
+            use_cache=use_cache,
+            cache_position=cache_position,
+            cache_start_layer_idx=cache_start_layer_idx,
+            encoder_kv_cache=encoder_kv_cache,
+            use_encoder_cache=use_encoder_cache,
+            encoder_cache_position=encoder_cache_position,
+            encoder_cache_start_layer_idx=encoder_cache_start_layer_idx,
         )
         output = self.fc_out(output)
 
