@@ -11,7 +11,7 @@ __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
     "vstack", "concatenate", "pad", "repeat", "tile", "flatten", "meshgrid",
     "split", "tril", "triu", "broadcast_to", "expand", "chunk", "masked_fill",
-    "roll", "unbind", "sort", "nonzero", "unique", "topk", "argsort",
+    "roll", "unbind", "sort", "gather", "nonzero", "unique", "topk", "argsort",
     "histogramdd", "histogram", "histogram2d", "where", "nonzero", "argmin",
     "argmax", "diagonal",
 ]
@@ -129,6 +129,10 @@ def roll(
     axis: int | tuple[int, ...] | None = None,
 ) -> Tensor:
     return func.roll(shifts, axis)(a)
+
+
+def gather(a: Tensor, /, dim: int, index: Tensor) -> Tensor:
+    return func.gather(dim)(a, index)
 
 
 def unbind(a: Tensor, /, axis: int = 0) -> tuple[Tensor, ...]:
@@ -269,6 +273,7 @@ Tensor.expand = expand
 Tensor.chunk = chunk
 Tensor.masked_fill = masked_fill
 Tensor.roll = roll
+Tensor.gather = gather
 Tensor.unbind = unbind
 Tensor.sort = sort
 Tensor.unique = unique

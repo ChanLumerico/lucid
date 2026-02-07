@@ -6,9 +6,17 @@ import numpy as np
 import math
 
 from lucid._tensor import Tensor
-from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar, _ArrayLike, _NumPyArray
+from lucid.types import (
+    _ShapeLike,
+    _ArrayLikeInt,
+    _Scalar,
+    _ArrayLike,
+    _NumPyArray,
+    _TensorData,
+)
 
 from lucid._backend.core import (
+    binary_func_op,
     fallback,
     Operation,
     func_op,
@@ -747,6 +755,136 @@ class masked_fill(Operation):
         grad = mx.array(self.result.grad)
         grad = mx.where(self.mask.data.astype(bool), 0, grad)
         return grad
+
+
+class gather(Operation):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.dim = dim
+
+    def _normalize_dim(self, ndim: int) -> int:
+        dim = self.dim + ndim if self.dim < 0 else self.dim
+        if dim < 0 or dim >= ndim:
+            raise ValueError(f"Dimension out of range (got dim={self.dim}).")
+        return dim
+
+    def _validate_inputs(self, a: Tensor, index: Tensor) -> int:
+        if a.ndim != index.ndim:
+            raise ValueError(
+                f"index must have the same number of dimensions as input "
+                + f"(got input.ndim={a.ndim}, index.ndim={index.ndim})."
+            )
+
+        dim = self._normalize_dim(a.ndim)
+        index_dtype = np.array(index.data).dtype
+        if not np.issubdtype(index_dtype, np.integer):
+            raise TypeError("index must be an integer tensor.")
+
+        for d, (i_size, a_size) in enumerate(zip(index.shape, a.shape)):
+            if d != dim and i_size > a_size:
+                raise ValueError(
+                    "index.size(d) must be <= input.size(d) for d != dim; "
+                    + f"got index.size({d})={i_size}, input.size({d})={a_size}."
+                )
+
+        index_np = np.array(index.data)
+        if index_np.size > 0 and (
+            (index_np < 0).any() or (index_np >= a.shape[dim]).any()
+        ):
+            raise IndexError(
+                f"index is out of bounds for dimension {dim} with size {a.shape[dim]}."
+            )
+
+        return dim
+
+    def _scatter_grad_np(
+        self,
+        a_shape: tuple[int, ...],
+        index_np: _NumPyArray,
+        grad_np: _NumPyArray,
+        dim: int,
+    ) -> _NumPyArray:
+        grad_input = np.zeros(a_shape, dtype=grad_np.dtype)
+
+        for out_coord in np.ndindex(index_np.shape):
+            in_coord = list(out_coord)
+            in_coord[dim] = int(index_np[out_coord])
+            grad_input[tuple(in_coord)] += grad_np[out_coord]
+
+        return grad_input
+
+    def _slice_to_index_extents(
+        self, x: _TensorData, index_shape: tuple[int, ...], dim: int
+    ) -> _TensorData:
+        slices = []
+        for d in range(len(index_shape)):
+            if d == dim:
+                slices.append(slice(None))
+            else:
+                slices.append(slice(0, index_shape[d]))
+        return x[tuple(slices)]
+
+    @binary_func_op()
+    def cpu(self, a: Tensor, index: Tensor) -> _FuncOpReturnType:
+        self._dim = self._validate_inputs(a, index)
+        a_data = self._slice_to_index_extents(a.data, index.shape, self._dim)
+
+        self.result = Tensor(np.take_along_axis(a_data, index.data, axis=self._dim))
+        return self.result, partial(self.__grad_cpu__, a=a, index=index)
+
+    @binary_func_op(device="gpu")
+    def gpu(self, a: Tensor, index: Tensor) -> _FuncOpReturnType:
+        self._dim = self._validate_inputs(a, index)
+        a_data = self._slice_to_index_extents(a.data, index.shape, self._dim)
+
+        self.result = Tensor(mx.take_along_axis(a_data, index.data, axis=self._dim))
+        return self.result, partial(self.__grad_gpu__, a=a, index=index)
+
+    def __grad_cpu__(self, a: Tensor, index: Tensor) -> _GradType:
+        grad_np = np.array(self.result.grad)
+        index_np = np.array(index.data)
+
+        a_grad = self._scatter_grad_np(a.shape, index_np, grad_np, self._dim)
+        index_grad = np.zeros_like(index_np)
+        return a_grad, index_grad
+
+    def __grad_gpu__(self, a: Tensor, index: Tensor) -> _GradType:
+        axis = self._dim
+        grad = self.result.grad
+        idx = index.data
+
+        gather_dim = a.shape[axis]
+
+        idx_exp = mx.expand_dims(idx, axis=axis)
+        grad_exp = mx.expand_dims(grad, axis=axis)
+
+        class_shape = [1] * (a.ndim + 1)
+        class_shape[axis] = gather_dim
+        class_range = mx.arange(gather_dim).reshape(*class_shape)
+
+        one_hot = (idx_exp == class_range).astype(grad.dtype)
+        partial_grad = mx.sum(grad_exp * one_hot, axis=axis + 1)
+
+        a_grad = partial_grad
+        for d in range(a.ndim):
+            if d == axis:
+                continue
+            pad = a.shape[d] - index.shape[d]
+            if pad <= 0:
+                continue
+
+            zeros_shape = list(a_grad.shape)
+            zeros_shape[d] = pad
+            zeros = mx.zeros(tuple(zeros_shape), dtype=a_grad.dtype)
+            a_grad = mx.concatenate((a_grad, zeros), axis=d)
+
+        index_grad = mx.zeros_like(index.data)
+
+        return a_grad, index_grad
+
+    def __flops__(self, a: Tensor, index: Tensor) -> int:
+        _ = a
+        return index.size
 
 
 class roll(Operation):

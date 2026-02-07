@@ -20,7 +20,7 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- New Tensor utility function added: `lucid.Tensor.expand`
+- New Tensor utility functions added: `lucid.Tensor.expand` and `lucid.Tensor.gather` (also `lucid.gather`)
 
 - Added Type-Generic Tensors: `lucid.LongTensor`, `lucid.DoubleTensor`, etc.
 

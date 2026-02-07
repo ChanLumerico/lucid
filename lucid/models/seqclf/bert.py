@@ -17,9 +17,11 @@ class _BertEmbeddings(nn.Module):
         hidden_dropout_prob: float,
     ) -> None:
         super().__init__()
-        self.word_embeddings = nn.Embedding(vocab_size, hidden_size, pad_token_id)
+        self.word_embeddings = nn.Embedding(
+            vocab_size, hidden_size, padding_idx=pad_token_id
+        )
         self.position_embeddings = nn.Embedding(max_position_embeddings, hidden_size)
-        self.token_type_embeddings = nn.Embedding(type_vocab_size)
+        self.token_type_embeddings = nn.Embedding(type_vocab_size, hidden_size)
 
         self.layernorm = nn.LayerNorm(hidden_size, eps=layer_norm_eps)
         self.dropout = nn.Dropout(hidden_dropout_prob)
@@ -59,4 +61,66 @@ class _BertEmbeddings(nn.Module):
                 buffered_token_type_ids = self.token_type_ids.expand(
                     position_ids.shape[0], -1
                 )
-                buffered_token_type_ids = ...
+                buffered_token_type_ids = lucid.gather(
+                    buffered_token_type_ids, dim=1, index=position_ids
+                )
+                token_type_ids = buffered_token_type_ids.expand(batch_size, seq_length)
+            else:
+                token_type_ids = lucid.zeros(
+                    *input_shape, dtype=lucid.Long, device=self.position_ids.device
+                )
+
+        if inputs_embeds is None:
+            inputs_embeds = self.word_embeddings(input_ids)
+
+        token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        embeddings = inputs_embeds + token_type_embeddings
+
+        position_embeddings = self.position_embeddings(position_ids)
+        embeddings = embeddings + position_embeddings
+
+        embeddings = self.layernorm(embeddings)
+        embeddings = self.dropout(embeddings)
+
+        return embeddings
+
+
+class _BertSelfAttention(nn.Module):
+    def __init__(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        attention_probs_dropout_prob: float,
+        is_decoder: bool,
+        is_causal: bool = False,
+        layer_idx: int | None = None,
+    ) -> None:
+        super().__init__()
+        if hidden_size % num_attention_heads != 0:
+            raise ValueError(
+                f"hidden_size {hidden_size} is not a multiple "
+                f"of num_attention_heads {num_attention_heads}."
+            )
+
+        self.num_attention_heads = num_attention_heads
+        self.attention_head_size = int(hidden_size / num_attention_heads)
+
+        self.all_head_size = self.num_attention_heads * self.attention_head_size
+        self.scaling = self.attention_head_size**-0.5
+
+        self.query = nn.Linear(hidden_size, self.all_head_size)
+        self.key = nn.Linear(hidden_size, self.all_head_size)
+        self.value = nn.Linear(hidden_size, self.all_head_size)
+
+        self.dropout = nn.Dropout(attention_probs_dropout_prob)
+
+        self.is_decoder = is_decoder
+        self.is_causal = is_causal
+        self.layer_idx = layer_idx
+
+    def forward(
+        self,
+        hidden_states: Tensor,
+        attention_mask: lucid.FloatTensor | None = None,
+        past_key_value=None,  # NOTE: Need to implement `Cache` class?
+    ) -> tuple[Tensor]: ...

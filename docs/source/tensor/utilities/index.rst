@@ -25,6 +25,7 @@ Tensor Utilities
    chunk.rst
    masked_fill.rst
    roll.rst
+   gather.rst
    unbind.rst
    sort.rst
    argsort.rst
