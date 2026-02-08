@@ -15,6 +15,7 @@ from lucid._tensor import Tensor
 class BertConfig:
     vocab_size: int
     hidden_size: int
+    num_attention_heads: int
     num_hidden_layers: int
     intermediate_size: int
 
@@ -22,22 +23,22 @@ class BertConfig:
     hidden_dropout_prob: float
     attention_probs_dropout_prob: float
 
-    max_position_embedding: int
+    max_position_embeddings: int
     tie_word_embedding: bool
     type_vocab_size: int
 
     initializer_range: float
     layer_norm_eps: float
 
-    pad_token_id: int = 0
-    bos_token_id: int | None = None
-    eos_token_id: int | None = None
-
     use_cache: bool
-    classifier_dropout: float | None = None
     is_decoder: bool
     add_cross_attention: bool
     chunk_size_feed_forward: int
+
+    pad_token_id: int = 0
+    bos_token_id: int | None = None
+    eos_token_id: int | None = None
+    classifier_dropout: float | None = None
 
 
 class _BertEmbeddings(nn.Module):
@@ -63,7 +64,7 @@ class _BertEmbeddings(nn.Module):
             nn.Buffer(lucid.arange(config.max_position_embeddings).expand(1, -1)),
         )
         self.register_buffer(
-            "token_type_uds",
+            "token_type_ids",
             nn.Buffer(lucid.zeros(*self.position_ids.shape, dtype=lucid.Long)),
         )
 
