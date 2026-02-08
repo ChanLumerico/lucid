@@ -482,9 +482,10 @@ def scaled_dot_product_attention(
     dropout_p: float = 0.0,
     is_causal: bool = False,
     scale: _Scalar | None = None,
-) -> Tensor:
+    output_weight: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]:
     return _attention.scaled_dot_product_attention(
-        query, key, value, attn_mask, dropout_p, is_causal, scale
+        query, key, value, attn_mask, dropout_p, is_causal, scale, output_weight
     )
 
 

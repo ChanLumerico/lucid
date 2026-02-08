@@ -7,7 +7,8 @@ Overview
 --------
 
 `KVCache` is the abstract base class for Transformer KV cache implementations.
-It defines the shared interface used by attention modules and generation loops.
+It extends :class:`lucid.nn.Cache` with KV-specific APIs used by attention
+modules and generation loops.
 
 Class Signature
 ---------------

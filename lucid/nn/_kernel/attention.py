@@ -29,16 +29,23 @@ class scaled_dot_product_attention_kernel(Operation):
         attn_mask: Tensor | None = None,
         is_causal: bool = False,
         scale: float | None = None,
+        dropout_p: float = 0.0,
     ) -> None:
         super().__init__()
         self.attn_mask = attn_mask
         self.is_causal = bool(is_causal)
         self.scale = scale
 
+        if not 0.0 <= dropout_p < 1.0:
+            raise ValueError("dropout_p must be in [0, 1).")
+        self.dropout_p = float(dropout_p)
+
         self._q = None
         self._k = None
         self._v = None
         self._attn = None
+        self._attn_dropped = None
+        self._drop_factor = None
         self._scale = None
 
     def clear(self) -> None:
@@ -47,6 +54,8 @@ class scaled_dot_product_attention_kernel(Operation):
         self._k = None
         self._v = None
         self._attn = None
+        self._attn_dropped = None
+        self._drop_factor = None
         self._scale = None
 
     @func_op(n_in=3, n_ret=1)
@@ -84,12 +93,25 @@ class scaled_dot_product_attention_kernel(Operation):
         sum_exp = lib_.sum(exp_x, axis=-1, keepdims=True)
         attn = exp_x / sum_exp
 
-        out = lib_.matmul(attn, vd)
+        drop_factor: _TensorData | None = None
+        attn_dropped = attn
+        if self.dropout_p > 0.0:
+            keep_prob = 1.0 - self.dropout_p
+            mask_np = (np.random.rand(*attn.shape) > self.dropout_p).astype(np.float32)
+            if lib_ is mx:
+                drop_factor = mx.array(mask_np).astype(attn.dtype) * (1.0 / keep_prob)
+            else:
+                drop_factor = mask_np.astype(attn.dtype) * (1.0 / keep_prob)
+            attn_dropped = attn * drop_factor
+
+        out = lib_.matmul(attn_dropped, vd)
 
         self._q = qd
         self._k = kd
         self._v = vd
         self._attn = attn
+        self._attn_dropped = attn_dropped
+        self._drop_factor = drop_factor
         self._scale = scale
 
         self.result = Tensor(out, device=device)
@@ -99,21 +121,31 @@ class scaled_dot_product_attention_kernel(Operation):
         if self.result is None or self.result.grad is None:
             raise RuntimeError("attention backward called before forward.")
 
-        if self._attn is None or self._q is None or self._k is None or self._v is None:
+        if (
+            self._attn is None
+            or self._attn_dropped is None
+            or self._q is None
+            or self._k is None
+            or self._v is None
+        ):
             raise RuntimeError("attention cached data missing.")
 
         dy = self.result.grad
         attn = self._attn
+        attn_dropped = self._attn_dropped
+
         qd = self._q
         kd = self._k
         vd = self._v
         scale = self._scale if self._scale is not None else 1.0
 
-        attn_t = lib_.swapaxes(attn, -1, -2)
+        attn_t = lib_.swapaxes(attn_dropped, -1, -2)
         dV = lib_.matmul(attn_t, dy)
 
         v_t = lib_.swapaxes(vd, -1, -2)
         dA = lib_.matmul(dy, v_t)
+        if self._drop_factor is not None:
+            dA = dA * self._drop_factor
 
         dot = lib_.sum(dA * attn, axis=-1, keepdims=True)
         dS = attn * (dA - dot)
@@ -123,3 +155,8 @@ class scaled_dot_product_attention_kernel(Operation):
         dK = lib_.matmul(lib_.swapaxes(dS, -1, -2), qd)
 
         return dQ, dK, dV
+
+    def get_attention_weight(self, device: _DeviceType) -> Tensor:
+        if self._attn_dropped is None:
+            raise RuntimeError("attention weight requested before forward.")
+        return Tensor(self._attn_dropped, device=device)

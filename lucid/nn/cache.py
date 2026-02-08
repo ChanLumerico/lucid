@@ -1,14 +1,36 @@
 from abc import ABC, abstractmethod
-from typing import override
+from typing import Any, override
 
 import lucid
 from lucid._tensor import Tensor
 
 
-__all__ = ["KVCache", "DynamicKVCache", "StaticKVCache"]
+__all__ = ["Cache", "KVCache", "DynamicKVCache", "StaticKVCache", "EncoderDecoderCache"]
 
 
-class KVCache(ABC):
+class Cache(ABC):
+    @abstractmethod
+    def reset(self) -> None: ...
+
+    def reorder_cache(self, beam_idx: Tensor) -> None:
+        self.batch_select_indices(beam_idx)
+
+    @abstractmethod
+    def batch_select_indices(self, indices: Tensor) -> None: ...
+
+    @abstractmethod
+    def batch_repeat_interleave(self, repeats: int) -> None: ...
+
+    @abstractmethod
+    def crop(self, max_length: int) -> None: ...
+
+    def update(self, *args, **kwargs) -> Any: ...
+
+    def get_max_cache_shape(self) -> int | None:
+        return None
+
+
+class KVCache(Cache):
     def __init__(self) -> None:
         super().__init__()
         self.key_cache: list[Tensor | None]
@@ -31,6 +53,7 @@ class KVCache(ABC):
                 f"key and value has different shapes: {key.shape} != {value.shape}"
             )
 
+    @override
     @abstractmethod
     def update(
         self,
@@ -46,12 +69,6 @@ class KVCache(ABC):
     @abstractmethod
     def get_seq_length(self, layer_idx: int = 0) -> int: ...
 
-    def get_max_cache_shape(self) -> int | None:
-        return None
-
-    @abstractmethod
-    def reset(self) -> None: ...
-
     @abstractmethod
     def _crop_layer(self, layer_idx: int, max_length: int) -> None: ...
 
@@ -61,9 +78,6 @@ class KVCache(ABC):
         if index.is_free:
             return index.to(device)
         raise lucid.DeviceMismatchError(to=device, from_=index.device)
-
-    def reorder_cache(self, beam_idx: Tensor) -> None:
-        self.batch_select_indices(beam_idx)
 
     def batch_select_indices(self, indices: Tensor) -> None:
         if indices.ndim != 1:
@@ -495,3 +509,85 @@ class StaticKVCache(KVCache):
         v[..., :max_length, :] = tail_v
 
         self._seq_lens[layer_idx] = max_length
+
+
+class EncoderDecoderCache(Cache):
+    def __init__(
+        self,
+        self_attention_cache: KVCache | None = None,
+        cross_attention_cache: KVCache | None = None,
+    ) -> None:
+        self.self_attention_cache = (
+            self_attention_cache
+            if self_attention_cache is not None
+            else DynamicKVCache()
+        )
+        self.cross_attention_cache = (
+            cross_attention_cache
+            if cross_attention_cache is not None
+            else DynamicKVCache()
+        )
+        self.is_updated: dict[int, bool] = {}
+
+    @staticmethod
+    def _select_cache(
+        self_attention_cache: KVCache,
+        cross_attention_cache: KVCache,
+        is_cross_attention: bool,
+    ) -> KVCache:
+        return cross_attention_cache if is_cross_attention else self_attention_cache
+
+    def update(
+        self,
+        key: Tensor,
+        value: Tensor,
+        layer_idx: int,
+        cache_position: Tensor | None = None,
+        is_cross_attention: bool = False,
+    ) -> tuple[Tensor, Tensor]:
+        target_cache = self._select_cache(
+            self.self_attention_cache, self.cross_attention_cache, is_cross_attention
+        )
+        updated = target_cache.update(key, value, layer_idx, cache_position)
+        if is_cross_attention:
+            self.is_updated[layer_idx] = True
+        return updated
+
+    def get(
+        self,
+        layer_idx: int,
+        is_cross_attention: bool = False,
+    ) -> tuple[Tensor, Tensor] | None:
+        target_cache = self._select_cache(
+            self.self_attention_cache, self.cross_attention_cache, is_cross_attention
+        )
+        return target_cache.get(layer_idx)
+
+    def get_seq_length(
+        self, layer_idx: int = 0, is_cross_attention: bool = False
+    ) -> int:
+        target_cache = self._select_cache(
+            self.self_attention_cache, self.cross_attention_cache, is_cross_attention
+        )
+        return target_cache.get_seq_length(layer_idx)
+
+    def reset(self) -> None:
+        self.self_attention_cache.reset()
+        self.cross_attention_cache.reset()
+        self.is_updated.clear()
+
+    def batch_select_indices(self, indices: Tensor) -> None:
+        self.self_attention_cache.batch_select_indices(indices)
+        self.cross_attention_cache.batch_select_indices(indices)
+
+    def batch_repeat_interleave(self, repeats: int) -> None:
+        self.self_attention_cache.batch_repeat_interleave(repeats)
+        self.cross_attention_cache.batch_repeat_interleave(repeats)
+
+    def crop(self, max_length: int) -> None:
+        self.self_attention_cache.crop(max_length)
+        self.cross_attention_cache.crop(max_length)
+
+    @override
+    def get_max_cache_shape(self) -> int | None:
+        return self.self_attention_cache.get_max_cache_shape()

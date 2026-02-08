@@ -1,25 +1,27 @@
 Neural Caches
 =============
 
-The :mod:`lucid.nn.cache` module provides cache classes for Transformer-style
-attention. These caches store past key/value (KV) tensors per layer so decoding
-can reuse previous attention states instead of recomputing full history.
+The :mod:`lucid.nn.cache` module provides generic cache abstractions used by
+neural components. It defines common lifecycle and batch-manipulation utilities
+for cache state management, and currently includes Transformer KV cache
+implementations.
 
 .. toctree::
     :maxdepth: 1
     :hidden:
 
+    Cache.rst
     KVCache.rst
+    EncoderDecoderCache.rst
     DynamicKVCache.rst
     StaticKVCache.rst
 
-Why KV cache matters
---------------------
+Why neural cache matters
+------------------------
 
-In autoregressive decoding, each new token attends to all previous tokens.
-Without cache, each step recomputes every historical key/value tensor.
-With cache, only the new key/value tensors are produced and merged into
-the existing cache.
+Neural models often maintain reusable intermediate state across steps.
+Without cache, each step recomputes historical state from scratch.
+With cache, only new state is appended or updated.
 
 Common cache workflow
 ---------------------
@@ -58,8 +60,15 @@ Quick start
 Cache types
 -----------
 
+- :class:`lucid.nn.Cache`
+  Abstract base interface for all cache types.
+
 - :class:`lucid.nn.KVCache`
-  Abstract base interface for all KV cache implementations.
+  Abstract KV-specific interface built on top of :class:`lucid.nn.Cache`.
+
+- :class:`lucid.nn.EncoderDecoderCache`
+  Container cache that routes updates/reads to decoder self-attention cache
+  or cross-attention cache.
 
 - :class:`lucid.nn.DynamicKVCache`
   Grows sequence length dynamically (append/expand on demand).

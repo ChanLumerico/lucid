@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>CoAtNet - Lucid 2.12.3 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="coatnet_0" href="coatnet_0.html" /><link rel="prev" title="inception_next_base" href="../inception_next/inception_next_base.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>CoAtNet - Lucid 2.12.5 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="coatnet_0" href="coatnet_0.html" /><link rel="prev" title="inception_next_base" href="../inception_next/inception_next_base.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/imgclf/coatnet/CoAtNet.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -455,7 +455,9 @@ data-aria-dark="Switch to auto color mode">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../nn/caches/index.html">Caches</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../nn/caches/Cache.html">nn.Cache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../nn/caches/KVCache.html">nn.KVCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../nn/caches/EncoderDecoderCache.html">nn.EncoderDecoderCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../nn/caches/DynamicKVCache.html">nn.DynamicKVCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../nn/caches/StaticKVCache.html">nn.StaticKVCache</a></li>
 </ul>
@@ -465,6 +467,7 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/get_total_norm.html">nn.utils.get_total_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/clip_grad_norm.html">nn.utils.clip_grad_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/clip_grad_value.html">nn.utils.clip_grad_value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/apply_chunking_to_forward.html">nn.utils.apply_chunking_to_forward</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../nn/utilities/rnn/index.html">RNN Utilities</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../../nn/utilities/rnn/pad_sequence.html">nn.utils.rnn.pad_sequence</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../nn/utilities/rnn/PackedSequence.html">nn.utils.rnn.PackedSequence</a></li>
@@ -921,7 +924,6 @@ data-aria-dark="Switch to auto color mode">
       <i class="i-lucide close"></i>
     </button>
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#lucid.models.CoAtNet"><code class="docutils literal notranslate"><span class="pre">CoAtNet</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#hybrid-architecture">Hybrid Architecture</a></li>
@@ -1000,11 +1002,6 @@ data-aria-dark="Switch to auto color mode">
 <div class="toctree-wrapper compound">
 </div>
 <p><span class="badge convnet">ConvNet</span> <span class="badge normal">Image Classification</span></p>
-<dl class="py class">
-<dt class="sig sig-object py" id="lucid.models.CoAtNet">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">CoAtNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_blocks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_heads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_types</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['C',</span> <span class="pre">'C',</span> <span class="pre">'T',</span> <span class="pre">'T']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_scaled_num_blocks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_scaled_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.CoAtNet" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
 <p>The <cite>CoAtNet</cite> module in <cite>lucid.nn</cite> implements the CoAtNet architecture,
 a hybrid model combining convolutional and attention-based mechanisms.
 It leverages the strengths of both convolutional neural networks (CNNs)
@@ -1291,7 +1288,7 @@ making it highly versatile for various image sizes and computational constraints
     </div>
   </div>
 </footer>
-      <script src="../../../_static/documentation_options.js?v=b3c014ee"></script>
+      <script src="../../../_static/documentation_options.js?v=dc31003a"></script>
       <script src="../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../_static/design-tabs.js?v=f930bc37"></script>

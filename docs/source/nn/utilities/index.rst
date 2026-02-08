@@ -8,5 +8,7 @@ Neural Network Utilities
     get_total_norm.rst
     clip_grad_norm.rst
     clip_grad_value.rst
+    
+    apply_chunking_to_forward.rst
 
     RNN Utilities <rnn/index.rst>

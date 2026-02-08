@@ -1,8 +1,3 @@
-import math
-
-import lucid
-import lucid.nn.functional as F
-
 from lucid.nn._kernel.attention import scaled_dot_product_attention_kernel
 
 from lucid._tensor import Tensor
@@ -16,28 +11,15 @@ def scaled_dot_product_attention(
     dropout_p: float = 0.0,
     is_causal: bool = False,
     scale: float | None = None,
-) -> Tensor:
-    if dropout_p == 0.0:
-        op = scaled_dot_product_attention_kernel(
-            attn_mask=attn_mask, is_causal=is_causal, scale=scale
-        )
-        return op(query, key, value)
-
-    L, S = query.shape[-2], key.shape[-2]
-    scale_factor = 1 / math.sqrt(query.shape[-1]) if scale is None else scale
-    attn_bias = lucid.zeros(L, S, dtype=query.dtype).free()
-
-    if is_causal:
-        assert attn_mask is None
-        temp_mask = 1 - lucid.ones(L, S).tril()
-        attn_bias += temp_mask * -1e12
-
-    if attn_mask is not None:
-        attn_bias += attn_mask
-
-    attn_weight = query @ key.mT * scale_factor
-    attn_weight += attn_bias.broadcast_to(attn_weight.shape)
-    attn_weight = F.softmax(attn_weight, axis=-1)
-    attn_weight = F.dropout(attn_weight, dropout_p)
-
-    return attn_weight @ value
+    output_weight: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]:
+    op = scaled_dot_product_attention_kernel(
+        attn_mask=attn_mask,
+        is_causal=is_causal,
+        scale=scale,
+        dropout_p=dropout_p,
+    )
+    attn_output = op(query, key, value)
+    if not output_weight:
+        return attn_output
+    return attn_output, op.get_attention_weight(device=query.device)
