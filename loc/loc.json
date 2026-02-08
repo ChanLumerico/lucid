@@ -2,10 +2,10 @@
  {
   "language": "Python",
   "files": 146,
-  "lines": 36987,
-  "blanks": 7399,
-  "comments": 24,
-  "linesOfCode": 29564
+  "lines": 37503,
+  "blanks": 7475,
+  "comments": 25,
+  "linesOfCode": 30003
  },
  {
   "language": "JSON",
@@ -50,9 +50,9 @@
  {
   "language": "Total",
   "files": 162,
-  "lines": 40175,
-  "blanks": 7658,
-  "comments": 46,
-  "linesOfCode": 32471
+  "lines": 40691,
+  "blanks": 7734,
+  "comments": 47,
+  "linesOfCode": 32910
  }
 ]
