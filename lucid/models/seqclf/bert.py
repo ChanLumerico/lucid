@@ -5,10 +5,35 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
+from lucid import register_model
 from lucid._tensor import Tensor
 
 
-__all__ = ["BERTConfig", "BERT"]
+__all__ = [
+    "BERTConfig",
+    "BERT",
+    "BERTForPreTraining",
+    "BERTForMaskedLM",
+    "BERTForCausalLM",
+    "BERTForNextSentencePrediction",
+    "BERTForSequenceClassification",
+    "BERTForTokenClassification",
+    "BERTForQuestionAnswering",
+    "bert_for_pre_training_base",
+    "bert_for_pre_training_large",
+    "bert_for_masked_lm_base",
+    "bert_for_masked_lm_large",
+    "bert_for_causal_lm_base",
+    "bert_for_causal_lm_large",
+    "bert_for_next_sentence_prediction_base",
+    "bert_for_next_sentence_prediction_large",
+    "bert_for_sequence_classification_base",
+    "bert_for_sequence_classification_large",
+    "bert_for_token_classification_base",
+    "bert_for_token_classification_large",
+    "bert_for_question_answering_base",
+    "bert_for_question_answering_large",
+]
 
 
 @dataclass
@@ -77,6 +102,7 @@ class _BERTEmbeddings(nn.Module):
         position_ids: lucid.LongTensor | None = None,
         inputs_embeds: lucid.FloatTensor | None = None,
         past_key_values_length: int = 0,
+        cache_position: Tensor | None = None,
     ) -> Tensor:
         if input_ids is not None:
             input_shape = input_ids.shape
@@ -85,9 +111,22 @@ class _BERTEmbeddings(nn.Module):
 
         batch_size, seq_length = input_shape
         if position_ids is None:
-            position_ids = self.position_ids[
-                :, past_key_values_length : seq_length + past_key_values_length
-            ]
+            if cache_position is not None:
+                if cache_position.ndim != 1 or cache_position.shape[0] != seq_length:
+                    raise ValueError(
+                        "cache_position must be 1-D with length == seq_length "
+                        f"(got shape={cache_position.shape}, seq_length={seq_length})."
+                    )
+                position_ids = cache_position.reshape(1, seq_length)
+            else:
+                position_ids = self.position_ids[
+                    :, past_key_values_length : seq_length + past_key_values_length
+                ]
+        elif position_ids.ndim != 2 or position_ids.shape[1] != seq_length:
+            raise ValueError(
+                "position_ids must be 2-D with shape [batch_or_1, seq_length] "
+                f"(got shape={position_ids.shape}, seq_length={seq_length})."
+            )
 
         if token_type_ids is None:
             if hasattr(self, "token_type_ids"):
@@ -185,7 +224,7 @@ class _BERTSelfAttention(nn.Module):
             value_layer,
             attn_mask=attention_mask,
             dropout_p=self.dropout.p if self.training else 0.0,
-            is_causal=self.is_causal,
+            is_causal=False,
             scale=self.scaling,
             output_weight=True,
         )
@@ -611,6 +650,7 @@ class BERT(nn.Module):
         self.embeddings = _BERTEmbeddings(config)
         self.encoder = _BERTEncoder(config)
         self.pooler = _BERTPooler(config) if config.add_pooling_layer else None
+        self.output_embeddings: nn.Linear | None = None
 
         self.apply(self._init_weights)
         self.tie_weights()
@@ -635,9 +675,14 @@ class BERT(nn.Module):
 
     def set_input_embeddings(self, value: nn.Embedding) -> None:
         self.embeddings.word_embeddings = value
+        self.tie_weights()
 
     def get_output_embeddings(self) -> nn.Linear | None:
-        return None
+        return self.output_embeddings
+
+    def set_output_embeddings(self, value: nn.Linear) -> None:
+        self.output_embeddings = value
+        self.tie_weights()
 
     def tie_weights(self) -> None:
         if not self.config.tie_word_embedding:
@@ -696,6 +741,59 @@ class BERT(nn.Module):
         attention_mask = attention_mask.astype(lucid.Float32)
         return (1.0 - attention_mask) * -1e12
 
+    def _build_decoder_causal_mask(
+        self,
+        *,
+        batch_size: int,
+        target_length: int,
+        source_length: int,
+        device: str,
+        past_key_values_length: int,
+        position_ids: Tensor | None = None,
+        cache_position: Tensor | None = None,
+    ) -> Tensor:
+        if position_ids is not None:
+            query_positions = position_ids
+
+        elif cache_position is not None:
+            if cache_position.ndim != 1 or cache_position.shape[0] != target_length:
+                raise ValueError(
+                    "cache_position must be 1-D with length == target_length "
+                    f"(got shape={cache_position.shape}, target_length={target_length})."
+                )
+            query_positions = cache_position.reshape(1, target_length)
+
+        else:
+            query_positions = lucid.arange(
+                past_key_values_length,
+                past_key_values_length + target_length,
+                device=device,
+            )
+            query_positions = query_positions.reshape(1, target_length)
+
+        if query_positions.ndim != 2 or query_positions.shape[1] != target_length:
+            raise ValueError(
+                "query positions must be 2-D with shape [batch_or_1, target_length] "
+                f"(got shape={query_positions.shape}, target_length={target_length})."
+            )
+
+        if query_positions.shape[0] == 1:
+            query_positions = query_positions.expand(batch_size, target_length)
+        elif query_positions.shape[0] != batch_size:
+            raise ValueError(
+                "query positions batch axis must be 1 or batch_size "
+                f"(got {query_positions.shape[0]} vs {batch_size})."
+            )
+
+        if query_positions.device != device:
+            query_positions = query_positions.to(device)
+
+        query_positions = query_positions.reshape(batch_size, target_length, 1)
+        key_positions = lucid.arange(source_length, device=device).reshape(1, 1, -1)
+
+        causal_mask = (key_positions > query_positions).astype(lucid.Float32) * -1e12
+        return causal_mask[:, None, :, :]
+
     def forward(
         self,
         input_ids: lucid.LongTensor | None = None,
@@ -711,6 +809,7 @@ class BERT(nn.Module):
     ) -> tuple[Tensor, Tensor | None]:
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("Only one of input_ids or inputs_embeds can be provided.")
+
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either input_ids or inputs_embeds must be provided.")
 
@@ -745,11 +844,13 @@ class BERT(nn.Module):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             past_key_values_length=past_key_values_length,
+            cache_position=cache_position,
         )
 
         source_length = input_shape[1] + past_key_values_length
         if attention_mask is None:
             attention_mask = lucid.ones((input_shape[0], source_length), device=device)
+
         elif attention_mask.ndim == 2 and attention_mask.shape[1] == input_shape[1]:
             if past_key_values_length > 0:
                 past_attention = lucid.ones(
@@ -765,6 +866,23 @@ class BERT(nn.Module):
             source_length=source_length,
             device=device,
         )
+        if self.config.is_decoder:
+            causal_attention_mask = self._build_decoder_causal_mask(
+                batch_size=input_shape[0],
+                target_length=input_shape[1],
+                source_length=source_length,
+                device=device,
+                past_key_values_length=past_key_values_length,
+                position_ids=position_ids,
+                cache_position=cache_position,
+            )
+            if extended_attention_mask is None:
+                extended_attention_mask = causal_attention_mask
+            else:
+                extended_attention_mask = (
+                    extended_attention_mask + causal_attention_mask
+                )
+
         if encoder_hidden_states is None:
             if encoder_attention_mask is not None:
                 raise ValueError(
@@ -793,3 +911,445 @@ class BERT(nn.Module):
         )
 
         return sequence_output, pooled_output
+
+
+class _BERTTaskWrapperMixin:
+    config: BERTConfig
+    bert: BERT
+
+    def get_input_embeddings(self) -> nn.Embedding:
+        return self.bert.get_input_embeddings()
+
+    def set_input_embeddings(self, value: nn.Embedding) -> None:
+        self.bert.set_input_embeddings(value)
+
+    def get_output_embeddings(self) -> nn.Linear | None:
+        return self.bert.get_output_embeddings()
+
+    def set_output_embeddings(self, value: nn.Linear) -> None:
+        self.bert.set_output_embeddings(value)
+
+    def tie_weights(self) -> None:
+        self.bert.tie_weights()
+
+
+class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.config = config
+        self.bert = BERT(config)
+        self.cls = _BERTPreTrainingHeads(config)
+        self.cls.apply(self.bert._init_weights)
+        self.bert.set_output_embeddings(self.cls.predictions.decoder)
+
+    def forward(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
+        sequence_output, pooled_output = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        if pooled_output is None:
+            raise RuntimeError("BERTForPreTraining requires pooled output.")
+        return self.cls(sequence_output, pooled_output)
+
+
+class BERTForMaskedLM(_BERTTaskWrapperMixin, nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.config = config
+        self.bert = BERT(config)
+        self.cls = _BERTOnlyMLMHead(config)
+        self.cls.apply(self.bert._init_weights)
+        self.bert.set_output_embeddings(self.cls.predictions.decoder)
+
+    def forward(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        sequence_output, _ = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        return self.cls(sequence_output)
+
+
+class BERTForCausalLM(_BERTTaskWrapperMixin, nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.config = config
+        self.bert = BERT(config)
+        self.cls = _BERTOnlyMLMHead(config)
+        self.cls.apply(self.bert._init_weights)
+        self.bert.set_output_embeddings(self.cls.predictions.decoder)
+
+    def forward(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+        encoder_hidden_states: lucid.FloatTensor | None = None,
+        encoder_attention_mask: Tensor | None = None,
+        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
+        use_cache: bool | None = None,
+        cache_position: Tensor | None = None,
+    ) -> Tensor:
+        sequence_output, _ = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+            cache_position=cache_position,
+        )
+        return self.cls(sequence_output)
+
+
+class BERTForNextSentencePrediction(_BERTTaskWrapperMixin, nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.config = config
+        self.bert = BERT(config)
+        self.cls = _BERTOnlyNSPHead(config)
+        self.cls.apply(self.bert._init_weights)
+
+    def forward(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        _, pooled_output = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        if pooled_output is None:
+            raise RuntimeError("BERTForNextSentencePrediction requires pooled output.")
+        return self.cls(pooled_output)
+
+
+class BERTForSequenceClassification(_BERTTaskWrapperMixin, nn.Module):
+    def __init__(self, config: BERTConfig, num_labels: int = 2) -> None:
+        super().__init__()
+        self.config = config
+        self.bert = BERT(config)
+        self.num_labels = num_labels
+
+        classifier_dropout = config.classifier_dropout
+        if classifier_dropout is None:
+            classifier_dropout = config.hidden_dropout_prob
+
+        self.dropout = nn.Dropout(classifier_dropout)
+        self.classifier = nn.Linear(config.hidden_size, num_labels)
+        self.classifier.apply(self.bert._init_weights)
+
+    def forward(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        _, pooled_output = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        if pooled_output is None:
+            raise RuntimeError("BERTForSequenceClassification requires pooled output.")
+        pooled_output = self.dropout(pooled_output)
+        logits = self.classifier(pooled_output)
+        return logits
+
+
+class BERTForTokenClassification(_BERTTaskWrapperMixin, nn.Module):
+    def __init__(self, config: BERTConfig, num_labels: int = 2) -> None:
+        super().__init__()
+        self.config = config
+        self.bert = BERT(config)
+        self.num_labels = num_labels
+
+        classifier_dropout = config.classifier_dropout
+        if classifier_dropout is None:
+            classifier_dropout = config.hidden_dropout_prob
+
+        self.dropout = nn.Dropout(classifier_dropout)
+        self.classifier = nn.Linear(config.hidden_size, num_labels)
+        self.classifier.apply(self.bert._init_weights)
+
+    def forward(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        sequence_output, _ = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        sequence_output = self.dropout(sequence_output)
+        logits = self.classifier(sequence_output)
+        return logits
+
+
+class BERTForQuestionAnswering(_BERTTaskWrapperMixin, nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.config = config
+        self.bert = BERT(config)
+        self.qa_outputs = nn.Linear(config.hidden_size, 2)
+        self.qa_outputs.apply(self.bert._init_weights)
+
+    def forward(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
+        sequence_output, _ = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        logits = self.qa_outputs(sequence_output)
+        start_logits = logits[:, :, 0]
+        end_logits = logits[:, :, 1]
+        return start_logits, end_logits
+
+
+def _build_bert_config(
+    *,
+    vocab_size: int,
+    hidden_size: int,
+    num_attention_heads: int,
+    num_hidden_layers: int,
+    intermediate_size: int,
+    is_decoder: bool,
+    use_cache: bool,
+    add_pooling_layer: bool,
+    **kwargs,
+) -> BERTConfig:
+    defaults = dict(
+        vocab_size=vocab_size,
+        hidden_size=hidden_size,
+        num_attention_heads=num_attention_heads,
+        num_hidden_layers=num_hidden_layers,
+        intermediate_size=intermediate_size,
+        hidden_act=F.gelu,
+        hidden_dropout_prob=0.1,
+        attention_probs_dropout_prob=0.1,
+        max_position_embeddings=512,
+        tie_word_embedding=True,
+        type_vocab_size=2,
+        initializer_range=0.02,
+        layer_norm_eps=1e-12,
+        use_cache=use_cache,
+        is_decoder=is_decoder,
+        add_cross_attention=False,
+        chunk_size_feed_forward=0,
+        pad_token_id=0,
+        classifier_dropout=None,
+        add_pooling_layer=add_pooling_layer,
+    )
+    defaults.update(kwargs)
+    return BERTConfig(**defaults)
+
+
+def _bert_base_config(
+    *,
+    is_decoder: bool = False,
+    use_cache: bool = False,
+    add_pooling_layer: bool = True,
+    vocab_size: int = 30522,
+    **kwargs,
+) -> BERTConfig:
+    return _build_bert_config(
+        vocab_size=vocab_size,
+        hidden_size=768,
+        num_attention_heads=12,
+        num_hidden_layers=12,
+        intermediate_size=3072,
+        is_decoder=is_decoder,
+        use_cache=use_cache,
+        add_pooling_layer=add_pooling_layer,
+        **kwargs,
+    )
+
+
+def _bert_large_config(
+    *,
+    is_decoder: bool = False,
+    use_cache: bool = False,
+    add_pooling_layer: bool = True,
+    vocab_size: int = 30522,
+    **kwargs,
+) -> BERTConfig:
+    return _build_bert_config(
+        vocab_size=vocab_size,
+        hidden_size=1024,
+        num_attention_heads=16,
+        num_hidden_layers=24,
+        intermediate_size=4096,
+        is_decoder=is_decoder,
+        use_cache=use_cache,
+        add_pooling_layer=add_pooling_layer,
+        **kwargs,
+    )
+
+
+@register_model
+def bert_for_pre_training_base(vocab_size: int = 30522, **kwargs) -> BERTForPreTraining:
+    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
+    return BERTForPreTraining(config)
+
+
+@register_model
+def bert_for_pre_training_large(
+    vocab_size: int = 30522, **kwargs
+) -> BERTForPreTraining:
+    config = _bert_large_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
+    return BERTForPreTraining(config)
+
+
+@register_model
+def bert_for_masked_lm_base(vocab_size: int = 30522, **kwargs) -> BERTForMaskedLM:
+    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=False, **kwargs)
+    return BERTForMaskedLM(config)
+
+
+@register_model
+def bert_for_masked_lm_large(vocab_size: int = 30522, **kwargs) -> BERTForMaskedLM:
+    config = _bert_large_config(
+        vocab_size=vocab_size, add_pooling_layer=False, **kwargs
+    )
+    return BERTForMaskedLM(config)
+
+
+@register_model
+def bert_for_causal_lm_base(vocab_size: int = 30522, **kwargs) -> BERTForCausalLM:
+    config = _bert_base_config(
+        vocab_size=vocab_size,
+        is_decoder=True,
+        use_cache=True,
+        add_pooling_layer=False,
+        **kwargs,
+    )
+    return BERTForCausalLM(config)
+
+
+@register_model
+def bert_for_causal_lm_large(vocab_size: int = 30522, **kwargs) -> BERTForCausalLM:
+    config = _bert_large_config(
+        vocab_size=vocab_size,
+        is_decoder=True,
+        use_cache=True,
+        add_pooling_layer=False,
+        **kwargs,
+    )
+    return BERTForCausalLM(config)
+
+
+@register_model
+def bert_for_next_sentence_prediction_base(
+    vocab_size: int = 30522, **kwargs
+) -> BERTForNextSentencePrediction:
+    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
+    return BERTForNextSentencePrediction(config)
+
+
+@register_model
+def bert_for_next_sentence_prediction_large(
+    vocab_size: int = 30522, **kwargs
+) -> BERTForNextSentencePrediction:
+    config = _bert_large_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
+    return BERTForNextSentencePrediction(config)
+
+
+@register_model
+def bert_for_sequence_classification_base(
+    num_labels: int = 2, vocab_size: int = 30522, **kwargs
+) -> BERTForSequenceClassification:
+    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
+    return BERTForSequenceClassification(config, num_labels=num_labels)
+
+
+@register_model
+def bert_for_sequence_classification_large(
+    num_labels: int = 2, vocab_size: int = 30522, **kwargs
+) -> BERTForSequenceClassification:
+    config = _bert_large_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
+    return BERTForSequenceClassification(config, num_labels=num_labels)
+
+
+@register_model
+def bert_for_token_classification_base(
+    num_labels: int = 2, vocab_size: int = 30522, **kwargs
+) -> BERTForTokenClassification:
+    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=False, **kwargs)
+    return BERTForTokenClassification(config, num_labels=num_labels)
+
+
+@register_model
+def bert_for_token_classification_large(
+    num_labels: int = 2, vocab_size: int = 30522, **kwargs
+) -> BERTForTokenClassification:
+    config = _bert_large_config(
+        vocab_size=vocab_size, add_pooling_layer=False, **kwargs
+    )
+    return BERTForTokenClassification(config, num_labels=num_labels)
+
+
+@register_model
+def bert_for_question_answering_base(
+    vocab_size: int = 30522, **kwargs
+) -> BERTForQuestionAnswering:
+    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=False, **kwargs)
+    return BERTForQuestionAnswering(config)
+
+
+@register_model
+def bert_for_question_answering_large(
+    vocab_size: int = 30522, **kwargs
+) -> BERTForQuestionAnswering:
+    config = _bert_large_config(
+        vocab_size=vocab_size, add_pooling_layer=False, **kwargs
+    )
+    return BERTForQuestionAnswering(config)
