@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Self, Sequence, TypedDict
+from typing import Literal, Self, TypedDict
 
 import lucid
 import lucid.nn as nn

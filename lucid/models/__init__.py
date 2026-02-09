@@ -1,5 +1,4 @@
-from .imgclf import *
-from .imggen import *
-from .objdet import *
-from .seq2seq import *
-from .seqclf import *
+from . import utils as utils
+
+from .vision import *
+from .text import *

@@ -6,7 +6,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.models.objdet.util import nms, DetectionDict
+from lucid.models.vision.utils import nms, DetectionDict
 
 
 __all__ = ["YOLO_V2", "yolo_v2", "yolo_v2_tiny"]
