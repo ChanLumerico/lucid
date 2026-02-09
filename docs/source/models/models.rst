@@ -57,7 +57,12 @@ and sentiment analysis.
       - Description
       - Docs
     
-    * - Sequence-to-Sequence
-      - A sequence-to-sequence model is a type of neural network architecture used to transform 
-        one sequence into another, such as translating a sentence from one language to another.
-      - `Sequence-to-Sequence <seq2seq/index>`_
+  * - Sequence-to-Sequence
+    - A sequence-to-sequence model is a type of neural network architecture used to transform 
+      one sequence into another, such as translating a sentence from one language to another.
+    - `Sequence-to-Sequence <seq2seq/index>`_
+
+  * - Sequence Classification
+    - A sequence classification model is a type of neural network architecture used to assign
+      a label to an input sequence, such as determining sentiment or topic from a sentence.
+    - `Sequence Classification <seqclf/index>`_

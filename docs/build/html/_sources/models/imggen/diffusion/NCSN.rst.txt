@@ -2,7 +2,7 @@ NCSN
 ====
 |diffusion-badge| |score-diffusion-badge| |imggen-badge|
 
-.. autoclass:: lucid.models.imggen.NCSN
+.. autoclass:: lucid.models.NCSN
 
 The `NCSN` class implements a Noise Conditional Score Network (NCSN), a score-based
 generative model trained with annealed denoising score matching.
@@ -242,10 +242,10 @@ Implemented via :py:meth:`NCSN.sample`.
 Methods
 -------
 
-.. automethod:: lucid.models.imggen.NCSN.make_sigmas
-.. automethod:: lucid.models.imggen.NCSN.set_sigmas
-.. automethod:: lucid.models.imggen.NCSN.get_loss
-.. automethod:: lucid.models.imggen.NCSN.sample
+.. automethod:: lucid.models.NCSN.make_sigmas
+.. automethod:: lucid.models.NCSN.set_sigmas
+.. automethod:: lucid.models.NCSN.get_loss
+.. automethod:: lucid.models.NCSN.sample
 
 Examples
 --------
@@ -253,7 +253,7 @@ Examples
 .. code-block:: python
 
     import lucid
-    from lucid.models.imggen import NCSN
+    from lucid.models import NCSN
 
     model = NCSN(in_channels=3, nf=128, num_classes=10)
     model.set_sigmas(NCSN.make_sigmas(sigma_begin=50.0, sigma_end=0.01, num_scales=10))

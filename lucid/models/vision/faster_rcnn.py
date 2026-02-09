@@ -10,7 +10,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.types import _DeviceType
 
-from lucid.models.vision.utils import (
+from lucid.models.utils import (
     ROIAlign,
     MultiScaleROIAlign,
     FPN,

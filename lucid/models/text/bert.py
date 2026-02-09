@@ -162,7 +162,6 @@ class _BERTSelfAttention(nn.Module):
         self,
         config: BERTConfig,
         /,
-        is_causal: bool = False,
         layer_idx: int | None = None,
     ) -> None:
         super().__init__()
@@ -185,7 +184,6 @@ class _BERTSelfAttention(nn.Module):
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
         self.is_decoder = config.is_decoder
-        self.is_causal = is_causal
         self.layer_idx = layer_idx
 
     def forward(
@@ -364,10 +362,12 @@ class _BERTAttention(nn.Module):
     ) -> None:
         super().__init__()
         self.is_cross_attention = is_cross_attention
-        attention_class = (
-            _BERTCrossAttention if is_cross_attention else _BERTSelfAttention
-        )
-        self.self = attention_class(config, is_causal=is_causal, layer_idx=layer_idx)
+        if is_cross_attention:
+            self.self = _BERTCrossAttention(
+                config, is_causal=is_causal, layer_idx=layer_idx
+            )
+        else:
+            self.self = _BERTSelfAttention(config, layer_idx=layer_idx)
         self.output = _BERTSelfOutput(config)
 
     def forward(
@@ -681,7 +681,7 @@ class BERT(nn.Module):
         return self.output_embeddings
 
     def set_output_embeddings(self, value: nn.Linear) -> None:
-        self.output_embeddings = value
+        self.setattr_raw("output_embeddings", value)
         self.tie_weights()
 
     def tie_weights(self) -> None:
@@ -739,7 +739,17 @@ class BERT(nn.Module):
             )
 
         attention_mask = attention_mask.astype(lucid.Float32)
-        return (1.0 - attention_mask) * -1e12
+        mask_min = float(lucid.min(attention_mask).item())
+        mask_max = float(lucid.max(attention_mask).item())
+
+        if mask_min >= 0.0 and mask_max <= 1.0:
+            return (1.0 - attention_mask) * -1e12
+        if mask_max <= 0.0:
+            return attention_mask
+
+        raise ValueError(
+            "attention_mask values must be binary (0/1) or additive (<= 0 values)."
+        )
 
     def _build_decoder_causal_mask(
         self,
@@ -828,6 +838,13 @@ class BERT(nn.Module):
         effective_use_cache = (
             use_cache if use_cache is not None else self.config.use_cache
         )
+        if not self.config.is_decoder:
+            effective_use_cache = False
+
+        if not effective_use_cache:
+            past_key_values = None
+            cache_position = None
+
         past_key_values_length = 0
         if effective_use_cache and past_key_values is not None:
             if isinstance(past_key_values, nn.EncoderDecoderCache):

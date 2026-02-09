@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/shibuya.css?v=44020203" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link media="print" rel="stylesheet" type="text/css" href="../../../_static/print.css?v=20ff2c19" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/badges.css?v=94ab1542" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/badges.css?v=b1c3d602" />
     <link rel="stylesheet" type="text/css" href="../../../_static/mermaid.css?v=71a6aa26" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -867,6 +867,34 @@ data-aria-dark="Switch to auto color mode">
 </li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../../seqclf/index.html">Sequence Classification</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../seqclf/bert/BERT.html">BERT</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTConfig.html">BERTConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForPreTraining.html">BERTForPreTraining</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForMaskedLM.html">BERTForMaskedLM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForCausalLM.html">BERTForCausalLM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForNextSentencePrediction.html">BERTForNextSentencePrediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForSequenceClassification.html">BERTForSequenceClassification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForTokenClassification.html">BERTForTokenClassification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForQuestionAnswering.html">BERTForQuestionAnswering</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_pre_training_base.html">bert_for_pre_training_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_pre_training_large.html">bert_for_pre_training_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_masked_lm_base.html">bert_for_masked_lm_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_masked_lm_large.html">bert_for_masked_lm_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_causal_lm_base.html">bert_for_causal_lm_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_causal_lm_large.html">bert_for_causal_lm_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_next_sentence_prediction_base.html">bert_for_next_sentence_prediction_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_next_sentence_prediction_large.html">bert_for_next_sentence_prediction_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_sequence_classification_base.html">bert_for_sequence_classification_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_sequence_classification_large.html">bert_for_sequence_classification_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_token_classification_base.html">bert_for_token_classification_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_token_classification_large.html">bert_for_token_classification_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_question_answering_base.html">bert_for_question_answering_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_question_answering_large.html">bert_for_question_answering_large</a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Weights</span></p>
 <ul>
@@ -1006,7 +1034,7 @@ data-aria-dark="Switch to auto color mode">
 <h1>inception_next_tiny<a class="headerlink" href="#inception-next-tiny" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="lucid.models.inception_next_tiny">
-<span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">inception_next_tiny</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="InceptionNeXt.html#lucid.models.InceptionNeXt" title="lucid.models.imgclf.inception_next.InceptionNeXt"><span class="pre">InceptionNeXt</span></a></span></span><a class="headerlink" href="#lucid.models.inception_next_tiny" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">inception_next_tiny</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="InceptionNeXt.html#lucid.models.InceptionNeXt" title="lucid.models.vision.inception_next.InceptionNeXt"><span class="pre">InceptionNeXt</span></a></span></span><a class="headerlink" href="#lucid.models.inception_next_tiny" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>inception_next_tiny</cite> function instantiates an InceptionNeXt-Tiny model,

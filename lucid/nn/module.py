@@ -212,11 +212,21 @@ class Module:
         return self
 
     def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]:
-        for _, param in self._parameters.items():
-            yield param
-        if recurse:
-            for module in self._modules.values():
-                yield from module.parameters(recurse=recurse)
+        seen_param_ids: set[int] = set()
+
+        def _iter_parameters(module: Self) -> Iterator[nn.Parameter]:
+            for _, param in module._parameters.items():
+                param_id = id(param)
+                if param_id in seen_param_ids:
+                    continue
+                seen_param_ids.add(param_id)
+                yield param
+
+            if recurse:
+                for child_module in module._modules.values():
+                    yield from _iter_parameters(child_module)
+
+        yield from _iter_parameters(self)
 
     def buffers(self, recurse: bool = True) -> Iterator[nn.Buffer]:
         for buffer in self._buffers.values():

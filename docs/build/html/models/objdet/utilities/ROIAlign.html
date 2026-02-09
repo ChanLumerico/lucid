@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/shibuya.css?v=44020203" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link media="print" rel="stylesheet" type="text/css" href="../../../_static/print.css?v=20ff2c19" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/badges.css?v=94ab1542" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/badges.css?v=b1c3d602" />
     <link rel="stylesheet" type="text/css" href="../../../_static/mermaid.css?v=71a6aa26" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -867,6 +867,34 @@ data-aria-dark="Switch to auto color mode">
 </li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../../seqclf/index.html">Sequence Classification</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../seqclf/bert/BERT.html">BERT</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTConfig.html">BERTConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForPreTraining.html">BERTForPreTraining</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForMaskedLM.html">BERTForMaskedLM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForCausalLM.html">BERTForCausalLM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForNextSentencePrediction.html">BERTForNextSentencePrediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForSequenceClassification.html">BERTForSequenceClassification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForTokenClassification.html">BERTForTokenClassification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForQuestionAnswering.html">BERTForQuestionAnswering</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_pre_training_base.html">bert_for_pre_training_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_pre_training_large.html">bert_for_pre_training_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_masked_lm_base.html">bert_for_masked_lm_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_masked_lm_large.html">bert_for_masked_lm_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_causal_lm_base.html">bert_for_causal_lm_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_causal_lm_large.html">bert_for_causal_lm_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_next_sentence_prediction_base.html">bert_for_next_sentence_prediction_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_next_sentence_prediction_large.html">bert_for_next_sentence_prediction_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_sequence_classification_base.html">bert_for_sequence_classification_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_sequence_classification_large.html">bert_for_sequence_classification_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_token_classification_base.html">bert_for_token_classification_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_token_classification_large.html">bert_for_token_classification_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_question_answering_base.html">bert_for_question_answering_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_question_answering_large.html">bert_for_question_answering_large</a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Weights</span></p>
 <ul>
@@ -924,7 +952,7 @@ data-aria-dark="Switch to auto color mode">
       <i class="i-lucide close"></i>
     </button>
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#lucid.models.objdet.util.ROIAlign"><code class="docutils literal notranslate"><span class="pre">ROIAlign</span></code></a></li>
+<li><a class="reference internal" href="#lucid.models.utils.ROIAlign"><code class="docutils literal notranslate"><span class="pre">ROIAlign</span></code></a></li>
 <li><a class="reference internal" href="#constructor">Constructor</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
@@ -1006,8 +1034,8 @@ data-aria-dark="Switch to auto color mode">
           <section id="util-roialign">
 <h1>util.ROIAlign<a class="headerlink" href="#util-roialign" title="Link to this heading">¶</a></h1>
 <dl class="py class">
-<dt class="sig sig-object py" id="lucid.models.objdet.util.ROIAlign">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.objdet.util.</span></span><span class="sig-name descname"><span class="pre">ROIAlign</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.objdet.util.ROIAlign" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.models.utils.ROIAlign">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.utils.</span></span><span class="sig-name descname"><span class="pre">ROIAlign</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.utils.ROIAlign" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>ROIAlign</cite> module performs Region of Interest (RoI) Align,
@@ -1073,7 +1101,7 @@ containing the aligned region features.</p></li>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models.objdet.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">ROIAlign</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ROIAlign</span>
 </span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="n">roi_align</span> <span class="o">=</span> <span class="n">ROIAlign</span><span class="p">(</span><span class="n">output_size</span><span class="o">=</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
 </span><span data-line="3"><span class="gp">&gt;&gt;&gt; </span><span class="n">features</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span>
 </span><span data-line="4"><span class="gp">&gt;&gt;&gt; </span><span class="n">rois</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">24</span><span class="p">]])</span>

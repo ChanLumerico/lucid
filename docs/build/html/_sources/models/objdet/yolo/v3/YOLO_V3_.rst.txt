@@ -73,9 +73,9 @@ Attributes
 Methods
 -------
 
-.. automethod:: lucid.models.objdet.YOLO_V3.forward
-.. automethod:: lucid.models.objdet.YOLO_V3.get_loss
-.. automethod:: lucid.models.objdet.YOLO_V3.predict
+.. automethod:: lucid.models.YOLO_V3.forward
+.. automethod:: lucid.models.YOLO_V3.get_loss
+.. automethod:: lucid.models.YOLO_V3.predict
 
 Multi-Scale Detection
 ---------------------

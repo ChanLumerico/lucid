@@ -1,7 +1,7 @@
 util.apply_deltas
 =================
 
-.. autofunction:: lucid.models.objdet.util.apply_deltas
+.. autofunction:: lucid.models.utils.apply_deltas
 
 The `apply_deltas` function reconstructs bounding boxes from the regression 
 deltas predicted relative to a set of reference boxes. 
@@ -55,7 +55,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import apply_deltas
+    >>> from lucid.models.utils import apply_deltas
     >>> ref_boxes = lucid.Tensor([[10, 10, 20, 20]])
     >>> deltas = lucid.Tensor([[0.1, 0.2, 0.0, 0.1]])
     >>> new_boxes = apply_deltas(ref_boxes, deltas)

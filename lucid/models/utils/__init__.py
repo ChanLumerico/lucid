@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Literal
 import json
 
 import lucid
@@ -7,6 +6,8 @@ import lucid.nn as nn
 
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
+
+from ._det import *
 
 
 def _get_input_shape(args: tuple[Tensor | tuple | list]) -> _ShapeLike | None:

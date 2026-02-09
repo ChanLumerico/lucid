@@ -1,7 +1,7 @@
 util.bbox_to_delta
 ==================
 
-.. autofunction:: lucid.models.objdet.util.bbox_to_delta
+.. autofunction:: lucid.models.utils.bbox_to_delta
 
 The `bbox_to_delta` function computes the offset deltas (translation and scale) 
 required to transform a set of source boxes into target boxes. This is commonly 
@@ -46,7 +46,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import bbox_to_delta
+    >>> from lucid.models.utils import bbox_to_delta
     >>> src = lucid.Tensor([[10, 10, 20, 20]])
     >>> tgt = lucid.Tensor([[12, 12, 24, 28]])
     >>> delta = bbox_to_delta(src, tgt)

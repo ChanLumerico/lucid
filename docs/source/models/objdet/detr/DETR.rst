@@ -234,9 +234,9 @@ Details
 Methods
 -------
 
-.. automethod:: lucid.models.objdet.DETR.forward
-.. automethod:: lucid.models.objdet.DETR.predict
-.. automethod:: lucid.models.objdet.DETR.get_loss
+.. automethod:: lucid.models.DETR.forward
+.. automethod:: lucid.models.DETR.predict
+.. automethod:: lucid.models.DETR.get_loss
 
 Examples
 --------

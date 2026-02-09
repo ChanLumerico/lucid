@@ -1,5 +1,3 @@
-from . import utils as utils
-
 from .alex import *
 from .coatnet import *
 from .convnext import *
@@ -30,6 +28,7 @@ from .senet import *
 from .sknet import *
 from .swin import *
 from .vae import *
+from .vgg import *
 from .vit import *
 from .xception import *
 from .yolo import *

@@ -383,9 +383,9 @@ well-classified examples and allowing the model to focus on harder ones.
 Methods
 -------
 
-.. automethod:: lucid.models.objdet.EfficientDet.forward
-.. automethod:: lucid.models.objdet.EfficientDet.predict
-.. automethod:: lucid.models.objdet.EfficientDet.get_loss
+.. automethod:: lucid.models.EfficientDet.forward
+.. automethod:: lucid.models.EfficientDet.predict
+.. automethod:: lucid.models.EfficientDet.get_loss
 
 .. tip::
 

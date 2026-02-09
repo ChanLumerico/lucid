@@ -1,7 +1,7 @@
 util.FPN
 ========
 
-.. autoclass:: lucid.models.objdet.util.FPN
+.. autoclass:: lucid.models.utils.FPN
 
 The `FPN` (Feature Pyramid Network) module constructs a multi-scale feature pyramid 
 from a list of input feature maps. It enhances semantic representation at all scales, 
@@ -53,7 +53,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import FPN
+    >>> from lucid.models.utils import FPN
     >>> inputs = [lucid.random.randn(1, c, s, s) for c, s in zip([64, 128, 256, 512], [64, 32, 16, 8])]
     >>> fpn = FPN(in_channels_list=[64, 128, 256, 512])
     >>> outputs = fpn(inputs)

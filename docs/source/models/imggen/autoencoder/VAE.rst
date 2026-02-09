@@ -2,7 +2,7 @@ VAE
 ===
 |autoencoder-badge| |vae-badge| |imggen-badge|
 
-.. autoclass:: lucid.models.imggen.VAE
+.. autoclass:: lucid.models.VAE
 
 The `VAE` class implements a generalized Variational Autoencoder supporting 
 standard and hierarchical variants. It is compatible with various encoder-decoder 
@@ -143,10 +143,10 @@ Where:
 Methods
 -------
 
-.. automethod:: lucid.models.imggen.VAE.reparameterize
-.. automethod:: lucid.models.imggen.VAE.encode
-.. automethod:: lucid.models.imggen.VAE.decode
-.. automethod:: lucid.models.imggen.VAE.current_beta
+.. automethod:: lucid.models.VAE.reparameterize
+.. automethod:: lucid.models.VAE.encode
+.. automethod:: lucid.models.VAE.decode
+.. automethod:: lucid.models.VAE.current_beta
 
 Module Output Requirements
 --------------------------
@@ -172,7 +172,7 @@ Examples
     import lucid
     import lucid.nn as nn
     import lucid.nn.functional as F
-    from lucid.models.imggen import VAE
+    from lucid.models import VAE
 
     encoder = nn.Sequential(
         nn.Linear(784, 512),

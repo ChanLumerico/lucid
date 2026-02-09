@@ -1,7 +1,7 @@
 util.iou
 ========
 
-.. autofunction:: lucid.models.objdet.util.iou
+.. autofunction:: lucid.models.utils.iou
 
 The `iou` function computes the Intersection over Union (IoU) between two sets 
 of bounding boxes.
@@ -45,7 +45,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import iou
+    >>> from lucid.models.utils import iou
     >>> a = lucid.Tensor([[10, 10, 20, 20]])
     >>> b = lucid.Tensor([[15, 15, 25, 25], [0, 0, 5, 5]])
     >>> iou_matrix = iou(a, b)

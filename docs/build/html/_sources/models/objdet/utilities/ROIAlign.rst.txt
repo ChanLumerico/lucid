@@ -1,7 +1,7 @@
 util.ROIAlign
 =============
 
-.. autoclass:: lucid.models.objdet.util.ROIAlign
+.. autoclass:: lucid.models.utils.ROIAlign
 
 The `ROIAlign` module performs Region of Interest (RoI) Align, 
 which extracts fixed-size feature maps from input feature tensors based on 
@@ -67,7 +67,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import ROIAlign
+    >>> from lucid.models.utils import ROIAlign
     >>> roi_align = ROIAlign(output_size=(7, 7))
     >>> features = lucid.random.randn(1, 256, 32, 32)
     >>> rois = lucid.Tensor([[0, 4, 4, 24, 24]])

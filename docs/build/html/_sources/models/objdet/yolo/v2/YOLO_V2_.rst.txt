@@ -77,9 +77,9 @@ Attributes
 Methods
 -------
 
-.. automethod:: lucid.models.objdet.YOLO_V2.forward
-.. automethod:: lucid.models.objdet.YOLO_V2.get_loss
-.. automethod:: lucid.models.objdet.YOLO_V2.predict
+.. automethod:: lucid.models.YOLO_V2.forward
+.. automethod:: lucid.models.YOLO_V2.get_loss
+.. automethod:: lucid.models.YOLO_V2.predict
 
 Darknet-19 Integration
 ----------------------

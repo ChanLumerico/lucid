@@ -1,7 +1,7 @@
 util.SelectiveSearch
 ====================
 
-.. autoclass:: lucid.models.objdet.util.SelectiveSearch
+.. autoclass:: lucid.models.utils.SelectiveSearch
 
 The `SelectiveSearch` class implements multi-scale region proposal generation 
 using color-based graph segmentation and Non-Maximum Suppression (NMS).
@@ -49,7 +49,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import SelectiveSearch
+    >>> from lucid.models.utils import SelectiveSearch
     >>> img = lucid.random.randn(256, 256, 3)
     >>> ss = SelectiveSearch()
     >>> proposals = ss(img)

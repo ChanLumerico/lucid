@@ -1036,5 +1036,89 @@
         "family": "DETR",
         "param_size": 60570528,
         "category": "vision"
+    },
+    "bert_for_pre_training_base": {
+        "name": "bert_for_pre_training_base",
+        "family": "BERTForPreTraining",
+        "param_size": 110106428,
+        "category": "text"
+    },
+    "bert_for_masked_lm_base": {
+        "name": "bert_for_masked_lm_base",
+        "family": "BERTForMaskedLM",
+        "param_size": 109514298,
+        "category": "text"
+    },
+    "bert_for_causal_lm_base": {
+        "name": "bert_for_causal_lm_base",
+        "family": "BERTForCausalLM",
+        "param_size": 109514298,
+        "category": "text"
+    },
+    "bert_for_next_sentence_prediction_base": {
+        "name": "bert_for_next_sentence_prediction_base",
+        "family": "BERTForNextSentencePrediction",
+        "param_size": 109483778,
+        "category": "text"
+    },
+    "bert_for_sequence_classification_base": {
+        "name": "bert_for_sequence_classification_base",
+        "family": "BERTForSequenceClassification",
+        "param_size": 109483778,
+        "category": "text"
+    },
+    "bert_for_token_classification_base": {
+        "name": "bert_for_token_classification_base",
+        "family": "BERTForTokenClassification",
+        "param_size": 108895493,
+        "category": "text"
+    },
+    "bert_for_question_answering_base": {
+        "name": "bert_for_question_answering_base",
+        "family": "BERTForQuestionAnswering",
+        "param_size": 108893186,
+        "category": "text"
+    },
+    "bert_for_pre_training_large": {
+        "name": "bert_for_pre_training_large",
+        "family": "BERTForPreTraining",
+        "param_size": 336226108,
+        "category": "text"
+    },
+    "bert_for_masked_lm_large": {
+        "name": "bert_for_masked_lm_large",
+        "family": "BERTForMaskedLM",
+        "param_size": 335174458,
+        "category": "text"
+    },
+    "bert_for_causal_lm_large": {
+        "name": "bert_for_causal_lm_large",
+        "family": "BERTForCausalLM",
+        "param_size": 335174458,
+        "category": "text"
+    },
+    "bert_for_next_sentence_prediction_large": {
+        "name": "bert_for_next_sentence_prediction_large",
+        "family": "BERTForNextSentencePrediction",
+        "param_size": 335143938,
+        "category": "text"
+    },
+    "bert_for_sequence_classification_large": {
+        "name": "bert_for_sequence_classification_large",
+        "family": "BERTForSequenceClassification",
+        "param_size": 335143938,
+        "category": "text"
+    },
+    "bert_for_token_classification_large": {
+        "name": "bert_for_token_classification_large",
+        "family": "BERTForTokenClassification",
+        "param_size": 334097413,
+        "category": "text"
+    },
+    "bert_for_question_answering_large": {
+        "name": "bert_for_question_answering_large",
+        "family": "BERTForQuestionAnswering",
+        "param_size": 334094338,
+        "category": "text"
     }
 }

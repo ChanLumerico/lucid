@@ -2,7 +2,7 @@ DDPM
 ====
 |diffusion-badge| |imggen-badge|
 
-.. autoclass:: lucid.models.imggen.DDPM
+.. autoclass:: lucid.models.DDPM
 
 The `DDPM` class implements a Denoising Diffusion Probabilistic Model, 
 following the original formulation by Ho et al. (2020). It is designed for 
@@ -275,8 +275,8 @@ Implemented via the :py:meth:`DDPM.get_loss` method.
 Methods
 -------
 
-.. automethod:: lucid.models.imggen.DDPM.get_loss
-.. automethod:: lucid.models.imggen.DDPM.sample
+.. automethod:: lucid.models.DDPM.get_loss
+.. automethod:: lucid.models.DDPM.sample
 
 Examples
 --------
@@ -285,7 +285,7 @@ Examples
 
     import lucid
     import lucid.nn as nn
-    from lucid.models.imggen import DDPM
+    from lucid.models import DDPM
 
     model = DDPM(image_size=32, timesteps=1000)
 

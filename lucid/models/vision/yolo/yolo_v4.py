@@ -8,7 +8,7 @@ from lucid._tensor import Tensor
 from lucid.types import _DeviceType
 
 from lucid.models.vision.cspnet import csp_darknet_53
-from lucid.models.vision.utils import DetectionDict
+from lucid.models.utils import DetectionDict
 
 
 __all__ = ["YOLO_V4", "yolo_v4"]

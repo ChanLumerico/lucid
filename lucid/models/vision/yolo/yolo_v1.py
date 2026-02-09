@@ -5,7 +5,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.models.vision.utils import iou
+from lucid.models.utils import iou
 
 
 __all__ = ["YOLO_V1", "yolo_v1", "yolo_v1_tiny"]

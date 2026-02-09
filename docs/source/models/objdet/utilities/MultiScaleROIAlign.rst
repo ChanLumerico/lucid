@@ -1,7 +1,7 @@
 util.MultiScaleROIAlign
 =======================
 
-.. autoclass:: lucid.models.objdet.util.MultiScaleROIAlign
+.. autoclass:: lucid.models.utils.MultiScaleROIAlign
 
 The `MultiScaleROIAlign` module performs RoI Align across multiple feature map levels, 
 such as those used in Feature Pyramid Networks (FPN). It dynamically selects the 
@@ -78,7 +78,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import MultiScaleROIAlign
+    >>> from lucid.models.utils import MultiScaleROIAlign
     >>> features = [lucid.random.randn(1, 256, s, s) for s in [64, 32, 16, 8]]
     >>> rois = lucid.Tensor([[0, 10, 10, 40, 40]])
     >>> align = MultiScaleROIAlign(output_size=(7, 7))

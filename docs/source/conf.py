@@ -78,6 +78,10 @@ ARCH_EP = """
 
     <span class="badge detection_transformer">Detection Transformer</span>
 
+.. |encoder-only-transformer-badge| raw:: html
+
+    <span class="badge encoder_only_transformer">Encoder-Only Transformer</span>
+
 .. |autoencoder-badge| raw:: html
 
     <span class="badge autoencoder">Autoencoder</span>
@@ -111,6 +115,10 @@ TASK_EP = """
 .. |seq2seq-badge| raw:: html
 
     <span class="badge normal">Sequence-to-Sequence</span>
+
+.. |seqclf-badge| raw:: html
+
+    <span class="badge normal">Sequence Classification</span>
 """
 
 rst_epilog = ARCH_EP + TASK_EP + MISC_EP

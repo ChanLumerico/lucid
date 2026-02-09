@@ -116,6 +116,7 @@
     Image Generation <models/imggen/index.rst>
     Object Detection <models/objdet/index.rst>
     Sequence-to-Sequence <models/seq2seq/index.rst>
+    Sequence Classification <models/seqclf/index.rst>
 
 .. toctree::
     :maxdepth: 1

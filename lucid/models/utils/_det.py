@@ -8,6 +8,21 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 
+__all__ = [
+    "felzenszwalb_segmentation",
+    "SelectiveSearch",
+    "iou",
+    "bbox_to_delta",
+    "apply_deltas",
+    "nms",
+    "clip_boxes",
+    "ROIAlign",
+    "MultiScaleROIAlign",
+    "FPN",
+    "DetectionDict",
+]
+
+
 class _UnionFind:
     def __init__(self, n: int) -> None:
         self.parent = lucid.arange(n, dtype=lucid.Int32)

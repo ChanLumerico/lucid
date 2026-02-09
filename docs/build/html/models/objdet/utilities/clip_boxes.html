@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/shibuya.css?v=44020203" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link media="print" rel="stylesheet" type="text/css" href="../../../_static/print.css?v=20ff2c19" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/badges.css?v=94ab1542" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/badges.css?v=b1c3d602" />
     <link rel="stylesheet" type="text/css" href="../../../_static/mermaid.css?v=71a6aa26" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -867,6 +867,34 @@ data-aria-dark="Switch to auto color mode">
 </li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../../seqclf/index.html">Sequence Classification</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../seqclf/bert/BERT.html">BERT</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTConfig.html">BERTConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForPreTraining.html">BERTForPreTraining</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForMaskedLM.html">BERTForMaskedLM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForCausalLM.html">BERTForCausalLM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForNextSentencePrediction.html">BERTForNextSentencePrediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForSequenceClassification.html">BERTForSequenceClassification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForTokenClassification.html">BERTForTokenClassification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/BERTForQuestionAnswering.html">BERTForQuestionAnswering</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_pre_training_base.html">bert_for_pre_training_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_pre_training_large.html">bert_for_pre_training_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_masked_lm_base.html">bert_for_masked_lm_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_masked_lm_large.html">bert_for_masked_lm_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_causal_lm_base.html">bert_for_causal_lm_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_causal_lm_large.html">bert_for_causal_lm_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_next_sentence_prediction_base.html">bert_for_next_sentence_prediction_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_next_sentence_prediction_large.html">bert_for_next_sentence_prediction_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_sequence_classification_base.html">bert_for_sequence_classification_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_sequence_classification_large.html">bert_for_sequence_classification_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_token_classification_base.html">bert_for_token_classification_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_token_classification_large.html">bert_for_token_classification_large</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_question_answering_base.html">bert_for_question_answering_base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../seqclf/bert/bert_for_question_answering_large.html">bert_for_question_answering_large</a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading" aria-level="3"><span class="caption-text">Weights</span></p>
 <ul>
@@ -924,7 +952,7 @@ data-aria-dark="Switch to auto color mode">
       <i class="i-lucide close"></i>
     </button>
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#lucid.models.objdet.util.clip_boxes"><code class="docutils literal notranslate"><span class="pre">clip_boxes()</span></code></a></li>
+<li><a class="reference internal" href="#lucid.models.utils.clip_boxes"><code class="docutils literal notranslate"><span class="pre">clip_boxes()</span></code></a></li>
 <li><a class="reference internal" href="#function-signature">Function Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#returns">Returns</a></li>
@@ -1005,8 +1033,8 @@ data-aria-dark="Switch to auto color mode">
           <section id="util-clip-boxes">
 <h1>util.clip_boxes<a class="headerlink" href="#util-clip-boxes" title="Link to this heading">¶</a></h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="lucid.models.objdet.util.clip_boxes">
-<span class="sig-prename descclassname"><span class="pre">lucid.models.objdet.util.</span></span><span class="sig-name descname"><span class="pre">clip_boxes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boxes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.models.objdet.util.clip_boxes" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.models.utils.clip_boxes">
+<span class="sig-prename descclassname"><span class="pre">lucid.models.utils.</span></span><span class="sig-name descname"><span class="pre">clip_boxes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boxes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.models.utils.clip_boxes" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>clip_boxes</cite> function constrains bounding boxes to lie within the spatial
@@ -1042,7 +1070,7 @@ to remain within the image boundaries.</p></li>
 </section>
 <section id="example">
 <h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models.objdet.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">clip_boxes</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">clip_boxes</span>
 </span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="n">boxes</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">120</span><span class="p">,</span> <span class="mi">130</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">60</span><span class="p">]])</span>
 </span><span data-line="3"><span class="gp">&gt;&gt;&gt; </span><span class="n">clipped</span> <span class="o">=</span> <span class="n">clip_boxes</span><span class="p">(</span><span class="n">boxes</span><span class="p">,</span> <span class="n">image_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">))</span>
 </span><span data-line="4"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">clipped</span><span class="p">)</span>

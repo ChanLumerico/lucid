@@ -254,8 +254,8 @@ Where:
 Methods
 -------
 
-.. automethod:: lucid.models.objdet.YOLO_V1.forward
-.. automethod:: lucid.models.objdet.YOLO_V1.get_loss
+.. automethod:: lucid.models.YOLO_V1.forward
+.. automethod:: lucid.models.YOLO_V1.get_loss
 
 Examples
 --------
@@ -264,7 +264,7 @@ Examples
 
     import lucid
     import lucid.nn as nn
-    from lucid.models.objdet import YOLO_V1
+    from lucid.models import YOLO_V1
 
     model = YOLO_V1(
         in_channels=3,

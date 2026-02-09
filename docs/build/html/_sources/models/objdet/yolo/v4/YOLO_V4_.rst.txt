@@ -248,9 +248,9 @@ Attributes
 
 Methods
 -------
-.. automethod:: lucid.models.objdet.YOLO_V4.forward  
-.. automethod:: lucid.models.objdet.YOLO_V4.get_loss  
-.. automethod:: lucid.models.objdet.YOLO_V4.predict  
+.. automethod:: lucid.models.YOLO_V4.forward  
+.. automethod:: lucid.models.YOLO_V4.get_loss  
+.. automethod:: lucid.models.YOLO_V4.predict  
 
 Architectural Improvements
 --------------------------

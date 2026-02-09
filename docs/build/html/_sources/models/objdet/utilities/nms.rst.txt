@@ -1,7 +1,7 @@
 util.nms
 ========
 
-.. autofunction:: lucid.models.objdet.util.nms
+.. autofunction:: lucid.models.utils.nms
 
 The `nms` (Non-Maximum Suppression) function filters overlapping 
 bounding boxes based on their Intersection over Union (IoU) and confidence scores. 
@@ -44,7 +44,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import nms
+    >>> from lucid.models.utils import nms
     >>> boxes = lucid.Tensor([[10, 10, 20, 20], [12, 12, 22, 22], [100, 100, 110, 110]])
     >>> scores = lucid.Tensor([0.9, 0.8, 0.75])
     >>> keep = nms(boxes, scores, iou_thresh=0.5)

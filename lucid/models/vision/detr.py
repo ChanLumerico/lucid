@@ -8,7 +8,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid import register_model
 
-from lucid.models.vision.utils import DetectionDict
+from lucid.models.utils import DetectionDict
 from lucid.models.vision.resnet import ResNet, resnet_50, resnet_101
 
 

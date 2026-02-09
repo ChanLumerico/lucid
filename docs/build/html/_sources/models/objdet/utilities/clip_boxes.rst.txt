@@ -1,7 +1,7 @@
 util.clip_boxes
 ===============
 
-.. autofunction:: lucid.models.objdet.util.clip_boxes
+.. autofunction:: lucid.models.utils.clip_boxes
 
 The `clip_boxes` function constrains bounding boxes to lie within the spatial 
 bounds of the image.
@@ -39,7 +39,7 @@ Example
 
 .. code-block:: python
 
-    >>> from lucid.models.objdet.util import clip_boxes
+    >>> from lucid.models.utils import clip_boxes
     >>> boxes = lucid.Tensor([[10, 10, 120, 130], [-5, -5, 50, 60]])
     >>> clipped = clip_boxes(boxes, image_shape=(100, 100))
     >>> print(clipped)
