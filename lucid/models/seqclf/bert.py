@@ -8,11 +8,11 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 
-# __all__ = ["BertConfig", "BERT"]  NOTE: Add final `BERT` class after final implementation.
+__all__ = ["BERTConfig", "BERT"]
 
 
 @dataclass
-class BertConfig:
+class BERTConfig:
     vocab_size: int
     hidden_size: int
     num_attention_heads: int
@@ -38,11 +38,13 @@ class BertConfig:
     pad_token_id: int = 0
     bos_token_id: int | None = None
     eos_token_id: int | None = None
+
     classifier_dropout: float | None = None
+    add_pooling_layer: bool = True
 
 
-class _BertEmbeddings(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTEmbeddings(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.word_embeddings = nn.Embedding(
             config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id
@@ -116,10 +118,10 @@ class _BertEmbeddings(nn.Module):
         return embeddings
 
 
-class _BertSelfAttention(nn.Module):
+class _BERTSelfAttention(nn.Module):
     def __init__(
         self,
-        config: BertConfig,
+        config: BERTConfig,
         /,
         is_causal: bool = False,
         layer_idx: int | None = None,
@@ -193,10 +195,10 @@ class _BertSelfAttention(nn.Module):
         return attn_output, attn_weights
 
 
-class _BertCrossAttention(nn.Module):
+class _BERTCrossAttention(nn.Module):
     def __init__(
         self,
-        config: BertConfig,
+        config: BERTConfig,
         /,
         is_causal: bool = False,
         layer_idx: int | None = None,
@@ -297,8 +299,8 @@ class _BertCrossAttention(nn.Module):
         return attn_output, attn_weight
 
 
-class _BertSelfOutput(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTSelfOutput(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -312,10 +314,10 @@ class _BertSelfOutput(nn.Module):
         return hidden_states
 
 
-class _BertAttention(nn.Module):
+class _BERTAttention(nn.Module):
     def __init__(
         self,
-        config: BertConfig,
+        config: BERTConfig,
         /,
         is_causal: bool = False,
         layer_idx: int | None = None,
@@ -324,10 +326,10 @@ class _BertAttention(nn.Module):
         super().__init__()
         self.is_cross_attention = is_cross_attention
         attention_class = (
-            _BertCrossAttention if is_cross_attention else _BertSelfAttention
+            _BERTCrossAttention if is_cross_attention else _BERTSelfAttention
         )
         self.self = attention_class(config, is_causal=is_causal, layer_idx=layer_idx)
-        self.output = _BertSelfOutput(config)
+        self.output = _BERTSelfOutput(config)
 
     def forward(
         self,
@@ -364,8 +366,8 @@ class _BertAttention(nn.Module):
         return attn_output, attn_weights
 
 
-class _BertIntermediate(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTIntermediate(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         self.intermediate_act_fn = config.hidden_act
@@ -376,8 +378,8 @@ class _BertIntermediate(nn.Module):
         return hidden_states
 
 
-class _BertOutput(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTOutput(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -391,13 +393,13 @@ class _BertOutput(nn.Module):
         return hidden_states
 
 
-class _BertLayer(nn.Module):
-    def __init__(self, config: BertConfig, layer_idx: int | None = None) -> None:
+class _BERTLayer(nn.Module):
+    def __init__(self, config: BERTConfig, layer_idx: int | None = None) -> None:
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.seq_len_dim = 1
 
-        self.attention = _BertAttention(
+        self.attention = _BERTAttention(
             config, is_causal=config.is_decoder, layer_idx=layer_idx
         )
         self.is_decoder = config.is_decoder
@@ -408,12 +410,12 @@ class _BertLayer(nn.Module):
                 raise ValueError(
                     f"{self} should be used as a decoder if cross attention is added."
                 )
-            self.crossattention = _BertAttention(
+            self.crossattention = _BERTAttention(
                 config, is_causal=False, layer_idx=layer_idx, is_cross_attention=True
             )
 
-        self.intermediate = _BertIntermediate(config)
-        self.output = _BertOutput(config)
+        self.intermediate = _BERTIntermediate(config)
+        self.output = _BERTOutput(config)
 
     def forward(
         self,
@@ -424,7 +426,7 @@ class _BertLayer(nn.Module):
         past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
         cache_position: Tensor | None = None,
         **kwargs,
-    ) -> tuple[Tensor, ...]:
+    ) -> Tensor:
         self_attention_output, _ = self.attention(
             hidden_states,
             attention_mask,
@@ -464,3 +466,330 @@ class _BertLayer(nn.Module):
         layer_output = self.output(intermediate_output, attention_output)
 
         return layer_output
+
+
+class _BERTEncoder(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.config = config
+        self.layer = nn.ModuleList(
+            [_BERTLayer(config, layer_idx=i) for i in range(config.num_hidden_layers)]
+        )
+
+    def forward(
+        self,
+        hidden_states: Tensor,
+        attention_mask: lucid.FloatTensor | None = None,
+        encoder_hidden_states: lucid.FloatTensor | None = None,
+        encoder_attention_mask: lucid.FloatTensor | None = None,
+        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
+        use_cache: bool | None = None,
+        cache_position: Tensor | None = None,
+        **kwargs,
+    ) -> Tensor:
+        effective_use_cache = (
+            use_cache if use_cache is not None else self.config.use_cache
+        )
+        if not self.config.is_decoder:
+            effective_use_cache = False
+
+        if (
+            self.config.add_cross_attention
+            and past_key_values is not None
+            and not isinstance(past_key_values, nn.EncoderDecoderCache)
+        ):
+            raise TypeError(
+                "When add_cross_attention=True, past_key_values must be "
+                "nn.EncoderDecoderCache."
+            )
+
+        if not effective_use_cache:
+            past_key_values = None
+            cache_position = None
+        elif past_key_values is None:
+            raise ValueError(
+                "use_cache=True requires a persistent past_key_values cache "
+                "instance from the caller."
+            )
+
+        for layer_module in self.layer:
+            hidden_states = layer_module(
+                hidden_states,
+                attention_mask,
+                encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
+                past_key_values=past_key_values,
+                cache_position=cache_position,
+                **kwargs,
+            )
+
+        return hidden_states
+
+
+class _BERTPooler(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states: Tensor) -> Tensor:
+        first_token_tensor = hidden_states[:, 0]
+        pooled_output = self.dense(first_token_tensor)
+        pooled_output = self.activation(pooled_output)
+
+        return pooled_output
+
+
+class _BERTPredictionHeadTransform(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.transform_act_fn = config.hidden_act
+        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+
+    def forward(self, hidden_states: Tensor) -> Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.transform_act_fn(hidden_states)
+        hidden_states = self.layernorm(hidden_states)
+
+        return hidden_states
+
+
+class _BERTLMPredictionHead(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.transform = _BERTPredictionHeadTransform(config)
+        self.decoder = nn.Linear(config.hidden_size, config.vocab_size)
+
+    def forward(self, hidden_states: Tensor) -> Tensor:
+        hidden_states = self.transform(hidden_states)
+        hidden_states = self.decoder(hidden_states)
+
+        return hidden_states
+
+
+class _BERTOnlyMLMHead(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.predictions = _BERTLMPredictionHead(config)
+
+    def forward(self, sequence_output: Tensor) -> Tensor:
+        prediction_scores = self.predictions(sequence_output)
+        return prediction_scores
+
+
+class _BERTOnlyNSPHead(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.seq_relationship = nn.Linear(config.hidden_size, 2)
+
+    def forward(self, pooled_output: Tensor) -> Tensor:
+        seq_relationship_score = self.seq_relationship(pooled_output)
+        return seq_relationship_score
+
+
+class _BERTPreTrainingHeads(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.predictions = _BERTLMPredictionHead(config)
+        self.seq_relationship = nn.Linear(config.hidden_size, 2)
+
+    def forward(
+        self, sequence_output: Tensor, pooled_output: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        prediction_score = self.predictions(sequence_output)
+        seq_relationship_score = self.seq_relationship(pooled_output)
+
+        return prediction_score, seq_relationship_score
+
+
+class BERT(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
+        super().__init__()
+        self.config = config
+
+        self.embeddings = _BERTEmbeddings(config)
+        self.encoder = _BERTEncoder(config)
+        self.pooler = _BERTPooler(config) if config.add_pooling_layer else None
+
+        self.apply(self._init_weights)
+        self.tie_weights()
+
+    def _init_weights(self, module: nn.Module) -> None:
+        if isinstance(module, nn.Linear):
+            nn.init.normal(module.weight, mean=0.0, std=self.config.initializer_range)
+            if module.bias is not None:
+                nn.init.constant(module.bias, 0.0)
+
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal(module.weight, mean=0.0, std=self.config.initializer_range)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx] = 0
+
+        elif isinstance(module, nn.LayerNorm):
+            nn.init.constant(module.bias, 0.0)
+            nn.init.constant(module.weight, 1.0)
+
+    def get_input_embeddings(self) -> nn.Embedding:
+        return self.embeddings.word_embeddings
+
+    def set_input_embeddings(self, value: nn.Embedding) -> None:
+        self.embeddings.word_embeddings = value
+
+    def get_output_embeddings(self) -> nn.Linear | None:
+        return None
+
+    def tie_weights(self) -> None:
+        if not self.config.tie_word_embedding:
+            return
+
+        output_embeddings = self.get_output_embeddings()
+        if output_embeddings is None:
+            return
+
+        output_embeddings.weight = self.get_input_embeddings().weight
+
+    def _to_4d_attention_mask(
+        self,
+        attention_mask: Tensor | None,
+        target_length: int,
+        source_length: int,
+        device: str,
+    ) -> Tensor | None:
+        if attention_mask is None:
+            return None
+
+        if attention_mask.device != device:
+            attention_mask = attention_mask.to(device)
+
+        if attention_mask.ndim == 2:
+            if attention_mask.shape[1] != source_length:
+                raise ValueError(
+                    f"attention_mask has invalid source length: "
+                    f"{attention_mask.shape[1]} != {source_length}"
+                )
+            attention_mask = attention_mask[:, None, None, :]
+        elif attention_mask.ndim == 3:
+            if attention_mask.shape[-1] != source_length:
+                raise ValueError(
+                    f"attention_mask has invalid source length: "
+                    f"{attention_mask.shape[-1]} != {source_length}"
+                )
+            attention_mask = attention_mask[:, None, :, :]
+        elif attention_mask.ndim == 4:
+            if attention_mask.shape[-1] != source_length:
+                raise ValueError(
+                    f"attention_mask has invalid source length: "
+                    f"{attention_mask.shape[-1]} != {source_length}"
+                )
+        else:
+            raise ValueError(
+                f"attention_mask must be 2-D, 3-D, or 4-D (got {attention_mask.ndim})."
+            )
+
+        if attention_mask.shape[-2] not in (1, target_length):
+            raise ValueError(
+                f"attention_mask has invalid target length axis: "
+                f"{attention_mask.shape[-2]} not in (1, {target_length})"
+            )
+
+        attention_mask = attention_mask.astype(lucid.Float32)
+        return (1.0 - attention_mask) * -1e12
+
+    def forward(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+        encoder_hidden_states: lucid.FloatTensor | None = None,
+        encoder_attention_mask: Tensor | None = None,
+        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
+        use_cache: bool | None = None,
+        cache_position: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor | None]:
+        if input_ids is not None and inputs_embeds is not None:
+            raise ValueError("Only one of input_ids or inputs_embeds can be provided.")
+        if input_ids is None and inputs_embeds is None:
+            raise ValueError("Either input_ids or inputs_embeds must be provided.")
+
+        if input_ids is not None:
+            input_shape = input_ids.shape
+            device = input_ids.device
+        else:
+            input_shape = inputs_embeds.shape[:-1]
+            device = inputs_embeds.device
+
+        if len(input_shape) != 2:
+            raise ValueError(
+                f"BERT expects 2-D token inputs [batch, seq] (got {input_shape})."
+            )
+
+        effective_use_cache = (
+            use_cache if use_cache is not None else self.config.use_cache
+        )
+        past_key_values_length = 0
+        if effective_use_cache and past_key_values is not None:
+            if isinstance(past_key_values, nn.EncoderDecoderCache):
+                self_cache = past_key_values.self_attention_cache
+                if len(self_cache.key_cache) > 0:
+                    past_key_values_length = self_cache.get_seq_length()
+            else:
+                if len(past_key_values.key_cache) > 0:
+                    past_key_values_length = past_key_values.get_seq_length()
+
+        embedding_output = self.embeddings(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            past_key_values_length=past_key_values_length,
+        )
+
+        source_length = input_shape[1] + past_key_values_length
+        if attention_mask is None:
+            attention_mask = lucid.ones((input_shape[0], source_length), device=device)
+        elif attention_mask.ndim == 2 and attention_mask.shape[1] == input_shape[1]:
+            if past_key_values_length > 0:
+                past_attention = lucid.ones(
+                    (input_shape[0], past_key_values_length), device=device
+                )
+                attention_mask = lucid.concatenate(
+                    [past_attention, attention_mask], axis=1
+                )
+
+        extended_attention_mask = self._to_4d_attention_mask(
+            attention_mask=attention_mask,
+            target_length=input_shape[1],
+            source_length=source_length,
+            device=device,
+        )
+        if encoder_hidden_states is None:
+            if encoder_attention_mask is not None:
+                raise ValueError(
+                    "encoder_attention_mask requires encoder_hidden_states."
+                )
+            extended_encoder_attention_mask = None
+        else:
+            extended_encoder_attention_mask = self._to_4d_attention_mask(
+                attention_mask=encoder_attention_mask,
+                target_length=input_shape[1],
+                source_length=encoder_hidden_states.shape[1],
+                device=device,
+            )
+
+        sequence_output = self.encoder(
+            embedding_output,
+            attention_mask=extended_attention_mask,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=extended_encoder_attention_mask,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+            cache_position=cache_position,
+        )
+        pooled_output = (
+            self.pooler(sequence_output) if self.pooler is not None else None
+        )
+
+        return sequence_output, pooled_output
