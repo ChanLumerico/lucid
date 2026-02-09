@@ -32,4 +32,5 @@ from .swin import *
 from .vae import *
 from .vit import *
 from .xception import *
+from .yolo import *
 from .zfnet import *

@@ -1036,5 +1036,11 @@
         "family": "DETR",
         "param_size": 60570528,
         "task": "objdet"
+    },
+    "bert_for_next_sentence_prediction_base": {
+        "name": "bert_for_next_sentence_prediction_base",
+        "family": "BERTForNextSentencePrediction",
+        "param_size": 109483778,
+        "task": "text"
     }
 }

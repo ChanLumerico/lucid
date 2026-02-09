@@ -8,8 +8,8 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid import register_model
 
-from lucid.models.objdet.util import DetectionDict
-from lucid.models.imgclf.resnet import ResNet, resnet_50, resnet_101
+from lucid.models.vision.utils import DetectionDict
+from lucid.models.vision.resnet import ResNet, resnet_50, resnet_101
 
 
 __all__ = ["DETR", "detr_r50", "detr_r101"]

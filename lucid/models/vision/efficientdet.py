@@ -9,8 +9,8 @@ from lucid._tensor import Tensor
 from lucid import register_model
 from lucid.types import _Scalar, _ShapeLike, _DeviceType
 
-import lucid.models.imgclf.efficient as effnet
-from lucid.models.objdet.util import iou, nms, DetectionDict
+import lucid.models.vision.efficient as effnet
+from lucid.models.vision.utils import iou, nms, DetectionDict
 
 
 __all__ = [

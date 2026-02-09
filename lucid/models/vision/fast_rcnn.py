@@ -5,7 +5,7 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
-from lucid.models.objdet.util import (
+from lucid.models.vision.utils import (
     ROIAlign,
     SelectiveSearch,
     apply_deltas,

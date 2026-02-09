@@ -10,7 +10,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.types import _DeviceType
 
-from lucid.models.objdet.util import (
+from lucid.models.vision.utils import (
     ROIAlign,
     MultiScaleROIAlign,
     FPN,
@@ -21,7 +21,7 @@ from lucid.models.objdet.util import (
     clip_boxes,
 )
 
-from lucid.models.imgclf.resnet import resnet_50, resnet_101
+from lucid.models.vision.resnet import resnet_50, resnet_101
 
 
 __all__ = [
