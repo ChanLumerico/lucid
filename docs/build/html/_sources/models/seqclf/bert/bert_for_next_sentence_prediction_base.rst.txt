@@ -7,7 +7,6 @@ The `bert_for_next_sentence_prediction_base` function creates a BERT-Base model
 for binary next-sentence prediction.
 
 **Total Parameters**: 109,483,778
-**Total FLOPs**: 22.35G
 
 Function Signature
 ------------------

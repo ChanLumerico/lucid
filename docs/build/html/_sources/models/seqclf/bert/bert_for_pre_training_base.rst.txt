@@ -7,7 +7,6 @@ The `bert_for_pre_training_base` function creates a BERT-Base model configured f
 joint MLM + NSP pre-training.
 
 **Total Parameters**: 110,106,428
-**Total FLOPs**: 28.50G
 
 Function Signature
 ------------------

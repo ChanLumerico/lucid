@@ -7,7 +7,6 @@ The `bert_for_masked_lm_large` function creates a BERT-Large model configured fo
 masked language modeling.
 
 **Total Parameters**: 335,174,458
-**Total FLOPs**: 87.19G
 
 Function Signature
 ------------------

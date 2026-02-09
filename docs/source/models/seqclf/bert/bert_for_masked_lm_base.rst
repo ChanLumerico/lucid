@@ -7,7 +7,6 @@ The `bert_for_masked_lm_base` function creates a BERT-Base model configured for
 masked language modeling.
 
 **Total Parameters**: 109,514,298
-**Total FLOPs**: 28.50G
 
 Function Signature
 ------------------

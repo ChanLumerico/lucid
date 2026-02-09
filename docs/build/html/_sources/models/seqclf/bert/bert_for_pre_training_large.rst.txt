@@ -7,7 +7,6 @@ The `bert_for_pre_training_large` function creates a BERT-Large model configured
 joint MLM + NSP pre-training.
 
 **Total Parameters**: 336,226,108
-**Total FLOPs**: 87.19G
 
 Function Signature
 ------------------

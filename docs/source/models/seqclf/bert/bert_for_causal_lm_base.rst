@@ -7,7 +7,6 @@ The `bert_for_causal_lm_base` function creates a decoder-style BERT-Base model
 for causal language modeling.
 
 **Total Parameters**: 109,514,298
-**Total FLOPs**: 28.50G
 
 Function Signature
 ------------------

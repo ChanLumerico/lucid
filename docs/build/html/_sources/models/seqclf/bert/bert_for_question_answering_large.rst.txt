@@ -7,7 +7,6 @@ The `bert_for_question_answering_large` function creates a BERT-Large model for
 extractive question answering with span logits.
 
 **Total Parameters**: 334,094,338
-**Total FLOPs**: 78.92G
 
 Function Signature
 ------------------

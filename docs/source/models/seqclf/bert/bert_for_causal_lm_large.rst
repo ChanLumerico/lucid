@@ -7,7 +7,6 @@ The `bert_for_causal_lm_large` function creates a decoder-style BERT-Large model
 for causal language modeling.
 
 **Total Parameters**: 335,174,458
-**Total FLOPs**: 87.19G
 
 Function Signature
 ------------------

@@ -7,7 +7,6 @@ The `bert_for_sequence_classification_large` function creates a BERT-Large model
 a sequence-level classification head.
 
 **Total Parameters**: 335,143,938
-**Total FLOPs**: 78.92G
 
 Function Signature
 ------------------

@@ -7,7 +7,6 @@ The `bert_for_question_answering_base` function creates a BERT-Base model for
 extractive question answering with span logits.
 
 **Total Parameters**: 108,893,186
-**Total FLOPs**: 22.35G
 
 Function Signature
 ------------------

@@ -7,7 +7,6 @@ The `bert_for_token_classification_large` function creates a BERT-Large model wi
 a token-level classification head.
 
 **Total Parameters**: 334,097,413
-**Total FLOPs**: 78.92G
 
 Function Signature
 ------------------

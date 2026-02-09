@@ -7,7 +7,6 @@ The `bert_for_token_classification_base` function creates a BERT-Base model with
 a token-level classification head.
 
 **Total Parameters**: 108,895,493
-**Total FLOPs**: 22.35G
 
 Function Signature
 ------------------

@@ -7,7 +7,6 @@ The `bert_for_next_sentence_prediction_large` function creates a BERT-Large mode
 for binary next-sentence prediction.
 
 **Total Parameters**: 335,143,938
-**Total FLOPs**: 78.92G
 
 Function Signature
 ------------------

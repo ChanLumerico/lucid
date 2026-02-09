@@ -7,7 +7,6 @@ The `bert_for_sequence_classification_base` function creates a BERT-Base model w
 a sequence-level classification head.
 
 **Total Parameters**: 109,483,778
-**Total FLOPs**: 22.35G
 
 Function Signature
 ------------------
