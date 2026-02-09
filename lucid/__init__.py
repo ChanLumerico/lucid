@@ -286,10 +286,10 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
         if name not in registry:
             family = model.__class__.__name__
             param_size = model.parameter_size
-            task = sys.modules[func.__module__].__package__.split(".")[2]
+            category = sys.modules[func.__module__].__package__.split(".")[2]
 
             registry[name] = dict(
-                name=name, family=family, param_size=param_size, task=task
+                name=name, family=family, param_size=param_size, category=category
             )
             with open(MODELS_REGISTRY_PATH, "w") as f:
                 json.dump(registry, f, indent=4)

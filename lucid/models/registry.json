@@ -3,1044 +3,1038 @@
         "name": "lenet_1",
         "family": "LeNet",
         "param_size": 3246,
-        "task": "imgclf"
+        "category": "vision"
     },
     "lenet_4": {
         "name": "lenet_4",
         "family": "LeNet",
         "param_size": 18378,
-        "task": "imgclf"
+        "category": "vision"
     },
     "lenet_5": {
         "name": "lenet_5",
         "family": "LeNet",
         "param_size": 61706,
-        "task": "imgclf"
+        "category": "vision"
     },
     "alexnet": {
         "name": "alexnet",
         "family": "AlexNet",
         "param_size": 61100840,
-        "task": "imgclf"
+        "category": "vision"
     },
     "zfnet": {
         "name": "zfnet",
         "family": "ZFNet",
         "param_size": 62357608,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vggnet_11": {
         "name": "vggnet_11",
         "family": "VGGNet",
         "param_size": 132863336,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vggnet_13": {
         "name": "vggnet_13",
         "family": "VGGNet",
         "param_size": 133047848,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vggnet_16": {
         "name": "vggnet_16",
         "family": "VGGNet",
         "param_size": 138357544,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vggnet_19": {
         "name": "vggnet_19",
         "family": "VGGNet",
         "param_size": 143667240,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_v1": {
         "name": "inception_v1",
         "family": "Inception",
         "param_size": 13393352,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_v3": {
         "name": "inception_v3",
         "family": "Inception",
         "param_size": 30817392,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_v4": {
         "name": "inception_v4",
         "family": "Inception",
         "param_size": 40586984,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_resnet_v1": {
         "name": "inception_resnet_v1",
         "family": "InceptionResNet",
         "param_size": 22739128,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_resnet_v2": {
         "name": "inception_resnet_v2",
         "family": "InceptionResNet",
         "param_size": 35847512,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnet_18": {
         "name": "resnet_18",
         "family": "ResNet",
         "param_size": 11689512,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnet_34": {
         "name": "resnet_34",
         "family": "ResNet",
         "param_size": 21797672,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnet_50": {
         "name": "resnet_50",
         "family": "ResNet",
         "param_size": 25557032,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnet_101": {
         "name": "resnet_101",
         "family": "ResNet",
         "param_size": 44549160,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnet_152": {
         "name": "resnet_152",
         "family": "ResNet",
         "param_size": 60192808,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnet_200": {
         "name": "resnet_200",
         "family": "ResNet",
         "param_size": 64669864,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnet_269": {
         "name": "resnet_269",
         "family": "ResNet",
         "param_size": 102069416,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnet_1001": {
         "name": "resnet_1001",
         "family": "ResNet",
         "param_size": 149071016,
-        "task": "imgclf"
+        "category": "vision"
     },
     "wide_resnet_50": {
         "name": "wide_resnet_50",
         "family": "ResNet",
         "param_size": 78973224,
-        "task": "imgclf"
+        "category": "vision"
     },
     "wide_resnet_101": {
         "name": "wide_resnet_101",
         "family": "ResNet",
         "param_size": 126886696,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnet_18": {
         "name": "se_resnet_18",
         "family": "SENet",
         "param_size": 11778592,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnet_34": {
         "name": "se_resnet_34",
         "family": "SENet",
         "param_size": 21958868,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnet_50": {
         "name": "se_resnet_50",
         "family": "SENet",
         "param_size": 28088024,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnet_101": {
         "name": "se_resnet_101",
         "family": "SENet",
         "param_size": 49326872,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnet_152": {
         "name": "se_resnet_152",
         "family": "SENet",
         "param_size": 66821848,
-        "task": "imgclf"
+        "category": "vision"
     },
     "sk_resnet_18": {
         "name": "sk_resnet_18",
         "family": "SKNet",
         "param_size": 25647368,
-        "task": "imgclf"
+        "category": "vision"
     },
     "sk_resnet_34": {
         "name": "sk_resnet_34",
         "family": "SKNet",
         "param_size": 45895512,
-        "task": "imgclf"
+        "category": "vision"
     },
     "sk_resnet_50": {
         "name": "sk_resnet_50",
         "family": "SKNet",
         "param_size": 57073368,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnext_50_32x4d": {
         "name": "resnext_50_32x4d",
         "family": "ResNeXt",
         "param_size": 25028904,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnext_101_32x4d": {
         "name": "resnext_101_32x4d",
         "family": "ResNeXt",
         "param_size": 44177704,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnext_101_32x8d": {
         "name": "resnext_101_32x8d",
         "family": "ResNeXt",
         "param_size": 88791336,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnext_101_32x16d": {
         "name": "resnext_101_32x16d",
         "family": "ResNeXt",
         "param_size": 194026792,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnext_101_32x32d": {
         "name": "resnext_101_32x32d",
         "family": "ResNeXt",
         "param_size": 468530472,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnext_101_64x4d": {
         "name": "resnext_101_64x4d",
         "family": "ResNeXt",
         "param_size": 83455272,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnext_50_32x4d": {
         "name": "se_resnext_50_32x4d",
         "family": "SENet",
         "param_size": 27559896,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnext_101_32x4d": {
         "name": "se_resnext_101_32x4d",
         "family": "SENet",
         "param_size": 48955416,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnext_101_32x8d": {
         "name": "se_resnext_101_32x8d",
         "family": "SENet",
         "param_size": 93569048,
-        "task": "imgclf"
+        "category": "vision"
     },
     "se_resnext_101_64x4d": {
         "name": "se_resnext_101_64x4d",
         "family": "SENet",
         "param_size": 88232984,
-        "task": "imgclf"
+        "category": "vision"
     },
     "sk_resnext_50_32x4d": {
         "name": "sk_resnext_50_32x4d",
         "family": "SKNet",
         "param_size": 29274760,
-        "task": "imgclf"
+        "category": "vision"
     },
     "densenet_121": {
         "name": "densenet_121",
         "family": "DenseNet",
         "param_size": 7978856,
-        "task": "imgclf"
+        "category": "vision"
     },
     "densenet_169": {
         "name": "densenet_169",
         "family": "DenseNet",
         "param_size": 14149480,
-        "task": "imgclf"
+        "category": "vision"
     },
     "densenet_201": {
         "name": "densenet_201",
         "family": "DenseNet",
         "param_size": 20013928,
-        "task": "imgclf"
+        "category": "vision"
     },
     "densenet_264": {
         "name": "densenet_264",
         "family": "DenseNet",
         "param_size": 33337704,
-        "task": "imgclf"
+        "category": "vision"
     },
     "xception": {
         "name": "xception",
         "family": "Xception",
         "param_size": 22862096,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet": {
         "name": "mobilenet",
         "family": "MobileNet",
         "param_size": 4232008,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet_v2": {
         "name": "mobilenet_v2",
         "family": "MobileNet_V2",
         "param_size": 3504872,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet_v3_small": {
         "name": "mobilenet_v3_small",
         "family": "MobileNet_V3",
         "param_size": 2537238,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet_v3_large": {
         "name": "mobilenet_v3_large",
         "family": "MobileNet_V3",
         "param_size": 5481198,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_b0": {
         "name": "efficientnet_b0",
         "family": "EfficientNet",
         "param_size": 5289636,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_b1": {
         "name": "efficientnet_b1",
         "family": "EfficientNet",
         "param_size": 7795560,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_b2": {
         "name": "efficientnet_b2",
         "family": "EfficientNet",
         "param_size": 9111370,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_b3": {
         "name": "efficientnet_b3",
         "family": "EfficientNet",
         "param_size": 12235536,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_b4": {
         "name": "efficientnet_b4",
         "family": "EfficientNet",
         "param_size": 19344640,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_b5": {
         "name": "efficientnet_b5",
         "family": "EfficientNet",
         "param_size": 30393432,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_b6": {
         "name": "efficientnet_b6",
         "family": "EfficientNet",
         "param_size": 43046128,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_b7": {
         "name": "efficientnet_b7",
         "family": "EfficientNet",
         "param_size": 66355448,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_v2_s": {
         "name": "efficientnet_v2_s",
         "family": "EfficientNet_V2",
         "param_size": 21136440,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_v2_m": {
         "name": "efficientnet_v2_m",
         "family": "EfficientNet_V2",
         "param_size": 55302108,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_v2_l": {
         "name": "efficientnet_v2_l",
         "family": "EfficientNet_V2",
         "param_size": 120617032,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientnet_v2_xl": {
         "name": "efficientnet_v2_xl",
         "family": "EfficientNet_V2",
         "param_size": 210221568,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnest_14": {
         "name": "resnest_14",
         "family": "ResNeSt",
         "param_size": 10611560,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnest_26": {
         "name": "resnest_26",
         "family": "ResNeSt",
         "param_size": 17069320,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnest_50": {
         "name": "resnest_50",
         "family": "ResNeSt",
         "param_size": 27483112,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnest_101": {
         "name": "resnest_101",
         "family": "ResNeSt",
         "param_size": 48274760,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnest_200": {
         "name": "resnest_200",
         "family": "ResNeSt",
         "param_size": 70201288,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnest_269": {
         "name": "resnest_269",
         "family": "ResNeSt",
         "param_size": 110929224,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnest_50_4s2x40d": {
         "name": "resnest_50_4s2x40d",
         "family": "ResNeSt",
         "param_size": 30417464,
-        "task": "imgclf"
+        "category": "vision"
     },
     "resnest_50_1s4x24d": {
         "name": "resnest_50_1s4x24d",
         "family": "ResNeSt",
         "param_size": 25676872,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_tiny": {
         "name": "convnext_tiny",
         "family": "ConvNeXt",
         "param_size": 28589128,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_small": {
         "name": "convnext_small",
         "family": "ConvNeXt",
         "param_size": 46884148,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_base": {
         "name": "convnext_base",
         "family": "ConvNeXt",
         "param_size": 88591464,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_large": {
         "name": "convnext_large",
         "family": "ConvNeXt",
         "param_size": 197767336,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_xlarge": {
         "name": "convnext_xlarge",
         "family": "ConvNeXt",
         "param_size": 350196968,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_v2_atto": {
         "name": "convnext_v2_atto",
         "family": "ConvNeXt_V2",
         "param_size": 3708400,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_v2_femto": {
         "name": "convnext_v2_femto",
         "family": "ConvNeXt_V2",
         "param_size": 5233240,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_v2_pico": {
         "name": "convnext_v2_pico",
         "family": "ConvNeXt_V2",
         "param_size": 9066280,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_v2_nano": {
         "name": "convnext_v2_nano",
         "family": "ConvNeXt_V2",
         "param_size": 15623800,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_v2_tiny": {
         "name": "convnext_v2_tiny",
         "family": "ConvNeXt_V2",
         "param_size": 28635496,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_v2_base": {
         "name": "convnext_v2_base",
         "family": "ConvNeXt_V2",
         "param_size": 88717800,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_v2_large": {
         "name": "convnext_v2_large",
         "family": "ConvNeXt_V2",
         "param_size": 197956840,
-        "task": "imgclf"
+        "category": "vision"
     },
     "convnext_v2_huge": {
         "name": "convnext_v2_huge",
         "family": "ConvNeXt_V2",
         "param_size": 660289640,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_next_atto": {
         "name": "inception_next_atto",
         "family": "InceptionNeXt",
         "param_size": 4156520,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_next_tiny": {
         "name": "inception_next_tiny",
         "family": "InceptionNeXt",
         "param_size": 28083832,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_next_small": {
         "name": "inception_next_small",
         "family": "InceptionNeXt",
         "param_size": 49431544,
-        "task": "imgclf"
+        "category": "vision"
     },
     "inception_next_base": {
         "name": "inception_next_base",
         "family": "InceptionNeXt",
         "param_size": 86748840,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet_v4_conv_small": {
         "name": "mobilenet_v4_conv_small",
         "family": "MobileNet_V4",
         "param_size": 3774024,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet_v4_conv_medium": {
         "name": "mobilenet_v4_conv_medium",
         "family": "MobileNet_V4",
         "param_size": 9715512,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet_v4_conv_large": {
         "name": "mobilenet_v4_conv_large",
         "family": "MobileNet_V4",
         "param_size": 32590864,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet_v4_hybrid_medium": {
         "name": "mobilenet_v4_hybrid_medium",
         "family": "MobileNet_V4",
         "param_size": 11070136,
-        "task": "imgclf"
+        "category": "vision"
     },
     "mobilenet_v4_hybrid_large": {
         "name": "mobilenet_v4_hybrid_large",
         "family": "MobileNet_V4",
         "param_size": 37755152,
-        "task": "imgclf"
+        "category": "vision"
     },
     "transformer_base": {
         "name": "transformer_base",
         "family": "transformer",
         "param_size": 62584544,
-        "task": "seq2seq"
+        "category": "text"
     },
     "transformer_big": {
         "name": "transformer_big",
         "family": "transformer",
         "param_size": 213237472,
-        "task": "seq2seq"
+        "category": "text"
     },
     "coatnet_0": {
         "name": "coatnet_0",
         "family": "CoAtNet",
         "param_size": 27174944,
-        "task": "imgclf"
+        "category": "vision"
     },
     "coatnet_1": {
         "name": "coatnet_1",
         "family": "CoAtNet",
         "param_size": 53330240,
-        "task": "imgclf"
+        "category": "vision"
     },
     "coatnet_2": {
         "name": "coatnet_2",
         "family": "CoAtNet",
         "param_size": 82516096,
-        "task": "imgclf"
+        "category": "vision"
     },
     "coatnet_3": {
         "name": "coatnet_3",
         "family": "CoAtNet",
         "param_size": 157790656,
-        "task": "imgclf"
+        "category": "vision"
     },
     "coatnet_4": {
         "name": "coatnet_4",
         "family": "CoAtNet",
         "param_size": 277301632,
-        "task": "imgclf"
+        "category": "vision"
     },
     "coatnet_5": {
         "name": "coatnet_5",
         "family": "CoAtNet",
         "param_size": 770124608,
-        "task": "imgclf"
+        "category": "vision"
     },
     "coatnet_6": {
         "name": "coatnet_6",
         "family": "CoAtNet",
         "param_size": 2011558336,
-        "task": "imgclf"
+        "category": "vision"
     },
     "coatnet_7": {
         "name": "coatnet_7",
         "family": "CoAtNet",
         "param_size": 3107978688,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vit_tiny": {
         "name": "vit_tiny",
         "family": "ViT",
         "param_size": 5717416,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vit_small": {
         "name": "vit_small",
         "family": "ViT",
         "param_size": 22050664,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vit_base": {
         "name": "vit_base",
         "family": "ViT",
         "param_size": 86567656,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vit_large": {
         "name": "vit_large",
         "family": "ViT",
         "param_size": 304326632,
-        "task": "imgclf"
+        "category": "vision"
     },
     "vit_huge": {
         "name": "vit_huge",
         "family": "ViT",
         "param_size": 632199400,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_tiny": {
         "name": "swin_tiny",
         "family": "SwinTransformer",
         "param_size": 28288354,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_small": {
         "name": "swin_small",
         "family": "SwinTransformer",
         "param_size": 49606258,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_base": {
         "name": "swin_base",
         "family": "SwinTransformer",
         "param_size": 87768224,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_large": {
         "name": "swin_large",
         "family": "SwinTransformer",
         "param_size": 196532476,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_v2_tiny": {
         "name": "swin_v2_tiny",
         "family": "SwinTransformer_V2",
         "param_size": 28349842,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_v2_small": {
         "name": "swin_v2_small",
         "family": "SwinTransformer_V2",
         "param_size": 49731106,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_v2_base": {
         "name": "swin_v2_base",
         "family": "SwinTransformer_V2",
         "param_size": 87922400,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_v2_large": {
         "name": "swin_v2_large",
         "family": "SwinTransformer_V2",
         "param_size": 196745308,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_v2_huge": {
         "name": "swin_v2_huge",
         "family": "SwinTransformer_V2",
         "param_size": 657796668,
-        "task": "imgclf"
+        "category": "vision"
     },
     "swin_v2_giant": {
         "name": "swin_v2_giant",
         "family": "SwinTransformer_V2",
         "param_size": 3000869564,
-        "task": "imgclf"
+        "category": "vision"
     },
     "cvt_13": {
         "name": "cvt_13",
         "family": "CvT",
         "param_size": 19997480,
-        "task": "imgclf"
+        "category": "vision"
     },
     "cvt_21": {
         "name": "cvt_21",
         "family": "CvT",
         "param_size": 31622696,
-        "task": "imgclf"
+        "category": "vision"
     },
     "cvt_w24": {
         "name": "cvt_w24",
         "family": "CvT",
         "param_size": 277196392,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_tiny": {
         "name": "pvt_tiny",
         "family": "PVT",
         "param_size": 12457192,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_small": {
         "name": "pvt_small",
         "family": "PVT",
         "param_size": 23003048,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_medium": {
         "name": "pvt_medium",
         "family": "PVT",
         "param_size": 41492648,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_large": {
         "name": "pvt_large",
         "family": "PVT",
         "param_size": 55359848,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_huge": {
         "name": "pvt_huge",
         "family": "PVT",
         "param_size": 286706920,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_v2_b0": {
         "name": "pvt_v2_b0",
         "family": "PVT_V2",
         "param_size": 3666760,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_v2_b1": {
         "name": "pvt_v2_b1",
         "family": "PVT_V2",
         "param_size": 14009000,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_v2_b2": {
         "name": "pvt_v2_b2",
         "family": "PVT_V2",
         "param_size": 25362856,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_v2_b2_li": {
         "name": "pvt_v2_b2_li",
         "family": "PVT_V2",
         "param_size": 22553512,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_v2_b3": {
         "name": "pvt_v2_b3",
         "family": "PVT_V2",
         "param_size": 45238696,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_v2_b4": {
         "name": "pvt_v2_b4",
         "family": "PVT_V2",
         "param_size": 62556072,
-        "task": "imgclf"
+        "category": "vision"
     },
     "pvt_v2_b5": {
         "name": "pvt_v2_b5",
         "family": "PVT_V2",
         "param_size": 82882984,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_tiny": {
         "name": "crossvit_tiny",
         "family": "CrossViT",
         "param_size": 7014800,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_small": {
         "name": "crossvit_small",
         "family": "CrossViT",
         "param_size": 26856272,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_base": {
         "name": "crossvit_base",
         "family": "CrossViT",
         "param_size": 105025232,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_9": {
         "name": "crossvit_9",
         "family": "CrossViT",
         "param_size": 8553296,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_15": {
         "name": "crossvit_15",
         "family": "CrossViT",
         "param_size": 27528464,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_18": {
         "name": "crossvit_18",
         "family": "CrossViT",
         "param_size": 43271408,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_9_dagger": {
         "name": "crossvit_9_dagger",
         "family": "CrossViT",
         "param_size": 8776592,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_15_dagger": {
         "name": "crossvit_15_dagger",
         "family": "CrossViT",
         "param_size": 28209008,
-        "task": "imgclf"
+        "category": "vision"
     },
     "crossvit_18_dagger": {
         "name": "crossvit_18_dagger",
         "family": "CrossViT",
         "param_size": 44266976,
-        "task": "imgclf"
+        "category": "vision"
     },
     "maxvit_tiny": {
         "name": "maxvit_tiny",
         "family": "MaxViT",
         "param_size": 25081416,
-        "task": "imgclf"
+        "category": "vision"
     },
     "maxvit_small": {
         "name": "maxvit_small",
         "family": "MaxViT",
         "param_size": 55757304,
-        "task": "imgclf"
+        "category": "vision"
     },
     "maxvit_base": {
         "name": "maxvit_base",
         "family": "MaxViT",
         "param_size": 96626776,
-        "task": "imgclf"
+        "category": "vision"
     },
     "maxvit_large": {
         "name": "maxvit_large",
         "family": "MaxViT",
         "param_size": 171187880,
-        "task": "imgclf"
+        "category": "vision"
     },
     "maxvit_xlarge": {
         "name": "maxvit_xlarge",
         "family": "MaxViT",
         "param_size": 383734024,
-        "task": "imgclf"
+        "category": "vision"
     },
     "faster_rcnn_resnet_50_fpn": {
         "name": "faster_rcnn_resnet_50_fpn",
         "family": "FasterRCNN",
         "param_size": 43515902,
-        "task": "objdet"
+        "category": "vision"
     },
     "faster_rcnn_resnet_101_fpn": {
         "name": "faster_rcnn_resnet_101_fpn",
         "family": "FasterRCNN",
         "param_size": 62508030,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientformer_l1": {
         "name": "efficientformer_l1",
         "family": "EfficientFormer",
         "param_size": 11840928,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientformer_l3": {
         "name": "efficientformer_l3",
         "family": "EfficientFormer",
         "param_size": 30893000,
-        "task": "imgclf"
+        "category": "vision"
     },
     "efficientformer_l7": {
         "name": "efficientformer_l7",
         "family": "EfficientFormer",
         "param_size": 81460328,
-        "task": "imgclf"
+        "category": "vision"
     },
     "yolo_v1": {
         "name": "yolo_v1",
         "family": "YOLO_V1",
         "param_size": 271716734,
-        "task": "objdet"
+        "category": "vision"
     },
     "yolo_v1_tiny": {
         "name": "yolo_v1_tiny",
         "family": "YOLO_V1",
         "param_size": 236720462,
-        "task": "objdet"
+        "category": "vision"
     },
     "yolo_v2": {
         "name": "yolo_v2",
         "family": "YOLO_V2",
         "param_size": 21287133,
-        "task": "objdet"
+        "category": "vision"
     },
     "yolo_v2_tiny": {
         "name": "yolo_v2_tiny",
         "family": "YOLO_V2",
         "param_size": 15863821,
-        "task": "objdet"
+        "category": "vision"
     },
     "yolo_v3": {
         "name": "yolo_v3",
         "family": "YOLO_V3",
         "param_size": 62974149,
-        "task": "objdet"
+        "category": "vision"
     },
     "yolo_v3_tiny": {
         "name": "yolo_v3_tiny",
         "family": "YOLO_V3",
         "param_size": 23450997,
-        "task": "objdet"
+        "category": "vision"
     },
     "csp_resnet_50": {
         "name": "csp_resnet_50",
         "family": "CSPNet",
         "param_size": 22463016,
-        "task": "imgclf"
+        "category": "vision"
     },
     "csp_resnext_50_32x4d": {
         "name": "csp_resnext_50_32x4d",
         "family": "CSPNet",
         "param_size": 22509864,
-        "task": "imgclf"
+        "category": "vision"
     },
     "csp_darknet_53": {
         "name": "csp_darknet_53",
         "family": "CSPNet",
         "param_size": 27278536,
-        "task": "imgclf"
+        "category": "vision"
     },
     "yolo_v4": {
         "name": "yolo_v4",
         "family": "YOLO_V4",
         "param_size": 93488078,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientdet_d0": {
         "name": "efficientdet_d0",
         "family": "EfficientDet",
         "param_size": 3591656,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientdet_d1": {
         "name": "efficientdet_d1",
         "family": "EfficientDet",
         "param_size": 5068752,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientdet_d2": {
         "name": "efficientdet_d2",
         "family": "EfficientDet",
         "param_size": 6457434,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientdet_d3": {
         "name": "efficientdet_d3",
         "family": "EfficientDet",
         "param_size": 10286134,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientdet_d4": {
         "name": "efficientdet_d4",
         "family": "EfficientDet",
         "param_size": 18740232,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientdet_d5": {
         "name": "efficientdet_d5",
         "family": "EfficientDet",
         "param_size": 29882556,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientdet_d6": {
         "name": "efficientdet_d6",
         "family": "EfficientDet",
         "param_size": 52634622,
-        "task": "objdet"
+        "category": "vision"
     },
     "efficientdet_d7": {
         "name": "efficientdet_d7",
         "family": "EfficientDet",
         "param_size": 87173148,
-        "task": "objdet"
+        "category": "vision"
     },
     "detr_r50": {
         "name": "detr_r50",
         "family": "DETR",
         "param_size": 41578400,
-        "task": "objdet"
+        "category": "vision"
     },
     "detr_r101": {
         "name": "detr_r101",
         "family": "DETR",
         "param_size": 60570528,
-        "task": "objdet"
-    },
-    "bert_for_next_sentence_prediction_base": {
-        "name": "bert_for_next_sentence_prediction_base",
-        "family": "BERTForNextSentencePrediction",
-        "param_size": 109483778,
-        "task": "text"
+        "category": "vision"
     }
 }
