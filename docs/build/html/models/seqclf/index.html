@@ -1037,83 +1037,99 @@ for Language Understanding.” arXiv, 11 Oct. 2018,
 <thead>
 <tr class="row-odd"><th class="head"><p>Name</p></th>
 <th class="head"><p>Model</p></th>
+<th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
 <th class="head"><p>FLOPs</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>BERT</p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT}\)</span></p></td>
 <td><p><a class="reference external" href="bert/BERT">BERT</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p><em>Depends</em></p></td>
 <td><p><em>Depends</em></p></td>
 </tr>
 <tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{base}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_pre_training_base">bert_for_pre_training_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>110,106,428</p></td>
 <td><p>28.50G</p></td>
 </tr>
 <tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{large}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_pre_training_large">bert_for_pre_training_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>336,226,108</p></td>
 <td><p>87.19G</p></td>
 </tr>
-<tr class="row-odd"><td><p>bert_for_masked_lm_base</p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-MLM}_\text{base}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_masked_lm_base">bert_for_masked_lm_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>109,514,298</p></td>
 <td><p>28.50G</p></td>
 </tr>
-<tr class="row-even"><td><p>bert_for_masked_lm_large</p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-MLM}_\text{large}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_masked_lm_large">bert_for_masked_lm_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>335,174,458</p></td>
 <td><p>87.19G</p></td>
 </tr>
-<tr class="row-odd"><td><p>bert_for_causal_lm_base</p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-CLM}_\text{base}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_causal_lm_base">bert_for_causal_lm_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>109,514,298</p></td>
 <td><p>28.50G</p></td>
 </tr>
-<tr class="row-even"><td><p>bert_for_causal_lm_large</p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-CLM}_\text{large}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_causal_lm_large">bert_for_causal_lm_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>335,174,458</p></td>
 <td><p>87.19G</p></td>
 </tr>
-<tr class="row-odd"><td><p>bert_for_next_sentence_prediction_base</p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-NSP}_\text{base}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_next_sentence_prediction_base">bert_for_next_sentence_prediction_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>109,483,778</p></td>
 <td><p>22.35G</p></td>
 </tr>
-<tr class="row-even"><td><p>bert_for_next_sentence_prediction_large</p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-NSP}_\text{large}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_next_sentence_prediction_large">bert_for_next_sentence_prediction_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>335,143,938</p></td>
 <td><p>78.92G</p></td>
 </tr>
-<tr class="row-odd"><td><p>bert_for_sequence_classification_base</p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-SC}_\text{base}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_sequence_classification_base">bert_for_sequence_classification_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>109,483,778</p></td>
 <td><p>22.35G</p></td>
 </tr>
-<tr class="row-even"><td><p>bert_for_sequence_classification_large</p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-SC}_\text{large}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_sequence_classification_large">bert_for_sequence_classification_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>335,143,938</p></td>
 <td><p>78.92G</p></td>
 </tr>
-<tr class="row-odd"><td><p>bert_for_token_classification_base</p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-TC}_\text{base}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_token_classification_base">bert_for_token_classification_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>108,895,493</p></td>
 <td><p>22.35G</p></td>
 </tr>
-<tr class="row-even"><td><p>bert_for_token_classification_large</p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-TC}_\text{large}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_token_classification_large">bert_for_token_classification_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>334,097,413</p></td>
 <td><p>78.92G</p></td>
 </tr>
-<tr class="row-odd"><td><p>bert_for_question_answering_base</p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-QA}_\text{base}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_question_answering_base">bert_for_question_answering_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>108,893,186</p></td>
 <td><p>22.35G</p></td>
 </tr>
-<tr class="row-even"><td><p>bert_for_question_answering_large</p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-QA}_\text{large}\)</span></p></td>
 <td><p><a class="reference external" href="bert/bert_for_question_answering_large">bert_for_question_answering_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>334,094,338</p></td>
 <td><p>78.92G</p></td>
 </tr>

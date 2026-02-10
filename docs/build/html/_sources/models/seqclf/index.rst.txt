@@ -24,80 +24,96 @@ including pre-training, language modeling, and sequence-level prediction heads.
 
     * - Name
       - Model
+      - Input Shape
       - Parameter Count
       - FLOPs
 
-    * - BERT
+    * - :math:`\text{BERT}`
       - `BERT <bert/BERT>`_
+      - :math:`(N,L)`
       - *Depends*
       - *Depends*
 
     * - :math:`\text{BERT}_\text{base}`
       - `bert_for_pre_training_base <bert/bert_for_pre_training_base>`_
+      - :math:`(N,L)`
       - 110,106,428
       - 28.50G
 
     * - :math:`\text{BERT}_\text{large}`
       - `bert_for_pre_training_large <bert/bert_for_pre_training_large>`_
+      - :math:`(N,L)`
       - 336,226,108
       - 87.19G
 
-    * - bert_for_masked_lm_base
+    * - :math:`\text{BERT-MLM}_\text{base}`
       - `bert_for_masked_lm_base <bert/bert_for_masked_lm_base>`_
+      - :math:`(N,L)`
       - 109,514,298
       - 28.50G
 
-    * - bert_for_masked_lm_large
+    * - :math:`\text{BERT-MLM}_\text{large}`
       - `bert_for_masked_lm_large <bert/bert_for_masked_lm_large>`_
+      - :math:`(N,L)`
       - 335,174,458
       - 87.19G
 
-    * - bert_for_causal_lm_base
+    * - :math:`\text{BERT-CLM}_\text{base}`
       - `bert_for_causal_lm_base <bert/bert_for_causal_lm_base>`_
+      - :math:`(N,L)`
       - 109,514,298
       - 28.50G
 
-    * - bert_for_causal_lm_large
+    * - :math:`\text{BERT-CLM}_\text{large}`
       - `bert_for_causal_lm_large <bert/bert_for_causal_lm_large>`_
+      - :math:`(N,L)`
       - 335,174,458
       - 87.19G
 
-    * - bert_for_next_sentence_prediction_base
+    * - :math:`\text{BERT-NSP}_\text{base}`
       - `bert_for_next_sentence_prediction_base <bert/bert_for_next_sentence_prediction_base>`_
+      - :math:`(N,L)`
       - 109,483,778
       - 22.35G
 
-    * - bert_for_next_sentence_prediction_large
+    * - :math:`\text{BERT-NSP}_\text{large}`
       - `bert_for_next_sentence_prediction_large <bert/bert_for_next_sentence_prediction_large>`_
+      - :math:`(N,L)`
       - 335,143,938
       - 78.92G
 
-    * - bert_for_sequence_classification_base
+    * - :math:`\text{BERT-SC}_\text{base}`
       - `bert_for_sequence_classification_base <bert/bert_for_sequence_classification_base>`_
+      - :math:`(N,L)`
       - 109,483,778
       - 22.35G
 
-    * - bert_for_sequence_classification_large
+    * - :math:`\text{BERT-SC}_\text{large}`
       - `bert_for_sequence_classification_large <bert/bert_for_sequence_classification_large>`_
+      - :math:`(N,L)`
       - 335,143,938
       - 78.92G
 
-    * - bert_for_token_classification_base
+    * - :math:`\text{BERT-TC}_\text{base}`
       - `bert_for_token_classification_base <bert/bert_for_token_classification_base>`_
+      - :math:`(N,L)`
       - 108,895,493
       - 22.35G
 
-    * - bert_for_token_classification_large
+    * - :math:`\text{BERT-TC}_\text{large}`
       - `bert_for_token_classification_large <bert/bert_for_token_classification_large>`_
+      - :math:`(N,L)`
       - 334,097,413
       - 78.92G
 
-    * - bert_for_question_answering_base
+    * - :math:`\text{BERT-QA}_\text{base}`
       - `bert_for_question_answering_base <bert/bert_for_question_answering_base>`_
+      - :math:`(N,L)`
       - 108,893,186
       - 22.35G
 
-    * - bert_for_question_answering_large
+    * - :math:`\text{BERT-QA}_\text{large}`
       - `bert_for_question_answering_large <bert/bert_for_question_answering_large>`_
+      - :math:`(N,L)`
       - 334,094,338
       - 78.92G
