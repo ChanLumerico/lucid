@@ -32,12 +32,12 @@ including pre-training, language modeling, and sequence-level prediction heads.
       - *Depends*
       - *Depends*
 
-    * - BERT:math:`_\text{base}`
+    * - :math:`\text{BERT}_\text{base}`
       - `bert_for_pre_training_base <bert/bert_for_pre_training_base>`_
       - 110,106,428
       - 28.50G
 
-    * - BERT:math:`_\text{large}`
+    * - :math:`\text{BERT}_\text{large}`
       - `bert_for_pre_training_large <bert/bert_for_pre_training_large>`_
       - 336,226,108
       - 87.19G
