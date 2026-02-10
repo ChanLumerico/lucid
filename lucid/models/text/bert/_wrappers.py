@@ -52,6 +52,53 @@ class _BERTTaskWrapperMixin:
     def tie_weights(self) -> None:
         self.bert.tie_weights()
 
+    def _encoder_kwargs(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> dict[str, Tensor | None]:
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
+            "position_ids": position_ids,
+            "inputs_embeds": inputs_embeds,
+        }
+
+    def _decoder_kwargs(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+        encoder_hidden_states: lucid.FloatTensor | None = None,
+        encoder_attention_mask: Tensor | None = None,
+        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
+        use_cache: bool | None = None,
+        cache_position: Tensor | None = None,
+    ) -> dict[str, Tensor | nn.KVCache | nn.EncoderDecoderCache | bool | None]:
+        kwargs = self._encoder_kwargs(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        kwargs.update(
+            {
+                "encoder_hidden_states": encoder_hidden_states,
+                "encoder_attention_mask": encoder_attention_mask,
+                "past_key_values": past_key_values,
+                "use_cache": use_cache,
+                "cache_position": cache_position,
+            }
+        )
+        return kwargs
+
 
 class _BERTPredictionHeadTransform(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
@@ -202,6 +249,90 @@ def _qa_ce_loss(
     return (start_loss + end_loss) / 2.0
 
 
+def _qa_exact_match_accuracy(
+    start_pred: Tensor,
+    end_pred: Tensor,
+    start_positions: Tensor,
+    end_positions: Tensor,
+) -> Tensor:
+    start_targets = start_positions.reshape(-1).astype(lucid.Int)
+    end_targets = end_positions.reshape(-1).astype(lucid.Int)
+    start_correct = (start_pred.reshape(-1).astype(lucid.Int) == start_targets).astype(
+        lucid.Int
+    )
+    end_correct = (end_pred.reshape(-1).astype(lucid.Int) == end_targets).astype(
+        lucid.Int
+    )
+    return (start_correct * end_correct).astype(lucid.Float32).mean()
+
+
+def _create_masked_lm_inputs(
+    input_ids: Tensor,
+    *,
+    vocab_size: int,
+    attention_mask: Tensor | None = None,
+    special_tokens_mask: Tensor | None = None,
+    mask_token_id: int = 103,
+    mlm_probability: float = 0.15,
+    mask_replace_prob: float = 0.8,
+    random_replace_prob: float = 0.1,
+    ignore_index: int = -100,
+) -> tuple[Tensor, Tensor]:
+    if not 0.0 <= mlm_probability <= 1.0:
+        raise ValueError("mlm_probability must be in [0, 1].")
+    if not 0.0 <= mask_replace_prob <= 1.0:
+        raise ValueError("mask_replace_prob must be in [0, 1].")
+    if not 0.0 <= random_replace_prob <= 1.0:
+        raise ValueError("random_replace_prob must be in [0, 1].")
+    if mask_replace_prob + random_replace_prob > 1.0:
+        raise ValueError("mask_replace_prob + random_replace_prob must be <= 1.")
+
+    device = input_ids.device
+    input_ids = input_ids.astype(lucid.Long)
+    labels = lucid.full(input_ids.shape, ignore_index, dtype=lucid.Long, device=device)
+
+    if attention_mask is None:
+        can_mask = lucid.ones(input_ids.shape, dtype=lucid.Int, device=device)
+    else:
+        can_mask = (attention_mask > 0).astype(lucid.Int)
+
+    if special_tokens_mask is not None:
+        can_mask = can_mask * (special_tokens_mask == 0).astype(lucid.Int)
+
+    select_rand = lucid.random.rand(input_ids.shape, device=device)
+    masked_positions = (
+        (select_rand < mlm_probability).astype(lucid.Int) * can_mask
+    ).astype(lucid.Int)
+
+    labels = lucid.where(masked_positions > 0, input_ids, labels)
+    masked_input_ids = input_ids.detach()
+
+    replace_rand = lucid.random.rand(input_ids.shape, device=device)
+    mask_token_positions = (
+        (replace_rand < mask_replace_prob).astype(lucid.Int) * masked_positions
+    ).astype(lucid.Int)
+    random_token_positions = (
+        (replace_rand >= mask_replace_prob).astype(lucid.Int)
+        * (replace_rand < (mask_replace_prob + random_replace_prob)).astype(lucid.Int)
+        * masked_positions
+    ).astype(lucid.Int)
+
+    mask_token_tensor = lucid.full(
+        input_ids.shape, mask_token_id, dtype=lucid.Long, device=device
+    )
+    random_tokens = lucid.random.randint(
+        0, vocab_size, input_ids.shape, device=device
+    ).astype(lucid.Long)
+
+    masked_input_ids = lucid.where(
+        mask_token_positions > 0, mask_token_tensor, masked_input_ids
+    )
+    masked_input_ids = lucid.where(
+        random_token_positions > 0, random_tokens, masked_input_ids
+    )
+    return masked_input_ids, labels
+
+
 class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -220,15 +351,33 @@ class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         sequence_output, pooled_output = self.bert(
+            **self._encoder_kwargs(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+            )
+        )
+        if pooled_output is None:
+            raise RuntimeError("BERTForPreTraining requires pooled output.")
+        return self.cls(sequence_output, pooled_output)
+
+    def _forward_scores(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
+        return self.forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        if pooled_output is None:
-            raise RuntimeError("BERTForPreTraining requires pooled output.")
-        return self.cls(sequence_output, pooled_output)
 
     def get_mlm_loss(
         self,
@@ -242,7 +391,7 @@ class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
         ignore_index: int = -100,
         reduction: str | None = "mean",
     ) -> Tensor:
-        prediction_scores, _ = self.forward(
+        prediction_scores, _ = self._forward_scores(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -267,7 +416,7 @@ class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
         *,
         reduction: str | None = "mean",
     ) -> Tensor:
-        _, seq_relationship_scores = self.forward(
+        _, seq_relationship_scores = self._forward_scores(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -295,7 +444,7 @@ class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
         ignore_index: int = -100,
         reduction: str | None = "mean",
     ) -> Tensor:
-        prediction_scores, seq_relationship_scores = self.forward(
+        prediction_scores, seq_relationship_scores = self._forward_scores(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -316,6 +465,139 @@ class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
         )
         return (mlm_weight * mlm_loss) + (nsp_weight * nsp_loss)
 
+    def predict_mlm_token_ids(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        prediction_scores, _ = self._forward_scores(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        return _predict_labels_from_logits(prediction_scores)
+
+    def predict_nsp_labels(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        _, seq_relationship_scores = self._forward_scores(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        return _predict_labels_from_logits(seq_relationship_scores)
+
+    def get_mlm_accuracy(
+        self,
+        mlm_labels: Tensor,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+        *,
+        ignore_index: int = -100,
+    ) -> Tensor:
+        pred_ids = self.predict_mlm_token_ids(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        return _masked_token_accuracy(pred_ids, mlm_labels, ignore_index=ignore_index)
+
+    def get_nsp_accuracy(
+        self,
+        nsp_labels: Tensor,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        preds = self.predict_nsp_labels(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        return _classification_accuracy(preds, nsp_labels)
+
+    def get_accuracy(
+        self,
+        mlm_labels: Tensor,
+        nsp_labels: Tensor,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+        *,
+        ignore_index: int = -100,
+        mlm_weight: float = 1.0,
+        nsp_weight: float = 1.0,
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        mlm_acc = self.get_mlm_accuracy(
+            mlm_labels=mlm_labels,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            ignore_index=ignore_index,
+        )
+        nsp_acc = self.get_nsp_accuracy(
+            nsp_labels=nsp_labels,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
+        weighted = (mlm_weight * mlm_acc) + (nsp_weight * nsp_acc)
+        norm = mlm_weight + nsp_weight
+        if norm > 0:
+            weighted = weighted / norm
+        return mlm_acc, nsp_acc, weighted
+
+    def create_masked_lm_inputs(
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        special_tokens_mask: Tensor | None = None,
+        *,
+        mask_token_id: int = 103,
+        mlm_probability: float = 0.15,
+        mask_replace_prob: float = 0.8,
+        random_replace_prob: float = 0.1,
+        ignore_index: int = -100,
+    ) -> tuple[Tensor, Tensor]:
+        return _create_masked_lm_inputs(
+            input_ids=input_ids,
+            vocab_size=self.config.vocab_size,
+            attention_mask=attention_mask,
+            special_tokens_mask=special_tokens_mask,
+            mask_token_id=mask_token_id,
+            mlm_probability=mlm_probability,
+            mask_replace_prob=mask_replace_prob,
+            random_replace_prob=random_replace_prob,
+            ignore_index=ignore_index,
+        )
+
 
 class BERTForMaskedLM(_BERTTaskWrapperMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
@@ -335,13 +617,31 @@ class BERTForMaskedLM(_BERTTaskWrapperMixin, nn.Module):
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
         sequence_output, _ = self.bert(
+            **self._encoder_kwargs(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+            )
+        )
+        return self.cls(sequence_output)
+
+    def _forward_logits(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        return self.forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        return self.cls(sequence_output)
 
     def get_loss(
         self,
@@ -355,7 +655,7 @@ class BERTForMaskedLM(_BERTTaskWrapperMixin, nn.Module):
         ignore_index: int = -100,
         reduction: str | None = "mean",
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -381,63 +681,17 @@ class BERTForMaskedLM(_BERTTaskWrapperMixin, nn.Module):
         random_replace_prob: float = 0.1,
         ignore_index: int = -100,
     ) -> tuple[Tensor, Tensor]:
-        if not 0.0 <= mlm_probability <= 1.0:
-            raise ValueError("mlm_probability must be in [0, 1].")
-        if not 0.0 <= mask_replace_prob <= 1.0:
-            raise ValueError("mask_replace_prob must be in [0, 1].")
-        if not 0.0 <= random_replace_prob <= 1.0:
-            raise ValueError("random_replace_prob must be in [0, 1].")
-        if mask_replace_prob + random_replace_prob > 1.0:
-            raise ValueError("mask_replace_prob + random_replace_prob must be <= 1.")
-
-        device = input_ids.device
-        input_ids = input_ids.astype(lucid.Long)
-        labels = lucid.full(
-            input_ids.shape, ignore_index, dtype=lucid.Long, device=device
+        return _create_masked_lm_inputs(
+            input_ids=input_ids,
+            vocab_size=self.config.vocab_size,
+            attention_mask=attention_mask,
+            special_tokens_mask=special_tokens_mask,
+            mask_token_id=mask_token_id,
+            mlm_probability=mlm_probability,
+            mask_replace_prob=mask_replace_prob,
+            random_replace_prob=random_replace_prob,
+            ignore_index=ignore_index,
         )
-
-        if attention_mask is None:
-            can_mask = lucid.ones(input_ids.shape, dtype=lucid.Int, device=device)
-        else:
-            can_mask = (attention_mask > 0).astype(lucid.Int)
-
-        if special_tokens_mask is not None:
-            can_mask = can_mask * (special_tokens_mask == 0).astype(lucid.Int)
-
-        select_rand = lucid.random.rand(input_ids.shape, device=device)
-        masked_positions = (
-            (select_rand < mlm_probability).astype(lucid.Int) * can_mask
-        ).astype(lucid.Int)
-
-        labels = lucid.where(masked_positions > 0, input_ids, labels)
-        masked_input_ids = input_ids.detach()
-
-        replace_rand = lucid.random.rand(input_ids.shape, device=device)
-        mask_token_positions = (
-            (replace_rand < mask_replace_prob).astype(lucid.Int) * masked_positions
-        ).astype(lucid.Int)
-        random_token_positions = (
-            (replace_rand >= mask_replace_prob).astype(lucid.Int)
-            * (replace_rand < (mask_replace_prob + random_replace_prob)).astype(
-                lucid.Int
-            )
-            * masked_positions
-        ).astype(lucid.Int)
-
-        mask_token_tensor = lucid.full(
-            input_ids.shape, mask_token_id, dtype=lucid.Long, device=device
-        )
-        random_tokens = lucid.random.randint(
-            0, self.config.vocab_size, input_ids.shape, device=device
-        ).astype(lucid.Long)
-
-        masked_input_ids = lucid.where(
-            mask_token_positions > 0, mask_token_tensor, masked_input_ids
-        )
-        masked_input_ids = lucid.where(
-            random_token_positions > 0, random_tokens, masked_input_ids
-        )
-        return masked_input_ids, labels
 
     def predict_token_ids(
         self,
@@ -447,7 +701,7 @@ class BERTForMaskedLM(_BERTTaskWrapperMixin, nn.Module):
         position_ids: lucid.LongTensor | None = None,
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -500,6 +754,35 @@ class BERTForCausalLM(_BERTTaskWrapperMixin, nn.Module):
         cache_position: Tensor | None = None,
     ) -> Tensor:
         sequence_output, _ = self.bert(
+            **self._decoder_kwargs(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
+                past_key_values=past_key_values,
+                use_cache=use_cache,
+                cache_position=cache_position,
+            )
+        )
+        return self.cls(sequence_output)
+
+    def _forward_logits(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+        encoder_hidden_states: lucid.FloatTensor | None = None,
+        encoder_attention_mask: Tensor | None = None,
+        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
+        use_cache: bool | None = None,
+        cache_position: Tensor | None = None,
+    ) -> Tensor:
+        return self.forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -511,7 +794,6 @@ class BERTForCausalLM(_BERTTaskWrapperMixin, nn.Module):
             use_cache=use_cache,
             cache_position=cache_position,
         )
-        return self.cls(sequence_output)
 
     def get_loss(
         self,
@@ -531,7 +813,7 @@ class BERTForCausalLM(_BERTTaskWrapperMixin, nn.Module):
         ignore_index: int = -100,
         reduction: str | None = "mean",
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -565,7 +847,7 @@ class BERTForCausalLM(_BERTTaskWrapperMixin, nn.Module):
         use_cache: bool | None = None,
         cache_position: Tensor | None = None,
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -667,7 +949,7 @@ class BERTForCausalLM(_BERTTaskWrapperMixin, nn.Module):
         use_cache: bool | None = None,
         cache_position: Tensor | None = None,
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -726,15 +1008,33 @@ class BERTForNextSentencePrediction(_BERTTaskWrapperMixin, nn.Module):
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
         _, pooled_output = self.bert(
+            **self._encoder_kwargs(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+            )
+        )
+        if pooled_output is None:
+            raise RuntimeError("BERTForNextSentencePrediction requires pooled output.")
+        return self.cls(pooled_output)
+
+    def _forward_logits(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        return self.forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        if pooled_output is None:
-            raise RuntimeError("BERTForNextSentencePrediction requires pooled output.")
-        return self.cls(pooled_output)
 
     def get_loss(
         self,
@@ -747,7 +1047,7 @@ class BERTForNextSentencePrediction(_BERTTaskWrapperMixin, nn.Module):
         *,
         reduction: str | None = "mean",
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -764,7 +1064,7 @@ class BERTForNextSentencePrediction(_BERTTaskWrapperMixin, nn.Module):
         position_ids: lucid.LongTensor | None = None,
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -781,7 +1081,7 @@ class BERTForNextSentencePrediction(_BERTTaskWrapperMixin, nn.Module):
         position_ids: lucid.LongTensor | None = None,
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -833,17 +1133,35 @@ class BERTForSequenceClassification(_BERTTaskWrapperMixin, nn.Module):
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
         _, pooled_output = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
+            **self._encoder_kwargs(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+            )
         )
         if pooled_output is None:
             raise RuntimeError("BERTForSequenceClassification requires pooled output.")
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         return logits
+
+    def _forward_logits(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        return self.forward(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
 
     def get_loss(
         self,
@@ -856,7 +1174,7 @@ class BERTForSequenceClassification(_BERTTaskWrapperMixin, nn.Module):
         *,
         reduction: str | None = "mean",
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -873,7 +1191,7 @@ class BERTForSequenceClassification(_BERTTaskWrapperMixin, nn.Module):
         position_ids: lucid.LongTensor | None = None,
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -890,7 +1208,7 @@ class BERTForSequenceClassification(_BERTTaskWrapperMixin, nn.Module):
         position_ids: lucid.LongTensor | None = None,
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -942,15 +1260,33 @@ class BERTForTokenClassification(_BERTTaskWrapperMixin, nn.Module):
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
         sequence_output, _ = self.bert(
+            **self._encoder_kwargs(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+            )
+        )
+        sequence_output = self.dropout(sequence_output)
+        logits = self.classifier(sequence_output)
+        return logits
+
+    def _forward_logits(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> Tensor:
+        return self.forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        sequence_output = self.dropout(sequence_output)
-        logits = self.classifier(sequence_output)
-        return logits
 
     def get_loss(
         self,
@@ -964,7 +1300,7 @@ class BERTForTokenClassification(_BERTTaskWrapperMixin, nn.Module):
         ignore_index: int = -100,
         reduction: str | None = "mean",
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -986,7 +1322,7 @@ class BERTForTokenClassification(_BERTTaskWrapperMixin, nn.Module):
         position_ids: lucid.LongTensor | None = None,
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> Tensor:
-        logits = self.forward(
+        logits = self._forward_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1033,16 +1369,34 @@ class BERTForQuestionAnswering(_BERTTaskWrapperMixin, nn.Module):
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         sequence_output, _ = self.bert(
+            **self._encoder_kwargs(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+            )
+        )
+        logits = self.qa_outputs(sequence_output)
+        start_logits = logits[:, :, 0]
+        end_logits = logits[:, :, 1]
+        return start_logits, end_logits
+
+    def _forward_span_logits(
+        self,
+        input_ids: lucid.LongTensor | None = None,
+        attention_mask: Tensor | None = None,
+        token_type_ids: lucid.LongTensor | None = None,
+        position_ids: lucid.LongTensor | None = None,
+        inputs_embeds: lucid.FloatTensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
+        return self.forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        logits = self.qa_outputs(sequence_output)
-        start_logits = logits[:, :, 0]
-        end_logits = logits[:, :, 1]
-        return start_logits, end_logits
 
     def get_loss(
         self,
@@ -1056,7 +1410,7 @@ class BERTForQuestionAnswering(_BERTTaskWrapperMixin, nn.Module):
         *,
         reduction: str | None = "mean",
     ) -> Tensor:
-        start_logits, end_logits = self.forward(
+        start_logits, end_logits = self._forward_span_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1080,7 +1434,7 @@ class BERTForQuestionAnswering(_BERTTaskWrapperMixin, nn.Module):
         position_ids: lucid.LongTensor | None = None,
         inputs_embeds: lucid.FloatTensor | None = None,
     ) -> tuple[Tensor, Tensor]:
-        start_logits, end_logits = self.forward(
+        start_logits, end_logits = self._forward_span_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1106,7 +1460,7 @@ class BERTForQuestionAnswering(_BERTTaskWrapperMixin, nn.Module):
                 f"max_answer_length must be >= 1 (got {max_answer_length})."
             )
 
-        start_logits, end_logits = self.forward(
+        start_logits, end_logits = self._forward_span_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1166,16 +1520,12 @@ class BERTForQuestionAnswering(_BERTTaskWrapperMixin, nn.Module):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        start_targets = start_positions.reshape(-1).astype(lucid.Int)
-        end_targets = end_positions.reshape(-1).astype(lucid.Int)
-        start_correct = (
-            start_pred.reshape(-1).astype(lucid.Int) == start_targets
-        ).astype(lucid.Int)
-        end_correct = (end_pred.reshape(-1).astype(lucid.Int) == end_targets).astype(
-            lucid.Int
+        return _qa_exact_match_accuracy(
+            start_pred,
+            end_pred,
+            start_positions,
+            end_positions,
         )
-        exact_match = (start_correct * end_correct).astype(lucid.Float32)
-        return exact_match.mean()
 
 
 def _build_bert_config(

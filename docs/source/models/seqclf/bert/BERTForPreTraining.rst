@@ -41,6 +41,36 @@ Compute the next sentence prediction (NSP) loss from sequence labels.
 
 Compute the combined pretraining loss as a weighted sum of MLM and NSP losses.
 
+.. automethod:: lucid.models.BERTForPreTraining.create_masked_lm_inputs
+   :no-index:
+
+Create BERT-style masked inputs and MLM labels for pretraining batches.
+
+.. automethod:: lucid.models.BERTForPreTraining.predict_mlm_token_ids
+   :no-index:
+
+Predict token ids for the MLM branch.
+
+.. automethod:: lucid.models.BERTForPreTraining.predict_nsp_labels
+   :no-index:
+
+Predict binary NSP labels.
+
+.. automethod:: lucid.models.BERTForPreTraining.get_mlm_accuracy
+   :no-index:
+
+Compute masked-token accuracy for MLM labels.
+
+.. automethod:: lucid.models.BERTForPreTraining.get_nsp_accuracy
+   :no-index:
+
+Compute classification accuracy for NSP labels.
+
+.. automethod:: lucid.models.BERTForPreTraining.get_accuracy
+   :no-index:
+
+Return `(mlm_accuracy, nsp_accuracy, weighted_accuracy)` for joint pretraining.
+
 Examples
 --------
 
@@ -77,6 +107,42 @@ Examples
     ...     mlm_labels=mlm_labels,
     ...     nsp_labels=nsp_labels,
     ...     input_ids=input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )
+
+.. code-block:: python
+
+    >>> masked_input_ids, mlm_labels = model.create_masked_lm_inputs(
+    ...     input_ids=input_ids,
+    ...     attention_mask=attention_mask,
+    ... )
+    >>> mlm_pred_ids = model.predict_mlm_token_ids(
+    ...     input_ids=masked_input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )
+    >>> nsp_pred = model.predict_nsp_labels(
+    ...     input_ids=input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )
+    >>> mlm_acc = model.get_mlm_accuracy(
+    ...     mlm_labels=mlm_labels,
+    ...     input_ids=masked_input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )
+    >>> nsp_acc = model.get_nsp_accuracy(
+    ...     nsp_labels=nsp_labels,
+    ...     input_ids=input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )
+    >>> mlm_acc, nsp_acc, weighted_acc = model.get_accuracy(
+    ...     mlm_labels=mlm_labels,
+    ...     nsp_labels=nsp_labels,
+    ...     input_ids=masked_input_ids,
     ...     attention_mask=attention_mask,
     ...     token_type_ids=token_type_ids,
     ... )
