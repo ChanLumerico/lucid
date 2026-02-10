@@ -1,19 +1,19 @@
 [
  {
   "language": "Python",
-  "files": 146,
-  "lines": 37503,
-  "blanks": 7475,
-  "comments": 25,
-  "linesOfCode": 30003
+  "files": 145,
+  "lines": 39291,
+  "blanks": 7691,
+  "comments": 24,
+  "linesOfCode": 31576
  },
  {
   "language": "JSON",
   "files": 5,
-  "lines": 2142,
+  "lines": 2226,
   "blanks": 0,
   "comments": 0,
-  "linesOfCode": 2142
+  "linesOfCode": 2226
  },
  {
   "language": "Shell",
@@ -26,10 +26,10 @@
  {
   "language": "Markdown",
   "files": 3,
-  "lines": 780,
+  "lines": 788,
   "blanks": 214,
   "comments": 0,
-  "linesOfCode": 566
+  "linesOfCode": 574
  },
  {
   "language": "YAML",
@@ -49,10 +49,10 @@
  },
  {
   "language": "Total",
-  "files": 162,
-  "lines": 40691,
-  "blanks": 7734,
-  "comments": 47,
-  "linesOfCode": 32910
+  "files": 161,
+  "lines": 42571,
+  "blanks": 7950,
+  "comments": 46,
+  "linesOfCode": 34575
  }
 ]
