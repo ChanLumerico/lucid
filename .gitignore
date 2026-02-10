@@ -15,3 +15,5 @@ mypy_report.txt
 
 review/INSTRUCTION.txt
 review/_sources
+
+out/

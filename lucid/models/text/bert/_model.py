@@ -174,7 +174,7 @@ class _BERTSelfAttention(nn.Module):
         past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
         cache_position: Tensor | None = None,
         **kwargs,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> Tensor:
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.attention_head_size)
 
@@ -197,7 +197,7 @@ class _BERTSelfAttention(nn.Module):
                 cache_position=cache_position,
             )
 
-        attn_output, attn_weights = F.scaled_dot_product_attention(
+        attn_output = F.scaled_dot_product_attention(
             query_layer,
             key_layer,
             value_layer,
@@ -205,12 +205,11 @@ class _BERTSelfAttention(nn.Module):
             dropout_p=self.dropout.p if self.training else 0.0,
             is_causal=False,
             scale=self.scaling,
-            output_weight=True,
         )
         attn_output = attn_output.swapaxes(1, 2).reshape(
             *input_shape, self.all_head_size
         )
-        return attn_output, attn_weights
+        return attn_output
 
 
 class _BERTCrossAttention(nn.Module):
@@ -249,7 +248,7 @@ class _BERTCrossAttention(nn.Module):
         attention_mask: lucid.FloatTensor | None = None,
         past_key_values: nn.EncoderDecoderCache | None = None,
         **kwargs,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> Tensor:
         bsz, tgt_len = hidden_states.shape[:-1]
         src_len = (
             encoder_hidden_states.shape[1]
@@ -301,7 +300,7 @@ class _BERTCrossAttention(nn.Module):
                     is_cross_attention=True,
                 )
 
-        attn_output, attn_weight = F.scaled_dot_product_attention(
+        attn_output = F.scaled_dot_product_attention(
             query_layer,
             key_layer,
             value_layer,
@@ -309,12 +308,11 @@ class _BERTCrossAttention(nn.Module):
             dropout_p=self.dropout.p if self.training else 0.0,
             scale=self.scaling,
             is_causal=self.is_causal,
-            output_weight=True,
         )
         attn_output = attn_output.swapaxes(1, 2).reshape(
             bsz, tgt_len, self.all_head_size
         )
-        return attn_output, attn_weight
+        return attn_output
 
 
 class _BERTSelfOutput(nn.Module):
@@ -360,7 +358,7 @@ class _BERTAttention(nn.Module):
         past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
         cache_position: Tensor | None = None,
         **kwargs,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> Tensor:
         attention_mask = (
             attention_mask if not self.is_cross_attention else encoder_attention_mask
         )
@@ -374,7 +372,7 @@ class _BERTAttention(nn.Module):
                 "nn.EncoderDecoderCache."
             )
 
-        attn_output, attn_weights = self.self(
+        attn_output = self.self(
             hidden_states,
             encoder_hidden_states=encoder_hidden_states,
             attention_mask=attention_mask,
@@ -383,7 +381,7 @@ class _BERTAttention(nn.Module):
             **kwargs,
         )
         attn_output = self.output(attn_output, hidden_states)
-        return attn_output, attn_weights
+        return attn_output
 
 
 class _BERTIntermediate(nn.Module):
@@ -447,7 +445,7 @@ class _BERTLayer(nn.Module):
         cache_position: Tensor | None = None,
         **kwargs,
     ) -> Tensor:
-        self_attention_output, _ = self.attention(
+        self_attention_output = self.attention(
             hidden_states,
             attention_mask,
             past_key_values=past_key_values,
@@ -463,7 +461,7 @@ class _BERTLayer(nn.Module):
                     "config.add_cross_attention must be set to True."
                 )
 
-            cross_attention_output, _ = self.crossattention(
+            cross_attention_output = self.crossattention(
                 self_attention_output,
                 attention_mask=None,
                 encoder_hidden_states=encoder_hidden_states,
