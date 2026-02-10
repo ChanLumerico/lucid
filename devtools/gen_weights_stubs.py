@@ -22,6 +22,8 @@ basic_stub = [
     "    tag: str",
     "    dataset: Optional[str] = None",
     "    meta: Optional[Dict[str, Any]] = None",
+    "    @property",
+    "    def config(self) -> Optional[Dict[str, Any]]: ...",
     "",
 ]
 
@@ -30,7 +32,12 @@ lines.extend(basic_stub)
 
 all_names = []
 for key, entries in reg.items():
-    name = _classname(key, family=entries["DEFAULT"]["meta"].get("family", None))
+    default_meta = entries.get("DEFAULT", {}).get("meta", {})
+    name = _classname(
+        key,
+        family=default_meta.get("family", None),
+        enum_name=default_meta.get("enum_name", None),
+    )
     if name is None:
         raise RuntimeError(f"Cannot resolve model key '{key}'.")
 

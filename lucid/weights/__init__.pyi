@@ -9,6 +9,8 @@ class WeightEntry:
     tag: str
     dataset: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
+    @property
+    def config(self) -> Optional[Dict[str, Any]]: ...
 
 class LeNet_1_Weights(Enum):
     MNIST: WeightEntry
@@ -106,6 +108,10 @@ class MobileNet_V3_Large_Weights(Enum):
     IMAGENET1K: WeightEntry
     DEFAULT: WeightEntry
 
+class BERT_Weights(Enum):
+    PRE_TRAIN_BASE: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
@@ -131,4 +137,5 @@ __all__ = [
     "MobileNet_V2_Weights",
     "MobileNet_V3_Small_Weights",
     "MobileNet_V3_Large_Weights",
+    "BERT_Weights",
 ]

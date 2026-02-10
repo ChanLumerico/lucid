@@ -27,6 +27,7 @@ p.add_argument(
     help="Mark this tag as the DEFAULT weight for the given model key",
 )
 p.add_argument("--family", default=None)
+p.add_argument("--enum-name", default=None)
 p.add_argument("--dataset", default=None)
 p.add_argument("--input_size", default=None)
 p.add_argument("--registry", default="../lucid/weights/registry.json")
@@ -54,6 +55,8 @@ if args.input_size:
 
 if args.family:
     meta["family"] = args.family
+if args.enum_name:
+    meta["enum_name"] = args.enum_name
 
 url = f"hf://{args.repo}@{args.revision}/weights/{_family_of(model_key).lower()}/{fn}"
 entry = {"url": url, "sha256": h, "meta": meta}

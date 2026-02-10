@@ -38,6 +38,15 @@ class WeightEntry:
     dataset: str | None = None
     meta: dict[str, Any] | None = None
 
+    @property
+    def config(self) -> dict[str, Any] | None:
+        if not isinstance(self.meta, dict):
+            return None
+        cfg = self.meta.get("config")
+        if isinstance(cfg, dict):
+            return cfg
+        return None
+
 
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -62,7 +71,12 @@ def _family_of(model_key: str) -> str | None:
     return None
 
 
-def _classname(model_key: str, family: str | None = None) -> str:
+def _classname(
+    model_key: str, family: str | None = None, enum_name: str | None = None
+) -> str:
+    if enum_name:
+        return enum_name
+
     if family is not None:
         return family + model_key[len(family) :].upper() + "_Weights"
 
@@ -80,6 +94,7 @@ def _classname(model_key: str, family: str | None = None) -> str:
 
 
 def _make_enum(model_key: str, entries: dict[str, Any]) -> type[Enum]:
+    default_meta = entries.get("DEFAULT", {}).get("meta", {})
     members = {}
     for tag, info in entries.items():
         members[tag] = WeightEntry(
@@ -91,9 +106,15 @@ def _make_enum(model_key: str, entries: dict[str, Any]) -> type[Enum]:
         )
 
     cl = Enum(
-        _classname(model_key, family=entries["DEFAULT"]["meta"].get("family", None)),
+        _classname(
+            model_key,
+            family=default_meta.get("family", None),
+            enum_name=default_meta.get("enum_name", None),
+        ),
         members,
     )
+    if not hasattr(cl, "config"):
+        setattr(cl, "config", property(lambda self: self.value.config))
     _DYNAMIC[_canon(model_key)] = cl
     return cl
 
