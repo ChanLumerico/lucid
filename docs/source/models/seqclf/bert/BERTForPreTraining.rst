@@ -26,6 +26,21 @@ Methods
 Return pretraining outputs as `(prediction_scores, seq_relationship_scores)`,
 combining MLM and NSP heads.
 
+.. automethod:: lucid.models.BERTForPreTraining.get_mlm_loss
+   :no-index:
+
+Compute the masked language modeling (MLM) loss from token labels.
+
+.. automethod:: lucid.models.BERTForPreTraining.get_nsp_loss
+   :no-index:
+
+Compute the next sentence prediction (NSP) loss from sequence labels.
+
+.. automethod:: lucid.models.BERTForPreTraining.get_loss
+   :no-index:
+
+Compute the combined pretraining loss as a weighted sum of MLM and NSP losses.
+
 Examples
 --------
 
@@ -39,6 +54,28 @@ Examples
 .. code-block:: python
 
     >>> prediction_scores, seq_relationship_scores = model(
+    ...     input_ids=input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )
+
+.. code-block:: python
+
+    >>> mlm_loss = model.get_mlm_loss(
+    ...     mlm_labels=mlm_labels,
+    ...     input_ids=input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )
+    >>> nsp_loss = model.get_nsp_loss(
+    ...     nsp_labels=nsp_labels,
+    ...     input_ids=input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )
+    >>> total_loss = model.get_loss(
+    ...     mlm_labels=mlm_labels,
+    ...     nsp_labels=nsp_labels,
     ...     input_ids=input_ids,
     ...     attention_mask=attention_mask,
     ...     token_type_ids=token_type_ids,
