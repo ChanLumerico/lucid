@@ -21,6 +21,30 @@ Methods
 -------
 
 .. automethod:: lucid.models.BERTForMaskedLM.forward
+   :no-index:
+
+Compute token logits over the vocabulary for each sequence position.
+
+.. automethod:: lucid.models.BERTForMaskedLM.get_loss
+   :no-index:
+
+Compute masked language modeling loss from token labels.
+
+.. automethod:: lucid.models.BERTForMaskedLM.create_masked_lm_inputs
+   :no-index:
+
+Build masked inputs and labels using the standard MLM masking policy
+(mask/random/original replacements).
+
+.. automethod:: lucid.models.BERTForMaskedLM.predict_token_ids
+   :no-index:
+
+Return argmax token predictions per position.
+
+.. automethod:: lucid.models.BERTForMaskedLM.get_accuracy
+   :no-index:
+
+Compute token-level accuracy while ignoring masked-out label indices.
 
 Examples
 --------
@@ -31,3 +55,9 @@ Examples
     >>> model = models.bert_for_masked_lm_base()
     >>> print(model)
     BERTForMaskedLM(...)
+
+.. code-block:: python
+
+    >>> masked_input_ids, labels = model.create_masked_lm_inputs(input_ids)
+    >>> loss = model.get_loss(labels=labels, input_ids=masked_input_ids)
+    >>> acc = model.get_accuracy(labels=labels, input_ids=masked_input_ids)

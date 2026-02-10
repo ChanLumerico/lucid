@@ -22,6 +22,24 @@ Methods
 -------
 
 .. automethod:: lucid.models.BERTForTokenClassification.forward
+   :no-index:
+
+Compute per-token classification logits for each sequence position.
+
+.. automethod:: lucid.models.BERTForTokenClassification.get_loss
+   :no-index:
+
+Compute token classification loss with optional ignored indices.
+
+.. automethod:: lucid.models.BERTForTokenClassification.predict_token_labels
+   :no-index:
+
+Return predicted token labels by argmax over class logits.
+
+.. automethod:: lucid.models.BERTForTokenClassification.get_accuracy
+   :no-index:
+
+Compute token-level accuracy with optional ignored indices.
 
 Examples
 --------
@@ -32,3 +50,9 @@ Examples
     >>> model = models.bert_for_token_classification_base(num_labels=2)
     >>> print(model)
     BERTForTokenClassification(...)
+
+.. code-block:: python
+
+    >>> logits = model(input_ids=input_ids, attention_mask=attention_mask)
+    >>> loss = model.get_loss(labels=labels, input_ids=input_ids, attention_mask=attention_mask)
+    >>> acc = model.get_accuracy(labels=labels, input_ids=input_ids, attention_mask=attention_mask)

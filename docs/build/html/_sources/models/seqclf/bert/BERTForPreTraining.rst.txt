@@ -21,6 +21,10 @@ Methods
 -------
 
 .. automethod:: lucid.models.BERTForPreTraining.forward
+   :no-index:
+
+Return pretraining outputs as `(prediction_scores, seq_relationship_scores)`,
+combining MLM and NSP heads.
 
 Examples
 --------
@@ -31,3 +35,11 @@ Examples
     >>> model = models.bert_for_pre_training_base()
     >>> print(model)
     BERTForPreTraining(...)
+
+.. code-block:: python
+
+    >>> prediction_scores, seq_relationship_scores = model(
+    ...     input_ids=input_ids,
+    ...     attention_mask=attention_mask,
+    ...     token_type_ids=token_type_ids,
+    ... )

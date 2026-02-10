@@ -20,11 +20,19 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Implemented **BERT**(Devlin et al., 2018) `lucid.models.BERT` with task-specific wrappers:
+
+    | Task | Wrapper |
+    |---|---|
+    | Pre-Training | `lucid.models.BERTForPreTraining` |
+    | Masked Language Modeling | `lucid.models.BERTForMaskedLM` |
+    | Causal Language Modeling | `lucid.models.BERTForCausalLM` |
+    | Next Sentence Prediction | `lucid.models.BERTForNextSentencePrediction` |
+    | Sequence Classification | `lucid.models.BERTForSequenceClassification` |
+    | Token Classification | `lucid.models.BERTForTokenClassification` |
+    | Question Answering | `lucid.models.BERTForQuestionAnswering` |
+
 - Now lucid supports **KV-Cache** system for transformer-like models: `nn.DynamicKVCache`, `nn.StaticKVCache` based on the super class `nn.KVCache`
-
-- New Tensor utility functions added: `lucid.Tensor.expand` and `lucid.Tensor.gather` (also `lucid.gather`)
-
-- Added Type-Generic Tensors: `lucid.LongTensor`, `lucid.DoubleTensor`, etc.
 
 ## 🔧 How to Install
 
