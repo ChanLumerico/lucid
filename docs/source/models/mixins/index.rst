@@ -1,5 +1,5 @@
-Mixins for nn.models
-====================
+Mixins for lucid.models
+=======================
 
 .. toctree::
     :maxdepth: 1
