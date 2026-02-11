@@ -112,6 +112,8 @@
 
     models/models.rst
 
+    Base Mixins <models/mixins/index.rst>
+
     Image Classification <models/imgclf/index.rst>
     Image Generation <models/imggen/index.rst>
     Object Detection <models/objdet/index.rst>

@@ -1046,7 +1046,6 @@
         "parameter_size": 110106428,
         "family": "BERTForPreTraining",
         "enum_name": "BERT_Weights",
-        "tokenizer_name": "bert-base-uncased",
         "config": {
           "vocab_size": 30522,
           "hidden_size": 768,
@@ -1083,7 +1082,6 @@
         "parameter_size": 110106428,
         "family": "BERTForPreTraining",
         "enum_name": "BERT_Weights",
-        "tokenizer_name": "bert-base-uncased",
         "config": {
           "vocab_size": 30522,
           "hidden_size": 768,

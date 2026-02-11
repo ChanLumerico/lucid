@@ -7,6 +7,7 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 from lucid.types import _Scalar
+from lucid.models.base import PreTrainedModelMixin
 
 
 __all__ = [
@@ -54,7 +55,7 @@ class _Depthwise(nn.Module):
         return self.pointwise(self.depthwise(x))
 
 
-class MobileNet(nn.Module):
+class MobileNet(nn.Module, PreTrainedModelMixin):
     def __init__(self, width_multiplier: float, num_classes: int = 1000) -> None:
         super().__init__()
         alpha = width_multiplier
@@ -149,7 +150,7 @@ class _InvertedBottleneck(nn.Module):
         return out
 
 
-class MobileNet_V2(nn.Module):
+class MobileNet_V2(nn.Module, PreTrainedModelMixin):
     def __init__(self, num_classes: int = 1000) -> None:
         super().__init__()
 
@@ -281,7 +282,7 @@ class _InvertedBottleneck_V3(nn.Module):
         return out
 
 
-class MobileNet_V3(nn.Module):
+class MobileNet_V3(nn.Module, PreTrainedModelMixin):
     def __init__(
         self, bottleneck_cfg: list, last_channels: int, num_classes: int = 1000
     ) -> None:

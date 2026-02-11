@@ -2,6 +2,7 @@ import lucid.nn as nn
 
 from lucid import register_model
 from .resnet import ResNet, _Bottleneck
+from lucid.models.base import PreTrainedModelMixin
 
 
 __all__ = [
@@ -15,7 +16,7 @@ __all__ = [
 ]
 
 
-class ResNeXt(ResNet):
+class ResNeXt(ResNet, PreTrainedModelMixin):
     def __init__(
         self,
         block: nn.Module,

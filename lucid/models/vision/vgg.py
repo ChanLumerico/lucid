@@ -2,12 +2,13 @@ import lucid.nn as nn
 
 from lucid import register_model
 from lucid._tensor import Tensor
+from lucid.models.base import PreTrainedModelMixin
 
 
 __all__ = ["VGGNet", "vggnet_11", "vggnet_13", "vggnet_16", "vggnet_19"]
 
 
-class VGGNet(nn.Module):
+class VGGNet(nn.Module, PreTrainedModelMixin):
     def __init__(self, conv_config: list[int | str], num_classes: int = 1000) -> None:
         super().__init__()
         self.conv = self._make_layers(conv_config)

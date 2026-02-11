@@ -6,6 +6,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+from lucid.models.base import PreTrainedModelMixin
 
 
 __all__ = ["BERTConfig", "BERT"]
@@ -19,7 +20,7 @@ class BERTConfig:
     num_hidden_layers: int
     intermediate_size: int
 
-    hidden_act: Callable[[Tensor], Tensor]
+    hidden_act: Callable[[Tensor], Tensor] | str
     hidden_dropout_prob: float
     attention_probs_dropout_prob: float
 
@@ -63,7 +64,11 @@ class _BERTEmbeddings(nn.Module):
         self.token_type_ids: nn.Buffer
         self.register_buffer(
             "position_ids",
-            nn.Buffer(lucid.arange(config.max_position_embeddings).expand(1, -1)),
+            nn.Buffer(
+                lucid.arange(config.max_position_embeddings, dtype=lucid.Long).expand(
+                    1, -1
+                )
+            ),
         )
         self.register_buffer(
             "token_type_ids",
@@ -388,7 +393,13 @@ class _BERTIntermediate(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.intermediate_act_fn = config.hidden_act
+        self.intermediate_act_fn = (
+            config.hidden_act
+            if callable(config.hidden_act)
+            else nn.utils.get_activation_from_name(config.hidden_act)
+        )
+        if self.intermediate_act_fn is None:
+            raise ValueError(f"Invalid config.hidden_act name '{config.hidden_act}'")
 
     def forward(self, hidden_states: Tensor) -> Tensor:
         hidden_states = self.dense(hidden_states)
@@ -558,7 +569,7 @@ class _BERTPooler(nn.Module):
         return pooled_output
 
 
-class BERT(nn.Module):
+class BERT(PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.config = config

@@ -360,3 +360,27 @@ MobileNet
       - 21.11 MB
       - 0.7404
       - 0.9134
+
+BERT
+----
+|transformer-badge| |encoder-only-transformer-badge| |seqclf-badge|
+
+.. code-block:: python
+
+    class lucid.weights.BERT_Weights(Enum)
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+
+    * - *BERT_Weights*
+      - PRE_TRAIN_BASE
+      - BookCorpus + English Wikipedia
+      - 110,106,428
+      - 628 MB

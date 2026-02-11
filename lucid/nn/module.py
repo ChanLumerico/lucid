@@ -12,6 +12,11 @@ from typing import (
 )
 from collections import OrderedDict
 
+try:
+    from tqdm.auto import tqdm
+except Exception:
+    tqdm = None
+
 from lucid._tensor import Tensor
 from lucid.types import (
     _ArrayOrScalar,
@@ -289,7 +294,14 @@ class Module:
 
         return destination
 
-    def load_state_dict(self, state_dict: OrderedDict, strict: bool = True) -> None:
+    def load_state_dict(
+        self,
+        state_dict: OrderedDict,
+        strict: bool = True,
+        *,
+        verbose: bool = False,
+        progress_desc: str | None = None,
+    ) -> None:
         for hook in self._load_state_dict_pre_hooks:
             hook(self, state_dict, strict)
 
@@ -307,16 +319,47 @@ class Module:
             if msg:
                 raise KeyError("Error(s) in loading state_dict:\n" + msg)
 
-        for key, value in state_dict.items():
-            if key in own_state:
+        keys_to_migrate = [k for k in state_dict.keys() if k in own_state]
+        total_params = len(keys_to_migrate)
+        migrated = 0
+
+        use_progress = verbose and tqdm is not None and total_params > 0
+        pbar = (
+            tqdm(
+                total=total_params,
+                desc=(
+                    progress_desc
+                    if progress_desc is not None
+                    else "Applying state-dict"
+                ),
+                unit="param",
+                leave=False,
+            )
+            if use_progress
+            else None
+        )
+
+        try:
+            for key in keys_to_migrate:
+                value = state_dict[key]
                 attr = own_state[key]
                 if isinstance(attr, (nn.Parameter, nn.Buffer)):
                     value_t = Tensor(value, device=self.device)
                     attr.data = value_t.data
                 else:
                     setattr(self, key, value)
-            elif strict:
-                raise KeyError(f"Unexpected key '{key}' in state_dict.")
+
+                migrated += 1
+                if pbar is not None:
+                    shape = getattr(value, "shape", None)
+                    shape_str = str(tuple(shape)) if shape is not None else "-"
+                    pbar.set_postfix_str(
+                        f"params={migrated}/{total_params}, shape={shape_str}, key={key}"
+                    )
+                    pbar.update(1)
+        finally:
+            if pbar is not None:
+                pbar.close()
 
         for hook in self._load_state_dict_post_hooks:
             hook(self, missing_keys, unexpected_keys, strict)

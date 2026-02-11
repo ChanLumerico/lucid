@@ -3,6 +3,7 @@ import lucid.nn as nn
 
 from lucid import register_model
 from lucid._tensor import Tensor
+from lucid.models.base import PreTrainedModelMixin
 
 
 __all__ = [
@@ -14,7 +15,7 @@ __all__ = [
 ]
 
 
-class DenseNet(nn.Module):
+class DenseNet(nn.Module, PreTrainedModelMixin):
     def __init__(
         self,
         block_config: tuple[int],

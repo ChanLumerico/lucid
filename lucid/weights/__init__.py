@@ -3,7 +3,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, OrderedDict
 
-import os, json, hashlib, urllib.request, tempfile, shutil
+import hashlib
+import json
+import os
+import shutil
+import ssl
+import tempfile
+import urllib.error
+import urllib.request
+from urllib.parse import urlparse
 
 import lucid
 import lucid.nn as nn
@@ -28,6 +36,39 @@ HF_TOKEN = (
     or os.environ.get("HF_TOKEN")
     or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
 )
+SSL_NO_VERIFY = os.environ.get("LUCID_SSL_NO_VERIFY", "0") == "1"
+SSL_CA_BUNDLE = (
+    os.environ.get("LUCID_SSL_CA_BUNDLE")
+    or os.environ.get("SSL_CERT_FILE")
+    or os.environ.get("REQUESTS_CA_BUNDLE")
+)
+
+
+def _build_ssl_context() -> ssl.SSLContext:
+    if SSL_NO_VERIFY:
+        c = ssl._create_unverified_context()
+        c.check_hostname = False
+        c.verify_mode = ssl.CERT_NONE
+        return c
+
+    if SSL_CA_BUNDLE:
+        return ssl.create_default_context(cafile=SSL_CA_BUNDLE)
+
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+_SSL_CONTEXT = _build_ssl_context()
+SHOW_PROGRESS = os.environ.get("LUCID_WEIGHTS_PROGRESS", "1") != "0"
+
+try:
+    from tqdm.auto import tqdm
+except Exception:
+    tqdm = None
 
 
 @dataclass(frozen=True)
@@ -157,7 +198,7 @@ def _hash_file(path: Path) -> str:
 def _hf_build_url(repo_id: str, revision: str, filename: str) -> str:
     rid = repo_id.strip("/")
     rev = revision or "main"
-    return f"{HF_ENDPOINT.rstrip("/")}/{rid}/resolve/{rev}/{filename}?download=true"
+    return f"{HF_ENDPOINT.rstrip('/')}/{rid}/resolve/{rev}/{filename}?download=true"
 
 
 def _parse_hf_uri(uri: str) -> tuple[str, str, str]:
@@ -229,6 +270,34 @@ def _cache_path(model_key: str, entry: WeightEntry) -> Path:
     return CACHE_HOME / fname
 
 
+def _download_with_progress(resp, out, *, desc: str) -> None:
+    total = 0
+    try:
+        total = int(resp.headers.get("Content-Length", "0"))
+    except Exception:
+        total = 0
+
+    chunk_size = 1024 * 1024
+    if tqdm is None or not SHOW_PROGRESS:
+        shutil.copyfileobj(resp, out, length=chunk_size)
+        return
+
+    with tqdm(
+        total=total if total > 0 else None,
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+        desc=desc,
+        leave=False,
+    ) as pbar:
+        while True:
+            chunk = resp.read(chunk_size)
+            if not chunk:
+                break
+            out.write(chunk)
+            pbar.update(len(chunk))
+
+
 def load_state_dict_from_url(
     model_key: str,
     entry: WeightEntry,
@@ -249,8 +318,15 @@ def load_state_dict_from_url(
                     req = urllib.request.Request(u)
                     if HF_TOKEN and (HF_ENDPOINT in u or "huggingface.co" in u):
                         req.add_header("Authorization", f"Bearer {HF_TOKEN}")
-                    with urllib.request.urlopen(req) as r, open(tmp_path, "wb") as out:
-                        shutil.copyfileobj(r, out)
+                    with urllib.request.urlopen(req, context=_SSL_CONTEXT) as r, open(
+                        tmp_path, "wb"
+                    ) as out:
+                        url_name = Path(urlparse(u).path).name or entry.tag
+                        _download_with_progress(
+                            r,
+                            out,
+                            desc=f"Downloading {model_key}:{entry.tag} ({url_name})",
+                        )
                     break
 
                 except Exception as e:
@@ -258,6 +334,16 @@ def load_state_dict_from_url(
                     continue
             else:
                 if last_err:
+                    if isinstance(last_err, urllib.error.URLError) and isinstance(
+                        getattr(last_err, "reason", None),
+                        ssl.SSLCertVerificationError,
+                    ):
+                        raise RuntimeError(
+                            "SSL certificate verification failed while downloading "
+                            "weights. Set LUCID_SSL_CA_BUNDLE (or SSL_CERT_FILE) to "
+                            "a valid CA bundle, install certifi, or as a last resort "
+                            "set LUCID_SSL_NO_VERIFY=1."
+                        ) from last_err
                     raise last_err
 
             if _hash_file(tmp_path) != entry.sha256:
@@ -306,7 +392,15 @@ def apply(model: nn.Module, weights: Enum | str, *, strict: bool = True) -> Path
                 cooked[k] = v
         state = cooked
 
-    model.load_state_dict(state, strict=strict)
+    try:
+        model.load_state_dict(
+            state,
+            strict=strict,
+            verbose=True,
+            progress_desc=f"Applying {key}:{entry.tag}",
+        )
+    except TypeError:
+        model.load_state_dict(state, strict=strict)
     return _cache_path(key, entry)
 
 

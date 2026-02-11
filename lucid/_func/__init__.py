@@ -594,9 +594,9 @@ def arange(
     device: _DeviceType = "cpu",
 ) -> Tensor:
     if len(args) == 1:
-        arange_args = (0.0, *args, 1.0)
+        arange_args = (0, *args, 1)
     elif len(args) == 2:
-        arange_args = (*args, 1.0)
+        arange_args = (*args, 1)
     elif len(args) == 3:
         arange_args = (*args,)
     else:

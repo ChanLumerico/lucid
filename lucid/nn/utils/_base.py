@@ -12,6 +12,7 @@ __all__ = [
     "clip_grad_norm",
     "clip_grad_value",
     "apply_chunking_to_forward",
+    "get_activation_from_name",
 ]
 
 
@@ -137,3 +138,9 @@ def apply_chunking_to_forward(
         outputs.append(forward_fn(*chunk_inputs))
 
     return lucid.concatenate(tuple(outputs), axis=chunk_dim)
+
+
+def get_activation_from_name(act_name: str) -> Callable[[Tensor], Tensor] | None:
+    from lucid.nn.functional import _activation
+
+    return getattr(_activation, act_name, None)

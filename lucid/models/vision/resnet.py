@@ -5,6 +5,7 @@ import lucid.nn as nn
 
 from lucid import register_model
 from lucid._tensor import Tensor
+from lucid.models.base import PreTrainedModelMixin
 
 
 __all__ = [
@@ -22,7 +23,7 @@ __all__ = [
 ]
 
 
-class ResNet(nn.Module):
+class ResNet(nn.Module, PreTrainedModelMixin):
     def __init__(
         self,
         block: nn.Module,

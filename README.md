@@ -32,6 +32,8 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
     | Token Classification | `lucid.models.BERTForTokenClassification` |
     | Question Answering | `lucid.models.BERTForQuestionAnswering` |
 
+    - Also provides *pre-trained weights* via *`BERT_Weights.PRE_TRAIN_BASE`* at `lucid.weights`
+
 - Now lucid supports **KV-Cache** system for transformer-like models: `nn.DynamicKVCache`, `nn.StaticKVCache` based on the super class `nn.KVCache`
 
 ## 🔧 How to Install

@@ -4,6 +4,7 @@ import lucid.nn.functional as F
 
 from lucid import register_model
 from lucid._tensor import Tensor
+from lucid.models.base import PreTrainedModelMixin
 
 from ._model import BERT, BERTConfig
 
@@ -104,7 +105,14 @@ class _BERTPredictionHeadTransform(nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.transform_act_fn = config.hidden_act
+        self.transform_act_fn = (
+            config.hidden_act
+            if callable(config.hidden_act)
+            else nn.utils.get_activation_from_name(config.hidden_act)
+        )
+        if self.transform_act_fn is None:
+            raise ValueError(f"Invalid config.hidden_act name '{config.hidden_act}'")
+
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states: Tensor) -> Tensor:
@@ -311,6 +319,7 @@ def _create_masked_lm_inputs(
     mask_token_positions = (
         (replace_rand < mask_replace_prob).astype(lucid.Int) * masked_positions
     ).astype(lucid.Int)
+
     random_token_positions = (
         (replace_rand >= mask_replace_prob).astype(lucid.Int)
         * (replace_rand < (mask_replace_prob + random_replace_prob)).astype(lucid.Int)
@@ -333,7 +342,7 @@ def _create_masked_lm_inputs(
     return masked_input_ids, labels
 
 
-class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
+class BERTForPreTraining(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.config = config
@@ -599,7 +608,7 @@ class BERTForPreTraining(_BERTTaskWrapperMixin, nn.Module):
         )
 
 
-class BERTForMaskedLM(_BERTTaskWrapperMixin, nn.Module):
+class BERTForMaskedLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.config = config
@@ -731,7 +740,7 @@ class BERTForMaskedLM(_BERTTaskWrapperMixin, nn.Module):
         return _masked_token_accuracy(pred_ids, labels, ignore_index=ignore_index)
 
 
-class BERTForCausalLM(_BERTTaskWrapperMixin, nn.Module):
+class BERTForCausalLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.config = config
@@ -991,7 +1000,9 @@ class BERTForCausalLM(_BERTTaskWrapperMixin, nn.Module):
         return lucid.argmax(next_logits, axis=-1)
 
 
-class BERTForNextSentencePrediction(_BERTTaskWrapperMixin, nn.Module):
+class BERTForNextSentencePrediction(
+    _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
+):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.config = config
@@ -1109,7 +1120,9 @@ class BERTForNextSentencePrediction(_BERTTaskWrapperMixin, nn.Module):
         return _classification_accuracy(preds, labels)
 
 
-class BERTForSequenceClassification(_BERTTaskWrapperMixin, nn.Module):
+class BERTForSequenceClassification(
+    _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
+):
     def __init__(self, config: BERTConfig, num_labels: int = 2) -> None:
         super().__init__()
         self.config = config
@@ -1236,7 +1249,9 @@ class BERTForSequenceClassification(_BERTTaskWrapperMixin, nn.Module):
         return _classification_accuracy(preds, labels)
 
 
-class BERTForTokenClassification(_BERTTaskWrapperMixin, nn.Module):
+class BERTForTokenClassification(
+    _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
+):
     def __init__(self, config: BERTConfig, num_labels: int = 2) -> None:
         super().__init__()
         self.config = config
@@ -1352,7 +1367,7 @@ class BERTForTokenClassification(_BERTTaskWrapperMixin, nn.Module):
         return _masked_token_accuracy(preds, labels, ignore_index=ignore_index)
 
 
-class BERTForQuestionAnswering(_BERTTaskWrapperMixin, nn.Module):
+class BERTForQuestionAnswering(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.config = config

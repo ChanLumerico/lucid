@@ -2,12 +2,13 @@ import lucid.nn as nn
 
 from lucid import register_model
 from lucid._tensor import Tensor
+from lucid.models.base import PreTrainedModelMixin
 
 
 __all__ = ["AlexNet", "alexnet"]
 
 
-class AlexNet(nn.Module):
+class AlexNet(nn.Module, PreTrainedModelMixin):
     def __init__(self, num_classes: int = 1000) -> None:
         super().__init__()
         self.conv = nn.Sequential(
