@@ -2,8 +2,6 @@ data.tokenizers.Tokenizer
 =========================
 
 .. autoclass:: lucid.data.tokenizers.Tokenizer
-   :members:
-   :undoc-members:
 
 The `Tokenizer` class defines a Hugging Face-style tokenizer interface for Lucid.
 It is an abstract base class intended for custom tokenizer implementations in
