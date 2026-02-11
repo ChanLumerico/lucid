@@ -520,6 +520,10 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l1"><a class="reference internal" href="TensorDataset.html">data.TensorDataset</a></li>
 <li class="toctree-l1"><a class="reference internal" href="ConcatDataset.html">data.ConcatDataset</a></li>
 <li class="toctree-l1"><a class="reference internal" href="DataLoader.html">data.DataLoader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tokenizers/index.html">Tokenizers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tokenizers/Tokenizer.html">data.tokenizers.Tokenizer</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="utilities/index.html">Utilities</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="utilities/random_split.html">data.random_split</a></li>
 </ul>
@@ -961,6 +965,7 @@ data-aria-dark="Switch to auto color mode">
 <li><a class="reference internal" href="#custom-data-pipelines">Custom Data Pipelines</a></li>
 <li><a class="reference internal" href="#integration-with-lucid">Integration with <cite>lucid</cite></a></li>
 <li><a class="reference internal" href="#conclusion">Conclusion</a></li>
+<li><a class="reference internal" href="#subpackages">Subpackages</a></li>
 </ul>
 </div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
   </aside>
@@ -1161,6 +1166,8 @@ batching and shuffling the data.</p>
 <li><p><strong>Tensors</strong>: <cite>DataLoader</cite> returns batches as <cite>Tensor</cite> objects, ready to be fed into models.</p></li>
 <li><p><strong>Neural Networks</strong>: The <cite>DataLoader</cite> makes it easy to iterate through training samples
 during model training.</p></li>
+<li><p><strong>Text Pipelines</strong>: The <cite>tokenizers</cite> subpackage provides a tokenizer abstraction for
+converting text into token ids and reconstructing text from ids.</p></li>
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
@@ -1181,6 +1188,13 @@ users can streamline the process of feeding data into models.</p>
 <p>For more advanced use cases, consider combining <cite>DataLoader</cite> with preprocessing logic inside <cite>Dataset</cite>.
 This approach allows for dynamic data augmentation and efficient memory usage during training.</p>
 </div>
+</section>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="tokenizers/index.html"><span class="doc">Tokenizers</span></a></p></li>
+<li><p><a class="reference internal" href="utilities/index.html"><span class="doc">Utilities</span></a></p></li>
+</ul>
 </section>
 </section>
 

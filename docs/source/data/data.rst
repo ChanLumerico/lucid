@@ -36,7 +36,7 @@ and implement the `__len__` and `__getitem__` methods.
 
 .. admonition:: Example
 
-    Here’s a simple example of a custom dataset that returns squares of integers from 0 to 9:
+    Here's a simple example of a custom dataset that returns squares of integers from 0 to 9:
 
     .. code-block:: python
 
@@ -77,7 +77,7 @@ efficiently handles the loading of data in batches.
 
 .. admonition:: Example
 
-    Here’s an example of how to use `DataLoader` to batch data from a custom dataset:
+    Here's an example of how to use `DataLoader` to batch data from a custom dataset:
 
     .. code-block:: python
 
@@ -113,7 +113,7 @@ and create complex data pipelines.
 
 .. admonition:: Example
 
-    Here’s a more advanced usage of `Dataset` and `DataLoader`, where we load images from disk:
+    Here's a more advanced usage of `Dataset` and `DataLoader`, where we load images from disk:
 
     .. code-block:: python
 
@@ -150,6 +150,8 @@ The `data` package integrates seamlessly with other components of the `lucid` li
 - **Tensors**: `DataLoader` returns batches as `Tensor` objects, ready to be fed into models.
 - **Neural Networks**: The `DataLoader` makes it easy to iterate through training samples 
   during model training.
+- **Text Pipelines**: The `tokenizers` subpackage provides a tokenizer abstraction for
+  converting text into token ids and reconstructing text from ids.
 
 .. warning::
 
@@ -172,3 +174,8 @@ users can streamline the process of feeding data into models.
     For more advanced use cases, consider combining `DataLoader` with preprocessing logic inside `Dataset`.
     This approach allows for dynamic data augmentation and efficient memory usage during training.
 
+Subpackages
+-----------
+
+- :doc:`Tokenizers <tokenizers/index>`
+- :doc:`Utilities <utilities/index>`

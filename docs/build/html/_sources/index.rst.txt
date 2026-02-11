@@ -94,6 +94,7 @@
     data/ConcatDataset.rst
     data/DataLoader.rst
 
+    Tokenizers <data/tokenizers/index.rst>
     Utilities <data/utilities/index.rst>
 
 .. toctree::
