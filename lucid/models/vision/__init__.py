@@ -4,7 +4,6 @@ from .convnext import *
 from .crossvit import *
 from .cspnet import *
 from .cvt import *
-from .ddpm import *
 from .dense import *
 from .detr import *
 from .efficient import *
@@ -18,7 +17,6 @@ from .inception import *
 from .lenet import *
 from .maxvit import *
 from .mobile import *
-from .ncsn import *
 from .pvt import *
 from .rcnn import *
 from .resnest import *
@@ -27,7 +25,6 @@ from .resnext import *
 from .senet import *
 from .sknet import *
 from .swin import *
-from .vae import *
 from .vgg import *
 from .vit import *
 from .xception import *
