@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <optional>
 
 namespace lucid::tokenizers::core {
 
@@ -20,7 +21,7 @@ namespace lucid::tokenizers::core {
         std::size_t max_length = 0;
     };
 
-    class TokenizerBase{
+    class TokenizerBase {
         public:
             virtual ~TokenizerBase() = default;
 
@@ -33,7 +34,7 @@ namespace lucid::tokenizers::core {
             ) const = 0;
 
             virtual std::string convert_id_to_token(int32_t id) const = 0;
-            virtual std::vector<std::string> conert_ids_to_tokens(
+            virtual std::vector<std::string> convert_ids_to_tokens(
                 const std::vector<std::int32_t>& ids
             ) const = 0;
 
@@ -69,16 +70,18 @@ namespace lucid::tokenizers::core {
                 std::size_t min_frequency = 2
             );
 
-            const std::string unk_token() const { return unk_token_; }
-            const std::string pad_token() const { return pad_token_; }
-            const std::string bos_token() const { return bos_token_; }
-            const std::string eos_token() const { return eos_token_; }
+            const std::string& unk_token() const { return unk_token_; }
+            const std::string& pad_token() const { return pad_token_; }
 
-            void get_special_tokens(
+            const std::optional<std::string>& bos_token() const { return bos_token_; }
+            const std::optional<std::string>& eos_token() const { return eos_token_; }
+
+            void set_special_tokens(
                 std::string unk, 
                 std::string pad, 
-                std::string bos = "", 
-                std::string eos = ""
+                
+                std::optional<std::string> bos = std::nullopt, 
+                std::optional<std::string> eos = std::nullopt
             );
 
             std::vector<std::string> all_special_tokens() const;
@@ -86,7 +89,8 @@ namespace lucid::tokenizers::core {
         protected:
             std::string unk_token_ = "[UNK]";
             std::string pad_token_ = "[PAD]";
-            std::string bos_token_;
-            std::string eos_token_;
+
+            std::optional<std::string> bos_token_;
+            std::optional<std::string> eos_token_;
     };
 }
