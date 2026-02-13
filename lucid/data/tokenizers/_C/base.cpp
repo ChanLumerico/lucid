@@ -110,7 +110,7 @@ namespace lucid::tokenizers::core {
         return out;
     }
 
-    void TokenizerBase::fit(
+    TokenizerBase& TokenizerBase::fit(
         const std::vector<std::string>&, std::size_t, std::size_t
     ) {
         throw std::runtime_error("This tokenizer does not support 'fit()'.");

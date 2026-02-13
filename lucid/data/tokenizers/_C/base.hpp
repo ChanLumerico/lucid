@@ -64,7 +64,7 @@ namespace lucid::tokenizers::core {
                 bool skip_special_tokens = true
             ) const;
 
-            virtual void fit(
+            virtual TokenizerBase& fit(
                 const std::vector<std::string>& texts,
                 std::size_t vocab_size,
                 std::size_t min_frequency = 2
