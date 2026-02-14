@@ -1,6 +1,13 @@
 import setuptools
+from setuptools import Extension
 
-import _extension
+try:
+    import pybind11
+except ImportError as e:
+    raise RuntimeError(
+        "pybind11 is required to build C++ extensions. "
+        "Install it first: pip install pybind11"
+    ) from e
 
 
 with open("README.md", "r") as fh:
@@ -8,6 +15,20 @@ with open("README.md", "r") as fh:
 
 _raw_version = "{{VERSION_PLACEHOLDER}}"
 PACKAGE_VERSION = "0.0.0" if _raw_version.startswith("{{") else _raw_version
+
+tokenizers_cpp = Extension(
+    "lucid.data.tokenizers._C",
+    sources=[
+        "lucid/_backend/_C/tokenizers/base.cpp",
+        "lucid/_backend/_C/tokenizers/wordpiece.cpp",
+        "lucid/_backend/_C/tokenizers/bindings.cpp",
+    ],
+    include_dirs=[
+        pybind11.get_include(),
+    ],
+    language="c++",
+    extra_compile_args=["-std=c++20"],
+)
 
 setuptools.setup(
     name="lucid-dl",
@@ -35,6 +56,6 @@ setuptools.setup(
         "openml",
         "mlx; platform_system == 'Darwin' and platform_machine == 'arm64'",
     ],
-    ext_modules=[getattr(_extension, ext) for ext in _extension.__all__],
+    ext_modules=[tokenizers_cpp],
     include_package_data=True,
 )
