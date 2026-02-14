@@ -1,4 +1,4 @@
- #include "tokenizers.hpp"
+#include "tokenizers.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -199,6 +199,11 @@ namespace lucid::tokenizers::core {
         int32_t max_id = -1;
         for (const auto& [token, id] : vocab_) {
             (void)token;
+            if (id < 0) {
+                throw std::runtime_error(
+                    "Vocabulary indices must be non-negative integers."
+                );
+            }
             if (id > max_id) max_id = id;
         }
         if (max_id < 0) {
@@ -208,7 +213,19 @@ namespace lucid::tokenizers::core {
 
         ids_to_tokens_.assign(static_cast<std::size_t>(max_id) + 1, "");
         for (const auto& [token, id] : vocab_) {
-            if (id >= 0) ids_to_tokens_[static_cast<std::size_t>(id)] = token;
+            auto& slot = ids_to_tokens_[static_cast<std::size_t>(id)];
+            if (!slot.empty()) {
+                throw std::runtime_error(
+                    "Duplicate token index detected: " + std::to_string(id)
+                );
+            }
+            slot = token;
+        }
+
+        for (auto& token : ids_to_tokens_) {
+            if (token.empty()) {
+                token = unk_token_;
+            }
         }
     }
 
@@ -465,13 +482,91 @@ namespace lucid::tokenizers::core {
         const std::unordered_map<std::string, std::vector<std::string>>& word_splits,
         const std::unordered_map<std::string, std::size_t>& word_freq
     ) const {
-        // not implemented
+        std::unordered_map<std::string, std::size_t> token_freq;
+        std::unordered_map<std::pair<std::string, std::string>, std::size_t, PairHash> pair_freq;
+
+        for (const auto& [word, split] : word_splits) {
+            auto wf_it = word_freq.find(word);
+            if (wf_it == word_freq.end()) continue;
+
+            const std::size_t freq = wf_it->second;
+            for (const auto& tok : split) {
+                token_freq[tok] += freq;
+            }
+            for (std::size_t i = 0; i + 1 < split.size(); ++i) {
+                pair_freq[{split[i], split[i + 1]}] += freq;
+            }
+        }
+
+        bool has_best = false;
+        std::pair<std::string, std::string> best_pair;
+        double best_score = -1.0;
+        std::size_t best_pair_count = 0;
+
+        for (const auto& [pair, pfreq]: pair_freq) {
+            if (pfreq < 1) continue;
+
+            const auto& left = pair.first;
+            const auto& right = pair.second;
+
+            auto l_it = token_freq.find(left);
+            auto r_it = token_freq.find(right);
+            if (l_it == token_freq.end() || r_it == token_freq.end()) continue;
+
+            const std::size_t denom = l_it->second * r_it->second;
+            if (denom == 0) continue;
+
+            const double score = static_cast<double>(pfreq) / static_cast<double>(denom);
+
+            if (
+                !has_best
+                || score > best_score
+                || (score == best_score && pfreq > best_pair_count)
+                || (score == best_score && pfreq == best_pair_count && pair < best_pair)
+            ) {
+                has_best = true;
+                best_pair = pair;
+                best_score = score;
+                best_pair_count = pfreq;
+            }
+        }
+        if (!has_best || best_pair_count < 1) return std::nullopt;
+        return best_pair;
     }
 
     std::string WordPieceTokenizer::merge_pair(
         const std::pair<std::string, std::string>& pair,
         std::unordered_map<std::string, std::vector<std::string>>& word_splits
     ) const {
-        // not implemented
+        const auto& left = pair.first;
+        const auto& right = pair.second;
+
+        std::string merged_token;
+        if (right.rfind(wordpieces_prefix_, 0) == 0) {
+            merged_token = left + right.substr(wordpieces_prefix_.size());
+        } else {
+            merged_token = left + right;
+        }
+
+        for (auto& [word, split] : word_splits) {
+            (void)word;
+            if (split.size() < 2) continue;
+
+            std::vector<std::string> new_split;
+            new_split.reserve(split.size());
+
+            std::size_t i = 0;
+            while (i < split.size()) {
+                if (i + 1 < split.size() && split[i] == left && split[i + 1] == right) {
+                    new_split.push_back(merged_token);
+                    i += 2;
+                } else {
+                    new_split.push_back(split[i]);
+                    ++i;
+                }
+            }
+            split = std::move(new_split);
+        }
+        return merged_token;
     }
 }
