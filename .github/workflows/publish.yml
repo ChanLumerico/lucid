@@ -43,7 +43,7 @@ jobs:
       - name: Update version in setup.py
         run: |
           VERSION=${{ steps.extract-version.outputs.VERSION }}
-          sed -i "s/{{VERSION_PLACEHOLDER}}/$VERSION/g" setup.py
+          sed -i '' "s|{{VERSION_PLACEHOLDER}}|$VERSION|g" setup.py
 
       - name: Build the package
         env:
