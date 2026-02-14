@@ -1,8 +1,10 @@
-from abc import ABC, abstractmethod
+from importlib import import_module
 import json
+
+from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Iterable
+from typing import ClassVar, Iterable, final
 
 import lucid
 from lucid.types import _DeviceType
@@ -22,6 +24,8 @@ _SpecialTokensOrStr = SpecialTokens | str
 
 
 class Tokenizer(ABC):
+    _cpp_accelerated: ClassVar[bool] = False
+
     def __init__(
         self,
         unk_token: _SpecialTokensOrStr = SpecialTokens.UNK,
@@ -281,3 +285,21 @@ class Tokenizer(ABC):
     def from_pretrained(
         cls, pretrained_model_name_or_path: str | Path, **kwrags
     ) -> Tokenizer: ...
+
+    @final
+    @classmethod
+    def cpp_accelerated(cls: type[Tokenizer]) -> type[Tokenizer]:
+        cls._cpp_accelerated = True
+        return cls
+
+    @staticmethod
+    def _resolve_cpp_cls(cls: type[Tokenizer]) -> type:
+        module = import_module("lucid.data.tokenizers._C")
+        backend_cls = getattr(module, cls.__name__)
+        if backend_cls is not None:
+            return backend_cls
+
+        raise ImportError(
+            f"Cannot import native C++ '{cls.__name__}' backend. "
+            "Build and expose the _C extension first."
+        )

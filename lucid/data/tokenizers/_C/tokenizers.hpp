@@ -13,7 +13,7 @@
 #include <vector>
 
 
-namespace lucid::tokenizers::core {
+namespace lucid::tokenizers::C {
 
     class WordPieceTokenizer final : public TokenizerBase {
         public:

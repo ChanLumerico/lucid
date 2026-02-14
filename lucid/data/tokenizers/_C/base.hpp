@@ -7,7 +7,7 @@
 #include <vector>
 #include <optional>
 
-namespace lucid::tokenizers::core {
+namespace lucid::tokenizers::C {
 
     struct EncodeOptions {
         bool add_special_tokens = true;

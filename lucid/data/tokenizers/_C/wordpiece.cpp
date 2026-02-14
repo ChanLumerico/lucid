@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace lucid::tokenizers::core {
+namespace lucid::tokenizers::C {
 
     std::size_t WordPieceTokenizer::PairHash::operator()(
         const std::pair<std::string, std::string>& p

@@ -5,7 +5,7 @@
 #include <unordered_set>
 #include <utility>
 
-namespace lucid::tokenizers::core {
+namespace lucid::tokenizers::C {
 
     std::vector<std::string> TokenizerBase::build_inputs_with_special_tokens(
         const std::vector<std::string>& tokens

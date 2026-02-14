@@ -4,7 +4,12 @@
       "name": "macOS",
       "compilerPath": "/usr/bin/clang++",
       "cppStandard": "c++17",
-      "intelliSenseMode": "macos-clang-arm64"
+      "intelliSenseMode": "macos-clang-arm64",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "/Library/Frameworks/Python.framework/Versions/3.14/include/python3.14",
+        "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/pybind11/include"
+      ]
     }
   ],
   "version": 4
