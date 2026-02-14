@@ -4,7 +4,7 @@ import json
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import ClassVar, Iterable, final
+from typing import ClassVar, Iterable, TypeVar, final
 
 import lucid
 from lucid.types import _DeviceType
@@ -22,9 +22,11 @@ class SpecialTokens(Enum):
 
 _SpecialTokensOrStr = SpecialTokens | str
 
+T = TypeVar("T", bound="Tokenizer")
+
 
 class Tokenizer(ABC):
-    _cpp_accelerated: ClassVar[bool] = False
+    _is_cpp_wrapper: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -287,15 +289,19 @@ class Tokenizer(ABC):
     ) -> Tokenizer: ...
 
     @final
-    @classmethod
-    def cpp_accelerated(cls: type[Tokenizer]) -> type[Tokenizer]:
-        cls._cpp_accelerated = True
+    @staticmethod
+    def cpp_backend(cls: type[T]) -> type[T]:
+        cls._is_cpp_wrapper = True
         return cls
 
     @staticmethod
     def _resolve_cpp_cls(cls: type[Tokenizer]) -> type:
+        if not cls._is_cpp_wrapper:
+            raise RuntimeError(f"'{cls.__name__}' is not a C++ based tokenizer.")
+
+        requested_name = cls.__name__.removesuffix("Fast")
         module = import_module("lucid.data.tokenizers._C")
-        backend_cls = getattr(module, cls.__name__)
+        backend_cls = getattr(module, requested_name)
         if backend_cls is not None:
             return backend_cls
 

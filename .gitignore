@@ -17,3 +17,4 @@ review/INSTRUCTION.txt
 review/_sources
 
 out/
+*.so/

@@ -1,7 +1,6 @@
 import unicodedata
 
 from collections import Counter
-from importlib import import_module
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -421,7 +420,7 @@ class WordPieceTokenizer(Tokenizer):
         return "".join(out)
 
 
-@Tokenizer.cpp_accelerated
+@Tokenizer.cpp_backend
 class WordPieceTokenizerFast(Tokenizer):
     def __init__(
         self,
@@ -451,7 +450,7 @@ class WordPieceTokenizerFast(Tokenizer):
         backend_cls = self._resolve_cpp_cls(cls=type(self))
         self._backend = backend_cls(
             vocab=vocab,
-            vocab_file=str(vocab_file) if vocab_file is not None else None,
+            vocab_file=Path(vocab_file) if vocab_file is not None else None,
             unk_token=self.unk_token,
             pad_token=self.pad_token,
             bos_token=self.bos_token,

@@ -9,13 +9,16 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../../"))
+HERE = os.path.abspath(os.path.dirname(__file__))
+ROOT = os.path.abspath(os.path.join(HERE, "../../"))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, HERE)
 os.environ["SPHINX_BUILD"] = "1"
 
 project = "Lucid"
 copyright = "2025, ChanLumerico"
 author = "ChanLumerico"
-release = "2.12.8"
+release = "2.13.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -46,79 +49,6 @@ html_theme_options = {
 }
 
 # -- RST Epilogs -------------------------------------------------------------
+from rstep import get_total_epilogs
 
-MISC_EP = """
-.. |wip-badge| raw:: html
-
-    <span class="badge wip">Work-In-Progress</span>
-"""
-
-ARCH_EP = """
-.. |convnet-badge| raw:: html
-
-    <span class="badge convnet">ConvNet</span>
-
-.. |one-stage-det-badge| raw:: html
-
-    <span class="badge one_stage_det">One-Stage Detector</span>
-
-.. |two-stage-det-badge| raw:: html
-
-    <span class="badge two_stage_det">Two-Stage Detector</span>
-
-.. |transformer-badge| raw:: html
-
-    <span class="badge transformer">Transformer</span>
-
-.. |vision-transformer-badge| raw:: html
-
-    <span class="badge vision_transformer">Vision Transformer</span>
-
-.. |detection-transformer-badge| raw:: html
-
-    <span class="badge detection_transformer">Detection Transformer</span>
-
-.. |encoder-only-transformer-badge| raw:: html
-
-    <span class="badge encoder_only_transformer">Encoder-Only Transformer</span>
-
-.. |autoencoder-badge| raw:: html
-
-    <span class="badge autoencoder">Autoencoder</span>
-
-.. |vae-badge| raw:: html
-
-    <span class="badge vae">Variational Autoencoder</span>
-
-.. |diffusion-badge| raw:: html
-
-    <span class="badge diffusion">Diffusion</span>
-
-.. |score-diffusion-badge| raw:: html
-
-    <span class="badge score_based_diffusion">Score-Based Diffusion</span>
-"""
-
-TASK_EP = """    
-.. |imgclf-badge| raw:: html
-
-    <span class="badge normal">Image Classification</span>
-
-.. |imggen-badge| raw:: html
-
-    <span class="badge normal">Image Generation</span>
-
-.. |objdet-badge| raw:: html
-
-    <span class="badge normal">Object Detection</span>
-
-.. |seq2seq-badge| raw:: html
-
-    <span class="badge normal">Sequence-to-Sequence</span>
-
-.. |seqclf-badge| raw:: html
-
-    <span class="badge normal">Sequence Classification</span>
-"""
-
-rst_epilog = ARCH_EP + TASK_EP + MISC_EP
+rst_epilog = get_total_epilogs()

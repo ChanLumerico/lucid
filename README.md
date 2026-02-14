@@ -20,18 +20,10 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Implemented **BERT**(Devlin et al., 2018) `lucid.models.BERT` with task-specific wrappers:
+- Added new submodule `lucid.data.tokenizers` which contains various tokenizers for NLP tasks, starting with `WordPieceTokenizer`
+    - Tokenizers in `data.tokenizers` also come along with thier ***Fast*** versions, accelerated via **C++ backend**. (e.g. `WordPieceTokenizerFast`)
 
-    | Task | Wrapper |
-    |---|---|
-    | Pre-Training | `lucid.models.BERTForPreTraining` |
-    | Masked Language Modeling | `lucid.models.BERTForMaskedLM` |
-    | Causal Language Modeling | `lucid.models.BERTForCausalLM` |
-    | Next Sentence Prediction | `lucid.models.BERTForNextSentencePrediction` |
-    | Sequence Classification | `lucid.models.BERTForSequenceClassification` |
-    | Token Classification | `lucid.models.BERTForTokenClassification` |
-    | Question Answering | `lucid.models.BERTForQuestionAnswering` |
-
+- Implemented **BERT**(Devlin et al., 2018) `lucid.models.BERT`
     - Also provides *pre-trained weights* via *`BERT_Weights.PRE_TRAIN_BASE`* at `lucid.weights`
 
 - Now lucid supports **KV-Cache** system for transformer-like models: `nn.DynamicKVCache`, `nn.StaticKVCache` based on the super class `nn.KVCache`

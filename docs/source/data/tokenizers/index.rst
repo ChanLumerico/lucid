@@ -6,6 +6,8 @@ Tokenizers
     :hidden:
 
     Tokenizer.rst
+    WordPieceTokenizer.rst
+    WordPieceTokenizerFast.rst
 
 The `lucid.data.tokenizers` package provides tokenizer interfaces for text pipelines.
 It focuses on converting text into token ids and reconstructing text from ids in a way
