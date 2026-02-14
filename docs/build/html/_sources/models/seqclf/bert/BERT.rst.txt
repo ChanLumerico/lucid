@@ -6,6 +6,7 @@ BERT
     :hidden:
 
     BERTConfig.rst
+    BERTTokenizerFast.rst
     BERTForPreTraining.rst
     BERTForMaskedLM.rst
     BERTForCausalLM.rst
@@ -13,6 +14,7 @@ BERT
     BERTForSequenceClassification.rst
     BERTForTokenClassification.rst
     BERTForQuestionAnswering.rst
+    
     bert_for_pre_training_base.rst
     bert_for_pre_training_large.rst
     bert_for_masked_lm_base.rst

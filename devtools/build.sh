@@ -29,7 +29,7 @@ cd devtools/
 ./clean_pycache.sh
 
 python --version
-cd ../../docs
+cd ../docs
 if $clean_build; then
   rm -rf build/
 fi

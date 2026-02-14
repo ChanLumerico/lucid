@@ -48,7 +48,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ChanLumerico/lucid",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_namespace_packages(include=["lucid*"]),
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.12",
