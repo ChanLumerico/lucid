@@ -18,10 +18,10 @@
  {
   "language": "Shell",
   "files": 4,
-  "lines": 141,
+  "lines": 140,
   "blanks": 24,
   "comments": 9,
-  "linesOfCode": 108
+  "linesOfCode": 107
  },
  {
   "language": "C++",
@@ -74,9 +74,9 @@
  {
   "language": "Total",
   "files": 174,
-  "lines": 45357,
+  "lines": 45356,
   "blanks": 8334,
   "comments": 38,
-  "linesOfCode": 36985
+  "linesOfCode": 36984
  }
 ]
