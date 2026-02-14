@@ -1,6 +1,0 @@
-numpy
-pandas
-openml
-
-[:platform_system == "Darwin" and platform_machine == "arm64"]
-mlx

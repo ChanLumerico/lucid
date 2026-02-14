@@ -41,6 +41,16 @@ Return predicted token labels by argmax over class logits.
 
 Compute token-level accuracy with optional ignored indices.
 
+.. automethod:: lucid.models.BERTForTokenClassification.get_loss_from_text
+   :no-index:
+
+Compute token classification loss directly from raw text input.
+
+.. automethod:: lucid.models.BERTForTokenClassification.predict_token_labels_from_text
+   :no-index:
+
+Predict token labels directly from raw text input.
+
 Examples
 --------
 
@@ -56,3 +66,12 @@ Examples
     >>> logits = model(input_ids=input_ids, attention_mask=attention_mask)
     >>> loss = model.get_loss(labels=labels, input_ids=input_ids, attention_mask=attention_mask)
     >>> acc = model.get_accuracy(labels=labels, input_ids=input_ids, attention_mask=attention_mask)
+
+.. code-block:: python
+
+    >>> tokenizer = models.BERTTokenizerFast.from_pretrained(".data/bert/pretrained")
+    >>> pred = model.predict_token_labels_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="John lives in New York.",
+    ...     device="gpu",
+    ... )

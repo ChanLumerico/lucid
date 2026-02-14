@@ -41,6 +41,11 @@ Compute the next sentence prediction (NSP) loss from sequence labels.
 
 Compute the combined pretraining loss as a weighted sum of MLM and NSP losses.
 
+.. automethod:: lucid.models.BERTForPreTraining.get_loss_from_text
+   :no-index:
+
+Compute pretraining loss directly from raw text pairs using `BERTTokenizerFast`.
+
 .. automethod:: lucid.models.BERTForPreTraining.create_masked_lm_inputs
    :no-index:
 
@@ -109,6 +114,17 @@ Examples
     ...     input_ids=input_ids,
     ...     attention_mask=attention_mask,
     ...     token_type_ids=token_type_ids,
+    ... )
+
+.. code-block:: python
+
+    >>> tokenizer = models.BERTTokenizerFast.from_pretrained(".data/bert/pretrained")
+    >>> total_loss = model.get_loss_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="Machine learning helps us build useful systems.",
+    ...     text_b="Tokenization quality strongly affects language model performance.",
+    ...     nsp_label=0,
+    ...     device="gpu",
     ... )
 
 .. code-block:: python

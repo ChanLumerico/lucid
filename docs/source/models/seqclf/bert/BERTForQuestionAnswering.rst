@@ -45,6 +45,16 @@ Return best start/end span candidates with scores under a max answer length.
 
 Compute exact-match span accuracy (both start and end must match).
 
+.. automethod:: lucid.models.BERTForQuestionAnswering.predict_spans_from_text
+   :no-index:
+
+Predict start/end spans directly from `(question, context)` text pairs.
+
+.. automethod:: lucid.models.BERTForQuestionAnswering.predict_answer_from_text
+   :no-index:
+
+Return decoded extractive answer text directly from `(question, context)`.
+
 Examples
 --------
 
@@ -60,3 +70,13 @@ Examples
     >>> start_logits, end_logits = model(input_ids=input_ids, attention_mask=attention_mask)
     >>> loss = model.get_loss(start_positions, end_positions, input_ids=input_ids, attention_mask=attention_mask)
     >>> best_start, best_end, best_score = model.get_best_spans(input_ids=input_ids, attention_mask=attention_mask)
+
+.. code-block:: python
+
+    >>> tokenizer = models.BERTTokenizerFast.from_pretrained(".data/bert/pretrained")
+    >>> answer = model.predict_answer_from_text(
+    ...     tokenizer=tokenizer,
+    ...     question="What helps model performance?",
+    ...     context="Tokenization quality strongly affects language model performance.",
+    ...     device="gpu",
+    ... )

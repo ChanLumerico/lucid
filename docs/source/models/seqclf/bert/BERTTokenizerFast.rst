@@ -54,6 +54,7 @@ Methods
 -------
 
 .. automethod:: lucid.models.BERTTokenizerFast.encode_plus
+.. automethod:: lucid.models.BERTTokenizerFast.encode_pretraining_inputs
 .. automethod:: lucid.models.BERTTokenizerFast.encode
 .. automethod:: lucid.models.BERTTokenizerFast.decode
 .. automethod:: lucid.models.BERTTokenizerFast.save_pretrained
@@ -64,5 +65,7 @@ Methods
     - This class requires compiled C++ extensions under `lucid._backend._C`.
     - `encode_plus` returns a dict with `input_ids`, `token_type_ids`,
       and `attention_mask`.
+    - `encode_pretraining_inputs` also returns `special_tokens_mask`, which is
+      directly usable for MLM masking preprocessing.
     - This tokenizer does not apply MLM masking (e.g., 15% masking); masking is
       typically handled in data-collation or training preprocessing.

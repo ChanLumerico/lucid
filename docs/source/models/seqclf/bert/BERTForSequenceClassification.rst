@@ -46,6 +46,21 @@ Return class probabilities via softmax.
 
 Compute sequence classification accuracy.
 
+.. automethod:: lucid.models.BERTForSequenceClassification.get_loss_from_text
+   :no-index:
+
+Compute sequence classification loss directly from raw text input.
+
+.. automethod:: lucid.models.BERTForSequenceClassification.predict_labels_from_text
+   :no-index:
+
+Predict sequence labels directly from raw text input.
+
+.. automethod:: lucid.models.BERTForSequenceClassification.predict_proba_from_text
+   :no-index:
+
+Predict class probabilities directly from raw text input.
+
 Examples
 --------
 
@@ -61,3 +76,18 @@ Examples
     >>> logits = model(input_ids=input_ids, attention_mask=attention_mask)
     >>> loss = model.get_loss(labels=labels, input_ids=input_ids, attention_mask=attention_mask)
     >>> acc = model.get_accuracy(labels=labels, input_ids=input_ids, attention_mask=attention_mask)
+
+.. code-block:: python
+
+    >>> tokenizer = models.BERTTokenizerFast.from_pretrained(".data/bert/pretrained")
+    >>> loss = model.get_loss_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="This movie is excellent.",
+    ...     labels=1,
+    ...     device="gpu",
+    ... )
+    >>> pred = model.predict_labels_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="This movie is excellent.",
+    ...     device="gpu",
+    ... )

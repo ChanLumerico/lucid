@@ -46,6 +46,16 @@ Return argmax token predictions per position.
 
 Compute token-level accuracy while ignoring masked-out label indices.
 
+.. automethod:: lucid.models.BERTForMaskedLM.get_loss_from_text
+   :no-index:
+
+Compute MLM loss directly from raw text (with internal masking preparation).
+
+.. automethod:: lucid.models.BERTForMaskedLM.predict_token_ids_from_text
+   :no-index:
+
+Predict token IDs directly from raw text input.
+
 Examples
 --------
 
@@ -61,3 +71,18 @@ Examples
     >>> masked_input_ids, labels = model.create_masked_lm_inputs(input_ids)
     >>> loss = model.get_loss(labels=labels, input_ids=masked_input_ids)
     >>> acc = model.get_accuracy(labels=labels, input_ids=masked_input_ids)
+
+.. code-block:: python
+
+    >>> tokenizer = models.BERTTokenizerFast.from_pretrained(".data/bert/pretrained")
+    >>> loss = model.get_loss_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="Machine learning helps us build useful systems.",
+    ...     text_b="Tokenization quality strongly affects language model performance.",
+    ...     device="gpu",
+    ... )
+    >>> pred_ids = model.predict_token_ids_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="Machine learning is [MASK].",
+    ...     device="gpu",
+    ... )

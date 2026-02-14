@@ -45,6 +45,21 @@ Return NSP class probabilities via softmax.
 
 Compute NSP classification accuracy.
 
+.. automethod:: lucid.models.BERTForNextSentencePrediction.get_loss_from_text
+   :no-index:
+
+Compute NSP loss directly from text pairs.
+
+.. automethod:: lucid.models.BERTForNextSentencePrediction.predict_labels_from_text
+   :no-index:
+
+Predict NSP labels directly from text pairs.
+
+.. automethod:: lucid.models.BERTForNextSentencePrediction.predict_proba_from_text
+   :no-index:
+
+Predict NSP probabilities directly from text pairs.
+
 Examples
 --------
 
@@ -60,3 +75,20 @@ Examples
     >>> logits = model(input_ids=input_ids)
     >>> loss = model.get_loss(labels=labels, input_ids=input_ids)
     >>> acc = model.get_accuracy(labels=labels, input_ids=input_ids)
+
+.. code-block:: python
+
+    >>> tokenizer = models.BERTTokenizerFast.from_pretrained(".data/bert/pretrained")
+    >>> loss = model.get_loss_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="A cat sits on the mat.",
+    ...     text_b="It starts to rain outside.",
+    ...     labels=0,
+    ...     device="gpu",
+    ... )
+    >>> pred = model.predict_labels_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="A cat sits on the mat.",
+    ...     text_b="It starts to rain outside.",
+    ...     device="gpu",
+    ... )

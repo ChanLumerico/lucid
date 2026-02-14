@@ -154,7 +154,19 @@ namespace lucid::tokenizers::fast {
             out.pop_back();
         }
 
-        return out;
+        std::string deduped;
+        deduped.reserve(out.size());
+        for (char ch : out) {
+            if (!deduped.empty()) {
+                const char prev = deduped.back();
+                const bool same = (ch == prev);
+                const bool punct = (ch == '.' || ch == '!' || ch == '?');
+                if (same && punct) continue;
+            }
+            deduped.push_back(ch);
+        }
+
+        return deduped;
     }
 
     WordPieceTokenizer& WordPieceTokenizer::fit(

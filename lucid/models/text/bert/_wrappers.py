@@ -5,8 +5,10 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 from lucid.models.base import PreTrainedModelMixin
+from lucid.types import _DeviceType
 
 from ._model import BERT, BERTConfig
+from ._tokenizer import BERTTokenizerFast
 
 
 __all__ = [
@@ -52,6 +54,33 @@ class _BERTTaskWrapperMixin:
 
     def tie_weights(self) -> None:
         self.bert.tie_weights()
+
+    @staticmethod
+    def _ensure_bert_tokenizer(tokenizer: BERTTokenizerFast) -> None:
+        if not isinstance(tokenizer, BERTTokenizerFast):
+            raise TypeError("'tokenizer' must be an instance of BERTTokenizerFast.")
+
+    def _encode_text_pair_inputs(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> dict[str, Tensor]:
+        self._ensure_bert_tokenizer(tokenizer)
+        encoded = tokenizer.encode_pretraining_inputs(
+            text_a=text_a,
+            text_b=text_b,
+            return_tensor=True,
+            device=device,
+        )
+        return {
+            "input_ids": encoded["input_ids"],
+            "token_type_ids": encoded["token_type_ids"],
+            "attention_mask": encoded["attention_mask"],
+            "special_tokens_mask": encoded["special_tokens_mask"],
+        }
 
     def _encoder_kwargs(
         self,
@@ -474,6 +503,61 @@ class BERTForPreTraining(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module)
         )
         return (mlm_weight * mlm_loss) + (nsp_weight * nsp_loss)
 
+    def get_loss_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        nsp_label: int = 0,
+        device: _DeviceType = "cpu",
+        mask_token_id: int | None = None,
+        mlm_probability: float = 0.15,
+        mask_replace_prob: float = 0.8,
+        random_replace_prob: float = 0.1,
+        ignore_index: int = -100,
+        reduction: str | None = "mean",
+        mlm_weight: float = 1.0,
+        nsp_weight: float = 1.0,
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        input_ids = encoded["input_ids"]
+        token_type_ids = encoded["token_type_ids"]
+        attention_mask = encoded["attention_mask"]
+        special_tokens_mask = encoded["special_tokens_mask"]
+
+        if mask_token_id is None:
+            mid = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+            if not isinstance(mid, int):
+                raise TypeError("Expected integer mask token id.")
+            mask_token_id = mid
+
+        masked_input_ids, mlm_labels = self.create_masked_lm_inputs(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            special_tokens_mask=special_tokens_mask,
+            mask_token_id=mask_token_id,
+            mlm_probability=mlm_probability,
+            mask_replace_prob=mask_replace_prob,
+            random_replace_prob=random_replace_prob,
+            ignore_index=ignore_index,
+        )
+        nsp_labels = lucid.LongTensor([nsp_label], device=device)
+
+        return self.get_loss(
+            mlm_labels=mlm_labels,
+            nsp_labels=nsp_labels,
+            input_ids=masked_input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            ignore_index=ignore_index,
+            reduction=reduction,
+            mlm_weight=mlm_weight,
+            nsp_weight=nsp_weight,
+        )
+
     def predict_mlm_token_ids(
         self,
         input_ids: lucid.LongTensor | None = None,
@@ -739,6 +823,68 @@ class BERTForMaskedLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
         )
         return _masked_token_accuracy(pred_ids, labels, ignore_index=ignore_index)
 
+    def get_loss_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+        mask_token_id: int | None = None,
+        mlm_probability: float = 0.15,
+        mask_replace_prob: float = 0.8,
+        random_replace_prob: float = 0.1,
+        ignore_index: int = -100,
+        reduction: str | None = "mean",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        if mask_token_id is None:
+            mid = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+            if not isinstance(mid, int):
+                raise TypeError("Expected integer mask token id.")
+            mask_token_id = mid
+
+        masked_input_ids, labels = self.create_masked_lm_inputs(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            special_tokens_mask=encoded["special_tokens_mask"],
+            mask_token_id=mask_token_id,
+            mlm_probability=mlm_probability,
+            mask_replace_prob=mask_replace_prob,
+            random_replace_prob=random_replace_prob,
+            ignore_index=ignore_index,
+        )
+        return self.get_loss(
+            labels=labels,
+            input_ids=masked_input_ids,
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+            ignore_index=ignore_index,
+            reduction=reduction,
+        )
+
+    def predict_token_ids_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer,
+            text_a=text_a,
+            text_b=text_b,
+            device=device,
+        )
+        return self.predict_token_ids(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+        )
+
 
 class BERTForCausalLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
@@ -999,6 +1145,51 @@ class BERTForCausalLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
         )
         return lucid.argmax(next_logits, axis=-1)
 
+    def get_loss_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+        shift_labels: bool = True,
+        ignore_index: int = -100,
+        reduction: str | None = "mean",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        labels = encoded["input_ids"].detach()
+        return self.get_loss(
+            labels=labels,
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+            shift_labels=shift_labels,
+            ignore_index=ignore_index,
+            reduction=reduction,
+        )
+
+    def predict_next_token_id_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer,
+            text_a=text_a,
+            text_b=text_b,
+            device=device,
+        )
+        return self.predict_next_token_id(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+        )
+
 
 class BERTForNextSentencePrediction(
     _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
@@ -1118,6 +1309,63 @@ class BERTForNextSentencePrediction(
             inputs_embeds=inputs_embeds,
         )
         return _classification_accuracy(preds, labels)
+
+    def get_loss_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        labels: int | Tensor = 0,
+        *,
+        device: _DeviceType = "cpu",
+        reduction: str | None = "mean",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        if isinstance(labels, int):
+            labels = lucid.LongTensor([labels], device=device)
+        return self.get_loss(
+            labels=labels,
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+            reduction=reduction,
+        )
+
+    def predict_labels_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        return self.predict_labels(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+        )
+
+    def predict_proba_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        return self.predict_proba(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+        )
 
 
 class BERTForSequenceClassification(
@@ -1248,6 +1496,63 @@ class BERTForSequenceClassification(
         )
         return _classification_accuracy(preds, labels)
 
+    def get_loss_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        labels: int | Tensor = 0,
+        *,
+        device: _DeviceType = "cpu",
+        reduction: str | None = "mean",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        if isinstance(labels, int):
+            labels = lucid.LongTensor([labels], device=device)
+        return self.get_loss(
+            labels=labels,
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+            reduction=reduction,
+        )
+
+    def predict_labels_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        return self.predict_labels(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+        )
+
+    def predict_proba_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        return self.predict_proba(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+        )
+
 
 class BERTForTokenClassification(
     _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
@@ -1365,6 +1670,48 @@ class BERTForTokenClassification(
             inputs_embeds=inputs_embeds,
         )
         return _masked_token_accuracy(preds, labels, ignore_index=ignore_index)
+
+    def get_loss_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        labels: Tensor | None = None,
+        *,
+        device: _DeviceType = "cpu",
+        ignore_index: int = -100,
+        reduction: str | None = "mean",
+    ) -> Tensor:
+        if labels is None:
+            raise ValueError("'labels' must be provided for token classification.")
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        return self.get_loss(
+            labels=labels,
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+            ignore_index=ignore_index,
+            reduction=reduction,
+        )
+
+    def predict_token_labels_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        text_a: str,
+        text_b: str | None = None,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> Tensor:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=text_a, text_b=text_b, device=device
+        )
+        return self.predict_token_labels(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+        )
 
 
 class BERTForQuestionAnswering(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
@@ -1541,6 +1888,49 @@ class BERTForQuestionAnswering(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.M
             start_positions,
             end_positions,
         )
+
+    def predict_spans_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        question: str,
+        context: str,
+        *,
+        device: _DeviceType = "cpu",
+    ) -> tuple[Tensor, Tensor]:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer, text_a=question, text_b=context, device=device
+        )
+        return self.predict_spans(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+        )
+
+    def predict_answer_from_text(
+        self,
+        tokenizer: BERTTokenizerFast,
+        question: str,
+        context: str,
+        *,
+        device: _DeviceType = "cpu",
+        max_answer_length: int = 30,
+    ) -> str:
+        encoded = self._encode_text_pair_inputs(
+            tokenizer=tokenizer,
+            text_a=question,
+            text_b=context,
+            device=device,
+        )
+        start, end, _ = self.get_best_spans(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            token_type_ids=encoded["token_type_ids"],
+            max_answer_length=max_answer_length,
+        )
+        s = int(start[0].item())
+        e = int(end[0].item())
+        ids = encoded["input_ids"][0].tolist()[s : e + 1]
+        return tokenizer.decode(ids, skip_special_tokens=True)
 
 
 def _build_bert_config(

@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>BERT - Lucid 2.13.2 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="BERTConfig" href="BERTConfig.html" /><link rel="prev" title="Sequence Classification" href="../index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>BERT - Lucid 2.13.3 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="BERTConfig" href="BERTConfig.html" /><link rel="prev" title="Sequence Classification" href="../index.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/seqclf/bert/BERT.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -976,6 +976,7 @@ data-aria-dark="Switch to auto color mode">
 </ul>
 </li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#end-to-end-example">End-to-End Example</a></li>
 </ul>
 </div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
   </aside>
@@ -1204,6 +1205,43 @@ attention setup, and runtime behavior (decoder/cache/pooling).</p></li>
 </span></pre></div>
 </div>
 </section>
+<section id="end-to-end-example">
+<h2>End-to-End Example<a class="headerlink" href="#end-to-end-example" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span data-line="2"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="3"><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">BERTConfig</span><span class="p">,</span> <span class="n">BERTTokenizerFast</span><span class="p">,</span> <span class="n">BERTForPreTraining</span>
+</span><span data-line="4"><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.weights</span><span class="w"> </span><span class="kn">import</span> <span class="n">BERT_Weights</span>
+</span><span data-line="5"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="6"><span class="gp">&gt;&gt;&gt; </span><span class="n">device</span> <span class="o">=</span> <span class="s2">&quot;gpu&quot;</span>
+</span><span data-line="7"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="8"><span class="gp">&gt;&gt;&gt; </span><span class="c1"># 1) Tokenizer build/save/reload</span>
+</span><span data-line="9"><span class="gp">&gt;&gt;&gt; </span><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">BERTTokenizerFast</span><span class="p">(</span><span class="n">vocab_file</span><span class="o">=</span><span class="s2">&quot;some_vocab.txt&quot;</span><span class="p">)</span>
+</span><span data-line="10"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="11"><span class="gp">&gt;&gt;&gt; </span><span class="n">tokenizer</span><span class="o">.</span><span class="n">save_pretrained</span><span class="p">(</span><span class="s2">&quot;some_path&quot;</span><span class="p">)</span>
+</span><span data-line="12"><span class="gp">&gt;&gt;&gt; </span><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">BERTTokenizerFast</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;some_path&quot;</span><span class="p">)</span>
+</span><span data-line="13"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="14"><span class="gp">&gt;&gt;&gt; </span><span class="c1"># 2) Model config + pretrained weights</span>
+</span><span data-line="15"><span class="gp">&gt;&gt;&gt; </span><span class="n">config</span> <span class="o">=</span> <span class="n">BERTConfig</span><span class="p">(</span><span class="o">**</span><span class="n">BERT_Weights</span><span class="o">.</span><span class="n">DEFAULT</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+</span><span data-line="16"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="17"><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">BERTForPreTraining</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span data-line="18"><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">weights</span><span class="o">=</span><span class="n">BERT_Weights</span><span class="o">.</span><span class="n">DEFAULT</span><span class="p">)</span>
+</span><span data-line="19"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="20"><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+</span><span data-line="21"><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+</span><span data-line="22"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="23"><span class="gp">&gt;&gt;&gt; </span><span class="c1"># 3) One-shot text-to-loss</span>
+</span><span data-line="24"><span class="gp">&gt;&gt;&gt; </span><span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">get_loss_from_text</span><span class="p">(</span>
+</span><span data-line="25"><span class="gp">... </span>    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span data-line="26"><span class="gp">... </span>    <span class="n">text_a</span><span class="o">=</span><span class="s2">&quot;Machine learning helps us build useful systems.&quot;</span><span class="p">,</span>
+</span><span data-line="27"><span class="gp">... </span>    <span class="n">text_b</span><span class="o">=</span><span class="s2">&quot;Tokenization quality strongly affects language model performance.&quot;</span><span class="p">,</span>
+</span><span data-line="28"><span class="gp">... </span>    <span class="n">nsp_label</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+</span><span data-line="29"><span class="gp">... </span>    <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+</span><span data-line="30"><span class="gp">... </span><span class="p">)</span>
+</span><span data-line="31"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+</span><span data-line="32"><span class="go">0.051273621783</span>
+</span></pre></div>
+</div>
+</section>
 </section>
 
         </article><button class="back-to-top" type="button">
@@ -1246,7 +1284,7 @@ attention setup, and runtime behavior (decoder/cache/pooling).</p></li>
     </div>
   </div>
 </footer>
-      <script src="../../../_static/documentation_options.js?v=666ddaae"></script>
+      <script src="../../../_static/documentation_options.js?v=c2155eb7"></script>
       <script src="../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../_static/design-tabs.js?v=f930bc37"></script>

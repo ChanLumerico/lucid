@@ -1,4 +1,5 @@
 import unicodedata
+import re
 
 from collections import Counter
 from pathlib import Path
@@ -120,7 +121,9 @@ class WordPieceTokenizer(Tokenizer):
         for punct in ["(", "[", "{"]:
             out = out.replace(f"{punct} ", punct)
 
-        return out.strip()
+        out = re.sub(r"\s+", " ", out).strip()
+        out = re.sub(r"([.!?])\1+", r"\1", out)
+        return out
 
     def save_pretrained(self, save_directory: Path | str) -> list[str]:
         save_path = Path(save_directory)

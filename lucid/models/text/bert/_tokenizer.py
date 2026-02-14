@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Any
 
+import lucid
+
 from lucid.data.tokenizers import SpecialTokens, Tokenizer
+from lucid.types import _DeviceType
 
 from lucid._backend._C.tokenizers.bert.core import _C_BERTTokenizer
 
@@ -85,6 +88,48 @@ class BERTTokenizerFast(Tokenizer):
             "input_ids": [int(x) for x in out.input_ids],
             "token_type_ids": [int(x) for x in out.token_type_ids],
             "attention_mask": [int(x) for x in out.attention_mask],
+        }
+
+    def encode_pretraining_inputs(
+        self,
+        text_a: str,
+        text_b: str | None = None,
+        return_tensor: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> dict[str, list[int] | lucid.LongTensor]:
+        enc = self.encode_plus(text_a, text_b)
+
+        special_ids = set(self.all_special_ids)
+        cls_id = self.convert_tokens_to_ids(self.cls_token)
+        sep_id = self.convert_tokens_to_ids(self.sep_token)
+
+        if isinstance(cls_id, int):
+            special_ids.add(cls_id)
+        if isinstance(sep_id, int):
+            special_ids.add(sep_id)
+
+        special_tokens_mask = [
+            1 if tid in special_ids else 0 for tid in enc["input_ids"]
+        ]
+        if return_tensor:
+            return {
+                "input_ids": lucid.LongTensor([enc["input_ids"]], device=device),
+                "token_type_ids": lucid.LongTensor(
+                    [enc["token_type_ids"]], device=device
+                ),
+                "attention_mask": lucid.LongTensor(
+                    [enc["attention_mask"]], device=device
+                ),
+                "special_tokens_mask": lucid.LongTensor(
+                    [special_tokens_mask], device=device
+                ),
+            }
+
+        return {
+            "input_ids": enc["input_ids"],
+            "token_type_ids": enc["token_type_ids"],
+            "attention_mask": enc["attention_mask"],
+            "special_tokens_mask": special_tokens_mask,
         }
 
     def save_pretrained(self, save_directory: Path | str) -> list[str]:

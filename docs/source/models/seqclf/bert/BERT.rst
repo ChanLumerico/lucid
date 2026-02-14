@@ -163,3 +163,41 @@ Examples
     >>> model = models.BERT(config)
     >>> print(model)
     BERT(...)
+
+End-to-End Example
+------------------
+
+.. code-block:: python
+
+    >>> from pathlib import Path
+    >>>
+    >>> from lucid.models import BERTConfig, BERTTokenizerFast, BERTForPreTraining
+    >>> from lucid.weights import BERT_Weights
+    >>>
+    >>> device = "gpu"
+    >>>
+    >>> # 1) Tokenizer build/save/reload
+    >>> tokenizer = BERTTokenizerFast(vocab_file="some_vocab.txt")
+    >>>
+    >>> tokenizer.save_pretrained("some_path")
+    >>> tokenizer = BERTTokenizerFast.from_pretrained("some_path")
+    >>>
+    >>> # 2) Model config + pretrained weights
+    >>> config = BERTConfig(**BERT_Weights.DEFAULT.config)
+    >>>
+    >>> model = BERTForPreTraining(config)
+    >>> model = model.from_pretrained(weights=BERT_Weights.DEFAULT)
+    >>>
+    >>> model.to(device)
+    >>> model.eval()
+    >>>
+    >>> # 3) One-shot text-to-loss
+    >>> loss = model.get_loss_from_text(
+    ...     tokenizer=tokenizer,
+    ...     text_a="Machine learning helps us build useful systems.",
+    ...     text_b="Tokenization quality strongly affects language model performance.",
+    ...     nsp_label=0,
+    ...     device=device,
+    ... )
+    >>> print(loss.item())
+    0.051273621783
