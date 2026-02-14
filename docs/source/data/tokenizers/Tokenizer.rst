@@ -1,5 +1,5 @@
-data.tokenizers.Tokenizer
-=========================
+tokenizers.Tokenizer
+====================
 
 .. autoclass:: lucid.data.tokenizers.Tokenizer
 

@@ -25,7 +25,6 @@ done
 
 cd devtools/scripts
 ./black.sh ../../lucid
-./rm_pyc.sh ../../lucid
 ./clean_pycache.sh
 
 python --version
