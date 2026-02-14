@@ -1,5 +1,7 @@
+import json
 import setuptools
 from setuptools import Extension
+from pathlib import Path
 
 try:
     import pybind11
@@ -16,19 +18,26 @@ with open("README.md", "r") as fh:
 _raw_version = "{{VERSION_PLACEHOLDER}}"
 PACKAGE_VERSION = "0.0.0" if _raw_version.startswith("{{") else _raw_version
 
-tokenizers_cpp = Extension(
-    "lucid.data.tokenizers._C",
-    sources=[
-        "lucid/_backend/_C/tokenizers/base.cpp",
-        "lucid/_backend/_C/tokenizers/wordpiece.cpp",
-        "lucid/_backend/_C/tokenizers/bindings.cpp",
-    ],
-    include_dirs=[
-        pybind11.get_include(),
-    ],
-    language="c++",
-    extra_compile_args=["-std=c++20"],
-)
+BUILD_CFG_PATH = Path(".extensions/cpp_extensions.json")
+with BUILD_CFG_PATH.open("r", encoding="utf-8") as f:
+    build_cfg = json.load(f)
+
+common = build_cfg.get("common", {})
+extensions_cfg = build_cfg.get("extensions", [])
+if not isinstance(extensions_cfg, list) or not extensions_cfg:
+    raise RuntimeError(f"Invalid extension config: {BUILD_CFG_PATH}")
+
+ext_modules: list[Extension] = []
+for ext_cfg in extensions_cfg:
+    ext_modules.append(
+        Extension(
+            ext_cfg["name"],
+            sources=ext_cfg["sources"],
+            include_dirs=[pybind11.get_include()],
+            language=common.get("language", "c++"),
+            extra_compile_args=common.get("extra_compile_args", ["-std=c++20"]),
+        )
+    )
 
 setuptools.setup(
     name="lucid-dl",
@@ -56,6 +65,6 @@ setuptools.setup(
         "openml",
         "mlx; platform_system == 'Darwin' and platform_machine == 'arm64'",
     ],
-    ext_modules=[tokenizers_cpp],
+    ext_modules=ext_modules,
     include_package_data=True,
 )

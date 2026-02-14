@@ -23,8 +23,9 @@ EOF
   esac
 done
 
-cd devtools/scripts
-./black.sh ../../lucid
+cd devtools/
+./black.sh ../lucid
+./compile.sh
 ./clean_pycache.sh
 
 python --version

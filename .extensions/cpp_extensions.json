@@ -1,0 +1,29 @@
+{
+  "common": {
+    "language": "c++",
+    "extra_compile_args": ["-std=c++20"]
+  },
+  "extensions": [
+    {
+      "name": "lucid._backend._C.tokenizers.core",
+      "sources": [
+        "lucid/_backend/_C/tokenizers/base.cpp",
+        "lucid/_backend/_C/tokenizers/wordpiece.cpp",
+        "lucid/_backend/_C/tokenizers/bindings.cpp"
+      ]
+    },
+    {
+      "name": "lucid._backend._C.tokenizers.bert.core",
+      "sources": [
+        "lucid/_backend/_C/tokenizers/base.cpp",
+        "lucid/_backend/_C/tokenizers/wordpiece.cpp",
+        "lucid/_backend/_C/tokenizers/bert/bert.cpp",
+        "lucid/_backend/_C/tokenizers/bert/bindings.cpp"
+      ]
+    }
+  ],
+  "stub_modules": [
+    "lucid._backend._C.tokenizers.core",
+    "lucid._backend._C.tokenizers.bert.core"
+  ]
+}

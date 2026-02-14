@@ -15,7 +15,7 @@
 
 namespace lucid::tokenizers::fast {
 
-    class WordPieceTokenizer final : public TokenizerBase {
+    class WordPieceTokenizer : public TokenizerBase {
         public:
             using Vocab = std::unordered_map<std::string, int32_t>;
 

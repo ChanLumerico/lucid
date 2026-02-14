@@ -6,6 +6,8 @@ from typing import Any, Iterable
 
 from lucid.data.tokenizers import Tokenizer, SpecialTokens
 
+from lucid._backend._C.tokenizers.core import _C_WordPieceTokenizer
+
 
 __all__ = ["WordPieceTokenizer", "WordPieceTokenizerFast"]
 
@@ -420,7 +422,6 @@ class WordPieceTokenizer(Tokenizer):
         return "".join(out)
 
 
-@Tokenizer.cpp_backend
 class WordPieceTokenizerFast(Tokenizer):
     def __init__(
         self,
@@ -447,8 +448,14 @@ class WordPieceTokenizerFast(Tokenizer):
         self.max_input_chars_per_word = max_input_chars_per_word
         self.clean_text = clean_text
 
-        backend_cls = self._resolve_cpp_cls(cls=type(self))
-        self._backend = backend_cls(
+        if _C_WordPieceTokenizer is None:
+            raise ImportError(
+                "Cannot import native C++ WordPiece backend "
+                "'lucid._backend._C.tokenizers.core'. "
+                "Build extensions first."
+            )
+
+        self._backend = _C_WordPieceTokenizer(
             vocab=vocab,
             vocab_file=Path(vocab_file) if vocab_file is not None else None,
             unk_token=self.unk_token,

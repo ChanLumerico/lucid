@@ -8,10 +8,10 @@ namespace py = pybind11;
 
 using lucid::tokenizers::fast::WordPieceTokenizer;
 
-PYBIND11_MODULE(_C, m) {
+PYBIND11_MODULE(core, m) {
     m.doc() = "Lucid tokenizers C++ bindings";
 
-    py::class_<WordPieceTokenizer>(m, "WordPieceTokenizer")
+    py::class_<WordPieceTokenizer>(m, "_C_WordPieceTokenizer")
         .def(
             py::init<
                 std::optional<WordPieceTokenizer::Vocab>,
