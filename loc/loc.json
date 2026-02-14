@@ -66,16 +66,16 @@
  {
   "language": "TOML",
   "files": 1,
-  "lines": 8,
-  "blanks": 1,
+  "lines": 7,
+  "blanks": 0,
   "comments": 0,
   "linesOfCode": 7
  },
  {
   "language": "Total",
   "files": 174,
-  "lines": 45356,
-  "blanks": 8334,
+  "lines": 45355,
+  "blanks": 8333,
   "comments": 38,
   "linesOfCode": 36984
  }
