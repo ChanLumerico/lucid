@@ -6,7 +6,7 @@
 
 namespace py = pybind11;
 
-using lucid::tokenizers::C::WordPieceTokenizer;
+using lucid::tokenizers::fast::WordPieceTokenizer;
 
 PYBIND11_MODULE(_C, m) {
     m.doc() = "Lucid tokenizers C++ bindings";
