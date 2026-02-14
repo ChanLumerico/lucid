@@ -4,7 +4,7 @@ on:
 jobs:
   pypi-publish:
     name: Upload release to PyPI
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     environment: release
     permissions:
       id-token: write
@@ -15,7 +15,7 @@ jobs:
       # Extract the commit message
       - name: Get commit message
         id: get-commit-message
-        run: echo "::set-output name=COMMIT_MESSAGE::$(git log -1 --pretty=%B)"
+        run: echo "COMMIT_MESSAGE=$(git log -1 --pretty=%B)" >> "$GITHUB_OUTPUT"
 
       # Extract version from commit message
       - name: Extract version from commit message
@@ -24,7 +24,7 @@ jobs:
           COMMIT_MESSAGE=${{ steps.get-commit-message.outputs.COMMIT_MESSAGE }}
           if [[ "$COMMIT_MESSAGE" =~ release-([0-9]+\.[0-9]+\.[0-9]+) ]]; then
             VERSION="${BASH_REMATCH[1]}"
-            echo "::set-output name=VERSION::$VERSION"
+            echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           else
             echo "Commit message does not match the release pattern. Exiting."
             exit 1
@@ -46,6 +46,8 @@ jobs:
           sed -i "s/{{VERSION_PLACEHOLDER}}/$VERSION/g" setup.py
 
       - name: Build the package
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
         run: |
           python setup.py sdist bdist_wheel
 
