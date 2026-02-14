@@ -1,5 +1,5 @@
-tokenizers.WordPieceTokenizerFast
-=================================
+WordPieceTokenizerFast
+======================
 |cpp-badge|
 
 .. autoclass:: lucid.data.tokenizers.WordPieceTokenizerFast

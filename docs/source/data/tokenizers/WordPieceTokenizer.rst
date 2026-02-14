@@ -1,5 +1,5 @@
-tokenizers.WordPieceTokenizer
-=============================
+WordPieceTokenizer
+==================
 
 .. autoclass:: lucid.data.tokenizers.WordPieceTokenizer
 

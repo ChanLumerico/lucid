@@ -5,7 +5,8 @@ Tokenizers
     :maxdepth: 1
     :hidden:
 
-    Tokenizer Base <Tokenizer.rst>
+    Tokenizer.rst
+    
     WordPieceTokenizer <WordPieceTokenizer.rst>
     WordPieceTokenizerFast <WordPieceTokenizerFast.rst>
 

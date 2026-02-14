@@ -35,9 +35,37 @@ jobs:
 
           python - <<'PY'
           import json
+
           path = "loc/loc.json"
           data = json.load(open(path, "r", encoding="utf-8"))
-          total = next(x for x in data if x.get("language") == "Total")
+
+          # Keep only py/cpp/hpp-like language groups from CodeTabs output.
+          allowed_languages = {
+              "Python",
+              "C++",
+              "C/C++ Header",
+              "C Header",
+              "C++ Header",
+          }
+
+          filtered = [
+              x for x in data
+              if x.get("language") in allowed_languages
+          ]
+
+          total = {
+              "language": "Total",
+              "files": sum(int(x.get("files", 0)) for x in filtered),
+              "lines": sum(int(x.get("lines", 0)) for x in filtered),
+              "linesOfCode": sum(int(x.get("linesOfCode", 0)) for x in filtered),
+              "blanks": sum(int(x.get("blanks", 0)) for x in filtered),
+              "comments": sum(int(x.get("comments", 0)) for x in filtered),
+          }
+
+          # Overwrite loc.json with filtered language rows + recomputed Total.
+          filtered_out = filtered + [total]
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(filtered_out, f)
 
           out = {
               "lines": total["lines"],
@@ -50,7 +78,8 @@ jobs:
           with open("loc/loc_badge.json", "w", encoding="utf-8") as f:
               json.dump(out, f)
 
-          print("Total:", total)
+          print("Filtered languages:", [x.get("language") for x in filtered])
+          print("Total(py/cpp/hpp):", total)
           print("Badge:", out)
           PY
 
