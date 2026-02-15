@@ -8,16 +8,6 @@
 #include <utility>
 
 namespace lucid::tokenizers::fast {
-
-    std::size_t WordPieceTokenizer::PairHash::operator()(
-        const std::pair<std::string, std::string>& p
-    ) const noexcept {
-        const std::size_t h1 = std::hash<std::string>{}(p.first);
-        const std::size_t h2 = std::hash<std::string>{}(p.second);
-
-        return hash_combine(h1, h2);
-    }
-
     WordPieceTokenizer::WordPieceTokenizer(
         std::optional<Vocab> vocab,
         std::optional<std::filesystem::path> vocab_file,
@@ -64,9 +54,9 @@ namespace lucid::tokenizers::fast {
 
     std::vector<std::string> WordPieceTokenizer::tokenize(std::string_view text) const {
         std::string input(text);
-        if (clean_text_) input = clean_text_impl(input);
+        if (clean_text_) input = detail::clean_text(input);
 
-        const auto basic_tokens = basic_tokenize(input);
+        const auto basic_tokens = detail::basic_tokenize(input, lowercase_);
         std::vector<std::string> out;
 
         for(const auto& tok : basic_tokens) {
@@ -259,31 +249,6 @@ namespace lucid::tokenizers::fast {
         return tok.empty() ? unk_token_ : tok;
     }
 
-    std::vector<std::string> WordPieceTokenizer::basic_tokenize(
-        const std::string& text
-    ) const {
-        std::vector<std::string> out;
-        std::string current;
-
-        auto flush_current = [&]() {
-            if (current.empty()) return;
-            if (lowercase_) {
-                for (char& ch : current) {
-                    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-                }
-            }
-            const auto split = split_on_punctuation(current);
-            out.insert(out.end(), split.begin(), split.end());
-            current.clear();
-        };
-        for (char ch : text) {
-            if (is_whitespace(ch)) flush_current();
-            else current.push_back(ch);
-        }
-        flush_current();
-        return out;
-    }
-
     std::vector<std::string> WordPieceTokenizer::wordpiece_tokenize(
         const std::string& token
     ) const {
@@ -311,62 +276,6 @@ namespace lucid::tokenizers::fast {
 
             out.push_back(std::move(best));
             start = end;
-        }
-        return out;
-    }
-
-    std::vector<std::string> WordPieceTokenizer::split_on_punctuation(
-        const std::string& token
-    ) {
-        std::vector<std::string> out;
-        std::string current;
-
-        for (char ch : token) {
-            if (is_punctuation(ch)) {
-                if (!current.empty()) {
-                    out.push_back(std::move(current));
-                    current.clear();
-                }
-                out.emplace_back(1, ch);
-            } else {
-                current.push_back(ch);
-            }
-        }
-        if (!current.empty()) out.push_back(std::move(current));
-        return out;
-    }
-
-    bool WordPieceTokenizer::is_whitespace(char ch) {
-        return std::isspace(static_cast<unsigned char>(ch)) != 0;
-    }
-
-    bool WordPieceTokenizer::is_control(char ch) {
-        if (ch == '\t' || ch == '\n' || ch == '\r') return false;
-        return std::iscntrl(static_cast<unsigned char>(ch)) != 0;
-    }
-
-    bool WordPieceTokenizer::is_punctuation(char ch) {
-        const unsigned char uch = static_cast<unsigned char>(ch);
-        const int cp = static_cast<int>(uch);
-        if (
-            (33 <= cp && cp <= 47) 
-            || (58 <= cp && cp <= 64) 
-            || (91 <= cp && cp <= 96) 
-            || (123 <= cp && cp <= 126)
-        ) return true;
-        return std::ispunct(uch) != 0;
-    }
-
-    std::string WordPieceTokenizer::clean_text_impl(const std::string& text) {
-        std::string out;
-        out.reserve(text.size());
-
-        for (unsigned char uch : text) {
-            const char ch = static_cast<char>(uch);
-            if (uch == 0 || is_control(ch)) continue;
-
-            if (is_whitespace(ch)) out.push_back(' ');
-            else out.push_back(ch);
         }
         return out;
     }
@@ -453,9 +362,9 @@ namespace lucid::tokenizers::fast {
         std::unordered_map<std::string, std::size_t> word_freq;
         for (const auto& raw_text: texts) {
             std::string text = raw_text;
-            if (clean_text_) text = clean_text_impl(text);
+            if (clean_text_) text = detail::clean_text(text);
 
-            const auto tokens = basic_tokenize(text);
+            const auto tokens = detail::basic_tokenize(text, lowercase_);
             for (const auto& token : tokens) {
                 if (!token.empty()) ++word_freq[token];
             }
@@ -495,7 +404,7 @@ namespace lucid::tokenizers::fast {
         const std::unordered_map<std::string, std::size_t>& word_freq
     ) const {
         std::unordered_map<std::string, std::size_t> token_freq;
-        std::unordered_map<std::pair<std::string, std::string>, std::size_t, PairHash> pair_freq;
+        std::unordered_map<detail::TokenPair, std::size_t, detail::TokenPairHash> pair_freq;
 
         for (const auto& [word, split] : word_splits) {
             auto wf_it = word_freq.find(word);

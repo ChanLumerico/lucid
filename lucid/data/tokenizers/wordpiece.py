@@ -1,4 +1,3 @@
-import unicodedata
 import re
 
 from collections import Counter
@@ -6,6 +5,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from lucid.data.tokenizers import Tokenizer, SpecialTokens
+from lucid.data.tokenizers._util import basic_tokenize, clean_text
 
 from lucid._backend._C.tokenizers.core import _C_WordPieceTokenizer
 
@@ -93,9 +93,9 @@ class WordPieceTokenizer(Tokenizer):
 
     def tokenize(self, text: str) -> list[str]:
         if self.clean_text:
-            text = self._clean_text(text)
+            text = clean_text(text)
 
-        basic_tokens = self._basic_tokenize(text)
+        basic_tokens = basic_tokenize(text, lowercase=self.lowercase)
         tokens: list[str] = []
         for token in basic_tokens:
             tokens.extend(self._wordpiece_tokenize(token))
@@ -233,8 +233,8 @@ class WordPieceTokenizer(Tokenizer):
         word_freq: Counter[str] = Counter()
         for text in texts:
             if self.clean_text:
-                text = self._clean_text(text)
-            for token in self._basic_tokenize(text):
+                text = clean_text(text)
+            for token in basic_tokenize(text, lowercase=self.lowercase):
                 if token:
                     word_freq[token] += 1
         return word_freq
@@ -335,30 +335,6 @@ class WordPieceTokenizer(Tokenizer):
         token = self.ids_to_tokens[idx]
         return token if token else (self.unk_token or SpecialTokens.UNK.value)
 
-    def _basic_tokenize(self, text: str) -> list[str]:
-        tokens: list[str] = []
-        for token in text.strip().split():
-            if self.lowercase:
-                token = token.lower()
-            tokens.extend(self._split_on_punctuation(token))
-        return tokens
-
-    @staticmethod
-    def _split_on_punctuation(token: str) -> list[str]:
-        out: list[str] = []
-        current: list[str] = []
-        for ch in token:
-            if WordPieceTokenizer._is_punctuation(ch):
-                if current:
-                    out.append("".join(current))
-                    current = []
-                out.append(ch)
-            else:
-                current.append(ch)
-        if current:
-            out.append("".join(current))
-        return out
-
     def _wordpiece_tokenize(self, token: str) -> list[str]:
         if len(token) > self.max_input_chars_per_word:
             return [self.unk_token or SpecialTokens.UNK.value]
@@ -386,43 +362,6 @@ class WordPieceTokenizer(Tokenizer):
             start = end
 
         return sub_tokens
-
-    @staticmethod
-    def _is_whitespace(ch: str) -> bool:
-        if ch in (" ", "\t", "\n", "\r"):
-            return True
-        return unicodedata.category(ch) == "Zs"
-
-    @staticmethod
-    def _is_control(ch: str) -> bool:
-        if ch in ("\t", "\n", "\r"):
-            return False
-        return unicodedata.category(ch) in {"Cc", "Cf"}
-
-    @staticmethod
-    def _is_punctuation(ch: str) -> bool:
-        cp = ord(ch)
-        if (
-            (33 <= cp <= 47)
-            or (58 <= cp <= 64)
-            or (91 <= cp <= 96)
-            or (123 <= cp <= 126)
-        ):
-            return True
-        return unicodedata.category(ch).startswith("P")
-
-    @staticmethod
-    def _clean_text(text: str) -> str:
-        out: list[str] = []
-        for ch in text:
-            cp = ord(ch)
-            if cp in (0, 0xFFFD) or WordPieceTokenizer._is_control(ch):
-                continue
-            if WordPieceTokenizer._is_whitespace(ch):
-                out.append(" ")
-            else:
-                out.append(ch)
-        return "".join(out)
 
 
 class WordPieceTokenizerFast(Tokenizer):

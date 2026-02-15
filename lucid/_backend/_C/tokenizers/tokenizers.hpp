@@ -14,6 +14,30 @@
 
 
 namespace lucid::tokenizers::fast {
+    namespace detail {
+        using TokenPair = std::pair<std::string, std::string>;
+
+        inline std::size_t hash_combine(std::size_t h1, std::size_t h2) noexcept {
+            constexpr std::size_t kMagic = 0x9e3779b97f4a7c15ULL;
+            return h1 ^ (h2 + kMagic + (h1 << 6) + (h1 >> 2));
+        }
+
+        struct TokenPairHash {
+            std::size_t operator()(const TokenPair& p) const noexcept {
+                const auto h1 = std::hash<std::string>{}(p.first);
+                const auto h2 = std::hash<std::string>{}(p.second);
+                return hash_combine(h1, h2);
+            }
+        };
+
+        bool is_whitespace(char ch);
+        bool is_control(char ch);
+        bool is_punctuation(char ch);
+        
+        std::string clean_text(std::string_view text);
+        std::vector<std::string> split_on_punctuation(std::string_view token);
+        std::vector<std::string> basic_tokenize(std::string_view text, bool lowercase);
+    }
 
     class WordPieceTokenizer : public TokenizerBase {
         public:
@@ -60,17 +84,6 @@ namespace lucid::tokenizers::fast {
             ) override;
         
         private:
-            struct PairHash {
-                std::size_t operator()(
-                    const std::pair<std::string, std::string>& p
-                ) const noexcept;
-            };
-
-            static constexpr std::size_t kMagic = 0x9e3779b97f4a7c15ULL;
-            static std::size_t hash_combine(std::size_t h1, std::size_t h2) noexcept {
-                return h1 ^ (h2 + kMagic + (h1 << 6) + (h1 >> 2));
-            }
-
             static Vocab load_vocab(const std::filesystem::path& vocab_file);
             void ensure_special_tokens();
             void rebuild_id_to_tokens();
@@ -78,14 +91,7 @@ namespace lucid::tokenizers::fast {
             int32_t unk_id() const;
             std::string id_to_token_impl(int32_t id) const;
             
-            std::vector<std::string> basic_tokenize(const std::string& text) const;
             std::vector<std::string> wordpiece_tokenize(const std::string& token) const;
-            static std::vector<std::string> split_on_punctuation(const std::string& token);
-
-            static bool is_whitespace(char ch);
-            static bool is_control(char ch);
-            static bool is_punctuation(char ch);
-            static std::string clean_text_impl(const std::string& text);
 
             Vocab train_vocab(
                 const std::vector<std::string>& texts,

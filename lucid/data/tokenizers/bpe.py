@@ -1,11 +1,11 @@
 import re
-import unicodedata
 
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
 from lucid.data.tokenizers import Tokenizer, SpecialTokens
+from lucid.data.tokenizers._util import basic_tokenize, clean_text
 
 
 __all__ = ["BPETokenizer"]
@@ -153,8 +153,8 @@ class BPETokenizer(Tokenizer):
 
     def tokenize(self, text: str) -> list[str]:
         if self.clean_text:
-            text = self._clean_text(text)
-        basic_tokens = self._basic_tokenize(text)
+            text = clean_text(text)
+        basic_tokens = basic_tokenize(text, lowercase=self.lowercase)
 
         out: list[str] = []
         for tok in basic_tokens:
@@ -175,7 +175,13 @@ class BPETokenizer(Tokenizer):
     def convert_tokens_to_string(self, tokens: list[str]) -> str:
         text = "".join(tokens)
         text = text.replace(self.end_of_word_suffix, " ")
+        for punct in [".", ",", "!", "?", ";", ":", "%", ")", "]", "}"]:
+            text = text.replace(f" {punct}", punct)
+        for punct in ["(", "[", "{"]:
+            text = text.replace(f"{punct} ", punct)
+
         text = re.sub(r"\s+", " ", text).strip()
+        text = re.sub(r"([.!?])\1+", r"\1", text)
 
         return text
 
@@ -209,10 +215,18 @@ class BPETokenizer(Tokenizer):
     ) -> BPETokenizer:
         path = Path(pretrained_model_name_or_path)
         if path.is_dir():
-            vocab_file = path / "vocab.json"
-            merges_file = path / "merges.txt"
+            base_dir = path
+            vocab_file = base_dir / "vocab.json"
+            merges_file = base_dir / "merges.txt"
         else:
-            raise ValueError("Expected directory for BPE pretrained tokenizer.")
+            base_dir = path.parent
+            vocab_file = path
+            if vocab_file.name != "vocab.json":
+                raise ValueError(
+                    "Expected a directory containing 'vocab.json'/'merges.txt' "
+                    "or a direct path to 'vocab.json'."
+                )
+            merges_file = base_dir / "merges.txt"
 
         if not vocab_file.exists():
             raise FileNotFoundError(f"Cannot find vocabulary file: {vocab_file}")
@@ -228,7 +242,7 @@ class BPETokenizer(Tokenizer):
             "clean_text",
             "end_of_word_suffix",
         }
-        init_kwargs = cls._load_tokenizer_config(path, allowed_keys=allowed)
+        init_kwargs = cls._load_tokenizer_config(base_dir, allowed_keys=allowed)
         init_kwargs.update(kwargs)
 
         return cls(vocab_file=vocab_file, merges_file=merges_file, **init_kwargs)
@@ -274,31 +288,6 @@ class BPETokenizer(Tokenizer):
         t = self.ids_to_tokens[idx]
         return t if t else (self.unk_token or SpecialTokens.UNK.value)
 
-    def _basic_tokenize(self, text: str) -> list[str]:
-        out: list[str] = []
-        for tok in text.strip().split():
-            if self.lowercase:
-                tok = tok.lower()
-            out.extend(self._split_on_punctuation(tok))
-        return out
-
-    @staticmethod
-    def _split_on_punctuation(token: str) -> list[str]:
-        out: list[str] = []
-        cur: list[str] = []
-        for ch in token:
-            if BPETokenizer._is_punctuation(ch):
-                if cur:
-                    out.append("".join(cur))
-                    cur = []
-                out.append(ch)
-            else:
-                cur.append(ch)
-
-        if cur:
-            out.append("".join(cur))
-        return out
-
     def _bpe_tokenize(self, token: str) -> list[str]:
         if not token:
             return []
@@ -336,46 +325,8 @@ class BPETokenizer(Tokenizer):
         freq: Counter[str] = Counter()
         for text in texts:
             if self.clean_text:
-                text = self._clean_text(text)
-            for tok in self._basic_tokenize(text):
+                text = clean_text(text)
+            for tok in basic_tokenize(text, lowercase=self.lowercase):
                 if tok:
                     freq[tok] += 1
         return freq
-
-    @staticmethod
-    def _is_whitespace(ch: str) -> bool:
-        if ch in (" ", "\t", "\n", "\r"):
-            return True
-        return unicodedata.category(ch) == "Zs"
-
-    @staticmethod
-    def _is_control(ch: str) -> bool:
-        if ch in ("\t", "\n", "\r"):
-            return False
-        return unicodedata.category(ch) in {"Cc", "Cf"}
-
-    @staticmethod
-    def _is_punctuation(ch: str) -> bool:
-        cp = ord(ch)
-        if (
-            (33 <= cp <= 47)
-            or (58 <= cp <= 64)
-            or (91 <= cp <= 96)
-            or (123 <= cp <= 126)
-        ):
-            return True
-        return unicodedata.category(ch).startswith("P")
-
-    @staticmethod
-    def _clean_text(text: str) -> str:
-        out: list[str] = []
-        for ch in text:
-            cp = ord(ch)
-            if cp in (0, 0xFFFD) or BPETokenizer._is_control(ch):
-                continue
-            if BPETokenizer._is_whitespace(ch):
-                out.append(" ")
-            else:
-                out.append(ch)
-
-        return "".join(out)
