@@ -36,3 +36,6 @@ fi
 if ! $skip_make; then
   make html
 fi
+
+cd ../
+rm -rf build/
