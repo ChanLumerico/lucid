@@ -3,12 +3,110 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <iterator>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
 
 namespace lucid::tokenizers::fast {
+    
+    namespace {
+        bool parse_hex4(const std::string& s, std::size_t pos, uint32_t& out) {
+            if (pos + 4 > s.size()) return false;
+            uint32_t value = 0;
+
+            for (std::size_t i = 0; i < 4; ++i) {
+                const char c = s[pos + i];
+                value <<= 4;
+
+                if (c >= '0' && c <= '9') value |= static_cast<uint32_t>(c - '0');
+                else if (c >= 'a' && c <= 'f') value |= static_cast<uint32_t>(c - 'a' + 10);
+                else if (c >= 'A' && c <= 'F') value |= static_cast<uint32_t>(c - 'A' + 10);
+                else return false;
+            }
+            out = value;
+            return true;
+        }
+
+        void append_utf8(std::string& out, uint32_t cp) {
+            if (cp <= 0x7F) {
+                out.push_back(static_cast<char>(cp));
+
+            } else if (cp <= 0x7FF) {
+                out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+                out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+
+            } else if (cp <= 0xFFFF) {
+                out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+                out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+                out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+
+            } else {
+                out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+                out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+                out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+                out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            }
+        }
+
+        std::string unescape_json_string(const std::string& s) {
+            std::string out;
+            out.reserve(s.size());
+
+            for (std::size_t i = 0; i < s.size(); ++i) {
+                const char ch = s[i];
+                if (ch != '\\') {
+                    out.push_back(ch);
+                    continue;
+                }
+                if (i + 1 >= s.size()) break;
+
+                const char esc = s[++i];
+                switch (esc) {
+                    case '"': out.push_back('"'); break;
+                    case '\\': out.push_back('\\'); break;
+                    case '/': out.push_back('/'); break;
+                    case 'b': out.push_back('\b'); break;
+                    case 'f': out.push_back('\f'); break;
+                    case 'n': out.push_back('\n'); break;
+                    case 'r': out.push_back('\r'); break;
+                    case 't': out.push_back('\t'); break;
+                    case 'u': {
+                        uint32_t cp1 = 0;
+                        if (!parse_hex4(s, i + 1, cp1)) {
+                            out.push_back('u');
+                            break;
+                        }
+                        i += 4;
+                        if (cp1 >= 0xD800 && cp1 <= 0xDBFF) {
+                            if (
+                                i + 6 < s.size()
+                                && s[i + 1] == '\\'
+                                && s[i + 2] == 'u'
+                            ) {
+                                uint32_t cp2 = 0;
+                                if (parse_hex4(s, i + 3, cp2) && cp2 >= 0xDC00 && cp2 <= 0xDFFF) {
+                                    const uint32_t hi = cp1 - 0xD800;
+                                    const uint32_t lo = cp2 - 0xDC00;
+                                    const uint32_t full = 0x10000 + ((hi << 10) | lo);
+                                    append_utf8(out, full);
+                                    i += 6;
+                                    break;
+                                }
+                            }
+                        }
+                        append_utf8(out, cp1);
+                        break;
+                    }
+                    default:
+                        out.push_back(esc);
+                        break;
+                }
+            }
+            return out;
+        }
+    }
     
     BPETokenizer::BPETokenizer(
         std::optional<Vocab> vocab,
@@ -155,6 +253,14 @@ namespace lucid::tokenizers::fast {
         return text;
     }
 
+    const BPETokenizer::Vocab& BPETokenizer::vocab() const noexcept {
+        return vocab_;
+    }
+
+    const std::vector<BPETokenizer::Merge>& BPETokenizer::merges() const noexcept {
+        return merges_;
+    }
+
     BPETokenizer& BPETokenizer::fit(
         const std::vector<std::string>& texts,
         std::size_t target_vocab_size,
@@ -273,14 +379,24 @@ namespace lucid::tokenizers::fast {
                 "Failed to open vocabulary file: " + vocab_file.string()
             );
         }
+        const std::string content(
+            (std::istreambuf_iterator<char>(fin)),
+            std::istreambuf_iterator<char>()
+        );
+        if (content.empty()) {
+            throw std::runtime_error(
+                "Parsed empty vocabulary from file: " + vocab_file.string()
+            );
+        }
+
         Vocab vocab;
-        std::string line;
-        std::regex kv(R"kv(^\s*"((?:\\.|[^"\\])*)"\s*:\s*([0-9]+)\s*,?\s*$)kv");
-
-        while (std::getline(fin, line)) {
-            std::smatch m;
-            if (!std::regex_match(line, m, kv)) continue;
-
+        const std::regex kv(R"kv("((?:\\.|[^"\\])*)"\s*:\s*([0-9]+))kv");
+        for (
+            std::sregex_iterator it(content.begin(), content.end(), kv), end;
+            it != end;
+            ++it
+        ) {
+            const auto& m = *it;
             const std::string token = unescape_json_string(m[1].str());
             const int32_t id = static_cast<int32_t>(std::stoll(m[2].str()));
             vocab[token] = id;
@@ -297,78 +413,171 @@ namespace lucid::tokenizers::fast {
     std::vector<BPETokenizer::Merge> BPETokenizer::load_merges(
         const std::filesystem::path& merges_file
     ) {
-        //    
+        std::ifstream fin(merges_file);
+        if (!fin.is_open()) {
+            throw std::runtime_error(
+                "Failed to open merges file: " + merges_file.string()
+            );
+        }
+        std::vector<Merge> merges;
+        std::string line;
+        while (std::getline(fin, line)) {
+            if (line.empty()) continue;
+            if (!line.empty() && line[0] == '#') continue;
+
+            std::istringstream iss(line);
+            std::string left;
+            std::string right;
+
+            if (!(iss >> left >> right)) continue;
+            merges.emplace_back(std::move(left), std::move(right));
+        }
+        return merges;
     }
 
     void BPETokenizer::ensure_special_tokens() {
-        //
+        const auto specials = all_special_tokens();
+        int32_t next_id = 0;
+        for (const auto& [token, id] : vocab_) {
+            (void)token;
+            if (id >= next_id) next_id = id + 1;
+        }
+        for (const auto& token : specials) {
+            if (vocab_.find(token) == vocab_.end()) {
+                vocab_[token] = next_id++;
+            }
+        }
     }
 
     void BPETokenizer::rebuild_id_to_tokens() {
-        //
+        int32_t max_id = -1;
+        for (const auto& [token, id] : vocab_) {
+            (void)token;
+            if (id < 0) {
+                throw std::runtime_error(
+                    "Vocabulary indices must be non-negative integers."
+                );
+            }
+            if (id > max_id) max_id = id;
+        }
+
+        if (max_id < 0) {
+            ids_to_tokens_.clear();
+            return;
+        }
+
+        ids_to_tokens_.assign(static_cast<std::size_t>(max_id) + 1, "");
+        for (const auto& [token, id] : vocab_) {
+            auto& slot = ids_to_tokens_[static_cast<std::size_t>(id)];
+            if (!slot.empty()) {
+                throw std::runtime_error(
+                    "Duplicate token index detected: " + std::to_string(id)
+                );
+            }
+            slot = token;
+        }
+        for (auto& token : ids_to_tokens_) {
+            if (token.empty()) token = unk_token_;
+        }
     }
 
     void BPETokenizer::rebuild_merge_ranks() {
-        //
+        merge_ranks_.clear();
+        merge_ranks_.reserve(merges_.size());
+        for(std::size_t i = 0; i < merges_.size(); ++i){
+            merge_ranks_[merges_[i]] = i;
+        }
     }
 
     int32_t BPETokenizer::unk_id() const {
-        //
+        const auto it = vocab_.find(unk_token_);
+        if (it == vocab_.end()) {
+            throw std::runtime_error(
+                "Unknown token '" + unk_token_ + "' is not in vocabulary."
+            );
+        }
+        return it->second;
     }
 
     std::string BPETokenizer::id_to_token_impl(int32_t id) const {
-        //
+        if (id < 0 || static_cast<std::size_t>(id) >= ids_to_tokens_.size()) {
+            return unk_token_;
+        }
+        const auto& tok = ids_to_tokens_[static_cast<std::size_t>(id)];
+        return tok.empty() ? unk_token_ : tok;
     }
 
     std::vector<std::string> BPETokenizer::bpe_tokenize(
         const std::string& token
     ) const {
-        //    
+        if (token.empty()) return {};
+
+        std::vector<std::string> symbols;
+        symbols.reserve(token.size());
+
+        for (char ch : token) symbols.emplace_back(1, ch);
+        symbols.back() += end_of_word_suffix_;
+
+        while (symbols.size() > 1) {
+            bool found = false;
+            std::size_t best_rank = static_cast<std::size_t>(-1);
+            Merge best_pair;
+
+            for (std::size_t i = 0; i < symbols.size() - 1; ++i) {
+                Merge p{symbols[i], symbols[i + 1]};
+                auto it = merge_ranks_.find(p);
+                if (it == merge_ranks_.end()) continue;
+                
+                if (!found || it->second < best_rank) {
+                    found = true;
+                    best_rank = it->second;
+                    best_pair = std::move(p);
+                }
+            }
+
+            if (!found) break;
+            symbols = merge_word_once(symbols, best_pair);
+        }
+        return symbols;
     }
 
     std::unordered_map<std::string, std::size_t> BPETokenizer::build_word_frequency(
         const std::vector<std::string>& texts
     ) const {
-        //
+        std::unordered_map<std::string, std::size_t> word_freq;
+        for (const auto& raw_text : texts) {
+            std::string text = raw_text;
+            if (clean_text_) text = detail::clean_text(text);
+
+            const auto tokens = detail::basic_tokenize(text, lowercase_);
+            for (const auto& tok : tokens) {
+                if (!tok.empty()) ++word_freq[tok];
+            }
+        }
+        return word_freq;
     }
 
     std::vector<std::string> BPETokenizer::merge_word_once(
         const std::vector<std::string>& symbols,
         const Merge& pair
     ) {
-        //
-    }
+        std::vector<std::string> out;
+        out.reserve(symbols.size());
 
-    namespace {
-
-        std::string unescape_json_string(const std::string& s) {
-            std::string out;
-            out.reserve(s.size());
-
-            for (std::size_t i = 0; i < s.size(); ++i) {
-                const char ch = s[i];
-                if (ch != '\\') {
-                    out.push_back(ch);
-                    continue;
-                }
-                if (i + 1 >= s.size()) break;
-
-                const char esc = s[++i];
-                switch (esc) {
-                    case '"': out.push_back('"'); break;
-                    case '\\': out.push_back('\\'); break;
-                    case '/': out.push_back('/'); break;
-                    case 'b': out.push_back('\b'); break;
-                    case 'f': out.push_back('\f'); break;
-                    case 'n': out.push_back('\n'); break;
-                    case 'r': out.push_back('\r'); break;
-                    case 't': out.push_back('\t'); break;
-                    default:
-                        out.push_back(esc);
-                        break;
-                }
+        std::size_t i = 0;
+        while (i < symbols.size()) {
+            if (
+                i < symbols.size() - 1
+                && symbols[i] == pair.first
+                && symbols[i + 1] == pair.second
+            ) {
+                out.push_back(pair.first + pair.second);
+                i += 2;
+            } else {
+                out.push_back(symbols[i]);
+                ++i;
             }
-            return out;
         }
+        return out;
     }
 }

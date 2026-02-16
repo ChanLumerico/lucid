@@ -7,6 +7,7 @@
 namespace py = pybind11;
 
 using lucid::tokenizers::fast::WordPieceTokenizer;
+using lucid::tokenizers::fast::BPETokenizer;
 
 PYBIND11_MODULE(core, m) {
     m.doc() = "Lucid tokenizers C++ bindings";
@@ -49,6 +50,64 @@ PYBIND11_MODULE(core, m) {
                const std::vector<std::string>& texts,
                std::size_t vocab_size,
                std::size_t min_frequency) -> WordPieceTokenizer& {
+                return self.fit(texts, vocab_size, min_frequency);
+            },
+            py::arg("texts"),
+            py::arg("vocab_size"),
+            py::arg("min_frequency") = 2,
+            py::return_value_policy::reference_internal
+        );
+
+    py::class_<BPETokenizer>(m, "_C_BPETokenizer")
+        .def(
+            py::init<
+                std::optional<BPETokenizer::Vocab>,
+                std::optional<std::vector<BPETokenizer::Merge>>,
+                std::optional<std::filesystem::path>,
+                std::optional<std::filesystem::path>,
+                std::string,
+                std::string,
+                std::optional<std::string>,
+                std::optional<std::string>,
+                bool,
+                bool,
+                std::string
+            >(),
+            py::arg("vocab") = std::nullopt,
+            py::arg("merges") = std::nullopt,
+            py::arg("vocab_file") = std::nullopt,
+            py::arg("merges_file") = std::nullopt,
+            py::arg("unk_token") = "[UNK]",
+            py::arg("pad_token") = "[PAD]",
+            py::arg("bos_token") = std::nullopt,
+            py::arg("eos_token") = std::nullopt,
+            py::arg("lowercase") = true,
+            py::arg("clean_text") = true,
+            py::arg("end_of_word_suffix") = "</w>"
+        )
+        .def("vocab_size", &BPETokenizer::vocab_size)
+        .def("tokenize", &BPETokenizer::tokenize, py::arg("text"))
+        .def("convert_token_to_id", &BPETokenizer::convert_token_to_id, py::arg("token"))
+        .def("convert_tokens_to_ids", &BPETokenizer::convert_tokens_to_ids, py::arg("tokens"))
+        .def("convert_id_to_token", &BPETokenizer::convert_id_to_token, py::arg("id"))
+        .def("convert_ids_to_tokens", &BPETokenizer::convert_ids_to_tokens, py::arg("ids"))
+        .def("convert_tokens_to_string", &BPETokenizer::convert_tokens_to_string, py::arg("tokens"))
+        .def(
+            "get_vocab",
+            &BPETokenizer::vocab,
+            py::return_value_policy::copy
+        )
+        .def(
+            "get_merges",
+            &BPETokenizer::merges,
+            py::return_value_policy::copy
+        )
+        .def(
+            "fit",
+            [](BPETokenizer& self,
+               const std::vector<std::string>& texts,
+               std::size_t vocab_size,
+               std::size_t min_frequency) -> BPETokenizer& {
                 return self.fit(texts, vocab_size, min_frequency);
             },
             py::arg("texts"),

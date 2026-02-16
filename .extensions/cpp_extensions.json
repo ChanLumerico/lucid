@@ -10,6 +10,7 @@
         "lucid/_backend/_C/tokenizers/base.cpp",
         "lucid/_backend/_C/tokenizers/util.cpp",
         "lucid/_backend/_C/tokenizers/wordpiece.cpp",
+        "lucid/_backend/_C/tokenizers/bpe.cpp",
         "lucid/_backend/_C/tokenizers/bindings.cpp"
       ]
     },

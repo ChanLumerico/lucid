@@ -172,6 +172,9 @@ namespace lucid::tokenizers::fast {
                 const std::vector<std::string>& tokens
             ) const override;
 
+            const Vocab& vocab() const noexcept;
+            const std::vector<Merge>& merges() const noexcept;
+
             BPETokenizer& fit(
                 const std::vector<std::string>& texts,
                 std::size_t vocab_size,

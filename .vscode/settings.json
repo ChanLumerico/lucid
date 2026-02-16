@@ -1,5 +1,8 @@
 {
     "python.REPL.enableREPLSmartSend": false,
     "remote.autoForwardPortsFallback": 0,
-    "editor.fontSize": 12
+    "editor.fontSize": 12,
+    "python.analysis.ignore": [
+    "**/*.pyi"
+  ]
 }
