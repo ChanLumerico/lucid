@@ -12,7 +12,7 @@ from lucid.nn.functional import (
     _norm,
     _loss,
     _spatial,
-    _util,
+    _utils,
 )
 
 
@@ -449,11 +449,11 @@ def interpolate(
 ) -> Tensor:
     match mode:
         case "bilinear":
-            return _util._interpolate_bilinear(input_, size, align_corners)
+            return _utils._interpolate_bilinear(input_, size, align_corners)
         case "nearest":
-            return _util._interpolate_nearest(input_, size, align_corners)
+            return _utils._interpolate_nearest(input_, size, align_corners)
         case "area":
-            return _util._interpolate_area(input_, size, align_corners)
+            return _utils._interpolate_area(input_, size, align_corners)
         case _:
             raise ValueError("Invalid interpolation type.")
 
@@ -461,7 +461,7 @@ def interpolate(
 def rotate(
     input_: Tensor, angle: float, center: tuple[_Scalar, _Scalar] | None = None
 ) -> Tensor:
-    return _util.rotate(input_, angle, center)
+    return _utils.rotate(input_, angle, center)
 
 
 def embedding(
@@ -471,7 +471,7 @@ def embedding(
     max_norm: float | None = None,
     norm_type: float = 2.0,
 ) -> Tensor:
-    return _util.embedding(input_, weight, padding_idx, max_norm, norm_type)
+    return _utils.embedding(input_, weight, padding_idx, max_norm, norm_type)
 
 
 def scaled_dot_product_attention(
@@ -511,4 +511,4 @@ def grid_sample(
 def one_hot(
     input_: Tensor, num_classes: int = -1, dtype: Numeric | bool | None = None
 ) -> Tensor:
-    return _util.one_hot(input_, num_classes, dtype)
+    return _utils.one_hot(input_, num_classes, dtype)

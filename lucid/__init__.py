@@ -27,7 +27,7 @@ import numpy as np
 
 from lucid._tensor import *
 from lucid._func import *
-from lucid._util import *
+from lucid._utils import *
 
 from lucid._backend.metal import mx
 

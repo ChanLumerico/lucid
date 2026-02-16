@@ -3,7 +3,7 @@ from typing import Literal, Sequence, overload
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar
 
-from lucid._util import func
+from lucid._utils import func
 
 
 # fmt: off

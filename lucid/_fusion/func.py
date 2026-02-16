@@ -2,7 +2,7 @@ from lucid._tensor.tensor import Tensor
 from lucid._backend.core import _GradType
 
 from lucid._func import ufunc
-from lucid._util import func as util_func
+from lucid._utils import func as utils_func
 
 from .base import FusedBackwardOp
 
@@ -61,20 +61,20 @@ class DoubleMT(_IdentityFusion):
 
 
 class DoubleReshape(_IdentityViewFusion):
-    op1 = util_func.reshape
-    op2 = util_func.reshape
+    op1 = utils_func.reshape
+    op2 = utils_func.reshape
 
 
 class _DoubleReshapeImmediate(_IdentityViewFusion):
-    op1 = getattr(util_func, "_reshape_immediate", None)
-    op2 = getattr(util_func, "_reshape_immediate", None)
+    op1 = getattr(utils_func, "_reshape_immediate", None)
+    op2 = getattr(utils_func, "_reshape_immediate", None)
 
 
 class SqueezeUnsqueeze(_IdentityViewFusion):
-    op1 = util_func.squeeze
-    op2 = util_func.unsqueeze
+    op1 = utils_func.squeeze
+    op2 = utils_func.unsqueeze
 
 
 class UnsqueezeSqueeze(_IdentityViewFusion):
-    op1 = util_func.unsqueeze
-    op2 = util_func.squeeze
+    op1 = utils_func.unsqueeze
+    op2 = utils_func.squeeze

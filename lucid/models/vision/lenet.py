@@ -35,9 +35,11 @@ class LeNet(nn.Module, PreTrainedModelMixin):
         )
 
         in_features = clf_in_features
+        n_clf_layers = len(clf_layers)
         for idx, units in enumerate(clf_layers, start=1):
             self.add_module(f"fc{idx}", nn.Linear(in_features, units))
-            self.add_module(f"tanh{idx + 2}", _base_activation())
+            if idx < n_clf_layers:
+                self.add_module(f"tanh{idx + 2}", _base_activation())
             in_features = units
 
     def forward(self, x: Tensor) -> Tensor:
@@ -48,7 +50,8 @@ class LeNet(nn.Module, PreTrainedModelMixin):
         idx = 1
         while hasattr(self, f"fc{idx}"):
             x = getattr(self, f"fc{idx}")(x)
-            x = getattr(self, f"tanh{idx + 2}")(x)
+            if hasattr(self, f"tanh{idx + 2}"):
+                x = getattr(self, f"tanh{idx + 2}")(x)
             idx += 1
 
         return x

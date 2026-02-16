@@ -11,6 +11,8 @@ Tokenizers
     WordPieceTokenizerFast <WordPieceTokenizerFast.rst>
     BPETokenizer <BPETokenizer.rst>
     BPETokenizerFast <BPETokenizerFast.rst>
+    ByteBPETokenizer <ByteBPETokenizer.rst>
+    ByteBPETokenizerFast <ByteBPETokenizerFast.rst>
 
 The `lucid.data.tokenizers` package provides tokenizer interfaces for text pipelines.
 It focuses on converting text into token ids and reconstructing text from ids in a way

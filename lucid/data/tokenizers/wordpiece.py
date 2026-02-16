@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from lucid.data.tokenizers import Tokenizer, SpecialTokens
-from lucid.data.tokenizers._util import basic_tokenize, clean_text
+from lucid.data.tokenizers.utils import basic_tokenize, clean_text
 
 from lucid._backend._C.tokenizers.core import _C_WordPieceTokenizer
 
@@ -436,7 +436,6 @@ class WordPieceTokenizerFast(Tokenizer):
         texts: Iterable[str],
         vocab_size: int,
         min_frequency: int = 2,
-        **_: Any,
     ) -> WordPieceTokenizerFast:
         self._backend.fit(list(texts), int(vocab_size), int(min_frequency))
         return self

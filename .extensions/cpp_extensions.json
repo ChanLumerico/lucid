@@ -13,20 +13,9 @@
         "lucid/_backend/_C/tokenizers/bpe.cpp",
         "lucid/_backend/_C/tokenizers/bindings.cpp"
       ]
-    },
-    {
-      "name": "lucid._backend._C.tokenizers.bert.core",
-      "sources": [
-        "lucid/_backend/_C/tokenizers/base.cpp",
-        "lucid/_backend/_C/tokenizers/util.cpp",
-        "lucid/_backend/_C/tokenizers/wordpiece.cpp",
-        "lucid/_backend/_C/tokenizers/bert/bert.cpp",
-        "lucid/_backend/_C/tokenizers/bert/bindings.cpp"
-      ]
     }
   ],
   "stub_modules": [
-    "lucid._backend._C.tokenizers.core",
-    "lucid._backend._C.tokenizers.bert.core"
+    "lucid._backend._C.tokenizers.core"
   ]
 }

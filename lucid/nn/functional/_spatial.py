@@ -3,7 +3,7 @@ from typing import Literal, Callable
 import lucid
 from lucid._tensor import Tensor
 
-from ._util import _interpolate_nearest
+from ._utils import _interpolate_nearest
 
 
 def affine_grid(

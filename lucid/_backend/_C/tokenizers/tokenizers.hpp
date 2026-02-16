@@ -184,8 +184,11 @@ namespace lucid::tokenizers::fast {
                 std::size_t vocab_size,
                 std::size_t min_frequency
             ) override;
+
+        protected:
+            std::vector<std::string> bpe_tokenize(const std::string& token) const;
         
-        private:
+        protected:
             static Vocab load_vocab(const std::filesystem::path& vocab_file);
             static std::vector<Merge> load_merges(const std::filesystem::path& merges_file);
 
@@ -196,8 +199,6 @@ namespace lucid::tokenizers::fast {
             int32_t unk_id() const;
             std::string id_to_token_impl(int32_t id) const;
 
-            std::vector<std::string> bpe_tokenize(const std::string& token) const;
-
             std::unordered_map<std::string, std::size_t> build_word_frequency(
                 const std::vector<std::string>& texts
             ) const;
@@ -207,7 +208,7 @@ namespace lucid::tokenizers::fast {
                 const Merge& pair
             );
         
-        private:
+        protected:
             Vocab vocab_;
             std::vector<std::string> ids_to_tokens_;
 
@@ -217,5 +218,64 @@ namespace lucid::tokenizers::fast {
             bool lowercase_ = true;
             bool clean_text_ = true;
             std::string end_of_word_suffix_ = "</w>";
+    };
+
+    class ByteBPETokenizer : public BPETokenizer {
+        public:
+            using BPETokenizer::Vocab;
+            using BPETokenizer::Merge;
+
+            ByteBPETokenizer(
+                std::optional<Vocab> vocab = std::nullopt,
+                std::optional<std::vector<Merge>> merges = std::nullopt,
+
+                std::optional<std::filesystem::path> vocab_file = std::nullopt,
+                std::optional<std::filesystem::path> merges_file = std::nullopt,
+
+                std::string unk_token = "[UNK]",
+                std::string pad_token = "[PAD]",
+
+                std::optional<std::string> bos_token = std::nullopt,
+                std::optional<std::string> eos_token = std::nullopt,
+
+                bool lowercase = false,
+                bool clean_text = true,
+                bool add_prefix_space = false,
+
+                std::string end_of_word_suffix = ""
+            );
+            
+            std::vector<std::string> tokenize(std::string_view text) const override;
+            std::string convert_tokens_to_string(
+                const std::vector<std::string>& texts                
+            ) const override;
+
+            ByteBPETokenizer& fit(
+                const std::vector<std::string>& texts,
+                std::size_t vocab_size,
+                std::size_t min_frequency = 2
+            ) override;
+
+            bool add_prefix_space() const noexcept { return add_prefix_space_; }
+        
+        private:
+            static const std::unordered_map<unsigned char, std::string>& byte_encoder_map();
+            static const std::unordered_map<std::string, unsigned char>& byte_decoder_map();
+
+            std::string normalize_text_for_bbpe(std::string_view text) const;
+            std::vector<std::string> split_byte_level_pieces(std::string_view text) const;
+
+            std::string bytes_to_symbols(std::string_view text) const;
+            std::string decode_symbol_piece(std::string_view piece) const;
+
+            std::unordered_map<std::string, std::size_t> build_word_frequency_bbpe(
+                const std::vector<std::string>& texts
+            ) const;
+
+            bool add_prefix_space_ = false;
+            bool lowercase_bbpe_ = false;
+            bool clean_text_bbpe_ = true;
+
+            std::string end_of_word_suffix_bbpe_;
     };
 }

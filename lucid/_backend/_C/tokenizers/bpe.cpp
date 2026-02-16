@@ -10,8 +10,164 @@
 #include <utility>
 
 namespace lucid::tokenizers::fast {
-    
+
     namespace {
+        std::string clean_text_for_bbpe_ascii(std::string_view text) {
+            std::string out;
+            out.reserve(text.size());
+
+            for (char ch : text) {
+                const unsigned char uch = static_cast<unsigned char>(ch);
+                if (uch == 0) continue;
+                if (uch < 128) {
+                    if (uch == '\t' || uch == '\n' || uch == '\r' || uch == ' ') {
+                        out.push_back(' ');
+                        continue;
+                    }
+                    if (uch < 32 || uch == 127) {
+                        continue;
+                    }
+                }
+                out.push_back(ch);
+            }
+            return out;
+        }
+
+        std::string utf8_decode_replace(std::string_view bytes) {
+            std::string out;
+            out.reserve(bytes.size());
+
+            constexpr char kReplacement[] = "\xEF\xBF\xBD";
+            auto is_cont = [](unsigned char c) { return (c & 0xC0) == 0x80; };
+
+            std::size_t i = 0;
+            while (i < bytes.size()) {
+                const unsigned char c0 = static_cast<unsigned char>(bytes[i]);
+                if (c0 <= 0x7F) {
+                    out.push_back(static_cast<char>(c0));
+                    ++i;
+                    continue;
+                }
+                auto append_repl = [&]() { out.append(kReplacement, 3); };
+                if (c0 >= 0xC2 && c0 <= 0xDF) {
+                    if (
+                        i + 1 < bytes.size()
+                        && is_cont(static_cast<unsigned char>(bytes[i + 1]))
+                    ) {
+                        out.append(bytes.substr(i, 2));
+                        i += 2;
+                    } else {
+                        append_repl();
+                        ++i;
+                    }
+                    continue;
+                }
+
+                if (c0 >= 0xE0 && c0 <= 0xEF) {
+                    if (i + 2 < bytes.size()) {
+                        const unsigned char c1 = static_cast<unsigned char>(bytes[i + 1]);
+                        const unsigned char c2 = static_cast<unsigned char>(bytes[i + 2]);
+                        const bool valid = (
+                            (
+                                (c0 == 0xE0 && c1 >= 0xA0 && c1 <= 0xBF)
+                                || (c0 == 0xED && c1 >= 0x80 && c1 <= 0x9F)
+                                || (((c0 >= 0xE1 && c0 <= 0xEC) || (c0 >= 0xEE && c0 <= 0xEF))
+                                    && is_cont(c1))
+                            ) 
+                            && is_cont(c2)
+                        );
+                        if (valid) {
+                            out.append(bytes.substr(i, 3));
+                            i += 3;
+                        } else {
+                            append_repl();
+                            ++i;
+                        }
+                    } else {
+                        append_repl();
+                        ++i;
+                    }
+                    continue;
+                }
+                if (c0 >= 0xF0 && c0 <= 0xF4) {
+                    if (i + 3 < bytes.size()) {
+                        const unsigned char c1 = static_cast<unsigned char>(bytes[i + 1]);
+                        const unsigned char c2 = static_cast<unsigned char>(bytes[i + 2]);
+                        const unsigned char c3 = static_cast<unsigned char>(bytes[i + 3]);
+
+                        const bool valid = (
+                            (
+                                (c0 == 0xF0 && c1 >= 0x90 && c1 <= 0xBF)
+                                || ((c0 >= 0xF1 && c0 <= 0xF3) && is_cont(c1))
+                                || (c0 == 0xF4 && c1 >= 0x80 && c1 <= 0x8F)
+                            )
+                            && is_cont(c2) 
+                            && is_cont(c3)
+                        );
+                        if (valid) {
+                            out.append(bytes.substr(i, 4));
+                            i += 4;
+                        } else {
+                            append_repl();
+                            ++i;
+                        }
+                    } else {
+                        append_repl();
+                        ++i;
+                    }
+                    continue;
+                }
+                append_repl();
+                ++i;
+            }
+            return out;
+        }
+
+        std::vector<std::string> split_utf8_codepoints(const std::string& s) {
+            std::vector<std::string> out;
+            out.reserve(s.size());
+
+            std::size_t i = 0;
+            while (i < s.size()) {
+                const unsigned char c = static_cast<unsigned char>(s[i]);
+                std::size_t n = 1;
+                
+                if ((c & 0x80) == 0x00) n = 1;
+                else if ((c & 0xE0) == 0xC0) n = 2;
+                else if ((c & 0xF0) == 0xE0) n = 3;
+                else if ((c & 0xF8) == 0xF0) n = 4;
+
+                if (i + n > s.size()) break;
+                out.emplace_back(s.substr(i, n));
+                i += n;
+            }
+            return out;
+        }
+
+        std::vector<std::string> merge_symbols_once(
+            const std::vector<std::string>& symbols,
+            const detail::TokenPair& pair
+        ) {
+            std::vector<std::string> out;
+            out.reserve(symbols.size());
+
+            std::size_t i = 0;
+            while (i < symbols.size()) {
+                if (
+                    i < symbols.size() - 1
+                    && symbols[i] == pair.first
+                    && symbols[i + 1] == pair.second
+                ) {
+                    out.push_back(pair.first + pair.second);
+                    i += 2;
+                } else {
+                    out.push_back(symbols[i]);
+                    ++i;
+                }
+            }
+            return out;
+        }
+
         bool parse_hex4(const std::string& s, std::size_t pos, uint32_t& out) {
             if (pos + 4 > s.size()) return false;
             uint32_t value = 0;
@@ -86,7 +242,11 @@ namespace lucid::tokenizers::fast {
                                 && s[i + 2] == 'u'
                             ) {
                                 uint32_t cp2 = 0;
-                                if (parse_hex4(s, i + 3, cp2) && cp2 >= 0xDC00 && cp2 <= 0xDFFF) {
+                                if (
+                                    parse_hex4(s, i + 3, cp2) 
+                                    && cp2 >= 0xDC00 
+                                    && cp2 <= 0xDFFF
+                                ) {
                                     const uint32_t hi = cp1 - 0xD800;
                                     const uint32_t lo = cp2 - 0xDC00;
                                     const uint32_t full = 0x10000 + ((hi << 10) | lo);
@@ -363,15 +523,39 @@ namespace lucid::tokenizers::fast {
             }
         }
 
-        std::vector<std::string> vocab_tokens;
-        vocab_tokens.reserve(token_set.size());
-
+        std::unordered_map<std::string, std::size_t> token_freq;
+        token_freq.reserve(token_set.size());
         for (const auto& [tok, seen] : token_set) {
-            if (seen) vocab_tokens.push_back(tok);
+            if (seen) token_freq.emplace(tok, 0);
+        }
+        for (const auto& [word, split] : word_splits) {
+            const auto wf_it = word_freq.find(word);
+            if (wf_it == word_freq.end()) continue;
+
+            const std::size_t wf = wf_it->second;
+            for (const auto& tok : split) {
+                token_freq[tok] += wf;
+            }
         }
 
-        std::sort(vocab_tokens.begin(), vocab_tokens.end());
-        if (vocab_tokens.size() > token_target) vocab_tokens.resize(token_target);
+        std::vector<std::string> vocab_tokens;
+        vocab_tokens.reserve(token_freq.size());
+        for (const auto& [tok, _] : token_freq) vocab_tokens.push_back(tok);
+
+        std::sort(
+            vocab_tokens.begin(),
+            vocab_tokens.end(),
+            [&](const std::string& a, const std::string& b) {
+                const std::size_t fa = token_freq[a];
+                const std::size_t fb = token_freq[b];
+
+                if (fa != fb) return fa > fb;
+                return a < b;
+            }
+        );
+        if (vocab_tokens.size() > token_target) {
+            vocab_tokens.resize(token_target);
+        }
 
         std::vector<std::string> full_vocab;
         full_vocab.reserve(special_tokens.size() + vocab_tokens.size());
@@ -599,5 +783,443 @@ namespace lucid::tokenizers::fast {
             }
         }
         return out;
+    }
+
+    ByteBPETokenizer::ByteBPETokenizer(
+        std::optional<Vocab> vocab,
+        std::optional<std::vector<Merge>> merges,
+
+        std::optional<std::filesystem::path> vocab_file,
+        std::optional<std::filesystem::path> merges_file,
+
+        std::string unk_token,
+        std::string pad_token,
+
+        std::optional<std::string> bos_token,
+        std::optional<std::string> eos_token,
+
+        bool lowercase,
+        bool clean_text,
+        bool add_prefix_space,
+
+        std::string end_of_word_suffix
+    ) 
+        : BPETokenizer(
+            std::move(vocab),
+            std::move(merges),
+            std::move(vocab_file),
+            std::move(merges_file),
+            std::move(unk_token),
+            std::move(pad_token),
+            std::move(bos_token),
+            std::move(eos_token),
+
+            lowercase,
+            clean_text,
+            end_of_word_suffix
+        ), 
+        add_prefix_space_(add_prefix_space), 
+        lowercase_bbpe_(lowercase), 
+        clean_text_bbpe_(clean_text), 
+        end_of_word_suffix_bbpe_(std::move(end_of_word_suffix)) {}
+    
+    std::vector<std::string> ByteBPETokenizer::tokenize(std::string_view text) const {
+        const std::string norm = normalize_text_for_bbpe(text);
+        const auto pieces = split_byte_level_pieces(norm);
+
+        std::unordered_map<Merge, std::size_t, detail::TokenPairHash> ranks;
+        const auto& ms = merges();
+        ranks.reserve(ms.size());
+        for (std::size_t i = 0; i < ms.size(); ++i) ranks[ms[i]] = i;
+
+        std::vector<std::string> out;
+        for (const auto& p : pieces) {
+            const std::string sym = bytes_to_symbols(p);
+            if (sym.empty()) continue;
+
+            auto symbols = split_utf8_codepoints(sym);
+            if (symbols.empty()) continue;
+            if (!end_of_word_suffix_bbpe_.empty()) {
+                symbols.back() += end_of_word_suffix_bbpe_;
+            }
+
+            while (symbols.size() > 1) {
+                bool found = false;
+                std::size_t best_rank = static_cast<std::size_t>(-1);
+                Merge best_pair;
+
+                for (std::size_t i = 0; i < symbols.size() - 1; ++i) {
+                    const Merge pair{symbols[i], symbols[i + 1]};
+                    const auto it = ranks.find(pair);
+                    if (it == ranks.end()) continue;
+                    if (!found || it->second < best_rank) {
+                        found = true;
+                        best_rank = it->second;
+                        best_pair = pair;
+                    }
+                }
+                if (!found) break;
+                symbols = merge_symbols_once(symbols, best_pair);
+            }
+            out.insert(out.end(), symbols.begin(), symbols.end());
+        }
+        return out;
+    }
+
+    std::string ByteBPETokenizer::convert_tokens_to_string(
+        const std::vector<std::string>& tokens
+    ) const {
+        const auto specials_vec = all_special_tokens();
+        std::unordered_map<std::string, bool> specials_set;
+        for (const auto& s : specials_vec) specials_set[s] = true;
+
+        std::string out_bytes;
+        for (const auto& tok : tokens) {
+            if (specials_set.find(tok) != specials_set.end()) continue;
+            
+            std::string piece = tok;
+            if (!end_of_word_suffix_bbpe_.empty()) {
+                if (
+                    piece.size() >= end_of_word_suffix_bbpe_.size()
+                    && piece.compare(
+                        piece.size() - end_of_word_suffix_bbpe_.size(),
+                        end_of_word_suffix_bbpe_.size(),
+                        end_of_word_suffix_bbpe_
+                    ) == 0
+                ) {
+                    piece.erase(piece.size() - end_of_word_suffix_bbpe_.size());
+                }
+            }
+            out_bytes += decode_symbol_piece(piece);
+        }
+        return utf8_decode_replace(out_bytes);
+    }
+
+    ByteBPETokenizer& ByteBPETokenizer::fit(
+        const std::vector<std::string>& texts,
+        std::size_t vocab_size,
+        std::size_t min_frequency
+    ) {
+        const std::size_t min_bbpe_vocab = all_special_tokens().size() + 256;
+        if (vocab_size < min_bbpe_vocab) {
+            throw std::invalid_argument(
+                "'vocab_size' must be >= number of special tokens + 256 for ByteBPE (got "
+                + std::to_string(vocab_size) + ", need at least "
+                + std::to_string(min_bbpe_vocab) + ")."
+            );
+        }
+        if (min_frequency < 1) {
+            throw std::invalid_argument("'min_frequency' must be >= 1.");
+        }
+
+        const auto special_tokens = all_special_tokens();
+        if (vocab_size < special_tokens.size()) {
+            throw std::invalid_argument(
+                "'vocab_size' must be >= number of special tokens ("
+                + std::to_string(special_tokens.size()) + ")."
+            );
+        }
+
+        const auto word_freq = build_word_frequency_bbpe(texts);
+        if (word_freq.empty()) {
+            throw std::invalid_argument("Cannot train ByteBPE vocabulary from empty corpus.");
+        }
+
+        std::unordered_map<std::string, std::vector<std::string>> word_splits;
+        std::unordered_map<std::string, bool> token_set;
+        
+        std::vector<std::string> required_byte_tokens;
+        required_byte_tokens.reserve(256);
+
+        const auto& enc = byte_encoder_map();
+        for (int b = 0; b < 256; ++b) {
+            const auto it = enc.find(static_cast<unsigned char>(b));
+            if (it == enc.end()) continue;
+            required_byte_tokens.push_back(it->second);
+            token_set[it->second] = true;
+        }
+
+        for (const auto& [word, freq] : word_freq) {
+            (void)freq;
+            if (word.empty()) continue;
+
+            auto symbols = split_utf8_codepoints(word);
+            if (symbols.empty()) continue;
+            if (!end_of_word_suffix_bbpe_.empty()) {
+                symbols.back() += end_of_word_suffix_bbpe_;
+            }
+
+            word_splits[word] = symbols;
+            for (const auto& s : symbols) token_set[s] = true;
+        }
+
+        std::vector<Merge> learned_merges;
+        const std::size_t token_target = vocab_size - special_tokens.size();
+        if (token_target < required_byte_tokens.size()) {
+            throw std::invalid_argument(
+                "'vocab_size' is too small to include required 256 byte tokens."
+            );
+        }
+
+        while (token_set.size() < token_target) {
+            std::unordered_map<Merge, std::size_t, detail::TokenPairHash> pair_counts;
+
+            for (const auto& [word, split] : word_splits) {
+                const auto wf_it = word_freq.find(word);
+                if (wf_it == word_freq.end()) continue;
+
+                const std::size_t freq = wf_it->second;
+                for (std::size_t i = 0; i < split.size() - 1; ++i) {
+                    pair_counts[{split[i], split[i + 1]}] += freq;
+                }
+            }
+            if (pair_counts.empty()) break;
+
+            bool has_best = false;
+            Merge best_pair;
+            std::size_t best_count = 0;
+
+            for (const auto& [pair, count] : pair_counts) {
+                if (
+                    !has_best
+                    || count > best_count
+                    || (count == best_count && pair < best_pair)
+                ) {
+                    has_best = true;
+                    best_pair = pair;
+                    best_count = count;
+                }
+            }
+            if (!has_best || best_count < min_frequency) break;
+
+            learned_merges.push_back(best_pair);
+            token_set[best_pair.first + best_pair.second] = true;
+
+            for (auto& [word, split] : word_splits) {
+                (void)word;
+                split = merge_symbols_once(split, best_pair);
+            }
+        }
+
+        std::unordered_map<std::string, std::size_t> token_freq;
+        token_freq.reserve(token_set.size());
+        for (const auto& [tok, seen] : token_set) {
+            if (seen) token_freq.emplace(tok, 0);
+        }
+        for (const auto& [word, split] : word_splits) {
+            const auto wf_it = word_freq.find(word);
+            if (wf_it == word_freq.end()) continue;
+            const std::size_t wf = wf_it->second;
+            for (const auto& tok : split) token_freq[tok] += wf;
+        }
+
+        std::vector<std::string> vocab_tokens;
+        vocab_tokens.reserve(token_freq.size());
+        for (const auto& [tok, _] : token_freq) vocab_tokens.push_back(tok);
+
+        std::sort(
+            vocab_tokens.begin(),
+            vocab_tokens.end(),
+            [&](const std::string& a, const std::string& b) {
+                const std::size_t fa = token_freq[a];
+                const std::size_t fb = token_freq[b];
+                if (fa != fb) return fa > fb;
+                return a < b;
+            }
+        );
+
+        std::unordered_map<std::string, bool> required_set;
+        required_set.reserve(required_byte_tokens.size());
+        for (const auto& t : required_byte_tokens) required_set[t] = true;
+
+        std::vector<std::string> selected_tokens;
+        selected_tokens.reserve(std::min(token_target, vocab_tokens.size()));
+
+        for (const auto& t : required_byte_tokens) {
+            if (selected_tokens.size() >= token_target) break;
+            if (token_freq.find(t) == token_freq.end()) continue;
+            selected_tokens.push_back(t);
+        }
+        for (const auto& t : vocab_tokens) {
+            if (selected_tokens.size() >= token_target) break;
+            if (required_set.find(t) != required_set.end()) continue;
+            selected_tokens.push_back(t);
+        }
+        vocab_tokens = std::move(selected_tokens);
+
+        std::vector<std::string> full_vocab;
+
+        full_vocab.reserve(special_tokens.size() + vocab_tokens.size());
+        full_vocab.insert(full_vocab.end(), special_tokens.begin(), special_tokens.end());
+        full_vocab.insert(full_vocab.end(), vocab_tokens.begin(), vocab_tokens.end());
+
+        vocab_.clear();
+        for (std::size_t i = 0; i < full_vocab.size(); ++i) {
+            vocab_[full_vocab[i]] = static_cast<int32_t>(i);
+        }
+
+        merges_ = std::move(learned_merges);
+        ensure_special_tokens();
+        rebuild_merge_ranks();
+        rebuild_id_to_tokens();
+        return *this;
+    }
+
+    const std::unordered_map<unsigned char, std::string>& ByteBPETokenizer::byte_encoder_map() {
+        static const std::unordered_map<unsigned char, std::string> enc = [] {
+            std::vector<int> bs;
+            bs.reserve(256);
+
+            for (int i = 33; i <= 126; ++i) bs.push_back(i);
+            for (int i = 161; i <= 172; ++i) bs.push_back(i);
+            for (int i = 174; i <= 255; ++i) bs.push_back(i);
+
+            std::vector<int> cs = bs;
+            int n = 0;
+            for (int b = 0; b < 256; ++b) {
+                if (std::find(bs.begin(), bs.end(), b) == bs.end()) {
+                    bs.push_back(b);
+                    cs.push_back(256 + n);
+                    ++n;
+                }
+            }
+            std::unordered_map<unsigned char, std::string> m;
+            m.reserve(256);
+
+            for (std::size_t i = 0; i < bs.size(); ++i) {
+                std::string u;
+                append_utf8(u, static_cast<uint32_t>(cs[i]));
+                m[static_cast<unsigned char>(bs[i])] = std::move(u);
+            }
+            return m;
+        }();
+        return enc;
+    }
+
+    const std::unordered_map<std::string, unsigned char>& ByteBPETokenizer::byte_decoder_map() {
+        static const std::unordered_map<std::string, unsigned char> dec = [] {
+            std::unordered_map<std::string, unsigned char> m;
+            m.reserve(256);
+
+            const auto& enc = byte_encoder_map();
+            for (const auto& [b, s] : enc) m[s] = b;
+            return m;
+        }();
+        return dec;
+    }
+
+    std::string ByteBPETokenizer::normalize_text_for_bbpe(
+        std::string_view text
+    ) const {
+        std::string out(text);
+        if (clean_text_bbpe_) out = clean_text_for_bbpe_ascii(out);
+        if (lowercase_bbpe_) {
+            for (auto& ch : out) {
+                if (ch >= 'A' && ch <= 'Z') {
+                    ch = static_cast<char>(ch - 'A' + 'a');
+                }
+            }
+        }
+        if (add_prefix_space_ && !out.empty() && out.front() != ' '){
+            out.insert(out.begin(), ' ');
+        }
+        return out;
+    }
+
+    std::vector<std::string> ByteBPETokenizer::split_byte_level_pieces(
+        std::string_view text
+    ) const {
+        std::vector<std::string> out;
+        std::size_t i = 0;
+        const std::string s(text);
+
+        while (i < s.size()) {
+            const bool is_ws =
+                (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r');
+
+            if (is_ws) {
+                std::size_t j = i;
+                while (
+                    j < s.size()
+                    && (s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r')
+                ) { ++j; }
+                out.emplace_back(s.substr(i, j - i));
+                i = j;
+
+            } else {
+                std::size_t j = i;
+                while (
+                    j < s.size()
+                    && !(s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r')
+                ) { ++j; }
+                while (
+                    j < s.size()
+                    && (s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r')
+                ) { ++j; }
+                out.emplace_back(s.substr(i, j - i));
+                i = j;
+            }
+        }
+        return out;
+    }
+
+    std::string ByteBPETokenizer::bytes_to_symbols(std::string_view text) const {
+        const auto& enc = byte_encoder_map();
+        std::string out;
+        out.reserve(text.size() * 2);
+
+        const std::string s(text);
+        for (unsigned char b : s) {
+            auto it = enc.find(b);
+            if (it != enc.end()) out += it->second;
+        }
+        return out;
+    }
+
+    std::string ByteBPETokenizer::decode_symbol_piece(std::string_view piece) const {
+        const auto& dec = byte_decoder_map();
+        const std::string s(piece);
+
+        std::vector<unsigned char> bytes;
+        bytes.reserve(s.size());
+
+        std::size_t i = 0;
+        while (i < s.size()) {
+            const unsigned char c = static_cast<unsigned char>(s[i]);
+            std::size_t n = 1;
+
+            if ((c & 0x80) == 0x00) n = 1;
+            else if ((c & 0xE0) == 0xC0) n = 2;
+            else if ((c & 0xF0) == 0xE0) n = 3;
+            else if ((c & 0xF8) == 0xF0) n = 4;
+
+            if ((i + n > s.size())) break;
+            const std::string ch = s.substr(i, n);
+            i += n;
+
+            auto it = dec.find(ch);
+            if (it != dec.end()) bytes.push_back(it->second);
+        }
+        return std::string(
+            reinterpret_cast<const char*>(bytes.data()), 
+            bytes.size()
+        );
+    }
+
+    std::unordered_map<std::string, std::size_t> ByteBPETokenizer::build_word_frequency_bbpe(
+        const std::vector<std::string>& texts
+    ) const {
+        std::unordered_map<std::string, std::size_t> freq;
+        
+        for (const auto& t : texts) {
+            const std::string norm = normalize_text_for_bbpe(t);
+            const auto pieces = split_byte_level_pieces(norm);
+
+            for (const auto& p : pieces) {
+                const std::string sym = bytes_to_symbols(p);
+                if (!sym.empty()) ++freq[sym];
+            }
+        }
+        return freq;
     }
 }
