@@ -157,6 +157,10 @@ namespace lucid::tokenizers::fast {
 
             std::size_t vocab_size() const override;
             std::vector<std::string> tokenize(std::string_view text) const override;
+            std::vector<int32_t> encode_ids(
+                std::string_view text,
+                bool add_special_tokens = true
+            ) const;
 
             int32_t convert_token_to_id(std::string_view token) const override;
             std::vector<int32_t> convert_tokens_to_ids(

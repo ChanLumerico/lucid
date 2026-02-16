@@ -45,11 +45,24 @@ if ! "$PYTHON_BIN" -c "import pybind11" >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ "$MODE" = "inplace" ]; then
-  "$PYTHON_BIN" setup.py build_ext --inplace
-else
-  "$PYTHON_BIN" setup.py sdist bdist_wheel
-fi
+CPP_FILES=()
+while IFS= read -r src; do
+  [ -z "$src" ] && continue
+  CPP_FILES+=("$src")
+done < <(
+  "$PYTHON_BIN" - <<PY
+import json
+from pathlib import Path
+
+cfg = json.loads(Path(r"$BUILD_CONFIG_PATH").read_text(encoding="utf-8"))
+for ext in cfg.get("extensions", []):
+    for src in ext.get("sources", []):
+        if str(src).endswith(".cpp"):
+            print(src)
+PY
+)
+
+"$PYTHON_BIN" devtools/compile.py --python-bin "$PYTHON_BIN" --mode "$MODE" "${CPP_FILES[@]}"
 
 if [ "$MODE" = "inplace" ]; then
   if "$PYTHON_BIN" -m pybind11_stubgen --help >/dev/null 2>&1; then
@@ -86,3 +99,6 @@ fi
 
 cd devtools/
 ./black.sh ../lucid/
+
+cd ../
+rm -rf build

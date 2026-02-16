@@ -42,6 +42,7 @@ for ext_cfg in extensions_cfg:
 setuptools.setup(
     name="lucid-dl",
     version=PACKAGE_VERSION,
+    license="MIT",
     author="ChanLumerico",
     author_email="greensox284@gmail.com",
     description="Lumerico's Comprehensive Interface for Deep Learning",
@@ -54,7 +55,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: 3.14",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Operating System :: MacOS :: MacOS X",
     ],

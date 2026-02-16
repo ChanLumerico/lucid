@@ -87,6 +87,12 @@ PYBIND11_MODULE(core, m) {
         )
         .def("vocab_size", &BPETokenizer::vocab_size)
         .def("tokenize", &BPETokenizer::tokenize, py::arg("text"))
+        .def(
+            "encode_ids",
+            &BPETokenizer::encode_ids,
+            py::arg("text"),
+            py::arg("add_special_tokens") = true
+        )
         .def("convert_token_to_id", &BPETokenizer::convert_token_to_id, py::arg("token"))
         .def("convert_tokens_to_ids", &BPETokenizer::convert_tokens_to_ids, py::arg("tokens"))
         .def("convert_id_to_token", &BPETokenizer::convert_id_to_token, py::arg("id"))

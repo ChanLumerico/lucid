@@ -4,8 +4,11 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
+import lucid
+
 from lucid.data.tokenizers import Tokenizer, SpecialTokens
 from lucid.data.tokenizers._util import basic_tokenize, clean_text
+from lucid.types import _DeviceType
 
 from lucid._backend._C.tokenizers.core import _C_BPETokenizer
 
@@ -356,10 +359,16 @@ class BPETokenizerFast(Tokenizer):
 
         super().__init__(unk_token, pad_token, bos_token, eos_token)
 
+        backend_vocab_file: Path | None = None
+        backend_merges_file: Path | None = None
         if vocab_file is not None:
             vocab = BPETokenizer._load_vocab(vocab_file)
+        else:
+            backend_vocab_file = None
         if merges_file is not None:
             merges = BPETokenizer._load_merges(merges_file)
+        else:
+            backend_merges_file = None
 
         self.lowercase = lowercase
         self.clean_text = clean_text
@@ -371,8 +380,8 @@ class BPETokenizerFast(Tokenizer):
         self._backend = _C_BPETokenizer(
             vocab=vocab,
             merges=merges,
-            vocab_file=Path(vocab_file) if vocab_file is not None else None,
-            merges_file=Path(merges_file) if merges_file is not None else None,
+            vocab_file=backend_vocab_file,
+            merges_file=backend_merges_file,
             unk_token=self.unk_token,
             pad_token=self.pad_token,
             bos_token=self.bos_token,
@@ -390,6 +399,18 @@ class BPETokenizerFast(Tokenizer):
 
     def tokenize(self, text: str) -> list[str]:
         return list(self._backend.tokenize(text))
+
+    def encode(
+        self,
+        text: str,
+        add_special_tokens: bool = True,
+        return_tensor: bool = False,
+        device: _DeviceType = "cpu",
+    ) -> list[int] | lucid.LongTensor:
+        ids = [int(x) for x in self._backend.encode_ids(text, add_special_tokens)]
+        if return_tensor:
+            return lucid.LongTensor(ids, device=device)
+        return ids
 
     def convert_tokens_to_ids(self, tokens: str | list[str]) -> int | list[int]:
         if isinstance(tokens, str):

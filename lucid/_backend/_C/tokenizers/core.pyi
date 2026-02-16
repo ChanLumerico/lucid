@@ -34,6 +34,7 @@ class _C_BPETokenizer:
     def convert_tokens_to_string(
         self, tokens: collections.abc.Sequence[str]
     ) -> str: ...
+    def encode_ids(self, text: str, add_special_tokens: bool = True) -> list[int]: ...
     def fit(
         self,
         texts: collections.abc.Sequence[str],

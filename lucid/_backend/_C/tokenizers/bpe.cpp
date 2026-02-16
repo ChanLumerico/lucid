@@ -175,6 +175,26 @@ namespace lucid::tokenizers::fast {
         return out;
     }
 
+    std::vector<int32_t> BPETokenizer::encode_ids(
+        std::string_view text,
+        bool add_special_tokens
+    ) const {
+        const auto tokens = tokenize(text);
+        std::vector<int32_t> ids;
+        ids.reserve(tokens.size() + 2);
+
+        if (add_special_tokens && bos_token_.has_value()) {
+            ids.push_back(convert_token_to_id(*bos_token_));
+        }
+        for (const auto& t : tokens) {
+            ids.push_back(convert_token_to_id(t));
+        }
+        if (add_special_tokens && eos_token_.has_value()) {
+            ids.push_back(convert_token_to_id(*eos_token_));
+        }
+        return ids;
+    }
+
     int32_t BPETokenizer::convert_token_to_id(std::string_view token) const {
         auto it = vocab_.find(std::string(token));
         if (it != vocab_.end()) return it->second;
