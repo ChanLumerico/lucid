@@ -14,6 +14,7 @@ from lucid.types import (
 )
 
 from lucid._backend.metal import is_gpu_op
+from lucid._backend._C.runtime.core import _C_func_op_raw
 
 
 _GradType = _NumPyArray | _MLXArray | Tuple[_NumPyArray | _MLXArray, ...]
@@ -25,6 +26,30 @@ _FuncOpReturnType = _ReturnGradFuncPair | Tuple[_ReturnGradFuncPair, ...]
 
 
 def func_op(
+    n_in: int | None,
+    n_ret: int | None,
+    has_gradient: bool = True,
+    device: _DeviceType = "cpu",
+) -> Callable:
+    py_decorator = _py_func_op(n_in, n_ret, has_gradient, device)
+    cpp_decorator = _cpp_func_op(n_in, n_ret, has_gradient, device)
+
+    def decorator(forward_func: Callable[..., _FuncOpReturnType]) -> Callable:
+        py_wrapper = py_decorator(forward_func)
+        cpp_wrapper = cpp_decorator(forward_func)
+
+        @functools.wraps(forward_func)
+        def wrapper(op_self: Operation, *args, **kwargs) -> Tuple[_TensorLike, ...]:
+            if lucid.USE_CPP_FUNC_OP:
+                return cpp_wrapper(op_self, *args, **kwargs)
+            return py_wrapper(op_self, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def _py_func_op(
     n_in: int | None,
     n_ret: int | None,
     has_gradient: bool = True,
@@ -186,6 +211,38 @@ def func_op(
                         pass
 
             return results if num_returns > 1 else results[0]
+
+        return wrapper
+
+    return decorator
+
+
+def _cpp_func_op(
+    n_in: int | None,
+    n_ret: int | None,
+    has_gradient: bool = True,
+    device: _DeviceType = "cpu",
+) -> Callable:
+    def decorator(forwward_func: Callable[..., _FuncOpReturnType]) -> Callable:
+        @functools.wraps(forwward_func)
+        def wrapper(op_self: Operation, *args, **kwargs) -> Tuple[_TensorLike, ...]:
+            lucid._CPP_USAGE += 1
+            try:
+                return _C_func_op_raw(
+                    op_self=op_self,
+                    forward_func=forwward_func,
+                    args=args,
+                    kwargs=kwargs,
+                    n_in=n_in,
+                    n_ret=n_ret,
+                    has_gradient=has_gradient,
+                    device=device,
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    "C++ backend func_op error occurred during "
+                    f"'{type(op_self).__name__}' at '{id(op_self)}'"
+                ) from e
 
         return wrapper
 

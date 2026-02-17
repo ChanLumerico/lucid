@@ -23,28 +23,23 @@ namespace lucid::backend::runtime {
         }
 
         inline py::module_ lucid_module() {
-            static py::module_ m = py::module_::import("lucid");
-            return m;
+            return py::module_::import("lucid");
         }
 
         inline py::module_ weakref_module() {
-            static py::module_ m = py::module_::import("weakref");
-            return m;
+            return py::module_::import("weakref");
         }
 
         inline py::module_ core_module() {
-            static py::module_ m = py::module_::import("lucid._backend.core");
-            return m;
+            return py::module_::import("lucid._backend.core");
         }
 
         inline py::object tensor_like_protocol() {
-            static py::object proto = py::module_::import("lucid.types").attr("_TensorLike");
-            return proto;
+            return py::module_::import("lucid.types").attr("_TensorLike");
         }
 
         inline py::object builtins_bool() {
-            static py::object b = py::module_::import("builtins").attr("bool");
-            return b;
+            return py::module_::import("builtins").attr("bool");
         }
 
         inline py::tuple tuple_slice(const py::tuple& src, std::size_t start, std::size_t stop) {
