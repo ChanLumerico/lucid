@@ -13,6 +13,7 @@ from lucid.nn.functional import (
     _loss,
     _spatial,
     _utils,
+    _embedding,
 )
 
 
@@ -464,16 +465,6 @@ def rotate(
     return _utils.rotate(input_, angle, center)
 
 
-def embedding(
-    input_: Tensor,
-    weight: Tensor,
-    padding_idx: int | None = None,
-    max_norm: float | None = None,
-    norm_type: float = 2.0,
-) -> Tensor:
-    return _utils.embedding(input_, weight, padding_idx, max_norm, norm_type)
-
-
 def scaled_dot_product_attention(
     query: Tensor,
     key: Tensor,
@@ -512,3 +503,13 @@ def one_hot(
     input_: Tensor, num_classes: int = -1, dtype: Numeric | bool | None = None
 ) -> Tensor:
     return _utils.one_hot(input_, num_classes, dtype)
+
+
+def embedding(
+    input_: Tensor,
+    weight: Tensor,
+    padding_idx: int | None = None,
+    max_norm: float | None = None,
+    norm_type: float = 2.0,
+) -> Tensor:
+    return _embedding.embedding(input_, weight, padding_idx, max_norm, norm_type)

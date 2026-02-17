@@ -9,15 +9,24 @@ from lucid._tensor import Tensor
 
 
 class embedding_kernel(Operation):
-    def __init__(self, padding_idx: int = -1) -> None:
+    def __init__(
+        self,
+        padding_idx: int = -1,
+        max_norm: float | None = None,
+        norm_type: float = 2.0,
+    ) -> None:
         super().__init__()
         self.padding_idx = int(padding_idx)
+        self.max_norm = max_norm
+        self.norm_type = float(norm_type)
         self._indices = None
         self._num_embeddings = None
 
     def clear(self) -> None:
         super().clear()
         self.padding_idx = -1
+        self.max_norm = None
+        self.norm_type = 2.0
         self._indices = None
         self._num_embeddings = None
 
@@ -33,6 +42,23 @@ class embedding_kernel(Operation):
         self, indices: Tensor, weight: Tensor, lib_: ModuleType
     ) -> _FuncOpReturnType:
         idx = indices.data
+
+        if self.max_norm is not None:
+            flat = idx.reshape(-1)
+            w = weight.data[flat]
+
+            norms = (lib_.abs(w) ** self.norm_type).sum(axis=1) ** (
+                1.0 / self.norm_type
+            )
+            scale = lib_.minimum(1.0, self.max_norm / (norms + (norms == 0)))
+
+            if self.padding_idx >= 0:
+                mask = flat == self.padding_idx
+                mask_f = mask.astype(scale.dtype)
+                scale = scale * (1 - mask_f) + mask_f
+
+            weight.data[flat] = w * scale[:, None]
+
         out = weight.data[idx]
 
         self._indices = idx

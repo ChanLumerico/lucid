@@ -57,6 +57,12 @@ lucid.nn.functional
 
 .. toctree::
     :maxdepth: 2
+    :caption: Embeding Functions
+
+    Embedding Functions <embedding/index.rst>
+
+.. toctree::
+    :maxdepth: 2
     :caption: Utility Functions
 
     Utility Functions <util/index.rst>
