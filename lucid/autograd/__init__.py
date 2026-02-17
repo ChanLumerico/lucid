@@ -3,6 +3,8 @@ import weakref
 
 import numpy as np
 
+import lucid
+
 from lucid._backend.metal import mx
 from lucid.error import BackwardError
 from lucid.types import _MLXArray, _NumPyArray, _TensorLike, _Scalar, _Gradient
@@ -135,9 +137,7 @@ def backward(
             if parent not in visited:
                 stack.append(parent)
 
-    from lucid._fusion import ENABLE_FUSION
-
-    if ENABLE_FUSION and tensor.is_cpu():
+    if lucid.USE_BAKCWARD_FUSION and tensor.is_cpu():
         _try_backward_fusion(topo_order)
 
     for node in reversed(topo_order):

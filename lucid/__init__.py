@@ -25,6 +25,13 @@ import json
 import math
 import numpy as np
 
+_GlobalFlag = bool
+
+USE_CPP_FUNC_OP: _GlobalFlag = False
+USE_BAKCWARD_FUSION: _GlobalFlag = True
+
+_CPP_USAGE: int = 0
+
 from lucid._tensor import *
 from lucid._func import *
 from lucid._utils import *
@@ -51,9 +58,6 @@ import lucid.nn as nn
 import lucid.types as types
 import lucid.autograd as autograd
 import lucid.visual as visual
-
-from lucid._fusion import ENABLE_FUSION
-
 
 _grad_enabled: bool = True
 _flops_enabled: bool = False
