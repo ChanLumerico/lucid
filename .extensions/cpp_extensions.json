@@ -5,6 +5,13 @@
   },
   "extensions": [
     {
+      "name": "lucid._backend._C.runtime.core",
+      "sources": [
+        "lucid/_backend/_C/runtime/op.cpp",
+        "lucid/_backend/_C/runtime/bindings.cpp"
+      ]
+    },
+    {
       "name": "lucid._backend._C.tokenizers.core",
       "sources": [
         "lucid/_backend/_C/tokenizers/base.cpp",
@@ -16,6 +23,7 @@
     }
   ],
   "stub_modules": [
+    "lucid._backend._C.runtime.core",
     "lucid._backend._C.tokenizers.core"
   ]
 }
