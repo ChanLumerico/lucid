@@ -16,6 +16,8 @@ from lucid.nn.functional import (
     _embedding,
 )
 
+from lucid.types import _DeviceType
+
 
 def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
     return _linear.linear(input_, weight, bias)
@@ -513,3 +515,14 @@ def embedding(
     norm_type: float = 2.0,
 ) -> Tensor:
     return _embedding.embedding(input_, weight, padding_idx, max_norm, norm_type)
+
+
+def sinusoidal_pos_embedding(
+    seq_len: int,
+    embed_dim: int,
+    device: _DeviceType = "cpu",
+    dtype: Numeric | None = None,
+) -> Tensor:
+    if seq_len <= 0 or embed_dim <= 0:
+        raise ValueError("seq_len and embed_dim must be positive.")
+    return _embedding.sinusoidal_pos_embedding(seq_len, embed_dim, device, dtype)

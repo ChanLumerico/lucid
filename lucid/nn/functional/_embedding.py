@@ -40,11 +40,11 @@ def embedding(
 
 
 def sinusoidal_pos_embedding(
-    seq_len: int, embed_dim: int, device: _DeviceType, dtype: Numeric | None = None
+    seq_len: int,
+    embed_dim: int,
+    device: _DeviceType = "cpu",
+    dtype: Numeric | None = None,
 ) -> Tensor:
-    if seq_len <= 0 or embed_dim <= 0:
-        raise ValueError("seq_len and embed_dim must be positive.")
-
     position = lucid.arange(seq_len, device=device).unsqueeze(axis=1)
     div_term = lucid.exp(
         lucid.arange(0, embed_dim, 2, device=device) * (-math.log(1e4) / embed_dim)
