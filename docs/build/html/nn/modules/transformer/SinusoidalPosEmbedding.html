@@ -2,8 +2,8 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.functional.embedding - Lucid 2.13.5 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.one_hot" href="one_hot.html" /><link rel="prev" title="nn.functional.rotate" href="rotate.html" />
-      <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/util/embedding.html" /><script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.SinusoidalPosEmbedding - Lucid 2.13.5 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="Einops Layers" href="../einops/index.html" /><link rel="prev" title="nn.Transformer" href="Transformer.html" />
+      <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/transformer/SinusoidalPosEmbedding.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
   </script><link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=e1a1ceaf" />
@@ -22,8 +22,8 @@
 }
 </style>
     <meta property="og:type" content="website"/>
-  <meta property="og:url" content="https://chanlumerico.github.io/lucid/nn/functions/util/embedding.html"/>
-  <meta property="og:title" content="nn.functional.embedding"/>
+  <meta property="og:url" content="https://chanlumerico.github.io/lucid/nn/modules/transformer/SinusoidalPosEmbedding.html"/>
+  <meta property="og:title" content="nn.SinusoidalPosEmbedding"/>
     <meta name="twitter:card" content="summary"/>
   </head>
 <body><div class="sy-head">
@@ -220,90 +220,94 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l1"><a class="reference internal" href="../../Buffer.html">nn.Buffer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../Module.html">nn.Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../ModuleHooks.html">Module Hooks</a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="../index.html">Neural Functions</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="../linear/index.html">Linear Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../linear/linear.html">nn.functional.linear</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../linear/bilinear.html">nn.functional.bilinear</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../functions/index.html">Neural Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/linear/index.html">Linear Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/linear/linear.html">nn.functional.linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/linear/bilinear.html">nn.functional.bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../activation/index.html">Activation Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../activation/relu.html">nn.functional.relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/leaky_relu.html">nn.functional.leaky_relu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/elu.html">nn.functional.elu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/selu.html">nn.functional.selu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/gelu.html">nn.functional.gelu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/sigmoid.html">nn.functional.sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/tanh.html">nn.functional.tanh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../activation/softmax.html">nn.functional.softmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/activation/index.html">Activation Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/relu.html">nn.functional.relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/leaky_relu.html">nn.functional.leaky_relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/elu.html">nn.functional.elu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/selu.html">nn.functional.selu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/gelu.html">nn.functional.gelu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/sigmoid.html">nn.functional.sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/tanh.html">nn.functional.tanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/activation/softmax.html">nn.functional.softmax</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../attention/index.html">Attention Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../attention/scaled_dot_product_attention.html">nn.functional.scaled_dot_product_attention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/attention/index.html">Attention Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/attention/scaled_dot_product_attention.html">nn.functional.scaled_dot_product_attention</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../conv/index.html">Convolution Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../conv/unfold.html">nn.functional.unfold</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv1d.html">nn.functional.conv1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv2d.html">nn.functional.conv2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv3d.html">nn.functional.conv3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv_transpose1d.html">nn.functional.conv_transpose1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv_transpose2d.html">nn.functional.conv_transpose2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../conv/conv_transpose3d.html">nn.functional.conv_transpose3d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/conv/index.html">Convolution Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/unfold.html">nn.functional.unfold</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv1d.html">nn.functional.conv1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv2d.html">nn.functional.conv2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv3d.html">nn.functional.conv3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv_transpose1d.html">nn.functional.conv_transpose1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv_transpose2d.html">nn.functional.conv_transpose2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/conv/conv_transpose3d.html">nn.functional.conv_transpose3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../pool/index.html">Pooling Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool1d.html">nn.functional.avg_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool2d.html">nn.functional.avg_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/avg_pool3d.html">nn.functional.avg_pool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool1d.html">nn.functional.max_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool2d.html">nn.functional.max_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/max_pool3d.html">nn.functional.max_pool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_avg_pool1d.html">nn.functional.adaptive_avg_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_avg_pool2d.html">nn.functional.adaptive_avg_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_avg_pool3d.html">nn.functional.adaptive_avg_pool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_max_pool1d.html">nn.functional.adaptive_max_pool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_max_pool2d.html">nn.functional.adaptive_max_pool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../pool/adaptive_max_pool3d.html">nn.functional.adaptive_max_pool3d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/pool/index.html">Pooling Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool1d.html">nn.functional.avg_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool2d.html">nn.functional.avg_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/avg_pool3d.html">nn.functional.avg_pool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool1d.html">nn.functional.max_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool2d.html">nn.functional.max_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/max_pool3d.html">nn.functional.max_pool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_avg_pool1d.html">nn.functional.adaptive_avg_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_avg_pool2d.html">nn.functional.adaptive_avg_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_avg_pool3d.html">nn.functional.adaptive_avg_pool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_max_pool1d.html">nn.functional.adaptive_max_pool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_max_pool2d.html">nn.functional.adaptive_max_pool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/pool/adaptive_max_pool3d.html">nn.functional.adaptive_max_pool3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../drop/index.html">Dropout Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout.html">nn.functional.dropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout1d.html">nn.functional.dropout1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout2d.html">nn.functional.dropout2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/dropout3d.html">nn.functional.dropout3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/alpha_dropout.html">nn.functional.alpha_dropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/drop_block.html">nn.functional.drop_block</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../drop/drop_path.html">nn.functional.drop_path</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/drop/index.html">Dropout Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout.html">nn.functional.dropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout1d.html">nn.functional.dropout1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout2d.html">nn.functional.dropout2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/dropout3d.html">nn.functional.dropout3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/alpha_dropout.html">nn.functional.alpha_dropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/drop_block.html">nn.functional.drop_block</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/drop/drop_path.html">nn.functional.drop_path</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../norm/index.html">Normalization Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../norm/normalize.html">nn.functional.normalize</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/batch_norm.html">nn.functional.batch_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/layer_norm.html">nn.functional.layer_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/instance_norm.html">nn.functional.instance_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/group_norm.html">nn.functional.group_norm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../norm/global_response_norm.html">nn.functional.global_response_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/norm/index.html">Normalization Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/normalize.html">nn.functional.normalize</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/batch_norm.html">nn.functional.batch_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/layer_norm.html">nn.functional.layer_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/instance_norm.html">nn.functional.instance_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/group_norm.html">nn.functional.group_norm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/norm/global_response_norm.html">nn.functional.global_response_norm</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../loss/index.html">Loss Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../loss/mse_loss.html">nn.functional.mse_loss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/binary_cross_entropy.html">nn.functional.binary_cross_entropy</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/binary_cross_entropy_with_logits.html">nn.functional.binary_cross_entropy_with_logits</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/cross_entropy.html">nn.functional.cross_entropy</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/nll_loss.html">nn.functional.nll_loss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../loss/huber_loss.html">nn.functional.huber_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/loss/index.html">Loss Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/mse_loss.html">nn.functional.mse_loss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/binary_cross_entropy.html">nn.functional.binary_cross_entropy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/binary_cross_entropy_with_logits.html">nn.functional.binary_cross_entropy_with_logits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/cross_entropy.html">nn.functional.cross_entropy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/nll_loss.html">nn.functional.nll_loss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/loss/huber_loss.html">nn.functional.huber_loss</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../spatial/index.html">Spatial Functions</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../spatial/affine_grid.html">nn.functional.affine_grid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../spatial/grid_sample.html">nn.functional.grid_sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/spatial/index.html">Spatial Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/spatial/affine_grid.html">nn.functional.affine_grid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/spatial/grid_sample.html">nn.functional.grid_sample</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current"><a class="reference internal" href="index.html">Utility Functions</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="interpolate.html">nn.functional.interpolate</a></li>
-<li class="toctree-l3"><a class="reference internal" href="rotate.html">nn.functional.rotate</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">nn.functional.embedding</a></li>
-<li class="toctree-l3"><a class="reference internal" href="one_hot.html">nn.functional.one_hot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/embedding/index.html">Embedding Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/embedding/embedding.html">nn.functional.embedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/embedding/sinusoidal_pos_embedding.html">nn.functional.sinusoidal_pos_embedding</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/util/index.html">Utility Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/util/interpolate.html">nn.functional.interpolate</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/util/rotate.html">nn.functional.rotate</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/util/one_hot.html">nn.functional.one_hot</a></li>
 </ul>
 </li>
 </ul>
@@ -318,119 +322,120 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l2"><a class="reference internal" href="../../init/kaiming_normal.html">nn.init.kaiming_normal</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="../../modules/index.html">Modules</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/linear/index.html">Linear Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/linear/Identity.html">nn.Identity</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/linear/Flatten.html">nn.Flatten</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/linear/Linear.html">nn.Linear</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/linear/Bilinear.html">nn.Bilinear</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">Modules</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../linear/index.html">Linear Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../linear/Identity.html">nn.Identity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../linear/Flatten.html">nn.Flatten</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../linear/Linear.html">nn.Linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../linear/Bilinear.html">nn.Bilinear</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/conv/index.html">Convolution Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/Unfold.html">nn.Unfold</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/Conv1d.html">nn.Conv1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/Conv2d.html">nn.Conv2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/Conv3d.html">nn.Conv3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/ConvTranspose1d.html">nn.ConvTranspose1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/ConvTranspose2d.html">nn.ConvTranspose2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/conv/ConvTranspose3d.html">nn.ConvTranspose3d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conv/index.html">Convolution Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Unfold.html">nn.Unfold</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv1d.html">nn.Conv1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv2d.html">nn.Conv2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/Conv3d.html">nn.Conv3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/ConvTranspose1d.html">nn.ConvTranspose1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/ConvTranspose2d.html">nn.ConvTranspose2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../conv/ConvTranspose3d.html">nn.ConvTranspose3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/activation/index.html">Activation Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/ReLU.html">nn.ReLU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/ReLU6.html">nn.ReLU6</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/LeakyReLU.html">nn.LeakyReLU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/ELU.html">nn.ELU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/SELU.html">nn.SELU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/GELU.html">nn.GELU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Sigmoid.html">nn.Sigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/HardSigmoid.html">nn.HardSigmoid</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Tanh.html">nn.Tanh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Softmax.html">nn.Softmax</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Swish.html">nn.Swish</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/HardSwish.html">nn.HardSwish</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/activation/Mish.html">nn.Mish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../activation/index.html">Activation Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../activation/ReLU.html">nn.ReLU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/ReLU6.html">nn.ReLU6</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/LeakyReLU.html">nn.LeakyReLU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/ELU.html">nn.ELU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/SELU.html">nn.SELU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/GELU.html">nn.GELU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Sigmoid.html">nn.Sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/HardSigmoid.html">nn.HardSigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Tanh.html">nn.Tanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Softmax.html">nn.Softmax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Swish.html">nn.Swish</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/HardSwish.html">nn.HardSwish</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../activation/Mish.html">nn.Mish</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/pool/index.html">Pooling Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AvgPool1d.html">nn.AvgPool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AvgPool2d.html">nn.AvgPool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AvgPool3d.html">nn.AvgPool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/MaxPool1d.html">nn.MaxPool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/MaxPool2d.html">nn.MaxPool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/MaxPool3d.html">nn.MaxPool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveAvgPool1d.html">nn.AdaptiveAvgPool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveAvgPool2d.html">nn.AdaptiveAvgPool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveAvgPool3d.html">nn.AdaptiveAvgPool3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveMaxPool1d.html">nn.AdaptiveMaxPool1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveMaxPool2d.html">nn.AdaptiveMaxPool2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/pool/AdaptiveMaxPool3d.html">nn.AdaptiveMaxPool3d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../pool/index.html">Pooling Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool1d.html">nn.AvgPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool2d.html">nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AvgPool3d.html">nn.AvgPool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool1d.html">nn.MaxPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool2d.html">nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/MaxPool3d.html">nn.MaxPool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveAvgPool1d.html">nn.AdaptiveAvgPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveAvgPool2d.html">nn.AdaptiveAvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveAvgPool3d.html">nn.AdaptiveAvgPool3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveMaxPool1d.html">nn.AdaptiveMaxPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveMaxPool2d.html">nn.AdaptiveMaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../pool/AdaptiveMaxPool3d.html">nn.AdaptiveMaxPool3d</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/norm/index.html">Normalization Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/BatchNorm1d.html">nn.BatchNorm1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/BatchNorm2d.html">nn.BatchNorm2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/BatchNorm3d.html">nn.BatchNorm3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/InstanceNorm1d.html">nn.InstanceNorm1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/InstanceNorm2d.html">nn.InstanceNorm2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/InstanceNorm3d.html">nn.InstanceNorm3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/LayerNorm.html">nn.LayerNorm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/GroupNorm.html">nn.GroupNorm</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/norm/GlobalResponseNorm.html">nn.GlobalResponseNorm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../norm/index.html">Normalization Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../norm/BatchNorm1d.html">nn.BatchNorm1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../norm/BatchNorm2d.html">nn.BatchNorm2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../norm/BatchNorm3d.html">nn.BatchNorm3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../norm/InstanceNorm1d.html">nn.InstanceNorm1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../norm/InstanceNorm2d.html">nn.InstanceNorm2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../norm/InstanceNorm3d.html">nn.InstanceNorm3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../norm/LayerNorm.html">nn.LayerNorm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../norm/GroupNorm.html">nn.GroupNorm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../norm/GlobalResponseNorm.html">nn.GlobalResponseNorm</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/drop/index.html">Dropout Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/Dropout.html">nn.Dropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/Dropout1d.html">nn.Dropout1d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/Dropout2d.html">nn.Dropout2d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/Dropout3d.html">nn.Dropout3d</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/AlphaDropout.html">nn.AlphaDropout</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/DropBlock.html">nn.DropBlock</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/drop/DropPath.html">nn.DropPath</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../drop/index.html">Dropout Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../drop/Dropout.html">nn.Dropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/Dropout1d.html">nn.Dropout1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/Dropout2d.html">nn.Dropout2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/Dropout3d.html">nn.Dropout3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/AlphaDropout.html">nn.AlphaDropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/DropBlock.html">nn.DropBlock</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../drop/DropPath.html">nn.DropPath</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/loss/index.html">Loss Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/MSELoss.html">nn.MSELoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/BCELoss.html">nn.BCELoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/BCEWithLogitsLoss.html">nn.BCEWithLogitsLoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/CrossEntropyLoss.html">nn.CrossEntropyLoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/NLLLoss.html">nn.NLLLoss</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/loss/HuberLoss.html">nn.HuberLoss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../loss/index.html">Loss Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../loss/MSELoss.html">nn.MSELoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/BCELoss.html">nn.BCELoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/BCEWithLogitsLoss.html">nn.BCEWithLogitsLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/CrossEntropyLoss.html">nn.CrossEntropyLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/NLLLoss.html">nn.NLLLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../loss/HuberLoss.html">nn.HuberLoss</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/vision/index.html">Vision Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/vision/Upsample.html">nn.Upsample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../vision/index.html">Vision Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../vision/Upsample.html">nn.Upsample</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/sparse/index.html">Sparse Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/sparse/Embedding.html">nn.Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sparse/index.html">Sparse Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sparse/Embedding.html">nn.Embedding</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/rnn/index.html">Recurrent Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/rnn/RNNBase.html">nn.RNNBase</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/rnn/RNN.html">nn.RNN</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/rnn/LSTM.html">nn.LSTM</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/rnn/GRU.html">nn.GRU</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/rnn/RNNCell.html">nn.RNNCell</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/rnn/LSTMCell.html">nn.LSTMCell</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/rnn/GRUCell.html">nn.GRUCell</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../rnn/index.html">Recurrent Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../rnn/RNNBase.html">nn.RNNBase</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../rnn/RNN.html">nn.RNN</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../rnn/LSTM.html">nn.LSTM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../rnn/GRU.html">nn.GRU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../rnn/RNNCell.html">nn.RNNCell</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../rnn/LSTMCell.html">nn.LSTMCell</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../rnn/GRUCell.html">nn.GRUCell</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/attention/index.html">Attention Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/attention/ScaledDotProductAttention.html">nn.ScaledDotProductAttention</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/attention/MultiHeadAttention.html">nn.MultiHeadAttention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../attention/index.html">Attention Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../attention/ScaledDotProductAttention.html">nn.ScaledDotProductAttention</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../attention/MultiHeadAttention.html">nn.MultiHeadAttention</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/transformer/index.html">Transformer Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/transformer/TransformerEncoderLayer.html">nn.TransformerEncoderLayer</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/transformer/TransformerDecoderLayer.html">nn.TransformerDecoderLayer</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/transformer/TransformerEncoder.html">nn.TransformerEncoder</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/transformer/TransformerDecoder.html">nn.TransformerDecoder</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/transformer/Transformer.html">nn.Transformer</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="index.html">Transformer Layers</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="TransformerEncoderLayer.html">nn.TransformerEncoderLayer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="TransformerDecoderLayer.html">nn.TransformerDecoderLayer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="TransformerEncoder.html">nn.TransformerEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="TransformerDecoder.html">nn.TransformerDecoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Transformer.html">nn.Transformer</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">nn.SinusoidalPosEmbedding</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../modules/einops/index.html">Einops Layers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../modules/einops/Rearrange.html">nn.Rearrange</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../einops/index.html">Einops Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../einops/Rearrange.html">nn.Rearrange</a></li>
 </ul>
 </li>
 </ul>
@@ -967,11 +972,13 @@ data-aria-dark="Switch to auto color mode">
       <i class="i-lucide close"></i>
     </button>
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#lucid.nn.functional.embedding"><code class="docutils literal notranslate"><span class="pre">embedding()</span></code></a></li>
-<li><a class="reference internal" href="#function-signature">Function Signature</a></li>
+<li><a class="reference internal" href="#lucid.nn.SinusoidalPosEmbedding"><code class="docutils literal notranslate"><span class="pre">SinusoidalPosEmbedding</span></code></a></li>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
-<li><a class="reference internal" href="#returns">Returns</a></li>
-<li><a class="reference internal" href="#embedding-process">Embedding Process</a></li>
+<li><a class="reference internal" href="#forward-method">Forward Method</a></li>
+<li><a class="reference internal" href="#behavior">Behavior</a></li>
+<li><a class="reference internal" href="#sinusoidal-encoding">Sinusoidal Encoding</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
@@ -990,15 +997,15 @@ data-aria-dark="Switch to auto color mode">
         <span>/</span>
         <meta itemprop="position" content="1" />
       </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-        <a itemprop="item" href="../index.html"><span itemprop="name">lucid.nn.functional</span></a>
+        <a itemprop="item" href="../index.html"><span itemprop="name">Modules</span></a>
         <span>/</span>
         <meta itemprop="position" content="2" />
       </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-        <a itemprop="item" href="index.html"><span itemprop="name">Utility Functions</span></a>
+        <a itemprop="item" href="index.html"><span itemprop="name">Transformer Layers</span></a>
         <span>/</span>
         <meta itemprop="position" content="3" />
       </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-        <strong itemprop="name">nn.functional.embedding</strong>
+        <strong itemprop="name">nn.SinusoidalPosEmbedding</strong>
         <meta itemprop="position" content="4" />
       </li></ol>
     <div class="xl:hidden ml-1">
@@ -1015,7 +1022,7 @@ data-aria-dark="Switch to auto color mode">
     <button
       type="button"
       class="js-copy px-3 py-1 inline-flex items-center gap-1"
-      data-url="https://chanlumerico.github.io/lucid/_sources/nn/functions/util/embedding.rst.txt"
+      data-url="https://chanlumerico.github.io/lucid/_sources/nn/modules/transformer/SinusoidalPosEmbedding.rst.txt"
     >
       <i class="i-lucide" data-icon="copy"></i>
       <span>Copy page</span>
@@ -1029,124 +1036,108 @@ data-aria-dark="Switch to auto color mode">
     <div role="presentation">
       <div class="flex flex-col" role="group">
         <button class="js-copy" type="button" role="menuitem"
-          data-url="https://chanlumerico.github.io/lucid/_sources/nn/functions/util/embedding.rst.txt">
+          data-url="https://chanlumerico.github.io/lucid/_sources/nn/modules/transformer/SinusoidalPosEmbedding.rst.txt">
           <span class="iconify-icon">
             <i class="i-lucide" data-icon="copy"></i>
           </span>
           <span>Copy page</span>
         </button>
-        <a role="menuitem" href="https://chanlumerico.github.io/lucid/_sources/nn/functions/util/embedding.rst.txt" target="_blank" rel="nofollow"><iconify-icon icon="bi:code-slash"></iconify-icon>
-            <span>View Source</span></a><a role="menuitem" href="https://chatgpt.com/?hints=search&q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/nn/functions/util/embedding.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
+        <a role="menuitem" href="https://chanlumerico.github.io/lucid/_sources/nn/modules/transformer/SinusoidalPosEmbedding.rst.txt" target="_blank" rel="nofollow"><iconify-icon icon="bi:code-slash"></iconify-icon>
+            <span>View Source</span></a><a role="menuitem" href="https://chatgpt.com/?hints=search&q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/nn/modules/transformer/SinusoidalPosEmbedding.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
           <iconify-icon icon="bi:openai"></iconify-icon>
           <span>Open in ChatGPT</span>
-        </a><a role="menuitem" href="https://claude.ai/new?q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/nn/functions/util/embedding.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
+        </a><a role="menuitem" href="https://claude.ai/new?q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/nn/modules/transformer/SinusoidalPosEmbedding.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
           <iconify-icon icon="bi:claude"></iconify-icon>
           <span>Open in Claude</span>
         </a></div>
     </div>
   </div>
 </div><article class="yue" role="main">
-          <section id="nn-functional-embedding">
-<h1>nn.functional.embedding<a class="headerlink" href="#nn-functional-embedding" title="Link to this heading">¶</a></h1>
-<dl class="py function">
-<dt class="sig sig-object py" id="lucid.nn.functional.embedding">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">embedding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding_idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_norm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.embedding" title="Link to this definition">¶</a></dt>
+          <section id="nn-sinusoidalposembedding">
+<h1>nn.SinusoidalPosEmbedding<a class="headerlink" href="#nn-sinusoidalposembedding" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lucid.nn.SinusoidalPosEmbedding">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.nn.</span></span><span class="sig-name descname"><span class="pre">SinusoidalPosEmbedding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq_len</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.nn.SinusoidalPosEmbedding" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>embedding</cite> function converts input indices into a dense representation using an embedding weight matrix.
-It is commonly used for handling categorical data, such as word embeddings in NLP models.</p>
-<section id="function-signature">
-<h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">embedding</span><span class="p">(</span>
-</span><span data-line="2">    <span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
-</span><span data-line="3">    <span class="n">weight</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
-</span><span data-line="4">    <span class="n">padding_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span data-line="5">    <span class="n">max_norm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span data-line="6">    <span class="n">norm_type</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
-</span><span data-line="7"><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<p><cite>SinusoidalPosEmbedding</cite> adds deterministic sinusoidal positional encodings to
+embedding tensors. It supports both unbatched and batched inputs and can either
+infer sequence shape dynamically or enforce fixed shape from constructor arguments.</p>
+</section>
+<section id="class-signature">
+<h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">class</span><span class="w"> </span><span class="nc">lucid</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">SinusoidalPosEmbedding</span><span class="p">(</span>
+</span><span data-line="2">    <span class="n">seq_len</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span data-line="3"><span class="p">)</span>
 </span></pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>input_</strong> (<em>Tensor</em>):
-The input tensor containing indices of shape <cite>(N, …)</cite>, where each element is an index.</p></li>
-<li><p><strong>weight</strong> (<em>Tensor</em>):
-The embedding weight matrix of shape <cite>(num_embeddings, embedding_dim)</cite>.</p></li>
-<li><p><strong>padding_idx</strong> (<em>int | None</em>, optional):
-If provided, the embedding at <cite>padding_idx</cite> will be zeroed out. Default is None.</p></li>
-<li><p><strong>max_norm</strong> (<em>float | None</em>, optional):
-If provided, each embedding vector is normalized to <cite>max_norm</cite> using <cite>norm_type</cite>.
-Default is None.</p></li>
-<li><p><strong>norm_type</strong> (<em>float</em>, optional):
-The p-norm to use for normalization if <cite>max_norm</cite> is specified. Default is 2.0.</p></li>
+<li><p><strong>seq_len</strong> (<em>int | None</em>, optional):
+Fixed sequence length. If <cite>None</cite>, length is inferred from each input.</p></li>
+<li><p><strong>embed_dim</strong> (<em>int | None</em>, optional):
+Fixed embedding dimension. If <cite>None</cite>, embedding size is inferred from each input.</p></li>
 </ul>
 </section>
-<section id="returns">
-<h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
+<section id="forward-method">
+<h2>Forward Method<a class="headerlink" href="#forward-method" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">input_</span><span class="p">:</span> <span class="n">lucid</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">lucid</span><span class="o">.</span><span class="n">FloatTensor</span>
+</span></pre></div>
+</div>
+<p><strong>Input:</strong></p>
 <ul class="simple">
-<li><p><strong>Tensor</strong>:
-The embedded tensor of shape <cite>(N, …, embedding_dim)</cite>, containing the
-corresponding embeddings from <cite>weight</cite>.</p></li>
+<li><p><strong>input_</strong> (<em>FloatTensor</em>):
+Input embedding tensor with shape <cite>(L, D)</cite> or <cite>(N, L, D)</cite>.
+The tensor must have a floating-point dtype.</p></li>
+</ul>
+<p><strong>Output:</strong></p>
+<ul class="simple">
+<li><p><strong>FloatTensor</strong>:
+Tensor with the same shape as input, where sinusoidal position encodings are added.</p></li>
 </ul>
 </section>
-<section id="embedding-process">
-<h2>Embedding Process<a class="headerlink" href="#embedding-process" title="Link to this heading">¶</a></h2>
-<p>Given an index tensor <cite>input_</cite>, the function retrieves the corresponding row from <cite>weight</cite>:</p>
+<section id="behavior">
+<h2>Behavior<a class="headerlink" href="#behavior" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>If <cite>seq_len</cite> or <cite>embed_dim</cite> is <cite>None</cite>, the value is inferred from the input tensor.</p></li>
+<li><p>If fixed values are provided and they do not match input shape, <cite>ValueError</cite> is raised.</p></li>
+<li><p>If the input dtype is not floating-point, <cite>TypeError</cite> is raised.</p></li>
+</ul>
+</section>
+<section id="sinusoidal-encoding">
+<h2>Sinusoidal Encoding<a class="headerlink" href="#sinusoidal-encoding" title="Link to this heading">¶</a></h2>
+<p>For position <span class="math notranslate nohighlight">\(p\)</span> and channel index <span class="math notranslate nohighlight">\(i\)</span>:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\text{output}[i, j, ...] = \text{weight}[\text{input_}[i, j, ...]]\]</div>
+\[\text{PE}(p, 2i) = \sin\left(\frac{p}{10000^{2i / D}}\right), \quad
+\text{PE}(p, 2i + 1) = \cos\left(\frac{p}{10000^{2i / D}}\right)\]</div>
 </div>
-<p>If <cite>padding_idx</cite> is specified, embeddings corresponding to this index are set to zero:</p>
+<p>The module computes <span class="math notranslate nohighlight">\(\text{PE}\)</span> and returns:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\text{output}[i, j, ...] = 0 \quad \text{if} \quad \text{input_}[i, j, ...] =
-\text{padding_idx}\]</div>
+\[\mathbf{Y} = \mathbf{X} + \text{PE}\]</div>
 </div>
-<p>If <cite>max_norm</cite> is specified, the output vectors are normalized:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{output} = \frac{\text{output} \cdot \text{max_norm}}{||\text{output}||_{p}}\]</div>
-</div>
-<p>where <span class="math notranslate nohighlight">\(||\cdot||_p\)</span> represents the p-norm.</p>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p><strong>Basic embedding lookup:</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
-</span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="n">input_indices</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
-</span><span data-line="3"><span class="gp">&gt;&gt;&gt; </span><span class="n">embedding_matrix</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span>
-</span><span data-line="4"><span class="gp">... </span>    <span class="p">[</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">],</span>  <span class="c1"># Word 0</span>
-</span><span data-line="5"><span class="gp">... </span>    <span class="p">[</span><span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">],</span>  <span class="c1"># Word 1</span>
-</span><span data-line="6"><span class="gp">... </span>    <span class="p">[</span><span class="mf">0.7</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">],</span>  <span class="c1"># Word 2</span>
-</span><span data-line="7"><span class="gp">... </span>    <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.1</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">],</span>  <span class="c1"># Word 3</span>
-</span><span data-line="8"><span class="gp">... </span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span data-line="9"><span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">input_indices</span><span class="p">,</span> <span class="n">embedding_matrix</span><span class="p">)</span>
-</span><span data-line="10"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
-</span><span data-line="11"><span class="go">Tensor([...])</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
+</span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+</span><span data-line="3"><span class="gp">&gt;&gt;&gt;</span>
+</span><span data-line="4"><span class="gp">&gt;&gt;&gt; </span><span class="n">pos</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">SinusoidalPosEmbedding</span><span class="p">()</span>
+</span><span data-line="5"><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>   <span class="c1"># (batch, seq_len, embed_dim)</span>
+</span><span data-line="6"><span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">pos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</span><span data-line="7"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</span><span data-line="8"><span class="go">(2, 8, 64)</span>
+</span><span data-line="9">
+</span><span data-line="10"><span class="gp">&gt;&gt;&gt; </span><span class="n">pos_fixed</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">SinusoidalPosEmbedding</span><span class="p">(</span><span class="n">seq_len</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>
+</span><span data-line="11"><span class="gp">&gt;&gt;&gt; </span><span class="n">y2</span> <span class="o">=</span> <span class="n">pos_fixed</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</span><span data-line="12"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">y2</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</span><span data-line="13"><span class="go">(2, 8, 64)</span>
 </span></pre></div>
-</div>
-<p><strong>Using padding index:</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="n">output_with_padding</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">input_indices</span><span class="p">,</span> <span class="n">embedding_matrix</span><span class="p">,</span> <span class="n">padding_idx</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-</span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output_with_padding</span><span class="p">)</span>
-</span><span data-line="3"><span class="go">Tensor([...])  # Embeddings at index 1 are zeroed out.</span>
-</span></pre></div>
-</div>
-<p><strong>Using max normalization:</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="n">output_with_norm</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">input_indices</span><span class="p">,</span> <span class="n">embedding_matrix</span><span class="p">,</span> <span class="n">max_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
-</span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">output_with_norm</span><span class="p">)</span>
-</span><span data-line="3"><span class="go">Tensor([...])  # Each embedding vector is scaled to have norm ≤ 1.0.</span>
-</span></pre></div>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<ul class="simple">
-<li><p>The function ensures proper differentiation when <cite>weight.requires_grad=True</cite>.</p></li>
-<li><p><cite>padding_idx</cite> ensures that a given index is zeroed in the output tensor.</p></li>
-<li><p><cite>max_norm</cite> helps regulate the magnitude of embedding vectors,
-often improving training stability.</p></li>
-</ul>
 </div>
 </section>
 </section>
@@ -1157,16 +1148,16 @@ often improving training stability.</p></li>
   </svg>
   <span>Back to top</span>
 </button><div class="navigation flex print:hidden"><div class="navigation-prev">
-    <a href="rotate.html">
+    <a href="Transformer.html">
       <i class="i-lucide chevron-left"></i>
       <div class="page-info">
-        <span>Previous</span><div class="title">nn.functional.rotate</div></div>
+        <span>Previous</span><div class="title">nn.Transformer</div></div>
     </a>
   </div><div class="navigation-next">
-    <a href="one_hot.html">
+    <a href="../einops/index.html">
       <div class="page-info">
         <span>Next</span>
-        <div class="title">nn.functional.one_hot</div>
+        <div class="title">Einops Layers</div>
       </div>
       <i class="i-lucide chevron-right"></i>
     </a>

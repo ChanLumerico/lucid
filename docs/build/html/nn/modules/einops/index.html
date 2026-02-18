@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Einops Layers - Lucid 2.13.5 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.Rearrange" href="Rearrange.html" /><link rel="prev" title="nn.Transformer" href="../transformer/Transformer.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Einops Layers - Lucid 2.13.5 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.Rearrange" href="Rearrange.html" /><link rel="prev" title="nn.SinusoidalPosEmbedding" href="../transformer/SinusoidalPosEmbedding.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/modules/einops/" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -299,10 +299,14 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l3"><a class="reference internal" href="../../functions/spatial/grid_sample.html">nn.functional.grid_sample</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="../../functions/embedding/index.html">Embedding Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/embedding/embedding.html">nn.functional.embedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../functions/embedding/sinusoidal_pos_embedding.html">nn.functional.sinusoidal_pos_embedding</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../functions/util/index.html">Utility Functions</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../functions/util/interpolate.html">nn.functional.interpolate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../functions/util/rotate.html">nn.functional.rotate</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../functions/util/embedding.html">nn.functional.embedding</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../functions/util/one_hot.html">nn.functional.one_hot</a></li>
 </ul>
 </li>
@@ -427,6 +431,7 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l3"><a class="reference internal" href="../transformer/TransformerEncoder.html">nn.TransformerEncoder</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transformer/TransformerDecoder.html">nn.TransformerDecoder</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transformer/Transformer.html">nn.Transformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../transformer/SinusoidalPosEmbedding.html">nn.SinusoidalPosEmbedding</a></li>
 </ul>
 </li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Einops Layers</a><ul>
@@ -1049,10 +1054,10 @@ data-aria-dark="Switch to auto color mode">
   </svg>
   <span>Back to top</span>
 </button><div class="navigation flex print:hidden"><div class="navigation-prev">
-    <a href="../transformer/Transformer.html">
+    <a href="../transformer/SinusoidalPosEmbedding.html">
       <i class="i-lucide chevron-left"></i>
       <div class="page-info">
-        <span>Previous</span><div class="title">nn.Transformer</div></div>
+        <span>Previous</span><div class="title">nn.SinusoidalPosEmbedding</div></div>
     </a>
   </div><div class="navigation-next">
     <a href="Rearrange.html">

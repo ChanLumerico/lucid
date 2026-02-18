@@ -14,6 +14,7 @@ __all__ = [
     "TransformerEncoder",
     "TransformerDecoder",
     "Transformer",
+    "SinusoidalPosEmbedding",
 ]
 
 
@@ -497,3 +498,43 @@ class Transformer(nn.Module):
             cache_start_layer_idx=cache_start_layer_idx,
         )
         return output
+
+
+class SinusoidalPosEmbedding(nn.Module):
+    def __init__(
+        self, seq_len: int | None = None, embed_dim: int | None = None
+    ) -> None:
+        super().__init__()
+        self.seq_len = seq_len
+        self.embed_dim = embed_dim
+
+    def forward(self, input_: lucid.FloatTensor) -> lucid.FloatTensor:
+        if input_.ndim not in {2, 3}:
+            raise ValueError(f"{type(self).__name__} expects 2D and 3D Tensor inputs.")
+
+        if input_.dtype.base_dtype is not float:
+            raise TypeError(f"'{type(self).__name__}' expects a float Tensor.")
+
+        _is_batched = True if input_.ndim == 3 else False
+        x = input_ if _is_batched else input_.unsqueeze(axis=0)
+
+        seq_len = x.shape[1] if self.seq_len is None else self.seq_len
+        embed_dim = x.shape[2] if self.embed_dim is None else self.embed_dim
+
+        if seq_len != x.shape[1]:
+            raise ValueError(
+                f"seq_len does not match: '{self.seq_len}', '{x.shape[1]}'. "
+                f"Use 'seq_len=None' for dynamic length inference."
+            )
+        if embed_dim != x.shape[2]:
+            raise ValueError(
+                f"embed_dim does not match: '{self.embed_dim}', '{x.shape[2]}'. "
+                f"Use 'embed_dim=None' for dynamic length inference."
+            )
+
+        posemb = F.sinusoidal_pos_embedding(seq_len, embed_dim, x.device, x.dtype)
+        embed = x + posemb
+        if not _is_batched:
+            embed = embed.squeeze(axis=0)
+
+        return embed
