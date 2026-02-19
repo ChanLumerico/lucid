@@ -60,3 +60,27 @@ def sinusoidal_pos_embedding(
     pos[:, 1::2] = lucid.cos(angle[:, : embed_dim // 2])
 
     return pos
+
+
+def rotary_pos_embedding(input_: Tensor) -> Tensor:
+    seq_len, embed_dim = input_.shape[-2:]
+    device = input_.device
+
+    if embed_dim % 2 != 0:
+        raise ValueError(f"Expected even input embedding dimension, got '{embed_dim}'.")
+
+    theta = lucid.exp(
+        -2
+        * lucid.arange(embed_dim // 2, device=device, dtype=lucid.Double)
+        * (math.log(10000.0) / embed_dim)
+    )
+    indices = lucid.arange(seq_len, device=device, dtype=lucid.Double)
+    freq = indices.unsqueeze(-1) @ theta.repeat(2).unsqueeze(0)
+
+    x = input_.astype(lucid.Double)
+    input_rot = lucid.zeros_like(x)
+    input_rot[..., 0::2] = -x[..., 1::2]
+    input_rot[..., 1::2] = x[..., 0::2]
+
+    out = x * lucid.cos(freq) + input_rot * lucid.sin(freq)
+    return out.astype(input_.dtype)
