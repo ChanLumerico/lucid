@@ -20,8 +20,11 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Added new submodule `lucid.data.tokenizers` which contains various tokenizers for NLP tasks, starting with `WordPieceTokenizer`
-    - Tokenizers in `data.tokenizers` also come along with thier ***Fast*** versions, accelerated via **C++ backend**. (e.g. `WordPieceTokenizerFast`)
+- Branched new package inside `nn.functional` and `nn.moduels` for positional embeddings for Transformer-like models.
+  
+  - e.g. `F.sinusoidal_pos_embedding`, `nn.SinusoidalPosEmbedding`, etc.
+
+- Added new submodule `lucid.data.tokenizers` which contains various tokenizers for NLP tasks along with thier ***Fast*** versions, accelerated via **C++ backend**. (e.g. `WordPieceTokenizerFast`)
 
 - Implemented **BERT**(Devlin et al., 2018) `lucid.models.BERT`
     - Also provides *pre-trained weights* via *`BERT_Weights.PRE_TRAIN_BASE`* at `lucid.weights`

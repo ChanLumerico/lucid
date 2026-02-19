@@ -15,6 +15,7 @@ __all__ = [
     "TransformerDecoder",
     "Transformer",
     "SinusoidalPosEmbedding",
+    "LearnedPosEmbedding",
 ]
 
 
@@ -538,3 +539,36 @@ class SinusoidalPosEmbedding(nn.Module):
             embed = embed.squeeze(axis=0)
 
         return embed
+
+
+class LearnedPosEmbedding(nn.Module):
+    def __init__(self, max_len: int, embed_dim: int) -> None:
+        super().__init__()
+        self.max_len = max_len
+        self.embed_dim = embed_dim
+        self.pos_emb = nn.Embedding(max_len, embed_dim)
+
+    def forward(self, x: lucid.FloatTensor, offset: int = 0) -> lucid.FloatTensor:
+        if x.ndim not in {2, 3}:
+            raise ValueError(f"{type(self).__name__} expects 2D and 3D Tensor inputs.")
+
+        if x.dtype.base_dtype is not float:
+            raise TypeError(f"'{type(self).__name__}' expects a float Tensor.")
+
+        seq_len, embed_dim = x.shape[-2:]
+        if embed_dim != self.embed_dim:
+            raise ValueError(
+                f"embed_dim does not match: '{self.embed_dim}', '{embed_dim}'."
+            )
+
+        if offset < 0 or seq_len + offset > self.max_len:
+            raise ValueError(f"Invalid position.")
+
+        pos_ids = lucid.arange(
+            offset, offset + seq_len, device=x.device, dtype=lucid.Long
+        )
+        pos_emb = self.pos_emb(pos_ids)
+        if x.ndim == 3:
+            pos_emb = pos_emb.unsqueeze(axis=0)
+
+        return x + pos_emb

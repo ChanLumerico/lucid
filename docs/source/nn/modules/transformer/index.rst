@@ -10,3 +10,4 @@ Transformer Layers
     TransformerDecoder.rst
     Transformer.rst
     SinusoidalPosEmbedding.rst
+    LearnedPosEmbedding.rst
