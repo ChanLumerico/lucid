@@ -62,7 +62,9 @@ def sinusoidal_pos_embedding(
     return pos
 
 
-def rotary_pos_embedding(input_: Tensor) -> Tensor:
+def rotary_pos_embedding(
+    input_: Tensor, position_ids: Tensor | None = None, interleaved: bool = True
+) -> Tensor:
     seq_len, embed_dim = input_.shape[-2:]
     device = input_.device
 
@@ -74,13 +76,30 @@ def rotary_pos_embedding(input_: Tensor) -> Tensor:
         * lucid.arange(embed_dim // 2, device=device, dtype=lucid.Double)
         * (math.log(10000.0) / embed_dim)
     )
-    indices = lucid.arange(seq_len, device=device, dtype=lucid.Double)
-    freq = indices.unsqueeze(-1) @ theta.repeat(2).unsqueeze(0)
+    if position_ids is None:
+        indices = lucid.arange(seq_len, device=device, dtype=lucid.Double)
+    else:
+        if position_ids.ndim != 1 or position_ids.shape[0] != seq_len:
+            raise ValueError(
+                "position_ids must be 1-D with length equal to input_.shape[-2]."
+            )
+        indices = position_ids.to(device).astype(lucid.Double)
+
+    freq_half = indices.unsqueeze(-1) @ theta.unsqueeze(0)
+    if interleaved:
+        freq = freq_half.repeat(2, axis=-1)
+    else:
+        freq = lucid.concatenate([freq_half, freq_half], axis=-1)
 
     x = input_.astype(lucid.Double)
     input_rot = lucid.zeros_like(x)
-    input_rot[..., 0::2] = -x[..., 1::2]
-    input_rot[..., 1::2] = x[..., 0::2]
+    if interleaved:
+        input_rot[..., 0::2] = -x[..., 1::2]
+        input_rot[..., 1::2] = x[..., 0::2]
+    else:
+        half = embed_dim // 2
+        input_rot[..., :half] = -x[..., half:]
+        input_rot[..., half:] = x[..., :half]
 
     out = x * lucid.cos(freq) + input_rot * lucid.sin(freq)
     return out.astype(input_.dtype)

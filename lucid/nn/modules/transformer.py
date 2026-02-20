@@ -1,3 +1,4 @@
+import math
 from typing import Callable
 from copy import deepcopy
 
@@ -16,6 +17,7 @@ __all__ = [
     "Transformer",
     "SinusoidalPosEmbedding",
     "LearnedPosEmbedding",
+    "RotaryPosEmbedding",
 ]
 
 
@@ -548,14 +550,14 @@ class LearnedPosEmbedding(nn.Module):
         self.embed_dim = embed_dim
         self.pos_emb = nn.Embedding(max_len, embed_dim)
 
-    def forward(self, x: lucid.FloatTensor, offset: int = 0) -> lucid.FloatTensor:
-        if x.ndim not in {2, 3}:
+    def forward(self, input_: lucid.FloatTensor, offset: int = 0) -> lucid.FloatTensor:
+        if input_.ndim not in {2, 3}:
             raise ValueError(f"{type(self).__name__} expects 2D and 3D Tensor inputs.")
 
-        if x.dtype.base_dtype is not float:
+        if input_.dtype.base_dtype is not float:
             raise TypeError(f"'{type(self).__name__}' expects a float Tensor.")
 
-        seq_len, embed_dim = x.shape[-2:]
+        seq_len, embed_dim = input_.shape[-2:]
         if embed_dim != self.embed_dim:
             raise ValueError(
                 f"embed_dim does not match: '{self.embed_dim}', '{embed_dim}'."
@@ -565,10 +567,122 @@ class LearnedPosEmbedding(nn.Module):
             raise ValueError(f"Invalid position.")
 
         pos_ids = lucid.arange(
-            offset, offset + seq_len, device=x.device, dtype=lucid.Long
+            offset, offset + seq_len, device=input_.device, dtype=lucid.Long
         )
         pos_emb = self.pos_emb(pos_ids)
-        if x.ndim == 3:
+        if input_.ndim == 3:
             pos_emb = pos_emb.unsqueeze(axis=0)
 
-        return x + pos_emb
+        return input_ + pos_emb
+
+
+class RotaryPosEmbedding(nn.Module):
+    def __init__(
+        self,
+        embed_dim: int | None = None,
+        max_seq_len: int | None = None,
+        interleaved: bool = True,
+    ) -> None:
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.max_seq_len = max_seq_len
+        self.interleaved = interleaved
+        self._cache_seq_len = 0
+
+        self.cos_cached: nn.Buffer | None
+        self.sin_cached: nn.Buffer | None
+        self.register_buffer("cos_cached", None)
+        self.register_buffer("sin_cached", None)
+
+    def _build_cache(self, seq_len: int, embed_dim: int, device: str) -> None:
+        theta = lucid.exp(
+            -2
+            * lucid.arange(embed_dim // 2, device=device, dtype=lucid.Double)
+            * (math.log(10000.0) / embed_dim)
+        )
+        indices = lucid.arange(seq_len, device=device, dtype=lucid.Double)
+        freq_half = indices.unsqueeze(-1) @ theta.unsqueeze(0)
+
+        if self.interleaved:
+            freq = freq_half.repeat(2, axis=-1)
+        else:
+            freq = lucid.concatenate([freq_half, freq_half], axis=-1)
+
+        self.cos_cached = nn.Buffer(lucid.cos(freq))
+        self.sin_cached = nn.Buffer(lucid.sin(freq))
+        self._cache_seq_len = seq_len
+
+    def forward(
+        self, input_: lucid.FloatTensor, position_ids: lucid.LongTensor | None = None
+    ) -> lucid.FloatTensor:
+        if input_.ndim < 2:
+            raise ValueError(f"{type(self).__name__} expects input ndim >= 2.")
+
+        if input_.dtype.base_dtype is not float:
+            raise TypeError(f"'{type(self).__name__}' expects a float Tensor.")
+
+        seq_len = input_.shape[-2]
+        embed_dim = input_.shape[-1]
+
+        if self.embed_dim is not None:
+            if embed_dim != self.embed_dim:
+                raise ValueError(
+                    f"Expected embed_dim of '{self.embed_dim}', got '{embed_dim}'"
+                )
+
+        if embed_dim % 2 != 0:
+            raise ValueError(
+                f"Expected even input embedding dimension, got '{embed_dim}'."
+            )
+
+        if position_ids is not None:
+            if position_ids.ndim != 1 or position_ids.shape[0] != seq_len:
+                raise ValueError(
+                    "position_ids must be 1-D with length equal to input_.shape[-2]."
+                )
+            max_pos = int(lucid.max(position_ids).item())
+            if max_pos < 0:
+                raise ValueError("position_ids must be non-negative.")
+            required_len = max_pos + 1
+        else:
+            required_len = seq_len
+
+        if self.max_seq_len is not None and required_len > self.max_seq_len:
+            raise ValueError(
+                f"Required sequence length '{required_len}' exceeds max_seq_len "
+                f"'{self.max_seq_len}'."
+            )
+
+        if (
+            self.cos_cached is None
+            or self.sin_cached is None
+            or self._cache_seq_len < required_len
+            or self.cos_cached.shape[-1] != embed_dim
+            or self.cos_cached.device != input_.device
+        ):
+            build_len = required_len if self.max_seq_len is None else self.max_seq_len
+            self._build_cache(build_len, embed_dim, input_.device)
+
+        if position_ids is None:
+            cos = self.cos_cached[:seq_len]
+            sin = self.sin_cached[:seq_len]
+        else:
+            ids = position_ids.to(input_.device).astype(lucid.Long)
+            cos = self.cos_cached[ids]
+            sin = self.sin_cached[ids]
+
+        x = input_.astype(lucid.Double)
+        cos = cos.astype(lucid.Double)
+        sin = sin.astype(lucid.Double)
+
+        x_rot = lucid.zeros_like(x)
+        if self.interleaved:
+            x_rot[..., 0::2] = -x[..., 1::2]
+            x_rot[..., 1::2] = x[..., 0::2]
+        else:
+            half = embed_dim // 2
+            x_rot[..., :half] = -x[..., half:]
+            x_rot[..., half:] = x[..., :half]
+
+        out = x * cos + x_rot * sin
+        return out.astype(input_.dtype)

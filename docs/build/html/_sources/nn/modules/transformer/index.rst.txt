@@ -11,3 +11,4 @@ Transformer Layers
     Transformer.rst
     SinusoidalPosEmbedding.rst
     LearnedPosEmbedding.rst
+    RotaryPosEmbedding.rst

@@ -526,3 +526,11 @@ def sinusoidal_pos_embedding(
     if seq_len <= 0 or embed_dim <= 0:
         raise ValueError("seq_len and embed_dim must be positive.")
     return _embedding.sinusoidal_pos_embedding(seq_len, embed_dim, device, dtype)
+
+
+def rotary_pos_embedding(
+    input_: Tensor,
+    position_ids: Tensor | None = None,
+    interleaved: bool = True,
+) -> Tensor:
+    return _embedding.rotary_pos_embedding(input_, position_ids, interleaved)
