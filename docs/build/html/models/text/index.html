@@ -1082,6 +1082,7 @@ for Language Understanding.” arXiv, 11 Oct. 2018,
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
 <th class="head"><p>FLOPs</p></th>
+<th class="head"><p>Pre-Trained</p></th>
 </tr>
 </thead>
 <tbody>
@@ -1090,48 +1091,56 @@ for Language Understanding.” arXiv, 11 Oct. 2018,
 <td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p><em>Depends</em></p></td>
 <td><p><em>Depends</em></p></td>
+<td><p>–</p></td>
 </tr>
 <tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{Pre}\)</span></p></td>
 <td><p><a class="reference external" href="bert/BERTForPreTraining">BERTForPreTraining</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>110,106,428</p></td>
-<td><p>28.50G</p></td>
+<td><p>28.50B</p></td>
+<td><p>✅</p></td>
 </tr>
-<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-MLM}\)</span></p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{MLM}\)</span></p></td>
 <td><p><a class="reference external" href="bert/BERTForMaskedLM">BERTForMaskedLM</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>109,514,298</p></td>
-<td><p>28.50G</p></td>
+<td><p>28.50B</p></td>
+<td><p>❌</p></td>
 </tr>
-<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-CLM}\)</span></p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{CLM}\)</span></p></td>
 <td><p><a class="reference external" href="bert/BERTForCausalLM">BERTForCausalLM</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>109,514,298</p></td>
-<td><p>28.50G</p></td>
+<td><p>28.50B</p></td>
+<td><p>❌</p></td>
 </tr>
-<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-NSP}\)</span></p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{NSP}\)</span></p></td>
 <td><p><a class="reference external" href="bert/BERTForNextSentencePrediction">BERTForNextSentencePrediction</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>109,483,778</p></td>
-<td><p>22.35G</p></td>
+<td><p>22.35B</p></td>
+<td><p>❌</p></td>
 </tr>
-<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-SC}\)</span></p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{SC}\)</span></p></td>
 <td><p><a class="reference external" href="bert/BERTForSequenceClassification">BERTForSequenceClassification</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>109,483,778</p></td>
-<td><p>22.35G</p></td>
+<td><p>22.35B</p></td>
+<td><p>❌</p></td>
 </tr>
-<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT-TC}\)</span></p></td>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{TC}\)</span></p></td>
 <td><p><a class="reference external" href="bert/BERTForTokenClassification">BERTForTokenClassification</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>108,895,493</p></td>
-<td><p>22.35G</p></td>
+<td><p>22.35B</p></td>
+<td><p>❌</p></td>
 </tr>
-<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT-QA}\)</span></p></td>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\text{BERT}_\text{QA}\)</span></p></td>
 <td><p><a class="reference external" href="bert/BERTForQuestionAnswering">BERTForQuestionAnswering</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,L)\)</span></p></td>
 <td><p>108,893,186</p></td>
-<td><p>22.35G</p></td>
+<td><p>22.35B</p></td>
+<td><p>❌</p></td>
 </tr>
 </tbody>
 </table>

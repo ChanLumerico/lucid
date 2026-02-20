@@ -62,53 +62,62 @@ including pre-training, language modeling, and sequence-level prediction heads.
       - Input Shape
       - Parameter Count
       - FLOPs
+      - Pre-Trained
 
     * - :math:`\text{BERT}`
       - `BERT <bert/BERT>`_
       - :math:`(N,L)`
       - *Depends*
       - *Depends*
+      - –
 
     * - :math:`\text{BERT}_\text{Pre}`
       - `BERTForPreTraining <bert/BERTForPreTraining>`_
       - :math:`(N,L)`
       - 110,106,428
-      - 28.50G
+      - 28.50B
+      - ✅
 
-    * - :math:`\text{BERT-MLM}`
+    * - :math:`\text{BERT}_\text{MLM}`
       - `BERTForMaskedLM <bert/BERTForMaskedLM>`_
       - :math:`(N,L)`
       - 109,514,298
-      - 28.50G
+      - 28.50B
+      - ❌
 
-    * - :math:`\text{BERT-CLM}`
+    * - :math:`\text{BERT}_\text{CLM}`
       - `BERTForCausalLM <bert/BERTForCausalLM>`_
       - :math:`(N,L)`
       - 109,514,298
-      - 28.50G
+      - 28.50B
+      - ❌
 
-    * - :math:`\text{BERT-NSP}`
+    * - :math:`\text{BERT}_\text{NSP}`
       - `BERTForNextSentencePrediction <bert/BERTForNextSentencePrediction>`_
       - :math:`(N,L)`
       - 109,483,778
-      - 22.35G
+      - 22.35B
+      - ❌
 
-    * - :math:`\text{BERT-SC}`
+    * - :math:`\text{BERT}_\text{SC}`
       - `BERTForSequenceClassification <bert/BERTForSequenceClassification>`_
       - :math:`(N,L)`
       - 109,483,778
-      - 22.35G
+      - 22.35B
+      - ❌
 
-    * - :math:`\text{BERT-TC}`
+    * - :math:`\text{BERT}_\text{TC}`
       - `BERTForTokenClassification <bert/BERTForTokenClassification>`_
       - :math:`(N,L)`
       - 108,895,493
-      - 22.35G
+      - 22.35B
+      - ❌
 
-    * - :math:`\text{BERT-QA}`
+    * - :math:`\text{BERT}_\text{QA}`
       - `BERTForQuestionAnswering <bert/BERTForQuestionAnswering>`_
       - :math:`(N,L)`
       - 108,893,186
-      - 22.35G
+      - 22.35B
+      - ❌
 
 *To be implemented...🔮*
