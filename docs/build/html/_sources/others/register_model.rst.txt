@@ -3,8 +3,8 @@ lucid.register_model
 
 .. autofunction:: lucid.register_model
 
-The `register_model` decorator registers a model function and its metadata into a JSON registry file. 
-This is particularly useful for managing and organizing models in the `lucid` library.
+The `register_model` decorator registers a model factory and its metadata into a JSON
+registry file.
 
 Function Signature
 ------------------
@@ -26,19 +26,20 @@ When a function decorated with `@register_model` is called, the following occurs
 
 1. The registry file (JSON) is loaded from `REGISTRY_PATH`.
 2. The function is invoked to instantiate the model.
-3. The model's name, family (class name), parameter size, and architecture are extracted.
-4. If the model's name already exists in the registry, the model is returned without making changes to the registry.
-5. Otherwise, the new model's metadata is added to the registry and saved back to the JSON file.
+3. The model's parameter size and submodule count are extracted.
+4. A hierarchical key path is derived from the model file location under
+   `lucid/models` (for example, `lucid/models/vision/dense.py` ->
+   `vision -> dense -> densenet_121`).
+5. If the model entry already exists, the model is returned without modifying the
+   registry.
+6. Otherwise, the new model metadata is inserted and the registry is saved.
 
 Metadata Captured
 -----------------
-The following metadata is registered:
+Each model factory entry stores:
 
-- **name** (*str*): Name of the function that creates the model.
-- **family** (*str*): The class name of the instantiated model.
-- **param_size** (*int*): The parameter size of the model.
-- **arch** (*str*): The architecture's name derived from the package structure, 
-  removing the `lucid.models.` prefix.
+- **parameter_size** (*int*): Total number of model parameters.
+- **submodule_count** (*int*): Total number of child submodules.
 
 Examples
 --------

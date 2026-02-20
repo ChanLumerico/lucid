@@ -121,7 +121,11 @@ def empty(
     keep_grad: bool = False,
     device: _DeviceType = "cpu",
 ) -> Tensor:
-    return Tensor(np.empty(shape), requires_grad, keep_grad, dtype, device)
+    if dtype is None:
+        dtype = types.Float32
+    return Tensor(
+        np.empty(shape, dtype=dtype.cpu), requires_grad, keep_grad, dtype, device
+    )
 
 
 def empty_like(

@@ -18,7 +18,7 @@ Class Signature
         num_attention_heads: int
         num_hidden_layers: int
         intermediate_size: int
-        hidden_act: Callable[[Tensor], Tensor]
+        hidden_act: Callable[[Tensor], Tensor] | str
         hidden_dropout_prob: float
         attention_probs_dropout_prob: float
         max_position_embeddings: int
@@ -60,3 +60,27 @@ Parameters
 - **eos_token_id** (*int | None*, optional): End-of-sequence token id.
 - **classifier_dropout** (*float | None*, optional): Dropout for classification heads.
 - **add_pooling_layer** (*bool*, optional): Whether to add BERT pooler. Default is True.
+
+Preset Constructors
+-------------------
+
+`BERTConfig` provides class methods for common presets:
+
+- **BERTConfig.base(...)**: Returns a BERT-Base style config
+  (hidden_size=768, num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072).
+- **BERTConfig.large(...)**: Returns a BERT-Large style config
+  (hidden_size=1024, num_hidden_layers=24, num_attention_heads=16, intermediate_size=4096).
+
+Both methods support overrides via keyword arguments.
+
+Basic Usage
+-----------
+
+.. code-block:: python
+
+    from lucid.models import BERTConfig
+
+    base_cfg = BERTConfig.base()
+    large_cfg = BERTConfig.large()
+
+    custom_base = BERTConfig.base(vocab_size=32000, use_cache=True)

@@ -147,12 +147,28 @@ def summarize(
 
 def get_model_names(registry_path: Path = lucid.MODELS_REGISTRY_PATH) -> list[str]:
     model_name_list = []
+
+    def _collect_names(node: dict) -> None:
+        for key, value in node.items():
+            if not isinstance(value, dict):
+                continue
+
+            if "name" in value and isinstance(value["name"], str):
+                model_name_list.append(value["name"])
+                continue
+
+            if "parameter_size" in value and "submodule_count" in value:
+                model_name_list.append(key)
+                continue
+
+            _collect_names(value)
+
     try:
         with open(registry_path, "r") as file:
             registry = json.load(file)
 
-        for model_info in registry.values():
-            model_name_list.append(model_info["name"])
+        if isinstance(registry, dict):
+            _collect_names(registry)
 
     except FileNotFoundError:
         print(f"File not found: {registry_path}")

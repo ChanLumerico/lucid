@@ -18,6 +18,7 @@ from typing import Any, Generator, SupportsIndex, Callable, Self, Optional, Type
 from types import TracebackType, ModuleType
 from functools import wraps
 from pathlib import Path
+import inspect
 
 import os
 import sys
@@ -266,9 +267,171 @@ _PACKAGE_DIR: Path = Path(__file__).resolve().parent
 MODELS_REGISTRY_PATH: Path = _PACKAGE_DIR / "models" / "registry.json"
 
 _ModuleReturnFunc = Callable[[Any], nn.Module]
+_ModuleClass = type[nn.Module]
 
 
-def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
+def _load_models_registry(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump({}, f)
+        return {}
+
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        return {}
+
+
+def _is_legacy_flat_registry(registry: dict[str, Any]) -> bool:
+    for value in registry.values():
+        if not isinstance(value, dict):
+            continue
+        if "name" in value and ("param_size" in value or "parameter_size" in value):
+            return True
+    return False
+
+
+def _migrate_flat_registry(registry: dict[str, Any]) -> dict[str, Any]:
+    nested: dict[str, Any] = {}
+
+    for model_name, info in registry.items():
+        if not isinstance(info, dict):
+            continue
+
+        category = info.get("category")
+        if isinstance(category, str) and category:
+            category_parts = [category]
+        elif isinstance(category, list) and category:
+            category_parts = [str(part) for part in category]
+        else:
+            category_parts = ["uncategorized"]
+
+        cursor = nested
+        for part in category_parts:
+            cursor = cursor.setdefault(part, {})
+
+        cursor[model_name] = {
+            "parameter_size": int(
+                info.get("param_size", info.get("parameter_size", 0))
+            ),
+            "submodule_count": int(info.get("submodule_count", 0)),
+        }
+
+    return nested
+
+
+def _get_registry_category_path(func: _ModuleReturnFunc) -> list[str]:
+    module = sys.modules.get(func.__module__)
+    module_file = getattr(module, "__file__", None)
+    models_dir = _PACKAGE_DIR / "models"
+
+    if module_file:
+        try:
+            rel = Path(module_file).resolve().relative_to(models_dir).with_suffix("")
+            parts = list(rel.parts)
+            if parts and parts[-1] == "__init__":
+                parts = parts[:-1]
+            if parts:
+                return parts
+        except ValueError:
+            pass
+
+    module_parts = func.__module__.split(".")
+    if "models" in module_parts:
+        parts = module_parts[module_parts.index("models") + 1 :]
+        return parts if parts else ["uncategorized"]
+    return ["uncategorized"]
+
+
+def _has_model_entry(
+    registry: dict[str, Any], path: list[str], model_name: str
+) -> bool:
+    cursor: Any = registry
+    for part in path:
+        if not isinstance(cursor, dict) or part not in cursor:
+            return False
+        cursor = cursor[part]
+    return isinstance(cursor, dict) and model_name in cursor
+
+
+def _upsert_model_entry(
+    registry: dict[str, Any], path: list[str], model_name: str, entry: dict[str, int]
+) -> None:
+    cursor = registry
+    for part in path:
+        cursor = cursor.setdefault(part, {})
+    cursor[model_name] = entry
+
+
+def _build_registry_entry(model: nn.Module, *, is_class: bool) -> dict[str, Any]:
+    submodule_count = 0
+    for _ in model.modules():
+        submodule_count += 1
+
+    entry: dict[str, Any] = {
+        "parameter_size": int(model.parameter_size),
+        "submodule_count": submodule_count - 1 if submodule_count > 0 else 0,
+    }
+    if is_class:
+        entry["factory_type"] = "class"
+    return entry
+
+
+def _maybe_register_model(target: Any, model: nn.Module, *, is_class: bool) -> None:
+    registry = _load_models_registry(MODELS_REGISTRY_PATH)
+    if _is_legacy_flat_registry(registry):
+        registry = _migrate_flat_registry(registry)
+
+    model_name = target.__name__
+    category_path = _get_registry_category_path(target)
+
+    if not _has_model_entry(registry, category_path, model_name):
+        _upsert_model_entry(
+            registry,
+            category_path,
+            model_name,
+            _build_registry_entry(model, is_class=is_class),
+        )
+        with open(MODELS_REGISTRY_PATH, "w") as f:
+            json.dump(registry, f, indent=4)
+
+
+def register_model(
+    target: _ModuleReturnFunc | _ModuleClass,
+) -> _ModuleReturnFunc | _ModuleClass:
+    if inspect.isclass(target):
+        if not issubclass(target, nn.Module):
+            raise TypeError("@register_model class target must inherit from nn.Module.")
+
+        original_init = target.__init__
+
+        @wraps(original_init)
+        def wrapped_init(self, *args, **kwargs) -> None:
+            weights = kwargs.pop("weights", None)
+            original_init(self, *args, **kwargs)
+
+            if os.environ.get("SPHINX_BUILD"):
+                return
+
+            _maybe_register_model(target, self, is_class=True)
+
+            if weights is not None:
+                import lucid.weights as W
+
+                try:
+                    W.apply(self, weights)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to apply pre-trained weights: {e}"
+                    ) from e
+
+        target.__init__ = wrapped_init
+        return target
+
+    func = target
+
     @wraps(func)
     def wrapper(*args, **kwargs) -> nn.Module:
         weights = kwargs.pop("weights", None)
@@ -276,28 +439,9 @@ def register_model(func: _ModuleReturnFunc) -> _ModuleReturnFunc:
         if os.environ.get("SPHINX_BUILD"):
             return func(*args, **kwargs)
 
-        if not MODELS_REGISTRY_PATH.exists():
-            MODELS_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(MODELS_REGISTRY_PATH, "w") as f:
-                json.dump({}, f)
-
-        with open(MODELS_REGISTRY_PATH, "r") as f:
-            registry = json.load(f)
-
         model = func(*args, **kwargs)
         model._alt_name = func.__name__
-        name = func.__name__
-
-        if name not in registry:
-            family = model.__class__.__name__
-            param_size = model.parameter_size
-            category = sys.modules[func.__module__].__package__.split(".")[2]
-
-            registry[name] = dict(
-                name=name, family=family, param_size=param_size, category=category
-            )
-            with open(MODELS_REGISTRY_PATH, "w") as f:
-                json.dump(registry, f, indent=4)
+        _maybe_register_model(func, model, is_class=False)
 
         if weights is not None:
             import lucid.weights as W

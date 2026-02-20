@@ -106,9 +106,23 @@ def _canon(x: str) -> str:
     return x.lower()
 
 
+def _find_model_meta(node: dict[str, Any], model_key: str) -> dict[str, Any] | None:
+    if model_key in node and isinstance(node[model_key], dict):
+        return node[model_key]
+
+    for value in node.values():
+        if not isinstance(value, dict):
+            continue
+        found = _find_model_meta(value, model_key)
+        if found is not None:
+            return found
+    return None
+
+
 def _family_of(model_key: str) -> str | None:
-    if model_key in _MODELS_META:
-        return _MODELS_META[model_key].get("family")
+    meta = _find_model_meta(_MODELS_META, model_key)
+    if isinstance(meta, dict):
+        return meta.get("family")
     return None
 
 

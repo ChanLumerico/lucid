@@ -958,6 +958,8 @@ data-aria-dark="Switch to auto color mode">
 <li><a class="reference internal" href="#lucid.models.BERTConfig"><code class="docutils literal notranslate"><span class="pre">BERTConfig</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#preset-constructors">Preset Constructors</a></li>
+<li><a class="reference internal" href="#basic-usage">Basic Usage</a></li>
 </ul>
 </div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
   </aside>
@@ -1049,7 +1051,7 @@ BERT backbones and task-specific wrappers.</p>
 </span><span data-line="5">    <span class="n">num_attention_heads</span><span class="p">:</span> <span class="nb">int</span>
 </span><span data-line="6">    <span class="n">num_hidden_layers</span><span class="p">:</span> <span class="nb">int</span>
 </span><span data-line="7">    <span class="n">intermediate_size</span><span class="p">:</span> <span class="nb">int</span>
-</span><span data-line="8">    <span class="n">hidden_act</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">]</span>
+</span><span data-line="8">    <span class="n">hidden_act</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">]</span> <span class="o">|</span> <span class="nb">str</span>
 </span><span data-line="9">    <span class="n">hidden_dropout_prob</span><span class="p">:</span> <span class="nb">float</span>
 </span><span data-line="10">    <span class="n">attention_probs_dropout_prob</span><span class="p">:</span> <span class="nb">float</span>
 </span><span data-line="11">    <span class="n">max_position_embeddings</span><span class="p">:</span> <span class="nb">int</span>
@@ -1095,6 +1097,28 @@ BERT backbones and task-specific wrappers.</p>
 <li><p><strong>classifier_dropout</strong> (<em>float | None</em>, optional): Dropout for classification heads.</p></li>
 <li><p><strong>add_pooling_layer</strong> (<em>bool</em>, optional): Whether to add BERT pooler. Default is True.</p></li>
 </ul>
+</section>
+<section id="preset-constructors">
+<h2>Preset Constructors<a class="headerlink" href="#preset-constructors" title="Link to this heading">¶</a></h2>
+<p><cite>BERTConfig</cite> provides class methods for common presets:</p>
+<ul class="simple">
+<li><p><strong>BERTConfig.base(…)</strong>: Returns a BERT-Base style config
+(hidden_size=768, num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072).</p></li>
+<li><p><strong>BERTConfig.large(…)</strong>: Returns a BERT-Large style config
+(hidden_size=1024, num_hidden_layers=24, num_attention_heads=16, intermediate_size=4096).</p></li>
+</ul>
+<p>Both methods support overrides via keyword arguments.</p>
+</section>
+<section id="basic-usage">
+<h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">BERTConfig</span>
+</span><span data-line="2">
+</span><span data-line="3"><span class="n">base_cfg</span> <span class="o">=</span> <span class="n">BERTConfig</span><span class="o">.</span><span class="n">base</span><span class="p">()</span>
+</span><span data-line="4"><span class="n">large_cfg</span> <span class="o">=</span> <span class="n">BERTConfig</span><span class="o">.</span><span class="n">large</span><span class="p">()</span>
+</span><span data-line="5">
+</span><span data-line="6"><span class="n">custom_base</span> <span class="o">=</span> <span class="n">BERTConfig</span><span class="o">.</span><span class="n">base</span><span class="p">(</span><span class="n">vocab_size</span><span class="o">=</span><span class="mi">32000</span><span class="p">,</span> <span class="n">use_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span></pre></div>
+</div>
 </section>
 </section>
 

@@ -1,1124 +1,797 @@
 {
-    "lenet_1": {
-        "name": "lenet_1",
-        "family": "LeNet",
-        "param_size": 3246,
-        "category": "vision"
-    },
-    "lenet_4": {
-        "name": "lenet_4",
-        "family": "LeNet",
-        "param_size": 18378,
-        "category": "vision"
-    },
-    "lenet_5": {
-        "name": "lenet_5",
-        "family": "LeNet",
-        "param_size": 61706,
-        "category": "vision"
-    },
-    "alexnet": {
-        "name": "alexnet",
-        "family": "AlexNet",
-        "param_size": 61100840,
-        "category": "vision"
-    },
-    "zfnet": {
-        "name": "zfnet",
-        "family": "ZFNet",
-        "param_size": 62357608,
-        "category": "vision"
-    },
-    "vggnet_11": {
-        "name": "vggnet_11",
-        "family": "VGGNet",
-        "param_size": 132863336,
-        "category": "vision"
-    },
-    "vggnet_13": {
-        "name": "vggnet_13",
-        "family": "VGGNet",
-        "param_size": 133047848,
-        "category": "vision"
-    },
-    "vggnet_16": {
-        "name": "vggnet_16",
-        "family": "VGGNet",
-        "param_size": 138357544,
-        "category": "vision"
-    },
-    "vggnet_19": {
-        "name": "vggnet_19",
-        "family": "VGGNet",
-        "param_size": 143667240,
-        "category": "vision"
-    },
-    "inception_v1": {
-        "name": "inception_v1",
-        "family": "Inception",
-        "param_size": 13393352,
-        "category": "vision"
-    },
-    "inception_v3": {
-        "name": "inception_v3",
-        "family": "Inception",
-        "param_size": 30817392,
-        "category": "vision"
-    },
-    "inception_v4": {
-        "name": "inception_v4",
-        "family": "Inception",
-        "param_size": 40586984,
-        "category": "vision"
-    },
-    "inception_resnet_v1": {
-        "name": "inception_resnet_v1",
-        "family": "InceptionResNet",
-        "param_size": 22739128,
-        "category": "vision"
-    },
-    "inception_resnet_v2": {
-        "name": "inception_resnet_v2",
-        "family": "InceptionResNet",
-        "param_size": 35847512,
-        "category": "vision"
-    },
-    "resnet_18": {
-        "name": "resnet_18",
-        "family": "ResNet",
-        "param_size": 11689512,
-        "category": "vision"
-    },
-    "resnet_34": {
-        "name": "resnet_34",
-        "family": "ResNet",
-        "param_size": 21797672,
-        "category": "vision"
-    },
-    "resnet_50": {
-        "name": "resnet_50",
-        "family": "ResNet",
-        "param_size": 25557032,
-        "category": "vision"
-    },
-    "resnet_101": {
-        "name": "resnet_101",
-        "family": "ResNet",
-        "param_size": 44549160,
-        "category": "vision"
-    },
-    "resnet_152": {
-        "name": "resnet_152",
-        "family": "ResNet",
-        "param_size": 60192808,
-        "category": "vision"
-    },
-    "resnet_200": {
-        "name": "resnet_200",
-        "family": "ResNet",
-        "param_size": 64669864,
-        "category": "vision"
-    },
-    "resnet_269": {
-        "name": "resnet_269",
-        "family": "ResNet",
-        "param_size": 102069416,
-        "category": "vision"
-    },
-    "resnet_1001": {
-        "name": "resnet_1001",
-        "family": "ResNet",
-        "param_size": 149071016,
-        "category": "vision"
-    },
-    "wide_resnet_50": {
-        "name": "wide_resnet_50",
-        "family": "ResNet",
-        "param_size": 78973224,
-        "category": "vision"
-    },
-    "wide_resnet_101": {
-        "name": "wide_resnet_101",
-        "family": "ResNet",
-        "param_size": 126886696,
-        "category": "vision"
-    },
-    "se_resnet_18": {
-        "name": "se_resnet_18",
-        "family": "SENet",
-        "param_size": 11778592,
-        "category": "vision"
-    },
-    "se_resnet_34": {
-        "name": "se_resnet_34",
-        "family": "SENet",
-        "param_size": 21958868,
-        "category": "vision"
-    },
-    "se_resnet_50": {
-        "name": "se_resnet_50",
-        "family": "SENet",
-        "param_size": 28088024,
-        "category": "vision"
-    },
-    "se_resnet_101": {
-        "name": "se_resnet_101",
-        "family": "SENet",
-        "param_size": 49326872,
-        "category": "vision"
-    },
-    "se_resnet_152": {
-        "name": "se_resnet_152",
-        "family": "SENet",
-        "param_size": 66821848,
-        "category": "vision"
-    },
-    "sk_resnet_18": {
-        "name": "sk_resnet_18",
-        "family": "SKNet",
-        "param_size": 25647368,
-        "category": "vision"
-    },
-    "sk_resnet_34": {
-        "name": "sk_resnet_34",
-        "family": "SKNet",
-        "param_size": 45895512,
-        "category": "vision"
-    },
-    "sk_resnet_50": {
-        "name": "sk_resnet_50",
-        "family": "SKNet",
-        "param_size": 57073368,
-        "category": "vision"
-    },
-    "resnext_50_32x4d": {
-        "name": "resnext_50_32x4d",
-        "family": "ResNeXt",
-        "param_size": 25028904,
-        "category": "vision"
-    },
-    "resnext_101_32x4d": {
-        "name": "resnext_101_32x4d",
-        "family": "ResNeXt",
-        "param_size": 44177704,
-        "category": "vision"
-    },
-    "resnext_101_32x8d": {
-        "name": "resnext_101_32x8d",
-        "family": "ResNeXt",
-        "param_size": 88791336,
-        "category": "vision"
-    },
-    "resnext_101_32x16d": {
-        "name": "resnext_101_32x16d",
-        "family": "ResNeXt",
-        "param_size": 194026792,
-        "category": "vision"
-    },
-    "resnext_101_32x32d": {
-        "name": "resnext_101_32x32d",
-        "family": "ResNeXt",
-        "param_size": 468530472,
-        "category": "vision"
-    },
-    "resnext_101_64x4d": {
-        "name": "resnext_101_64x4d",
-        "family": "ResNeXt",
-        "param_size": 83455272,
-        "category": "vision"
-    },
-    "se_resnext_50_32x4d": {
-        "name": "se_resnext_50_32x4d",
-        "family": "SENet",
-        "param_size": 27559896,
-        "category": "vision"
-    },
-    "se_resnext_101_32x4d": {
-        "name": "se_resnext_101_32x4d",
-        "family": "SENet",
-        "param_size": 48955416,
-        "category": "vision"
-    },
-    "se_resnext_101_32x8d": {
-        "name": "se_resnext_101_32x8d",
-        "family": "SENet",
-        "param_size": 93569048,
-        "category": "vision"
-    },
-    "se_resnext_101_64x4d": {
-        "name": "se_resnext_101_64x4d",
-        "family": "SENet",
-        "param_size": 88232984,
-        "category": "vision"
-    },
-    "sk_resnext_50_32x4d": {
-        "name": "sk_resnext_50_32x4d",
-        "family": "SKNet",
-        "param_size": 29274760,
-        "category": "vision"
-    },
-    "densenet_121": {
-        "name": "densenet_121",
-        "family": "DenseNet",
-        "param_size": 7978856,
-        "category": "vision"
-    },
-    "densenet_169": {
-        "name": "densenet_169",
-        "family": "DenseNet",
-        "param_size": 14149480,
-        "category": "vision"
-    },
-    "densenet_201": {
-        "name": "densenet_201",
-        "family": "DenseNet",
-        "param_size": 20013928,
-        "category": "vision"
-    },
-    "densenet_264": {
-        "name": "densenet_264",
-        "family": "DenseNet",
-        "param_size": 33337704,
-        "category": "vision"
-    },
-    "xception": {
-        "name": "xception",
-        "family": "Xception",
-        "param_size": 22862096,
-        "category": "vision"
-    },
-    "mobilenet": {
-        "name": "mobilenet",
-        "family": "MobileNet",
-        "param_size": 4232008,
-        "category": "vision"
-    },
-    "mobilenet_v2": {
-        "name": "mobilenet_v2",
-        "family": "MobileNet_V2",
-        "param_size": 3504872,
-        "category": "vision"
-    },
-    "mobilenet_v3_small": {
-        "name": "mobilenet_v3_small",
-        "family": "MobileNet_V3",
-        "param_size": 2537238,
-        "category": "vision"
-    },
-    "mobilenet_v3_large": {
-        "name": "mobilenet_v3_large",
-        "family": "MobileNet_V3",
-        "param_size": 5481198,
-        "category": "vision"
-    },
-    "efficientnet_b0": {
-        "name": "efficientnet_b0",
-        "family": "EfficientNet",
-        "param_size": 5289636,
-        "category": "vision"
-    },
-    "efficientnet_b1": {
-        "name": "efficientnet_b1",
-        "family": "EfficientNet",
-        "param_size": 7795560,
-        "category": "vision"
-    },
-    "efficientnet_b2": {
-        "name": "efficientnet_b2",
-        "family": "EfficientNet",
-        "param_size": 9111370,
-        "category": "vision"
-    },
-    "efficientnet_b3": {
-        "name": "efficientnet_b3",
-        "family": "EfficientNet",
-        "param_size": 12235536,
-        "category": "vision"
-    },
-    "efficientnet_b4": {
-        "name": "efficientnet_b4",
-        "family": "EfficientNet",
-        "param_size": 19344640,
-        "category": "vision"
-    },
-    "efficientnet_b5": {
-        "name": "efficientnet_b5",
-        "family": "EfficientNet",
-        "param_size": 30393432,
-        "category": "vision"
-    },
-    "efficientnet_b6": {
-        "name": "efficientnet_b6",
-        "family": "EfficientNet",
-        "param_size": 43046128,
-        "category": "vision"
-    },
-    "efficientnet_b7": {
-        "name": "efficientnet_b7",
-        "family": "EfficientNet",
-        "param_size": 66355448,
-        "category": "vision"
-    },
-    "efficientnet_v2_s": {
-        "name": "efficientnet_v2_s",
-        "family": "EfficientNet_V2",
-        "param_size": 21136440,
-        "category": "vision"
-    },
-    "efficientnet_v2_m": {
-        "name": "efficientnet_v2_m",
-        "family": "EfficientNet_V2",
-        "param_size": 55302108,
-        "category": "vision"
-    },
-    "efficientnet_v2_l": {
-        "name": "efficientnet_v2_l",
-        "family": "EfficientNet_V2",
-        "param_size": 120617032,
-        "category": "vision"
-    },
-    "efficientnet_v2_xl": {
-        "name": "efficientnet_v2_xl",
-        "family": "EfficientNet_V2",
-        "param_size": 210221568,
-        "category": "vision"
-    },
-    "resnest_14": {
-        "name": "resnest_14",
-        "family": "ResNeSt",
-        "param_size": 10611560,
-        "category": "vision"
-    },
-    "resnest_26": {
-        "name": "resnest_26",
-        "family": "ResNeSt",
-        "param_size": 17069320,
-        "category": "vision"
-    },
-    "resnest_50": {
-        "name": "resnest_50",
-        "family": "ResNeSt",
-        "param_size": 27483112,
-        "category": "vision"
-    },
-    "resnest_101": {
-        "name": "resnest_101",
-        "family": "ResNeSt",
-        "param_size": 48274760,
-        "category": "vision"
-    },
-    "resnest_200": {
-        "name": "resnest_200",
-        "family": "ResNeSt",
-        "param_size": 70201288,
-        "category": "vision"
-    },
-    "resnest_269": {
-        "name": "resnest_269",
-        "family": "ResNeSt",
-        "param_size": 110929224,
-        "category": "vision"
-    },
-    "resnest_50_4s2x40d": {
-        "name": "resnest_50_4s2x40d",
-        "family": "ResNeSt",
-        "param_size": 30417464,
-        "category": "vision"
-    },
-    "resnest_50_1s4x24d": {
-        "name": "resnest_50_1s4x24d",
-        "family": "ResNeSt",
-        "param_size": 25676872,
-        "category": "vision"
-    },
-    "convnext_tiny": {
-        "name": "convnext_tiny",
-        "family": "ConvNeXt",
-        "param_size": 28589128,
-        "category": "vision"
-    },
-    "convnext_small": {
-        "name": "convnext_small",
-        "family": "ConvNeXt",
-        "param_size": 46884148,
-        "category": "vision"
-    },
-    "convnext_base": {
-        "name": "convnext_base",
-        "family": "ConvNeXt",
-        "param_size": 88591464,
-        "category": "vision"
-    },
-    "convnext_large": {
-        "name": "convnext_large",
-        "family": "ConvNeXt",
-        "param_size": 197767336,
-        "category": "vision"
-    },
-    "convnext_xlarge": {
-        "name": "convnext_xlarge",
-        "family": "ConvNeXt",
-        "param_size": 350196968,
-        "category": "vision"
-    },
-    "convnext_v2_atto": {
-        "name": "convnext_v2_atto",
-        "family": "ConvNeXt_V2",
-        "param_size": 3708400,
-        "category": "vision"
-    },
-    "convnext_v2_femto": {
-        "name": "convnext_v2_femto",
-        "family": "ConvNeXt_V2",
-        "param_size": 5233240,
-        "category": "vision"
-    },
-    "convnext_v2_pico": {
-        "name": "convnext_v2_pico",
-        "family": "ConvNeXt_V2",
-        "param_size": 9066280,
-        "category": "vision"
-    },
-    "convnext_v2_nano": {
-        "name": "convnext_v2_nano",
-        "family": "ConvNeXt_V2",
-        "param_size": 15623800,
-        "category": "vision"
-    },
-    "convnext_v2_tiny": {
-        "name": "convnext_v2_tiny",
-        "family": "ConvNeXt_V2",
-        "param_size": 28635496,
-        "category": "vision"
-    },
-    "convnext_v2_base": {
-        "name": "convnext_v2_base",
-        "family": "ConvNeXt_V2",
-        "param_size": 88717800,
-        "category": "vision"
-    },
-    "convnext_v2_large": {
-        "name": "convnext_v2_large",
-        "family": "ConvNeXt_V2",
-        "param_size": 197956840,
-        "category": "vision"
-    },
-    "convnext_v2_huge": {
-        "name": "convnext_v2_huge",
-        "family": "ConvNeXt_V2",
-        "param_size": 660289640,
-        "category": "vision"
-    },
-    "inception_next_atto": {
-        "name": "inception_next_atto",
-        "family": "InceptionNeXt",
-        "param_size": 4156520,
-        "category": "vision"
-    },
-    "inception_next_tiny": {
-        "name": "inception_next_tiny",
-        "family": "InceptionNeXt",
-        "param_size": 28083832,
-        "category": "vision"
-    },
-    "inception_next_small": {
-        "name": "inception_next_small",
-        "family": "InceptionNeXt",
-        "param_size": 49431544,
-        "category": "vision"
-    },
-    "inception_next_base": {
-        "name": "inception_next_base",
-        "family": "InceptionNeXt",
-        "param_size": 86748840,
-        "category": "vision"
-    },
-    "mobilenet_v4_conv_small": {
-        "name": "mobilenet_v4_conv_small",
-        "family": "MobileNet_V4",
-        "param_size": 3774024,
-        "category": "vision"
-    },
-    "mobilenet_v4_conv_medium": {
-        "name": "mobilenet_v4_conv_medium",
-        "family": "MobileNet_V4",
-        "param_size": 9715512,
-        "category": "vision"
-    },
-    "mobilenet_v4_conv_large": {
-        "name": "mobilenet_v4_conv_large",
-        "family": "MobileNet_V4",
-        "param_size": 32590864,
-        "category": "vision"
-    },
-    "mobilenet_v4_hybrid_medium": {
-        "name": "mobilenet_v4_hybrid_medium",
-        "family": "MobileNet_V4",
-        "param_size": 11070136,
-        "category": "vision"
-    },
-    "mobilenet_v4_hybrid_large": {
-        "name": "mobilenet_v4_hybrid_large",
-        "family": "MobileNet_V4",
-        "param_size": 37755152,
-        "category": "vision"
-    },
-    "transformer_base": {
-        "name": "transformer_base",
-        "family": "transformer",
-        "param_size": 62584544,
-        "category": "text"
-    },
-    "transformer_big": {
-        "name": "transformer_big",
-        "family": "transformer",
-        "param_size": 213237472,
-        "category": "text"
-    },
-    "coatnet_0": {
-        "name": "coatnet_0",
-        "family": "CoAtNet",
-        "param_size": 27174944,
-        "category": "vision"
-    },
-    "coatnet_1": {
-        "name": "coatnet_1",
-        "family": "CoAtNet",
-        "param_size": 53330240,
-        "category": "vision"
-    },
-    "coatnet_2": {
-        "name": "coatnet_2",
-        "family": "CoAtNet",
-        "param_size": 82516096,
-        "category": "vision"
-    },
-    "coatnet_3": {
-        "name": "coatnet_3",
-        "family": "CoAtNet",
-        "param_size": 157790656,
-        "category": "vision"
-    },
-    "coatnet_4": {
-        "name": "coatnet_4",
-        "family": "CoAtNet",
-        "param_size": 277301632,
-        "category": "vision"
-    },
-    "coatnet_5": {
-        "name": "coatnet_5",
-        "family": "CoAtNet",
-        "param_size": 770124608,
-        "category": "vision"
-    },
-    "coatnet_6": {
-        "name": "coatnet_6",
-        "family": "CoAtNet",
-        "param_size": 2011558336,
-        "category": "vision"
-    },
-    "coatnet_7": {
-        "name": "coatnet_7",
-        "family": "CoAtNet",
-        "param_size": 3107978688,
-        "category": "vision"
-    },
-    "vit_tiny": {
-        "name": "vit_tiny",
-        "family": "ViT",
-        "param_size": 5717416,
-        "category": "vision"
-    },
-    "vit_small": {
-        "name": "vit_small",
-        "family": "ViT",
-        "param_size": 22050664,
-        "category": "vision"
-    },
-    "vit_base": {
-        "name": "vit_base",
-        "family": "ViT",
-        "param_size": 86567656,
-        "category": "vision"
-    },
-    "vit_large": {
-        "name": "vit_large",
-        "family": "ViT",
-        "param_size": 304326632,
-        "category": "vision"
-    },
-    "vit_huge": {
-        "name": "vit_huge",
-        "family": "ViT",
-        "param_size": 632199400,
-        "category": "vision"
-    },
-    "swin_tiny": {
-        "name": "swin_tiny",
-        "family": "SwinTransformer",
-        "param_size": 28288354,
-        "category": "vision"
-    },
-    "swin_small": {
-        "name": "swin_small",
-        "family": "SwinTransformer",
-        "param_size": 49606258,
-        "category": "vision"
-    },
-    "swin_base": {
-        "name": "swin_base",
-        "family": "SwinTransformer",
-        "param_size": 87768224,
-        "category": "vision"
-    },
-    "swin_large": {
-        "name": "swin_large",
-        "family": "SwinTransformer",
-        "param_size": 196532476,
-        "category": "vision"
-    },
-    "swin_v2_tiny": {
-        "name": "swin_v2_tiny",
-        "family": "SwinTransformer_V2",
-        "param_size": 28349842,
-        "category": "vision"
-    },
-    "swin_v2_small": {
-        "name": "swin_v2_small",
-        "family": "SwinTransformer_V2",
-        "param_size": 49731106,
-        "category": "vision"
-    },
-    "swin_v2_base": {
-        "name": "swin_v2_base",
-        "family": "SwinTransformer_V2",
-        "param_size": 87922400,
-        "category": "vision"
-    },
-    "swin_v2_large": {
-        "name": "swin_v2_large",
-        "family": "SwinTransformer_V2",
-        "param_size": 196745308,
-        "category": "vision"
-    },
-    "swin_v2_huge": {
-        "name": "swin_v2_huge",
-        "family": "SwinTransformer_V2",
-        "param_size": 657796668,
-        "category": "vision"
-    },
-    "swin_v2_giant": {
-        "name": "swin_v2_giant",
-        "family": "SwinTransformer_V2",
-        "param_size": 3000869564,
-        "category": "vision"
-    },
-    "cvt_13": {
-        "name": "cvt_13",
-        "family": "CvT",
-        "param_size": 19997480,
-        "category": "vision"
-    },
-    "cvt_21": {
-        "name": "cvt_21",
-        "family": "CvT",
-        "param_size": 31622696,
-        "category": "vision"
-    },
-    "cvt_w24": {
-        "name": "cvt_w24",
-        "family": "CvT",
-        "param_size": 277196392,
-        "category": "vision"
-    },
-    "pvt_tiny": {
-        "name": "pvt_tiny",
-        "family": "PVT",
-        "param_size": 12457192,
-        "category": "vision"
-    },
-    "pvt_small": {
-        "name": "pvt_small",
-        "family": "PVT",
-        "param_size": 23003048,
-        "category": "vision"
-    },
-    "pvt_medium": {
-        "name": "pvt_medium",
-        "family": "PVT",
-        "param_size": 41492648,
-        "category": "vision"
-    },
-    "pvt_large": {
-        "name": "pvt_large",
-        "family": "PVT",
-        "param_size": 55359848,
-        "category": "vision"
-    },
-    "pvt_huge": {
-        "name": "pvt_huge",
-        "family": "PVT",
-        "param_size": 286706920,
-        "category": "vision"
-    },
-    "pvt_v2_b0": {
-        "name": "pvt_v2_b0",
-        "family": "PVT_V2",
-        "param_size": 3666760,
-        "category": "vision"
-    },
-    "pvt_v2_b1": {
-        "name": "pvt_v2_b1",
-        "family": "PVT_V2",
-        "param_size": 14009000,
-        "category": "vision"
-    },
-    "pvt_v2_b2": {
-        "name": "pvt_v2_b2",
-        "family": "PVT_V2",
-        "param_size": 25362856,
-        "category": "vision"
-    },
-    "pvt_v2_b2_li": {
-        "name": "pvt_v2_b2_li",
-        "family": "PVT_V2",
-        "param_size": 22553512,
-        "category": "vision"
-    },
-    "pvt_v2_b3": {
-        "name": "pvt_v2_b3",
-        "family": "PVT_V2",
-        "param_size": 45238696,
-        "category": "vision"
-    },
-    "pvt_v2_b4": {
-        "name": "pvt_v2_b4",
-        "family": "PVT_V2",
-        "param_size": 62556072,
-        "category": "vision"
-    },
-    "pvt_v2_b5": {
-        "name": "pvt_v2_b5",
-        "family": "PVT_V2",
-        "param_size": 82882984,
-        "category": "vision"
-    },
-    "crossvit_tiny": {
-        "name": "crossvit_tiny",
-        "family": "CrossViT",
-        "param_size": 7014800,
-        "category": "vision"
-    },
-    "crossvit_small": {
-        "name": "crossvit_small",
-        "family": "CrossViT",
-        "param_size": 26856272,
-        "category": "vision"
-    },
-    "crossvit_base": {
-        "name": "crossvit_base",
-        "family": "CrossViT",
-        "param_size": 105025232,
-        "category": "vision"
-    },
-    "crossvit_9": {
-        "name": "crossvit_9",
-        "family": "CrossViT",
-        "param_size": 8553296,
-        "category": "vision"
-    },
-    "crossvit_15": {
-        "name": "crossvit_15",
-        "family": "CrossViT",
-        "param_size": 27528464,
-        "category": "vision"
-    },
-    "crossvit_18": {
-        "name": "crossvit_18",
-        "family": "CrossViT",
-        "param_size": 43271408,
-        "category": "vision"
-    },
-    "crossvit_9_dagger": {
-        "name": "crossvit_9_dagger",
-        "family": "CrossViT",
-        "param_size": 8776592,
-        "category": "vision"
-    },
-    "crossvit_15_dagger": {
-        "name": "crossvit_15_dagger",
-        "family": "CrossViT",
-        "param_size": 28209008,
-        "category": "vision"
-    },
-    "crossvit_18_dagger": {
-        "name": "crossvit_18_dagger",
-        "family": "CrossViT",
-        "param_size": 44266976,
-        "category": "vision"
-    },
-    "maxvit_tiny": {
-        "name": "maxvit_tiny",
-        "family": "MaxViT",
-        "param_size": 25081416,
-        "category": "vision"
-    },
-    "maxvit_small": {
-        "name": "maxvit_small",
-        "family": "MaxViT",
-        "param_size": 55757304,
-        "category": "vision"
-    },
-    "maxvit_base": {
-        "name": "maxvit_base",
-        "family": "MaxViT",
-        "param_size": 96626776,
-        "category": "vision"
-    },
-    "maxvit_large": {
-        "name": "maxvit_large",
-        "family": "MaxViT",
-        "param_size": 171187880,
-        "category": "vision"
-    },
-    "maxvit_xlarge": {
-        "name": "maxvit_xlarge",
-        "family": "MaxViT",
-        "param_size": 383734024,
-        "category": "vision"
-    },
-    "faster_rcnn_resnet_50_fpn": {
-        "name": "faster_rcnn_resnet_50_fpn",
-        "family": "FasterRCNN",
-        "param_size": 43515902,
-        "category": "vision"
-    },
-    "faster_rcnn_resnet_101_fpn": {
-        "name": "faster_rcnn_resnet_101_fpn",
-        "family": "FasterRCNN",
-        "param_size": 62508030,
-        "category": "vision"
-    },
-    "efficientformer_l1": {
-        "name": "efficientformer_l1",
-        "family": "EfficientFormer",
-        "param_size": 11840928,
-        "category": "vision"
-    },
-    "efficientformer_l3": {
-        "name": "efficientformer_l3",
-        "family": "EfficientFormer",
-        "param_size": 30893000,
-        "category": "vision"
-    },
-    "efficientformer_l7": {
-        "name": "efficientformer_l7",
-        "family": "EfficientFormer",
-        "param_size": 81460328,
-        "category": "vision"
-    },
-    "yolo_v1": {
-        "name": "yolo_v1",
-        "family": "YOLO_V1",
-        "param_size": 271716734,
-        "category": "vision"
-    },
-    "yolo_v1_tiny": {
-        "name": "yolo_v1_tiny",
-        "family": "YOLO_V1",
-        "param_size": 236720462,
-        "category": "vision"
-    },
-    "yolo_v2": {
-        "name": "yolo_v2",
-        "family": "YOLO_V2",
-        "param_size": 21287133,
-        "category": "vision"
-    },
-    "yolo_v2_tiny": {
-        "name": "yolo_v2_tiny",
-        "family": "YOLO_V2",
-        "param_size": 15863821,
-        "category": "vision"
-    },
-    "yolo_v3": {
-        "name": "yolo_v3",
-        "family": "YOLO_V3",
-        "param_size": 62974149,
-        "category": "vision"
-    },
-    "yolo_v3_tiny": {
-        "name": "yolo_v3_tiny",
-        "family": "YOLO_V3",
-        "param_size": 23450997,
-        "category": "vision"
-    },
-    "csp_resnet_50": {
-        "name": "csp_resnet_50",
-        "family": "CSPNet",
-        "param_size": 22463016,
-        "category": "vision"
-    },
-    "csp_resnext_50_32x4d": {
-        "name": "csp_resnext_50_32x4d",
-        "family": "CSPNet",
-        "param_size": 22509864,
-        "category": "vision"
-    },
-    "csp_darknet_53": {
-        "name": "csp_darknet_53",
-        "family": "CSPNet",
-        "param_size": 27278536,
-        "category": "vision"
-    },
-    "yolo_v4": {
-        "name": "yolo_v4",
-        "family": "YOLO_V4",
-        "param_size": 93488078,
-        "category": "vision"
-    },
-    "efficientdet_d0": {
-        "name": "efficientdet_d0",
-        "family": "EfficientDet",
-        "param_size": 3591656,
-        "category": "vision"
-    },
-    "efficientdet_d1": {
-        "name": "efficientdet_d1",
-        "family": "EfficientDet",
-        "param_size": 5068752,
-        "category": "vision"
-    },
-    "efficientdet_d2": {
-        "name": "efficientdet_d2",
-        "family": "EfficientDet",
-        "param_size": 6457434,
-        "category": "vision"
-    },
-    "efficientdet_d3": {
-        "name": "efficientdet_d3",
-        "family": "EfficientDet",
-        "param_size": 10286134,
-        "category": "vision"
-    },
-    "efficientdet_d4": {
-        "name": "efficientdet_d4",
-        "family": "EfficientDet",
-        "param_size": 18740232,
-        "category": "vision"
-    },
-    "efficientdet_d5": {
-        "name": "efficientdet_d5",
-        "family": "EfficientDet",
-        "param_size": 29882556,
-        "category": "vision"
-    },
-    "efficientdet_d6": {
-        "name": "efficientdet_d6",
-        "family": "EfficientDet",
-        "param_size": 52634622,
-        "category": "vision"
-    },
-    "efficientdet_d7": {
-        "name": "efficientdet_d7",
-        "family": "EfficientDet",
-        "param_size": 87173148,
-        "category": "vision"
-    },
-    "detr_r50": {
-        "name": "detr_r50",
-        "family": "DETR",
-        "param_size": 41578400,
-        "category": "vision"
-    },
-    "detr_r101": {
-        "name": "detr_r101",
-        "family": "DETR",
-        "param_size": 60570528,
-        "category": "vision"
-    },
-    "bert_for_pre_training_base": {
-        "name": "bert_for_pre_training_base",
-        "family": "BERTForPreTraining",
-        "param_size": 110106428,
-        "category": "text"
-    },
-    "bert_for_masked_lm_base": {
-        "name": "bert_for_masked_lm_base",
-        "family": "BERTForMaskedLM",
-        "param_size": 109514298,
-        "category": "text"
-    },
-    "bert_for_causal_lm_base": {
-        "name": "bert_for_causal_lm_base",
-        "family": "BERTForCausalLM",
-        "param_size": 109514298,
-        "category": "text"
-    },
-    "bert_for_next_sentence_prediction_base": {
-        "name": "bert_for_next_sentence_prediction_base",
-        "family": "BERTForNextSentencePrediction",
-        "param_size": 109483778,
-        "category": "text"
-    },
-    "bert_for_sequence_classification_base": {
-        "name": "bert_for_sequence_classification_base",
-        "family": "BERTForSequenceClassification",
-        "param_size": 109483778,
-        "category": "text"
-    },
-    "bert_for_token_classification_base": {
-        "name": "bert_for_token_classification_base",
-        "family": "BERTForTokenClassification",
-        "param_size": 108895493,
-        "category": "text"
-    },
-    "bert_for_question_answering_base": {
-        "name": "bert_for_question_answering_base",
-        "family": "BERTForQuestionAnswering",
-        "param_size": 108893186,
-        "category": "text"
-    },
-    "bert_for_pre_training_large": {
-        "name": "bert_for_pre_training_large",
-        "family": "BERTForPreTraining",
-        "param_size": 336226108,
-        "category": "text"
-    },
-    "bert_for_masked_lm_large": {
-        "name": "bert_for_masked_lm_large",
-        "family": "BERTForMaskedLM",
-        "param_size": 335174458,
-        "category": "text"
-    },
-    "bert_for_causal_lm_large": {
-        "name": "bert_for_causal_lm_large",
-        "family": "BERTForCausalLM",
-        "param_size": 335174458,
-        "category": "text"
-    },
-    "bert_for_next_sentence_prediction_large": {
-        "name": "bert_for_next_sentence_prediction_large",
-        "family": "BERTForNextSentencePrediction",
-        "param_size": 335143938,
-        "category": "text"
-    },
-    "bert_for_sequence_classification_large": {
-        "name": "bert_for_sequence_classification_large",
-        "family": "BERTForSequenceClassification",
-        "param_size": 335143938,
-        "category": "text"
-    },
-    "bert_for_token_classification_large": {
-        "name": "bert_for_token_classification_large",
-        "family": "BERTForTokenClassification",
-        "param_size": 334097413,
-        "category": "text"
-    },
-    "bert_for_question_answering_large": {
-        "name": "bert_for_question_answering_large",
-        "family": "BERTForQuestionAnswering",
-        "param_size": 334094338,
-        "category": "text"
+    "text": {
+        "bert": {
+            "_wrappers": {
+                "BERTForCausalLM": {
+                    "parameter_size": 110104890,
+                    "submodule_count": 223,
+                    "factory_type": "class"
+                },
+                "BERTForNextSentencePrediction": {
+                    "parameter_size": 109483778,
+                    "submodule_count": 218,
+                    "factory_type": "class"
+                },
+                "BERTForQuestionAnswering": {
+                    "parameter_size": 109483778,
+                    "submodule_count": 217,
+                    "factory_type": "class"
+                },
+                "BERTForTokenClassification": {
+                    "parameter_size": 109483778,
+                    "submodule_count": 218,
+                    "factory_type": "class"
+                },
+                "BERTForMaskedLM": {
+                    "parameter_size": 110104890,
+                    "submodule_count": 223,
+                    "factory_type": "class"
+                },
+                "BERTForPreTraining": {
+                    "parameter_size": 110106428,
+                    "submodule_count": 224,
+                    "factory_type": "class"
+                },
+                "BERTForSequenceClassification": {
+                    "parameter_size": 109483778,
+                    "submodule_count": 218,
+                    "factory_type": "class"
+                }
+            }
+        }
+    },
+    "vision": {
+        "alex": {
+            "alexnet": {
+                "parameter_size": 61100840,
+                "submodule_count": 23
+            }
+        },
+        "coatnet": {
+            "coatnet_0": {
+                "parameter_size": 27174944,
+                "submodule_count": 288
+            },
+            "coatnet_1": {
+                "parameter_size": 53330240,
+                "submodule_count": 561
+            },
+            "coatnet_2": {
+                "parameter_size": 82516096,
+                "submodule_count": 561
+            },
+            "coatnet_3": {
+                "parameter_size": 157790656,
+                "submodule_count": 561
+            },
+            "coatnet_4": {
+                "parameter_size": 277301632,
+                "submodule_count": 1011
+            },
+            "coatnet_5": {
+                "parameter_size": 770124608,
+                "submodule_count": 1011
+            },
+            "coatnet_6": {
+                "parameter_size": 2011558336,
+                "submodule_count": 1352
+            },
+            "coatnet_7": {
+                "parameter_size": 3107978688,
+                "submodule_count": 1352
+            }
+        },
+        "convnext": {
+            "convnext_base": {
+                "parameter_size": 88591464,
+                "submodule_count": 273
+            },
+            "convnext_large": {
+                "parameter_size": 197767336,
+                "submodule_count": 273
+            },
+            "convnext_small": {
+                "parameter_size": 46884148,
+                "submodule_count": 273
+            },
+            "convnext_tiny": {
+                "parameter_size": 28589128,
+                "submodule_count": 147
+            },
+            "convnext_v2_atto": {
+                "parameter_size": 3708400,
+                "submodule_count": 117
+            },
+            "convnext_v2_base": {
+                "parameter_size": 88717800,
+                "submodule_count": 309
+            },
+            "convnext_v2_femto": {
+                "parameter_size": 5233240,
+                "submodule_count": 117
+            },
+            "convnext_v2_huge": {
+                "parameter_size": 660289640,
+                "submodule_count": 309
+            },
+            "convnext_v2_large": {
+                "parameter_size": 197956840,
+                "submodule_count": 309
+            },
+            "convnext_v2_nano": {
+                "parameter_size": 15623800,
+                "submodule_count": 133
+            },
+            "convnext_v2_pico": {
+                "parameter_size": 9066280,
+                "submodule_count": 117
+            },
+            "convnext_v2_tiny": {
+                "parameter_size": 28635496,
+                "submodule_count": 165
+            },
+            "convnext_xlarge": {
+                "parameter_size": 350196968,
+                "submodule_count": 273
+            }
+        },
+        "crossvit": {
+            "crossvit_15": {
+                "parameter_size": 27528464,
+                "submodule_count": 522
+            },
+            "crossvit_15_dagger": {
+                "parameter_size": 28209008,
+                "submodule_count": 532
+            },
+            "crossvit_18": {
+                "parameter_size": 43271408,
+                "submodule_count": 585
+            },
+            "crossvit_18_dagger": {
+                "parameter_size": 44266976,
+                "submodule_count": 595
+            },
+            "crossvit_9": {
+                "parameter_size": 8553296,
+                "submodule_count": 396
+            },
+            "crossvit_9_dagger": {
+                "parameter_size": 8776592,
+                "submodule_count": 406
+            },
+            "crossvit_base": {
+                "parameter_size": 105025232,
+                "submodule_count": 459
+            },
+            "crossvit_small": {
+                "parameter_size": 26856272,
+                "submodule_count": 459
+            },
+            "crossvit_tiny": {
+                "parameter_size": 7014800,
+                "submodule_count": 459
+            }
+        },
+        "cspnet": {
+            "csp_darknet_53": {
+                "parameter_size": 27278536,
+                "submodule_count": 359
+            },
+            "csp_resnet_50": {
+                "parameter_size": 22463016,
+                "submodule_count": 283
+            },
+            "csp_resnext_50_32x4d": {
+                "parameter_size": 22509864,
+                "submodule_count": 283
+            }
+        },
+        "cvt": {
+            "cvt_13": {
+                "parameter_size": 19997480,
+                "submodule_count": 384
+            },
+            "cvt_21": {
+                "parameter_size": 31622696,
+                "submodule_count": 608
+            },
+            "cvt_w24": {
+                "parameter_size": 277196392,
+                "submodule_count": 692
+            }
+        },
+        "dense": {
+            "densenet_121": {
+                "parameter_size": 7978856,
+                "submodule_count": 440
+            },
+            "densenet_169": {
+                "parameter_size": 14149480,
+                "submodule_count": 608
+            },
+            "densenet_201": {
+                "parameter_size": 20013928,
+                "submodule_count": 720
+            },
+            "densenet_264": {
+                "parameter_size": 33337704,
+                "submodule_count": 944
+            }
+        },
+        "resnet": {
+            "resnet_101": {
+                "parameter_size": 44549160,
+                "submodule_count": 452
+            },
+            "resnet_50": {
+                "parameter_size": 25557032,
+                "submodule_count": 231
+            },
+            "resnet_1001": {
+                "parameter_size": 149071016,
+                "submodule_count": 1963
+            },
+            "resnet_152": {
+                "parameter_size": 60192808,
+                "submodule_count": 673
+            },
+            "resnet_18": {
+                "parameter_size": 11689512,
+                "submodule_count": 76
+            },
+            "resnet_200": {
+                "parameter_size": 64669864,
+                "submodule_count": 683
+            },
+            "resnet_269": {
+                "parameter_size": 102069416,
+                "submodule_count": 913
+            },
+            "resnet_34": {
+                "parameter_size": 21797672,
+                "submodule_count": 132
+            },
+            "wide_resnet_101": {
+                "parameter_size": 126886696,
+                "submodule_count": 452
+            },
+            "wide_resnet_50": {
+                "parameter_size": 68883240,
+                "submodule_count": 231
+            }
+        },
+        "detr": {
+            "detr_r101": {
+                "parameter_size": 60570528,
+                "submodule_count": 681
+            },
+            "detr_r50": {
+                "parameter_size": 41578400,
+                "submodule_count": 460
+            }
+        },
+        "efficient": {
+            "efficientnet_b0": {
+                "parameter_size": 5289636,
+                "submodule_count": 322
+            },
+            "efficientnet_b1": {
+                "parameter_size": 7795560,
+                "submodule_count": 455
+            },
+            "efficientnet_b2": {
+                "parameter_size": 9111370,
+                "submodule_count": 455
+            },
+            "efficientnet_b3": {
+                "parameter_size": 12235536,
+                "submodule_count": 512
+            },
+            "efficientnet_b4": {
+                "parameter_size": 19344640,
+                "submodule_count": 626
+            },
+            "efficientnet_b5": {
+                "parameter_size": 30393432,
+                "submodule_count": 759
+            },
+            "efficientnet_b6": {
+                "parameter_size": 43046128,
+                "submodule_count": 873
+            },
+            "efficientnet_b7": {
+                "parameter_size": 66355448,
+                "submodule_count": 1063
+            },
+            "efficientnet_v2_l": {
+                "parameter_size": 120617032,
+                "submodule_count": 1307
+            },
+            "efficientnet_v2_m": {
+                "parameter_size": 55302108,
+                "submodule_count": 946
+            },
+            "efficientnet_v2_s": {
+                "parameter_size": 21136440,
+                "submodule_count": 658
+            },
+            "efficientnet_v2_xl": {
+                "parameter_size": 210221568,
+                "submodule_count": 1684
+            }
+        },
+        "efficientdet": {
+            "efficientdet_d0": {
+                "parameter_size": 3591656,
+                "submodule_count": 485
+            },
+            "efficientdet_d1": {
+                "parameter_size": 5068752,
+                "submodule_count": 669
+            },
+            "efficientdet_d2": {
+                "parameter_size": 6457434,
+                "submodule_count": 739
+            },
+            "efficientdet_d3": {
+                "parameter_size": 10286134,
+                "submodule_count": 876
+            },
+            "efficientdet_d4": {
+                "parameter_size": 18740232,
+                "submodule_count": 1060
+            },
+            "efficientdet_d5": {
+                "parameter_size": 29882556,
+                "submodule_count": 1244
+            },
+            "efficientdet_d6": {
+                "parameter_size": 52634622,
+                "submodule_count": 1438
+            },
+            "efficientdet_d7": {
+                "parameter_size": 87173148,
+                "submodule_count": 1609
+            }
+        },
+        "efficientformer": {
+            "efficientformer_l1": {
+                "parameter_size": 11840928,
+                "submodule_count": 242
+            },
+            "efficientformer_l3": {
+                "parameter_size": 30893000,
+                "submodule_count": 402
+            },
+            "efficientformer_l7": {
+                "parameter_size": 81460328,
+                "submodule_count": 578
+            }
+        },
+        "faster_rcnn": {
+            "faster_rcnn_resnet_101_fpn": {
+                "parameter_size": 62498494,
+                "submodule_count": 485
+            },
+            "faster_rcnn_resnet_50_fpn": {
+                "parameter_size": 43506366,
+                "submodule_count": 264
+            }
+        },
+        "inception": {
+            "inception_v1": {
+                "parameter_size": 13393352,
+                "submodule_count": 304
+            },
+            "inception_v3": {
+                "parameter_size": 30333376,
+                "submodule_count": 494
+            },
+            "inception_v4": {
+                "parameter_size": 40586984,
+                "submodule_count": 680
+            }
+        },
+        "inception_next": {
+            "inception_next_atto": {
+                "parameter_size": 4156520,
+                "submodule_count": 185
+            },
+            "inception_next_base": {
+                "parameter_size": 86748840,
+                "submodule_count": 497
+            },
+            "inception_next_small": {
+                "parameter_size": 49431544,
+                "submodule_count": 497
+            },
+            "inception_next_tiny": {
+                "parameter_size": 28083832,
+                "submodule_count": 263
+            }
+        },
+        "inception_res": {
+            "inception_resnet_v1": {
+                "parameter_size": 22769848,
+                "submodule_count": 528
+            },
+            "inception_resnet_v2": {
+                "parameter_size": 32450360,
+                "submodule_count": 551
+            }
+        },
+        "lenet": {
+            "lenet_1": {
+                "parameter_size": 3246,
+                "submodule_count": 9
+            },
+            "lenet_4": {
+                "parameter_size": 18378,
+                "submodule_count": 11
+            },
+            "lenet_5": {
+                "parameter_size": 61706,
+                "submodule_count": 13
+            }
+        },
+        "maxvit": {
+            "maxvit_base": {
+                "parameter_size": 96626776,
+                "submodule_count": 1295
+            },
+            "maxvit_large": {
+                "parameter_size": 171187880,
+                "submodule_count": 1295
+            },
+            "maxvit_small": {
+                "parameter_size": 55757304,
+                "submodule_count": 606
+            },
+            "maxvit_tiny": {
+                "parameter_size": 25081416,
+                "submodule_count": 606
+            },
+            "maxvit_xlarge": {
+                "parameter_size": 383734024,
+                "submodule_count": 1295
+            }
+        },
+        "mobile": {
+            "mobilenet": {
+                "parameter_size": 4232008,
+                "submodule_count": 126
+            },
+            "mobilenet_v2": {
+                "parameter_size": 3504872,
+                "submodule_count": 237
+            },
+            "mobilenet_v3_large": {
+                "parameter_size": 5481198,
+                "submodule_count": 255
+            },
+            "mobilenet_v3_small": {
+                "parameter_size": 2537370,
+                "submodule_count": 209
+            },
+            "mobilenet_v4_conv_large": {
+                "parameter_size": 32590864,
+                "submodule_count": 393
+            },
+            "mobilenet_v4_conv_medium": {
+                "parameter_size": 9715512,
+                "submodule_count": 302
+            },
+            "mobilenet_v4_conv_small": {
+                "parameter_size": 3774024,
+                "submodule_count": 189
+            },
+            "mobilenet_v4_hybrid_large": {
+                "parameter_size": 37755152,
+                "submodule_count": 532
+            },
+            "mobilenet_v4_hybrid_medium": {
+                "parameter_size": 11070136,
+                "submodule_count": 441
+            }
+        },
+        "pvt": {
+            "pvt_huge": {
+                "parameter_size": 286706920,
+                "submodule_count": 1308
+            },
+            "pvt_large": {
+                "parameter_size": 55359848,
+                "submodule_count": 645
+            },
+            "pvt_medium": {
+                "parameter_size": 41492648,
+                "submodule_count": 492
+            },
+            "pvt_small": {
+                "parameter_size": 23003048,
+                "submodule_count": 288
+            },
+            "pvt_tiny": {
+                "parameter_size": 12457192,
+                "submodule_count": 154
+            },
+            "pvt_v2_b0": {
+                "parameter_size": 3666760,
+                "submodule_count": 169
+            },
+            "pvt_v2_b1": {
+                "parameter_size": 14009000,
+                "submodule_count": 169
+            },
+            "pvt_v2_b2": {
+                "parameter_size": 25362856,
+                "submodule_count": 319
+            },
+            "pvt_v2_b2_li": {
+                "parameter_size": 22553512,
+                "submodule_count": 373
+            },
+            "pvt_v2_b3": {
+                "parameter_size": 45238696,
+                "submodule_count": 547
+            },
+            "pvt_v2_b4": {
+                "parameter_size": 62556072,
+                "submodule_count": 794
+            },
+            "pvt_v2_b5": {
+                "parameter_size": 82882984,
+                "submodule_count": 1003
+            }
+        },
+        "resnest": {
+            "resnest_101": {
+                "parameter_size": 48274760,
+                "submodule_count": 657
+            },
+            "resnest_14": {
+                "parameter_size": 10611560,
+                "submodule_count": 106
+            },
+            "resnest_200": {
+                "parameter_size": 70201288,
+                "submodule_count": 1284
+            },
+            "resnest_26": {
+                "parameter_size": 17069320,
+                "submodule_count": 182
+            },
+            "resnest_269": {
+                "parameter_size": 110929224,
+                "submodule_count": 1721
+            },
+            "resnest_50": {
+                "parameter_size": 27483112,
+                "submodule_count": 334
+            },
+            "resnest_50_1s4x24d": {
+                "parameter_size": 25676872,
+                "submodule_count": 334
+            },
+            "resnest_50_4s2x40d": {
+                "parameter_size": 30417464,
+                "submodule_count": 334
+            }
+        },
+        "resnext": {
+            "resnext_101_32x16d": {
+                "parameter_size": 194026792,
+                "submodule_count": 452
+            },
+            "resnext_101_32x32d": {
+                "parameter_size": 468530472,
+                "submodule_count": 452
+            },
+            "resnext_101_32x4d": {
+                "parameter_size": 44177704,
+                "submodule_count": 452
+            },
+            "resnext_101_32x8d": {
+                "parameter_size": 88791336,
+                "submodule_count": 452
+            },
+            "resnext_101_64x4d": {
+                "parameter_size": 83455272,
+                "submodule_count": 452
+            },
+            "resnext_50_32x4d": {
+                "parameter_size": 25028904,
+                "submodule_count": 231
+            }
+        },
+        "senet": {
+            "se_resnet_101": {
+                "parameter_size": 49326872,
+                "submodule_count": 650
+            },
+            "se_resnet_152": {
+                "parameter_size": 66821848,
+                "submodule_count": 973
+            },
+            "se_resnet_18": {
+                "parameter_size": 11778592,
+                "submodule_count": 140
+            },
+            "se_resnet_34": {
+                "parameter_size": 21958868,
+                "submodule_count": 260
+            },
+            "se_resnet_50": {
+                "parameter_size": 28088024,
+                "submodule_count": 327
+            },
+            "se_resnext_101_32x4d": {
+                "parameter_size": 48955416,
+                "submodule_count": 650
+            },
+            "se_resnext_101_32x8d": {
+                "parameter_size": 93569048,
+                "submodule_count": 650
+            },
+            "se_resnext_101_64x4d": {
+                "parameter_size": 88232984,
+                "submodule_count": 650
+            },
+            "se_resnext_50_32x4d": {
+                "parameter_size": 27559896,
+                "submodule_count": 327
+            }
+        },
+        "sknet": {
+            "sk_resnet_18": {
+                "parameter_size": 25647368,
+                "submodule_count": 188
+            },
+            "sk_resnet_34": {
+                "parameter_size": 45895512,
+                "submodule_count": 356
+            },
+            "sk_resnet_50": {
+                "parameter_size": 57073368,
+                "submodule_count": 359
+            },
+            "sk_resnext_50_32x4d": {
+                "parameter_size": 29274760,
+                "submodule_count": 359
+            }
+        },
+        "swin": {
+            "swin_base": {
+                "parameter_size": 87768224,
+                "submodule_count": 385
+            },
+            "swin_large": {
+                "parameter_size": 196532476,
+                "submodule_count": 385
+            },
+            "swin_small": {
+                "parameter_size": 49606258,
+                "submodule_count": 385
+            },
+            "swin_tiny": {
+                "parameter_size": 28288354,
+                "submodule_count": 205
+            },
+            "swin_v2_base": {
+                "parameter_size": 87922400,
+                "submodule_count": 481
+            },
+            "swin_v2_giant": {
+                "parameter_size": 3000869564,
+                "submodule_count": 975
+            },
+            "swin_v2_huge": {
+                "parameter_size": 657796668,
+                "submodule_count": 481
+            },
+            "swin_v2_large": {
+                "parameter_size": 196745308,
+                "submodule_count": 481
+            },
+            "swin_v2_small": {
+                "parameter_size": 49731106,
+                "submodule_count": 481
+            },
+            "swin_v2_tiny": {
+                "parameter_size": 28349842,
+                "submodule_count": 253
+            }
+        },
+        "vgg": {
+            "vggnet_11": {
+                "parameter_size": 132863336,
+                "submodule_count": 31
+            },
+            "vggnet_13": {
+                "parameter_size": 133047848,
+                "submodule_count": 35
+            },
+            "vggnet_16": {
+                "parameter_size": 138357544,
+                "submodule_count": 41
+            },
+            "vggnet_19": {
+                "parameter_size": 143667240,
+                "submodule_count": 47
+            }
+        },
+        "vit": {
+            "vit_base": {
+                "parameter_size": 86567656,
+                "submodule_count": 162
+            },
+            "vit_huge": {
+                "parameter_size": 632199400,
+                "submodule_count": 422
+            },
+            "vit_large": {
+                "parameter_size": 304326632,
+                "submodule_count": 318
+            },
+            "vit_small": {
+                "parameter_size": 22050664,
+                "submodule_count": 162
+            },
+            "vit_tiny": {
+                "parameter_size": 5717416,
+                "submodule_count": 162
+            }
+        },
+        "xception": {
+            "xception": {
+                "parameter_size": 22862096,
+                "submodule_count": 215
+            }
+        },
+        "yolo": {
+            "yolo_v1": {
+                "yolo_v1": {
+                    "parameter_size": 271716734,
+                    "submodule_count": 105
+                },
+                "yolo_v1_tiny": {
+                    "parameter_size": 236720462,
+                    "submodule_count": 47
+                }
+            },
+            "yolo_v2": {
+                "yolo_v2": {
+                    "parameter_size": 21287133,
+                    "submodule_count": 58
+                },
+                "yolo_v2_tiny": {
+                    "parameter_size": 15863821,
+                    "submodule_count": 36
+                }
+            },
+            "yolo_v3": {
+                "yolo_v3": {
+                    "parameter_size": 62974149,
+                    "submodule_count": 284
+                },
+                "yolo_v3_tiny": {
+                    "parameter_size": 23106933,
+                    "submodule_count": 98
+                }
+            },
+            "yolo_v4": {
+                "yolo_v4": {
+                    "parameter_size": 93488078,
+                    "submodule_count": 536
+                }
+            }
+        },
+        "zfnet": {
+            "zfnet": {
+                "parameter_size": 62357608,
+                "submodule_count": 23
+            }
+        }
     }
 }

@@ -43,6 +43,76 @@ class BERTConfig:
     classifier_dropout: float | None = None
     add_pooling_layer: bool = True
 
+    @classmethod
+    def base(
+        cls,
+        *,
+        is_decoder: bool = False,
+        use_cache: bool = False,
+        add_pooling_layer: bool = True,
+        vocab_size: int = 30522,
+        **kwargs,
+    ) -> BERTConfig:
+        defaults = dict(
+            vocab_size=vocab_size,
+            hidden_size=768,
+            num_attention_heads=12,
+            num_hidden_layers=12,
+            intermediate_size=3072,
+            hidden_act=F.gelu,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
+            max_position_embeddings=512,
+            tie_word_embedding=True,
+            type_vocab_size=2,
+            initializer_range=0.02,
+            layer_norm_eps=1e-12,
+            use_cache=use_cache,
+            is_decoder=is_decoder,
+            add_cross_attention=False,
+            chunk_size_feed_forward=0,
+            pad_token_id=0,
+            classifier_dropout=None,
+            add_pooling_layer=add_pooling_layer,
+        )
+        defaults.update(kwargs)
+        return cls(**defaults)
+
+    @classmethod
+    def large(
+        cls,
+        *,
+        is_decoder: bool = False,
+        use_cache: bool = False,
+        add_pooling_layer: bool = True,
+        vocab_size: int = 30522,
+        **kwargs,
+    ) -> BERTConfig:
+        defaults = dict(
+            vocab_size=vocab_size,
+            hidden_size=1024,
+            num_attention_heads=16,
+            num_hidden_layers=24,
+            intermediate_size=4096,
+            hidden_act=F.gelu,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
+            max_position_embeddings=512,
+            tie_word_embedding=True,
+            type_vocab_size=2,
+            initializer_range=0.02,
+            layer_norm_eps=1e-12,
+            use_cache=use_cache,
+            is_decoder=is_decoder,
+            add_cross_attention=False,
+            chunk_size_feed_forward=0,
+            pad_token_id=0,
+            classifier_dropout=None,
+            add_pooling_layer=add_pooling_layer,
+        )
+        defaults.update(kwargs)
+        return cls(**defaults)
+
 
 class _BERTEmbeddings(nn.Module):
     def __init__(self, config: BERTConfig) -> None:

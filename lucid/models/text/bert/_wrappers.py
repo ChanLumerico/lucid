@@ -19,20 +19,6 @@ __all__ = [
     "BERTForSequenceClassification",
     "BERTForTokenClassification",
     "BERTForQuestionAnswering",
-    "bert_for_pre_training_base",
-    "bert_for_pre_training_large",
-    "bert_for_masked_lm_base",
-    "bert_for_masked_lm_large",
-    "bert_for_causal_lm_base",
-    "bert_for_causal_lm_large",
-    "bert_for_next_sentence_prediction_base",
-    "bert_for_next_sentence_prediction_large",
-    "bert_for_sequence_classification_base",
-    "bert_for_sequence_classification_large",
-    "bert_for_token_classification_base",
-    "bert_for_token_classification_large",
-    "bert_for_question_answering_base",
-    "bert_for_question_answering_large",
 ]
 
 
@@ -371,6 +357,7 @@ def _create_masked_lm_inputs(
     return masked_input_ids, labels
 
 
+@register_model
 class BERTForPreTraining(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -692,6 +679,7 @@ class BERTForPreTraining(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module)
         )
 
 
+@register_model
 class BERTForMaskedLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -886,6 +874,7 @@ class BERTForMaskedLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
         )
 
 
+@register_model
 class BERTForCausalLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -1191,6 +1180,7 @@ class BERTForCausalLM(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
         )
 
 
+@register_model
 class BERTForNextSentencePrediction(
     _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
 ):
@@ -1368,6 +1358,7 @@ class BERTForNextSentencePrediction(
         )
 
 
+@register_model
 class BERTForSequenceClassification(
     _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
 ):
@@ -1554,6 +1545,7 @@ class BERTForSequenceClassification(
         )
 
 
+@register_model
 class BERTForTokenClassification(
     _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
 ):
@@ -1714,6 +1706,7 @@ class BERTForTokenClassification(
         )
 
 
+@register_model
 class BERTForQuestionAnswering(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module):
     def __init__(self, config: BERTConfig) -> None:
         super().__init__()
@@ -1931,203 +1924,3 @@ class BERTForQuestionAnswering(_BERTTaskWrapperMixin, PreTrainedModelMixin, nn.M
         e = int(end[0].item())
         ids = encoded["input_ids"][0].tolist()[s : e + 1]
         return tokenizer.decode(ids, skip_special_tokens=True)
-
-
-def _build_bert_config(
-    *,
-    vocab_size: int,
-    hidden_size: int,
-    num_attention_heads: int,
-    num_hidden_layers: int,
-    intermediate_size: int,
-    is_decoder: bool,
-    use_cache: bool,
-    add_pooling_layer: bool,
-    **kwargs,
-) -> BERTConfig:
-    defaults = dict(
-        vocab_size=vocab_size,
-        hidden_size=hidden_size,
-        num_attention_heads=num_attention_heads,
-        num_hidden_layers=num_hidden_layers,
-        intermediate_size=intermediate_size,
-        hidden_act=F.gelu,
-        hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,
-        max_position_embeddings=512,
-        tie_word_embedding=True,
-        type_vocab_size=2,
-        initializer_range=0.02,
-        layer_norm_eps=1e-12,
-        use_cache=use_cache,
-        is_decoder=is_decoder,
-        add_cross_attention=False,
-        chunk_size_feed_forward=0,
-        pad_token_id=0,
-        classifier_dropout=None,
-        add_pooling_layer=add_pooling_layer,
-    )
-    defaults.update(kwargs)
-    return BERTConfig(**defaults)
-
-
-def _bert_base_config(
-    *,
-    is_decoder: bool = False,
-    use_cache: bool = False,
-    add_pooling_layer: bool = True,
-    vocab_size: int = 30522,
-    **kwargs,
-) -> BERTConfig:
-    return _build_bert_config(
-        vocab_size=vocab_size,
-        hidden_size=768,
-        num_attention_heads=12,
-        num_hidden_layers=12,
-        intermediate_size=3072,
-        is_decoder=is_decoder,
-        use_cache=use_cache,
-        add_pooling_layer=add_pooling_layer,
-        **kwargs,
-    )
-
-
-def _bert_large_config(
-    *,
-    is_decoder: bool = False,
-    use_cache: bool = False,
-    add_pooling_layer: bool = True,
-    vocab_size: int = 30522,
-    **kwargs,
-) -> BERTConfig:
-    return _build_bert_config(
-        vocab_size=vocab_size,
-        hidden_size=1024,
-        num_attention_heads=16,
-        num_hidden_layers=24,
-        intermediate_size=4096,
-        is_decoder=is_decoder,
-        use_cache=use_cache,
-        add_pooling_layer=add_pooling_layer,
-        **kwargs,
-    )
-
-
-@register_model
-def bert_for_pre_training_base(vocab_size: int = 30522, **kwargs) -> BERTForPreTraining:
-    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
-    return BERTForPreTraining(config)
-
-
-@register_model
-def bert_for_pre_training_large(
-    vocab_size: int = 30522, **kwargs
-) -> BERTForPreTraining:
-    config = _bert_large_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
-    return BERTForPreTraining(config)
-
-
-@register_model
-def bert_for_masked_lm_base(vocab_size: int = 30522, **kwargs) -> BERTForMaskedLM:
-    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=False, **kwargs)
-    return BERTForMaskedLM(config)
-
-
-@register_model
-def bert_for_masked_lm_large(vocab_size: int = 30522, **kwargs) -> BERTForMaskedLM:
-    config = _bert_large_config(
-        vocab_size=vocab_size, add_pooling_layer=False, **kwargs
-    )
-    return BERTForMaskedLM(config)
-
-
-@register_model
-def bert_for_causal_lm_base(vocab_size: int = 30522, **kwargs) -> BERTForCausalLM:
-    config = _bert_base_config(
-        vocab_size=vocab_size,
-        is_decoder=True,
-        use_cache=True,
-        add_pooling_layer=False,
-        **kwargs,
-    )
-    return BERTForCausalLM(config)
-
-
-@register_model
-def bert_for_causal_lm_large(vocab_size: int = 30522, **kwargs) -> BERTForCausalLM:
-    config = _bert_large_config(
-        vocab_size=vocab_size,
-        is_decoder=True,
-        use_cache=True,
-        add_pooling_layer=False,
-        **kwargs,
-    )
-    return BERTForCausalLM(config)
-
-
-@register_model
-def bert_for_next_sentence_prediction_base(
-    vocab_size: int = 30522, **kwargs
-) -> BERTForNextSentencePrediction:
-    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
-    return BERTForNextSentencePrediction(config)
-
-
-@register_model
-def bert_for_next_sentence_prediction_large(
-    vocab_size: int = 30522, **kwargs
-) -> BERTForNextSentencePrediction:
-    config = _bert_large_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
-    return BERTForNextSentencePrediction(config)
-
-
-@register_model
-def bert_for_sequence_classification_base(
-    num_labels: int = 2, vocab_size: int = 30522, **kwargs
-) -> BERTForSequenceClassification:
-    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
-    return BERTForSequenceClassification(config, num_labels=num_labels)
-
-
-@register_model
-def bert_for_sequence_classification_large(
-    num_labels: int = 2, vocab_size: int = 30522, **kwargs
-) -> BERTForSequenceClassification:
-    config = _bert_large_config(vocab_size=vocab_size, add_pooling_layer=True, **kwargs)
-    return BERTForSequenceClassification(config, num_labels=num_labels)
-
-
-@register_model
-def bert_for_token_classification_base(
-    num_labels: int = 2, vocab_size: int = 30522, **kwargs
-) -> BERTForTokenClassification:
-    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=False, **kwargs)
-    return BERTForTokenClassification(config, num_labels=num_labels)
-
-
-@register_model
-def bert_for_token_classification_large(
-    num_labels: int = 2, vocab_size: int = 30522, **kwargs
-) -> BERTForTokenClassification:
-    config = _bert_large_config(
-        vocab_size=vocab_size, add_pooling_layer=False, **kwargs
-    )
-    return BERTForTokenClassification(config, num_labels=num_labels)
-
-
-@register_model
-def bert_for_question_answering_base(
-    vocab_size: int = 30522, **kwargs
-) -> BERTForQuestionAnswering:
-    config = _bert_base_config(vocab_size=vocab_size, add_pooling_layer=False, **kwargs)
-    return BERTForQuestionAnswering(config)
-
-
-@register_model
-def bert_for_question_answering_large(
-    vocab_size: int = 30522, **kwargs
-) -> BERTForQuestionAnswering:
-    config = _bert_large_config(
-        vocab_size=vocab_size, add_pooling_layer=False, **kwargs
-    )
-    return BERTForQuestionAnswering(config)

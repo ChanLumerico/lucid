@@ -1030,11 +1030,11 @@ data-aria-dark="Switch to auto color mode">
 <h1>lucid.register_model<a class="headerlink" href="#lucid-register-model" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="lucid.register_model">
-<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">register_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.register_model" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">lucid.</span></span><span class="sig-name descname"><span class="pre">register_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">type</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">type</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.register_model" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>The <cite>register_model</cite> decorator registers a model function and its metadata into a JSON registry file.
-This is particularly useful for managing and organizing models in the <cite>lucid</cite> library.</p>
+<p>The <cite>register_model</cite> decorator registers a model factory and its metadata into a JSON
+registry file.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">register_model</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span>
@@ -1054,20 +1054,21 @@ The function that instantiates and returns a model class instance.</p></li>
 <ol class="arabic simple">
 <li><p>The registry file (JSON) is loaded from <cite>REGISTRY_PATH</cite>.</p></li>
 <li><p>The function is invoked to instantiate the model.</p></li>
-<li><p>The model’s name, family (class name), parameter size, and architecture are extracted.</p></li>
-<li><p>If the model’s name already exists in the registry, the model is returned without making changes to the registry.</p></li>
-<li><p>Otherwise, the new model’s metadata is added to the registry and saved back to the JSON file.</p></li>
+<li><p>The model’s parameter size and submodule count are extracted.</p></li>
+<li><p>A hierarchical key path is derived from the model file location under
+<cite>lucid/models</cite> (for example, <cite>lucid/models/vision/dense.py</cite> -&gt;
+<cite>vision -&gt; dense -&gt; densenet_121</cite>).</p></li>
+<li><p>If the model entry already exists, the model is returned without modifying the
+registry.</p></li>
+<li><p>Otherwise, the new model metadata is inserted and the registry is saved.</p></li>
 </ol>
 </section>
 <section id="metadata-captured">
 <h2>Metadata Captured<a class="headerlink" href="#metadata-captured" title="Link to this heading">¶</a></h2>
-<p>The following metadata is registered:</p>
+<p>Each model factory entry stores:</p>
 <ul class="simple">
-<li><p><strong>name</strong> (<em>str</em>): Name of the function that creates the model.</p></li>
-<li><p><strong>family</strong> (<em>str</em>): The class name of the instantiated model.</p></li>
-<li><p><strong>param_size</strong> (<em>int</em>): The parameter size of the model.</p></li>
-<li><p><strong>arch</strong> (<em>str</em>): The architecture’s name derived from the package structure,
-removing the <cite>lucid.models.</cite> prefix.</p></li>
+<li><p><strong>parameter_size</strong> (<em>int</em>): Total number of model parameters.</p></li>
+<li><p><strong>submodule_count</strong> (<em>int</em>): Total number of child submodules.</p></li>
 </ul>
 </section>
 <section id="examples">
