@@ -115,11 +115,11 @@
 
     Base Mixins <models/mixins/index.rst>
 
-    Image Classification <models/imgclf/index.rst>
-    Image Generation <models/imggen/index.rst>
-    Object Detection <models/objdet/index.rst>
-    Sequence-to-Sequence <models/seq2seq/index.rst>
-    Sequence Classification <models/seqclf/index.rst>
+    Vision Models <models/vision/index.rst>
+    Generative Models <models/generative/index.rst>
+    Text Models <models/text/index.rst>
+
+    Model Utilities <models/utilities/index.rst>
 
 .. toctree::
     :maxdepth: 1

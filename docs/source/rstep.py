@@ -50,28 +50,6 @@ ARCH_EP = """
     <span class="badge score_based_diffusion">Score-Based Diffusion</span>
 """
 
-TASK_EP = """
-.. |imgclf-badge| raw:: html
-
-    <span class="badge normal">Image Classification</span>
-
-.. |imggen-badge| raw:: html
-
-    <span class="badge normal">Image Generation</span>
-
-.. |objdet-badge| raw:: html
-
-    <span class="badge normal">Object Detection</span>
-
-.. |seq2seq-badge| raw:: html
-
-    <span class="badge normal">Sequence-to-Sequence</span>
-
-.. |seqclf-badge| raw:: html
-
-    <span class="badge normal">Sequence Classification</span>
-"""
-
 BACKEND_EP = """
 .. |cpp-badge| raw:: html
 
@@ -80,4 +58,4 @@ BACKEND_EP = """
 
 
 def get_total_epilogs() -> str:
-    return MISC_EP + ARCH_EP + TASK_EP + BACKEND_EP
+    return MISC_EP + ARCH_EP + BACKEND_EP

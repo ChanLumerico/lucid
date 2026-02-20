@@ -14,31 +14,14 @@ and understand visual information from the world, such as images and videos. It 
 teaching computers to process, analyze, and make sense of visual data in a way similar to 
 human vision.
 
-.. list-table::
-    :header-rows: 1
-    :align: left
+Generative Models
+~~~~~~~~~~~~~~~~~
 
-    * - Task
-      - Description
-      - Docs
-    
-    * - Image classification
-      - Image classification is a key task in computer vision where a model assigns labels 
-        to images based on their content. It processes the image through layers to extract 
-        features and predict the most likely class.
-      - `Image Classification <imgclf/index>`_
-    
-    * - Image generation
-      - Image generation is a fundamental task in generative modeling where a model learns 
-        to create new images that resemble a given dataset. It involves learning patterns 
-        and structures from data to synthesize realistic or novel visuals.
-      - `Image Generation <imggen/index>`_
-    
-    * - Object Detection
-      - Object detection is a computer vision task that identifies and classifies multiple 
-        objects within an image. It assigns labels and draws bounding boxes around each 
-        detected object, combining localization with classification.
-      - `Object Detection <objdet/index>`_
+Generative Models are a class of models that learn to generate visual data, such as images. 
+Unlike discriminative models that focus on classification or prediction, generative models aim to 
+capture the underlying distribution of image data in order to produce new samples. This section 
+focuses specifically on vision-based generative tasks such as image synthesis, reconstruction, 
+and visual representation learning.
 
 Natural Language Processing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -48,20 +31,3 @@ understand, interpret, and generate human language. It combines linguistics and 
 to process text or speech, allowing models to perform tasks like translation, summarization, 
 and sentiment analysis.
 
-.. list-table::
-    :header-rows: 1
-    :align: left
-
-    * - Task
-      - Description
-      - Docs
-    
-    * - Sequence-to-Sequence
-      - A sequence-to-sequence model is a type of neural network architecture used to transform 
-        one sequence into another, such as translating a sentence from one language to another.
-      - `Sequence-to-Sequence <seq2seq/index>`_
-
-    * - Sequence Classification
-      - A sequence classification model is a type of neural network architecture used to assign
-        a label to an input sequence, such as determining sentiment or topic from a sentence.
-      - `Sequence Classification <seqclf/index>`_

@@ -3,7 +3,7 @@ Pre-Trained Weights
 
 LeNet
 -----
-|convnet-badge| |imgclf-badge|
+|convnet-badge|
 
 .. code-block:: python
 
@@ -45,7 +45,7 @@ LeNet
 
 AlexNet
 -------
-|convnet-badge| |imgclf-badge|
+|convnet-badge|
 
 .. code-block:: python
 
@@ -73,7 +73,7 @@ AlexNet
 
 VGGNet
 ------
-|convnet-badge| |imgclf-badge|
+|convnet-badge|
 
 .. code-block:: python
 
@@ -128,7 +128,7 @@ VGGNet
 
 ResNet
 ------
-|convnet-badge| |imgclf-badge|
+|convnet-badge|
 
 .. code-block:: python
 
@@ -225,7 +225,7 @@ ResNet
 
 ResNeXt
 -------
-|convnet-badge| |imgclf-badge|
+|convnet-badge|
 
 .. code-block:: python
 
@@ -271,7 +271,7 @@ ResNeXt
 
 DenseNet
 --------
-|convnet-badge| |imgclf-badge|
+|convnet-badge|
 
 .. code-block:: python
 
@@ -317,7 +317,7 @@ DenseNet
 
 MobileNet
 ---------
-|convnet-badge| |imgclf-badge|
+|convnet-badge|
 
 .. code-block:: python
 
@@ -363,7 +363,7 @@ MobileNet
 
 BERT
 ----
-|transformer-badge| |encoder-only-transformer-badge| |seqclf-badge|
+|transformer-badge| |encoder-only-transformer-badge|
 
 .. code-block:: python
 
