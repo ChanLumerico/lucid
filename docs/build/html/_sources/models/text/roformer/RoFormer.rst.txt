@@ -6,6 +6,7 @@ RoFormer
     :hidden:
 
     RoFormerConfig.rst
+    RoFormerTokenizerFast.rst
     RoFormerForMaskedLM.rst
     RoFormerForSequenceClassification.rst
     RoFormerForTokenClassification.rst
