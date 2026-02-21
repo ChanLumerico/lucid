@@ -38,6 +38,35 @@
                     "factory_type": "class"
                 }
             }
+        },
+        "roformer": {
+            "_wrappers": {
+                "RoFormerForMaskedLM": {
+                    "parameter_size": 109711674,
+                    "submodule_count": 234,
+                    "factory_type": "class"
+                },
+                "RoFormerForSequenceClassification": {
+                    "parameter_size": 109090562,
+                    "submodule_count": 229,
+                    "factory_type": "class"
+                },
+                "RoFormerForTokenClassification": {
+                    "parameter_size": 109090562,
+                    "submodule_count": 229,
+                    "factory_type": "class"
+                },
+                "RoFormerForMultipleChoice": {
+                    "parameter_size": 109089793,
+                    "submodule_count": 229,
+                    "factory_type": "class"
+                },
+                "RoFormerForQuestionAnswering": {
+                    "parameter_size": 109090562,
+                    "submodule_count": 228,
+                    "factory_type": "class"
+                }
+            }
         }
     },
     "vision": {

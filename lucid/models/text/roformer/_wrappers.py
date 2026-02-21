@@ -3,7 +3,7 @@ import lucid.nn as nn
 
 from lucid import register_model
 from lucid._tensor import Tensor
-from lucid.models.base import PreTrainedModelMixin
+
 from lucid.models.text.bert import _wrappers as bert
 
 from ._model import RoFormer, RoFormerConfig
@@ -44,9 +44,7 @@ class RoFormerForTokenClassification(bert.BERTForTokenClassification):
 
 
 @register_model
-class RoFormerForMultipleChoice(
-    bert._BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
-):
+class RoFormerForMultipleChoice(bert._BERTTaskWrapperMixin, nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
         self.config = config

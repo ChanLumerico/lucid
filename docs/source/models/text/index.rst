@@ -7,6 +7,7 @@ Text Models
 
     Transformer <transformer/Transformer.rst>
     BERT <bert/BERT.rst>
+    RoFormer <roformer/RoFormer.rst>
 
 Transformer
 -----------
@@ -61,13 +62,11 @@ including pre-training, language modeling, and sequence-level prediction heads.
       - Model
       - Input Shape
       - Parameter Count
-      - FLOPs
       - Pre-Trained
 
     * - :math:`\text{BERT}`
       - `BERT <bert/BERT>`_
       - :math:`(N,L)`
-      - *Depends*
       - *Depends*
       - –
 
@@ -75,49 +74,103 @@ including pre-training, language modeling, and sequence-level prediction heads.
       - `BERTForPreTraining <bert/BERTForPreTraining>`_
       - :math:`(N,L)`
       - 110,106,428
-      - 28.50B
       - ✅
 
     * - :math:`\text{BERT}_\text{MLM}`
       - `BERTForMaskedLM <bert/BERTForMaskedLM>`_
       - :math:`(N,L)`
       - 109,514,298
-      - 28.50B
       - ❌
 
     * - :math:`\text{BERT}_\text{CLM}`
       - `BERTForCausalLM <bert/BERTForCausalLM>`_
       - :math:`(N,L)`
       - 109,514,298
-      - 28.50B
       - ❌
 
     * - :math:`\text{BERT}_\text{NSP}`
       - `BERTForNextSentencePrediction <bert/BERTForNextSentencePrediction>`_
       - :math:`(N,L)`
       - 109,483,778
-      - 22.35B
       - ❌
 
     * - :math:`\text{BERT}_\text{SC}`
       - `BERTForSequenceClassification <bert/BERTForSequenceClassification>`_
       - :math:`(N,L)`
       - 109,483,778
-      - 22.35B
       - ❌
 
     * - :math:`\text{BERT}_\text{TC}`
       - `BERTForTokenClassification <bert/BERTForTokenClassification>`_
       - :math:`(N,L)`
       - 108,895,493
-      - 22.35B
       - ❌
 
     * - :math:`\text{BERT}_\text{QA}`
       - `BERTForQuestionAnswering <bert/BERTForQuestionAnswering>`_
       - :math:`(N,L)`
       - 108,893,186
-      - 22.35B
       - ❌
+
+RoFormer
+--------
+|transformer-badge| |encoder-only-transformer-badge|
+
+RoFormer is a rotary-position-embedding variant of BERT-style encoders,
+retaining bidirectional Transformer blocks while replacing absolute positional
+embedding usage in self-attention with RoPE.
+
+ Su, Jianlin, et al. "RoFormer: Enhanced Transformer with Rotary Position
+ Embedding." arXiv, 15 Apr. 2021, https://doi.org/10.48550/arXiv.2104.09864.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Pre-Trained
+
+    * - :math:`\text{RoFormer}`
+      - `RoFormer <roformer/RoFormer>`_
+      - :math:`(N,L)`
+      - *Depends*
+      - –
+
+    * - :math:`\text{RoFormer}_\text{MLM}`
+      - `RoFormerForMaskedLM <roformer/RoFormerForMaskedLM>`_
+      - :math:`(N,L)`
+      - 109,711,674
+      - ❌
+
+    * - :math:`\text{RoFormer}_\text{SC}`
+      - `RoFormerForSequenceClassification <roformer/RoFormerForSequenceClassification>`_
+      - :math:`(N,L)`
+      - 109,090,562
+      - ❌
+
+    * - :math:`\text{RoFormer}_\text{TC}`
+      - `RoFormerForTokenClassification <roformer/RoFormerForTokenClassification>`_
+      - :math:`(N,L)`
+      - 109,090,562
+      - ❌
+
+    * - :math:`\text{RoFormer}_\text{MC}`
+      - `RoFormerForMultipleChoice <roformer/RoFormerForMultipleChoice>`_
+      - :math:`(N,C,L)`
+      - 109,089,793
+      - ❌
+
+    * - :math:`\text{RoFormer}_\text{QA}`
+      - `RoFormerForQuestionAnswering <roformer/RoFormerForQuestionAnswering>`_
+      - :math:`(N,L)`
+      - 109,090,562
+      - ❌
+
+.. note::
+
+    Parameter counts are based on the smallest known variants for each model families.
 
 *To be implemented...🔮*
