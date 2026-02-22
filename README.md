@@ -20,13 +20,14 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Added **Image Segmentation** model category, starting with `lucid.models.MaskRCNN`
+    - Also includes variants: `models.mask_rcnn_resnet_{50,101}_fpn`
+
 - Implemented **RoFormer** (Su et al., 2021) `lucid.models.RoFormer` based on BERT implementation, along with various task wrappers.
 
 - Added **Rotary Positional Embedding** (RoPE; Su et al., 2021): `nn.RotaryPosEmbedding`
 
 - Added new submodule `lucid.data.tokenizers` which contains various tokenizers for NLP tasks along with thier ***Fast*** versions, accelerated via **C++ backend**. (e.g. `WordPieceTokenizerFast`)
-
-- Implemented **BERT**(Devlin et al., 2018) `lucid.models.BERT`
 
 ## 🔧 How to Install
 

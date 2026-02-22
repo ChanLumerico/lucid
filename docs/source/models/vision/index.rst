@@ -7,6 +7,7 @@ Vision Models
 
     Image Classification <imgclf/index.rst>
     Object Detection <objdet/index.rst>
+    Image Segmentation <imgseg/index.rst>
 
 .. list-table::
     :header-rows: 1
@@ -31,3 +32,10 @@ Vision Models
         what is present and where it appears, making it suitable for scene
         understanding and real-world perception pipelines.
       - `Object Detection <objdet/index.rst>`_
+
+    * - Image Segmentation
+      - Perform dense visual understanding by assigning predictions at the
+        pixel level. In instance segmentation, each object instance receives
+        both a category label and its own binary mask, enabling fine-grained
+        scene parsing beyond bounding boxes.
+      - `Image Segmentation <imgseg/index.rst>`_

@@ -826,6 +826,10 @@
             "mask_rcnn_resnet_50_fpn": {
                 "parameter_size": 46037607,
                 "submodule_count": 274
+            },
+            "mask_rcnn_resnet_101_fpn": {
+                "parameter_size": 65126611,
+                "submodule_count": 495
             }
         }
     }
