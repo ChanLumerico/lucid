@@ -419,8 +419,12 @@ class MaskRCNN(nn.Module):
             num_pos = min(pos_i.shape[0], 32)
             num_neg = min(neg_i.shape[0], 128 - num_pos)
 
-            perm_pos = lucid.random.permutation(pos_i.shape[0])[:num_pos]
-            perm_neg = lucid.random.permutation(neg_i.shape[0])[:num_neg]
+            perm_pos = lucid.random.permutation(pos_i.shape[0], device=images.device)[
+                :num_pos
+            ]
+            perm_neg = lucid.random.permutation(neg_i.shape[0], device=images.device)[
+                :num_neg
+            ]
 
             sel_idx = lucid.concatenate([pos_i[perm_pos], neg_i[perm_neg]], axis=0)
             sel = mask_i[sel_idx]
@@ -437,8 +441,18 @@ class MaskRCNN(nn.Module):
         sb_tgts = lucid.concatenate(sampled_tgts, axis=0)
         sb_gt_idx = lucid.concatenate(sampled_gt_indices, axis=0)
 
+        valid = (sb_rois[:, 2] > sb_rois[:, 0]) & (sb_rois[:, 3] > sb_rois[:, 1])
+        if lucid.sum(valid) > 0:
+            sb_rois = sb_rois[valid]
+            sb_idx = sb_idx[valid]
+            sb_labels = sb_labels[valid]
+            sb_tgts = sb_tgts[valid]
+            sb_gt_idx = sb_gt_idx[valid]
+        else:
+            sb_rois = lucid.empty(0, 4, device=images.device)
+
         if sb_rois.shape[0] == 0:
-            zero = lucid.zeros((), dtype=lucid.Float32)
+            zero = lucid.zeros((), dtype=lucid.Float32, device=images.device)
             total_loss = (rpn_cls_loss + rpn_reg_loss) / B
             return {
                 "rpn_cls_loss": rpn_cls_loss,
@@ -515,8 +529,8 @@ class MaskRCNN(nn.Module):
             )
 
         else:
-            roi_reg_loss = lucid.zeros((), dtype=lucid.Float32)
-            mask_loss = lucid.zeros((), dtype=lucid.Float32)
+            roi_reg_loss = lucid.zeros((), dtype=lucid.Float32, device=images.device)
+            mask_loss = lucid.zeros((), dtype=lucid.Float32, device=images.device)
 
         total_loss = (
             rpn_cls_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss + mask_loss

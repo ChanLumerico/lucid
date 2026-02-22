@@ -77,8 +77,10 @@ def grid_sample(
         ix = lucid.clip(ix, 0, input_.shape[3] - 1).astype(lucid.Int)
         iy = lucid.clip(iy, 0, input_.shape[2] - 1).astype(lucid.Int)
 
-        n_idx = lucid.arange(N)[:, None, None].astype(lucid.Int)
-        c_idx = lucid.arange(C)[None, :, None, None].astype(lucid.Int)
+        n_idx = lucid.arange(N, device=input_.device)[:, None, None].astype(lucid.Int)
+        c_idx = lucid.arange(C, device=input_.device)[None, :, None, None].astype(
+            lucid.Int
+        )
 
         iy = iy[:, None, :, :].repeat(C, axis=1)
         ix = ix[:, None, :, :].repeat(C, axis=1)
@@ -99,8 +101,12 @@ def grid_sample(
         wc = (ix - x0) * (y1 - iy)
         wd = (ix - x0) * (iy - y0)
 
-        n_idx = lucid.arange(N).reshape(N, 1, 1, 1).astype(lucid.Int)
-        c_idx = lucid.arange(C).reshape(1, C, 1, 1).astype(lucid.Int)
+        n_idx = lucid.arange(N, device=input_.device).reshape(N, 1, 1, 1).astype(
+            lucid.Int
+        )
+        c_idx = lucid.arange(C, device=input_.device).reshape(1, C, 1, 1).astype(
+            lucid.Int
+        )
 
         n_idx = n_idx.repeat(C, axis=1).repeat(H_out, axis=2).repeat(W_out, axis=3)
         c_idx = c_idx.repeat(N, axis=0).repeat(H_out, axis=2).repeat(W_out, axis=3)

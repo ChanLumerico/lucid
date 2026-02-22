@@ -473,6 +473,11 @@ class MultiScaleROIAlign(nn.Module):
         self.align = ROIAlign(output_size)
 
     def forward(self, features: list[Tensor], rois: Tensor, roi_idx: Tensor) -> Tensor:
+        if rois.shape[0] == 0:
+            C = features[0].shape[1]
+            ph, pw = self.output_size
+            return lucid.empty(0, C, ph, pw, device=features[0].device)
+
         device = rois.device
 
         x1, y1, x2, y2 = rois.unbind(axis=-1)
@@ -484,7 +489,8 @@ class MultiScaleROIAlign(nn.Module):
         target_lvls = target_lvls.astype(lucid.Int32) + self.canonical_level
         target_lvls = lucid.clip(target_lvls, 2, 5)
 
-        pooled = []
+        pooled: list[Tensor] = []
+        pooled_indices: list[Tensor] = []
         for level in range(2, 6):
             mask = (target_lvls == level).nonzero().squeeze(axis=1)
             if mask.size == 0:
@@ -494,12 +500,16 @@ class MultiScaleROIAlign(nn.Module):
             rois_l = rois[mask]
             idx_l = roi_idx[mask]
             pooled.append(self.align(feat, rois_l, idx_l))
+            pooled_indices.append(mask)
 
         if pooled:
-            return lucid.concatenate(pooled, axis=0)
+            pooled_cat = lucid.concatenate(pooled, axis=0)
+            pooled_order = lucid.concatenate(pooled_indices, axis=0)
+            restore_order = lucid.argsort(pooled_order)
+            return pooled_cat[restore_order]
         else:
-            B, C, ph, pw = features[0].shape[0], features[0].shape[1], *self.output_size
-            return lucid.empty(B, C, ph, pw, device=device)
+            C, ph, pw = features[0].shape[1], *self.output_size
+            return lucid.empty(0, C, ph, pw, device=device)
 
 
 class FPN(nn.Module):
