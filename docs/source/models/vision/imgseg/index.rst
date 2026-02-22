@@ -28,11 +28,6 @@ refinements, and a binary mask for each detected instance.
       - Input Shape
       - Parameter Count
 
-    * - Mask R-CNN
-      - `MaskRCNN <mask_rcnn/MaskRCNN>`_
-      - :math:`(N,C_{in},H,W)`
-      - :math:`-`
-
     * - Mask R-CNN ResNet-50 FPN
       - `mask_rcnn_resnet_50_fpn <mask_rcnn/mask_rcnn_resnet_50_fpn>`_
       - :math:`(N,3,H,W)`

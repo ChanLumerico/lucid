@@ -15,6 +15,75 @@ Mask R-CNN
 RoI features. For each foreground proposal, it predicts class logits, bounding-box
 deltas, and a per-instance binary segmentation mask.
 
+.. mermaid::
+    :name: Mask R-CNN
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+      linkStyle default stroke-width:2.0px
+      subgraph sg_m0["<span style='font-size:20px;font-weight:700'>mask_rcnn_resnet_50_fpn</span>"]
+      style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m1["_ResNetFPNBackbone"]
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m2["resnet_50"];
+          m3["Sequential"];
+          m4["MaxPool2d"];
+          m5["FPN"];
+        end
+        m9["_AnchorGenerator"];
+        subgraph sg_m7["_RegionProposalNetwork"]
+        style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m8["_RPNHead"];
+          m9["_AnchorGenerator"];
+        end
+        subgraph sg_m10["MultiScaleROIAlign x 2"]
+        style sg_m10 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m10_in(["Input"]);
+          m10_out(["Output"]);
+      style m10_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+      style m10_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
+          m11["ROIAlign"];
+        end
+        m12(["Linear x 2"]);
+        m13(["Dropout x 2"]);
+        m14(["Linear x 2"]);
+        subgraph sg_m15["_MaskHead"]
+        style sg_m15 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+          m16(["Conv2d x 4"]);
+          m17["ConvTranspose2d"];
+          m18["Conv2d"];
+        end
+        m19["ROIAlign"];
+      end
+      input["Input"];
+      output["Output"];
+      style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+      style m4 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
+      style m12 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      style m13 fill:#edf2f7,stroke:#4a5568,stroke-width:1px;
+      style m14 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+      style m16 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m17 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      style m18 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+      input --> m3;
+      m10_in -.-> m11;
+      m10_out --> m16;
+      m11 --> m10_out;
+      m11 -.-> m12;
+      m12 --> m13;
+      m13 -.-> m12;
+      m13 --> m14;
+      m14 --> m10_in;
+      m16 --> m17;
+      m17 --> m18;
+      m18 --> output;
+      m2 --> m5;
+      m3 --> m4;
+      m4 --> m2;
+      m5 --> m8;
+      m8 -.-> m11;
+
 Class Signature
 ---------------
 
