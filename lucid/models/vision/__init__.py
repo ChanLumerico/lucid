@@ -16,6 +16,7 @@ from .inception_res import *
 from .inception import *
 from .lenet import *
 from .maxvit import *
+from .mask_rcnn import *
 from .mobile import *
 from .pvt import *
 from .rcnn import *

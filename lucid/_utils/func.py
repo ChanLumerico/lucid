@@ -985,7 +985,7 @@ class sort(Operation):
             sorted_data = np.take_along_axis(data, indices, axis=self.axis)
 
         values = Tensor(sorted_data)
-        indices_t = Tensor(indices)
+        indices_t = Tensor(indices.astype(np.int32))
 
         self.result = (values, indices_t)
         return (
@@ -1009,7 +1009,7 @@ class sort(Operation):
         sorted_data = mx.take_along_axis(data, indices, axis=self.axis)
 
         values = Tensor(sorted_data)
-        indices_t = Tensor(indices)
+        indices_t = Tensor(indices.astype(mx.int32))
 
         self.result = (values, indices_t)
         return (

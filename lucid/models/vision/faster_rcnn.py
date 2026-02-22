@@ -164,8 +164,8 @@ class _RegionProposalNetwork(nn.Module):
 
         anchors = self.anchor_generator.grid_anchors(H, W, feats.device)
 
-        rpn_cls_loss = lucid.zeros((), dtype=lucid.Float32)
-        rpn_reg_loss = lucid.zeros((), dtype=lucid.Float32)
+        rpn_cls_loss = lucid.zeros((), dtype=lucid.Float32, device=feats.device)
+        rpn_reg_loss = lucid.zeros((), dtype=lucid.Float32, device=feats.device)
         proposals: list[Tensor] = []
 
         for b in range(B):
@@ -202,8 +202,12 @@ class _RegionProposalNetwork(nn.Module):
             num_pos = min(pos_idx.shape[0], 128)
             num_neg = min(neg_idx.shape[0], 256 - num_pos)
 
-            perm_pos = lucid.random.permutation(pos_idx.shape[0])[:num_pos]
-            perm_neg = lucid.random.permutation(neg_idx.shape[0])[:num_neg]
+            perm_pos = lucid.random.permutation(pos_idx.shape[0], device=feats.device)[
+                :num_pos
+            ]
+            perm_neg = lucid.random.permutation(neg_idx.shape[0], device=feats.device)[
+                :num_neg
+            ]
             samp = lucid.concatenate([pos_idx[perm_pos], neg_idx[perm_neg]], axis=0)
 
             cls_scores = F.sigmoid(logits[b][samp])
@@ -540,8 +544,12 @@ class FasterRCNN(nn.Module):
             num_pos = min(pos_i.shape[0], 32)
             num_neg = min(neg_i.shape[0], 128 - num_pos)
 
-            perm_pos = lucid.random.permutation(pos_i.shape[0])[:num_pos]
-            perm_neg = lucid.random.permutation(neg_i.shape[0])[:num_neg]
+            perm_pos = lucid.random.permutation(pos_i.shape[0], device=images.device)[
+                :num_pos
+            ]
+            perm_neg = lucid.random.permutation(neg_i.shape[0], device=images.device)[
+                :num_neg
+            ]
 
             sel_idx = lucid.concatenate([pos_i[perm_pos], neg_i[perm_neg]], axis=0)
             sel = mask_i[sel_idx]
@@ -555,6 +563,26 @@ class FasterRCNN(nn.Module):
         sb_idx = lucid.concatenate(sampled_idx, axis=0)
         sb_labels = lucid.concatenate(sampled_labels, axis=0)
         sb_tgts = lucid.concatenate(sampled_tgts, axis=0)
+
+        valid = (sb_rois[:, 2] > sb_rois[:, 0]) & (sb_rois[:, 3] > sb_rois[:, 1])
+        if lucid.sum(valid) > 0:
+            sb_rois = sb_rois[valid]
+            sb_idx = sb_idx[valid]
+            sb_labels = sb_labels[valid]
+            sb_tgts = sb_tgts[valid]
+        else:
+            sb_rois = lucid.empty(0, 4, device=images.device)
+
+        if sb_rois.shape[0] == 0:
+            zero = lucid.zeros((), dtype=lucid.Float32, device=images.device)
+            total_loss = (rpn_cls_loss + rpn_reg_loss) / B
+            return {
+                "rpn_cls_loss": rpn_cls_loss,
+                "rpn_reg_loss": rpn_reg_loss,
+                "roi_cls_loss": zero,
+                "roi_reg_loss": zero,
+                "total_loss": total_loss,
+            }
 
         cls_logits, bbox_deltas = self.roi_forward(feature_roi, sb_rois, sb_idx)
         roi_cls_loss = F.cross_entropy(cls_logits, sb_labels, reduction="mean")
@@ -571,7 +599,9 @@ class FasterRCNN(nn.Module):
             roi_reg_loss = F.huber_loss(preds, reg_tgt_fg, reduction="mean")
 
         else:
-            roi_reg_loss = lucid.zeros((), dtype=lucid.Float32)
+            roi_reg_loss = lucid.zeros(
+                (), dtype=lucid.Float32, device=images.device
+            )
 
         total_loss = (rpn_cls_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss) / B
         return {
