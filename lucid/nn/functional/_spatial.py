@@ -101,11 +101,11 @@ def grid_sample(
         wc = (ix - x0) * (y1 - iy)
         wd = (ix - x0) * (iy - y0)
 
-        n_idx = lucid.arange(N, device=input_.device).reshape(N, 1, 1, 1).astype(
-            lucid.Int
+        n_idx = (
+            lucid.arange(N, device=input_.device).reshape(N, 1, 1, 1).astype(lucid.Int)
         )
-        c_idx = lucid.arange(C, device=input_.device).reshape(1, C, 1, 1).astype(
-            lucid.Int
+        c_idx = (
+            lucid.arange(C, device=input_.device).reshape(1, C, 1, 1).astype(lucid.Int)
         )
 
         n_idx = n_idx.repeat(C, axis=1).repeat(H_out, axis=2).repeat(W_out, axis=3)

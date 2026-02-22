@@ -599,9 +599,7 @@ class FasterRCNN(nn.Module):
             roi_reg_loss = F.huber_loss(preds, reg_tgt_fg, reduction="mean")
 
         else:
-            roi_reg_loss = lucid.zeros(
-                (), dtype=lucid.Float32, device=images.device
-            )
+            roi_reg_loss = lucid.zeros((), dtype=lucid.Float32, device=images.device)
 
         total_loss = (rpn_cls_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss) / B
         return {
