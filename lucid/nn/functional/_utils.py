@@ -10,27 +10,50 @@ def _interpolate_bilinear(
 ) -> Tensor:
     _, _, H, W = input_.shape
     out_h, out_w = size
+    if (H, W) == (out_h, out_w):
+        return input_
 
-    scale_h = (H - 1) / (out_h - 1) if align_corners else H / out_h
-    scale_w = (W - 1) / (out_w - 1) if align_corners else W / out_w
-
-    indices_h = lucid.arange(out_h).to(input_.device) * scale_h
-    indices_w = lucid.arange(out_w).to(input_.device) * scale_w
-
-    if not align_corners:
-        indices_h += 0.5 * scale_h
-        indices_w += 0.5 * scale_w
+    device = input_.device
+    if align_corners:
+        if out_h == 1:
+            indices_h = lucid.zeros((out_h,), dtype=lucid.Float32, device=device)
+        else:
+            indices_h = (
+                lucid.arange(out_h, dtype=lucid.Float32, device=device)
+                * (H - 1)
+                / (out_h - 1)
+            )
+        if out_w == 1:
+            indices_w = lucid.zeros((out_w,), dtype=lucid.Float32, device=device)
+        else:
+            indices_w = (
+                lucid.arange(out_w, dtype=lucid.Float32, device=device)
+                * (W - 1)
+                / (out_w - 1)
+            )
+    else:
+        scale_h = H / out_h
+        scale_w = W / out_w
+        indices_h = (
+            lucid.arange(out_h, dtype=lucid.Float32, device=device) + 0.5
+        ) * scale_h - 0.5
+        indices_w = (
+            lucid.arange(out_w, dtype=lucid.Float32, device=device) + 0.5
+        ) * scale_w - 0.5
 
     indices_h = indices_h.clip(0, H - 1)
     indices_w = indices_w.clip(0, W - 1)
 
-    top_indices = indices_h.astype(lucid.Int)
-    bot_indices = (top_indices + 1).clip(0, H - 1).astype(lucid.Int)
-    left_indices = indices_w.astype(lucid.Int)
-    right_indices = (left_indices + 1).clip(0, W - 1).astype(lucid.Int)
+    top_indices_f = lucid.floor(indices_h)
+    left_indices_f = lucid.floor(indices_w)
 
-    h_lerp = indices_h - top_indices
-    w_lerp = indices_w - left_indices
+    top_indices = top_indices_f.astype(lucid.Int)
+    bot_indices = (top_indices_f + 1).clip(0, H - 1).astype(lucid.Int)
+    left_indices = left_indices_f.astype(lucid.Int)
+    right_indices = (left_indices_f + 1).clip(0, W - 1).astype(lucid.Int)
+
+    h_lerp = indices_h - top_indices_f
+    w_lerp = indices_w - left_indices_f
 
     top_left = input_[:, :, top_indices[:, None], left_indices]
     top_right = input_[:, :, top_indices[:, None], right_indices]
@@ -46,23 +69,33 @@ def _interpolate_bilinear(
 
 def _interpolate_nearest(
     input_: Tensor, size: tuple[int, int], align_corners: bool = False
-) -> None:
+) -> Tensor:
+    _ = align_corners
     _, _, H, W = input_.shape
     device = input_.device
     out_h, out_w = size
 
+    if (H, W) == (out_h, out_w):
+        return input_
+
     scale_h = H / out_h
     scale_w = W / out_w
 
-    indices_h = (lucid.arange(out_h) * scale_h).clip(0, H - 1).astype(int).to(device)
-    indices_w = (lucid.arange(out_w) * scale_w).clip(0, W - 1).astype(int).to(device)
+    indices_h = lucid.floor(
+        lucid.arange(out_h, dtype=lucid.Float32, device=device) * scale_h
+    )
+    indices_w = lucid.floor(
+        lucid.arange(out_w, dtype=lucid.Float32, device=device) * scale_w
+    )
+    indices_h = indices_h.clip(0, H - 1).astype(lucid.Int32)
+    indices_w = indices_w.clip(0, W - 1).astype(lucid.Int32)
 
-    return input_[:, :, indices_h[:, None], indices_w]
+    return input_[:, :, indices_h[:, None], indices_w[None, :]]
 
 
 def _interpolate_area(
     input_: Tensor, size: tuple[int, int], align_corners: bool = False
-) -> None:
+) -> Tensor:
     _, _, H, W = input_.shape
     out_h, out_w = size
 

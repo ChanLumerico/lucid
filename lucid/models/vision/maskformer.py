@@ -75,7 +75,7 @@ class _BackboneOutput:
     feature_maps: list[Tensor]
 
 
-class _HFConvNormLayer(nn.Module):
+class _ConvNormLayer(nn.Module):
     def __init__(
         self,
         convolution: nn.Module,
@@ -95,29 +95,27 @@ class _HFConvNormLayer(nn.Module):
         return out
 
 
-class _HFBackboneBlock(nn.Module):
+class _BackboneBlock(nn.Module):
     def __init__(self, block: nn.Module) -> None:
         super().__init__()
-        self.shortcut: _HFConvNormLayer | None = None
+        self.shortcut: _ConvNormLayer | None = None
         if getattr(block, "downsample", None) is not None:
-            self.shortcut = _HFConvNormLayer(
+            self.shortcut = _ConvNormLayer(
                 block.downsample[0], block.downsample[1], None
             )
 
         if hasattr(block, "conv1") and hasattr(block.conv1, "conv"):
-            # Bottleneck block in lucid ResNet.
             self.layer = nn.Sequential(
-                _HFConvNormLayer(block.conv1.conv, block.conv1.bn, block.conv1.relu),
-                _HFConvNormLayer(block.conv2.conv, block.conv2.bn, block.conv2.relu),
-                _HFConvNormLayer(block.conv3[0], block.conv3[1], None),
+                _ConvNormLayer(block.conv1.conv, block.conv1.bn, block.conv1.relu),
+                _ConvNormLayer(block.conv2.conv, block.conv2.bn, block.conv2.relu),
+                _ConvNormLayer(block.conv3[0], block.conv3[1], None),
             )
             self.activation = block.relu
             self.se = getattr(block, "se", None)
         else:
-            # BasicBlock in lucid ResNet.
             self.layer = nn.Sequential(
-                _HFConvNormLayer(block.conv1, block.bn1, block.relu1),
-                _HFConvNormLayer(block.conv2, block.bn2, None),
+                _ConvNormLayer(block.conv1, block.bn1, block.relu1),
+                _ConvNormLayer(block.conv2, block.bn2, None),
             )
             self.activation = block.relu2
             self.se = None
@@ -135,10 +133,10 @@ class _HFBackboneBlock(nn.Module):
         return self.activation(out)
 
 
-class _HFBackboneStage(nn.Module):
+class _BackboneStage(nn.Module):
     def __init__(self, stage: nn.Sequential) -> None:
         super().__init__()
-        self.layers = nn.Sequential(*[_HFBackboneBlock(block) for block in stage])
+        self.layers = nn.Sequential(*[_BackboneBlock(block) for block in stage])
 
     def forward(self, input_: Tensor) -> Tensor:
         out = input_
@@ -209,17 +207,17 @@ class _MaskFormerResNetBackbone(nn.Module):
         self.channels = self._CHANNELS_BY_VARIANT[variant]
 
         self.embedder = nn.Module()
-        self.embedder.embedder = _HFConvNormLayer(
+        self.embedder.embedder = _ConvNormLayer(
             model.stem[0], model.stem[1], model.stem[2]
         )
         self.maxpool = model.maxpool
 
         self.encoder = nn.Module()
         self.encoder.stages = nn.Sequential(
-            _HFBackboneStage(model.layer1),
-            _HFBackboneStage(model.layer2),
-            _HFBackboneStage(model.layer3),
-            _HFBackboneStage(model.layer4),
+            _BackboneStage(model.layer1),
+            _BackboneStage(model.layer2),
+            _BackboneStage(model.layer3),
+            _BackboneStage(model.layer4),
         )
 
     @classmethod
