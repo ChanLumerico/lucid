@@ -317,10 +317,10 @@ class Tensor(Generic[DType], _TensorBase, _TensorInplace):
             return self.astype(dtype)
 
     def cpu(self) -> Self:
-        return self.to(device="cpu")
+        return self.to("cpu")
 
     def gpu(self) -> Self:
-        return self.to(device="gpu")
+        return self.to("gpu")
 
     def is_cpu(self) -> bool:
         return self.device == "cpu"

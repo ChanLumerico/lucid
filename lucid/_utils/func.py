@@ -743,7 +743,9 @@ class masked_fill(Operation):
 
     @unary_func_op(device="gpu")
     def gpu(self, a: Tensor) -> _FuncOpReturnType:
-        self.result = Tensor(mx.where(self.mask.data.astype(bool), self.value, a.data))
+        self.result = Tensor(
+            mx.where(self.mask.data.astype(mx.bool_), self.value, a.data)
+        )
         return self.result, self.__grad_gpu__
 
     def __grad_cpu__(self) -> _GradType:
