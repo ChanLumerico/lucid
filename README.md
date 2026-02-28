@@ -1,11 +1,19 @@
 # Lucid² 💎
 
+<div align="center">
+
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=16&pause=1000&color=FFFFFF&center=true&vCenter=true&width=435&height=30&lines=A+Deep+Learning+Framework+Built+From+Scratch" alt="Typing SVG"/>
+
+<br>
+
 ![PyPI Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI Downloads](https://img.shields.io/pypi/dm/lucid-dl.svg)
 [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 ![Lines of Code](https://img.shields.io/badge/dynamic/json?label=Lines%20of%20Code&color=purple&url=https%3A%2F%2Fraw.githubusercontent.com%2FChanLumerico%2Flucid%2Fmain%2Floc%2Floc_badge.json&query=%24.linesOfCode&cacheSeconds=3600)
+
+</div>
 
 **Lucid** is a minimalist deep learning framework built entirely from scratch in Python. It offers a pedagogically rich environment to explore the foundations of modern deep learning systems, including autodiff, neural network modules, and GPU acceleration — all while staying lightweight, readable, and free of complex dependencies.
 
@@ -20,14 +28,14 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Added **Image Segmentation** model category, starting with `lucid.models.MaskRCNN`
-    - Also includes variants: `models.mask_rcnn_resnet_{50,101}_fpn`
+- Implemented **MaskFormer** (Cheng et al. 2021) `models.MaskFormer` with 4-variants:
+    - `models.maskformer_resnet_{18, 34, 50, 101}` with 2 pre-trained weights available `weights.MaskFormer_ResNet_{50, 101}_ADE20K`
+
+- Added **Image Segmentation** model category, starting with `lucid.models.MaskRCNN`.
 
 - Implemented **RoFormer** (Su et al., 2021) `lucid.models.RoFormer` based on BERT implementation, along with various task wrappers.
 
 - Added **Rotary Positional Embedding** (RoPE; Su et al., 2021): `nn.RotaryPosEmbedding`
-
-- Added new submodule `lucid.data.tokenizers` which contains various tokenizers for NLP tasks along with thier ***Fast*** versions, accelerated via **C++ backend**. (e.g. `WordPieceTokenizerFast`)
 
 ## 🔧 How to Install
 
@@ -287,17 +295,23 @@ Lucid serves as a powerful educational resource and a minimalist experimental sa
 
 ## 📜 Others
 
-**Dependencies**:
+**Core Dependencies**:
+
+<div align="center">
 
 | Library | Purpose |
 | ------- | ------- |
 | `numpy` | Core Tensor operations for CPU |
 |  `mlx`  | Core Tensor operations for GPU(Apple Silicon) |
-| `pandas`, `openml` | Dataset download and fetching |
-| `matplotlib` | Various visualizations |
+
+</div>
 
 **Inspired By**:
+
+<div align="center">
 
 ![](https://skillicons.dev/icons?i=pytorch)
 ![](https://skillicons.dev/icons?i=tensorflow)
 ![](https://skillicons.dev/icons?i=stackoverflow)
+
+</div>
