@@ -11,6 +11,7 @@ from lucid._tensor import Tensor
 from lucid import register_model
 
 from lucid.models.vision.resnet import resnet_18, resnet_34, resnet_50, resnet_101
+from lucid.models.base import PreTrainedModelMixin
 
 
 __all__ = [
@@ -243,6 +244,28 @@ class _MaskFormerResNetBackbone(nn.Module):
         c4 = self.encoder.stages[2](c3)
         c5 = self.encoder.stages[3](c4)
         return _BackboneOutput(feature_maps=[c2, c3, c4, c5])
+
+
+def _maskformer_infer_resnet_variant(backbone_config: dict | None) -> str | None:
+    if not isinstance(backbone_config, dict):
+        return None
+    if backbone_config.get("model_type", "") != "resnet":
+        return None
+    depths = backbone_config.get("depths")
+    if not isinstance(depths, list):
+        return None
+    if depths == [2, 2, 2, 2]:
+        return "resnet_18"
+    if depths == [3, 4, 6, 3]:
+        return (
+            "resnet_34"
+            if len(backbone_config.get("hidden_sizes", [])) == 4
+            and backbone_config.get("hidden_sizes", [])[0] == 64
+            else "resnet_50"
+        )
+    if depths == [3, 4, 23, 3]:
+        return "resnet_101"
+    return None
 
 
 class _DETRAttention(nn.Module):
@@ -1446,7 +1469,17 @@ class _MaskFormerModel(nn.Module):
         super().__init__()
         self.config = config
         if backbone is None:
-            raise ValueError("backbone must be provided to _MaskFormerModel.")
+            variant = _maskformer_infer_resnet_variant(config.backbone_config)
+            if variant is None:
+                raise ValueError(
+                    "backbone must be provided to _MaskFormerModel when "
+                    "backbone_config is missing or unsupported."
+                )
+            backbone = _MaskFormerResNetBackbone.from_config(
+                config=config,
+                variant=variant,
+                pretrained=False,
+            )
         self.pixel_level_module = _MaskFormerPixelLevelModule(config, backbone)
         self.transformer_module = _MaskFormerTransformerModule(
             in_features=self.pixel_level_module.encoder.channels[-1], config=config
@@ -1581,7 +1614,7 @@ class _MaskFormerModel(nn.Module):
         return output
 
 
-class MaskFormer(nn.Module):
+class MaskFormer(PreTrainedModelMixin, nn.Module):
     def __init__(
         self, config: MaskFormerConfig, backbone: nn.Module | None = None
     ) -> None:
