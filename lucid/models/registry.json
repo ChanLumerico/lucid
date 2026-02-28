@@ -831,6 +831,24 @@
                 "parameter_size": 65126611,
                 "submodule_count": 495
             }
+        },
+        "maskformer": {
+            "maskformer_resnet_18": {
+                "parameter_size": 13854148,
+                "submodule_count": 162
+            },
+            "maskformer_resnet_34": {
+                "parameter_size": 23971012,
+                "submodule_count": 218
+            },
+            "maskformer_resnet_50": {
+                "parameter_size": 28332484,
+                "submodule_count": 317
+            },
+            "maskformer_resnet_101": {
+                "parameter_size": 47324612,
+                "submodule_count": 538
+            }
         }
     }
 }

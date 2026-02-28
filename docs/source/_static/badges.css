@@ -57,6 +57,11 @@
     border-color: #ff8dd9;
 }
 
+.badge.segmentation_transformer {
+    color: #ff8dd9;
+    border-color: #ff8dd9;
+}
+
 .badge.autoencoder {
     color: #61f300;
     border-color: #61f300;

@@ -361,6 +361,39 @@ MobileNet
       - 0.7404
       - 0.9134
 
+MaskFormer
+----------
+|transformer-badge| |segmentation-transformer-badge|
+
+.. code-block:: python
+
+    class lucid.weights.MaskFormer_ResNet_50_Weights(Enum)
+    class lucid.weights.MaskFormer_ResNet_101_Weights(Enum)
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+
+    * - *MaskFormer_ResNet_50_Weights*
+      - ADE20K
+      - ADE20K
+      - 41,307,863
+      - 166 MB
+
+    * - *MaskFormer_ResNet_101_Weights*
+      - ADE20K
+      - ADE20K
+      - 60,299,991
+      - 242 MB
+
+---
+
 BERT
 ----
 |transformer-badge| |encoder-only-transformer-badge|

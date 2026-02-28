@@ -4,5 +4,6 @@
     "editor.fontSize": 12,
     "python.analysis.ignore": [
     "**/*.pyi"
-  ]
+  ],
+  "python-envs.defaultEnvManager": "ms-python.python:system"
 }

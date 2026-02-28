@@ -6,6 +6,7 @@ from typing import Any, OrderedDict
 import hashlib
 import json
 import os
+import re
 import shutil
 import ssl
 import tempfile
@@ -98,8 +99,41 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 _REGISTRY = _load_json(WEIGHTS_REGISTRY_PATH)
 _MODELS_META = _load_json(lucid.MODELS_REGISTRY_PATH)
+_PYI_PATH = _WEIGHTS_DIR / "__init__.pyi"
 
 _DYNAMIC: dict[str, Enum] = {}
+
+
+def _load_stub_classnames() -> set[str]:
+    if not _PYI_PATH.exists():
+        return set()
+    try:
+        text = _PYI_PATH.read_text(encoding="utf-8")
+    except Exception:
+        return set()
+    return set(
+        re.findall(r"^class\s+([A-Za-z0-9_]+)\(Enum\):", text, flags=re.MULTILINE)
+    )
+
+
+_STUB_CLASSNAMES = _load_stub_classnames()
+
+
+def _norm_key(name: str) -> str:
+    return "".join(ch for ch in name.lower() if ch.isalnum())
+
+
+def _build_stub_modelkey_map(classnames: set[str]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for cls in classnames:
+        if not cls.endswith("_Weights"):
+            continue
+        model_part = cls[: -len("_Weights")]
+        mapping.setdefault(_norm_key(model_part), cls)
+    return mapping
+
+
+_STUB_MODELKEY_MAP = _build_stub_modelkey_map(_STUB_CLASSNAMES)
 
 
 def _canon(x: str) -> str:
@@ -132,20 +166,35 @@ def _classname(
     if enum_name:
         return enum_name
 
+    stub_match = _STUB_MODELKEY_MAP.get(_norm_key(model_key))
+    if stub_match is not None:
+        return stub_match
+
+    candidates: list[str] = []
+
     if family is not None:
-        return family + model_key[len(family) :].upper() + "_Weights"
+        candidates.append(family + model_key[len(family) :].upper() + "_Weights")
+    else:
+        fam = _family_of(model_key)
+        if fam:
+            suf = model_key
+            fam_key = fam.lower().replace(" ", "")
+            suf = (
+                suf[len(fam_key) :] if suf.replace("_", "").startswith(fam_key) else suf
+            )
+            suf = suf.lstrip()
+            candidates.append(
+                f"{fam}{suf.upper()}_Weights" if suf else f"{fam}_Weights"
+            )
 
-    fam = _family_of(model_key)
-    if fam:
-        suf = model_key
-        fam_key = fam.lower().replace(" ", "")
-        suf = suf[len(fam_key) :] if suf.replace("_", "").startswith(fam_key) else suf
-        suf = suf.lstrip()
+        parts = model_key.split("_")
+        candidates.append("_".join(p.capitalize() for p in parts) + "_Weights")
 
-        return f"{fam}{suf.upper()}_Weights" if suf else f"{fam}_Weights"
+    for name in candidates:
+        if name in _STUB_CLASSNAMES:
+            return name
 
-    parts = model_key.split("_")
-    return "_".join(p.capitalize() for p in parts) + "_Weights"
+    return candidates[0]
 
 
 def _make_enum(model_key: str, entries: dict[str, Any]) -> type[Enum]:

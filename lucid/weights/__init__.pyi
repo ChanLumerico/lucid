@@ -112,6 +112,14 @@ class BERT_Weights(Enum):
     PRE_TRAIN_BASE: WeightEntry
     DEFAULT: WeightEntry
 
+class MaskFormer_ResNet_50_Weights(Enum):
+    ADE20K: WeightEntry
+    DEFAULT: WeightEntry
+
+class MaskFormer_ResNet_101_Weights(Enum):
+    ADE20K: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
@@ -138,4 +146,6 @@ __all__ = [
     "MobileNet_V3_Small_Weights",
     "MobileNet_V3_Large_Weights",
     "BERT_Weights",
+    "MaskFormer_ResNet_50_Weights",
+    "MaskFormer_ResNet_101_Weights",
 ]
