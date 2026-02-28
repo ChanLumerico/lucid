@@ -2,8 +2,8 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>MaskFormer - Lucid 2.14.4 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="MaskFormerConfig" href="MaskFormerConfig.html" /><link rel="prev" title="mask_rcnn_resnet_101_fpn" href="../mask_rcnn/mask_rcnn_resnet_101_fpn.html" />
-      <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/vision/imgseg/maskformer/MaskFormer.html" /><script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>MaskFormerConfig - Lucid 2.14.4 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="maskformer_resnet_18" href="maskformer_resnet_18.html" /><link rel="prev" title="MaskFormer" href="MaskFormer.html" />
+      <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/vision/imgseg/maskformer/MaskFormerConfig.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
   </script><link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=e1a1ceaf" />
@@ -22,8 +22,8 @@
 }
 </style>
     <meta property="og:type" content="website"/>
-  <meta property="og:url" content="https://chanlumerico.github.io/lucid/models/vision/imgseg/maskformer/MaskFormer.html"/>
-  <meta property="og:title" content="MaskFormer"/>
+  <meta property="og:url" content="https://chanlumerico.github.io/lucid/models/vision/imgseg/maskformer/MaskFormerConfig.html"/>
+  <meta property="og:title" content="MaskFormerConfig"/>
     <meta name="twitter:card" content="summary"/>
   </head>
 <body><div class="sy-head">
@@ -855,8 +855,8 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l4"><a class="reference internal" href="../mask_rcnn/mask_rcnn_resnet_101_fpn.html">mask_rcnn_resnet_101_fpn</a></li>
 </ul>
 </li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">MaskFormer</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="MaskFormerConfig.html">MaskFormerConfig</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="MaskFormer.html">MaskFormer</a><ul class="current">
+<li class="toctree-l4 current"><a class="current reference internal" href="#">MaskFormerConfig</a></li>
 <li class="toctree-l4"><a class="reference internal" href="maskformer_resnet_18.html">maskformer_resnet_18</a></li>
 <li class="toctree-l4"><a class="reference internal" href="maskformer_resnet_34.html">maskformer_resnet_34</a></li>
 <li class="toctree-l4"><a class="reference internal" href="maskformer_resnet_50.html">maskformer_resnet_50</a></li>
@@ -972,18 +972,10 @@ data-aria-dark="Switch to auto color mode">
       <i class="i-lucide close"></i>
     </button>
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#lucid.models.MaskFormer"><code class="docutils literal notranslate"><span class="pre">MaskFormer</span></code></a></li>
+<li><a class="reference internal" href="#lucid.models.MaskFormerConfig"><code class="docutils literal notranslate"><span class="pre">MaskFormerConfig</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
-<li><a class="reference internal" href="#methods">Methods</a><ul>
-<li><a class="reference internal" href="#lucid.models.MaskFormer.forward"><code class="docutils literal notranslate">forward()</span></code></a></li>
-<li><a class="reference internal" href="#lucid.models.MaskFormer.predict"><code class="docutils literal notranslate">predict()</span></code></a></li>
-<li><a class="reference internal" href="#lucid.models.MaskFormer.get_logits"><code class="docutils literal notranslate">get_logits()</span></code></a></li>
-<li><a class="reference internal" href="#lucid.models.MaskFormer.get_loss_dict"><code class="docutils literal notranslate">get_loss_dict()</span></code></a></li>
-<li><a class="reference internal" href="#lucid.models.MaskFormer.get_loss"><code class="docutils literal notranslate">get_loss()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#usage">Usage</a></li>
 </ul>
 </div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
   </aside>
@@ -1009,8 +1001,12 @@ data-aria-dark="Switch to auto color mode">
         <span>/</span>
         <meta itemprop="position" content="3" />
       </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-        <strong itemprop="name">MaskFormer</strong>
+        <a itemprop="item" href="MaskFormer.html"><span itemprop="name">MaskFormer</span></a>
+        <span>/</span>
         <meta itemprop="position" content="4" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <strong itemprop="name">MaskFormerConfig</strong>
+        <meta itemprop="position" content="5" />
       </li></ol>
     <div class="xl:hidden ml-1">
       <button class="js-menu" aria-label="Show table of contents" type="button" aria-controls="rside"
@@ -1026,7 +1022,7 @@ data-aria-dark="Switch to auto color mode">
     <button
       type="button"
       class="js-copy px-3 py-1 inline-flex items-center gap-1"
-      data-url="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormer.rst.txt"
+      data-url="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormerConfig.rst.txt"
     >
       <i class="i-lucide" data-icon="copy"></i>
       <span>Copy page</span>
@@ -1040,210 +1036,126 @@ data-aria-dark="Switch to auto color mode">
     <div role="presentation">
       <div class="flex flex-col" role="group">
         <button class="js-copy" type="button" role="menuitem"
-          data-url="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormer.rst.txt">
+          data-url="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormerConfig.rst.txt">
           <span class="iconify-icon">
             <i class="i-lucide" data-icon="copy"></i>
           </span>
           <span>Copy page</span>
         </button>
-        <a role="menuitem" href="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormer.rst.txt" target="_blank" rel="nofollow"><iconify-icon icon="bi:code-slash"></iconify-icon>
-            <span>View Source</span></a><a role="menuitem" href="https://chatgpt.com/?hints=search&q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormer.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
+        <a role="menuitem" href="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormerConfig.rst.txt" target="_blank" rel="nofollow"><iconify-icon icon="bi:code-slash"></iconify-icon>
+            <span>View Source</span></a><a role="menuitem" href="https://chatgpt.com/?hints=search&q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormerConfig.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
           <iconify-icon icon="bi:openai"></iconify-icon>
           <span>Open in ChatGPT</span>
-        </a><a role="menuitem" href="https://claude.ai/new?q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormer.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
+        </a><a role="menuitem" href="https://claude.ai/new?q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/models/vision/imgseg/maskformer/MaskFormerConfig.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
           <iconify-icon icon="bi:claude"></iconify-icon>
           <span>Open in Claude</span>
         </a></div>
     </div>
   </div>
 </div><article class="yue" role="main">
-          <section id="maskformer">
-<h1>MaskFormer<a class="headerlink" href="#maskformer" title="Link to this heading">¶</a></h1>
-<p><span class="badge transformer">Transformer</span> <span class="badge segmentation_transformer">Segmentation Transformer</span></p>
-<div class="toctree-wrapper compound">
-</div>
+          <section id="maskformerconfig">
+<h1>MaskFormerConfig<a class="headerlink" href="#maskformerconfig" title="Link to this heading">¶</a></h1>
 <dl class="py class">
-<dt class="sig sig-object py" id="lucid.models.MaskFormer">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">MaskFormer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="MaskFormerConfig.html#lucid.models.MaskFormerConfig" title="lucid.models.vision.maskformer.MaskFormerConfig"><span class="pre">MaskFormerConfig</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">backbone</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../nn/Module.html#lucid.nn.Module" title="lucid.nn.module.Module"><span class="pre">Module</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.MaskFormer" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.models.MaskFormerConfig">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">MaskFormerConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_labels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpn_feature_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask_feature_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backbone_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_queries</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">encoder_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">6</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">encoder_ffn_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2048</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">encoder_attention_heads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decoder_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decoder_layers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">6</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decoder_ffn_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2048</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decoder_attention_heads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decoder_hidden_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decoder_num_queries</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">encoder_layerdrop</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decoder_layerdrop</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_encoder_decoder</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">activation_function</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'relu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">256</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dropout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attention_dropout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">activation_dropout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init_std</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.02</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init_xavier_std</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dilation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_cost</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask_loss_coefficient</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dice_loss_coefficient</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eos_coefficient</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_object_weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_attentions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_hidden_states</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.MaskFormerConfig" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p><cite>MaskFormer</cite> reformulates segmentation as a mask classification problem.
-The model combines a CNN backbone + pixel decoder with a Transformer decoder
-that predicts query-level class logits and mask embeddings.</p>
-<pre id="id1" class="mermaid">
-        %%{init: {&quot;flowchart&quot;:{&quot;curve&quot;:&quot;monotoneX&quot;,&quot;nodeSpacing&quot;:50,&quot;rankSpacing&quot;:50}} }%%
-flowchart LR
-linkStyle default stroke-width:2.0px
-subgraph sg_m0[&quot;&lt;span style='font-size:20px;font-weight:700'&gt;MaskFormer&lt;/span&gt;&quot;]
-style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-    subgraph sg_m1[&quot;_MaskFormerModel&quot;]
-    style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-    subgraph sg_m2[&quot;_MaskFormerPixelLevelModule&quot;]
-        direction TB;
-    style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-        subgraph sg_m3[&quot;_MaskFormerResNetBackbone&quot;]
-        direction TB;
-        style sg_m3 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-        m4[&quot;Module&quot;];
-        m5[&quot;MaxPool2d&quot;];
-        m6[&quot;Module&quot;];
-        end
-        subgraph sg_m7[&quot;_MaskFormerPixelDecoder&quot;]
-        direction TB;
-        style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-        m8[&quot;_MaskFormerFPNModel&quot;];
-        m9[&quot;Conv2d&quot;];
-        end
-    end
-    subgraph sg_m10[&quot;_MaskFormerTransformerModule&quot;]
-        direction TB;
-    style sg_m10 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-        subgraph sg_m11[&quot;_MaskFormerSinePositionEmbedding&quot;]
-        direction TB;
-        style sg_m11 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-        m12[&quot;SinusoidalPosEmbedding&quot;];
-        end
-        m13[&quot;Embedding&quot;];
-        m14[&quot;Conv2d&quot;];
-        subgraph sg_m15[&quot;_DETRDecoder&quot;]
-        direction TB;
-        style sg_m15 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-        m16[&quot;ModuleList&quot;];
-        m17[&quot;LayerNorm&quot;];
-        end
-    end
-    end
-    m18[&quot;Linear&quot;];
-    subgraph sg_m19[&quot;_MaskFormerMLPPredictionHead&quot;]
-    style sg_m19 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-    subgraph sg_m20[&quot;_PredictionBlock x 2&quot;]
-        direction TB;
-    style sg_m20 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-        m20_in([&quot;Input&quot;]);
-        m20_out([&quot;Output&quot;]);
-style m20_in fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
-style m20_out fill:#e2e8f0,stroke:#64748b,stroke-width:1px;
-        m21[&quot;Linear&quot;];
-        m22[&quot;ReLU&quot;];
-    end
-    subgraph sg_m23[&quot;_PredictionBlock&quot;]
-        direction TB;
-    style sg_m23 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-        m24[&quot;Linear&quot;];
-        m25[&quot;Identity&quot;];
-    end
-    end
-    m28[&quot;_MaskFormerHungarianMatcher&quot;];
-    subgraph sg_m27[&quot;_MaskFormerLoss&quot;]
-    style sg_m27 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
-    m28[&quot;_MaskFormerHungarianMatcher&quot;];
-    end
-end
-input[&quot;Input&quot;];
-output[&quot;Output&quot;];
-style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
-style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
-style m5 fill:#fefcbf,stroke:#b7791f,stroke-width:1px;
-style m9 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
-style m12 fill:#e2e8f0,stroke:#334155,stroke-width:1px;
-style m13 fill:#f1f5f9,stroke:#475569,stroke-width:1px;
-style m14 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
-style m17 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
-style m18 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
-style m21 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
-style m22 fill:#faf5ff,stroke:#6b46c1,stroke-width:1px;
-style m24 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
-style m25 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
-input --&gt; m4;
-m14 --&gt; m16;
-m16 --&gt; m17;
-m17 --&gt; m18;
-m18 -.-&gt; m21;
-m20_in -.-&gt; m21;
-m20_out --&gt; m24;
-m21 --&gt; m22;
-m22 --&gt; m20_in;
-m22 --&gt; m20_out;
-m24 --&gt; m25;
-m25 --&gt; output;
-m4 --&gt; m5;
-m5 --&gt; m6;
-m6 --&gt; m8;
-m8 --&gt; m9;
-m9 --&gt; m14;
-    </pre><section id="class-signature">
+<p><cite>MaskFormerConfig</cite> stores the full model setup used by <a class="reference internal" href="MaskFormer.html#lucid.models.MaskFormer" title="lucid.models.MaskFormer"><code class="xref py py-class docutils literal notranslate"><span class="pre">lucid.models.MaskFormer</span></code></a>.
+It includes output space, backbone, decoder shape, and loss-related coefficients.</p>
+<section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">class</span><span class="w"> </span><span class="nc">MaskFormer</span><span class="p">(</span><span class="n">PreTrainedModelMixin</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-</span><span data-line="2">    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span data-line="3">        <span class="bp">self</span><span class="p">,</span>
-</span><span data-line="4">        <span class="n">config</span><span class="p">:</span> <span class="n">MaskFormerConfig</span><span class="p">,</span>
-</span><span data-line="5">        <span class="n">backbone</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span data-line="6">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="nd">@dataclass</span>
+</span><span data-line="2"><span class="k">class</span><span class="w"> </span><span class="nc">MaskFormerConfig</span><span class="p">:</span>
+</span><span data-line="3">    <span class="n">num_labels</span><span class="p">:</span> <span class="nb">int</span>
+</span><span data-line="4">    <span class="n">fpn_feature_size</span><span class="p">:</span> <span class="nb">int</span>
+</span><span data-line="5">    <span class="n">mask_feature_size</span><span class="p">:</span> <span class="nb">int</span>
+</span><span data-line="6">    <span class="n">backbone_config</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span data-line="7">    <span class="n">num_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
+</span><span data-line="8">    <span class="n">num_queries</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span>
+</span><span data-line="9">    <span class="n">encoder_layer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span>
+</span><span data-line="10">    <span class="n">encoder_ffn_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2048</span>
+</span><span data-line="11">    <span class="n">encoder_attention_heads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span>
+</span><span data-line="12">    <span class="n">decoder_config</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span data-line="13">    <span class="n">decoder_layers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span>
+</span><span data-line="14">    <span class="n">decoder_ffn_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2048</span>
+</span><span data-line="15">    <span class="n">decoder_attention_heads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span>
+</span><span data-line="16">    <span class="n">decoder_hidden_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span data-line="17">    <span class="n">decoder_num_queries</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span data-line="18">    <span class="n">encoder_layerdrop</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+</span><span data-line="19">    <span class="n">decoder_layerdrop</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+</span><span data-line="20">    <span class="n">is_encoder_decoder</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span data-line="21">    <span class="n">activation_function</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;relu&quot;</span>
+</span><span data-line="22">    <span class="n">d_model</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span>
+</span><span data-line="23">    <span class="n">dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span>
+</span><span data-line="24">    <span class="n">attention_dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span>
+</span><span data-line="25">    <span class="n">activation_dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+</span><span data-line="26">    <span class="n">init_std</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.02</span>
+</span><span data-line="27">    <span class="n">init_xavier_std</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+</span><span data-line="28">    <span class="n">dilation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span data-line="29">    <span class="n">class_cost</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+</span><span data-line="30">    <span class="n">mask_loss_coefficient</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+</span><span data-line="31">    <span class="n">dice_loss_coefficient</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+</span><span data-line="32">    <span class="n">eos_coefficient</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span>
+</span><span data-line="33">    <span class="n">no_object_weight</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span>
+</span><span data-line="34">    <span class="n">output_attentions</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span data-line="35">    <span class="n">output_hidden_states</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
 </span></pre></div>
 </div>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>config</strong> (<em>MaskFormerConfig</em>):
-Model hyperparameters including label count, decoder depth/width, and
-backbone metadata.</p></li>
-<li><p><strong>backbone</strong> (<em>nn.Module | None</em>, optional):
-Feature extractor used by the pixel-level module. If <cite>None</cite>, a backbone may
-be inferred from <cite>config.backbone_config</cite> when supported.</p></li>
+<li><p><strong>num_labels</strong> (<em>int</em>): Number of semantic classes (foreground categories).</p></li>
+<li><p><strong>fpn_feature_size</strong> (<em>int</em>): Pyramid feature channel width.</p></li>
+<li><p><strong>mask_feature_size</strong> (<em>int</em>): Hidden width for mask embedding MLP head.</p></li>
+<li><p><strong>backbone_config</strong> (<em>dict | None</em>): Backbone metadata (<cite>model_type</cite>, <cite>depths</cite>, <cite>hidden_sizes</cite>).</p></li>
+<li><p><strong>num_channels</strong> (<em>int</em>): Input channel count.</p></li>
+<li><p><strong>num_queries</strong> (<em>int</em>): Number of segmentation queries.</p></li>
+<li><p><strong>encoder_layer</strong> (<em>int</em>): Number of encoder blocks.</p></li>
+<li><p><strong>encoder_ffn_dim</strong> (<em>int</em>): Encoder MLP hidden width.</p></li>
+<li><p><strong>encoder_attention_heads</strong> (<em>int</em>): Encoder attention heads.</p></li>
+<li><p><strong>decoder_config</strong> (<em>dict | None</em>): Decoder preset config (DETR-style).</p></li>
+<li><p><strong>decoder_layers</strong> (<em>int</em>): Number of decoder layers.</p></li>
+<li><p><strong>decoder_ffn_dim</strong> (<em>int</em>): Decoder MLP hidden width.</p></li>
+<li><p><strong>decoder_attention_heads</strong> (<em>int</em>): Decoder attention heads.</p></li>
+<li><p><strong>decoder_hidden_size</strong> (<em>int | None</em>): Optional decoder hidden size override.</p></li>
+<li><p><strong>decoder_num_queries</strong> (<em>int | None</em>): Optional query count override.</p></li>
+<li><p><strong>encoder_layerdrop</strong> (<em>float</em>): Layer drop probability for encoder.</p></li>
+<li><p><strong>decoder_layerdrop</strong> (<em>float</em>): Layer drop probability for decoder.</p></li>
+<li><p><strong>is_encoder_decoder</strong> (<em>bool</em>): If True, treats model as encoder-decoder style.</p></li>
+<li><p><strong>activation_function</strong> (<em>str</em>): Activation function name.</p></li>
+<li><p><strong>d_model</strong> (<em>int</em>): Transformer model width.</p></li>
+<li><p><strong>dropout</strong> (<em>float</em>): Dropout probability.</p></li>
+<li><p><strong>attention_dropout</strong> (<em>float</em>): Attention dropout probability.</p></li>
+<li><p><strong>activation_dropout</strong> (<em>float</em>): Activation dropout probability.</p></li>
+<li><p><strong>init_std</strong> (<em>float</em>): Normal init standard deviation.</p></li>
+<li><p><strong>init_xavier_std</strong> (<em>float</em>): Xavier gain.</p></li>
+<li><p><strong>dilation</strong> (<em>bool</em>): Dilated backbone option (reserved in this implementation).</p></li>
+<li><p><strong>class_cost</strong> (<em>float</em>): Weight for classification loss in Hungarian matching.</p></li>
+<li><p><strong>mask_loss_coefficient</strong> (<em>float</em>): Weight for mask loss term.</p></li>
+<li><p><strong>dice_loss_coefficient</strong> (<em>float</em>): Weight for dice loss term.</p></li>
+<li><p><strong>eos_coefficient</strong> (<em>float</em>): Weight for end-of-object class.</p></li>
+<li><p><strong>no_object_weight</strong> (<em>float</em>): No-object weight for matcher/class losses.</p></li>
+<li><p><strong>output_attentions</strong> (<em>bool</em>): Whether to return attention maps.</p></li>
+<li><p><strong>output_hidden_states</strong> (<em>bool</em>): Whether to return hidden states.</p></li>
 </ul>
 </section>
-<section id="methods">
-<h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.MaskFormer.forward">
-<span class="sig-prename descclassname"><span class="pre">MaskFormer.</span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pixel_values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask_labels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_labels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pixel_mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_hidden_states</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_attentions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.MaskFormer.forward" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.MaskFormer.predict">
-<span class="sig-prename descclassname"><span class="pre">MaskFormer.</span></span><span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pixel_values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">pixel_mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_k_queries</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_logits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_scores</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.MaskFormer.predict" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.MaskFormer.get_logits">
-<span class="sig-prename descclassname"><span class="pre">MaskFormer.</span></span><span class="sig-name descname"><span class="pre">get_logits</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">outputs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.MaskFormer.get_logits" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.MaskFormer.get_loss_dict">
-<span class="sig-prename descclassname"><span class="pre">MaskFormer.</span></span><span class="sig-name descname"><span class="pre">get_loss_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">masks_queries_logits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_queries_logits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask_labels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_labels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.MaskFormer.get_loss_dict" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.MaskFormer.get_loss">
-<span class="sig-prename descclassname"><span class="pre">MaskFormer.</span></span><span class="sig-name descname"><span class="pre">get_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">loss_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.models.MaskFormer.get_loss" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-</section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p><strong>Build from Preset Builder</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">from</span><span class="w"> </span><span class="nn">lucid.models.vision.maskformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">maskformer_resnet_50</span>
-</span><span data-line="2"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
-</span><span data-line="3">
-</span><span data-line="4"><span class="n">model</span> <span class="o">=</span> <span class="n">maskformer_resnet_50</span><span class="p">(</span><span class="n">num_labels</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
-</span><span data-line="5"><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">)</span>
-</span><span data-line="6">
-</span><span data-line="7"><span class="n">out</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-</span><span data-line="8"><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;class_queries_logits&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
-</span><span data-line="9"><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;masks_queries_logits&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
-</span></pre></div>
-</div>
-<p><strong>Load Pretrained ADE20K Weights</strong></p>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">models</span>
-</span><span data-line="2"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.weights</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">W</span>
-</span><span data-line="3">
-</span><span data-line="4"><span class="n">weight</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">MaskFormer_ResNet_50_Weights</span><span class="o">.</span><span class="n">ADE20K</span>
-</span><span data-line="5"><span class="n">config</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">MaskFormerConfig</span><span class="p">(</span><span class="o">**</span><span class="n">weight</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
-</span><span data-line="6"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">MaskFormer</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">weight</span><span class="p">)</span>
-</span><span data-line="7">
-</span><span data-line="8"><span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameter_size</span><span class="p">)</span>
+</span><span data-line="2">
+</span><span data-line="3"><span class="n">cfg</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">MaskFormerConfig</span><span class="p">(</span>
+</span><span data-line="4">    <span class="n">num_labels</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
+</span><span data-line="5">    <span class="n">fpn_feature_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
+</span><span data-line="6">    <span class="n">mask_feature_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
+</span><span data-line="7">    <span class="n">backbone_config</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;model_type&quot;</span><span class="p">:</span> <span class="s2">&quot;resnet&quot;</span><span class="p">,</span> <span class="s2">&quot;depths&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s2">&quot;hidden_sizes&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">256</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">2048</span><span class="p">]},</span>
+</span><span data-line="8">    <span class="n">num_queries</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+</span><span data-line="9">    <span class="n">encoder_layer</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+</span><span data-line="10">    <span class="n">decoder_layers</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+</span><span data-line="11">    <span class="n">decoder_attention_heads</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+</span><span data-line="12"><span class="p">)</span>
+</span><span data-line="13">
+</span><span data-line="14"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">MaskFormer</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
 </span></pre></div>
 </div>
 </section>
@@ -1255,16 +1167,16 @@ be inferred from <cite>config.backbone_config</cite> when supported.</p></li>
   </svg>
   <span>Back to top</span>
 </button><div class="navigation flex print:hidden"><div class="navigation-prev">
-    <a href="../mask_rcnn/mask_rcnn_resnet_101_fpn.html">
+    <a href="MaskFormer.html">
       <i class="i-lucide chevron-left"></i>
       <div class="page-info">
-        <span>Previous</span><div class="title">mask_rcnn_resnet_101_fpn</div></div>
+        <span>Previous</span><div class="title">MaskFormer</div></div>
     </a>
   </div><div class="navigation-next">
-    <a href="MaskFormerConfig.html">
+    <a href="maskformer_resnet_18.html">
       <div class="page-info">
         <span>Next</span>
-        <div class="title">MaskFormerConfig</div>
+        <div class="title">maskformer_resnet_18</div>
       </div>
       <i class="i-lucide chevron-right"></i>
     </a>
@@ -1294,440 +1206,5 @@ be inferred from <cite>config.backbone_config</cite> when supported.</p></li>
       <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
       <script src="../../../../_static/shibuya.js?v=cac61aee"></script>
-      <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-      <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
-
-
-
-
-
-const initStyles = () => {
-    const defaultStyle = document.createElement('style');
-    defaultStyle.textContent = `pre.mermaid {
-    /* Same as .mermaid-container > pre */
-    display: block;
-    width: 100%;
-}
-
-pre.mermaid > svg {
-    /* Same as .mermaid-container > pre > svg */
-    height: 500px;
-    width: 100%;
-    max-width: 100% !important;
-}`;
-    document.head.appendChild(defaultStyle);
-
-    const fullscreenStyle = document.createElement('style');
-    fullscreenStyle.textContent = `.mermaid-container {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-}
-
-.mermaid-container > pre {
-    display: block;
-    width: 100%;
-}
-
-.mermaid-container > pre > svg {
-    height: 500px;
-    width: 100%;
-    max-width: 100% !important;
-}
-
-.mermaid-fullscreen-btn {
-    width: 28px;
-    height: 28px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(0, 0, 0, 0.3);
-    border-radius: 4px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-    font-size: 14px;
-    line-height: 1;
-    padding: 0;
-    color: #333;
-}
-
-.mermaid-fullscreen-btn:hover {
-    opacity: 100% !important;
-    background: rgba(255, 255, 255, 1);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-    transform: scale(1.1);
-}
-
-.mermaid-fullscreen-btn.dark-theme {
-    background: rgba(50, 50, 50, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #e0e0e0;
-}
-
-.mermaid-fullscreen-btn.dark-theme:hover {
-    background: rgba(60, 60, 60, 1);
-    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
-}
-
-.mermaid-fullscreen-modal {
-    display: none;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 95vw;
-    height: 100vh;
-    background: rgba(255, 255, 255, 0.98);
-    z-index: 9999;
-    padding: 20px;
-    overflow: auto;
-}
-
-.mermaid-fullscreen-modal.dark-theme {
-    background: rgba(0, 0, 0, 0.98);
-}
-
-.mermaid-fullscreen-modal.active {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.mermaid-container-fullscreen {
-    position: relative;
-    width: 95vw;
-    height: 90vh;
-    max-width: 95vw;
-    max-height: 90vh;
-    background: white;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    overflow: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.mermaid-container-fullscreen.dark-theme {
-    background: #1a1a1a;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
-}
-
-.mermaid-container-fullscreen pre.mermaid {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.mermaid-container-fullscreen .mermaid svg {
-    height: 100% !important;
-    width: 100% !important;
-    cursor: grab;
-}
-
-.mermaid-fullscreen-close {
-    position: fixed !important;
-    top: 20px !important;
-    right: 20px !important;
-    width: 40px;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(0, 0, 0, 0.2);
-    border-radius: 50%;
-    cursor: pointer;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    transition: all 0.2s;
-    font-size: 24px;
-    line-height: 1;
-    color: #333;
-}
-
-.mermaid-fullscreen-close:hover {
-    background: white;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-    transform: scale(1.1);
-}
-
-.mermaid-fullscreen-close.dark-theme {
-    background: rgba(50, 50, 50, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #e0e0e0;
-}
-
-.mermaid-fullscreen-close.dark-theme:hover {
-    background: rgba(60, 60, 60, 1);
-    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
-}
-
-.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
-    display: none !important;
-}`;
-    document.head.appendChild(fullscreenStyle);
-}
-
-// Detect if page has dark background
-const isDarkTheme = () => {
-    // We use a set of heuristics:
-    // 1. Check for common dark mode classes or attributes
-    // 2. Check computed background color brightness
-    if (document.documentElement.classList.contains('dark') ||
-        document.documentElement.getAttribute('data-theme') === 'dark' ||
-        document.body.classList.contains('dark') ||
-        document.body.getAttribute('data-theme') === 'dark') {
-        // console.log("Dark theme detected via class/attribute");
-        return true;
-    }
-    if (document.documentElement.classList.contains('light') ||
-        document.documentElement.getAttribute('data-theme') === 'light' ||
-        document.body.classList.contains('light') ||
-        document.body.getAttribute('data-theme') === 'light') {
-        // console.log("Light theme detected via class/attribute");
-        return false;
-    }
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        // console.log("Dark theme detected via prefers-color-scheme");
-        return true;
-    }
-    const bgColor = window.getComputedStyle(document.body).backgroundColor;
-    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
-    if (match) {
-        const r = parseInt(match[1]);
-        const g = parseInt(match[2]);
-        const b = parseInt(match[3]);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        // console.log("Background color brightness:", brightness);
-        return brightness < 128;
-    }
-    // console.log("No dark or light theme detected, defaulting to light theme");
-    return false;
-};
-
-let darkTheme = isDarkTheme();
-let modal = null;
-let modalContent = null;
-let previousScrollOffset = [window.scrollX, window.scrollY];
-
-const runMermaid = async (rerun) => {
-    console.log("Running mermaid diagrams, rerun =", rerun);
-    // clear all existing mermaid charts
-    let all_mermaids = document.querySelectorAll(".mermaid");
-
-    if (rerun) {
-        all_mermaids.forEach((el) => {
-            if(!el.hasAttribute("data-original-code")) {
-                // store original code
-                // console.log(`Storing original code for first run: `, el.innerHTML);
-                el.setAttribute('data-original-code', el.innerHTML);
-            }
-            if(el.getAttribute("data-processed") === "true") {
-                // remove and restore original
-                el.removeAttribute("data-processed");
-                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
-                el.innerHTML = el.getAttribute('data-original-code');
-            } else {
-                // store original code
-                // console.log(`Storing original code for re-run: `, el.innerHTML);
-                el.setAttribute('data-original-code', el.innerHTML);
-            }
-        });
-        await mermaid.run();
-    }
-
-    all_mermaids = document.querySelectorAll(".mermaid");
-    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
-
-    if ("False" === "True") {
-        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
-        if(mermaids_to_add_zoom > 0) {
-            var svgs = d3.selectAll("");
-            if(all_mermaids.length !== mermaids_processed.length) {
-                setTimeout(() => runMermaid(false), 200);
-                return;
-            } else if(svgs.size() !== mermaids_to_add_zoom) {
-                setTimeout(() => runMermaid(false), 200);
-                return;
-            } else {
-                svgs.each(function() {
-                    var svg = d3.select(this);
-                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
-                    var inner = svg.select("g");
-                    var zoom = d3.zoom().on("zoom", function(event) {
-                        inner.attr("transform", event.transform);
-                    });
-                    svg.call(zoom);
-                });
-            }
-        }
-    } else if(all_mermaids.length !== mermaids_processed.length) {
-        // Wait for mermaid to process all diagrams
-        setTimeout(() => runMermaid(false), 200);
-        return;
-    }
-
-    // Stop here if not adding fullscreen capability
-    if ("True" !== "True") return;
-
-    if (modal !== null ) {
-        // Destroy existing modal
-        modal.remove();
-        modal = null;
-        modalContent = null;
-    }
-
-    modal = document.createElement('div');
-    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
-    modal.innerHTML = `
-        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
-        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
-    `;
-    document.body.appendChild(modal);
-
-    modalContent = modal.querySelector('.mermaid-container-fullscreen');
-    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
-
-    const closeModal = () => {
-        modal.classList.remove('active');
-        modalContent.innerHTML = '';
-        document.body.style.overflow = ''
-        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
-    };
-
-    closeBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.classList.contains('active')) {
-            closeModal();
-        }
-    });
-
-    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
-        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
-            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
-            // Already processed, adjust button class if needed
-            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
-            if (existingBtn) {
-                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
-            }
-            return;
-        }
-
-        const container = document.createElement('div');
-        container.className = 'mermaid-container';
-        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
-        container.appendChild(mermaidDiv);
-
-        const fullscreenBtn = document.createElement('button');
-        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
-        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
-        fullscreenBtn.textContent = '⛶';
-        fullscreenBtn.style.opacity = '50%';
-
-        // Calculate dynamic position based on diagram's margin and padding
-        const diagramStyle = window.getComputedStyle(mermaidDiv);
-        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
-        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
-        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
-        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
-        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
-        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
-
-        fullscreenBtn.addEventListener('click', () => {
-            previousScrollOffset = [window.scroll, window.scrollY];
-            const clone = mermaidDiv.cloneNode(true);
-            modalContent.innerHTML = '';
-            modalContent.appendChild(clone);
-
-            const svg = clone.querySelector('svg');
-            if (svg) {
-                svg.removeAttribute('width');
-                svg.removeAttribute('height');
-                svg.style.width = '100%';
-                svg.style.height = 'auto';
-                svg.style.maxWidth = '100%';
-                svg.style.sdisplay = 'block';
-
-                if ("False" === "True") {
-                    setTimeout(() => {
-                        const g = svg.querySelector('g');
-                        if (g) {
-                            var svgD3 = d3.select(svg);
-                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
-                            var inner = svgD3.select("g");
-                            var zoom = d3.zoom().on("zoom", function(event) {
-                                inner.attr("transform", event.transform);
-                            });
-                            svgD3.call(zoom);
-                        }
-                    }, 100);
-                }
-            }
-
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        });
-        container.appendChild(fullscreenBtn);
-    });
-};
-
-const load = async () => {
-    initStyles();
-
-    await runMermaid(true);
-
-    const reRunIfThemeChanges = async () => {
-        const newDarkTheme = isDarkTheme();
-        if (newDarkTheme !== darkTheme) {
-            darkTheme = newDarkTheme;
-            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
-            await mermaid.initialize(
-                {...JSON.parse(
-                    `{"startOnLoad": false}`
-                ),
-                ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
-                }
-            );
-            await runMermaid(true);
-        }
-    };
-
-    // Update theme classes when theme changes
-    const themeObserver = new MutationObserver(reRunIfThemeChanges);
-    themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ['class', 'style', 'data-theme']
-    });
-    themeObserver.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['class', 'style', 'data-theme']
-    });
-};
-
-
-
-
-
-console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
-mermaid.initialize(
-    {...JSON.parse(
-        `{"startOnLoad": false}`
-    ),
-    ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
-    }
-);
-
-window.addEventListener("load", load);</script>
       <script src="../../../../_static/mermaid-zoom.js?v=0408cfdf"></script></body>
 </html>
