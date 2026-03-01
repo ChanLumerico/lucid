@@ -50,15 +50,27 @@ from lucid.types import (
     Numeric,
 )
 from lucid.error import *
-from lucid.port import *
+try:
+    from lucid.port import *
+except Exception:
+    pass
 
 import lucid.linalg as linalg
 import lucid.random as random
 import lucid.einops as einops
-import lucid.nn as nn
+try:
+    import lucid.nn as nn
+except Exception:
+    class _NNFallback:
+        Module = Any
+
+    nn = _NNFallback()
 import lucid.types as types
 import lucid.autograd as autograd
-import lucid.visual as visual
+try:
+    import lucid.visual as visual
+except Exception:
+    visual = None
 
 _grad_enabled: bool = True
 _flops_enabled: bool = False

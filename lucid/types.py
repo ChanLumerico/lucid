@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import (
     Any,
     Callable,
@@ -13,7 +15,44 @@ from collections import OrderedDict
 import re
 
 import numpy as np
-import mlx.core as mx
+
+try:
+    import mlx.core as mx
+except ImportError:
+    from enum import Enum
+
+    class _DeviceTypeFallback(Enum):
+        cpu = "cpu"
+        gpu = "gpu"
+
+    class _DeviceFallback:
+        type = _DeviceTypeFallback.cpu
+
+    class _DtypeFallback:
+        def __init__(self, np_dtype: type) -> None:
+            self._np_dtype = np.dtype(np_dtype)
+            self.size = self._np_dtype.itemsize
+
+    class _MXFallback:
+        array = np.ndarray
+        DeviceType = _DeviceTypeFallback
+        Dtype = _DtypeFallback
+
+        bool_ = np.bool_
+        int8 = np.int8
+        int16 = np.int16
+        int32 = np.int32
+        int64 = np.int64
+        float16 = np.float16
+        float32 = np.float32
+        float64 = np.float64
+        complex64 = np.complex64
+
+        @staticmethod
+        def default_device() -> _DeviceFallback:
+            return _DeviceFallback()
+
+    mx = _MXFallback()
 
 
 _DeviceType = Literal["cpu", "gpu"]

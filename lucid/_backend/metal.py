@@ -8,8 +8,33 @@ from lucid.types import _TensorLike
 
 try:
     import mlx.core as mx
-except ModuleNotFoundError as e:
-    print(f"mlx library not installed. Try 'pip install mlx'.")
+except ImportError:
+    class _MetalFallback:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+
+    class _RandomFallback:
+        @staticmethod
+        def seed(_seed):
+            return None
+
+    class _MXFallback:
+        array = np.ndarray
+        bool_ = np.bool_
+        int32 = np.int32
+        metal = _MetalFallback()
+        random = _RandomFallback()
+
+        @staticmethod
+        def eval(x):
+            return x
+
+        @staticmethod
+        def stop_gradient(x):
+            return x
+
+    mx = _MXFallback()
 
 
 class MetalNotSupportedWarning(UserWarning):

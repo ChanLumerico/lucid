@@ -14,7 +14,10 @@ from lucid.types import (
 )
 
 from lucid._backend.metal import is_gpu_op
-from lucid._backend._C.runtime.core import _C_func_op_raw
+try:
+    from lucid._backend._C.runtime.core import _C_func_op_raw
+except ModuleNotFoundError:
+    _C_func_op_raw = None
 
 
 _GradType = _NumPyArray | _MLXArray | Tuple[_NumPyArray | _MLXArray, ...]
@@ -40,7 +43,7 @@ def func_op(
 
         @functools.wraps(forward_func)
         def wrapper(op_self: Operation, *args, **kwargs) -> Tuple[_TensorLike, ...]:
-            if lucid.USE_CPP_FUNC_OP:
+            if lucid.USE_CPP_FUNC_OP and _C_func_op_raw is not None:
                 return cpp_wrapper(op_self, *args, **kwargs)
             return py_wrapper(op_self, *args, **kwargs)
 
