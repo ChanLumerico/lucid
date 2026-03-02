@@ -18,3 +18,5 @@ review/_sources
 
 out/
 *.so
+
+.pytest_cache

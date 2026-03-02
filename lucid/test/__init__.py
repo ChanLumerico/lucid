@@ -9,7 +9,6 @@ del torch
 from collections.abc import Sequence
 from typing import Any
 from pathlib import Path
-from shutil import get_terminal_size
 import sys
 
 from pytest import main as _pytest_main
@@ -61,7 +60,9 @@ def _run_pytest_with_progress(
 
     plugin = _TqdmProgressPlugin(tqdm, concise_failures=concise_failures)
 
-    exit_code = _pytest_main(["-q", *paths], plugins=[plugin])
+    exit_code = _pytest_main(
+        ["-q", "-p", "no:terminalreporter", *paths], plugins=[plugin]
+    )
     if raise_on_fail and exit_code != 0:
         raise AssertionError(f"pytest exited with code: {exit_code}")
     return exit_code
@@ -85,8 +86,28 @@ class _PytestProgressPluginBase:
         self._failed: int = 0
         self._counted: set[str] = set()
         self._total: int = 0
-        self._terminal_cols: int = get_terminal_size((120, 20)).columns
-        self._label_chars: int = max(8, self._terminal_cols // 6)
+        self._label_chars: int = 42
+
+    @staticmethod
+    def _colorize(text: str, color_code: str = "") -> str:
+        if not sys.stderr.isatty():
+            return text
+        return f"\033[{color_code}m{text}\033[0m"
+
+    def _green(self, text: str) -> str:
+        return self._colorize(text, "92")
+
+    def _red(self, text: str) -> str:
+        return self._colorize(text, "91")
+
+    def _yellow(self, text: str) -> str:
+        return self._colorize(text, "93")
+
+    def _cyan(self, text: str) -> str:
+        return self._colorize(text, "96")
+
+    def _bold(self, text: str) -> str:
+        return self._colorize(text, "1")
 
     def _get_short_label(self, nodeid: str | None) -> str:
         label = nodeid or "processing"
@@ -115,14 +136,24 @@ class _PytestProgressPluginBase:
         self._failure_infos.append((report.nodeid, message))
 
     def pytest_sessionfinish(self, session: Any, exitstatus: int) -> None:
-        if not self._concise_failures or not self._failure_infos:
-            return
-
         print(file=sys.stderr)
-        print("Failed cases (concise):", file=sys.stderr)
-        for idx, (nodeid, message) in enumerate(self._failure_infos, start=1):
-            print(f" {idx}. {nodeid}", file=sys.stderr)
-            print(f"    {message}", file=sys.stderr)
+        if self._failed == 0:
+            summary = self._green("ALL PASSED")
+        else:
+            summary = self._red(f"FAILED ({self._failed})")
+        print(
+            self._bold(
+                f"{summary} | total={self._total}, passed={self._passed}, failed={self._failed}"
+            ),
+            file=sys.stderr,
+        )
+
+        if self._concise_failures and self._failure_infos:
+            print(file=sys.stderr)
+            print(self._yellow("Failing cases:"), file=sys.stderr)
+            for idx, (nodeid, message) in enumerate(self._failure_infos, start=1):
+                print(f" {idx}. {self._cyan(nodeid)}", file=sys.stderr)
+                print(f"    {message}", file=sys.stderr)
 
 
 class _TqdmProgressPlugin(_PytestProgressPluginBase):
@@ -135,11 +166,9 @@ class _TqdmProgressPlugin(_PytestProgressPluginBase):
         self, session: Any, config: Any, items: Sequence[Any]
     ) -> None:
         self._total = len(items)
-        ncols = max(55, min(self._terminal_cols, 140))
         self._bar = self._tqdm_mod(
             total=len(items),
             desc="Running tests",
-            ncols=ncols,
             file=sys.stderr,
             unit="case",
             leave=False,

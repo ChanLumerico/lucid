@@ -407,7 +407,7 @@ class tile(Operation):
                 reps_list = (1,) * (a.ndim - 1) + (self.reps,)
             else:
                 reps_list = tuple(self.reps)
-                if len(reps_list) < self.ndim:
+                if len(reps_list) < a.ndim:
                     reps_list = (1,) * (a.ndim - len(reps_list)) + reps_list
 
         reps_array = lib_.array(reps_list)
@@ -755,7 +755,7 @@ class masked_fill(Operation):
 
     def __grad_gpu__(self) -> _GradType:
         grad = mx.array(self.result.grad)
-        grad = mx.where(self.mask.data.astype(bool), 0, grad)
+        grad = mx.where(self.mask.data.astype(mx.bool_), 0, grad)
         return grad
 
 

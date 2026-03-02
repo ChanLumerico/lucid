@@ -16,6 +16,14 @@ from lucid._backend.core import (
 from lucid._backend.metal import mx
 
 
+def _normalize_axis(axis: int | tuple[int] | None, ndim: int) -> tuple[int, ...]:
+    if axis is None:
+        return ()
+    if isinstance(axis, int):
+        return (axis % ndim,)
+    return tuple(ax % ndim for ax in axis)
+
+
 class _pow(Operation):
     def __init__(self, exp: _Scalar) -> None:
         self.exp = exp
@@ -594,7 +602,7 @@ class sum(Operation):
     def _grad_shape(self, shape: tuple[int]) -> tuple[int]:
         grad_shape = list(shape)
         if not self.keepdims:
-            axis_tuple = self.axis if isinstance(self.axis, tuple) else (self.axis,)
+            axis_tuple = _normalize_axis(self.axis, len(grad_shape))
             for ax in axis_tuple:
                 grad_shape.insert(ax, 1)
 
@@ -612,11 +620,12 @@ class sum(Operation):
     def __flops__(self, a: Tensor) -> int:
         if self.axis is None:
             return a.size - 1
-        if isinstance(self.axis, int):
-            self.axis = (self.axis,)
+        axis_tuple = _normalize_axis(self.axis, a.ndim)
+        if not axis_tuple:
+            return a.size - 1
 
         reduced_size = 1
-        for ax in self.axis:
+        for ax in axis_tuple:
             reduced_size *= a.shape[ax]
 
         output_size = a.size // reduced_size
@@ -666,7 +675,7 @@ class mean(Operation):
             count = a.data.size
             grad = lib_.ones_like(a.data) * self.result.grad
         else:
-            axis_tuple = self.axis if isinstance(self.axis, tuple) else (self.axis,)
+            axis_tuple = _normalize_axis(self.axis, a.ndim)
             count = lib_.prod(lib_.array([a.data.shape[ax] for ax in axis_tuple]))
 
             grad_shape = list(self.result.grad.shape)
@@ -711,12 +720,20 @@ class var(Operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         if self.axis is None:
             count = a.data.size
+            grad = self.result.grad
         else:
-            axis_tuple = self.axis if isinstance(self.axis, tuple) else (self.axis,)
+            axis_tuple = _normalize_axis(self.axis, a.ndim)
             count = lib_.prod(lib_.array([a.data.shape[ax] for ax in axis_tuple]))
+            grad = self.result.grad
+
+            if not self.keepdims:
+                grad_shape = list(grad.shape)
+                for ax in sorted(axis_tuple):
+                    grad_shape.insert(ax, 1)
+                grad = lib_.reshape(grad, grad_shape)
 
         mean_val = lib_.mean(a.data, axis=self.axis, keepdims=True)
-        grad = (2 / count) * (a.data - mean_val) * self.result.grad
+        grad = (2 / count) * (a.data - mean_val) * grad
 
         return grad
 
@@ -724,10 +741,11 @@ class var(Operation):
         if self.axis is None:
             reduced_size = a.size
         else:
-            if isinstance(self.axis, int):
-                self.axis = (self.axis,)
+            axis_tuple = _normalize_axis(self.axis, a.ndim)
+            if not axis_tuple:
+                return 0
             reduced_size = 1
-            for ax in self.axis:
+            for ax in axis_tuple:
                 reduced_size *= a.shape[ax]
 
         output_size = a.size // reduced_size
@@ -764,11 +782,9 @@ class _min_or_max(Operation):
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         grad = self.result.grad
         if not self.keepdims and self.axis is not None:
-            if isinstance(self.axis, tuple):
-                for ax in sorted(self.axis):
-                    grad = lib_.expand_dims(grad, axis=ax)
-            else:
-                grad = lib_.expand_dims(grad, axis=self.axis)
+            axis_tuple = _normalize_axis(self.axis, a.ndim)
+            for ax in sorted(axis_tuple):
+                grad = lib_.expand_dims(grad, axis=ax)
 
         if self.keepdims:
             result_expanded = self.result.data
@@ -776,12 +792,10 @@ class _min_or_max(Operation):
             if self.axis is None:
                 result_expanded = self.result.data.reshape((1,) * a.data.ndim)
             else:
-                if isinstance(self.axis, tuple):
-                    result_expanded = self.result.data
-                    for ax in sorted(self.axis):
-                        result_expanded = lib_.expand_dims(result_expanded, axis=ax)
-                else:
-                    result_expanded = lib_.expand_dims(self.result.data, axis=self.axis)
+                axis_tuple = _normalize_axis(self.axis, a.ndim)
+                result_expanded = self.result.data
+                for ax in sorted(axis_tuple):
+                    result_expanded = lib_.expand_dims(result_expanded, axis=ax)
 
         mask = a.data == result_expanded
         counts = lib_.sum(mask, axis=self.axis, keepdims=True)
@@ -935,11 +949,14 @@ class cumsum(Operation):
 
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
         g = self.result.grad
+        axis = self.axis
+        if axis < 0:
+            axis += a.ndim
+
         rev = tuple(
-            slice(None, None, -1) if ax == self.axis else slice(None)
-            for ax in range(a.ndim)
+            slice(None, None, -1) if ax == axis else slice(None) for ax in range(a.ndim)
         )
-        grad_rev = lib_.cumsum(g[rev], axis=self.axis)
+        grad_rev = lib_.cumsum(g[rev], axis=axis)
         return grad_rev[rev]
 
     def __flops__(self, a: Tensor) -> int:

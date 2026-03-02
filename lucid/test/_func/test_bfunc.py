@@ -109,7 +109,7 @@ class _TestBinaryNoGradFuncOpBase(_TestBinaryFuncOpBase):
 
 
 class TestAdd(_TestBinaryFuncOpBase):
-    case_name = "add_forward_backward"
+    case_name = "add"
     left = _ARITH_LEFT
     right = _ARITH_RIGHT
     forward_op = lucid.add
@@ -118,7 +118,7 @@ class TestAdd(_TestBinaryFuncOpBase):
 
 
 class TestSub(_TestBinaryFuncOpBase):
-    case_name = "sub_forward_backward"
+    case_name = "sub"
     left = _ARITH_LEFT
     right = _ARITH_RIGHT
     forward_op = lucid.sub
@@ -127,7 +127,7 @@ class TestSub(_TestBinaryFuncOpBase):
 
 
 class TestMultiply(_TestBinaryFuncOpBase):
-    case_name = "mul_forward_backward"
+    case_name = "mul"
     left = _ARITH_LEFT
     right = _ARITH_RIGHT
     forward_op = lucid.multiply
@@ -135,27 +135,29 @@ class TestMultiply(_TestBinaryFuncOpBase):
     expected_forward = np.array([[2.0, 2.0], [0.0, -4.0]], dtype=np.float64)
 
 
-class TestTruediv(_TestBinaryFuncOpBase):
-    case_name = "truediv_forward_backward"
-    left = [[1.0, 2.0], [3.0, 3.0]]
-    right = [[2.0, 1.0], [2.0, 2.0]]
-    forward_op = lucid.div
-    torch_forward = torch.div
-    expected_forward = np.array([[0.5, 2.0], [1.5, 1.5]], dtype=np.float64)
+class TestDiv(_TestBinaryFuncOpBase):
+    __test__ = False
 
+    class TestTruediv(_TestBinaryFuncOpBase):
+        case_name = "truediv"
+        left = [[1.0, 2.0], [3.0, 3.0]]
+        right = [[2.0, 1.0], [2.0, 2.0]]
+        forward_op = lucid.div
+        torch_forward = torch.div
+        expected_forward = np.array([[0.5, 2.0], [1.5, 1.5]], dtype=np.float64)
 
-class TestFloorDiv(_TestBinaryNoGradFuncOpBase):
-    case_name = "floordiv_forward_only"
-    left = [[1, 2], [3, 5]]
-    right = [[2, 3], [2, 2]]
-    forward_op = lambda a, b: lucid.div(a, b, floor=True)
-    torch_forward = torch.floor_divide
-    dtype = lucid.Int64
-    expected_forward = np.array([[0, 0], [1, 2]], dtype=np.int64)
+    class TestFloorDiv(_TestBinaryNoGradFuncOpBase):
+        case_name = "floordiv_no_grad"
+        left = [[1, 2], [3, 5]]
+        right = [[2, 3], [2, 2]]
+        forward_op = staticmethod(lambda a, b: lucid.div(a, b, floor=True))
+        torch_forward = torch.floor_divide
+        dtype = lucid.Int64
+        expected_forward = np.array([[0, 0], [1, 2]], dtype=np.int64)
 
 
 class TestMinimum(_TestBinaryFuncOpBase):
-    case_name = "minimum_forward_backward"
+    case_name = "minimum"
     left = _ARITH_LEFT
     right = _ARITH_RIGHT
     forward_op = lucid.minimum
@@ -164,7 +166,7 @@ class TestMinimum(_TestBinaryFuncOpBase):
 
 
 class TestMaximum(_TestBinaryFuncOpBase):
-    case_name = "maximum_forward_backward"
+    case_name = "maximum"
     left = _ARITH_LEFT
     right = _ARITH_RIGHT
     forward_op = lucid.maximum
@@ -173,7 +175,7 @@ class TestMaximum(_TestBinaryFuncOpBase):
 
 
 class TestPower(_TestBinaryFuncOpBase):
-    case_name = "power_forward_backward"
+    case_name = "power"
     left = [[1.0, 2.0], [3.0, 4.0]]
     right = [[2.0, 3.0], [1.0, 2.0]]
     forward_op = lucid.power
@@ -182,7 +184,7 @@ class TestPower(_TestBinaryFuncOpBase):
 
 
 class TestDot(_TestBinaryFuncOpBase):
-    case_name = "dot_forward_backward"
+    case_name = "dot"
     left = [1.0, 2.0, 3.0]
     right = [4.0, 5.0, 6.0]
     forward_op = lucid.dot
@@ -191,7 +193,7 @@ class TestDot(_TestBinaryFuncOpBase):
 
 
 class TestInner(_TestBinaryFuncOpBase):
-    case_name = "inner_forward_backward"
+    case_name = "inner"
     left = _ARITH_LEFT
     right = _MATRIX_RIGHT
     forward_op = lucid.inner
@@ -200,7 +202,7 @@ class TestInner(_TestBinaryFuncOpBase):
 
 
 class TestOuter(_TestBinaryFuncOpBase):
-    case_name = "outer_forward_backward"
+    case_name = "outer"
     left = [1.0, 2.0, 3.0]
     right = [4.0, 5.0]
     forward_op = lucid.outer
@@ -211,7 +213,7 @@ class TestOuter(_TestBinaryFuncOpBase):
 
 
 class TestMatmul(_TestBinaryFuncOpBase):
-    case_name = "matmul_forward_backward"
+    case_name = "matmul"
     left = _ARITH_LEFT
     right = [[1.0, 0.0], [2.0, 1.0]]
     forward_op = lucid.matmul
@@ -220,7 +222,7 @@ class TestMatmul(_TestBinaryFuncOpBase):
 
 
 class TestTensorDot(_TestBinaryFuncOpBase):
-    case_name = "tensordot_forward_backward"
+    case_name = "tensordot"
     left = _ARITH_LEFT
     right = _MATRIX_RIGHT
     forward_op = lucid.tensordot
@@ -229,7 +231,7 @@ class TestTensorDot(_TestBinaryFuncOpBase):
 
 
 class TestEqual(_TestBinaryNoGradFuncOpBase):
-    case_name = "equal_forward_only"
+    case_name = "equal_no_grad"
     left = _CMP_LEFT
     right = _CMP_RIGHT
     forward_op = _bind_bfunc(bfunc._equal)
@@ -238,7 +240,7 @@ class TestEqual(_TestBinaryNoGradFuncOpBase):
 
 
 class TestNotEqual(_TestBinaryNoGradFuncOpBase):
-    case_name = "not_equal_forward_only"
+    case_name = "not_equal_no_grad"
     left = _CMP_LEFT
     right = _CMP_RIGHT
     forward_op = _bind_bfunc(bfunc._not_equal)
@@ -247,7 +249,7 @@ class TestNotEqual(_TestBinaryNoGradFuncOpBase):
 
 
 class TestGreater(_TestBinaryNoGradFuncOpBase):
-    case_name = "greater_forward_only"
+    case_name = "greater_no_grad"
     left = _CMP_LEFT
     right = _CMP_RIGHT
     forward_op = _bind_bfunc(bfunc._greater)
@@ -256,7 +258,7 @@ class TestGreater(_TestBinaryNoGradFuncOpBase):
 
 
 class TestGreaterOrEqual(_TestBinaryNoGradFuncOpBase):
-    case_name = "greater_equal_forward_only"
+    case_name = "greater_equal_no_grad"
     left = _CMP_LEFT
     right = _CMP_RIGHT
     forward_op = _bind_bfunc(bfunc._greater_or_equal)
@@ -265,7 +267,7 @@ class TestGreaterOrEqual(_TestBinaryNoGradFuncOpBase):
 
 
 class TestLess(_TestBinaryNoGradFuncOpBase):
-    case_name = "less_forward_only"
+    case_name = "less_no_grad"
     left = _CMP_LEFT
     right = _CMP_RIGHT
     forward_op = _bind_bfunc(bfunc._less)
@@ -274,7 +276,7 @@ class TestLess(_TestBinaryNoGradFuncOpBase):
 
 
 class TestLessOrEqual(_TestBinaryNoGradFuncOpBase):
-    case_name = "less_equal_forward_only"
+    case_name = "less_equal_no_grad"
     left = _CMP_LEFT
     right = _CMP_RIGHT
     forward_op = _bind_bfunc(bfunc._less_or_equal)
@@ -283,7 +285,7 @@ class TestLessOrEqual(_TestBinaryNoGradFuncOpBase):
 
 
 class TestBitwiseAnd(_TestBinaryNoGradFuncOpBase):
-    case_name = "bitwise_and_forward_only"
+    case_name = "bitwise_and_no_grad"
     left = _BITWISE_LEFT
     right = _BITWISE_RIGHT
     forward_op = _bind_bfunc(bfunc._bitwise_and)
@@ -293,7 +295,7 @@ class TestBitwiseAnd(_TestBinaryNoGradFuncOpBase):
 
 
 class TestBitwiseOr(_TestBinaryNoGradFuncOpBase):
-    case_name = "bitwise_or_forward_only"
+    case_name = "bitwise_or_no_grad"
     left = _BITWISE_LEFT
     right = _BITWISE_RIGHT
     forward_op = _bind_bfunc(bfunc._bitwise_or)

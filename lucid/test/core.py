@@ -145,7 +145,7 @@ class TensorOpBase(LucidBaseCase):
 
         return tuple(prepared)
 
-    def test_tensor_ops_forward_backward_sanity(self) -> None:
+    def test_tensor_op_forward_backward(self) -> None:
         cases = self.tensor_op_cases()
         assert len(cases) > 0, f"No TensorOpCase defined in {type(self).__name__}."
 
