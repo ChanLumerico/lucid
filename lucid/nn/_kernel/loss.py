@@ -354,13 +354,12 @@ class binary_cross_entropy_with_logits_kernel(Operation):
         x = logits.data
         t = target.data
 
-        max_val = lib_.maximum(-x, 0)
-        sp = max_val + lib_.log(lib_.exp(-max_val) + lib_.exp(-x - max_val))
+        sp = lib_.log1p(lib_.exp(-lib_.abs(x)))
 
         if self.has_pos_weight:
             pw = pos_weight.data
             coeff = 1 + (pw - 1) * t
-            loss = (1 - t) * x + coeff * sp
+            loss = lib_.maximum(x, 0) - x * t + coeff * sp
         else:
             pw = None
             loss = lib_.maximum(x, 0) - x * t + sp

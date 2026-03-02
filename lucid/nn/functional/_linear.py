@@ -14,11 +14,15 @@ def linear(input_: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor
 def bilinear(
     input_1: Tensor, input_2: Tensor, weight: Tensor, bias: Tensor | None = None
 ) -> Tensor:
-    x1_outer_x2 = input_1[..., :, lucid.newaxis] * input_2[..., lucid.newaxis, :]
-    x1_outer_x2_flat = x1_outer_x2.reshape(*x1_outer_x2.shape[:-2], -1)
+    outputs = []
+    for i in range(weight.shape[0]):
+        wi = weight[i]
+        outputs.append(((input_1 @ wi) * input_2).sum(axis=1, keepdims=True))
 
-    weight_flat = weight.reshape(weight.shape[0], -1)
-    output = x1_outer_x2_flat @ weight_flat.T
+    if len(outputs) == 1:
+        output = outputs[0]
+    else:
+        output = lucid.concatenate(tuple(outputs), axis=1)
 
     if bias is not None:
         output += bias

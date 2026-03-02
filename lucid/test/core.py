@@ -353,6 +353,8 @@ class TensorOpWithTorchBase(TensorOpBase):
         out.backward()
 
         for input_, torch_input in zip(inputs, torch_inputs):
+            if torch_input is None:
+                continue
             torch_grad = None if not torch_input.requires_grad else torch_input.grad
             if torch_grad is None:
                 if hasattr(input_, "grad"):
