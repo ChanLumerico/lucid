@@ -718,12 +718,6 @@ class var(Operation):
         mean_val = lib_.mean(a.data, axis=self.axis, keepdims=True)
         grad = (2 / count) * (a.data - mean_val) * self.result.grad
 
-        if self.axis is not None and not self.keepdims:
-            grad_shape = list(self.result.grad.shape)
-            for ax in sorted(axis_tuple):
-                grad_shape.insert(ax, 1)
-            grad = lib_.reshape(grad, grad_shape)
-
         return grad
 
     def __flops__(self, a: Tensor) -> int:

@@ -327,7 +327,21 @@ class dot(Operation):
         return self.result, partial(self.__grad_gpu__, a=a, b=b)
 
     def __grad_cpu__(self, a: Tensor, b: Tensor) -> _GradType:
-        return self.result.grad.dot(b.data.mT), a.data.mT.dot(self.result.grad)
+        grad: _Gradient = self.result.grad
+
+        if a.ndim == 1 and b.ndim == 1:
+            return b.data * grad, a.data * grad
+
+        if a.ndim == 2 and b.ndim == 1:
+            return grad[:, None] * b.data, (a.data * grad[:, None]).sum(axis=0)
+
+        if a.ndim == 1 and b.ndim == 2:
+            return b.data.T @ grad, a.data[:, None] * grad[None, :]
+
+        if a.ndim == 2 and b.ndim == 2:
+            return grad @ b.data.T, a.data.T @ grad
+
+        raise ValueError("dot backward is currently implemented for 1D and 2D inputs.")
 
     def __grad_gpu__(self, a: Tensor, b: Tensor) -> _GradType:
         return b.data * self.result.grad, a.data * self.result.grad
@@ -366,18 +380,32 @@ class inner(Operation):
     @binary_func_op()
     def cpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(np.inner(a.data, b.data))
-        return self.result, partial(self.__grad__, a=a, b=b, lib=np)
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=np)
 
     @binary_func_op(device="gpu")
     def gpu(self, a: Tensor, b: Tensor) -> _FuncOpReturnType:
         self.result = Tensor(mx.inner(a.data, b.data))
-        return self.result, partial(self.__grad__, a=a, b=b, lib=mx)
+        return self.result, partial(self.__grad__, a=a, b=b, lib_=mx)
 
     def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
-        return (
-            lib_.tensordot(self.result.grad, b.data, axes=([-1], [-1])),
-            lib_.tensordot(a.data, self.result.grad, axes=([-1], [-1])),
-        )
+        grad = self.result.grad
+        a_prefix_size = math.prod(a.shape[:-1]) if a.ndim > 1 else 1
+        b_prefix_size = math.prod(b.shape[:-1]) if b.ndim > 1 else 1
+
+        a_matrix = lib_.reshape(a.data, (a_prefix_size, a.shape[-1]))
+        b_matrix = lib_.reshape(b.data, (b_prefix_size, b.shape[-1]))
+        grad_matrix = lib_.reshape(grad, (a_prefix_size, b_prefix_size))
+
+        a_grad = grad_matrix @ b_matrix
+        b_grad = lib_.matmul(lib_.transpose(a_matrix), grad_matrix)
+
+        a_grad = lib_.reshape(a_grad, a.shape)
+        b_grad = lib_.reshape(b_grad, (b.shape[-1],) + b.shape[:-1])
+        if b.ndim > 1:
+            b_grad = lib_.transpose(b_grad, list(range(1, b.ndim)) + [0])
+            b_grad = lib_.reshape(b_grad, b.shape)
+
+        return a_grad, b_grad
 
     def __flops__(self, a: Tensor, b: Tensor) -> int:
         if a.ndim == 1 and b.ndim == 1:
@@ -492,7 +520,10 @@ class tensordot(Operation):
 
     def _get_axes_lists(self) -> tuple[list[int], list[int]]:
         if isinstance(self.axes, int):
-            return [self.axes], [self.axes]
+            if self.axes == 0:
+                return [], []
+
+            return list(range(-self.axes, 0)), list(range(self.axes))
 
         if isinstance(self.axes, tuple):
             if len(self.axes) == 2 and all(isinstance(x, int) for x in self.axes):
@@ -516,24 +547,46 @@ class tensordot(Operation):
 
     def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         axes_a, axes_b = self._get_axes_lists()
-        grad = self.result.grad
+        axes_a = [axis % a.ndim for axis in axes_a]
+        axes_b = [axis % b.ndim for axis in axes_b]
 
+        grad: _Gradient = self.result.grad
         free_axes_a = [i for i in range(a.ndim) if i not in axes_a]
         free_axes_b = [i for i in range(b.ndim) if i not in axes_b]
 
-        grad_a = lib_.tensordot(
-            grad, b.data, axes=(list(range(len(free_axes_a), grad.ndim)), free_axes_b)
-        )
-        perm_a = free_axes_a + axes_a
-        inv_perm_a = [perm_a.index(i) for i in range(a.ndim)]
-        grad_a = lib_.transpose(grad_a, inv_perm_a)
+        free_a_len = len(free_axes_a)
+        contract_len = len(axes_a)
 
-        grad_b = lib_.tensordot(
-            a.data, grad, axes=(free_axes_a, list(range(len(free_axes_a))))
-        )
-        perm_b = axes_b + free_axes_b
-        inv_perm_b = [perm_b.index(i) for i in range(b.ndim)]
-        grad_b = lib_.transpose(grad_b, inv_perm_b)
+        a_perm = free_axes_a + axes_a
+        b_perm = axes_b + free_axes_b
+
+        a_t = lib_.transpose(a.data, a_perm)
+        b_t = lib_.transpose(b.data, b_perm)
+
+        a_free_shape = a_t.shape[:free_a_len]
+        a_contract_shape = a_t.shape[free_a_len:]
+
+        b_free_shape = b_t.shape[contract_len:]
+        b_contract_shape = b_t.shape[:contract_len]
+
+        a_free_size = int(math.prod(a_free_shape)) if a_free_shape else 1
+        a_contract_size = int(math.prod(a_contract_shape)) if a_contract_shape else 1
+
+        b_free_size = int(math.prod(b_free_shape)) if b_free_shape else 1
+        b_contract_size = int(math.prod(b_contract_shape)) if b_contract_shape else 1
+
+        grad_flat = lib_.reshape(grad, (a_free_size, b_free_size))
+        a_flat = lib_.reshape(a_t, (a_free_size, a_contract_size))
+        b_flat = lib_.reshape(b_t, (b_contract_size, b_free_size))
+
+        grad_a_t = lib_.matmul(grad_flat, lib_.transpose(b_flat))
+        grad_b_t = lib_.matmul(lib_.transpose(a_flat), grad_flat)
+
+        grad_a = lib_.reshape(grad_a_t, a_t.shape)
+        grad_b = lib_.reshape(grad_b_t, b_t.shape)
+
+        grad_a = lib_.transpose(grad_a, [a_perm.index(i) for i in range(a.ndim)])
+        grad_b = lib_.transpose(grad_b, [b_perm.index(i) for i in range(b.ndim)])
 
         return grad_a, grad_b
 
