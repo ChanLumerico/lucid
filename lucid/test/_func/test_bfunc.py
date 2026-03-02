@@ -5,7 +5,7 @@ import torch
 
 import lucid
 from lucid._func import bfunc
-from lucid.test.core import TensorOpTorchCase, TensorOpTorchBase
+from lucid.test.core import TensorOpTorchCase, TensorOpWithTorchBase
 
 
 _ARITH_LEFT: list[list[float]] = [[1.0, 2.0], [3.0, 4.0]]
@@ -27,7 +27,8 @@ def _bind_bfunc(op: type[Any]) -> Callable[[Any, Any], Any]:
     return _forward
 
 
-class _TestBinaryFuncOpBase(TensorOpTorchBase):
+class _TestBinaryFuncOpBase(TensorOpWithTorchBase):
+    _collect_nested_test_classes = True
     case_name: ClassVar[str]
     left: ClassVar[Any]
     right: ClassVar[Any]

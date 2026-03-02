@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 import lucid
-from lucid.test.core import TensorOpTorchBase, TensorOpTorchCase
+from lucid.test.core import TensorOpWithTorchBase, TensorOpTorchCase
 
 
 _UNARY_FLOAT_2x2: Final[list[list[float]]] = [[1.0, 2.0], [3.0, 4.0]]
@@ -20,7 +20,8 @@ _UNARY_DECIMALS: Final[list[list[float]]] = [[1.14, 2.73], [3.36, 4.99]]
 _UNARY_CLIP_1B: Final[list[list[float]]] = [[-1.0, 0.5], [1.5, 2.5]]
 
 
-class _TestUnaryFuncOpBase(TensorOpTorchBase):
+class _TestUnaryFuncOpBase(TensorOpWithTorchBase):
+    _collect_nested_test_classes = True
     case_name: ClassVar[str]
     input: ClassVar[Any]
 

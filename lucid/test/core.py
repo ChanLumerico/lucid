@@ -1,10 +1,12 @@
 import importlib
 from collections.abc import Generator
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, ClassVar
 
 import numpy as np
 import pytest
+
+from lucid.types import _NumPyArray
 
 
 __all__ = [
@@ -12,7 +14,7 @@ __all__ = [
     "TensorOpCase",
     "TensorOpTorchCase",
     "TensorOpBase",
-    "TensorOpTorchBase",
+    "TensorOpWithTorchBase",
     "ModuleImportBase",
     "TensorFactoryBase",
 ]
@@ -20,6 +22,20 @@ __all__ = [
 
 class LucidBaseCase:
     random_seed: int | None = 42
+
+    @staticmethod
+    def _to_numpy(value: Any) -> _NumPyArray:
+        try:
+            import torch
+
+            if isinstance(value, torch.Tensor):
+                return value.detach().cpu().numpy()
+        except ModuleNotFoundError:
+            pass
+
+        if hasattr(value, "data"):
+            return np.array(value.data)
+        return np.array(value)
 
     @pytest.fixture(autouse=True)
     def _ensure_seed(self) -> Generator[None, None, None]:
@@ -48,8 +64,8 @@ class LucidBaseCase:
         lhs: object,
         rhs: object,
     ) -> None:
-        lhs_arr = np.array(lhs.data if hasattr(lhs, "data") else lhs)
-        rhs_arr = np.array(rhs.data if hasattr(rhs, "data") else rhs)
+        lhs_arr = self._to_numpy(lhs)
+        rhs_arr = self._to_numpy(rhs)
         np.testing.assert_array_equal(lhs_arr, rhs_arr)
 
     def assert_tensor_allclose(
@@ -60,8 +76,8 @@ class LucidBaseCase:
         rtol: float = 1e-7,
         atol: float = 1e-8,
     ) -> None:
-        lhs_arr = np.array(lhs.data if hasattr(lhs, "data") else lhs)
-        rhs_arr = np.array(rhs.data if hasattr(rhs, "data") else rhs)
+        lhs_arr = self._to_numpy(lhs)
+        rhs_arr = self._to_numpy(rhs)
         np.testing.assert_allclose(lhs_arr, rhs_arr, rtol=rtol, atol=atol)
 
 
@@ -85,6 +101,45 @@ class TensorOpTorchCase(TensorOpCase):
 
 
 class TensorOpBase(LucidBaseCase):
+    _collect_nested_test_classes: ClassVar[bool] = False
+
+    @classmethod
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+
+        if not cls.__name__.startswith("Test"):
+            return
+
+        qualname = cls.__qualname__
+        if "." in qualname:
+            return
+
+        if not getattr(cls, "_collect_nested_test_classes", False):
+            return
+
+        if cls.__dict__.get("__test__") is not False:
+            return
+
+        outer_suffix = cls.__name__[4:]
+        module = importlib.import_module(cls.__module__)
+        for nested_name, nested_cls in vars(cls).items():
+            if not isinstance(nested_cls, type):
+                continue
+            if not nested_name.startswith("Test"):
+                continue
+
+            nested_suffix = nested_name[4:]
+            if nested_suffix.startswith(outer_suffix):
+                nested_suffix = nested_suffix[len(outer_suffix) :]
+            if not nested_suffix:
+                nested_suffix = "Case"
+
+            exported_name = f"Test{outer_suffix}{nested_suffix}"
+            existing = getattr(module, exported_name, None)
+            if existing is not None and existing is not nested_cls:
+                continue
+            setattr(module, exported_name, nested_cls)
+
     def tensor_op_devices(self) -> tuple[str, ...]:
         return ("cpu",)
 
@@ -210,7 +265,7 @@ class TensorOpBase(LucidBaseCase):
             np.testing.assert_(np.isfinite(np.array(got)).all())
 
 
-class TensorOpTorchBase(TensorOpBase):
+class TensorOpWithTorchBase(TensorOpBase):
     def _run_tensor_op_case(
         self,
         case: TensorOpTorchCase,

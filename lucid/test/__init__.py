@@ -1,20 +1,22 @@
-try:
-    import torch
-except ModuleNotFoundError:
-    torch = None
-    raise ModuleNotFoundError("'torch' is required to perform pytest on Lucid.")
-
-del torch
-
+import importlib
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Callable
 from pathlib import Path
 import sys
 
-from pytest import main as _pytest_main
-
 
 __all__ = ["run_tests"]
+
+
+def _require_module(module_name: str, message: str) -> None:
+    try:
+        importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(message) from exc
+
+
+def _get_pytest_main() -> Callable[..., int]:
+    return importlib.import_module("pytest").main
 
 
 def run_tests(
@@ -25,6 +27,8 @@ def run_tests(
     concise_failures: bool = True,
     single_line: bool = True,
 ) -> int:
+    _require_module("torch", "'torch' is required to perform pytest on Lucid.")
+    _require_module("pytest", "'pytest' is required to run tests.")
     test_paths = _normalize_test_paths(paths)
     return _run_pytest_with_progress(
         test_paths,
@@ -60,7 +64,7 @@ def _run_pytest_with_progress(
 
     plugin = _TqdmProgressPlugin(tqdm, concise_failures=concise_failures)
 
-    exit_code = _pytest_main(
+    exit_code = _get_pytest_main()(
         ["-q", "-p", "no:terminalreporter", *paths], plugins=[plugin]
     )
     if raise_on_fail and exit_code != 0:
@@ -68,11 +72,8 @@ def _run_pytest_with_progress(
     return exit_code
 
 
-from .core import *
-
-
 def _run_pytest(paths: list[str], *, raise_on_fail: bool = False) -> int:
-    exit_code = _pytest_main(["-q", *paths])
+    exit_code = _get_pytest_main()(["-q", *paths])
     if raise_on_fail and exit_code != 0:
         raise AssertionError(f"pytest exited with code: {exit_code}")
     return exit_code

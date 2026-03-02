@@ -5,7 +5,7 @@ import torch
 
 import lucid
 from lucid.types import _NumPyArray
-from lucid.test.core import TensorOpTorchBase, TensorOpTorchCase
+from lucid.test.core import TensorOpWithTorchBase, TensorOpTorchCase
 
 
 def _to_numpy_or_float(x: Any) -> _NumPyArray:
@@ -71,10 +71,10 @@ def _unwrap_callable(operation: Any) -> Callable[..., Any]:
 def _as_numpy(value: Any) -> Any:
     if isinstance(value, tuple):
         return tuple(_as_numpy(item) for item in value)
-    if hasattr(value, "data"):
-        return np.array(value.data)
     if isinstance(value, torch.Tensor):
         return value.detach().cpu().numpy()
+    if hasattr(value, "data"):
+        return np.array(value.data)
     return np.array(value)
 
 
@@ -106,7 +106,7 @@ def _assert_nested_finite(tester: Any, value: Any) -> None:
     np.testing.assert_(np.isfinite(np.array(value_np)).all())
 
 
-class _UtilsTorchOpBase(TensorOpTorchBase):
+class _UtilsTorchOpBase(TensorOpWithTorchBase):
     case_name: ClassVar[str]
     inputs: ClassVar[tuple[Any, ...]]
     input_dtypes: ClassVar[tuple[Any | None, ...] | None] = None
