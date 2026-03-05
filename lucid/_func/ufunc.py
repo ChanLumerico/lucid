@@ -599,10 +599,10 @@ class sum(Operation):
         self.result = Tensor(mx.sum(a.data, axis=self.axis, keepdims=self.keepdims))
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
-    def _grad_shape(self, shape: tuple[int]) -> tuple[int]:
+    def _grad_shape(self, shape: tuple[int], ndim: int) -> tuple[int]:
         grad_shape = list(shape)
         if not self.keepdims:
-            axis_tuple = _normalize_axis(self.axis, len(grad_shape))
+            axis_tuple = _normalize_axis(self.axis, ndim)
             for ax in axis_tuple:
                 grad_shape.insert(ax, 1)
 
@@ -612,7 +612,7 @@ class sum(Operation):
         if self.axis is None:
             grad = lib_.ones_like(a.data) * self.result.grad
         else:
-            grad_shpe = self._grad_shape(self.result.grad.shape)
+            grad_shpe = self._grad_shape(self.result.grad.shape, a.ndim)
             grad = lib_.reshape(self.result.grad, grad_shpe)
 
         return grad

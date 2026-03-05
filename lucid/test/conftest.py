@@ -16,3 +16,22 @@ def require_lucid_package() -> None:
             f"lucid import failed during collection: {_LUCID_IMPORT_ERROR}",
             allow_module_level=True,
         )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    _ = config
+    training_test_file = "test_training.py"
+    prior_items: list[pytest.Item] = []
+    trailing_items: list[pytest.Item] = []
+
+    for item in items:
+        file_path, _, _ = item.location
+        if file_path.endswith(training_test_file):
+            trailing_items.append(item)
+        else:
+            prior_items.append(item)
+
+    if trailing_items:
+        items[:] = prior_items + trailing_items

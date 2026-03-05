@@ -211,48 +211,53 @@ def _match_grad_shape(
         return grad
     if data.ndim == 0:
         return grad.sum()
+    lib = np if device == "cpu" else mx
     if grad.ndim == 0:
-        return (
-            np.broadcast_to(grad, data.shape)
-            if device == "cpu"
-            else mx.broadcast_to(grad, data.shape)
+        return lib.broadcast_to(grad, data.shape)
+
+    data_shape = tuple(data.shape)
+    grad_shape = tuple(grad.shape)
+
+    if len(grad_shape) < len(data_shape):
+        grad = lib.reshape(
+            grad, (1,) * (len(data_shape) - len(grad_shape)) + grad_shape
         )
+        grad_shape = tuple(grad.shape)
 
-    if data.size == grad.size:
-        return grad.reshape(data.shape)
+    aligned_data_shape = data_shape
+    if len(data_shape) < len(grad_shape):
+        aligned_data_shape = (1,) * (len(grad_shape) - len(data_shape)) + data_shape
 
-    elif data.size > grad.size:
-        grad_squeeze = grad.flatten()
-        expand_factor = data.size / grad.size
-        if expand_factor % 1 != 0:
-            raise ValueError(
-                f"Cannot broadcast grad of {grad.shape} to data of {data.shape}."
-            )
-        grad_expand = (
-            grad_squeeze[..., None].repeat(int(expand_factor), axis=-1)
-            if device == "cpu"
-            else mx.repeat(grad_squeeze[..., None], int(expand_factor), axis=1)
-        )
-        return grad_expand.reshape(data.shape)
-
-    elif data.size < grad.size:
-        if grad.size % data.size != 0:
-            raise ValueError(
-                f"Cannot collapse grad of {grad.shape} to data of {data.shape}."
-            )
-        new_shape = tuple()
-        remain_size = grad.size
-
-        for d_dim in data.shape:
-            fac = remain_size // d_dim
-            new_shape += (d_dim,)
-            remain_size = fac
-
-        new_shape += (fac,)
-        return grad.reshape(new_shape).sum(axis=-1)
-
-    else:
+    if len(aligned_data_shape) != len(grad_shape):
         raise ValueError("Unknown error occurred.")
+
+    reduce_axes: list[int] = []
+    for axis, (d_dim, g_dim) in enumerate(zip(aligned_data_shape, grad_shape)):
+        if d_dim == g_dim:
+            continue
+        if d_dim == 1 and g_dim != 1:
+            reduce_axes.append(axis)
+        elif g_dim == 1:
+            continue
+        else:
+            raise ValueError(
+                f"Cannot reduce grad of {grad.shape} to data of {data.shape}."
+            )
+
+    if reduce_axes:
+        grad = lib.sum(grad, axis=tuple(reduce_axes), keepdims=True)
+
+    if grad.shape != aligned_data_shape:
+        grad = lib.broadcast_to(grad, aligned_data_shape)
+
+    if len(aligned_data_shape) > len(data_shape):
+        if grad.size != data.size:
+            raise ValueError(
+                f"Cannot collapse grad of {grad_shape} to data of {data.shape}."
+            )
+        return lib.reshape(grad, data_shape)
+
+    return grad
 
 
 def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:

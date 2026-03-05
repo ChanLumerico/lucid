@@ -72,14 +72,14 @@ class Adam(optim.Optimizer):
 
                     if amsgrad:
                         max_exp_avg_sq = lucid.maximum(max_exp_avg_sq, exp_avg_sq)
-                        denom = lucid.sqrt(max_exp_avg_sq) + eps
-                    else:
-                        denom = lucid.sqrt(exp_avg_sq) + eps
+                        exp_avg_sq = max_exp_avg_sq
 
                     bias_correct1 = 1 - beta1 ** state["step"]
                     bias_correct2 = 1 - beta2 ** state["step"]
+                    bias_correct2_sqrt = bias_correct2**0.5
 
-                    step_size = lr * (bias_correct2**0.5) / bias_correct1
+                    step_size = lr * bias_correct2_sqrt / bias_correct1
+                    denom = lucid.sqrt(exp_avg_sq) + eps * bias_correct2_sqrt
                     param.data -= step_size * (exp_avg / denom.data)
 
                     post_step_eval(param, self.state.get(param))
@@ -147,14 +147,14 @@ class AdamW(optim.Optimizer):
 
                     if amsgrad:
                         max_exp_avg_sq = lucid.maximum(max_exp_avg_sq, exp_avg_sq)
-                        denom = lucid.sqrt(max_exp_avg_sq) + eps
-                    else:
-                        denom = lucid.sqrt(exp_avg_sq) + eps
+                        exp_avg_sq = max_exp_avg_sq
 
                     bias_correct1 = 1 - beta1 ** state["step"]
                     bias_correct2 = 1 - beta2 ** state["step"]
+                    bias_correct2_sqrt = bias_correct2**0.5
 
-                    step_size = lr * (bias_correct2**0.5) / bias_correct1
+                    step_size = lr * bias_correct2_sqrt / bias_correct1
+                    denom = lucid.sqrt(exp_avg_sq) + eps * bias_correct2_sqrt
                     param.data -= step_size * (exp_avg / denom.data)
 
                     post_step_eval(param, self.state.get(param))
