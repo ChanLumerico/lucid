@@ -979,6 +979,7 @@ data-aria-dark="Switch to auto color mode">
 <li><a class="reference internal" href="#resnext">ResNeXt</a></li>
 <li><a class="reference internal" href="#densenet">DenseNet</a></li>
 <li><a class="reference internal" href="#mobilenet">MobileNet</a></li>
+<li><a class="reference internal" href="#swin-transformer">Swin Transformer</a></li>
 <li><a class="reference internal" href="#maskformer">MaskFormer</a></li>
 <li><a class="reference internal" href="#bert">BERT</a></li>
 </ul>
@@ -1432,6 +1433,40 @@ data-aria-dark="Switch to auto color mode">
 </table>
 </div>
 </section>
+<section id="swin-transformer">
+<h2>Swin Transformer<a class="headerlink" href="#swin-transformer" title="Link to this heading">¶</a></h2>
+<p><span class="badge transformer">Transformer</span> <span class="badge vision_transformer">Vision Transformer</span></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">class</span><span class="w"> </span><span class="nc">lucid</span><span class="o">.</span><span class="n">weights</span><span class="o">.</span><span class="n">Swin_Tiny_Weights</span><span class="p">(</span><span class="n">Enum</span><span class="p">)</span>
+</span><span data-line="2"><span class="k">class</span><span class="w"> </span><span class="nc">lucid</span><span class="o">.</span><span class="n">weights</span><span class="o">.</span><span class="n">Swin_Base_Weights</span><span class="p">(</span><span class="n">Enum</span><span class="p">)</span>
+</span></pre></div>
+</div>
+<div class="table-wrapper docutils container">
+<table class="docutils align-left">
+<thead>
+<tr class="row-odd"><th class="head"><p>Enum Name</p></th>
+<th class="head"><p>Tag</p></th>
+<th class="head"><p>Dataset</p></th>
+<th class="head"><p>Parameter Size</p></th>
+<th class="head"><p>File Size</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><em>Swin_Tiny_Weights</em></p></td>
+<td><p>IMAGENET1K</p></td>
+<td><p>imagenet_1k</p></td>
+<td><p>28,288,354</p></td>
+<td><p>115 MB</p></td>
+</tr>
+<tr class="row-odd"><td><p><em>Swin_Base_Weights</em></p></td>
+<td><p>IMAGENET1K</p></td>
+<td><p>imagenet_1k</p></td>
+<td><p>87,768,224</p></td>
+<td><p>354 MB</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 <section id="maskformer">
 <h2>MaskFormer<a class="headerlink" href="#maskformer" title="Link to this heading">¶</a></h2>
 <p><span class="badge transformer">Transformer</span> <span class="badge segmentation_transformer">Segmentation Transformer</span></p>
@@ -1465,8 +1500,8 @@ data-aria-dark="Switch to auto color mode">
 </tbody>
 </table>
 </div>
-<p>—</p>
 </section>
+<hr class="docutils" />
 <section id="bert">
 <h2>BERT<a class="headerlink" href="#bert" title="Link to this heading">¶</a></h2>
 <p><span class="badge transformer">Transformer</span> <span class="badge encoder_only_transformer">Encoder-Only Transformer</span></p>

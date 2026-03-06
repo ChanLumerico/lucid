@@ -100,6 +100,38 @@ CANDIDATES: tuple[Candidate, ...] = (
         lucid_ctor="BERTForQuestionAnswering",
         required_keys=("qa_outputs.weight", "qa_outputs.bias"),
     ),
+    Candidate(
+        name="swin_tiny_imagenet1k",
+        model_key="swin_tiny",
+        enum_name="SwinTransformer_Tiny_Weights",
+        family="swin",
+        dataset="imagenet_1k",
+        tag="IMAGENET1K",
+        hf_repo="microsoft/swin-tiny-patch4-window7-224",
+        lucid_ctor="swin_tiny",
+        required_keys=(
+            "head.weight",
+            "norm.weight",
+            "layers.0.blocks.0.attn.qkv.weight",
+        ),
+        min_match_ratio=0.95,
+    ),
+    Candidate(
+        name="swin_base_imagenet1k",
+        model_key="swin_base",
+        enum_name="SwinTransformer_Base_Weights",
+        family="swin",
+        dataset="imagenet_1k",
+        tag="IMAGENET1K",
+        hf_repo="microsoft/swin-base-patch4-window7-224",
+        lucid_ctor="swin_base",
+        required_keys=(
+            "head.weight",
+            "norm.weight",
+            "layers.0.blocks.0.attn.qkv.weight",
+        ),
+        min_match_ratio=0.95,
+    ),
 )
 
 
@@ -174,7 +206,101 @@ def _normalize_key(key: str) -> str:
     return k
 
 
-def _normalize_hf_state(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+def _map_swin_state(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    out: dict[str, np.ndarray] = {}
+    qkv_chunks: dict[str, dict[str, np.ndarray]] = {}
+
+    for key, value in state.items():
+        if key.startswith("module."):
+            key = key[len("module.") :]
+
+        if key.startswith("swin.embeddings.patch_embeddings.projection."):
+            tail = key.split(".")[-1]
+            out[f"patch_embed.proj.{tail}"] = value
+            continue
+        if key.startswith("swin.embeddings.norm."):
+            tail = key.split(".")[-1]
+            out[f"patch_embed.norm.{tail}"] = value
+            continue
+        if key.startswith("swin.layernorm."):
+            tail = key.split(".")[-1]
+            out[f"norm.{tail}"] = value
+            continue
+        if key.startswith("classifier."):
+            tail = key.split(".")[-1]
+            out[f"head.{tail}"] = value
+            continue
+
+        if key.startswith("swin.encoder.layers."):
+            parts = key.split(".")
+            if len(parts) >= 8 and parts[4] == "blocks":
+                stage = parts[3]
+                block = parts[5]
+                sub = ".".join(parts[6:])
+                base = f"layers.{stage}.blocks.{block}"
+
+                if sub == "attention.self.relative_position_bias_table":
+                    out[f"{base}.attn.relative_position_bias_table"] = value
+                    continue
+                if sub == "attention.self.relative_position_index":
+                    out[f"{base}.attn.relative_pos_index"] = value
+                    continue
+                if sub in (
+                    "attention.self.query.weight",
+                    "attention.self.query.bias",
+                    "attention.self.key.weight",
+                    "attention.self.key.bias",
+                    "attention.self.value.weight",
+                    "attention.self.value.bias",
+                ):
+                    which = sub.split(".")[2]  # query|key|value
+                    param = sub.split(".")[-1]  # weight|bias
+                    qkv_key = f"{base}.attn.qkv.{param}"
+                    qkv_chunks.setdefault(qkv_key, {})[which] = value
+                    continue
+                if sub.startswith("attention.output.dense."):
+                    tail = sub.split(".")[-1]
+                    out[f"{base}.attn.proj.{tail}"] = value
+                    continue
+                if sub.startswith("layernorm_before."):
+                    tail = sub.split(".")[-1]
+                    out[f"{base}.norm1.{tail}"] = value
+                    continue
+                if sub.startswith("layernorm_after."):
+                    tail = sub.split(".")[-1]
+                    out[f"{base}.norm2.{tail}"] = value
+                    continue
+                if sub.startswith("intermediate.dense."):
+                    tail = sub.split(".")[-1]
+                    out[f"{base}.mlp.fc1.{tail}"] = value
+                    continue
+                if sub.startswith("output.dense."):
+                    tail = sub.split(".")[-1]
+                    out[f"{base}.mlp.fc2.{tail}"] = value
+                    continue
+
+            if len(parts) >= 7 and parts[4] == "downsample":
+                stage = parts[3]
+                if parts[5] in ("reduction", "norm"):
+                    tail = parts[-1]
+                    out[f"layers.{stage}.downsample.{parts[5]}.{tail}"] = value
+                    continue
+
+    for qkv_key, chunks in qkv_chunks.items():
+        if all(name in chunks for name in ("query", "key", "value")):
+            out[qkv_key] = np.concatenate(
+                [chunks["query"], chunks["key"], chunks["value"]], axis=0
+            )
+
+    return out
+
+
+def _normalize_hf_state(
+    state: dict[str, np.ndarray], candidate: Candidate
+) -> dict[str, np.ndarray]:
+    if candidate.family == "swin":
+        return _map_swin_state(state)
+
     out: dict[str, np.ndarray] = {}
     for key, value in state.items():
         out[_normalize_key(key)] = value
@@ -217,6 +343,18 @@ def _build_bert_config(config: dict[str, Any]) -> BERTConfig:
 
 
 def _build_lucid_model(candidate: Candidate, hf_config: dict[str, Any]) -> Any:
+    if candidate.family == "swin":
+        ctor = getattr(models, candidate.lucid_ctor)
+        num_classes = hf_config.get("num_labels")
+        if num_classes is None:
+            num_classes = hf_config.get("_num_labels")
+        if num_classes is None:
+            id2label = hf_config.get("id2label")
+            if isinstance(id2label, dict) and id2label:
+                num_classes = len(id2label)
+        num_classes = int(num_classes if num_classes is not None else 1000)
+        return ctor(num_classes=num_classes)
+
     bert_config = _build_bert_config(hf_config)
     ctor = getattr(models, candidate.lucid_ctor)
     if candidate.lucid_ctor in (
@@ -258,7 +396,7 @@ def _download_source_state(
         loaded = torch.load(weight_path, map_location="cpu")
         state = _to_numpy_state(_unwrap_state_dict(loaded))
 
-    return hf_config, _normalize_hf_state(state), weight_name
+    return hf_config, _normalize_hf_state(state, candidate), weight_name
 
 
 def _merge_state(

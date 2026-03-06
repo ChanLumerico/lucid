@@ -361,6 +361,37 @@ MobileNet
       - 0.7404
       - 0.9134
 
+Swin Transformer
+----------------
+|transformer-badge| |vision-transformer-badge|
+
+.. code-block:: python
+
+    class lucid.weights.Swin_Tiny_Weights(Enum)
+    class lucid.weights.Swin_Base_Weights(Enum)
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+
+    * - *Swin_Tiny_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 28,288,354
+      - 115 MB
+
+    * - *Swin_Base_Weights*
+      - IMAGENET1K
+      - imagenet_1k
+      - 87,768,224
+      - 354 MB
+
 MaskFormer
 ----------
 |transformer-badge| |segmentation-transformer-badge|
@@ -392,7 +423,7 @@ MaskFormer
       - 60,299,991
       - 242 MB
 
----
+----
 
 BERT
 ----

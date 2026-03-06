@@ -1580,5 +1580,59 @@
             "dataset": "squad2",
             "default": "True"
         }
+    },
+    "swin_tiny": {
+        "IMAGENET1K": {
+            "url": "hf://ChanLumerico/lucid@main/weights/swin/swin_tiny_imagenet_1k.safetensors",
+            "sha256": "bae4eab595275b1c835bbed31999f2882fcf137b7c541ade73f54364113fd26d",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/swin/swin_tiny_imagenet_1k.safetensors",
+                "parameter_size": 28288354,
+                "dataset": "imagenet_1k"
+            },
+            "dataset": "imagenet_1k"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/swin/swin_tiny_imagenet_1k.safetensors",
+            "sha256": "bae4eab595275b1c835bbed31999f2882fcf137b7c541ade73f54364113fd26d",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/swin/swin_tiny_imagenet_1k.safetensors",
+                "parameter_size": 28288354,
+                "dataset": "imagenet_1k"
+            },
+            "dataset": "imagenet_1k",
+            "default": "True"
+        }
+    },
+    "swin_base": {
+        "IMAGENET1K": {
+            "url": "hf://ChanLumerico/lucid@main/weights/swin/swin_base_imagenet_1k.safetensors",
+            "sha256": "209bb20b4239838cc207f63b89d535002ad078eecb94064d67542ca46a6bdc3e",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/swin/swin_base_imagenet_1k.safetensors",
+                "parameter_size": 87768224,
+                "dataset": "imagenet_1k"
+            },
+            "dataset": "imagenet_1k"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/swin/swin_base_imagenet_1k.safetensors",
+            "sha256": "209bb20b4239838cc207f63b89d535002ad078eecb94064d67542ca46a6bdc3e",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/swin/swin_base_imagenet_1k.safetensors",
+                "parameter_size": 87768224,
+                "dataset": "imagenet_1k"
+            },
+            "dataset": "imagenet_1k",
+            "default": "True"
+        }
     }
 }

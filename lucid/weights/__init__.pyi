@@ -144,6 +144,14 @@ class BERTForQuestionAnswering_Weights(Enum):
     SQUAD2: WeightEntry
     DEFAULT: WeightEntry
 
+class Swin_Tiny_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
+class Swin_Base_Weights(Enum):
+    IMAGENET1K: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
@@ -178,4 +186,6 @@ __all__ = [
     "BERTForSequenceClassification_Weights",
     "BERTForTokenClassification_Weights",
     "BERTForQuestionAnswering_Weights",
+    "Swin_Tiny_Weights",
+    "Swin_Base_Weights",
 ]
