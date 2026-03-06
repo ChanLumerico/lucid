@@ -1418,5 +1418,167 @@
             "dataset": "ade20k",
             "default": "True"
         }
+    },
+    "bert_for_masked_lm": {
+        "HF_BASE_UNCASED": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_masked_lm_base.safetensors",
+            "sha256": "05141d1e93d986a928eb6569a63a7a4c1ced2d08387c0eb1f057b94947f3cdb9",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_masked_lm_base.safetensors",
+                "parameter_size": 110104890,
+                "dataset": "base"
+            },
+            "dataset": "base"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_masked_lm_base.safetensors",
+            "sha256": "05141d1e93d986a928eb6569a63a7a4c1ced2d08387c0eb1f057b94947f3cdb9",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_masked_lm_base.safetensors",
+                "parameter_size": 110104890,
+                "dataset": "base"
+            },
+            "dataset": "base",
+            "default": "True"
+        }
+    },
+    "bert_for_causal_lm": {
+        "HF_BASE_UNCASED": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_causal_lm_base.safetensors",
+            "sha256": "ec19daf3f2a07531fcf48abcd08f0ae6941195278e9d1535add61cf9aaed826a",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_causal_lm_base.safetensors",
+                "parameter_size": 110104890,
+                "dataset": "base"
+            },
+            "dataset": "base"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_causal_lm_base.safetensors",
+            "sha256": "ec19daf3f2a07531fcf48abcd08f0ae6941195278e9d1535add61cf9aaed826a",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_causal_lm_base.safetensors",
+                "parameter_size": 110104890,
+                "dataset": "base"
+            },
+            "dataset": "base",
+            "default": "True"
+        }
+    },
+    "bert_for_next_sentence_prediction": {
+        "HF_BASE_UNCASED": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_next_sentence_prediction_base.safetensors",
+            "sha256": "3682399c8ecc0fa353347a7e0b71d013063dfdc534e7fce1302aeee48ff684ec",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_next_sentence_prediction_base.safetensors",
+                "parameter_size": 109483778,
+                "dataset": "base"
+            },
+            "dataset": "base"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_next_sentence_prediction_base.safetensors",
+            "sha256": "3682399c8ecc0fa353347a7e0b71d013063dfdc534e7fce1302aeee48ff684ec",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_next_sentence_prediction_base.safetensors",
+                "parameter_size": 109483778,
+                "dataset": "base"
+            },
+            "dataset": "base",
+            "default": "True"
+        }
+    },
+    "bert_for_sequence_classification": {
+        "SST2": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_sequence_classification_sst2.safetensors",
+            "sha256": "a2c4ae01b268d5742e0d110d63bbf126a2c9f6208cb481e3f2c2fac6b555f291",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_sequence_classification_sst2.safetensors",
+                "parameter_size": 109483778,
+                "dataset": "sst2"
+            },
+            "dataset": "sst2"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_sequence_classification_sst2.safetensors",
+            "sha256": "a2c4ae01b268d5742e0d110d63bbf126a2c9f6208cb481e3f2c2fac6b555f291",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_sequence_classification_sst2.safetensors",
+                "parameter_size": 109483778,
+                "dataset": "sst2"
+            },
+            "dataset": "sst2",
+            "default": "True"
+        }
+    },
+    "bert_for_token_classification": {
+        "CONLL03": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_token_classification_conll03.safetensors",
+            "sha256": "171a75548d80fddf041664f7d1f5bc2e27cd934c5de8902729e792bc7a60a04f",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_token_classification_conll03.safetensors",
+                "parameter_size": 108317193,
+                "dataset": "conll03"
+            },
+            "dataset": "conll03"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_token_classification_conll03.safetensors",
+            "sha256": "171a75548d80fddf041664f7d1f5bc2e27cd934c5de8902729e792bc7a60a04f",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_token_classification_conll03.safetensors",
+                "parameter_size": 108317193,
+                "dataset": "conll03"
+            },
+            "dataset": "conll03",
+            "default": "True"
+        }
+    },
+    "bert_for_question_answering": {
+        "SQUAD2": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_question_answering_squad2.safetensors",
+            "sha256": "5348eb95e54ee4d024d1e2b40e15e97542222c81d1dc869c7215eb51f4001b5c",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_question_answering_squad2.safetensors",
+                "parameter_size": 108311810,
+                "dataset": "squad2"
+            },
+            "dataset": "squad2"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/bert/bert_for_question_answering_squad2.safetensors",
+            "sha256": "5348eb95e54ee4d024d1e2b40e15e97542222c81d1dc869c7215eb51f4001b5c",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/bert/bert_for_question_answering_squad2.safetensors",
+                "parameter_size": 108311810,
+                "dataset": "squad2"
+            },
+            "dataset": "squad2",
+            "default": "True"
+        }
     }
 }

@@ -120,6 +120,30 @@ class MaskFormer_ResNet_101_Weights(Enum):
     ADE20K: WeightEntry
     DEFAULT: WeightEntry
 
+class BERTForMaskedLM_Weights(Enum):
+    HF_BASE_UNCASED: WeightEntry
+    DEFAULT: WeightEntry
+
+class BERTForCausalLM_Weights(Enum):
+    HF_BASE_UNCASED: WeightEntry
+    DEFAULT: WeightEntry
+
+class BERTForNextSentencePrediction_Weights(Enum):
+    HF_BASE_UNCASED: WeightEntry
+    DEFAULT: WeightEntry
+
+class BERTForSequenceClassification_Weights(Enum):
+    SST2: WeightEntry
+    DEFAULT: WeightEntry
+
+class BERTForTokenClassification_Weights(Enum):
+    CONLL03: WeightEntry
+    DEFAULT: WeightEntry
+
+class BERTForQuestionAnswering_Weights(Enum):
+    SQUAD2: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
@@ -148,4 +172,10 @@ __all__ = [
     "BERT_Weights",
     "MaskFormer_ResNet_50_Weights",
     "MaskFormer_ResNet_101_Weights",
+    "BERTForMaskedLM_Weights",
+    "BERTForCausalLM_Weights",
+    "BERTForNextSentencePrediction_Weights",
+    "BERTForSequenceClassification_Weights",
+    "BERTForTokenClassification_Weights",
+    "BERTForQuestionAnswering_Weights",
 ]

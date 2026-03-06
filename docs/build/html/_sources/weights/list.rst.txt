@@ -417,3 +417,58 @@ BERT
       - BookCorpus + English Wikipedia
       - 110,106,428
       - 628 MB
+
+.. code-block:: python
+
+    class lucid.weights.BERTForMaskedLM_Weights(Enum)
+    class lucid.weights.BERTForCausalLM_Weights(Enum)
+    class lucid.weights.BERTForNextSentencePrediction_Weights(Enum)
+    class lucid.weights.BERTForSequenceClassification_Weights(Enum)
+    class lucid.weights.BERTForTokenClassification_Weights(Enum)
+    class lucid.weights.BERTForQuestionAnswering_Weights(Enum)
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+
+    * - *BERTForMaskedLM_Weights*
+      - HF_BASE_UNCASED
+      - bert-base-uncased
+      - 110,104,890
+      - 599 MB
+
+    * - *BERTForCausalLM_Weights*
+      - HF_BASE_UNCASED
+      - bert-base-uncased
+      - 110,104,890
+      - 599 MB
+
+    * - *BERTForNextSentencePrediction_Weights*
+      - HF_BASE_UNCASED
+      - bert-base-uncased
+      - 109,483,778
+      - 417.7 MB
+
+    * - *BERTForSequenceClassification_Weights*
+      - SST2
+      - GLUE SST-2
+      - 109,483,778
+      - 417.7 MB
+
+    * - *BERTForTokenClassification_Weights*
+      - CONLL03
+      - CoNLL-2003
+      - 108,317,193
+      - 413.2 MB
+
+    * - *BERTForQuestionAnswering_Weights*
+      - SQUAD2
+      - SQuAD2.0
+      - 108,311,810
+      - 413.2 MB
