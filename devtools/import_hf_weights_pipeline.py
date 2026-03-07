@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict, dataclass, is_dataclass
 import json
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -129,6 +129,66 @@ CANDIDATES: tuple[Candidate, ...] = (
             "head.weight",
             "norm.weight",
             "layers.0.blocks.0.attn.qkv.weight",
+        ),
+        min_match_ratio=0.95,
+    ),
+    Candidate(
+        name="mask2former_swin_tiny_ade20k",
+        model_key="mask2former_swin_tiny",
+        enum_name="Mask2Former_Swin_Tiny_Weights",
+        family="mask2former",
+        dataset="ade20k",
+        tag="ADE20K",
+        hf_repo="facebook/mask2former-swin-tiny-ade-semantic",
+        lucid_ctor="mask2former_swin_tiny",
+        required_keys=(
+            "class_predictor.weight",
+            "model.pixel_level_module.encoder.encoder.layers.0.blocks.0.attn.qkv.weight",
+        ),
+        min_match_ratio=0.95,
+    ),
+    Candidate(
+        name="mask2former_swin_small_ade20k",
+        model_key="mask2former_swin_small",
+        enum_name="Mask2Former_Swin_Small_Weights",
+        family="mask2former",
+        dataset="ade20k",
+        tag="ADE20K",
+        hf_repo="facebook/mask2former-swin-small-ade-semantic",
+        lucid_ctor="mask2former_swin_small",
+        required_keys=(
+            "class_predictor.weight",
+            "model.pixel_level_module.encoder.encoder.layers.0.blocks.0.attn.qkv.weight",
+        ),
+        min_match_ratio=0.95,
+    ),
+    Candidate(
+        name="mask2former_swin_base_ade20k",
+        model_key="mask2former_swin_base",
+        enum_name="Mask2Former_Swin_Base_Weights",
+        family="mask2former",
+        dataset="ade20k",
+        tag="ADE20K",
+        hf_repo="facebook/mask2former-swin-base-ade-semantic",
+        lucid_ctor="mask2former_swin_base",
+        required_keys=(
+            "class_predictor.weight",
+            "model.pixel_level_module.encoder.encoder.layers.0.blocks.0.attn.qkv.weight",
+        ),
+        min_match_ratio=0.95,
+    ),
+    Candidate(
+        name="mask2former_swin_large_ade20k",
+        model_key="mask2former_swin_large",
+        enum_name="Mask2Former_Swin_Large_Weights",
+        family="mask2former",
+        dataset="ade20k",
+        tag="ADE20K",
+        hf_repo="facebook/mask2former-swin-large-ade-semantic",
+        lucid_ctor="mask2former_swin_large",
+        required_keys=(
+            "class_predictor.weight",
+            "model.pixel_level_module.encoder.encoder.layers.0.blocks.0.attn.qkv.weight",
         ),
         min_match_ratio=0.95,
     ),
@@ -295,9 +355,81 @@ def _map_swin_state(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return out
 
 
+def _map_mask2former_swin_state(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    out: dict[str, np.ndarray] = {}
+    qkv_chunks: dict[str, dict[str, np.ndarray]] = {}
+
+    for key, value in state.items():
+        if key.startswith("module."):
+            key = key[len("module.") :]
+
+        if (
+            ".attention.self.query." in key
+            or ".attention.self.key." in key
+            or ".attention.self.value." in key
+        ):
+            if key.endswith(".weight"):
+                qkv_key = (
+                    key.replace(".attention.self.query.weight", ".attn.qkv.weight")
+                    .replace(".attention.self.key.weight", ".attn.qkv.weight")
+                    .replace(".attention.self.value.weight", ".attn.qkv.weight")
+                )
+                slot = (
+                    "query"
+                    if ".attention.self.query." in key
+                    else "key"
+                    if ".attention.self.key." in key
+                    else "value"
+                )
+                qkv_chunks.setdefault(qkv_key, {})[slot] = value
+                continue
+
+            if key.endswith(".bias"):
+                qkv_key = (
+                    key.replace(".attention.self.query.bias", ".attn.qkv.bias")
+                    .replace(".attention.self.key.bias", ".attn.qkv.bias")
+                    .replace(".attention.self.value.bias", ".attn.qkv.bias")
+                )
+                slot = (
+                    "query"
+                    if ".attention.self.query." in key
+                    else "key"
+                    if ".attention.self.key." in key
+                    else "value"
+                )
+                qkv_chunks.setdefault(qkv_key, {})[slot] = value
+                continue
+
+        key = key.replace(".attention.output.dense.", ".attn.proj.")
+        key = key.replace(
+            ".attention.self.relative_position_bias_table",
+            ".attn.relative_position_bias_table",
+        )
+        key = key.replace(
+            ".attention.self.relative_position_index",
+            ".attn.relative_pos_index",
+        )
+        key = key.replace(".layernorm_before.", ".norm1.")
+        key = key.replace(".layernorm_after.", ".norm2.")
+        key = key.replace(".intermediate.dense.", ".mlp.fc1.")
+        key = key.replace(".output.dense.", ".mlp.fc2.")
+        out[key] = value
+
+    for qkv_key, chunks in qkv_chunks.items():
+        if all(name in chunks for name in ("query", "key", "value")):
+            out[qkv_key] = np.concatenate(
+                [chunks["query"], chunks["key"], chunks["value"]], axis=0
+            )
+
+    return out
+
+
 def _normalize_hf_state(
     state: dict[str, np.ndarray], candidate: Candidate
 ) -> dict[str, np.ndarray]:
+    if candidate.family == "mask2former":
+        return _map_mask2former_swin_state(state)
+
     if candidate.family == "swin":
         return _map_swin_state(state)
 
@@ -342,17 +474,84 @@ def _build_bert_config(config: dict[str, Any]) -> BERTConfig:
     )
 
 
+def _extract_num_labels(config: dict[str, Any], default: int) -> int:
+    num_labels = config.get("num_labels")
+    if num_labels is None:
+        num_labels = config.get("_num_labels")
+    if num_labels is None:
+        label2id = config.get("label2id")
+        if isinstance(label2id, dict) and label2id:
+            num_labels = len(label2id)
+    if num_labels is None:
+        id2label = config.get("id2label")
+        if isinstance(id2label, dict) and id2label:
+            num_labels = len(id2label)
+    return int(num_labels if num_labels is not None else default)
+
+
+def _build_mask2former_config_kwargs(hf_config: dict[str, Any]) -> dict[str, Any]:
+    model_kwargs: dict[str, Any] = {}
+    fields = models.Mask2FormerConfig.__dataclass_fields__
+    for key in fields:
+        if key == "num_labels":
+            continue
+        if key in hf_config:
+            model_kwargs[key] = hf_config[key]
+
+    backbone_config = model_kwargs.get("backbone_config")
+    if isinstance(backbone_config, dict):
+        backbone_config = dict(backbone_config)
+        if (
+            backbone_config.get("model_type") == "swin"
+            and int(backbone_config.get("window_size", 7)) >= 12
+            and int(backbone_config.get("image_size", 224)) < 384
+        ):
+            # HF Swin-Base semantic checkpoints often carry image_size=224 in config
+            # while using 12x12 windows. Lucid Swin expects 384 here.
+            backbone_config["image_size"] = 384
+
+        if backbone_config.get("model_type") == "swin":
+            keep = {
+                "model_type",
+                "image_size",
+                "patch_size",
+                "num_channels",
+                "embed_dim",
+                "depths",
+                "num_heads",
+                "window_size",
+                "drop_path_rate",
+                "out_features",
+                "out_indices",
+                "hidden_sizes",
+            }
+            backbone_config = {k: v for k, v in backbone_config.items() if k in keep}
+
+        model_kwargs["backbone_config"] = backbone_config
+
+    if "enforce_input_projection" not in model_kwargs and "enforce_input_proj" in hf_config:
+        model_kwargs["enforce_input_projection"] = hf_config["enforce_input_proj"]
+
+    if "num_channels" not in model_kwargs:
+        backbone_config = hf_config.get("backbone_config")
+        if isinstance(backbone_config, dict) and "num_channels" in backbone_config:
+            model_kwargs["num_channels"] = backbone_config["num_channels"]
+        else:
+            model_kwargs["num_channels"] = 3
+
+    return model_kwargs
+
+
 def _build_lucid_model(candidate: Candidate, hf_config: dict[str, Any]) -> Any:
+    if candidate.family == "mask2former":
+        ctor = getattr(models, candidate.lucid_ctor)
+        num_labels = _extract_num_labels(hf_config, default=150)
+        kwargs = _build_mask2former_config_kwargs(hf_config)
+        return ctor(num_labels=num_labels, **kwargs)
+
     if candidate.family == "swin":
         ctor = getattr(models, candidate.lucid_ctor)
-        num_classes = hf_config.get("num_labels")
-        if num_classes is None:
-            num_classes = hf_config.get("_num_labels")
-        if num_classes is None:
-            id2label = hf_config.get("id2label")
-            if isinstance(id2label, dict) and id2label:
-                num_classes = len(id2label)
-        num_classes = int(num_classes if num_classes is not None else 1000)
+        num_classes = _extract_num_labels(hf_config, default=1000)
         return ctor(num_classes=num_classes)
 
     bert_config = _build_bert_config(hf_config)
@@ -361,18 +560,7 @@ def _build_lucid_model(candidate: Candidate, hf_config: dict[str, Any]) -> Any:
         "BERTForSequenceClassification",
         "BERTForTokenClassification",
     ):
-        num_labels = hf_config.get("num_labels")
-        if num_labels is None:
-            num_labels = hf_config.get("_num_labels")
-        if num_labels is None:
-            label2id = hf_config.get("label2id")
-            if isinstance(label2id, dict) and label2id:
-                num_labels = len(label2id)
-        if num_labels is None:
-            id2label = hf_config.get("id2label")
-            if isinstance(id2label, dict) and id2label:
-                num_labels = len(id2label)
-        num_labels = int(num_labels if num_labels is not None else 2)
+        num_labels = _extract_num_labels(hf_config, default=2)
         return ctor(bert_config, num_labels=num_labels)
     return ctor(bert_config)
 
@@ -477,6 +665,52 @@ def _run_upload(
         )
     if proc.stdout.strip():
         print(proc.stdout.strip())
+
+
+def _extract_model_config(model: Any) -> dict[str, Any] | None:
+    cfg = getattr(model, "config", None)
+    if cfg is None:
+        return None
+    if is_dataclass(cfg):
+        return asdict(cfg)
+    if isinstance(cfg, dict):
+        return dict(cfg)
+    return None
+
+
+def _enrich_registry_meta(
+    *,
+    registry_path: Path,
+    model_key: str,
+    tag: str,
+    family: str,
+    enum_name: str,
+    config: dict[str, Any] | None,
+) -> None:
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    model_block = registry.get(model_key)
+    if not isinstance(model_block, dict):
+        return
+
+    tags = [tag, "DEFAULT"]
+    for t in tags:
+        entry = model_block.get(t)
+        if not isinstance(entry, dict):
+            continue
+        meta = entry.setdefault("meta", {})
+        if not isinstance(meta, dict):
+            meta = {}
+            entry["meta"] = meta
+        meta["family"] = family
+        meta["enum_name"] = enum_name
+        if config is not None:
+            meta["config"] = config
+
+    registry[model_key] = model_block
+    registry_path.write_text(
+        json.dumps(registry, indent=4, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -652,6 +886,17 @@ def main() -> int:
                 skip_upload=args.skip_upload,
                 dry_run=args.dry_run,
             )
+
+            if candidate.family == "mask2former" and not args.dry_run:
+                _enrich_registry_meta(
+                    registry_path=weights_registry_path,
+                    model_key=candidate.model_key,
+                    tag=candidate.tag,
+                    family="Mask2Former",
+                    enum_name=candidate.enum_name,
+                    config=_extract_model_config(model),
+                )
+                print(f"enriched registry meta: {candidate.model_key}:{candidate.tag}")
 
             successes += 1
             if args.max_models > 0 and successes >= args.max_models:

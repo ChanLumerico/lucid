@@ -849,6 +849,40 @@
                 "parameter_size": 47324612,
                 "submodule_count": 538
             }
+        },
+        "mask2former": {
+            "mask2former_resnet_18": {
+                "parameter_size": 30935302,
+                "submodule_count": 329
+            },
+            "mask2former_resnet_50": {
+                "parameter_size": 44041367,
+                "submodule_count": 476
+            },
+            "mask2former_resnet_34": {
+                "parameter_size": 41080727,
+                "submodule_count": 409
+            },
+            "mask2former_resnet_101": {
+                "parameter_size": 63033495,
+                "submodule_count": 714
+            },
+            "mask2former_swin_tiny": {
+                "parameter_size": 47402368,
+                "submodule_count": 433
+            },
+            "mask2former_swin_small": {
+                "parameter_size": 68720272,
+                "submodule_count": 613
+            },
+            "mask2former_swin_base": {
+                "parameter_size": 106749566,
+                "submodule_count": 613
+            },
+            "mask2former_swin_large": {
+                "parameter_size": 215248474,
+                "submodule_count": 613
+            }
         }
     }
 }

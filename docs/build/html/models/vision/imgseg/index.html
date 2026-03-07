@@ -866,6 +866,18 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l4"><a class="reference internal" href="maskformer/maskformer_resnet_101.html">maskformer_resnet_101</a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="mask2former/Mask2Former.html">Mask2Former</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/Mask2FormerConfig.html">Mask2FormerConfig</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/mask2former_resnet_18.html">mask2former_resnet_18</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/mask2former_resnet_34.html">mask2former_resnet_34</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/mask2former_resnet_50.html">mask2former_resnet_50</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/mask2former_resnet_101.html">mask2former_resnet_101</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/mask2former_swin_tiny.html">mask2former_swin_tiny</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/mask2former_swin_small.html">mask2former_swin_small</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/mask2former_swin_base.html">mask2former_swin_base</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mask2former/mask2former_swin_large.html">mask2former_swin_large</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -977,6 +989,7 @@ data-aria-dark="Switch to auto color mode">
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
 <li><a class="reference internal" href="#mask-r-cnn">Mask R-CNN</a></li>
 <li><a class="reference internal" href="#maskformer">MaskFormer</a></li>
+<li><a class="reference internal" href="#mask2former">Mask2Former</a></li>
 </ul>
 </div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
   </aside>
@@ -1068,6 +1081,7 @@ Conference on Computer Vision</em> (2017): 2961-2969.</p>
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
+<th class="head"><p>Pre-Trained</p></th>
 </tr>
 </thead>
 <tbody>
@@ -1075,11 +1089,13 @@ Conference on Computer Vision</em> (2017): 2961-2969.</p>
 <td><p><a class="reference external" href="mask_rcnn/mask_rcnn_resnet_50_fpn">mask_rcnn_resnet_50_fpn</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
 <td><p>46,037,607</p></td>
+<td><p>❌</p></td>
 </tr>
 <tr class="row-odd"><td><p>Mask R-CNN ResNet-101 FPN</p></td>
 <td><p><a class="reference external" href="mask_rcnn/mask_rcnn_resnet_101_fpn">mask_rcnn_resnet_101_fpn</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
 <td><p>65,126,611</p></td>
+<td><p>❌</p></td>
 </tr>
 </tbody>
 </table>
@@ -1104,28 +1120,107 @@ Semantic Segmentation.” <em>Advances in Neural Information Processing Systems<
 <th class="head"><p>Model</p></th>
 <th class="head"><p>Input Shape</p></th>
 <th class="head"><p>Parameter Count</p></th>
+<th class="head"><p>Pre-Trained</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>MaskFormer ResNet-18</p></td>
+<tr class="row-even"><td><p>MaskFormer-ResNet-18</p></td>
 <td><p><a class="reference external" href="maskformer/maskformer_resnet_18">maskformer_resnet_18</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
 <td><p>24,700,119</p></td>
+<td><p>❌</p></td>
 </tr>
-<tr class="row-odd"><td><p>MaskFormer ResNet-34</p></td>
+<tr class="row-odd"><td><p>MaskFormer-ResNet-34</p></td>
 <td><p><a class="reference external" href="maskformer/maskformer_resnet_34">maskformer_resnet_34</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
 <td><p>34,808,279</p></td>
+<td><p>❌</p></td>
 </tr>
-<tr class="row-even"><td><p>MaskFormer ResNet-50</p></td>
+<tr class="row-even"><td><p>MaskFormer-ResNet-50</p></td>
 <td><p><a class="reference external" href="maskformer/maskformer_resnet_50">maskformer_resnet_50</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
 <td><p>41,307,863</p></td>
+<td><p>✅</p></td>
 </tr>
-<tr class="row-odd"><td><p>MaskFormer ResNet-101</p></td>
+<tr class="row-odd"><td><p>MaskFormer-ResNet-101</p></td>
 <td><p><a class="reference external" href="maskformer/maskformer_resnet_101">maskformer_resnet_101</a></p></td>
 <td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
 <td><p>60,299,991</p></td>
+<td><p>✅</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="mask2former">
+<h2>Mask2Former<a class="headerlink" href="#mask2former" title="Link to this heading">¶</a></h2>
+<p><span class="badge transformer">Transformer</span> <span class="badge segmentation_transformer">Segmentation Transformer</span></p>
+<p>Mask2Former introduces masked attention and multi-scale decoding for
+universal segmentation. Query masks from each decoder stage are reused as
+attention constraints for the next stage.</p>
+<blockquote>
+<div><p>Cheng, Bowen, et al. “Masked-attention Mask Transformer for Universal Image
+Segmentation.” <em>Proceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition</em> (2022): 1290-1299.</p>
+</div></blockquote>
+<div class="table-wrapper docutils container">
+<table class="docutils align-left">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Model</p></th>
+<th class="head"><p>Input Shape</p></th>
+<th class="head"><p>Parameter Count</p></th>
+<th class="head"><p>Pre-Trained</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Mask2Former-ResNet-18</p></td>
+<td><p><a class="reference external" href="mask2former/mask2former_resnet_18">mask2former_resnet_18</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
+<td><p>30,972,567</p></td>
+<td><p>❌</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mask2Former-ResNet-34</p></td>
+<td><p><a class="reference external" href="mask2former/mask2former_resnet_34">mask2former_resnet_34</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
+<td><p>41,080,727</p></td>
+<td><p>❌</p></td>
+</tr>
+<tr class="row-even"><td><p>Mask2Former-ResNet-50</p></td>
+<td><p><a class="reference external" href="mask2former/mask2former_resnet_50">mask2former_resnet_50</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
+<td><p>44,041,367</p></td>
+<td><p>❌</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mask2Former-ResNet-101</p></td>
+<td><p><a class="reference external" href="mask2former/mask2former_resnet_101">mask2former_resnet_101</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,H,W)\)</span></p></td>
+<td><p>63,033,495</p></td>
+<td><p>❌</p></td>
+</tr>
+<tr class="row-even"><td><p>Mask2Former-Swin-Tiny</p></td>
+<td><p><a class="reference external" href="mask2former/mask2former_swin_tiny">mask2former_swin_tiny</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>47,439,633</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mask2Former-Swin-Small</p></td>
+<td><p><a class="reference external" href="mask2former/mask2former_swin_small">mask2former_swin_small</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,224,224)\)</span></p></td>
+<td><p>68,757,537</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-even"><td><p>Mask2Former-Swin-Base</p></td>
+<td><p><a class="reference external" href="mask2former/mask2former_swin_base">mask2former_swin_base</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,384,384)\)</span></p></td>
+<td><p>106,922,191</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mask2Former-Swin-Large</p></td>
+<td><p><a class="reference external" href="mask2former/mask2former_swin_large">mask2former_swin_large</a></p></td>
+<td><p><span class="math notranslate nohighlight">\((N,3,384,384)\)</span></p></td>
+<td><p>215,488,779</p></td>
+<td><p>✅</p></td>
 </tr>
 </tbody>
 </table>

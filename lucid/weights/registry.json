@@ -1634,5 +1634,649 @@
             "dataset": "imagenet_1k",
             "default": "True"
         }
+    },
+    "mask2former_swin_small": {
+        "ADE20K": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_ade20k.safetensors",
+            "sha256": "5db618ae4ad0ad23457db005eca0046dfe384d743ffad5ecd5553dd2e79905d9",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_ade20k.safetensors",
+                "parameter_size": 68757537,
+                "dataset": "ade20k",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Small_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_ade20k.safetensors",
+            "sha256": "5db618ae4ad0ad23457db005eca0046dfe384d743ffad5ecd5553dd2e79905d9",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_ade20k.safetensors",
+                "parameter_size": 68757537,
+                "dataset": "ade20k",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Small_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k",
+            "default": "True"
+        }
+    },
+    "mask2former_swin_tiny": {
+        "ADE20K": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_ade20k.safetensors",
+            "sha256": "ad394aacda66a6ab21623ab9fe39aec36d7fe7bd35e7fe2abb1f90cf38c9df66",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_ade20k.safetensors",
+                "parameter_size": 47439633,
+                "dataset": "ade20k",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Tiny_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            6,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_ade20k.safetensors",
+            "sha256": "ad394aacda66a6ab21623ab9fe39aec36d7fe7bd35e7fe2abb1f90cf38c9df66",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_ade20k.safetensors",
+                "parameter_size": 47439633,
+                "dataset": "ade20k",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Tiny_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            6,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k",
+            "default": "True"
+        }
+    },
+    "mask2former_swin_large": {
+        "ADE20K": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_ade20k.safetensors",
+            "sha256": "4e9c91123e8d532ef943043f1baf8ee61393820e678c7b623ea2b8fa83f81f0c",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_ade20k.safetensors",
+                "parameter_size": 215488779,
+                "dataset": "ade20k",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_ade20k.safetensors",
+            "sha256": "4e9c91123e8d532ef943043f1baf8ee61393820e678c7b623ea2b8fa83f81f0c",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_ade20k.safetensors",
+                "parameter_size": 215488779,
+                "dataset": "ade20k",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k",
+            "default": "True"
+        }
+    },
+    "mask2former_swin_base": {
+        "ADE20K": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_ade20k.safetensors",
+            "sha256": "68ecabf5599fe502a2b4e2ac249ddd361a0acc952c8ca1ad7977244cf3c060c1",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_ade20k.safetensors",
+                "parameter_size": 106922191,
+                "dataset": "ade20k",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Base_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 128,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k"
+        },
+        "DEFAULT": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_ade20k.safetensors",
+            "sha256": "68ecabf5599fe502a2b4e2ac249ddd361a0acc952c8ca1ad7977244cf3c060c1",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_ade20k.safetensors",
+                "parameter_size": 106922191,
+                "dataset": "ade20k",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Base_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 128,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k",
+            "default": "True"
+        }
     }
 }

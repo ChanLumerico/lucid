@@ -152,6 +152,35 @@ class Swin_Base_Weights(Enum):
     IMAGENET1K: WeightEntry
     DEFAULT: WeightEntry
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+class Mask2Former_Swin_Tiny_Weights(Enum):
+    ADE20K: WeightEntry
+    DEFAULT: WeightEntry
+
+class Mask2Former_Swin_Small_Weights(Enum):
+    ADE20K: WeightEntry
+    DEFAULT: WeightEntry
+
+class Mask2Former_Swin_Base_Weights(Enum):
+    ADE20K: WeightEntry
+    DEFAULT: WeightEntry
+
+class Mask2Former_Swin_Large_Weights(Enum):
+    ADE20K: WeightEntry
+    DEFAULT: WeightEntry
+
 __all__ = [
     "LeNet_1_Weights",
     "LeNet_4_Weights",
@@ -188,4 +217,8 @@ __all__ = [
     "BERTForQuestionAnswering_Weights",
     "Swin_Tiny_Weights",
     "Swin_Base_Weights",
+    "Mask2Former_Swin_Small_Weights",
+    "Mask2Former_Swin_Tiny_Weights",
+    "Mask2Former_Swin_Large_Weights",
+    "Mask2Former_Swin_Base_Weights",
 ]

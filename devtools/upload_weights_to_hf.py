@@ -148,7 +148,7 @@ def _update_pyi_stub(
 ) -> None:
     text = pyi_path.read_text(encoding="utf-8")
     class_block_pat = re.compile(
-        rf"(?ms)^class\s+{re.escape(enum_name)}\(Enum\):\n(?:    .*\n?)*"
+        rf"(?m)^class\s+{re.escape(enum_name)}\(Enum\):\n(?:^[ \t]+.*\n?)*"
     )
     blocks = list(class_block_pat.finditer(text))
     all_match = re.search(r"(?ms)^__all__\s*=\s*\[(.*?)\]\s*$", text)

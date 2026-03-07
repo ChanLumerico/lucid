@@ -17,6 +17,7 @@ from .inception import *
 from .lenet import *
 from .maxvit import *
 from .mask_rcnn import *
+from .mask2former import *
 from .maskformer import *
 from .mobile import *
 from .pvt import *
