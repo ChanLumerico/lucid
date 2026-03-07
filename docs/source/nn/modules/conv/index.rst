@@ -12,3 +12,7 @@ Convolution Layers
     ConvTranspose1d.rst
     ConvTranspose2d.rst
     ConvTranspose3d.rst
+
+    ConstrainedConv1d.rst
+    ConstrainedConv2d.rst
+    ConstrainedConv3d.rst

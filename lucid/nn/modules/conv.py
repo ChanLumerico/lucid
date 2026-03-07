@@ -16,6 +16,9 @@ __all__ = [
     "ConvTranspose1d",
     "ConvTranspose2d",
     "ConvTranspose3d",
+    "ConstrainedConv1d",
+    "ConstrainedConv2d",
+    "ConstrainedConv3d",
 ]
 
 
@@ -144,6 +147,151 @@ class _ConvNd(nn.Module):
         return s
 
 
+_ConstrainedMode = Literal[
+    "none",
+    "nonneg",
+    "sum_to_one",
+    "zero_mean",
+    "nonneg_sum1",
+    "unit_l2",
+    "max_l2",
+    "fixed_center",
+]
+_ConstraintEnforce = Literal["forward", "post_step"]
+
+
+class _ConstrainedConvNd(_ConvNd):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int | tuple[int, ...],
+        stride: int | tuple[int, ...],
+        padding: _PaddingStr | int | tuple[int, ...],
+        dilation: int | tuple[int, ...],
+        groups: int,
+        bias: bool,
+        *,
+        constraint: _ConstrainedMode = "none",
+        enforce: _ConstraintEnforce = "forward",
+        eps: float = 1e-12,
+        max_l2: float | None = None,
+        center_value: float = -1.0,
+        neighbor_sum: float = 1.0,
+        D: int,
+    ) -> None:
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            D=D,
+        )
+
+        self.constraint = constraint
+        self.enforce = enforce
+        self.eps = eps
+        self.max_l2 = max_l2
+        self.center_value = center_value
+        self.neighbor_sum = neighbor_sum
+        self._reduce_axis = tuple(range(-D, 0))
+
+        valid_constraints = {
+            "none",
+            "nonneg",
+            "sum_to_one",
+            "zero_mean",
+            "nonneg_sum1",
+            "unit_l2",
+            "max_l2",
+            "fixed_center",
+        }
+        if constraint not in valid_constraints:
+            raise ValueError(f"Unknown constraint: {constraint}")
+        if enforce not in {"forward", "post_step"}:
+            raise ValueError(f"Unknown enforce mode: {enforce}")
+        if constraint == "max_l2" and (max_l2 is None or max_l2 <= 0):
+            raise ValueError("`max_l2` must be positive when constraint='max_l2'.")
+
+        if constraint == "fixed_center":
+            if any(k % 2 == 0 for k in self.kernel_size):
+                raise ValueError(
+                    "fixed_center requires odd kernel sizes for all spatial dims."
+                )
+
+            center_mask = lucid.zeros(1, 1, *self.kernel_size, device=self.device)
+            center_idx = (0, 0, *[k // 2 for k in self.kernel_size])
+            center_mask[center_idx] = 1.0
+
+            self.register_buffer("_center_mask", center_mask)
+            self.register_buffer("_neighbor_mask", 1.0 - center_mask)
+        else:
+            self.register_buffer("_center_mask", None)
+            self.register_buffer("_neighbor_mask", None)
+
+        self._center_mask: nn.Buffer | None
+        self._neighbor_mask: nn.Buffer | None
+
+    def _sum_spatial(self, w: Tensor) -> Tensor:
+        return lucid.sum(w, axis=self._reduce_axis, keepdims=True)
+
+    def _normalize_sum(self, w: Tensor, target_sum: float) -> Tensor:
+        return w / (self._sum_spatial(w) + self.eps) * target_sum
+
+    def _l2_spatial(self, w: Tensor) -> Tensor:
+        return lucid.sqrt(self._sum_spatial(w * w) + self.eps)
+
+    def _apply_constraint(self, w: Tensor) -> Tensor:
+        if self.constraint == "none":
+            return w
+        if self.constraint == "nonneg":
+            return F.relu(w)
+        if self.constraint == "sum_to_one":
+            return self._normalize_sum(w, 1.0)
+        if self.constraint == "zero_mean":
+            return w - lucid.mean(w, axis=self._reduce_axis, keepdims=True)
+        if self.constraint == "nonneg_sum1":
+            return self._normalize_sum(F.relu(w), 1.0)
+        if self.constraint == "unit_l2":
+            return w / self._l2_spatial(w)
+        if self.constraint == "max_l2":
+            ratio = self.max_l2 / self._l2_spatial(w)
+            return w * lucid.clip(ratio, min_value=None, max_value=1.0)
+        if self.constraint == "fixed_center":
+            center = self._center_mask * self.center_value
+            neighbors = w * self._neighbor_mask
+            neighbors = self._normalize_sum(neighbors, self.neighbor_sum)
+            return neighbors + center
+
+        raise RuntimeError(f"Unhandled constraint: {self.constraint}")
+
+    def _constrained_weight(self) -> Tensor:
+        if self.enforce == "forward":
+            return self._apply_constraint(self.weight)
+        return self.weight
+
+    def project_(self) -> "_ConstrainedConvNd":
+        projected = self._apply_constraint(self.weight)
+        self.weight.data = projected.data
+        return self
+
+    def extra_repr(self) -> str:
+        s = super().extra_repr()
+        s += f", constraint={self.constraint}, enforce={self.enforce}, eps={self.eps}"
+        if self.constraint == "max_l2":
+            s += f", max_l2={self.max_l2}"
+        if self.constraint == "fixed_center":
+            s += (
+                f", center_value={self.center_value}, "
+                f"neighbor_sum={self.neighbor_sum}"
+            )
+        return s
+
+
 class Conv1d(_ConvNd):
     def __init__(
         self,
@@ -250,6 +398,153 @@ class Conv3d(_ConvNd):
 
     def forward(self, input_: Tensor) -> Tensor:
         return self._conv_forward(input_, self.weight, self.bias)
+
+
+class ConstrainedConv1d(_ConstrainedConvNd):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int | tuple[int, ...],
+        stride: int | tuple[int, ...] = 1,
+        padding: _PaddingStr | int | tuple[int, ...] = 0,
+        dilation: int | tuple[int, ...] = 1,
+        groups: int = 1,
+        bias: bool = True,
+        *,
+        constraint: _ConstrainedMode = "none",
+        enforce: _ConstraintEnforce = "forward",
+        eps: float = 1e-12,
+        max_l2: float | None = None,
+        center_value: float = -1.0,
+        neighbor_sum: float = 1.0,
+    ) -> None:
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            constraint=constraint,
+            enforce=enforce,
+            eps=eps,
+            max_l2=max_l2,
+            center_value=center_value,
+            neighbor_sum=neighbor_sum,
+            D=1,
+        )
+
+    def _conv_forward(
+        self, input_: Tensor, weight: Tensor, bias: Tensor | None
+    ) -> Tensor:
+        lucid._check_input_dim(input_, dim=3)
+        return F.conv1d(
+            input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
+        )
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return self._conv_forward(input_, self._constrained_weight(), self.bias)
+
+
+class ConstrainedConv2d(_ConstrainedConvNd):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int | tuple[int, ...],
+        stride: int | tuple[int, ...] = 1,
+        padding: _PaddingStr | int | tuple[int, ...] = 0,
+        dilation: int | tuple[int, ...] = 1,
+        groups: int = 1,
+        bias: bool = True,
+        *,
+        constraint: _ConstrainedMode = "none",
+        enforce: _ConstraintEnforce = "forward",
+        eps: float = 1e-12,
+        max_l2: float | None = None,
+        center_value: float = -1.0,
+        neighbor_sum: float = 1.0,
+    ) -> None:
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            constraint=constraint,
+            enforce=enforce,
+            eps=eps,
+            max_l2=max_l2,
+            center_value=center_value,
+            neighbor_sum=neighbor_sum,
+            D=2,
+        )
+
+    def _conv_forward(
+        self, input_: Tensor, weight: Tensor, bias: Tensor | None
+    ) -> Tensor:
+        lucid._check_input_dim(input_, dim=4)
+        return F.conv2d(
+            input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
+        )
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return self._conv_forward(input_, self._constrained_weight(), self.bias)
+
+
+class ConstrainedConv3d(_ConstrainedConvNd):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int | tuple[int, ...],
+        stride: int | tuple[int, ...] = 1,
+        padding: _PaddingStr | int | tuple[int, ...] = 0,
+        dilation: int | tuple[int, ...] = 1,
+        groups: int = 1,
+        bias: bool = True,
+        *,
+        constraint: _ConstrainedMode = "none",
+        enforce: _ConstraintEnforce = "forward",
+        eps: float = 1e-12,
+        max_l2: float | None = None,
+        center_value: float = -1.0,
+        neighbor_sum: float = 1.0,
+    ) -> None:
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            constraint=constraint,
+            enforce=enforce,
+            eps=eps,
+            max_l2=max_l2,
+            center_value=center_value,
+            neighbor_sum=neighbor_sum,
+            D=3,
+        )
+
+    def _conv_forward(
+        self, input_: Tensor, weight: Tensor, bias: Tensor | None
+    ) -> Tensor:
+        lucid._check_input_dim(input_, dim=5)
+        return F.conv3d(
+            input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
+        )
+
+    def forward(self, input_: Tensor) -> Tensor:
+        return self._conv_forward(input_, self._constrained_weight(), self.bias)
 
 
 class _ConvTransposeNd(nn.Module):
