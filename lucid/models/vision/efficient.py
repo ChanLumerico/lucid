@@ -7,7 +7,6 @@ import lucid
 from lucid import register_model
 from lucid._tensor import Tensor
 
-
 __all__ = [
     "EfficientNet",
     "EfficientNet_V2",

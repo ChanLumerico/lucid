@@ -5,7 +5,6 @@ import lucid
 from lucid._tensor import Tensor
 from lucid.types import _Scalar
 
-
 __all__ = [
     "grad_norm",
     "get_total_norm",

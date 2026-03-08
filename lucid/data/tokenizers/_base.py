@@ -8,7 +8,6 @@ from typing import Iterable, TypeVar
 import lucid
 from lucid.types import _DeviceType
 
-
 __all__ = ["SpecialTokens", "Tokenizer"]
 
 

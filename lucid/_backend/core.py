@@ -16,7 +16,6 @@ from lucid.types import (
 from lucid._backend.metal import is_gpu_op
 from lucid._backend._C.runtime.core import _C_func_op_raw
 
-
 _GradType = _NumPyArray | _MLXArray | Tuple[_NumPyArray | _MLXArray, ...]
 _GradFuncType = Callable[[], _GradType]
 
@@ -156,7 +155,7 @@ def _py_func_op(
                 raise ValueError("inplace op must have a single return value.")
 
             if op_self._inplace:
-                (ret_value, grad_func) = func_return_pairs[0]
+                ret_value, grad_func = func_return_pairs[0]
                 target = inplace_target
                 if target is None:
                     raise RuntimeError("Missing inplace target tensor.")

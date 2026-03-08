@@ -37,7 +37,6 @@ from lucid.types import (
 
 import lucid.nn as nn
 
-
 __all__ = [
     "Module",
     "Sequential",

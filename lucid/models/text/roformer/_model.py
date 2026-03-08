@@ -7,7 +7,6 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.models.text.bert import _model as bert
 
-
 __all__ = ["RoFormerConfig", "RoFormer"]
 
 

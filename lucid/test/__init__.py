@@ -4,7 +4,6 @@ from typing import Any, Callable
 from pathlib import Path
 import sys
 
-
 __all__ = ["run_tests"]
 
 

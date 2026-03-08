@@ -152,19 +152,6 @@ class Swin_Base_Weights(Enum):
     IMAGENET1K: WeightEntry
     DEFAULT: WeightEntry
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 class Mask2Former_Swin_Tiny_Weights(Enum):
     ADE20K: WeightEntry
     DEFAULT: WeightEntry

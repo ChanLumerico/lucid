@@ -7,7 +7,6 @@ from lucid._tensor import Tensor
 
 from .resnet import ResNet, _Bottleneck
 
-
 __all__ = [
     "SENet",
     "se_resnet_18",

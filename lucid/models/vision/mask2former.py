@@ -18,7 +18,6 @@ from lucid.models.vision.maskformer import (
 )
 from lucid.models.vision.swin import swin_base, swin_large, swin_small, swin_tiny
 
-
 __all__ = [
     "Mask2FormerConfig",
     "Mask2Former",

@@ -4,7 +4,6 @@ import lucid
 import lucid.nn as nn
 from lucid._tensor import Tensor
 
-
 __all__ = [
     "ConvBNReLU1d",
     "ConvBNReLU2d",

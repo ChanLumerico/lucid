@@ -6,7 +6,6 @@ from lucid._tensor import Tensor
 
 from typing import Literal, override
 
-
 __all__ = [
     "MSELoss",
     "BCELoss",

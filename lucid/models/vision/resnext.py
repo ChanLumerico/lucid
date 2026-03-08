@@ -4,7 +4,6 @@ from lucid import register_model
 from .resnet import ResNet, _Bottleneck
 from lucid.models.base import PreTrainedModelMixin
 
-
 __all__ = [
     "ResNeXt",
     "resnext_50_32x4d",

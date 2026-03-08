@@ -9,7 +9,6 @@ from lucid._backend.metal import mx
 from lucid.error import BackwardError
 from lucid.types import _MLXArray, _NumPyArray, _TensorLike, _Scalar, _Gradient
 
-
 __all__ = ["grad", "backward"]
 
 

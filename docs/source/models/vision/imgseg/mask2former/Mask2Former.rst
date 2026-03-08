@@ -22,6 +22,84 @@ Mask2Former
 and multi-scale features. In this lucid implementation, it supports both
 ResNet and Swin backbones through preset builders.
 
+.. mermaid::
+    :name: Mask2Former
+
+    %%{init: {"flowchart":{"curve":"monotoneX","nodeSpacing":50,"rankSpacing":50}} }%%
+    flowchart LR
+    linkStyle default stroke-width:2.0px
+    subgraph sg_m0["<span style='font-size:20px;font-weight:700'>Mask2Former</span>"]
+    style sg_m0 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m1["_Mask2FormerModel"]
+        style sg_m1 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        subgraph sg_m2["_Mask2FormerPixelLevelModule"]
+            direction TB;
+        style sg_m2 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            subgraph sg_m3["_Mask2FormerSwinBackbone"]
+            direction TB;
+            style sg_m3 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m4["Module"];
+            m5["Dropout"];
+            m6(["Module x 2"]);
+            end
+            subgraph sg_m7["_Mask2FormerPixelDecoder"]
+            direction TB;
+            style sg_m7 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m8["_Mask2FormerSinePositionEmbedding"];
+            m9["ModuleList"];
+            m10["_Mask2FormerPixelDecoderEncoderOnly"];
+            m11["Conv2d"];
+            m12(["Sequential x 2"]);
+            end
+        end
+        subgraph sg_m13["_Mask2FormerTransformerModule"]
+            direction TB;
+        style sg_m13 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m14["_Mask2FormerSinePositionEmbedding"];
+            m15(["Embedding x 2"]);
+            subgraph sg_m16["_Mask2FormerMaskedAttentionDecoder"]
+            direction TB;
+            style sg_m16 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+            m17["ModuleList"];
+            m18["LayerNorm"];
+            m19["_Mask2FormerMaskPredictor"];
+            end
+            m20["Embedding"];
+        end
+        end
+        m21["Linear"];
+        subgraph sg_m22["_Mask2FormerLoss"]
+        style sg_m22 fill:#000000,fill-opacity:0.05,stroke:#000000,stroke-opacity:0.75,stroke-width:1px
+        m23["_Mask2FormerHungarianMatcher"];
+        end
+    end
+    input["Input"];
+    output["Output"];
+    style input fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style output fill:#fff3cd,stroke:#a67c00,stroke-width:1px;
+    style m5 fill:#edf2f7,stroke:#4a5568,stroke-width:1px;
+    style m11 fill:#ffe8e8,stroke:#c53030,stroke-width:1px;
+    style m15 fill:#f1f5f9,stroke:#475569,stroke-width:1px;
+    style m18 fill:#e6fffa,stroke:#2c7a7b,stroke-width:1px;
+    style m20 fill:#f1f5f9,stroke:#475569,stroke-width:1px;
+    style m21 fill:#ebf8ff,stroke:#2b6cb0,stroke-width:1px;
+    input --> m4;
+    m10 --> m12;
+    m11 --> m14;
+    m12 --> m11;
+    m14 -.-> m18;
+    m17 -.-> m18;
+    m18 --> m19;
+    m19 --> m17;
+    m19 --> m21;
+    m21 --> output;
+    m4 --> m5;
+    m5 --> m6;
+    m6 -.-> m9;
+    m8 --> m10;
+    m8 -.-> m9;
+    m9 --> m8;
+
 Class Signature
 ---------------
 

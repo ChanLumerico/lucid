@@ -11,7 +11,6 @@ from lucid._backend.core import Operation, _GradType
 from lucid._backend.metal import mx
 from lucid.types import _DeviceType
 
-
 __all__ = ["FusedBackwardOp", "match_fusion_table"]
 
 

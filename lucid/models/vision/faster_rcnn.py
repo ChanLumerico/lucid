@@ -23,7 +23,6 @@ from lucid.models.utils import (
 
 from lucid.models.vision.resnet import resnet_50, resnet_101
 
-
 __all__ = [
     "FasterRCNN",
     "faster_rcnn_resnet_50_fpn",

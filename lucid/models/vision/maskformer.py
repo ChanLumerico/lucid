@@ -13,7 +13,6 @@ from lucid import register_model
 from lucid.models.vision.resnet import resnet_18, resnet_34, resnet_50, resnet_101
 from lucid.models.base import PreTrainedModelMixin
 
-
 __all__ = [
     "MaskFormerConfig",
     "MaskFormer",

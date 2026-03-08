@@ -9,7 +9,6 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 
-
 __all__ = ["CvT", "cvt_13", "cvt_21", "cvt_w24"]
 
 

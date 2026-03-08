@@ -12,7 +12,6 @@ from lucid._tensor import Tensor
 
 from ._base import DatasetBase
 
-
 __all__ = ["MNIST", "FashionMNIST"]
 
 

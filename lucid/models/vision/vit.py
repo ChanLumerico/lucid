@@ -5,7 +5,6 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 
-
 __all__ = ["ViT", "vit_tiny", "vit_small", "vit_base", "vit_large", "vit_huge"]
 
 

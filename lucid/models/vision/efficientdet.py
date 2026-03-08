@@ -12,7 +12,6 @@ from lucid.types import _Scalar, _ShapeLike, _DeviceType
 import lucid.models.vision.efficient as effnet
 from lucid.models.utils import iou, nms, DetectionDict
 
-
 __all__ = [
     "EfficientDet",
     "efficientdet_d0",

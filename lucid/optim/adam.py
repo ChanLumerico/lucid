@@ -8,7 +8,6 @@ from lucid.types import _OptimClosure, _Scalar
 from lucid._tensor import Tensor
 from lucid._backend.metal import post_step_eval
 
-
 __all__ = ["Adam", "AdamW", "NAdam", "RAdam"]
 
 

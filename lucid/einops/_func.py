@@ -17,7 +17,6 @@ from lucid._backend.core import (
 )
 from lucid._backend.metal import mx
 
-
 _ReduceStr = Literal["sum", "mean"]
 
 

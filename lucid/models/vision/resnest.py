@@ -8,7 +8,6 @@ from lucid._tensor import Tensor
 
 from .resnet import ResNet
 
-
 __all__ = [
     "ResNeSt",
     "resnest_14",

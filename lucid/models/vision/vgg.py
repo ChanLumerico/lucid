@@ -4,7 +4,6 @@ from lucid import register_model
 from lucid._tensor import Tensor
 from lucid.models.base import PreTrainedModelMixin
 
-
 __all__ = ["VGGNet", "vggnet_11", "vggnet_13", "vggnet_16", "vggnet_19"]
 
 

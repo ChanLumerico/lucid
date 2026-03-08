@@ -10,7 +10,6 @@ from lucid.types import Numeric, _DeviceType
 
 from .activation import Tanh, ReLU
 
-
 __all__ = ["RNNCell", "LSTMCell", "GRUCell", "RNNBase", "RNN", "LSTM", "GRU"]
 
 

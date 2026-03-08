@@ -8,7 +8,6 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 
-
 __all__ = [
     "PVT",
     "PVT_V2",

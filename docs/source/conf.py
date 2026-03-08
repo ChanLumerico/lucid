@@ -16,9 +16,9 @@ sys.path.insert(0, HERE)
 os.environ["SPHINX_BUILD"] = "1"
 
 project = "Lucid"
-copyright = "2025, ChanLumerico"
+copyright = "2026, ChanLumerico"
 author = "ChanLumerico"
-release = "2.14.6"
+release = "2.14.14"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

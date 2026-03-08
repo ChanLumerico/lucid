@@ -7,7 +7,6 @@ from lucid import register_model
 from lucid._tensor import Tensor
 from lucid.models.base import PreTrainedModelMixin
 
-
 __all__ = [
     "ResNet",
     "resnet_18",

@@ -6,7 +6,6 @@ from lucid._tensor import Tensor
 
 from lucid.models.utils import SelectiveSearch, apply_deltas, nms
 
-
 __all__ = ["RCNN"]
 
 

@@ -7,7 +7,6 @@ import lucid
 from lucid._func import bfunc
 from lucid.test.core import TensorOpTorchCase, TensorOpWithTorchBase
 
-
 _ARITH_LEFT: list[list[float]] = [[1.0, 2.0], [3.0, 4.0]]
 _ARITH_RIGHT: list[list[float]] = [[2.0, 1.0], [0.0, -1.0]]
 

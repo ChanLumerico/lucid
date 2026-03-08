@@ -6,7 +6,6 @@ import lucid.nn as nn
 from lucid import register_model
 from lucid._tensor import Tensor
 
-
 __all__ = [
     "ConvNeXt",
     "ConvNeXt_V2",

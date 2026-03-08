@@ -8,7 +8,6 @@ import lucid.nn as nn
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
 
-
 __all__ = ["build_tensor_mermaid_chart", "build_module_mermaid_chart"]
 
 

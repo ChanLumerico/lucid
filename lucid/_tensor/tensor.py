@@ -32,7 +32,6 @@ from lucid._tensor.base import _TensorBase, _TensorInplace
 from lucid._backend.core import BackwardOperation, Operation, noop
 from lucid._backend.metal import mx, parse_mlx_indexing, check_metal_availability
 
-
 __all__ = [
     "Tensor",
     "FloatTensor",

@@ -13,7 +13,6 @@ from lucid.types import (
 from lucid._tensor import Tensor
 from lucid._func import bfunc, gfunc, ufunc
 
-
 # fmt: off
 __all__ = [
     "add", "sub", "multiply", "div", "minimum", "maximum", "power", "dot", "inner", 

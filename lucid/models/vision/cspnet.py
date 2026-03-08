@@ -9,7 +9,6 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 
-
 __all__ = ["CSPNet", "csp_resnet_50", "csp_resnext_50_32x4d", "csp_darknet_53"]
 
 

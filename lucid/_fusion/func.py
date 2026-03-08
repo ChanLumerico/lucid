@@ -6,7 +6,6 @@ from lucid._utils import func as utils_func
 
 from .base import FusedBackwardOp
 
-
 __all__ = [
     "DoubleNeg",
     "DoubleReciprocal",

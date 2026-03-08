@@ -15,7 +15,6 @@ import re
 import numpy as np
 import mlx.core as mx
 
-
 _DeviceType = Literal["cpu", "gpu"]
 
 _Scalar = int | float | complex

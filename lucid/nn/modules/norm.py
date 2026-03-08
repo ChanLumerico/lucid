@@ -5,7 +5,6 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
 
-
 __all__ = [
     "BatchNorm1d",
     "BatchNorm2d",

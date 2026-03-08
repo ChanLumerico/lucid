@@ -13,7 +13,6 @@ from lucid.types import (
     Numeric,
 )
 
-
 __all__ = [
     "seed",
     "get_seed",

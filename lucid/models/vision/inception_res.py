@@ -8,7 +8,6 @@ from lucid._tensor import Tensor
 
 from .inception import _InceptionStem_V4, _InceptionReduce_V4A
 
-
 __all__ = ["InceptionResNet", "inception_resnet_v1", "inception_resnet_v2"]
 
 

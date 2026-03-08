@@ -1,7 +1,6 @@
 from lucid._tensor import Tensor
 from lucid.types import _ArrayOrScalar, _DeviceType, Float32, Numeric
 
-
 __all__ = ["Parameter", "Buffer"]
 
 

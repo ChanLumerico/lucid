@@ -1,7 +1,6 @@
 from lucid._tensor import Tensor
 from lucid.linalg import _func
 
-
 # fmt: off
 __all__ = [
     "inv", "det", "solve", "cholesky", "norm", "qr", "svd", "matrix_power", "pinv"

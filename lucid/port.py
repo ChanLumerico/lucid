@@ -6,7 +6,6 @@ from typing import Literal
 from lucid._tensor import Tensor
 from lucid.nn import Module
 
-
 __all__ = ["save", "load"]
 
 _LucidPortable = Tensor | Module | OrderedDict | dict

@@ -5,7 +5,6 @@ from lucid import register_model
 from lucid._tensor import Tensor
 from lucid.models.base import PreTrainedModelMixin
 
-
 __all__ = ["LeNet", "lenet_1", "lenet_4", "lenet_5"]
 
 

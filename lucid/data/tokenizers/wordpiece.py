@@ -9,7 +9,6 @@ from lucid.data.tokenizers.utils import basic_tokenize, clean_text
 
 from lucid._backend._C.tokenizers.core import _C_WordPieceTokenizer
 
-
 __all__ = ["WordPieceTokenizer", "WordPieceTokenizerFast"]
 
 

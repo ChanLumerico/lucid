@@ -13,7 +13,6 @@ from lucid.types import _DeviceType
 
 from lucid._backend._C.tokenizers.core import _C_BPETokenizer, _C_ByteBPETokenizer
 
-
 __all__ = [
     "BPETokenizer",
     "BPETokenizerFast",

@@ -6,7 +6,6 @@ import torch
 import lucid
 from lucid.test.core import TensorOpWithTorchBase, TensorOpTorchCase
 
-
 _UNARY_FLOAT_2x2: Final[list[list[float]]] = [[1.0, 2.0], [3.0, 4.0]]
 _UNARY_INT_2x2: Final[list[list[int]]] = [[1, 2], [3, 4]]
 _UNARY_NEG_2x2: Final[list[list[float]]] = [[-1.0, -2.0], [3.0, -4.0]]

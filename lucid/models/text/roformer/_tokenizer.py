@@ -3,7 +3,6 @@ from pathlib import Path
 from lucid.data.tokenizers import SpecialTokens
 from lucid.models.text.bert import BERTTokenizerFast
 
-
 __all__ = ["RoFormerTokenizerFast"]
 
 

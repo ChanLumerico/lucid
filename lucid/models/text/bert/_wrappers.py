@@ -10,7 +10,6 @@ from lucid.types import _DeviceType
 from ._model import BERT, BERTConfig
 from ._tokenizer import BERTTokenizerFast
 
-
 __all__ = [
     "BERTForPreTraining",
     "BERTForMaskedLM",

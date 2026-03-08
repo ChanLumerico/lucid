@@ -11,7 +11,6 @@ from lucid import register_model
 from lucid.models.utils import DetectionDict
 from lucid.models.vision.resnet import ResNet, resnet_50, resnet_101
 
-
 __all__ = ["DETR", "detr_r50", "detr_r101"]
 
 

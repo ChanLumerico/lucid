@@ -8,7 +8,6 @@ from lucid.models.text.bert import _wrappers as bert
 
 from ._model import RoFormer, RoFormerConfig
 
-
 __all__ = [
     "RoFormerForMaskedLM",
     "RoFormerForSequenceClassification",

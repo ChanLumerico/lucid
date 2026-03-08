@@ -6,7 +6,6 @@ from lucid._tensor import Tensor
 
 from .resnet import ResNet
 
-
 __all__ = [
     "SKNet",
     "sk_resnet_18",

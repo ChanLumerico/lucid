@@ -4,7 +4,6 @@ from typing import Callable, Literal
 from lucid.optim import Optimizer
 from lucid.optim.lr_scheduler import LRScheduler
 
-
 __all__ = [
     "LambdaLR",
     "StepLR",

@@ -8,7 +8,6 @@ import pytest
 
 from lucid.types import _NumPyArray
 
-
 __all__ = [
     "LucidBaseCase",
     "TensorOpCase",

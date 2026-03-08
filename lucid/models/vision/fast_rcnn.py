@@ -13,7 +13,6 @@ from lucid.models.utils import (
     clip_boxes,
 )
 
-
 __all__ = ["FastRCNN"]
 
 

@@ -9,7 +9,6 @@ from lucid._tensor import Tensor
 from lucid.types import _Scalar
 from lucid.models.base import PreTrainedModelMixin
 
-
 __all__ = [
     "MobileNet",
     "MobileNet_V2",

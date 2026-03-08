@@ -8,7 +8,6 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.models.utils import nms, DetectionDict
 
-
 __all__ = ["YOLO_V2", "yolo_v2", "yolo_v2_tiny"]
 
 

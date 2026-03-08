@@ -17,7 +17,6 @@ from lucid._backend.metal import mx
 
 from lucid.types import _NumPyArray, _MLXArray
 
-
 _Array: TypeAlias = _NumPyArray | _MLXArray
 _Shape: TypeAlias = tuple[int, ...]
 _Stride: TypeAlias = tuple[int, ...]

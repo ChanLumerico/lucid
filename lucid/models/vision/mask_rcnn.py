@@ -24,7 +24,6 @@ from lucid.models.vision.faster_rcnn import (
 )
 from lucid.models.vision.resnet import resnet_50, resnet_101
 
-
 __all__ = [
     "MaskRCNN",
     "mask_rcnn_resnet_50_fpn",

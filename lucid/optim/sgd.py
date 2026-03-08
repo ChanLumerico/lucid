@@ -9,7 +9,6 @@ from lucid._tensor import Tensor
 from lucid._backend.metal import post_step_eval
 from lucid.types import _OptimClosure
 
-
 __all__ = ["SGD", "ASGD"]
 
 

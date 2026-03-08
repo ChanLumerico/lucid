@@ -19,7 +19,6 @@ import lucid.nn as nn
 
 from lucid._tensor import Tensor
 
-
 _WEIGHTS_DIR: Path = Path(__file__).resolve().parent
 WEIGHTS_REGISTRY_PATH: Path = _WEIGHTS_DIR / "registry.json"
 

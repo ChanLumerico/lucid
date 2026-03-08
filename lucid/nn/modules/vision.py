@@ -7,7 +7,6 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.nn.functional import _InterpolateType
 
-
 __all__ = ["Upsample"]
 
 

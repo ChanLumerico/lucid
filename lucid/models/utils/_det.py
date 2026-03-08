@@ -7,7 +7,6 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
-
 __all__ = [
     "felzenszwalb_segmentation",
     "SelectiveSearch",

@@ -1,7 +1,6 @@
 import importlib
 import pytest
 
-
 try:
     importlib.import_module("lucid")
     _LUCID_IMPORT_ERROR = None

@@ -5,7 +5,6 @@ from lucid.types import _ShapeLike, _ArrayLikeInt, _Scalar
 
 from lucid._utils import func
 
-
 # fmt: off
 __all__ = [
     "reshape", "squeeze", "unsqueeze", "expand_dims", "ravel", "stack", "hstack",
