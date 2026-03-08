@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import copy
 import math
-from typing import Any, Callable
+from typing import Any, Callable, Final
 
 import lucid
 import lucid.nn as nn
@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-_MASK_ATTENTION_FILL_VALUE = -1e12
+_MASK_ATTENTION_FILL_VALUE: Final[float] = -1e12
 
 
 @dataclass
@@ -223,35 +223,40 @@ class _Mask2FormerSwinBackbone(nn.Module):
 
     def forward(self, pixel_values: Tensor) -> _BackboneOutput:
         hidden_states = self.embeddings.patch_embeddings.projection(pixel_values)
-        hidden_states = hidden_states.reshape(*hidden_states.shape[:2], -1).swapaxes(
-            1, 2
-        )
+        batch_size = hidden_states.shape[0]
+        height = hidden_states.shape[2]
+        width = hidden_states.shape[3]
+        hidden_states = hidden_states.reshape(batch_size, hidden_states.shape[1], -1)
+        hidden_states = hidden_states.swapaxes(1, 2)
         hidden_states = self.embeddings.norm(hidden_states)
         if self.abs_pos_emb:
             hidden_states = hidden_states + self.absolute_pos_emb
         hidden_states = self.pos_drop(hidden_states)
 
+        curr_height, curr_width = height, width
         feature_maps: list[Tensor] = []
         for stage_idx, layer in enumerate(self.encoder.layers):
             for block in layer.blocks:
+                block.input_res = (curr_height, curr_width)
                 hidden_states = block(hidden_states)
 
             norm = getattr(self.hidden_states_norms, f"stage{stage_idx + 1}")
             stage_hidden = norm(hidden_states)
 
             batch_size, _, channels = stage_hidden.shape
-            height = self.patches_res[0] // (2**stage_idx)
-            width = self.patches_res[1] // (2**stage_idx)
             feature = stage_hidden.transpose((0, 2, 1)).reshape(
                 batch_size,
                 channels,
-                height,
-                width,
+                curr_height,
+                curr_width,
             )
             feature_maps.append(feature)
 
             if layer.downsample is not None:
+                layer.downsample.input_res = (curr_height, curr_width)
                 hidden_states = layer.downsample(hidden_states)
+                curr_height = (curr_height + 1) // 2
+                curr_width = (curr_width + 1) // 2
 
         return _BackboneOutput(feature_maps=feature_maps)
 
@@ -1074,23 +1079,22 @@ class _Mask2FormerPixelDecoderEncoderOnly(nn.Module):
         reference_points_list = []
 
         for lvl, (height, width) in enumerate(spatial_shapes_list):
-            ref_y, ref_x = lucid.meshgrid(
-                lucid.linspace(
-                    0.5,
-                    height - 0.5,
-                    height,
-                    dtype=valid_ratios.dtype,
-                    device=device,
-                ),
-                lucid.linspace(
-                    0.5,
-                    width - 0.5,
-                    width,
-                    dtype=valid_ratios.dtype,
-                    device=device,
-                ),
-                indexing="ij",
+            y_coords = lucid.linspace(
+                0.5,
+                height - 0.5,
+                height,
+                dtype=valid_ratios.dtype,
+                device=device,
             )
+            x_coords = lucid.linspace(
+                0.5,
+                width - 0.5,
+                width,
+                dtype=valid_ratios.dtype,
+                device=device,
+            )
+            ref_y = y_coords[:, None].repeat(width, axis=1)
+            ref_x = x_coords[None, :].repeat(height, axis=0)
 
             ref_y = ref_y.reshape(-1)[None] / (valid_ratios[:, None, lvl, 1] * height)
             ref_x = ref_x.reshape(-1)[None] / (valid_ratios[:, None, lvl, 0] * width)
@@ -2513,6 +2517,29 @@ class Mask2Former(PreTrainedModelMixin, nn.Module):
         was_training = self.training
         self.eval()
 
+        original_hw = (pixel_values.shape[-2], pixel_values.shape[-1])
+        if pixel_mask is None:
+            stride = (
+                max(self.config.feature_strides) if self.config.feature_strides else 32
+            )
+            pad_h = (stride - original_hw[0] % stride) % stride
+            pad_w = (stride - original_hw[1] % stride) % stride
+
+            if pad_h or pad_w:
+                pixel_values = lucid.pad(
+                    pixel_values,
+                    ((0, 0), (0, 0), (0, pad_h), (0, pad_w)),
+                )
+
+            pixel_mask = lucid.zeros(
+                (pixel_values.shape[0], pixel_values.shape[-2], pixel_values.shape[-1]),
+                dtype=bool,
+                device=pixel_values.device,
+            )
+            if pad_h or pad_w:
+                pixel_mask[:, original_hw[0] :, :] = True
+                pixel_mask[:, :, original_hw[1] :] = True
+
         outputs = self.forward(
             pixel_values=pixel_values,
             pixel_mask=pixel_mask,
@@ -2550,7 +2577,7 @@ class Mask2Former(PreTrainedModelMixin, nn.Module):
         )
 
         if output_size is None:
-            output_size = (pixel_values.shape[-2], pixel_values.shape[-1])
+            output_size = original_hw
 
         if segmentation_logits.shape[-2:] != output_size:
             segmentation_logits = F.interpolate(

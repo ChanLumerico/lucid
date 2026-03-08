@@ -423,6 +423,219 @@ MaskFormer
       - 60,299,991
       - 242 MB
 
+Mask2Former
+-----------
+|transformer-badge| |segmentation-transformer-badge|
+
+.. code-block:: python
+
+    class lucid.weights.Mask2Former_Swin_Tiny_Weights(Enum)
+    class lucid.weights.Mask2Former_Swin_Small_Weights(Enum)
+    class lucid.weights.Mask2Former_Swin_Base_Weights(Enum)
+    class lucid.weights.Mask2Former_Swin_Large_Weights(Enum)
+  
+Mask2Former-Swin-Tiny
+~~~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+
+    * - *Mask2Former_Swin_Tiny_Weights*
+      - ADE20K_SEMANTIC
+      - ade20k_semantic
+      - 47,439,633
+      - 192 MB
+
+    * - *Mask2Former_Swin_Tiny_Weights*
+      - COCO_INSTANCE
+      - coco_instance
+      - 47,421,643
+      - 192 MB
+
+    * - *Mask2Former_Swin_Tiny_Weights*
+      - COCO_PANOPTIC
+      - coco_panoptic
+      - 47,435,264
+      - 192 MB
+
+    * - *Mask2Former_Swin_Tiny_Weights*
+      - CITYSCAPES_SEMANTIC
+      - cityscapes_semantic
+      - 47,405,966
+      - 192 MB
+
+    * - *Mask2Former_Swin_Tiny_Weights*
+      - CITYSCAPES_INSTANCE
+      - cityscapes_instance
+      - 47,403,139
+      - 192 MB
+
+    * - *Mask2Former_Swin_Tiny_Weights*
+      - CITYSCAPES_PANOPTIC
+      - cityscapes_panoptic
+      - 47,405,966
+      - 192 MB
+
+Mask2Former-Swin-Small
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+
+    * - *Mask2Former_Swin_Small_Weights*
+      - ADE20K_SEMANTIC
+      - ade20k_semantic
+      - 68,757,537
+      - 278 MB
+
+    * - *Mask2Former_Swin_Small_Weights*
+      - COCO_INSTANCE
+      - coco_instance
+      - 68,739,547
+      - 278 MB
+
+    * - *Mask2Former_Swin_Small_Weights*
+      - COCO_PANOPTIC
+      - coco_panoptic
+      - 68,753,168
+      - 278 MB
+
+    * - *Mask2Former_Swin_Small_Weights*
+      - CITYSCAPES_SEMANTIC
+      - cityscapes_semantic
+      - 68,723,870
+      - 278 MB
+
+    * - *Mask2Former_Swin_Small_Weights*
+      - CITYSCAPES_INSTANCE
+      - cityscapes_instance
+      - 68,721,043
+      - 278 MB
+
+    * - *Mask2Former_Swin_Small_Weights*
+      - CITYSCAPES_PANOPTIC
+      - cityscapes_panoptic
+      - 68,723,870
+      - 278 MB
+
+Mask2Former-Swin-Base
+~~~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+
+    * - *Mask2Former_Swin_Base_Weights*
+      - ADE20K_SEMANTIC
+      - ade20k_semantic
+      - 106,922,191
+      - 451 MB
+
+    * - *Mask2Former_Swin_Base_Weights*
+      - COCO_INSTANCE
+      - coco_instance
+      - 106,904,201
+      - 451 MB
+
+    * - *Mask2Former_Swin_Base_Weights*
+      - COCO_PANOPTIC
+      - coco_panoptic
+      - 106,917,822
+      - 451 MB
+
+    * - *Mask2Former_Swin_Base_Weights*
+      - CITYSCAPES_SEMANTIC
+      - cityscapes_semantic
+      - 106,888,524
+      - 451 MB
+
+    * - *Mask2Former_Swin_Base_Weights*
+      - CITYSCAPES_INSTANCE
+      - cityscapes_instance
+      - 106,885,697
+      - 451 MB
+
+    * - *Mask2Former_Swin_Base_Weights*
+      - CITYSCAPES_PANOPTIC
+      - cityscapes_panoptic
+      - 106,888,524
+      - 451 MB
+
+Mask2Former-Swin-Large
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Enum Name
+      - Tag
+      - Dataset
+      - Parameter Size
+      - File Size
+
+    * - *Mask2Former_Swin_Large_Weights*
+      - ADE20K_SEMANTIC
+      - ade20k_semantic
+      - 215,488,779
+      - 885 MB
+
+    * - *Mask2Former_Swin_Large_Weights*
+      - ADE20K_PANOPTIC
+      - ade20k_panoptic
+      - 215,539,979
+      - 885 MB
+
+    * - *Mask2Former_Swin_Large_Weights*
+      - COCO_INSTANCE
+      - coco_instance
+      - 215,521,989
+      - 885 MB
+
+    * - *Mask2Former_Swin_Large_Weights*
+      - COCO_PANOPTIC
+      - coco_panoptic
+      - 215,535,610
+      - 885 MB
+
+    * - *Mask2Former_Swin_Large_Weights*
+      - CITYSCAPES_SEMANTIC
+      - cityscapes_semantic
+      - 215,455,112
+      - 885 MB
+
+    * - *Mask2Former_Swin_Large_Weights*
+      - CITYSCAPES_INSTANCE
+      - cityscapes_instance
+      - 215,503,485
+      - 885 MB
+
+    * - *Mask2Former_Swin_Large_Weights*
+      - CITYSCAPES_PANOPTIC
+      - cityscapes_panoptic
+      - 215,506,312
+      - 885 MB
+
 ----
 
 BERT

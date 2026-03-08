@@ -1636,94 +1636,95 @@
         }
     },
     "mask2former_swin_small": {
-        "ADE20K": {
-            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_ade20k.safetensors",
-            "sha256": "5db618ae4ad0ad23457db005eca0046dfe384d743ffad5ecd5553dd2e79905d9",
-            "meta": {
-                "hf_repo": "ChanLumerico/lucid",
-                "hf_revision": "main",
-                "hf_filename": "weights/mask2former/mask2former_swin_small_ade20k.safetensors",
-                "parameter_size": 68757537,
-                "dataset": "ade20k",
-                "family": "Mask2Former",
-                "enum_name": "Mask2Former_Swin_Small_Weights",
-                "config": {
-                    "num_labels": 150,
-                    "feature_size": 256,
-                    "mask_feature_size": 256,
-                    "hidden_dim": 256,
-                    "backbone_config": {
-                        "depths": [
-                            2,
-                            2,
-                            18,
-                            2
-                        ],
-                        "drop_path_rate": 0.3,
-                        "embed_dim": 96,
-                        "image_size": 224,
-                        "model_type": "swin",
-                        "num_channels": 3,
-                        "num_heads": [
-                            3,
-                            6,
-                            12,
-                            24
-                        ],
-                        "out_features": [
-                            "stage1",
-                            "stage2",
-                            "stage3",
-                            "stage4"
-                        ],
-                        "patch_size": 4,
-                        "window_size": 7
-                    },
-                    "num_channels": 3,
-                    "num_queries": 100,
-                    "encoder_layers": 6,
-                    "encoder_feedforward_dim": 1024,
-                    "decoder_layers": 10,
-                    "dim_feedforward": 2048,
-                    "num_attention_heads": 8,
-                    "feature_strides": [
-                        4,
-                        8,
-                        16,
-                        32
-                    ],
-                    "common_stride": 4,
-                    "enforce_input_projection": false,
-                    "activation_function": "relu",
-                    "pre_norm": false,
-                    "dropout": 0.0,
-                    "init_std": 0.02,
-                    "init_xavier_std": 1.0,
-                    "dilation": false,
-                    "class_weight": 2.0,
-                    "mask_weight": 5.0,
-                    "dice_weight": 5.0,
-                    "no_object_weight": 0.1,
-                    "train_num_points": 12544,
-                    "oversample_ratio": 3.0,
-                    "importance_sample_ratio": 0.75,
-                    "use_auxiliary_loss": true,
-                    "output_auxiliary_logits": null,
-                    "output_attentions": false,
-                    "output_hidden_states": false
-                }
-            },
-            "dataset": "ade20k"
-        },
         "DEFAULT": {
-            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_ade20k.safetensors",
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_cityscapes_panoptic.safetensors",
+            "sha256": "f3b6b818a9a55f2f01fba7e1e544a644d8755752991ebfef331ec3ab0cd1832a",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_cityscapes_panoptic.safetensors",
+                "parameter_size": 68723870,
+                "dataset": "cityscapes_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Small_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_panoptic",
+            "default": "True"
+        },
+        "ADE20K_SEMANTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_ade20k_semantic.safetensors",
             "sha256": "5db618ae4ad0ad23457db005eca0046dfe384d743ffad5ecd5553dd2e79905d9",
             "meta": {
                 "hf_repo": "ChanLumerico/lucid",
                 "hf_revision": "main",
-                "hf_filename": "weights/mask2former/mask2former_swin_small_ade20k.safetensors",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_ade20k_semantic.safetensors",
                 "parameter_size": 68757537,
-                "dataset": "ade20k",
+                "dataset": "ade20k_semantic",
                 "family": "Mask2Former",
                 "enum_name": "Mask2Former_Swin_Small_Weights",
                 "config": {
@@ -1792,99 +1793,494 @@
                     "output_hidden_states": false
                 }
             },
-            "dataset": "ade20k",
-            "default": "True"
+            "dataset": "ade20k_semantic"
+        },
+        "COCO_INSTANCE": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_coco_instance.safetensors",
+            "sha256": "c01d6a26b6ccae731072c6343ec2dafbb6ec1ab5c3e2dc1ee35d4ce767f6fc88",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_coco_instance.safetensors",
+                "parameter_size": 68739547,
+                "dataset": "coco_instance",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Small_Weights",
+                "config": {
+                    "num_labels": 80,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "coco_instance"
+        },
+        "COCO_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_coco_panoptic.safetensors",
+            "sha256": "ebc8658a66938a54812b6819979b295e2060ab78df761c9178c359c4b39eec43",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_coco_panoptic.safetensors",
+                "parameter_size": 68753168,
+                "dataset": "coco_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Small_Weights",
+                "config": {
+                    "num_labels": 133,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "coco_panoptic"
+        },
+        "CITYSCAPES_SEMANTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_cityscapes_semantic.safetensors",
+            "sha256": "d88ec5ba7c59d228f5a8f62b456f12584dc58d1f1faf09839c53f0d6cd22c7b1",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_cityscapes_semantic.safetensors",
+                "parameter_size": 68723870,
+                "dataset": "cityscapes_semantic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Small_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_semantic"
+        },
+        "CITYSCAPES_INSTANCE": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_cityscapes_instance.safetensors",
+            "sha256": "ba05b86262664dee81269788e5db645e7cbc9afeed2da214bb28d67c6cfaebff",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_cityscapes_instance.safetensors",
+                "parameter_size": 68721043,
+                "dataset": "cityscapes_instance",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Small_Weights",
+                "config": {
+                    "num_labels": 8,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_instance"
+        },
+        "CITYSCAPES_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_small_cityscapes_panoptic.safetensors",
+            "sha256": "f3b6b818a9a55f2f01fba7e1e544a644d8755752991ebfef331ec3ab0cd1832a",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_small_cityscapes_panoptic.safetensors",
+                "parameter_size": 68723870,
+                "dataset": "cityscapes_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Small_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_panoptic"
         }
     },
     "mask2former_swin_tiny": {
-        "ADE20K": {
-            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_ade20k.safetensors",
-            "sha256": "ad394aacda66a6ab21623ab9fe39aec36d7fe7bd35e7fe2abb1f90cf38c9df66",
-            "meta": {
-                "hf_repo": "ChanLumerico/lucid",
-                "hf_revision": "main",
-                "hf_filename": "weights/mask2former/mask2former_swin_tiny_ade20k.safetensors",
-                "parameter_size": 47439633,
-                "dataset": "ade20k",
-                "family": "Mask2Former",
-                "enum_name": "Mask2Former_Swin_Tiny_Weights",
-                "config": {
-                    "num_labels": 150,
-                    "feature_size": 256,
-                    "mask_feature_size": 256,
-                    "hidden_dim": 256,
-                    "backbone_config": {
-                        "depths": [
-                            2,
-                            2,
-                            6,
-                            2
-                        ],
-                        "drop_path_rate": 0.3,
-                        "embed_dim": 96,
-                        "image_size": 224,
-                        "model_type": "swin",
-                        "num_channels": 3,
-                        "num_heads": [
-                            3,
-                            6,
-                            12,
-                            24
-                        ],
-                        "out_features": [
-                            "stage1",
-                            "stage2",
-                            "stage3",
-                            "stage4"
-                        ],
-                        "patch_size": 4,
-                        "window_size": 7
-                    },
-                    "num_channels": 3,
-                    "num_queries": 100,
-                    "encoder_layers": 6,
-                    "encoder_feedforward_dim": 1024,
-                    "decoder_layers": 10,
-                    "dim_feedforward": 2048,
-                    "num_attention_heads": 8,
-                    "feature_strides": [
-                        4,
-                        8,
-                        16,
-                        32
-                    ],
-                    "common_stride": 4,
-                    "enforce_input_projection": false,
-                    "activation_function": "relu",
-                    "pre_norm": false,
-                    "dropout": 0.0,
-                    "init_std": 0.02,
-                    "init_xavier_std": 1.0,
-                    "dilation": false,
-                    "class_weight": 2.0,
-                    "mask_weight": 5.0,
-                    "dice_weight": 5.0,
-                    "no_object_weight": 0.1,
-                    "train_num_points": 12544,
-                    "oversample_ratio": 3.0,
-                    "importance_sample_ratio": 0.75,
-                    "use_auxiliary_loss": true,
-                    "output_auxiliary_logits": null,
-                    "output_attentions": false,
-                    "output_hidden_states": false
-                }
-            },
-            "dataset": "ade20k"
-        },
         "DEFAULT": {
-            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_ade20k.safetensors",
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_cityscapes_panoptic.safetensors",
+            "sha256": "e25b6a533584f86b06c3b662c30a4e52e91d8e40eb528d3cd584ce833f7d80c5",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_cityscapes_panoptic.safetensors",
+                "parameter_size": 47405966,
+                "dataset": "cityscapes_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Tiny_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            6,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_panoptic",
+            "default": "True"
+        },
+        "ADE20K_SEMANTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_ade20k_semantic.safetensors",
             "sha256": "ad394aacda66a6ab21623ab9fe39aec36d7fe7bd35e7fe2abb1f90cf38c9df66",
             "meta": {
                 "hf_repo": "ChanLumerico/lucid",
                 "hf_revision": "main",
-                "hf_filename": "weights/mask2former/mask2former_swin_tiny_ade20k.safetensors",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_ade20k_semantic.safetensors",
                 "parameter_size": 47439633,
-                "dataset": "ade20k",
+                "dataset": "ade20k_semantic",
                 "family": "Mask2Former",
                 "enum_name": "Mask2Former_Swin_Tiny_Weights",
                 "config": {
@@ -1953,99 +2349,573 @@
                     "output_hidden_states": false
                 }
             },
-            "dataset": "ade20k",
-            "default": "True"
+            "dataset": "ade20k_semantic"
+        },
+        "COCO_INSTANCE": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_coco_instance.safetensors",
+            "sha256": "03dd157b2ed8bbe5816ecd7a11979565b51a7a26316fda24c778846919a9f90b",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_coco_instance.safetensors",
+                "parameter_size": 47421643,
+                "dataset": "coco_instance",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Tiny_Weights",
+                "config": {
+                    "num_labels": 80,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            6,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "coco_instance"
+        },
+        "COCO_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_coco_panoptic.safetensors",
+            "sha256": "4a14aa641afd796e4cb15f56514558a4f31383db0b9f20afb5f43dde6bc03f30",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_coco_panoptic.safetensors",
+                "parameter_size": 47435264,
+                "dataset": "coco_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Tiny_Weights",
+                "config": {
+                    "num_labels": 133,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            6,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "coco_panoptic"
+        },
+        "CITYSCAPES_SEMANTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_cityscapes_semantic.safetensors",
+            "sha256": "eb42ac6c24f8c8981eaac0061543c58d72b6da5ba23134962fe40846a6ec3311",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_cityscapes_semantic.safetensors",
+                "parameter_size": 47405966,
+                "dataset": "cityscapes_semantic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Tiny_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            6,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_semantic"
+        },
+        "CITYSCAPES_INSTANCE": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_cityscapes_instance.safetensors",
+            "sha256": "7a18d289b530ee266bcbc8b00860900b997739b76536d39f7fb86c145b2734f9",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_cityscapes_instance.safetensors",
+                "parameter_size": 47403139,
+                "dataset": "cityscapes_instance",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Tiny_Weights",
+                "config": {
+                    "num_labels": 8,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            6,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_instance"
+        },
+        "CITYSCAPES_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_tiny_cityscapes_panoptic.safetensors",
+            "sha256": "e25b6a533584f86b06c3b662c30a4e52e91d8e40eb528d3cd584ce833f7d80c5",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_tiny_cityscapes_panoptic.safetensors",
+                "parameter_size": 47405966,
+                "dataset": "cityscapes_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Tiny_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            6,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 96,
+                        "image_size": 224,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            3,
+                            6,
+                            12,
+                            24
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 7
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_panoptic"
         }
     },
     "mask2former_swin_large": {
-        "ADE20K": {
-            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_ade20k.safetensors",
-            "sha256": "4e9c91123e8d532ef943043f1baf8ee61393820e678c7b623ea2b8fa83f81f0c",
-            "meta": {
-                "hf_repo": "ChanLumerico/lucid",
-                "hf_revision": "main",
-                "hf_filename": "weights/mask2former/mask2former_swin_large_ade20k.safetensors",
-                "parameter_size": 215488779,
-                "dataset": "ade20k",
-                "family": "Mask2Former",
-                "enum_name": "Mask2Former_Swin_Large_Weights",
-                "config": {
-                    "num_labels": 150,
-                    "feature_size": 256,
-                    "mask_feature_size": 256,
-                    "hidden_dim": 256,
-                    "backbone_config": {
-                        "depths": [
-                            2,
-                            2,
-                            18,
-                            2
-                        ],
-                        "drop_path_rate": 0.3,
-                        "embed_dim": 192,
-                        "image_size": 384,
-                        "model_type": "swin",
-                        "num_channels": 3,
-                        "num_heads": [
-                            6,
-                            12,
-                            24,
-                            48
-                        ],
-                        "out_features": [
-                            "stage1",
-                            "stage2",
-                            "stage3",
-                            "stage4"
-                        ],
-                        "patch_size": 4,
-                        "window_size": 12
-                    },
-                    "num_channels": 3,
-                    "num_queries": 100,
-                    "encoder_layers": 6,
-                    "encoder_feedforward_dim": 1024,
-                    "decoder_layers": 10,
-                    "dim_feedforward": 2048,
-                    "num_attention_heads": 8,
-                    "feature_strides": [
-                        4,
-                        8,
-                        16,
-                        32
-                    ],
-                    "common_stride": 4,
-                    "enforce_input_projection": false,
-                    "activation_function": "relu",
-                    "pre_norm": false,
-                    "dropout": 0.0,
-                    "init_std": 0.02,
-                    "init_xavier_std": 1.0,
-                    "dilation": false,
-                    "class_weight": 2.0,
-                    "mask_weight": 5.0,
-                    "dice_weight": 5.0,
-                    "no_object_weight": 0.1,
-                    "train_num_points": 12544,
-                    "oversample_ratio": 3.0,
-                    "importance_sample_ratio": 0.75,
-                    "use_auxiliary_loss": true,
-                    "output_auxiliary_logits": null,
-                    "output_attentions": false,
-                    "output_hidden_states": false
-                }
-            },
-            "dataset": "ade20k"
-        },
         "DEFAULT": {
-            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_ade20k.safetensors",
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_cityscapes_panoptic.safetensors",
+            "sha256": "bd36f3e69128c8ef80537b5b6018281e7b9daf4fc59714bba323e9a93c243ef3",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_cityscapes_panoptic.safetensors",
+                "parameter_size": 215506312,
+                "dataset": "cityscapes_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 200,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_panoptic",
+            "default": "True"
+        },
+        "ADE20K_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_ade20k_panoptic.safetensors",
+            "sha256": "36f09789450c419a81ed7573009d326561faa1438067ab76b3b2f279acff90ad",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_ade20k_panoptic.safetensors",
+                "parameter_size": 215539979,
+                "dataset": "ade20k_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 150,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 200,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "ade20k_panoptic"
+        },
+        "ADE20K_SEMANTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_ade20k_semantic.safetensors",
             "sha256": "4e9c91123e8d532ef943043f1baf8ee61393820e678c7b623ea2b8fa83f81f0c",
             "meta": {
                 "hf_repo": "ChanLumerico/lucid",
                 "hf_revision": "main",
-                "hf_filename": "weights/mask2former/mask2former_swin_large_ade20k.safetensors",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_ade20k_semantic.safetensors",
                 "parameter_size": 215488779,
-                "dataset": "ade20k",
+                "dataset": "ade20k_semantic",
                 "family": "Mask2Former",
                 "enum_name": "Mask2Former_Swin_Large_Weights",
                 "config": {
@@ -2114,99 +2984,494 @@
                     "output_hidden_states": false
                 }
             },
-            "dataset": "ade20k",
-            "default": "True"
+            "dataset": "ade20k_semantic"
+        },
+        "COCO_INSTANCE": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_coco_instance.safetensors",
+            "sha256": "eee72248c9b0439007b944dc047861d5f6887c83e32e5c301da2cdecc5c62443",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_coco_instance.safetensors",
+                "parameter_size": 215521989,
+                "dataset": "coco_instance",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 80,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 200,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "coco_instance"
+        },
+        "COCO_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_coco_panoptic.safetensors",
+            "sha256": "c634f0dd7d057d0f5a27acf86899692ebf0437647b61f18d7c34c1bdf6a6e091",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_coco_panoptic.safetensors",
+                "parameter_size": 215535610,
+                "dataset": "coco_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 133,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 200,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "coco_panoptic"
+        },
+        "CITYSCAPES_SEMANTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_cityscapes_semantic.safetensors",
+            "sha256": "4c7ebb04ea74eaf3c58aeed926698a0ebb255d1c8b4506b1f6c31a1559b77068",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_cityscapes_semantic.safetensors",
+                "parameter_size": 215455112,
+                "dataset": "cityscapes_semantic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_semantic"
+        },
+        "CITYSCAPES_INSTANCE": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_cityscapes_instance.safetensors",
+            "sha256": "1bac2c0e323bbcbdd255a82ffed6b8dc9ee95a0594f627229401eb5eaea31d76",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_cityscapes_instance.safetensors",
+                "parameter_size": 215503485,
+                "dataset": "cityscapes_instance",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 8,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 200,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_instance"
+        },
+        "CITYSCAPES_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_large_cityscapes_panoptic.safetensors",
+            "sha256": "bd36f3e69128c8ef80537b5b6018281e7b9daf4fc59714bba323e9a93c243ef3",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_large_cityscapes_panoptic.safetensors",
+                "parameter_size": 215506312,
+                "dataset": "cityscapes_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Large_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 192,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            6,
+                            12,
+                            24,
+                            48
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 200,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_panoptic"
         }
     },
     "mask2former_swin_base": {
-        "ADE20K": {
-            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_ade20k.safetensors",
-            "sha256": "68ecabf5599fe502a2b4e2ac249ddd361a0acc952c8ca1ad7977244cf3c060c1",
-            "meta": {
-                "hf_repo": "ChanLumerico/lucid",
-                "hf_revision": "main",
-                "hf_filename": "weights/mask2former/mask2former_swin_base_ade20k.safetensors",
-                "parameter_size": 106922191,
-                "dataset": "ade20k",
-                "family": "Mask2Former",
-                "enum_name": "Mask2Former_Swin_Base_Weights",
-                "config": {
-                    "num_labels": 150,
-                    "feature_size": 256,
-                    "mask_feature_size": 256,
-                    "hidden_dim": 256,
-                    "backbone_config": {
-                        "depths": [
-                            2,
-                            2,
-                            18,
-                            2
-                        ],
-                        "drop_path_rate": 0.3,
-                        "embed_dim": 128,
-                        "image_size": 384,
-                        "model_type": "swin",
-                        "num_channels": 3,
-                        "num_heads": [
-                            4,
-                            8,
-                            16,
-                            32
-                        ],
-                        "out_features": [
-                            "stage1",
-                            "stage2",
-                            "stage3",
-                            "stage4"
-                        ],
-                        "patch_size": 4,
-                        "window_size": 12
-                    },
-                    "num_channels": 3,
-                    "num_queries": 100,
-                    "encoder_layers": 6,
-                    "encoder_feedforward_dim": 1024,
-                    "decoder_layers": 10,
-                    "dim_feedforward": 2048,
-                    "num_attention_heads": 8,
-                    "feature_strides": [
-                        4,
-                        8,
-                        16,
-                        32
-                    ],
-                    "common_stride": 4,
-                    "enforce_input_projection": false,
-                    "activation_function": "relu",
-                    "pre_norm": false,
-                    "dropout": 0.0,
-                    "init_std": 0.02,
-                    "init_xavier_std": 1.0,
-                    "dilation": false,
-                    "class_weight": 2.0,
-                    "mask_weight": 5.0,
-                    "dice_weight": 5.0,
-                    "no_object_weight": 0.1,
-                    "train_num_points": 12544,
-                    "oversample_ratio": 3.0,
-                    "importance_sample_ratio": 0.75,
-                    "use_auxiliary_loss": true,
-                    "output_auxiliary_logits": null,
-                    "output_attentions": false,
-                    "output_hidden_states": false
-                }
-            },
-            "dataset": "ade20k"
-        },
         "DEFAULT": {
-            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_ade20k.safetensors",
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_cityscapes_semantic.safetensors",
+            "sha256": "112f6bf7991110c75ed67b1a9d411261d6c272dae51d56a01ad6eb7cc1f68f7f",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_cityscapes_semantic.safetensors",
+                "parameter_size": 106888524,
+                "dataset": "cityscapes_semantic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Base_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 128,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_semantic",
+            "default": "True"
+        },
+        "ADE20K_SEMANTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_ade20k_semantic.safetensors",
             "sha256": "68ecabf5599fe502a2b4e2ac249ddd361a0acc952c8ca1ad7977244cf3c060c1",
             "meta": {
                 "hf_repo": "ChanLumerico/lucid",
                 "hf_revision": "main",
-                "hf_filename": "weights/mask2former/mask2former_swin_base_ade20k.safetensors",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_ade20k_semantic.safetensors",
                 "parameter_size": 106922191,
-                "dataset": "ade20k",
+                "dataset": "ade20k_semantic",
                 "family": "Mask2Former",
                 "enum_name": "Mask2Former_Swin_Base_Weights",
                 "config": {
@@ -2275,8 +3540,402 @@
                     "output_hidden_states": false
                 }
             },
-            "dataset": "ade20k",
-            "default": "True"
+            "dataset": "ade20k_semantic"
+        },
+        "COCO_INSTANCE": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_coco_instance.safetensors",
+            "sha256": "4990350fac416b1d733b16a38e730d114da4d3af3b82ab52c00fe31d5c2ccbab",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_coco_instance.safetensors",
+                "parameter_size": 106904201,
+                "dataset": "coco_instance",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Base_Weights",
+                "config": {
+                    "num_labels": 80,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 128,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "coco_instance"
+        },
+        "COCO_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_coco_panoptic.safetensors",
+            "sha256": "b040d415cf3614e32aac85d582275777946662e1a1464d3ba0d1754bdb062eae",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_coco_panoptic.safetensors",
+                "parameter_size": 106917822,
+                "dataset": "coco_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Base_Weights",
+                "config": {
+                    "num_labels": 133,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 128,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "coco_panoptic"
+        },
+        "CITYSCAPES_INSTANCE": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_cityscapes_instance.safetensors",
+            "sha256": "de7fcbd968305aaacd99aa00fe9818efe1933208e6dd190fd54f4442bff8d1bf",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_cityscapes_instance.safetensors",
+                "parameter_size": 106885697,
+                "dataset": "cityscapes_instance",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Base_Weights",
+                "config": {
+                    "num_labels": 8,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 128,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_instance"
+        },
+        "CITYSCAPES_PANOPTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_cityscapes_panoptic.safetensors",
+            "sha256": "95683c045d5736bad879ce0c70841cb0255d7a6cbe3b1be71abf552f910e56de",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_cityscapes_panoptic.safetensors",
+                "parameter_size": 106888524,
+                "dataset": "cityscapes_panoptic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Base_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 128,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_panoptic"
+        },
+        "CITYSCAPES_SEMANTIC": {
+            "url": "hf://ChanLumerico/lucid@main/weights/mask2former/mask2former_swin_base_cityscapes_semantic.safetensors",
+            "sha256": "112f6bf7991110c75ed67b1a9d411261d6c272dae51d56a01ad6eb7cc1f68f7f",
+            "meta": {
+                "hf_repo": "ChanLumerico/lucid",
+                "hf_revision": "main",
+                "hf_filename": "weights/mask2former/mask2former_swin_base_cityscapes_semantic.safetensors",
+                "parameter_size": 106888524,
+                "dataset": "cityscapes_semantic",
+                "family": "Mask2Former",
+                "enum_name": "Mask2Former_Swin_Base_Weights",
+                "config": {
+                    "num_labels": 19,
+                    "feature_size": 256,
+                    "mask_feature_size": 256,
+                    "hidden_dim": 256,
+                    "backbone_config": {
+                        "depths": [
+                            2,
+                            2,
+                            18,
+                            2
+                        ],
+                        "drop_path_rate": 0.3,
+                        "embed_dim": 128,
+                        "image_size": 384,
+                        "model_type": "swin",
+                        "num_channels": 3,
+                        "num_heads": [
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "out_features": [
+                            "stage1",
+                            "stage2",
+                            "stage3",
+                            "stage4"
+                        ],
+                        "patch_size": 4,
+                        "window_size": 12
+                    },
+                    "num_channels": 3,
+                    "num_queries": 100,
+                    "encoder_layers": 6,
+                    "encoder_feedforward_dim": 1024,
+                    "decoder_layers": 10,
+                    "dim_feedforward": 2048,
+                    "num_attention_heads": 8,
+                    "feature_strides": [
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "common_stride": 4,
+                    "enforce_input_projection": false,
+                    "activation_function": "relu",
+                    "pre_norm": false,
+                    "dropout": 0.0,
+                    "init_std": 0.02,
+                    "init_xavier_std": 1.0,
+                    "dilation": false,
+                    "class_weight": 2.0,
+                    "mask_weight": 5.0,
+                    "dice_weight": 5.0,
+                    "no_object_weight": 0.1,
+                    "train_num_points": 12544,
+                    "oversample_ratio": 3.0,
+                    "importance_sample_ratio": 0.75,
+                    "use_auxiliary_loss": true,
+                    "output_auxiliary_logits": null,
+                    "output_attentions": false,
+                    "output_hidden_states": false
+                }
+            },
+            "dataset": "cityscapes_semantic"
         }
     }
 }

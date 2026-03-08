@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mask2former_swin_large - Lucid 2.14.14 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="Generative Models" href="../../../generative/index.html" /><link rel="prev" title="mask2former_swin_base" href="mask2former_swin_base.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mask2former_swin_large - Lucid 2.14.15 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="Generative Models" href="../../../generative/index.html" /><link rel="prev" title="mask2former_swin_base" href="mask2former_swin_base.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/vision/imgseg/mask2former/mask2former_swin_large.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -1129,7 +1129,16 @@ Mask2Former model configured with a Swin-Large backbone.</p></li>
 </span><span data-line="3">
 </span><span data-line="4"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">mask2former_swin_large</span><span class="p">(</span>
 </span><span data-line="5">    <span class="n">num_labels</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
-</span><span data-line="6">    <span class="n">weights</span><span class="o">=</span><span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Large_Weights</span><span class="o">.</span><span class="n">ADE20K</span><span class="p">,</span>
+</span><span data-line="6">    <span class="n">weights</span><span class="o">=</span><span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Large_Weights</span><span class="o">.</span><span class="n">ADE20K_SEMANTIC</span><span class="p">,</span>
+</span><span data-line="7"><span class="p">)</span>
+</span></pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">models</span>
+</span><span data-line="2"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.weights</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">W</span>
+</span><span data-line="3">
+</span><span data-line="4"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">mask2former_swin_large</span><span class="p">(</span>
+</span><span data-line="5">    <span class="n">num_labels</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
+</span><span data-line="6">    <span class="n">weights</span><span class="o">=</span><span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Large_Weights</span><span class="o">.</span><span class="n">ADE20K_PANOPTIC</span><span class="p">,</span>
 </span><span data-line="7"><span class="p">)</span>
 </span></pre></div>
 </div>
@@ -1176,7 +1185,7 @@ Mask2Former model configured with a Swin-Large backbone.</p></li>
     </div>
   </div>
 </footer>
-      <script src="../../../../_static/documentation_options.js?v=67457545"></script>
+      <script src="../../../../_static/documentation_options.js?v=c33df15c"></script>
       <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>

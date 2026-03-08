@@ -156,7 +156,7 @@ Examples
     import lucid.models as models
     import lucid.weights as W
 
-    weight = W.Mask2Former_Swin_Small_Weights.ADE20K
+    weight = W.Mask2Former_Swin_Small_Weights.ADE20K_SEMANTIC
     config = models.Mask2FormerConfig(**weight.config)
     model = models.Mask2Former(config).from_pretrained(weight)
 
@@ -169,7 +169,7 @@ Examples
 
     model = models.mask2former_swin_tiny(
         num_labels=150,
-        weights=W.Mask2Former_Swin_Tiny_Weights.ADE20K,
+        weights=W.Mask2Former_Swin_Tiny_Weights.ADE20K_SEMANTIC,
     )
 
 **Swin-Base/Large Input Resolution**
@@ -182,8 +182,20 @@ Examples
 
     model = models.mask2former_swin_base(
         num_labels=150,
-        weights=W.Mask2Former_Swin_Base_Weights.ADE20K,
+        weights=W.Mask2Former_Swin_Base_Weights.ADE20K_SEMANTIC,
     )
     x = lucid.random.randn(1, 3, 384, 384)
     out = model(x)
     print(out["masks_queries_logits"].shape)
+
+**Task-Specific ADE20K Tags**
+
+.. code-block:: python
+
+    import lucid.weights as W
+
+    # semantic checkpoints (tiny/small/base/large)
+    sem = W.Mask2Former_Swin_Large_Weights.ADE20K_SEMANTIC
+
+    # panoptic checkpoint (currently large only)
+    pan = W.Mask2Former_Swin_Large_Weights.ADE20K_PANOPTIC

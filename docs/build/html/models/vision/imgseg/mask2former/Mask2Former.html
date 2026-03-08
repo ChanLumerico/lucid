@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Mask2Former - Lucid 2.14.14 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="Mask2FormerConfig" href="Mask2FormerConfig.html" /><link rel="prev" title="maskformer_resnet_101" href="../maskformer/maskformer_resnet_101.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Mask2Former - Lucid 2.14.15 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="Mask2FormerConfig" href="Mask2FormerConfig.html" /><link rel="prev" title="maskformer_resnet_101" href="../maskformer/maskformer_resnet_101.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/vision/imgseg/mask2former/Mask2Former.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -1233,7 +1233,7 @@ backbone can be inferred from <cite>config.backbone_config</cite>.</p></li>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">models</span>
 </span><span data-line="2"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.weights</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">W</span>
 </span><span data-line="3">
-</span><span data-line="4"><span class="n">weight</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Small_Weights</span><span class="o">.</span><span class="n">ADE20K</span>
+</span><span data-line="4"><span class="n">weight</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Small_Weights</span><span class="o">.</span><span class="n">ADE20K_SEMANTIC</span>
 </span><span data-line="5"><span class="n">config</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">Mask2FormerConfig</span><span class="p">(</span><span class="o">**</span><span class="n">weight</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
 </span><span data-line="6"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">Mask2Former</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">weight</span><span class="p">)</span>
 </span></pre></div>
@@ -1244,7 +1244,7 @@ backbone can be inferred from <cite>config.backbone_config</cite>.</p></li>
 </span><span data-line="3">
 </span><span data-line="4"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">mask2former_swin_tiny</span><span class="p">(</span>
 </span><span data-line="5">    <span class="n">num_labels</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
-</span><span data-line="6">    <span class="n">weights</span><span class="o">=</span><span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Tiny_Weights</span><span class="o">.</span><span class="n">ADE20K</span><span class="p">,</span>
+</span><span data-line="6">    <span class="n">weights</span><span class="o">=</span><span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Tiny_Weights</span><span class="o">.</span><span class="n">ADE20K_SEMANTIC</span><span class="p">,</span>
 </span><span data-line="7"><span class="p">)</span>
 </span></pre></div>
 </div>
@@ -1255,11 +1255,21 @@ backbone can be inferred from <cite>config.backbone_config</cite>.</p></li>
 </span><span data-line="4">
 </span><span data-line="5"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">mask2former_swin_base</span><span class="p">(</span>
 </span><span data-line="6">    <span class="n">num_labels</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
-</span><span data-line="7">    <span class="n">weights</span><span class="o">=</span><span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Base_Weights</span><span class="o">.</span><span class="n">ADE20K</span><span class="p">,</span>
+</span><span data-line="7">    <span class="n">weights</span><span class="o">=</span><span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Base_Weights</span><span class="o">.</span><span class="n">ADE20K_SEMANTIC</span><span class="p">,</span>
 </span><span data-line="8"><span class="p">)</span>
 </span><span data-line="9"><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">384</span><span class="p">,</span> <span class="mi">384</span><span class="p">)</span>
 </span><span data-line="10"><span class="n">out</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 </span><span data-line="11"><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;masks_queries_logits&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</span></pre></div>
+</div>
+<p><strong>Task-Specific ADE20K Tags</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.weights</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">W</span>
+</span><span data-line="2">
+</span><span data-line="3"><span class="c1"># semantic checkpoints (tiny/small/base/large)</span>
+</span><span data-line="4"><span class="n">sem</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Large_Weights</span><span class="o">.</span><span class="n">ADE20K_SEMANTIC</span>
+</span><span data-line="5">
+</span><span data-line="6"><span class="c1"># panoptic checkpoint (currently large only)</span>
+</span><span data-line="7"><span class="n">pan</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">Mask2Former_Swin_Large_Weights</span><span class="o">.</span><span class="n">ADE20K_PANOPTIC</span>
 </span></pre></div>
 </div>
 </section>
@@ -1305,7 +1315,7 @@ backbone can be inferred from <cite>config.backbone_config</cite>.</p></li>
     </div>
   </div>
 </footer>
-      <script src="../../../../_static/documentation_options.js?v=67457545"></script>
+      <script src="../../../../_static/documentation_options.js?v=c33df15c"></script>
       <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>

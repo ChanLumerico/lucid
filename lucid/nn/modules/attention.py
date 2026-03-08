@@ -199,7 +199,9 @@ class MultiHeadAttention(nn.Module):
         attn_output = F.scaled_dot_product_attention(
             q, k, v, attn_mask, self.dropout, is_causal=is_causal, scale=self.scale
         )
-        attn_output = attn_output.reshape(N, q_len, self.embed_dim)
+        attn_output = attn_output.transpose((0, 2, 1, 3)).reshape(
+            N, q_len, self.embed_dim
+        )
 
         output = self.out_proj(attn_output)
         return output

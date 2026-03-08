@@ -75,4 +75,6 @@ class DropPath(nn.Module):
         self.scale_by_keep = scale_by_keep
 
     def forward(self, input_: Tensor) -> Tensor:
+        if not self.training or self.drop_prob == 0.0:
+            return input_
         return F.drop_path(input_, self.drop_prob, self.scale_by_keep)

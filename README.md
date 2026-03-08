@@ -28,14 +28,13 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Implemented **MaskFormer** (Cheng et al. 2021) `models.MaskFormer` with 4-variants:
+- Implemented **Mask2Former** (Chang et al. 2022) `models.Mask2Former` with 8 variants.
+    - Variants with Swin Transformer backbone has pre-trained weights: `weights.Mask2Former_Swin_{Tiny,Small,Base,Large}_Weights`
+
+- Implemented **MaskFormer** (Cheng et al. 2021) `models.MaskFormer` with 4 variants:
     - `models.maskformer_resnet_{18, 34, 50, 101}` with 2 pre-trained weights available `weights.MaskFormer_ResNet_{50, 101}_ADE20K`
 
 - Added **Image Segmentation** model category, starting with `lucid.models.MaskRCNN`.
-
-- Implemented **RoFormer** (Su et al., 2021) `lucid.models.RoFormer` based on BERT implementation, along with various task wrappers.
-
-- Added **Rotary Positional Embedding** (RoPE; Su et al., 2021): `nn.RotaryPosEmbedding`
 
 ## 🔧 How to Install
 

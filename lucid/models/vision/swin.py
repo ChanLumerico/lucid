@@ -181,6 +181,7 @@ class _SwinTransformerBlock(nn.Module):
         self.num_heads = num_heads
         self.window_size = window_size
         self.shift_size = shift_size
+        self._configured_shift_size = shift_size
         self.mlp_ratio = mlp_ratio
 
         if min(self.input_res) <= self.window_size:
@@ -207,70 +208,121 @@ class _SwinTransformerBlock(nn.Module):
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = _MLP(dim, mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
-        if self.shift_size > 0:
-            H, W = self.input_res
-            img_mask = lucid.zeros(1, H, W, 1)
-            h_slices = (
-                slice(0, -self.window_size),
-                slice(-self.window_size, -self.shift_size),
-                slice(-self.shift_size, None),
-            )
-            w_slices = (
-                slice(0, -self.window_size),
-                slice(-self.window_size, -self.shift_size),
-                slice(-self.shift_size, None),
-            )
-
-            cnt = 0
-            for h in h_slices:
-                for w in w_slices:
-                    img_mask[:, h, w, :] = cnt
-                    cnt += 1
-
-            mask_windows = window_partition(img_mask, self.window_size)
-            mask_windows = mask_windows.reshape(-1, self.window_size * self.window_size)
-
-            attn_mask = mask_windows.unsqueeze(axis=1) - mask_windows.unsqueeze(axis=2)
-            attn_mask = attn_mask.masked_fill(attn_mask != 0, -100.0).masked_fill(
-                attn_mask == 0, 0.0
-            )
-        else:
-            attn_mask = None
+        attn_mask = self._build_attn_mask(*self.input_res)
 
         self.attn_mask: nn.Buffer
         self.register_buffer("attn_mask", attn_mask)
+
+    def _effective_shift_size(self, H: int, W: int) -> int:
+        if min(H, W) <= self.window_size:
+            return 0
+        return self._configured_shift_size
+
+    def _build_attn_mask(
+        self,
+        H: int,
+        W: int,
+        device: str | None = None,
+        *,
+        shift_size: int | None = None,
+        window_size: int | None = None,
+    ) -> Tensor | None:
+        shift_size = self.shift_size if shift_size is None else shift_size
+        window_size = self.window_size if window_size is None else window_size
+
+        if shift_size == 0:
+            return None
+
+        img_mask = lucid.zeros((1, H, W, 1), device=device or "cpu")
+        h_slices = (
+            slice(0, -window_size),
+            slice(-window_size, -shift_size),
+            slice(-shift_size, None),
+        )
+        w_slices = (
+            slice(0, -window_size),
+            slice(-window_size, -shift_size),
+            slice(-shift_size, None),
+        )
+
+        cnt = 0
+        for h in h_slices:
+            for w in w_slices:
+                img_mask[:, h, w, :] = cnt
+                cnt += 1
+
+        mask_windows = window_partition(img_mask, window_size)
+        mask_windows = mask_windows.reshape(-1, window_size * window_size)
+
+        attn_mask = mask_windows.unsqueeze(axis=1) - mask_windows.unsqueeze(axis=2)
+        attn_mask = attn_mask.masked_fill(attn_mask != 0, -100.0).masked_fill(
+            attn_mask == 0, 0.0
+        )
+        return attn_mask
 
     def forward(self, x: Tensor) -> Tensor:
         H, W = self.input_res
         B, L, C = x.shape
         assert L == H * W, "wrong input feature size."
+        window_size = self.window_size
+        shift_size = self._effective_shift_size(H, W)
 
         shortcut = x
         x = self.norm1(x)
         x = x.reshape(B, H, W, C)
 
-        if self.shift_size > 0:
-            shifted_x = lucid.roll(
-                x, shifts=(-self.shift_size, -self.shift_size), axis=(1, 2)
+        pad_b = (window_size - H % window_size) % window_size
+        pad_r = (window_size - W % window_size) % window_size
+        if pad_b > 0:
+            pad_h = lucid.zeros((B, pad_b, W, C), dtype=x.dtype, device=x.device)
+            x = lucid.concatenate([x, pad_h], axis=1)
+        if pad_r > 0:
+            pad_w = lucid.zeros(
+                (B, H + pad_b, pad_r, C), dtype=x.dtype, device=x.device
             )
-            x_windows = window_partition(shifted_x, self.window_size)
+            x = lucid.concatenate([x, pad_w], axis=2)
+        Hp, Wp = H + pad_b, W + pad_r
+
+        if shift_size > 0:
+            shifted_x = lucid.roll(x, shifts=(-shift_size, -shift_size), axis=(1, 2))
+            use_cached_mask = (
+                shift_size == self.shift_size
+                and pad_b == 0
+                and pad_r == 0
+                and self.attn_mask is not None
+                and self.attn_mask.shape[0] == (Hp // window_size) * (Wp // window_size)
+            )
+            attn_mask = (
+                self.attn_mask
+                if use_cached_mask
+                else self._build_attn_mask(
+                    Hp,
+                    Wp,
+                    device=x.device,
+                    shift_size=shift_size,
+                    window_size=window_size,
+                )
+            )
         else:
             shifted_x = x
-            x_windows = window_partition(shifted_x, self.window_size)
+            attn_mask = None
 
-        x_windows = x_windows.reshape(-1, self.window_size * self.window_size, C)
+        x_windows = window_partition(shifted_x, window_size)
 
-        attn_windows = self.attn(x_windows, mask=self.attn_mask)
-        attn_windows = attn_windows.reshape(-1, self.window_size, self.window_size, C)
+        x_windows = x_windows.reshape(-1, window_size * window_size, C)
 
-        if self.shift_size > 0:
-            shifted_x = window_reverse(attn_windows, self.window_size, H, W)
-            x = lucid.roll(
-                shifted_x, shifts=(self.shift_size, self.shift_size), axis=(1, 2)
-            )
+        attn_windows = self.attn(x_windows, mask=attn_mask)
+        attn_windows = attn_windows.reshape(-1, window_size, window_size, C)
+
+        if shift_size > 0:
+            shifted_x = window_reverse(attn_windows, window_size, Hp, Wp)
+            x = lucid.roll(shifted_x, shifts=(shift_size, shift_size), axis=(1, 2))
         else:
-            shifted_x = window_reverse(attn_windows, self.window_size, H, W)
+            shifted_x = window_reverse(attn_windows, window_size, Hp, Wp)
             x = shifted_x
+
+        if pad_b > 0 or pad_r > 0:
+            x = x[:, :H, :W, :]
 
         x = x.reshape(B, H * W, C)
         x = shortcut + self.drop_path(x)
@@ -297,9 +349,19 @@ class _PatchMerging(nn.Module):
         H, W = self.input_res
         B, L, C = x.shape
         assert L == H * W, "wrong input feature size."
-        assert H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even."
 
         x = x.reshape(B, H, W, C)
+        if H % 2 == 1:
+            x = lucid.concatenate(
+                [x, lucid.zeros((B, 1, W, C), dtype=x.dtype, device=x.device)], axis=1
+            )
+            H += 1
+        if W % 2 == 1:
+            x = lucid.concatenate(
+                [x, lucid.zeros((B, H, 1, C), dtype=x.dtype, device=x.device)], axis=2
+            )
+            W += 1
+
         x0 = x[:, 0::2, 0::2, :]
         x1 = x[:, 1::2, 0::2, :]
         x2 = x[:, 0::2, 1::2, :]
@@ -703,25 +765,57 @@ class _SwinTransformerBlock_V2(_SwinTransformerBlock):
         H, W = self.input_res
         B, L, C = x.shape
         assert L == H * W, "wrong input feature size."
+        window_size = self.window_size
+        shift_size = self._effective_shift_size(H, W)
 
         shortcut = x
         x = x.reshape(B, H, W, C)
 
-        if self.shift_size > 0:
-            shifted_x = x.roll((-self.shift_size, -self.shift_size), axis=(1, 2))
+        pad_b = (window_size - H % window_size) % window_size
+        pad_r = (window_size - W % window_size) % window_size
+        if pad_b > 0:
+            x = lucid.concatenate(
+                [x, lucid.zeros((B, pad_b, W, C), dtype=x.dtype, device=x.device)],
+                axis=1,
+            )
+        if pad_r > 0:
+            x = lucid.concatenate(
+                [
+                    x,
+                    lucid.zeros(
+                        (B, H + pad_b, pad_r, C), dtype=x.dtype, device=x.device
+                    ),
+                ],
+                axis=2,
+            )
+        Hp, Wp = H + pad_b, W + pad_r
+
+        if shift_size > 0:
+            shifted_x = x.roll((-shift_size, -shift_size), axis=(1, 2))
+            attn_mask = self._build_attn_mask(
+                Hp,
+                Wp,
+                device=x.device,
+                shift_size=shift_size,
+                window_size=window_size,
+            )
         else:
             shifted_x = x
+            attn_mask = None
 
-        x_windows = window_partition(shifted_x, self.window_size)
-        x_windows = x_windows.reshape(-1, self.window_size * self.window_size, C)
+        x_windows = window_partition(shifted_x, window_size)
+        x_windows = x_windows.reshape(-1, window_size * window_size, C)
 
-        attn_windows = self.attn(x_windows, mask=self.attn_mask)
-        shifted_x = window_reverse(attn_windows, self.window_size, H, W)
+        attn_windows = self.attn(x_windows, mask=attn_mask)
+        shifted_x = window_reverse(attn_windows, window_size, Hp, Wp)
 
-        if self.shift_size > 0:
-            x = shifted_x.roll((self.shift_size, self.shift_size), axis=(1, 2))
+        if shift_size > 0:
+            x = shifted_x.roll((shift_size, shift_size), axis=(1, 2))
         else:
             x = shifted_x
+
+        if pad_b > 0 or pad_r > 0:
+            x = x[:, :H, :W, :]
 
         x = x.reshape(B, H * W, C)
         x = shortcut + self.drop_path(self.norm1(x))

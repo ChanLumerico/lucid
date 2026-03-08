@@ -62,5 +62,15 @@ Pretrained Weights
 
     model = models.mask2former_swin_large(
         num_labels=150,
-        weights=W.Mask2Former_Swin_Large_Weights.ADE20K,
+        weights=W.Mask2Former_Swin_Large_Weights.ADE20K_SEMANTIC,
+    )
+
+.. code-block:: python
+
+    import lucid.models as models
+    import lucid.weights as W
+
+    model = models.mask2former_swin_large(
+        num_labels=150,
+        weights=W.Mask2Former_Swin_Large_Weights.ADE20K_PANOPTIC,
     )

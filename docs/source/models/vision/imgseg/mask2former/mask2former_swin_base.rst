@@ -62,5 +62,5 @@ Pretrained Weights
 
     model = models.mask2former_swin_base(
         num_labels=150,
-        weights=W.Mask2Former_Swin_Base_Weights.ADE20K,
+        weights=W.Mask2Former_Swin_Base_Weights.ADE20K_SEMANTIC,
     )

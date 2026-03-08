@@ -153,19 +153,40 @@ class Swin_Base_Weights(Enum):
     DEFAULT: WeightEntry
 
 class Mask2Former_Swin_Tiny_Weights(Enum):
-    ADE20K: WeightEntry
+    ADE20K_SEMANTIC: WeightEntry
+    COCO_INSTANCE: WeightEntry
+    COCO_PANOPTIC: WeightEntry
+    CITYSCAPES_SEMANTIC: WeightEntry
+    CITYSCAPES_INSTANCE: WeightEntry
+    CITYSCAPES_PANOPTIC: WeightEntry
     DEFAULT: WeightEntry
 
 class Mask2Former_Swin_Small_Weights(Enum):
-    ADE20K: WeightEntry
-    DEFAULT: WeightEntry
-
-class Mask2Former_Swin_Base_Weights(Enum):
-    ADE20K: WeightEntry
+    ADE20K_SEMANTIC: WeightEntry
+    COCO_INSTANCE: WeightEntry
+    COCO_PANOPTIC: WeightEntry
+    CITYSCAPES_SEMANTIC: WeightEntry
+    CITYSCAPES_INSTANCE: WeightEntry
+    CITYSCAPES_PANOPTIC: WeightEntry
     DEFAULT: WeightEntry
 
 class Mask2Former_Swin_Large_Weights(Enum):
-    ADE20K: WeightEntry
+    ADE20K_PANOPTIC: WeightEntry
+    ADE20K_SEMANTIC: WeightEntry
+    COCO_INSTANCE: WeightEntry
+    COCO_PANOPTIC: WeightEntry
+    CITYSCAPES_SEMANTIC: WeightEntry
+    CITYSCAPES_INSTANCE: WeightEntry
+    CITYSCAPES_PANOPTIC: WeightEntry
+    DEFAULT: WeightEntry
+
+class Mask2Former_Swin_Base_Weights(Enum):
+    ADE20K_SEMANTIC: WeightEntry
+    COCO_INSTANCE: WeightEntry
+    COCO_PANOPTIC: WeightEntry
+    CITYSCAPES_INSTANCE: WeightEntry
+    CITYSCAPES_PANOPTIC: WeightEntry
+    CITYSCAPES_SEMANTIC: WeightEntry
     DEFAULT: WeightEntry
 
 __all__ = [
