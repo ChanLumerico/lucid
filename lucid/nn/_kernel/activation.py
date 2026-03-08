@@ -38,10 +38,16 @@ class softmax_kernel(Operation):
     ) -> _FuncOpReturnType:
         axis = _norm_axis(self.axis, a.ndim)
         max_val = lib_.max(a.data, axis=axis, keepdims=True)
-        exp_x = lib_.exp(a.data - max_val)
-        sum_exp = lib_.sum(exp_x, axis=axis, keepdims=True)
-        y = exp_x / sum_exp
 
+        finite_max = lib_.isfinite(max_val)
+        shifted = lib_.where(finite_max, a.data - max_val, 0.0)
+        exp_x = lib_.exp(shifted)
+
+        sum_exp = lib_.sum(exp_x, axis=axis, keepdims=True)
+        valid = finite_max & (sum_exp > 0)
+        safe_sum = lib_.where(valid, sum_exp, 1.0)
+
+        y = lib_.where(valid, exp_x / safe_sum, 0.0)
         self._axis = axis
         self._y = y
 

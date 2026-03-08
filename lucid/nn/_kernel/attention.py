@@ -89,9 +89,15 @@ class scaled_dot_product_attention_kernel(Operation):
             scores = scores + self.attn_mask.data
 
         max_val = lib_.max(scores, axis=-1, keepdims=True)
-        exp_x = lib_.exp(scores - max_val)
+        finite_max = lib_.isfinite(max_val)
+        shifted = lib_.where(finite_max, scores - max_val, 0.0)
+
+        exp_x = lib_.exp(shifted)
         sum_exp = lib_.sum(exp_x, axis=-1, keepdims=True)
-        attn = exp_x / sum_exp
+
+        valid = finite_max & (sum_exp > 0)
+        safe_sum = lib_.where(valid, sum_exp, 1.0)
+        attn = lib_.where(valid, exp_x / safe_sum, 0.0)
 
         drop_factor: _TensorData | None = None
         attn_dropped = attn

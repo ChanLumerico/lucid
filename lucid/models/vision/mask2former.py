@@ -32,6 +32,9 @@ __all__ = [
 ]
 
 
+_MASK_ATTENTION_FILL_VALUE = -1e12
+
+
 @dataclass
 class Mask2FormerConfig:
     num_labels: int
@@ -1552,7 +1555,7 @@ class _Mask2FormerAttention(nn.Module):
                     attention_mask, dtype=attn_weights.dtype
                 ).masked_fill(
                     attention_mask,
-                    float("-inf"),
+                    _MASK_ATTENTION_FILL_VALUE,
                 )
             attn_weights = attn_weights + attention_mask
 
@@ -1657,7 +1660,7 @@ class _Mask2FormerMaskedAttentionDecoderLayer(nn.Module):
         if attention_mask.dtype is bool:
             attention_mask = lucid.zeros_like(attention_mask, dtype=dtype).masked_fill(
                 attention_mask,
-                float("-inf"),
+                _MASK_ATTENTION_FILL_VALUE,
             )
 
         return attention_mask

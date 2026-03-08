@@ -156,9 +156,9 @@ class MultiHeadAttention(nn.Module):
                 k = F.linear(key, w_k, b_k)
                 v = F.linear(value, w_v, b_v)
 
-        q = q.reshape(N, self.num_heads, q_len, self.head_dim)
-        k = k.reshape(N, self.num_heads, k_len, self.head_dim)
-        v = v.reshape(N, self.num_heads, v_len, self.head_dim)
+        q = q.reshape(N, q_len, self.num_heads, self.head_dim).transpose((0, 2, 1, 3))
+        k = k.reshape(N, k_len, self.num_heads, self.head_dim).transpose((0, 2, 1, 3))
+        v = v.reshape(N, v_len, self.num_heads, self.head_dim).transpose((0, 2, 1, 3))
 
         if use_cache:
             if kv_cache is None:

@@ -78,7 +78,14 @@ def drop_path(input_: Tensor, p: float = 0.0, scale_by_keep: bool = True) -> Ten
     keep_prob = 1 - p
     shape = (input_.shape[0],) + (1,) * (input_.ndim - 1)
 
-    random_tensor = lucid.random.bernoulli(keep_prob * lucid.ones(shape)).free()
+    random_tensor = (
+        lucid.random.bernoulli(
+            keep_prob * lucid.ones(shape, dtype=input_.dtype, device=input_.device),
+            device=input_.device,
+        )
+        .astype(input_.dtype)
+        .free()
+    )
     if keep_prob > 0.0 and scale_by_keep:
         random_tensor /= keep_prob
 

@@ -78,11 +78,12 @@ def bernoulli(
     else:
         probs_data = np.array(probs)
 
-    if np.any(probs_data < 0) or np.any(probs_data > 1):
+    probs_np = np.array(probs_data)
+    if np.any(probs_np < 0) or np.any(probs_np > 1):
         raise ValueError("probs must be in the range [0, 1].")
 
     return Tensor(
-        (np.random.rand(*probs_data.shape) < probs_data).astype(int),
+        (np.random.rand(*probs_np.shape) < probs_np).astype(int),
         requires_grad,
         keep_grad,
         device=device,
