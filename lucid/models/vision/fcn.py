@@ -69,7 +69,9 @@ def _set_conv2d_attr(
 
 
 def _patch_backbone_for_fcn(backbone: ResNet) -> None:
-    def _patch_stage(stage: nn.Sequential, dilation: int) -> None:
+    def _patch_stage(
+        stage: nn.Sequential, *, first_dilation: int, dilation: int
+    ) -> None:
         for idx, block in enumerate(stage):
             if not hasattr(block, "conv2") or not hasattr(block.conv2, "conv"):
                 raise TypeError(
@@ -77,7 +79,8 @@ def _patch_backbone_for_fcn(backbone: ResNet) -> None:
                 )
 
             conv2 = block.conv2.conv
-            _set_conv2d_attr(conv2, padding=dilation, dilation=dilation)
+            current_dilation = first_dilation if idx == 0 else dilation
+            _set_conv2d_attr(conv2, padding=current_dilation, dilation=current_dilation)
 
             if idx == 0:
                 _set_conv2d_attr(conv2, stride=1)
@@ -85,8 +88,8 @@ def _patch_backbone_for_fcn(backbone: ResNet) -> None:
                     downsample_conv = block.downsample[0]
                     _set_conv2d_attr(downsample_conv, stride=1)
 
-    _patch_stage(backbone.layer3, dilation=2)
-    _patch_stage(backbone.layer4, dilation=4)
+    _patch_stage(backbone.layer3, first_dilation=1, dilation=2)
+    _patch_stage(backbone.layer4, first_dilation=2, dilation=4)
 
 
 class _FCNResNetBackbone(nn.Module):

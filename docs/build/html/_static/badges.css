@@ -37,6 +37,11 @@
     border-color: #ffc55b;
 }
 
+.badge.segmentation_convnet {
+    color: #ffc55b;
+    border-color: #ffc55b;
+}
+
 .badge.transformer {
     color: #fd4ec3;
     border-color: #fd4ec3;
