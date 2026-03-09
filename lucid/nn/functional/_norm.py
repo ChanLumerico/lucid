@@ -31,34 +31,36 @@ def batch_norm(
     eps: float = 1e-5,
 ) -> Tensor:
     C = input_.shape[1]
-    if running_mean is None or running_var is None:
-        running_mean = lucid.zeros((C,), device=input_.device)
-        running_var = lucid.ones((C,), device=input_.device)
-        has_running = False
-    else:
-        has_running = True
-
-    if weight is None:
-        weight = lucid.ones((C,), device=input_.device)
-        has_weight = False
-    else:
-        has_weight = True
-
-    if bias is None:
-        bias = lucid.zeros((C,), device=input_.device)
-        has_bias = False
-    else:
-        has_bias = True
+    running_mean_ = (
+        running_mean
+        if running_mean is not None
+        else lucid.zeros((C,), device=input_.device, dtype=input_.dtype)
+    )
+    running_var_ = (
+        running_var
+        if running_var is not None
+        else lucid.ones((C,), device=input_.device, dtype=input_.dtype)
+    )
+    weight_ = (
+        weight
+        if weight is not None
+        else lucid.ones((C,), device=input_.device, dtype=input_.dtype)
+    )
+    bias_ = (
+        bias
+        if bias is not None
+        else lucid.zeros((C,), device=input_.device, dtype=input_.dtype)
+    )
 
     op = batch_norm_kernel(
         eps=eps,
         momentum=momentum,
         training=training,
-        has_running=has_running,
-        has_weight=has_weight,
-        has_bias=has_bias,
+        has_running=running_mean is not None and running_var is not None,
+        has_weight=weight is not None,
+        has_bias=bias is not None,
     )
-    return op(input_, running_mean, running_var, weight, bias)
+    return op(input_, running_mean_, running_var_, weight_, bias_)
 
 
 def layer_norm(

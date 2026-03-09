@@ -19,6 +19,12 @@ def _broadcast_shape(ndim: int, normalized_shape: Sequence[int]) -> tuple[int, .
     return (1,) * (ndim - len(normalized_shape)) + tuple(normalized_shape)
 
 
+def _clone_array(arr):
+    if isinstance(arr, np.ndarray):
+        return arr.copy()
+    return mx.array(arr)
+
+
 class layer_norm_kernel(Operation):
     def __init__(
         self,
@@ -222,31 +228,43 @@ class batch_norm_kernel(Operation):
         if self._rstd is None or self._axes is None or self._m is None:
             raise RuntimeError("batch_norm cached data missing.")
 
-        dy = self.result.grad
-        axes = self._axes
-        m = self._m
+        dy = _clone_array(self.result.grad)
+        if dy.dtype != a.data.dtype:
+            dy = dy.astype(a.data.dtype)
+
+        C = a.shape[1]
+        spatial_rank = a.ndim - 2
+        view_shape = (1, C, *([1] * spatial_rank))
+        perm = (1, 0, *range(2, a.ndim))
 
         if self.has_weight:
-            w_broadcast = w.data.reshape(1, -1, *([1] * (a.ndim - 2)))
-            dyw = dy * w_broadcast
+            gamma = _clone_array(w.data.reshape(view_shape))
+            dy_gamma = dy * gamma
         else:
-            dyw = dy
+            dy_gamma = dy
 
         if self._use_batch_stats:
-            xhat = self._xhat
-            rstd = self._rstd
-            sum1 = lib_.sum(dyw, axis=axes, keepdims=True)
-            sum2 = lib_.sum(dyw * xhat, axis=axes, keepdims=True)
-            dx = (1.0 / m) * rstd * (m * dyw - sum1 - xhat * sum2)
-        else:
-            rstd = self._rstd
-            dx = dyw * rstd
+            xhat = _clone_array(self._xhat)
+            rstd = _clone_array(self._rstd)
+            dy_gamma_flat = dy_gamma.transpose(perm).reshape(C, -1)
+            xhat_flat = xhat.transpose(perm).reshape(C, -1)
 
-        reduce_axes = (0,) + tuple(range(2, a.ndim))
-        dweight = lib_.sum(
-            dy * (self._xhat if self._xhat is not None else 1.0), axis=reduce_axes
+            mean_dy = dy_gamma_flat.mean(axis=1).reshape(view_shape)
+            mean_dyxhat = (dy_gamma_flat * xhat_flat).mean(axis=1).reshape(view_shape)
+            dx = (dy_gamma - mean_dy - xhat * mean_dyxhat) * rstd
+        else:
+            rstd = _clone_array(self._rstd)
+            dx = dy_gamma * rstd
+
+        dy_flat = dy.transpose(perm).reshape(C, -1)
+        dweight = (
+            (dy_flat * _clone_array(self._xhat).transpose(perm).reshape(C, -1)).sum(
+                axis=1
+            )
+            if self.has_weight
+            else None
         )
-        dbias = lib_.sum(dy, axis=reduce_axes)
+        dbias = dy_flat.sum(axis=1) if self.has_bias else None
 
         return dx, None, None, dweight, dbias
 

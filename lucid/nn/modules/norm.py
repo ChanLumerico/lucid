@@ -35,10 +35,10 @@ class _NormBase(nn.Module):
         self.track_running_stats = track_running_stats
 
         if affine:
-            weight_ = lucid.ones((num_features,))
+            weight_ = lucid.ones((num_features,), dtype=lucid.Float32)
             self.weight = nn.Parameter(weight_)
 
-            bias_ = lucid.zeros((num_features,))
+            bias_ = lucid.zeros((num_features,), dtype=lucid.Float32)
             self.bias = nn.Parameter(bias_)
         else:
             self.register_parameter("weight", None)
@@ -48,16 +48,24 @@ class _NormBase(nn.Module):
             self.running_mean: nn.Buffer
             self.running_var: nn.Buffer
 
-            self.register_buffer("running_mean", lucid.zeros((num_features,)))
-            self.register_buffer("running_var", lucid.ones((num_features,)))
+            self.register_buffer(
+                "running_mean", lucid.zeros((num_features,), dtype=lucid.Float32)
+            )
+            self.register_buffer(
+                "running_var", lucid.ones((num_features,), dtype=lucid.Float32)
+            )
         else:
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
 
     def reset_running_stats(self) -> None:
         if self.track_running_stats:
-            self.running_mean.data = lucid.zeros((self.num_features,)).data
-            self.running_var.data = lucid.ones((self.num_features,)).data
+            self.running_mean.data = lucid.zeros(
+                (self.num_features,), dtype=lucid.Float32
+            ).data
+            self.running_var.data = lucid.ones(
+                (self.num_features,), dtype=lucid.Float32
+            ).data
 
     def reset_parameters(self) -> None:
         self.reset_running_stats()
