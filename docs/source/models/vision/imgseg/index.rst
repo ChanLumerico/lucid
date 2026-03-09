@@ -5,9 +5,46 @@ Image Segmentation Models
     :maxdepth: 1
     :hidden:
 
+    FCN <fcn/FCN.rst>
     Mask R-CNN <mask_rcnn/MaskRCNN.rst>
     MaskFormer <maskformer/MaskFormer.rst>
     Mask2Former <mask2former/Mask2Former.rst>
+
+FCN
+---
+|convnet-badge| |segmentation-convnet-badge|
+
+FCN adapts convolutional backbones for dense semantic segmentation by replacing
+image-level classification heads with per-pixel prediction layers. In this
+implementation, a ResNet backbone produces dense features, a lightweight head
+predicts segmentation logits, and an optional auxiliary head can be used during
+training.
+
+ Long, Jonathan, Evan Shelhamer, and Trevor Darrell. "Fully convolutional
+ networks for semantic segmentation." *Proceedings of the IEEE conference on
+ computer vision and pattern recognition* (2015): 3431-3440.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Pre-Trained
+
+    * - FCN-ResNet-50
+      - `fcn_resnet_50 <fcn/fcn_resnet_50>`_
+      - :math:`(N,3,H,W)`
+      - 35,322,218
+      - ❌
+
+    * - FCN-ResNet-101
+      - `fcn_resnet_101 <fcn/fcn_resnet_101>`_
+      - :math:`(N,3,H,W)`
+      - 54,314,346
+      - ❌
 
 Mask R-CNN
 ----------

@@ -11,6 +11,7 @@ from .efficientdet import *
 from .efficientformer import *
 from .fast_rcnn import *
 from .faster_rcnn import *
+from .fcn import *
 from .inception_next import *
 from .inception_res import *
 from .inception import *

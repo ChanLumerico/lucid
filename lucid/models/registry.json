@@ -883,6 +883,16 @@
                 "parameter_size": 215248474,
                 "submodule_count": 613
             }
+        },
+        "fcn": {
+            "fcn_resnet_50": {
+                "parameter_size": 35322218,
+                "submodule_count": 241
+            },
+            "fcn_resnet_101": {
+                "parameter_size": 54314346,
+                "submodule_count": 462
+            }
         }
     }
 }

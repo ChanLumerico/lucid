@@ -17,6 +17,10 @@ ARCH_EP = """
 
     <span class="badge two_stage_det">Two-Stage Detector</span>
 
+.. |segmentation-convnet-badge| raw:: html
+
+    <span class="badge segmentation_convnet">Segmentation ConvNet</span>
+
 .. |transformer-badge| raw:: html
 
     <span class="badge transformer">Transformer</span>
