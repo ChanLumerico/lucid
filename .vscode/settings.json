@@ -5,5 +5,5 @@
     "python.analysis.ignore": [
     "**/*.pyi"
   ],
-  "python-envs.defaultEnvManager": "ms-python.python:venv"
+  "python-envs.defaultEnvManager": "ms-python.python:system"
 }
