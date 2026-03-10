@@ -5,19 +5,20 @@ SKNet
     :maxdepth: 1
     :hidden:
 
+    SKNetConfig.rst
     sk_resnet_18.rst
     sk_resnet_34.rst
     sk_resnet_50.rst
-    
     sk_resnext_50_32x4d.rst
 
-|convnet-badge| 
+|convnet-badge|
 
 .. autoclass:: lucid.models.SKNet
 
-The `SKNet` class extends the `ResNet` architecture by incorporating Selective Kernel (SK) blocks,
-which dynamically adjust receptive fields via attention mechanisms. This enables the network to
-adaptively fuse multi-scale features, improving performance on tasks involving objects of varying scales.
+The `SKNet` class extends the `ResNet` family with Selective Kernel blocks, which
+adaptively fuse multiple receptive fields inside each residual unit. Model structure
+is defined through `SKNetConfig`, which captures the residual stage depths together
+with the Selective Kernel hyperparameters and shared ResNet stem options.
 
 .. mermaid::
     :name: SKNet
@@ -116,58 +117,37 @@ Class Signature
 
 .. code-block:: python
 
-    class lucid.nn.SKNet(
-        block: nn.Module,
-        layers: list[int],
-        num_classes: int = 1000,
-        kernel_sizes: list[int] = [3, 5],
-        base_width: int = 64,
-        cardinality: int = 1,
-    )
+    class SKNet(ResNet):
+        def __init__(self, config: SKNetConfig)
 
 Parameters
 ----------
-- **block** (*nn.Module*):
-  The building block module used for the SKNet layers. Typically an SKBlock or compatible 
-  block type.
 
-- **layers** (*list[int]*):
-  Specifies the number of blocks in each stage of the network.
-
-- **num_classes** (*int*, optional):
-  Number of output classes for the final fully connected layer. Default: 1000.
-
-- **kernel_sizes** (*list[int]*, optional):
-  Specifies the sizes of kernels to be used in the SK blocks for multi-scale processing. 
-  Default: [3, 5].
-
-- **base_width** (*int*, optional):
-  Base width of the feature maps in the SK blocks. Default: 64.
-
-- **cardinality** (*int*, optional):
-  The number of parallel convolutional groups (grouped convolutions) in the SK blocks. 
-  Default: 1.
+- **config** (*SKNetConfig*):
+  Configuration object describing the residual stage depths, Selective Kernel hyperparameters,
+  classifier size, stem settings, and any additional block keyword arguments.
 
 Attributes
 ----------
-- **kernel_sizes** (*list[int]*):
-  Stores the kernel sizes used in the SK blocks.
 
+- **config** (*SKNetConfig*):
+  The configuration used to construct the model.
+- **kernel_sizes** (*tuple[int, ...]*):
+  Kernel sizes used by each Selective Kernel branch.
 - **base_width** (*int*):
-  Stores the base width of feature maps.
-
+  Width scaling factor used by the SK blocks.
 - **cardinality** (*int*):
-  Stores the number of groups for grouped convolutions.
-
-- **layers** (*list[nn.Module]*):
-  A list of stages, each containing a sequence of SK blocks.
+  Group count used inside the Selective Kernel branches.
+- **stem**, **layer1**, **layer2**, **layer3**, **layer4**, **avgpool**, **fc**:
+  Inherited ResNet submodules assembled from the configuration.
 
 Forward Calculation
---------------------
+-------------------
+
 The forward pass of the `SKNet` model includes:
 
 1. **Stem**: Initial convolutional layers for feature extraction.
-2. **Selective Kernel Stages**: Each stage applies a series of SK blocks configured via `layers`.
+2. **Selective Kernel Stages**: Residual stages built from SK blocks.
 3. **Global Pooling**: A global average pooling layer reduces spatial dimensions.
 4. **Classifier**: A fully connected layer maps the features to class scores.
 
@@ -175,8 +155,28 @@ The forward pass of the `SKNet` model includes:
 
     \text{output} = \text{FC}(\text{GAP}(\text{SKBlocks}(\text{Stem}(\text{input}))))
 
+Examples
+--------
+
+.. code-block:: python
+
+    >>> import lucid
+    >>> import lucid.models as models
+    >>> config = models.SKNetConfig(
+    ...     block="basic",
+    ...     layers=[2, 2, 2, 2],
+    ...     kernel_sizes=[3, 7],
+    ...     num_classes=10,
+    ...     in_channels=1,
+    ...     stem_type="deep",
+    ...     stem_width=32,
+    ... )
+    >>> model = models.SKNet(config)
+    >>> output = model(lucid.zeros(1, 1, 224, 224))
+    >>> print(output.shape)
+    (1, 10)
+
 .. note::
 
-   - The `SKNet` is well-suited for tasks requiring multi-scale feature representation.
-   - Increasing the `kernel_sizes` parameter allows the model to capture features over 
-     larger receptive fields.
+   - `SKNet` adapts its effective receptive field by weighting multiple kernel branches.
+   - Factory helpers such as `sk_resnet_50` and `sk_resnext_50_32x4d` provide standard presets.
