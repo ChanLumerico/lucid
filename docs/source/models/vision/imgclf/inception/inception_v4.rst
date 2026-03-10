@@ -9,6 +9,8 @@ Overview
 The `inception_v4` function implements the Inception v4 architecture, which combines
 the improved features of Inception v3 with residual connections to enhance gradient flow and optimization.
 This model excels in image classification tasks, leveraging deeper networks and improved module designs.
+It builds an `InceptionConfig` preset internally and forwards extra keyword arguments
+to that config.
 
 **Total Parameters**: 40,586,984
 
@@ -27,7 +29,8 @@ Parameters
   The number of output classes for the final classification layer. Default is `1000`.
 
 - **kwargs** (*dict*, optional):
-  Additional arguments passed to the underlying `Inception` base class or model components.
+  Additional keyword arguments forwarded to `InceptionConfig`, such as
+  `in_channels` or `dropout_prob`.
 
 Returns
 -------
@@ -53,3 +56,13 @@ Below is an example of defining and using the Inception v4 model:
    # Forward pass
    output = model(input_tensor)
    print(output)
+
+.. code-block:: python
+
+   model = models.inception_v4(
+       num_classes=10,
+       in_channels=1,
+       dropout_prob=0.25,
+   )
+
+   print(model.config)

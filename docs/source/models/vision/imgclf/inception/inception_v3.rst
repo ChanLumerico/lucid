@@ -9,7 +9,8 @@ Overview
 The `inception_v3` function provides an implementation of the Inception v3 architecture.
 This model improves upon the original Inception design by introducing factorized convolutions,
 auxiliary classifiers, and label smoothing, among other enhancements. 
-It is well-suited for image classification tasks.
+It is well-suited for image classification tasks. It builds an `InceptionConfig`
+preset internally and forwards extra keyword arguments to that config.
 
 **Total Parameters**: 30,817,392
 
@@ -41,7 +42,8 @@ Parameters
   Default is `0.5`.
 
 - **kwargs** (*dict*, optional):
-  Additional arguments passed to the underlying `Inception` base class or model components.
+  Additional keyword arguments forwarded to `InceptionConfig`, such as
+  `in_channels`.
 
 Returns
 -------
@@ -67,3 +69,14 @@ Below is an example of defining and using the Inception v3 model:
    # Forward pass
    output = model(input_tensor)
    print(output)
+
+.. code-block:: python
+
+   model = models.inception_v3(
+       num_classes=10,
+       use_aux=False,
+       dropout_prob=0.25,
+       in_channels=1,
+   )
+
+   print(model.config)
