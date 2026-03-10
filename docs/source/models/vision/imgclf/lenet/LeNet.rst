@@ -5,6 +5,7 @@ LeNet
     :maxdepth: 1
     :hidden:
 
+    LeNetConfig.rst
     lenet_1.rst
     lenet_4.rst
     lenet_5.rst
@@ -16,11 +17,11 @@ LeNet
 Overview
 --------
 
-The `LeNet` base class provides a flexible implementation for defining 
-various versions of the LeNet architecture, including LeNet-1, LeNet-4, and LeNet-5. 
+The `LeNet` base class provides a flexible implementation for defining
+various versions of the LeNet architecture, including LeNet-1, LeNet-4, and LeNet-5.
 
-It allows the configuration of convolutional and fully connected layers through arguments, 
-making it adaptable for different use cases.
+It takes a `LeNetConfig` object that centralizes the convolution, classifier,
+and activation settings for a concrete LeNet variant or a custom architecture.
 
 .. mermaid::
     :name: LeNet
@@ -81,69 +82,65 @@ Class Signature
 .. code-block:: python
 
    class LeNet(nn.Module):
-       def __init__(
-           self, 
-           conv_layers: list[dict], 
-           clf_layers: list[int], 
-           clf_in_features: int,
-        ) -> None
+       def __init__(self, config: LeNetConfig) -> None
 
 Parameters
 ----------
 
-- **conv_layers** (*list[dict]*)
-  A list of dictionaries specifying the configuration of the convolutional layers. 
-  Each dictionary should define the number of output channels (`out_channels`) and optionally other parameters such as kernel size, stride, and padding.
-
-- **clf_layers** (*list[int]*)
-  A list specifying the sizes of fully connected (classifier) layers. 
-  Each entry represents the number of units in the respective layer.
-
-- **clf_in_features** (*int*)
-  The number of input features for the first fully connected layer. 
-  This is determined by the output size of the feature extractor.
+- **config** (*LeNetConfig*)
+  A configuration object describing the two convolution stages, the classifier
+  layer sizes, the flattened input size for the first linear layer, and the
+  activation module class used between layers.
 
 Attributes
 ----------
 
-- **feature_extractor** (*nn.Sequential*)
-  A sequential model containing the convolutional and pooling layers.
+- **config** (*LeNetConfig*)
+  The configuration used to build the model.
 
-- **classifier** (*nn.Sequential*)
-  A sequential model containing the fully connected layers.
+- **conv1**, **conv2** (*nn.Sequential*)
+  Sequential blocks containing convolution, activation, and average pooling.
+
+- **fc1**, **fc2**, ...
+  Dynamically added fully connected classifier layers.
 
 Methods
 -------
 
 - **forward(x: Tensor) -> Tensor**
-  Performs the forward pass through the feature extractor and classifier.
+  Performs the forward pass through the convolution blocks, flattens the
+  features, and applies the classifier stack.
 
   .. code-block:: python
 
       def forward(self, x):
-          x = self.feature_extractor(x)
-          x = x.view(x.shape[0], -1)  # Flatten
-          x = self.classifier(x)
+          x = self.conv1(x)
+          x = self.conv2(x)
+          x = x.reshape(x.shape[0], -1)
+          ...
           return x
 
 Example Usage
 -------------
 
-Below is an example of defining and using a LeNet-based architecture:
+Below is an example of defining and using a custom LeNet architecture with
+`LeNetConfig`:
 
 .. code-block:: python
 
    import lucid.models as models
+   import lucid.nn as nn
 
-   # Define a custom LeNet architecture
-   custom_lenet = models.LeNet(
+   config = models.LeNetConfig(
        conv_layers=[
            {"out_channels": 6},
            {"out_channels": 16},
        ],
        clf_layers=[120, 84, 10],
        clf_in_features=16 * 5 * 5,
+       base_activation=nn.Tanh,
    )
+   custom_lenet = models.LeNet(config)
 
    # Sample input tensor (e.g., 32x32 grayscale image)
    input_tensor = lucid.Tensor([...])
