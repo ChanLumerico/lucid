@@ -63,9 +63,7 @@ class VGGNet(nn.Module, PreTrainedModelMixin):
         self.avgpool = nn.AdaptiveAvgPool2d(output_size=(7, 7))
         hidden_1, hidden_2 = config.classifier_hidden_features
         out_channels = next(
-            layer
-            for layer in reversed(config.conv_config)
-            if isinstance(layer, int)
+            layer for layer in reversed(config.conv_config) if isinstance(layer, int)
         )
         self.fc = nn.Sequential(
             nn.Linear(out_channels * 7 * 7, hidden_1),

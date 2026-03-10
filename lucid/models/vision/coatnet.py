@@ -54,7 +54,9 @@ class CoAtNetConfig:
             raise ValueError("img_size must contain exactly two values")
         self.img_size = tuple(self.img_size)
         if any(not isinstance(value, int) or value < 32 for value in self.img_size):
-            raise ValueError("img_size values must be integers greater than or equal to 32")
+            raise ValueError(
+                "img_size values must be integers greater than or equal to 32"
+            )
 
         if self.in_channels <= 0:
             raise ValueError("in_channels must be greater than 0")
@@ -167,7 +169,7 @@ class _MBConv(nn.Module):
         out_channels: int,
         downsample: bool = False,
         expansion: int = 4,
-        **kwargs
+        **kwargs,
     ) -> None:
         super().__init__()
         self.downsample = downsample
@@ -379,10 +381,18 @@ class CoAtNet(nn.Module):
             0, conv_3x3_bn, config.in_channels, config.channels[0], config.num_blocks[0]
         )
         self.s1 = self._make_layer(
-            1, get_block(0), config.channels[0], config.channels[1], config.num_blocks[1]
+            1,
+            get_block(0),
+            config.channels[0],
+            config.channels[1],
+            config.num_blocks[1],
         )
         self.s2 = self._make_layer(
-            2, get_block(1), config.channels[1], config.channels[2], config.num_blocks[2]
+            2,
+            get_block(1),
+            config.channels[1],
+            config.channels[2],
+            config.num_blocks[2],
         )
         self.s3 = (
             self._make_layer(
@@ -398,9 +408,7 @@ class CoAtNet(nn.Module):
         self.s4 = self._make_layer(
             4,
             get_block(3),
-            config.channels[3]
-            if not self._do_scale
-            else config.scaled_channels[1],
+            config.channels[3] if not self._do_scale else config.scaled_channels[1],
             config.channels[4],
             config.num_blocks[4],
         )

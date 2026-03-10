@@ -111,7 +111,9 @@ class EfficientNetConfig:
 
 @dataclass
 class EfficientNetV2Config:
-    block_cfg: tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]]
+    block_cfg: (
+        tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]]
+    )
     num_classes: int = 1000
     dropout: float = 0.2
     drop_path_rate: float = 0.2
@@ -126,7 +128,9 @@ class EfficientNetV2Config:
                 raise ValueError(
                     "each block spec must contain exactly 7 values: (fused, out_channels, kernel_size, stride, expansion, repeats, se_scale)"
                 )
-            fused, out_channels, kernel_size, stride, expansion, repeats, se_scale = spec
+            fused, out_channels, kernel_size, stride, expansion, repeats, se_scale = (
+                spec
+            )
             if not isinstance(fused, bool):
                 raise TypeError("block spec fused value must be a boolean")
             positive_int_values = (
@@ -144,7 +148,9 @@ class EfficientNetV2Config:
                     "block spec out_channels, kernel_size, stride, expansion, and repeats values must be positive integers"
                 )
             if not isinstance(se_scale, int) or se_scale < 0:
-                raise ValueError("block spec se_scale value must be a non-negative integer")
+                raise ValueError(
+                    "block spec se_scale value must be a non-negative integer"
+                )
             normalized_block_cfg.append(tuple(spec))
 
         self.block_cfg = tuple(normalized_block_cfg)
@@ -257,7 +263,9 @@ class EfficientNet(nn.Module):
         if config.stochastic_depth:
             self.p = config.p
             stochastic_depth_steps = sum(rep - 1 for rep in repeats)
-            self.step = 0.5 / stochastic_depth_steps if stochastic_depth_steps > 0 else 0.0
+            self.step = (
+                0.5 / stochastic_depth_steps if stochastic_depth_steps > 0 else 0.0
+            )
         else:
             self.p = 1.0
             self.step = 0.0

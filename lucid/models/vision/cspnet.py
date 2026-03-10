@@ -20,7 +20,9 @@ __all__ = [
 
 
 def _normalize_stage_specs(
-    values: tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]],
+    values: (
+        tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]]
+    ),
 ) -> tuple[tuple[int, int, bool], ...]:
     normalized = tuple(tuple(spec) for spec in values)
     if len(normalized) == 0:
@@ -42,7 +44,9 @@ def _normalize_stage_specs(
 
 @dataclass
 class CSPNetConfig:
-    stage_specs: tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]]
+    stage_specs: (
+        tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]]
+    )
     stack_type: Literal["resnet", "resnext", "darknet"]
     in_channels: int = 3
     stem_channels: int = 64
@@ -60,7 +64,9 @@ class CSPNetConfig:
     def __post_init__(self) -> None:
         self.stage_specs = _normalize_stage_specs(self.stage_specs)
         if self.stack_type not in {"resnet", "resnext", "darknet"}:
-            raise ValueError("stack_type must be one of 'resnet', 'resnext', or 'darknet'")
+            raise ValueError(
+                "stack_type must be one of 'resnet', 'resnext', or 'darknet'"
+            )
         if self.in_channels <= 0:
             raise ValueError("in_channels must be greater than 0")
         if self.stem_channels <= 0:

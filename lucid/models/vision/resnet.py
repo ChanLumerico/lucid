@@ -53,7 +53,9 @@ class ResNetConfig:
                     "or 'preact_bottleneck'"
                 )
         elif not isinstance(self.block, type) or not issubclass(self.block, nn.Module):
-            raise TypeError("block must be a ResNet block name or an nn.Module subclass")
+            raise TypeError(
+                "block must be a ResNet block name or an nn.Module subclass"
+            )
         elif not hasattr(self.block, "expansion"):
             raise ValueError("custom block types must define an 'expansion' attribute")
 
@@ -389,7 +391,9 @@ def _build_resnet_config(
 ) -> ResNetConfig:
     kwargs = {} if kwargs is None else dict(kwargs)
     if "block" in kwargs or "layers" in kwargs:
-        raise TypeError("factory variants do not allow overriding preset block or layers")
+        raise TypeError(
+            "factory variants do not allow overriding preset block or layers"
+        )
 
     override_block_args = kwargs.pop("block_args", None)
     merged_block_args = {} if block_args is None else dict(block_args)

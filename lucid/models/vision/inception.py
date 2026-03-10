@@ -7,7 +7,13 @@ import lucid.nn as nn
 from lucid import register_model
 from lucid._tensor import Tensor
 
-__all__ = ["Inception", "InceptionConfig", "inception_v1", "inception_v3", "inception_v4"]
+__all__ = [
+    "Inception",
+    "InceptionConfig",
+    "inception_v1",
+    "inception_v3",
+    "inception_v4",
+]
 
 
 @dataclass
@@ -20,9 +26,7 @@ class InceptionConfig:
 
     def __post_init__(self) -> None:
         if self.variant not in {"v1", "v3", "v4"}:
-            raise ValueError(
-                "Inception variant must be one of {'v1', 'v3', 'v4'}."
-            )
+            raise ValueError("Inception variant must be one of {'v1', 'v3', 'v4'}.")
 
         if self.num_classes <= 0:
             raise ValueError("Inception num_classes must be greater than 0.")
@@ -31,9 +35,7 @@ class InceptionConfig:
             raise ValueError("Inception in_channels must be greater than 0.")
 
         if self.dropout_prob is not None and not 0.0 <= self.dropout_prob < 1.0:
-            raise ValueError(
-                "Inception dropout_prob must be in the range [0.0, 1.0)."
-            )
+            raise ValueError("Inception dropout_prob must be in the range [0.0, 1.0).")
 
         if self.variant in {"v1", "v3"}:
             if self.use_aux is None:
@@ -47,9 +49,7 @@ class InceptionConfig:
             if self.use_aux is None:
                 self.use_aux = False
             elif self.use_aux is not False:
-                raise ValueError(
-                    "Inception v4 does not support auxiliary classifiers."
-                )
+                raise ValueError("Inception v4 does not support auxiliary classifiers.")
 
 
 class Inception(nn.Module):
@@ -693,5 +693,7 @@ def inception_v3(
 
 @register_model
 def inception_v4(num_classes: int = 1000, **kwargs) -> Inception:
-    config = InceptionConfig(variant="v4", num_classes=num_classes, use_aux=False, **kwargs)
+    config = InceptionConfig(
+        variant="v4", num_classes=num_classes, use_aux=False, **kwargs
+    )
     return Inception(config)

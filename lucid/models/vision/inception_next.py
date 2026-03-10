@@ -82,7 +82,9 @@ class InceptionNeXtConfig:
         elif isinstance(self.mlp_ratios, int) and self.mlp_ratios > 0:
             self.mlp_ratios = tuple(self.mlp_ratios for _ in range(num_stage))
         else:
-            raise ValueError("mlp_ratios must be a positive integer or sequence of positive integers")
+            raise ValueError(
+                "mlp_ratios must be a positive integer or sequence of positive integers"
+            )
 
         if self.head_fn is None:
             self.head_fn = _MLPHead

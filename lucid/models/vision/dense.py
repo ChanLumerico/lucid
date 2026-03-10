@@ -32,9 +32,7 @@ class DenseNetConfig:
 
         if len(self.block_config) != 4:
             raise ValueError("block_config must contain exactly 4 dense block depths")
-        if any(
-            not isinstance(depth, int) or depth <= 0 for depth in self.block_config
-        ):
+        if any(not isinstance(depth, int) or depth <= 0 for depth in self.block_config):
             raise ValueError("block_config values must be positive integers")
         if self.growth_rate <= 0:
             raise ValueError("growth_rate must be greater than 0")

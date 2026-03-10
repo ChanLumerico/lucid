@@ -26,19 +26,13 @@ class InceptionResNetConfig:
 
     def __post_init__(self) -> None:
         if self.variant not in {"v1", "v2"}:
-            raise ValueError(
-                "InceptionResNet variant must be one of {'v1', 'v2'}."
-            )
+            raise ValueError("InceptionResNet variant must be one of {'v1', 'v2'}.")
 
         if self.num_classes <= 0:
-            raise ValueError(
-                "InceptionResNet num_classes must be greater than 0."
-            )
+            raise ValueError("InceptionResNet num_classes must be greater than 0.")
 
         if self.in_channels <= 0:
-            raise ValueError(
-                "InceptionResNet in_channels must be greater than 0."
-            )
+            raise ValueError("InceptionResNet in_channels must be greater than 0.")
 
         if not 0.0 <= self.dropout_prob < 1.0:
             raise ValueError(

@@ -157,7 +157,9 @@ class ConvNeXt(nn.Module):
             self.downsample_layers.append(downsample)
 
         self.stages = nn.ModuleList()
-        dp_rates = [x.item() for x in lucid.linspace(0, config.drop_path, sum(config.depths))]
+        dp_rates = [
+            x.item() for x in lucid.linspace(0, config.drop_path, sum(config.depths))
+        ]
         cur = 0
         for i in range(4):
             stage = nn.Sequential(

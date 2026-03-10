@@ -92,7 +92,10 @@ class MobileNetConfig:
 
 @dataclass
 class MobileNetV2Config:
-    stage_configs: tuple[tuple[int, int, int, int, int], ...] | list[tuple[int, int, int, int, int]]
+    stage_configs: (
+        tuple[tuple[int, int, int, int, int], ...]
+        | list[tuple[int, int, int, int, int]]
+    )
     num_classes: int = 1000
     in_channels: int = 3
     stem_channels: int = 32
@@ -138,10 +141,16 @@ class MobileNetV3Config:
             raise ValueError("bottleneck_cfg must contain at least one bottleneck spec")
         for spec in self.bottleneck_cfg:
             if len(spec) != 7:
-                raise ValueError(
-                    "each bottleneck spec must contain exactly 7 values"
-                )
-            kernel_size, mid_channels, out_channels, use_se, use_hswish, stride, se_reduction = spec
+                raise ValueError("each bottleneck spec must contain exactly 7 values")
+            (
+                kernel_size,
+                mid_channels,
+                out_channels,
+                use_se,
+                use_hswish,
+                stride,
+                se_reduction,
+            ) = spec
             int_values = (kernel_size, mid_channels, out_channels, stride, se_reduction)
             if any(not isinstance(value, int) or value <= 0 for value in int_values):
                 raise ValueError(
@@ -189,7 +198,11 @@ class MobileNetV4Config:
             layer_spec = self.cfg[key]
             if not isinstance(layer_spec, dict):
                 raise TypeError(f"{key} spec must be a dictionary")
-            if "block_name" not in layer_spec or "num_blocks" not in layer_spec or "block_specs" not in layer_spec:
+            if (
+                "block_name" not in layer_spec
+                or "num_blocks" not in layer_spec
+                or "block_specs" not in layer_spec
+            ):
                 raise ValueError(
                     f"{key} spec must contain block_name, num_blocks, and block_specs"
                 )
