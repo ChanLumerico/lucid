@@ -1,4 +1,6 @@
-from typing import Dict
+from copy import deepcopy
+from dataclasses import dataclass
+from typing import Any
 
 import lucid
 import lucid.nn as nn
@@ -11,9 +13,13 @@ from lucid.models.base import PreTrainedModelMixin
 
 __all__ = [
     "MobileNet",
+    "MobileNetConfig",
     "MobileNet_V2",
+    "MobileNetV2Config",
     "MobileNet_V3",
+    "MobileNetV3Config",
     "MobileNet_V4",
+    "MobileNetV4Config",
     "mobilenet",
     "mobilenet_v2",
     "mobilenet_v3_small",
@@ -24,6 +30,182 @@ __all__ = [
     "mobilenet_v4_hybrid_medium",
     "mobilenet_v4_hybrid_large",
 ]
+
+
+_MOBILENET_V2_STAGE_CONFIGS = (
+    (32, 16, 1, 1, 1),
+    (16, 24, 6, 2, 2),
+    (24, 32, 6, 3, 2),
+    (32, 64, 6, 4, 2),
+    (64, 96, 6, 3, 1),
+    (96, 160, 6, 3, 2),
+    (160, 320, 6, 1, 1),
+)
+
+_MOBILENET_V3_SMALL_CFG = (
+    (3, 16, 16, True, False, 2, 2),
+    (3, 72, 24, False, False, 2, 4),
+    (3, 88, 24, False, False, 1, 4),
+    (5, 96, 40, True, True, 2, 4),
+    (5, 240, 40, True, True, 1, 4),
+    (5, 240, 40, True, True, 1, 4),
+    (5, 120, 48, True, True, 1, 4),
+    (5, 144, 48, True, True, 1, 4),
+    (5, 288, 96, True, True, 2, 4),
+    (5, 576, 96, True, True, 1, 4),
+    (5, 576, 96, True, True, 1, 4),
+)
+
+_MOBILENET_V3_LARGE_CFG = (
+    (3, 16, 16, False, False, 1, 4),
+    (3, 64, 24, False, False, 2, 4),
+    (3, 72, 24, False, False, 1, 4),
+    (5, 72, 40, True, False, 2, 4),
+    (5, 120, 40, True, False, 1, 4),
+    (5, 120, 40, True, False, 1, 4),
+    (3, 240, 80, False, True, 2, 4),
+    (3, 200, 80, False, True, 1, 4),
+    (3, 184, 80, False, True, 1, 4),
+    (3, 184, 80, False, True, 1, 4),
+    (3, 480, 112, True, True, 1, 4),
+    (3, 672, 112, True, True, 1, 4),
+    (5, 672, 160, True, True, 2, 4),
+    (5, 960, 160, True, True, 1, 4),
+    (5, 960, 160, True, True, 1, 4),
+)
+
+
+@dataclass
+class MobileNetConfig:
+    width_multiplier: float = 1.0
+    num_classes: int = 1000
+    in_channels: int = 3
+
+    def __post_init__(self) -> None:
+        if self.width_multiplier <= 0:
+            raise ValueError("width_multiplier must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+
+
+@dataclass
+class MobileNetV2Config:
+    stage_configs: tuple[tuple[int, int, int, int, int], ...] | list[tuple[int, int, int, int, int]]
+    num_classes: int = 1000
+    in_channels: int = 3
+    stem_channels: int = 32
+    last_channels: int = 1280
+    dropout: float = 0.2
+
+    def __post_init__(self) -> None:
+        self.stage_configs = tuple(tuple(stage) for stage in self.stage_configs)
+        if len(self.stage_configs) == 0:
+            raise ValueError("stage_configs must contain at least one stage")
+        for stage in self.stage_configs:
+            if len(stage) != 5:
+                raise ValueError(
+                    "each stage config must contain exactly 5 values: (in_channels, out_channels, expansion, repeats, stride)"
+                )
+            if any(not isinstance(value, int) or value <= 0 for value in stage):
+                raise ValueError("stage config values must be positive integers")
+
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.stem_channels <= 0:
+            raise ValueError("stem_channels must be greater than 0")
+        if self.last_channels <= 0:
+            raise ValueError("last_channels must be greater than 0")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
+
+
+@dataclass
+class MobileNetV3Config:
+    bottleneck_cfg: tuple[tuple[object, ...], ...] | list[list[object]]
+    last_channels: int
+    num_classes: int = 1000
+    in_channels: int = 3
+    stem_channels: int = 16
+    dropout: float = 0.2
+
+    def __post_init__(self) -> None:
+        self.bottleneck_cfg = tuple(tuple(spec) for spec in self.bottleneck_cfg)
+        if len(self.bottleneck_cfg) == 0:
+            raise ValueError("bottleneck_cfg must contain at least one bottleneck spec")
+        for spec in self.bottleneck_cfg:
+            if len(spec) != 7:
+                raise ValueError(
+                    "each bottleneck spec must contain exactly 7 values"
+                )
+            kernel_size, mid_channels, out_channels, use_se, use_hswish, stride, se_reduction = spec
+            int_values = (kernel_size, mid_channels, out_channels, stride, se_reduction)
+            if any(not isinstance(value, int) or value <= 0 for value in int_values):
+                raise ValueError(
+                    "bottleneck spec kernel, channel, stride, and reduction values must be positive integers"
+                )
+            if not isinstance(use_se, bool) or not isinstance(use_hswish, bool):
+                raise TypeError(
+                    "bottleneck spec use_se and use_hswish values must be booleans"
+                )
+
+        if self.last_channels <= 0:
+            raise ValueError("last_channels must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.stem_channels <= 0:
+            raise ValueError("stem_channels must be greater than 0")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
+
+
+@dataclass
+class MobileNetV4Config:
+    cfg: dict[str, dict[str, Any]]
+    num_classes: int = 1000
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.cfg, dict):
+            raise TypeError("cfg must be a dictionary")
+        self.cfg = deepcopy(self.cfg)
+
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+
+        required_keys = ("conv0", "layer1", "layer2", "layer3", "layer4", "layer5")
+        missing_keys = [key for key in required_keys if key not in self.cfg]
+        if missing_keys:
+            raise ValueError(
+                f"cfg must define conv0 and layer1-layer5 blocks; missing {missing_keys}"
+            )
+
+        valid_block_names = {"convbn", "uib", "fused_ib"}
+        for key in required_keys:
+            layer_spec = self.cfg[key]
+            if not isinstance(layer_spec, dict):
+                raise TypeError(f"{key} spec must be a dictionary")
+            if "block_name" not in layer_spec or "num_blocks" not in layer_spec or "block_specs" not in layer_spec:
+                raise ValueError(
+                    f"{key} spec must contain block_name, num_blocks, and block_specs"
+                )
+            block_name = layer_spec["block_name"]
+            num_blocks = layer_spec["num_blocks"]
+            block_specs = layer_spec["block_specs"]
+            if block_name not in valid_block_names:
+                raise ValueError(
+                    f"{key} block_name must be one of {sorted(valid_block_names)}"
+                )
+            if not isinstance(num_blocks, int) or num_blocks <= 0:
+                raise ValueError(f"{key} num_blocks must be a positive integer")
+            if not isinstance(block_specs, list) or len(block_specs) != num_blocks:
+                raise ValueError(
+                    f"{key} block_specs must be a list whose length matches num_blocks"
+                )
 
 
 class _Depthwise(nn.Module):
@@ -55,12 +237,13 @@ class _Depthwise(nn.Module):
 
 
 class MobileNet(nn.Module, PreTrainedModelMixin):
-    def __init__(self, width_multiplier: float, num_classes: int = 1000) -> None:
+    def __init__(self, config: MobileNetConfig) -> None:
         super().__init__()
-        alpha = width_multiplier
+        self.config = config
+        alpha = config.width_multiplier
 
         self.conv1 = nn.ConvBNReLU2d(
-            3, int(32 * alpha), kernel_size=3, stride=2, padding=1
+            config.in_channels, int(32 * alpha), kernel_size=3, stride=2, padding=1
         )
         self.conv2 = _Depthwise(int(32 * alpha), int(64 * alpha))
 
@@ -84,7 +267,7 @@ class MobileNet(nn.Module, PreTrainedModelMixin):
         self.conv7 = _Depthwise(int(1024 * alpha), int(1024 * alpha), stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(int(1024 * alpha), num_classes)
+        self.fc = nn.Linear(int(1024 * alpha), config.num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv1(x)
@@ -150,32 +333,51 @@ class _InvertedBottleneck(nn.Module):
 
 
 class MobileNet_V2(nn.Module, PreTrainedModelMixin):
-    def __init__(self, num_classes: int = 1000) -> None:
+    def __init__(self, config: MobileNetV2Config) -> None:
         super().__init__()
+        self.config = config
 
         self.conv_first = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(
+                config.in_channels,
+                config.stem_channels,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                bias=False,
+            ),
+            nn.BatchNorm2d(config.stem_channels),
             nn.ReLU6(),
         )
 
         self.bottlenecks = nn.Sequential(
-            self._make_stage(32, 16, t=1, n=1),
-            self._make_stage(16, 24, t=6, n=2, stride=2),
-            self._make_stage(24, 32, t=6, n=3, stride=2),
-            self._make_stage(32, 64, t=6, n=4, stride=2),
-            self._make_stage(64, 96, t=6, n=3),
-            self._make_stage(96, 160, t=6, n=3, stride=2),
-            self._make_stage(160, 320, t=6, n=1),
+            *[
+                self._make_stage(
+                    in_channels,
+                    out_channels,
+                    t=expand_ratio,
+                    n=repeats,
+                    stride=stride,
+                )
+                for in_channels, out_channels, expand_ratio, repeats, stride in config.stage_configs
+            ]
         )
 
         self.conv_last = nn.Sequential(
-            nn.Conv2d(320, 1280, kernel_size=1, bias=False),
-            nn.BatchNorm2d(1280),
+            nn.Conv2d(
+                config.stage_configs[-1][1],
+                config.last_channels,
+                kernel_size=1,
+                bias=False,
+            ),
+            nn.BatchNorm2d(config.last_channels),
             nn.ReLU6(),
         )
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(1280, num_classes))
+        self.fc = nn.Sequential(
+            nn.Dropout(p=config.dropout),
+            nn.Linear(config.last_channels, config.num_classes),
+        )
 
     def _make_stage(
         self, in_channels: int, out_channels: int, t: int, n: int, stride: int = 1
@@ -282,18 +484,24 @@ class _InvertedBottleneck_V3(nn.Module):
 
 
 class MobileNet_V3(nn.Module, PreTrainedModelMixin):
-    def __init__(
-        self, bottleneck_cfg: list, last_channels: int, num_classes: int = 1000
-    ) -> None:
+    def __init__(self, config: MobileNetV3Config) -> None:
         super().__init__()
+        self.config = config
 
         self.conv_first = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(
+                config.in_channels,
+                config.stem_channels,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                bias=False,
+            ),
+            nn.BatchNorm2d(config.stem_channels),
             nn.HardSwish(),
         )
 
-        in_channels = 16
+        in_channels = config.stem_channels
         bottleneck_layers = []
         for (
             kernel_size,
@@ -303,7 +511,7 @@ class MobileNet_V3(nn.Module, PreTrainedModelMixin):
             use_hswish,
             stride,
             se_reduction,
-        ) in bottleneck_cfg:
+        ) in config.bottleneck_cfg:
             bottleneck_layers.append(
                 _InvertedBottleneck_V3(
                     in_channels,
@@ -318,20 +526,22 @@ class MobileNet_V3(nn.Module, PreTrainedModelMixin):
             )
             in_channels = out_channels
         self.bottlenecks = nn.Sequential(*bottleneck_layers)
+        last_mid_channels = config.bottleneck_cfg[-1][1]
 
         self.conv_last = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(mid_channels),
+            nn.Conv2d(in_channels, last_mid_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(last_mid_channels),
             nn.HardSwish(),
         )
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc1 = nn.Sequential(
-            nn.Linear(mid_channels, last_channels),
+            nn.Linear(last_mid_channels, config.last_channels),
             nn.HardSwish(),
         )
         self.fc2 = nn.Sequential(
-            nn.Dropout(p=0.2), nn.Linear(last_channels, num_classes)
+            nn.Dropout(p=config.dropout),
+            nn.Linear(config.last_channels, config.num_classes),
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -725,18 +935,19 @@ def build_v4_blocks(layer_spec: dict) -> nn.Sequential:
 
 
 class MobileNet_V4(nn.Module):
-    def __init__(self, cfg: Dict[str, dict], num_classes: int = 1000) -> None:
+    def __init__(self, config: MobileNetV4Config) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.conv0 = build_v4_blocks(cfg["conv0"])
+        self.config = config
+        self.num_classes = config.num_classes
+        self.conv0 = build_v4_blocks(config.cfg["conv0"])
 
         self.layers = nn.ModuleList()
         for i in range(1, 6):
-            self.layers.append(build_v4_blocks(cfg[f"layer{i}"]))
+            self.layers.append(build_v4_blocks(config.cfg[f"layer{i}"]))
 
-        last_channels = cfg["layer5"]["block_specs"][-1][1]
+        last_channels = config.cfg["layer5"]["block_specs"][-1][1]
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(last_channels, num_classes)
+        self.fc = nn.Linear(last_channels, config.num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv0(x)
@@ -750,60 +961,115 @@ class MobileNet_V4(nn.Module):
         return x
 
 
+def _build_mobilenet_config(
+    *,
+    width_multiplier: float,
+    num_classes: int,
+    kwargs: dict[str, object] | None = None,
+) -> MobileNetConfig:
+    kwargs = {} if kwargs is None else dict(kwargs)
+    if "width_multiplier" in kwargs:
+        raise TypeError("mobilenet does not allow width_multiplier inside kwargs")
+
+    return MobileNetConfig(
+        width_multiplier=width_multiplier,
+        num_classes=num_classes,
+        **kwargs,
+    )
+
+
+def _build_mobilenet_v2_config(
+    *,
+    num_classes: int,
+    kwargs: dict[str, object] | None = None,
+) -> MobileNetV2Config:
+    kwargs = {} if kwargs is None else dict(kwargs)
+    locked_fields = {"stage_configs", "stem_channels", "last_channels"}
+    if locked_fields & kwargs.keys():
+        raise TypeError(
+            "factory variants do not allow overriding preset stage_configs, stem_channels, or last_channels"
+        )
+
+    return MobileNetV2Config(
+        stage_configs=_MOBILENET_V2_STAGE_CONFIGS,
+        num_classes=num_classes,
+        **kwargs,
+    )
+
+
+def _build_mobilenet_v3_config(
+    *,
+    bottleneck_cfg: tuple[tuple[object, ...], ...],
+    last_channels: int,
+    num_classes: int,
+    kwargs: dict[str, object] | None = None,
+) -> MobileNetV3Config:
+    kwargs = {} if kwargs is None else dict(kwargs)
+    locked_fields = {"bottleneck_cfg", "last_channels", "stem_channels"}
+    if locked_fields & kwargs.keys():
+        raise TypeError(
+            "factory variants do not allow overriding preset bottleneck_cfg, last_channels, or stem_channels"
+        )
+
+    return MobileNetV3Config(
+        bottleneck_cfg=bottleneck_cfg,
+        last_channels=last_channels,
+        num_classes=num_classes,
+        **kwargs,
+    )
+
+
+def _build_mobilenet_v4_config(
+    *,
+    cfg: dict[str, dict[str, Any]],
+    num_classes: int,
+    kwargs: dict[str, object] | None = None,
+) -> MobileNetV4Config:
+    kwargs = {} if kwargs is None else dict(kwargs)
+    if "cfg" in kwargs:
+        raise TypeError("factory variants do not allow overriding preset cfg")
+
+    return MobileNetV4Config(cfg=cfg, num_classes=num_classes, **kwargs)
+
+
 @register_model
 def mobilenet(
     width_multiplier: float = 1.0, num_classes: int = 1000, **kwargs
 ) -> MobileNet:
-    return MobileNet(width_multiplier, num_classes, **kwargs)
+    config = _build_mobilenet_config(
+        width_multiplier=width_multiplier,
+        num_classes=num_classes,
+        kwargs=kwargs,
+    )
+    return MobileNet(config)
 
 
 @register_model
 def mobilenet_v2(num_classes: int = 1000, **kwargs) -> MobileNet_V2:
-    return MobileNet_V2(num_classes, **kwargs)
+    config = _build_mobilenet_v2_config(num_classes=num_classes, kwargs=kwargs)
+    return MobileNet_V2(config)
 
 
 @register_model
 def mobilenet_v3_small(num_classes: int = 1000, **kwargs) -> MobileNet_V3:
-    cfg = [
-        [3, 16, 16, True, False, 2, 2],
-        [3, 72, 24, False, False, 2, 4],
-        [3, 88, 24, False, False, 1, 4],
-        [5, 96, 40, True, True, 2, 4],
-        [5, 240, 40, True, True, 1, 4],
-        [5, 240, 40, True, True, 1, 4],
-        [5, 120, 48, True, True, 1, 4],
-        [5, 144, 48, True, True, 1, 4],
-        [5, 288, 96, True, True, 2, 4],
-        [5, 576, 96, True, True, 1, 4],
-        [5, 576, 96, True, True, 1, 4],
-    ]
-    return MobileNet_V3(
-        bottleneck_cfg=cfg, last_channels=1024, num_classes=num_classes, **kwargs
+    config = _build_mobilenet_v3_config(
+        bottleneck_cfg=_MOBILENET_V3_SMALL_CFG,
+        last_channels=1024,
+        num_classes=num_classes,
+        kwargs=kwargs,
     )
+    return MobileNet_V3(config)
 
 
 @register_model
 def mobilenet_v3_large(num_classes: int = 1000, **kwargs) -> MobileNet_V3:
-    cfg = [
-        [3, 16, 16, False, False, 1, 4],
-        [3, 64, 24, False, False, 2, 4],
-        [3, 72, 24, False, False, 1, 4],
-        [5, 72, 40, True, False, 2, 4],
-        [5, 120, 40, True, False, 1, 4],
-        [5, 120, 40, True, False, 1, 4],
-        [3, 240, 80, False, True, 2, 4],
-        [3, 200, 80, False, True, 1, 4],
-        [3, 184, 80, False, True, 1, 4],
-        [3, 184, 80, False, True, 1, 4],
-        [3, 480, 112, True, True, 1, 4],
-        [3, 672, 112, True, True, 1, 4],
-        [5, 672, 160, True, True, 2, 4],
-        [5, 960, 160, True, True, 1, 4],
-        [5, 960, 160, True, True, 1, 4],
-    ]
-    return MobileNet_V3(
-        bottleneck_cfg=cfg, last_channels=1280, num_classes=num_classes, **kwargs
+    config = _build_mobilenet_v3_config(
+        bottleneck_cfg=_MOBILENET_V3_LARGE_CFG,
+        last_channels=1280,
+        num_classes=num_classes,
+        kwargs=kwargs,
     )
+    return MobileNet_V3(config)
 
 
 @register_model
@@ -854,7 +1120,8 @@ def mobilenet_v4_conv_small(num_classes: int = 1000, **kwargs) -> MobileNet_V4:
             "block_specs": [[128, 960, 1, 1], [960, 1280, 1, 1]],
         },
     )
-    return MobileNet_V4(cfg, num_classes, **kwargs)
+    config = _build_mobilenet_v4_config(cfg=cfg, num_classes=num_classes, kwargs=kwargs)
+    return MobileNet_V4(config)
 
 
 @register_model
@@ -912,7 +1179,8 @@ def mobilenet_v4_conv_medium(num_classes: int = 1000, **kwargs) -> MobileNet_V4:
             "block_specs": [[256, 960, 1, 1], [960, 1280, 1, 1]],
         },
     )
-    return MobileNet_V4(cfg, num_classes, **kwargs)
+    config = _build_mobilenet_v4_config(cfg=cfg, num_classes=num_classes, kwargs=kwargs)
+    return MobileNet_V4(config)
 
 
 @register_model
@@ -975,7 +1243,8 @@ def mobilenet_v4_conv_large(num_classes: int = 1000, **kwargs) -> MobileNet_V4:
             "block_specs": [[512, 960, 1, 1], [960, 1280, 1, 1]],
         },
     )
-    return MobileNet_V4(cfg, num_classes, **kwargs)
+    config = _build_mobilenet_v4_config(cfg=cfg, num_classes=num_classes, kwargs=kwargs)
+    return MobileNet_V4(config)
 
 
 def _mha_specs(num_heads: int, key_dim: int, value_dim: int, px: int) -> list[int]:
@@ -1054,7 +1323,8 @@ def mobilenet_v4_hybrid_medium(num_classes: int = 1000, **kwargs) -> MobileNet_V
             "block_specs": [[256, 960, 1, 1], [960, 1280, 1, 1]],
         },
     )
-    return MobileNet_V4(cfg, num_classes, **kwargs)
+    config = _build_mobilenet_v4_config(cfg=cfg, num_classes=num_classes, kwargs=kwargs)
+    return MobileNet_V4(config)
 
 
 @register_model
@@ -1114,4 +1384,5 @@ def mobilenet_v4_hybrid_large(num_classes: int = 1000, **kwargs) -> MobileNet_V4
             "block_specs": [[512, 960, 1, 1], [960, 1280, 1, 1]],
         },
     )
-    return MobileNet_V4(cfg, num_classes, **kwargs)
+    config = _build_mobilenet_v4_config(cfg=cfg, num_classes=num_classes, kwargs=kwargs)
+    return MobileNet_V4(config)

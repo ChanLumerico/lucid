@@ -3,12 +3,7 @@ mobilenet_v4_hybrid_large
 
 .. autofunction:: lucid.models.mobilenet_v4_hybrid_large
 
-Overview
---------
-The `mobilenet_v4_hybrid_large` function instantiates a `MobileNet_V4` model variant that leverages a 
-hybrid architecture in its large configuration. This model is designed to maximize performance and accuracy 
-for demanding classification tasks by integrating advanced convolutional strategies with supplementary architectural 
-enhancements.
+The `mobilenet_v4_hybrid_large` function constructs the MobileNet-v4 Hybrid Large model.
 
 **Total Parameters**: 37,755,152
 
@@ -22,29 +17,14 @@ Function Signature
 
 Parameters
 ----------
-- **num_classes** (*int*, optional):  
-  Specifies the number of output classes. The default value is 1000, aligning with standard benchmarks like 
-  ImageNet.
 
-- **\*\*kwargs** (*dict*):  
-  Additional keyword arguments for further customization of the model. These can override default configurations 
-  to adapt the network for specific scenarios.
+- **num_classes** (*int*, optional):
+  Number of output classes for classification. Default is `1000`.
+- **kwargs** (*dict*, optional):
+  Additional keyword arguments forwarded to `MobileNetV4Config`, excluding the preset `cfg` field.
 
-Usage Example
--------------
-.. code-block:: python
-
-    >>> import lucid.models as models
-    >>> model = models.mobilenet_v4_hybrid_large(num_classes=1000)
-    >>> print(model)
-
-Details
+Returns
 -------
-The `mobilenet_v4_hybrid_large` function delivers a high-performance MobileNet-v4 model by employing a large-scale 
-hybrid architecture that integrates cutting-edge convolutional techniques with extra architectural optimizations. 
-This design is optimal for scenarios where the highest accuracy is required and computational resources are abundant.
 
-.. note::
-
-   Due to its increased complexity and resource demands, the hybrid large variant is best suited for applications 
-   where performance is prioritized over computational efficiency.
+- **MobileNet_V4**:
+  A MobileNet-v4 Hybrid Large model instance constructed from the preset stage dictionary.

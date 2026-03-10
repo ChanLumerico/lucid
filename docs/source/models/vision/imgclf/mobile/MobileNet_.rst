@@ -5,6 +5,7 @@ MobileNet
     :maxdepth: 1
     :hidden:
 
+    MobileNetConfig.rst
     mobilenet.rst
 
 |convnet-badge| 
@@ -16,8 +17,9 @@ Overview
 
 The `MobileNet` class implements the MobileNet-v1 architecture, 
 which introduces depthwise separable convolutions to reduce computational 
-cost while maintaining accuracy. This architecture is ideal for mobile and 
-embedded vision applications.
+cost while maintaining accuracy. Model structure is defined through
+`MobileNetConfig`, which captures the width multiplier together with the
+classifier size and input channel count.
 
 .. mermaid::
     :name: MobileNet
@@ -139,19 +141,16 @@ Class Signature
 .. code-block:: python
 
     class MobileNet(nn.Module):
-        def __init__(self, width_multiplier: float, num_classes: int = 1000) -> None
+        def __init__(self, config: MobileNetConfig) -> None
 
 Parameters
 ----------
-- **width_multiplier** (*float*):
-  Adjusts the width of the network by scaling the number of channels in each layer. 
-  A higher value increases the capacity of the model, while a lower value reduces computational cost.
 
-- **num_classes** (*int*, optional):
-  Number of output classes for the classification task. Default is 1000, 
-  commonly used for ImageNet.
+- **config** (*MobileNetConfig*):
+  Configuration object describing the MobileNet-v1 width multiplier, classifier size,
+  and input channel count.
 
 .. tip::
 
-  - Adjust the `width_multiplier` and `num_classes` parameters to suit specific 
-    datasets or computational constraints.
+  - Use `mobilenet(width_multiplier=...)` for standard presets with alternative width scales.
+  - Use `MobileNetConfig` directly when you need to customize the input channel count.
