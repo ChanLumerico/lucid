@@ -13,7 +13,8 @@ for enhanced performance on complex image classification tasks.
 
 This function returns a preconfigured `InceptionResNet` model optimized for use in 
 various applications, while allowing for flexibility in the number of output classes 
-and other customizations.
+and other customizations. It builds an `InceptionResNetConfig` preset internally
+and forwards extra keyword arguments to that config.
 
 **Total Parameters**: 35,847,512
 
@@ -35,7 +36,8 @@ Parameters
   The number of output classes for the final classification layer. Default is `1000`.
 
 - **kwargs** (*dict*, optional):
-  Additional arguments passed to the underlying `InceptionResNet` base class or components.
+  Additional keyword arguments forwarded to `InceptionResNetConfig`, such as
+  `in_channels` or `dropout_prob`.
 
 Returns
 -------
@@ -61,3 +63,13 @@ Below is an example of defining and using the `inception_resnet_v2` function:
    # Forward pass
    output = model(input_tensor)
    print(output)
+
+.. code-block:: python
+
+   model = models.inception_resnet_v2(
+       num_classes=10,
+       in_channels=1,
+       dropout_prob=0.25,
+   )
+
+   print(model.config)
