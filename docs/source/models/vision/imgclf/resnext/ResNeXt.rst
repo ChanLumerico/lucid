@@ -5,6 +5,7 @@ ResNeXt
     :maxdepth: 1
     :hidden:
 
+    ResNeXtConfig.rst
     resnext_50_32x4d.rst
     resnext_101_32x4d.rst
     resnext_101_32x8d.rst
@@ -16,10 +17,10 @@ ResNeXt
 
 .. autoclass:: lucid.models.ResNeXt
 
-The `ResNeXt` class extends the `ResNet` architecture by incorporating group convolutions, 
-allowing for an increase in model capacity while maintaining computational efficiency. 
-This is achieved through the use of cardinality, a hyperparameter that specifies the number 
-of groups in convolutions.
+The `ResNeXt` class extends the `ResNet` family with grouped bottleneck convolutions,
+using cardinality and base width as the main scaling knobs. Model structure is defined
+through `ResNeXtConfig`, which captures the stage depths together with grouped-convolution
+hyperparameters and the shared ResNet stem options.
 
 .. mermaid::
     :name: ResNeXt
@@ -106,45 +107,27 @@ Class Signature
 
 .. code-block:: python
 
-    class lucid.nn.ResNeXt(
-        block: nn.Module,
-        layers: list[int],
-        cardinality: int,
-        base_width: int,
-        num_classes: int = 1000,
-    )
+    class ResNeXt(ResNet):
+        def __init__(self, config: ResNeXtConfig)
 
 Parameters
 ----------
-- **block** (*nn.Module*):
-  The building block module used for the ResNeXt layers. 
-  Typically, this is a bottleneck block.
 
-- **layers** (*list[int]*):
-  Specifies the number of blocks in each stage of the network.
-
-- **cardinality** (*int*):
-  Number of groups for grouped convolutions. Higher cardinality 
-  increases model capacity without significantly increasing computational cost.
-
-- **base_width** (*int*):
-  The base width of feature channels in each group.
-
-- **num_classes** (*int*, optional):
-  Number of output classes for the final fully connected layer. 
-  Default: 1000.
+- **config** (*ResNeXtConfig*):
+  Configuration object describing the stage depths, grouped convolution hyperparameters,
+  classifier size, stem settings, and any extra bottleneck keyword arguments.
 
 Attributes
 ----------
-- **layers** (*list[nn.Module]*):
-  A list of stages, each containing a sequence of grouped 
-  convolutional blocks.
 
+- **config** (*ResNeXtConfig*):
+  The configuration used to construct the model.
 - **cardinality** (*int*):
-  Stores the number of groups used in the grouped convolutions.
-
+  Number of groups used in grouped bottleneck convolutions.
 - **base_width** (*int*):
-  Stores the base width of the feature maps for each group.
+  Width per group used by the bottleneck blocks.
+- **stem**, **layer1**, **layer2**, **layer3**, **layer4**, **avgpool**, **fc**:
+  Inherited ResNet submodules assembled from the configuration.
 
 Forward Calculation
 -------------------
@@ -152,8 +135,7 @@ Forward Calculation
 The forward pass of the `ResNeXt` model includes:
 
 1. **Stem**: Initial convolutional layers for feature extraction.
-2. **Grouped Convolution Stages**: Each stage applies grouped convolutions based on the 
-   `cardinality` parameter.
+2. **Grouped Bottleneck Stages**: Residual stages built with grouped bottleneck blocks.
 3. **Global Pooling**: A global average pooling layer reduces spatial dimensions.
 4. **Classifier**: A fully connected layer maps the features to class scores.
 
@@ -161,9 +143,28 @@ The forward pass of the `ResNeXt` model includes:
 
     \text{output} = \text{FC}(\text{GAP}(\text{GroupedConvBlocks}(\text{Stem}(\text{input}))))
 
+Examples
+--------
+
+.. code-block:: python
+
+    >>> import lucid
+    >>> import lucid.models as models
+    >>> config = models.ResNeXtConfig(
+    ...     layers=[3, 4, 6, 3],
+    ...     cardinality=32,
+    ...     base_width=4,
+    ...     num_classes=10,
+    ...     in_channels=1,
+    ...     stem_type="deep",
+    ...     stem_width=32,
+    ... )
+    >>> model = models.ResNeXt(config)
+    >>> output = model(lucid.zeros(1, 1, 224, 224))
+    >>> print(output.shape)
+    (1, 10)
+
 .. note::
 
-   - The `ResNeXt` architecture introduces cardinality as an additional dimension 
-     to control model capacity.
-   - Increasing the cardinality improves feature learning while maintaining 
-     computational efficiency.
+   - `ResNeXt` introduces cardinality as a scaling axis for grouped bottleneck blocks.
+   - Factory helpers such as `resnext_50_32x4d` and `resnext_101_64x4d` provide standard presets.
