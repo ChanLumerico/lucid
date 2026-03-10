@@ -5,20 +5,20 @@ DenseNet
     :maxdepth: 1
     :hidden:
 
+    DenseNetConfig.rst
     densenet_121.rst
     densenet_169.rst
     densenet_201.rst
     densenet_264.rst
 
-|convnet-badge| 
+|convnet-badge|
 
 .. autoclass:: lucid.models.DenseNet
 
-The `DenseNet` class implements the Dense Convolutional Network (DenseNet),
-featuring dense connections, bottleneck layers, and transition layers.
-
-This class serves as the base for various DenseNet variants such as DenseNet-121, 
-DenseNet-169, etc.
+The `DenseNet` class implements the Dense Convolutional Network family with dense
+feature reuse across each block. Model structure is defined through `DenseNetConfig`,
+which captures the dense block depths, growth rate, initial stem width, and classifier
+settings together with optional input-channel and transition-compression overrides.
 
 .. mermaid::
     :name: DenseNet
@@ -78,59 +78,52 @@ Class Signature
 
 .. code-block:: python
 
-    class lucid.nn.DenseNet(
-        block_config: tuple[int],
-        growth_rate: int = 32,
-        num_init_features: int = 64,
-        num_classes: int = 1000,
-    )
+    class DenseNet(nn.Module):
+        def __init__(self, config: DenseNetConfig)
 
 Parameters
 ----------
-- **block_config** (*tuple[int]*): 
-  Specifies the number of layers in each dense block.
 
-- **growth_rate** (*int*, optional):
-  Number of output channels added by each dense layer. Default is 32.
+- **config** (*DenseNetConfig*):
+  Configuration object describing the dense block depths, growth rate, stem width,
+  classifier size, and optional input-channel, bottleneck, and compression settings.
 
-- **num_init_features** (*int*, optional):
-  Number of output channels from the initial convolution layer. Default is 64.
+Attributes
+----------
 
-- **num_classes** (*int*, optional):
-  Number of output classes for the final fully connected layer. Default is 1000.
+- **config** (*DenseNetConfig*):
+  The configuration used to construct the model.
+- **growth_rate** (*int*):
+  Number of new channels contributed by each dense layer.
+- **num_init_features** (*int*):
+  Output width of the initial convolution stem.
+- **bottleneck** (*int*):
+  Expansion factor used by the 1x1 bottleneck convolution inside each dense layer.
+- **compression** (*float*):
+  Transition-layer compression ratio applied between dense blocks.
+- **conv0**, **pool0**, **blocks**, **transitions**, **bn_final**, **relu**, **avgpool**, **fc**:
+  DenseNet stem, dense blocks, transition layers, normalization head, and classifier.
 
 Examples
 --------
 
-**Defining a DenseNet-121 model:**
-
 .. code-block:: python
 
-    from lucid.models import DenseNet
-
-    model = DenseNet(
-        block_config=(6, 12, 24, 16),  # DenseNet-121
-        growth_rate=32,
-        num_init_features=64,
-        num_classes=1000
-    )
-
-    input_tensor = lucid.random.randn(1, 3, 224, 224)  # Example input
-    output = model(input_tensor)
-    print(output.shape)  # Output shape: (1, 1000)
-
-**Using a custom configuration:**
-
-.. code-block:: python
-
-    model = DenseNet(
-        block_config=(4, 8, 16, 12),
-        growth_rate=24,
-        num_init_features=48,
-        num_classes=10
-    )
+    >>> import lucid
+    >>> import lucid.models as models
+    >>> config = models.DenseNetConfig(
+    ...     block_config=[6, 12, 24, 16],
+    ...     growth_rate=32,
+    ...     num_init_features=64,
+    ...     num_classes=10,
+    ...     in_channels=1,
+    ... )
+    >>> model = models.DenseNet(config)
+    >>> output = model(lucid.zeros(1, 1, 224, 224))
+    >>> print(output.shape)
+    (1, 10)
 
 .. note::
 
-  DenseNet is a memory-intensive architecture due to dense connections. 
-  Consider optimizing for memory usage in large-scale applications.
+   - Dense connectivity improves feature reuse and gradient flow across very deep stacks.
+   - Factory helpers such as `densenet_121` and `densenet_201` provide standard ImageNet presets.
