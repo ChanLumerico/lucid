@@ -1,4 +1,5 @@
-from typing import ClassVar
+from dataclasses import dataclass, field
+from typing import Any, ClassVar
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -10,6 +11,7 @@ from .resnet import ResNet, ResNetConfig
 
 __all__ = [
     "ResNeSt",
+    "ResNeStConfig",
     "resnest_14",
     "resnest_26",
     "resnest_50",
@@ -19,6 +21,51 @@ __all__ = [
     "resnest_50_4s2x40d",
     "resnest_50_1s4x24d",
 ]
+
+
+@dataclass
+class ResNeStConfig:
+    layers: tuple[int, int, int, int] | list[int]
+    base_width: int = 64
+    stem_width: int = 32
+    cardinality: int = 1
+    radix: int = 2
+    avd: bool = True
+    num_classes: int = 1000
+    in_channels: int = 3
+    avg_down: bool = False
+    channels: tuple[int, int, int, int] | list[int] = (64, 128, 256, 512)
+    block_args: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.layers = tuple(self.layers)
+        self.channels = tuple(self.channels)
+        if not isinstance(self.block_args, dict):
+            raise TypeError("block_args must be a dictionary")
+        self.block_args = dict(self.block_args)
+
+        if len(self.layers) != 4:
+            raise ValueError("layers must contain exactly 4 stage depths")
+        if any(not isinstance(depth, int) or depth <= 0 for depth in self.layers):
+            raise ValueError("layers values must be positive integers")
+        if self.base_width <= 0:
+            raise ValueError("base_width must be greater than 0")
+        if self.stem_width <= 0:
+            raise ValueError("stem_width must be greater than 0")
+        if self.cardinality <= 0:
+            raise ValueError("cardinality must be greater than 0")
+        if self.radix < 0:
+            raise ValueError("radix must be greater than or equal to 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if len(self.channels) != 4:
+            raise ValueError("channels must contain exactly 4 stage widths")
+        if any(
+            not isinstance(channel, int) or channel <= 0 for channel in self.channels
+        ):
+            raise ValueError("channels values must be positive integers")
 
 
 class _RadixSoftmax(nn.Module):
@@ -169,93 +216,196 @@ class _ResNeStBottleneck(nn.Module):
 
 
 class ResNeSt(ResNet):
-    def __init__(
-        self,
-        block,
-        layers,
-        num_classes=1000,
-        base_width: int = 64,
-        stem_width: int = 32,
-        cardinality: int = 1,
-        radix: int = 2,
-        avd: bool = True,
-    ) -> None:
-        block_args = dict(
-            base_width=base_width, cardinality=cardinality, radix=radix, avd=avd
-        )
+    def __init__(self, config: ResNeStConfig) -> None:
+        block_args = {
+            **config.block_args,
+            "base_width": config.base_width,
+            "cardinality": config.cardinality,
+            "radix": config.radix,
+            "avd": config.avd,
+        }
         super().__init__(
             ResNetConfig(
-                block=block,
-                layers=layers,
-                num_classes=num_classes,
-                stem_width=stem_width,
+                block=_ResNeStBottleneck,
+                layers=config.layers,
+                num_classes=config.num_classes,
+                in_channels=config.in_channels,
+                stem_width=config.stem_width,
                 stem_type="deep",
+                avg_down=config.avg_down,
+                channels=config.channels,
                 block_args=block_args,
             )
         )
+        self.config = config
+        self.base_width = config.base_width
+        self.stem_width = config.stem_width
+        self.cardinality = config.cardinality
+        self.radix = config.radix
+        self.avd = config.avd
+
+
+def _build_resnest_config(
+    *,
+    layers: tuple[int, int, int, int] | list[int],
+    base_width: int,
+    stem_width: int,
+    cardinality: int,
+    radix: int,
+    avd: bool,
+    num_classes: int,
+    kwargs: dict[str, Any] | None = None,
+) -> ResNeStConfig:
+    kwargs = {} if kwargs is None else dict(kwargs)
+    locked_fields = {
+        "layers",
+        "base_width",
+        "stem_width",
+        "cardinality",
+        "radix",
+        "avd",
+    }
+    if locked_fields & kwargs.keys():
+        raise TypeError(
+            "factory variants do not allow overriding preset layers, base_width, "
+            "stem_width, cardinality, radix, or avd"
+        )
+
+    return ResNeStConfig(
+        layers=layers,
+        base_width=base_width,
+        stem_width=stem_width,
+        cardinality=cardinality,
+        radix=radix,
+        avd=avd,
+        num_classes=num_classes,
+        **kwargs,
+    )
 
 
 @register_model
 def resnest_14(num_classes: int = 1000, **kwargs) -> ResNeSt:
     layers = [1, 1, 1, 1]
-    return ResNeSt(_ResNeStBottleneck, layers, num_classes, **kwargs)
+    config = _build_resnest_config(
+        layers=layers,
+        base_width=64,
+        stem_width=32,
+        cardinality=1,
+        radix=2,
+        avd=True,
+        num_classes=num_classes,
+        kwargs=kwargs,
+    )
+    return ResNeSt(config)
 
 
 @register_model
 def resnest_26(num_classes: int = 1000, **kwargs) -> ResNeSt:
     layers = [2, 2, 2, 2]
-    return ResNeSt(_ResNeStBottleneck, layers, num_classes, **kwargs)
+    config = _build_resnest_config(
+        layers=layers,
+        base_width=64,
+        stem_width=32,
+        cardinality=1,
+        radix=2,
+        avd=True,
+        num_classes=num_classes,
+        kwargs=kwargs,
+    )
+    return ResNeSt(config)
 
 
 @register_model
 def resnest_50(num_classes: int = 1000, **kwargs) -> ResNeSt:
     layers = [3, 4, 6, 3]
-    return ResNeSt(_ResNeStBottleneck, layers, num_classes, **kwargs)
+    config = _build_resnest_config(
+        layers=layers,
+        base_width=64,
+        stem_width=32,
+        cardinality=1,
+        radix=2,
+        avd=True,
+        num_classes=num_classes,
+        kwargs=kwargs,
+    )
+    return ResNeSt(config)
 
 
 @register_model
 def resnest_101(num_classes: int = 1000, **kwargs) -> ResNeSt:
     layers = [3, 4, 23, 3]
-    return ResNeSt(_ResNeStBottleneck, layers, num_classes, stem_width=64, **kwargs)
+    config = _build_resnest_config(
+        layers=layers,
+        base_width=64,
+        stem_width=64,
+        cardinality=1,
+        radix=2,
+        avd=True,
+        num_classes=num_classes,
+        kwargs=kwargs,
+    )
+    return ResNeSt(config)
 
 
 @register_model
 def resnest_200(num_classes: int = 1000, **kwargs) -> ResNeSt:
     layers = [3, 24, 36, 3]
-    return ResNeSt(_ResNeStBottleneck, layers, num_classes, stem_width=64, **kwargs)
+    config = _build_resnest_config(
+        layers=layers,
+        base_width=64,
+        stem_width=64,
+        cardinality=1,
+        radix=2,
+        avd=True,
+        num_classes=num_classes,
+        kwargs=kwargs,
+    )
+    return ResNeSt(config)
 
 
 @register_model
 def resnest_269(num_classes: int = 1000, **kwargs) -> ResNeSt:
     layers = [3, 30, 48, 8]
-    return ResNeSt(_ResNeStBottleneck, layers, num_classes, stem_width=64, **kwargs)
+    config = _build_resnest_config(
+        layers=layers,
+        base_width=64,
+        stem_width=64,
+        cardinality=1,
+        radix=2,
+        avd=True,
+        num_classes=num_classes,
+        kwargs=kwargs,
+    )
+    return ResNeSt(config)
 
 
 @register_model
 def resnest_50_4s2x40d(num_classes: int = 1000, **kwargs) -> ResNeSt:
     layers = [3, 4, 6, 3]
-    return ResNeSt(
-        _ResNeStBottleneck,
-        layers,
-        num_classes,
+    config = _build_resnest_config(
+        layers=layers,
         base_width=40,
         stem_width=32,
         cardinality=2,
         radix=4,
-        **kwargs
+        avd=True,
+        num_classes=num_classes,
+        kwargs=kwargs,
     )
+    return ResNeSt(config)
 
 
 @register_model
 def resnest_50_1s4x24d(num_classes: int = 1000, **kwargs) -> ResNeSt:
     layers = [3, 4, 6, 3]
-    return ResNeSt(
-        _ResNeStBottleneck,
-        layers,
-        num_classes,
+    config = _build_resnest_config(
+        layers=layers,
         base_width=24,
         stem_width=32,
         cardinality=4,
         radix=1,
-        **kwargs
+        avd=True,
+        num_classes=num_classes,
+        kwargs=kwargs,
     )
+    return ResNeSt(config)
