@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Any, override
 from functools import partial
 
@@ -10,6 +11,7 @@ from lucid._tensor import Tensor
 
 __all__ = [
     "CrossViT",
+    "CrossViTConfig",
     "crossvit_tiny",
     "crossvit_small",
     "crossvit_base",
@@ -24,6 +26,74 @@ __all__ = [
 
 def _to_2tuple(val: Any) -> tuple[Any, Any]:
     return (val, val)
+
+
+@dataclass
+class CrossViTConfig:
+    img_size: tuple[int, int] | list[int] = (224, 224)
+    patch_size: tuple[int, int] | list[int] = (12, 16)
+    in_channels: int = 3
+    num_classes: int = 1000
+    embed_dim: tuple[int, int] | list[int] = (192, 384)
+    depth: tuple[tuple[int, int, int], ...] | list[list[int]] = (
+        (1, 3, 1),
+        (1, 3, 1),
+        (1, 3, 1),
+    )
+    num_heads: tuple[int, int] | list[int] = (6, 12)
+    mlp_ratio: tuple[float, float, float] | list[float] = (2.0, 2.0, 4.0)
+    qkv_bias: bool = False
+    qk_scale: float | None = None
+    drop_rate: float = 0.0
+    attn_drop_rate: float = 0.0
+    drop_path_rate: float = 0.0
+    norm_layer: type[nn.Module] = nn.LayerNorm
+    multi_conv: bool = False
+
+    def __post_init__(self) -> None:
+        self.img_size = tuple(self.img_size)
+        self.patch_size = tuple(self.patch_size)
+        self.embed_dim = tuple(self.embed_dim)
+        self.depth = tuple(tuple(stage) for stage in self.depth)
+        self.num_heads = tuple(self.num_heads)
+        self.mlp_ratio = tuple(self.mlp_ratio)
+
+        if len(self.img_size) != 2 or any(size <= 0 for size in self.img_size):
+            raise ValueError("img_size must contain exactly two positive integers")
+        if len(self.patch_size) != 2 or any(size <= 0 for size in self.patch_size):
+            raise ValueError("patch_size must contain exactly two positive integers")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.num_classes < 0:
+            raise ValueError("num_classes must be greater than or equal to 0")
+        if len(self.embed_dim) != 2 or any(dim <= 0 for dim in self.embed_dim):
+            raise ValueError("embed_dim must contain exactly two positive integers")
+        if len(self.num_heads) != 2 or any(head <= 0 for head in self.num_heads):
+            raise ValueError("num_heads must contain exactly two positive integers")
+        if len(self.mlp_ratio) != 3 or any(ratio <= 0 for ratio in self.mlp_ratio):
+            raise ValueError("mlp_ratio must contain exactly three positive values")
+        if len(self.depth) == 0:
+            raise ValueError("depth must contain at least one multi-scale block spec")
+        for stage in self.depth:
+            if len(stage) != 3:
+                raise ValueError("each depth spec must contain three integers")
+            if stage[0] <= 0 or stage[1] <= 0 or stage[2] < 0:
+                raise ValueError(
+                    "each depth spec must contain two positive branch depths and a non-negative fusion depth"
+                )
+        for dim, heads in zip(self.embed_dim, self.num_heads):
+            if dim % heads != 0:
+                raise ValueError("embed_dim values must be divisible by num_heads")
+        if self.drop_rate < 0 or self.drop_rate >= 1:
+            raise ValueError("drop_rate must be in the range [0, 1)")
+        if self.attn_drop_rate < 0 or self.attn_drop_rate >= 1:
+            raise ValueError("attn_drop_rate must be in the range [0, 1)")
+        if self.drop_path_rate < 0 or self.drop_path_rate >= 1:
+            raise ValueError("drop_path_rate must be in the range [0, 1)")
+        if self.multi_conv and any(size not in {12, 16} for size in self.patch_size):
+            raise ValueError(
+                "multi_conv presets require patch_size values of 12 or 16"
+            )
 
 
 def _get_num_patches(img_size: tuple[int, int], patches: tuple[int, int]) -> list[int]:
@@ -423,32 +493,13 @@ class _MultiScaleBlock(nn.Module):
 
 
 class CrossViT(nn.Module):
-    def __init__(
-        self,
-        img_size: int | list[int] = [224, 224],
-        patch_size: list[int] = [12, 16],
-        in_channels: int = 3,
-        num_classes: int = 1000,
-        embed_dim: list[int] = [192, 384],
-        depth: list[list[int]] = [[1, 3, 1], [1, 3, 1], [1, 3, 1]],
-        num_heads: list[int] = [6, 12],
-        mlp_ratio: list[float] = [2.0, 2.0, 4.0],
-        qkv_bias: bool = False,
-        qk_scale: float | None = None,
-        drop_rate: float = 0.0,
-        attn_drop_rate: float = 0.0,
-        drop_path_rate: float = 0.0,
-        norm_layer: type[nn.Module] = nn.LayerNorm,
-        multi_conv: bool = False,
-    ) -> None:
+    def __init__(self, config: CrossViTConfig) -> None:
         super().__init__()
-        self.num_classes = num_classes
+        self.config = config
+        self.num_classes = config.num_classes
+        self.img_size = config.img_size
 
-        if not isinstance(img_size, (list, tuple)):
-            img_size = _to_2tuple(img_size)
-        self.img_size = img_size
-
-        num_patches = _get_num_patches(img_size, patch_size)
+        num_patches = _get_num_patches(config.img_size, config.patch_size)
         self.num_branches = len(num_patches)
 
         self.pos_embed = nn.ParameterList()
@@ -456,50 +507,50 @@ class CrossViT(nn.Module):
 
         for i in range(self.num_branches):
             self.pos_embed.append(
-                nn.Parameter(lucid.zeros(1, 1 + num_patches[i], embed_dim[i]))
+                nn.Parameter(lucid.zeros(1, 1 + num_patches[i], config.embed_dim[i]))
             )
-            self.cls_token.append(nn.Parameter(lucid.zeros(1, 1, embed_dim[i])))
+            self.cls_token.append(nn.Parameter(lucid.zeros(1, 1, config.embed_dim[i])))
 
         self.patch_embed = nn.ModuleList()
-        for im_s, p, d in zip(img_size, patch_size, embed_dim):
+        for im_s, p, d in zip(config.img_size, config.patch_size, config.embed_dim):
             self.patch_embed.append(
-                _PatchEmbed(im_s, p, in_channels, d, multi_conv=multi_conv)
+                _PatchEmbed(im_s, p, config.in_channels, d, multi_conv=config.multi_conv)
             )
 
-        self.pos_drop = nn.Dropout(drop_rate)
+        self.pos_drop = nn.Dropout(config.drop_rate)
 
-        total_depth = sum([sum(d[-2:]) for d in depth])
-        dpr = [x.item() for x in lucid.linspace(0, drop_path_rate, total_depth)]
+        total_depth = sum(sum(stage[-2:]) for stage in config.depth)
+        dpr = [x.item() for x in lucid.linspace(0, config.drop_path_rate, total_depth)]
         dpr_ptr = 0
 
         self.blocks = nn.ModuleList()
-        for block_cfg in depth:
+        for block_cfg in config.depth:
             cur_depth = max(block_cfg[:-1]) + block_cfg[-1]
             dpr_ = dpr[dpr_ptr : dpr_ptr + cur_depth]
 
             blk = _MultiScaleBlock(
-                dim=embed_dim,
+                dim=config.embed_dim,
                 depth=block_cfg,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop=drop_rate,
-                attn_drop=attn_drop_rate,
+                num_heads=config.num_heads,
+                mlp_ratio=config.mlp_ratio,
+                qkv_bias=config.qkv_bias,
+                qk_scale=config.qk_scale,
+                drop=config.drop_rate,
+                attn_drop=config.attn_drop_rate,
                 drop_path=dpr_,
-                norm_layer=norm_layer,
+                norm_layer=config.norm_layer,
             )
             dpr_ptr += cur_depth
             self.blocks.append(blk)
 
         self.norm = nn.ModuleList(
-            [norm_layer(embed_dim[i]) for i in range(self.num_branches)]
+            [config.norm_layer(config.embed_dim[i]) for i in range(self.num_branches)]
         )
         self.head = nn.ModuleList()
         for i in range(self.num_branches):
             self.head.append(
-                nn.Linear(embed_dim[i], num_classes)
-                if num_classes > 0
+                nn.Linear(config.embed_dim[i], config.num_classes)
+                if config.num_classes > 0
                 else nn.Identity()
             )
 
@@ -550,139 +601,237 @@ class CrossViT(nn.Module):
         return logit
 
 
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_crossvit_config(
+    *,
+    num_classes: int,
+    img_size: tuple[int, int] | list[int],
+    patch_size: tuple[int, int] | list[int],
+    embed_dim: tuple[int, int] | list[int],
+    depth: tuple[tuple[int, int, int], ...] | list[list[int]],
+    num_heads: tuple[int, int] | list[int],
+    mlp_ratio: tuple[float, float, float] | list[float],
+    qkv_bias: bool,
+    multi_conv: bool,
+    **kwargs,
+) -> CrossViTConfig:
+    params = {
+        "num_classes": num_classes,
+        "img_size": img_size,
+        "patch_size": patch_size,
+        "embed_dim": embed_dim,
+        "depth": depth,
+        "num_heads": num_heads,
+        "mlp_ratio": mlp_ratio,
+        "qkv_bias": qkv_bias,
+        "norm_layer": partial(nn.LayerNorm, eps=1e-6),
+        "multi_conv": multi_conv,
+    }
+    params.update(kwargs)
+    return CrossViTConfig(**params)
+
+
 @register_model
 def crossvit_tiny(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[96, 192],
-        depth=[[1, 4, 0] for _ in range(3)],
-        num_heads=[3, 3],
-        mlp_ratio=[4, 4, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(96, 192),
+        depth=((1, 4, 0), (1, 4, 0), (1, 4, 0)),
+        num_heads=(3, 3),
+        mlp_ratio=(4, 4, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=False,
         **kwargs,
     )
+    return CrossViT(config)
 
 
 @register_model
 def crossvit_small(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[192, 384],
-        depth=[[1, 4, 0] for _ in range(3)],
-        num_heads=[6, 6],
-        mlp_ratio=[4, 4, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(192, 384),
+        depth=((1, 4, 0), (1, 4, 0), (1, 4, 0)),
+        num_heads=(6, 6),
+        mlp_ratio=(4, 4, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=False,
         **kwargs,
     )
+    return CrossViT(config)
 
 
 @register_model
 def crossvit_base(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[384, 768],
-        depth=[[1, 4, 0] for _ in range(3)],
-        num_heads=[12, 12],
-        mlp_ratio=[4, 4, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(384, 768),
+        depth=((1, 4, 0), (1, 4, 0), (1, 4, 0)),
+        num_heads=(12, 12),
+        mlp_ratio=(4, 4, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=False,
         **kwargs,
     )
+    return CrossViT(config)
 
 
 @register_model
 def crossvit_9(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[128, 256],
-        depth=[[1, 3, 0] for _ in range(3)],
-        num_heads=[4, 4],
-        mlp_ratio=[3, 3, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(128, 256),
+        depth=((1, 3, 0), (1, 3, 0), (1, 3, 0)),
+        num_heads=(4, 4),
+        mlp_ratio=(3, 3, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=False,
         **kwargs,
     )
+    return CrossViT(config)
 
 
 @register_model
 def crossvit_15(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[192, 384],
-        depth=[[1, 5, 0] for _ in range(3)],
-        num_heads=[6, 6],
-        mlp_ratio=[3, 3, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(192, 384),
+        depth=((1, 5, 0), (1, 5, 0), (1, 5, 0)),
+        num_heads=(6, 6),
+        mlp_ratio=(3, 3, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=False,
         **kwargs,
     )
+    return CrossViT(config)
 
 
 @register_model
 def crossvit_18(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[224, 448],
-        depth=[[1, 6, 0] for _ in range(3)],
-        num_heads=[7, 7],
-        mlp_ratio=[3, 3, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(224, 448),
+        depth=((1, 6, 0), (1, 6, 0), (1, 6, 0)),
+        num_heads=(7, 7),
+        mlp_ratio=(3, 3, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        multi_conv=False,
         **kwargs,
     )
+    return CrossViT(config)
 
 
 @register_model
 def crossvit_9_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[128, 256],
-        depth=[[1, 3, 0] for _ in range(3)],
-        num_heads=[4, 4],
-        mlp_ratio=[3, 3, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(128, 256),
+        depth=((1, 3, 0), (1, 3, 0), (1, 3, 0)),
+        num_heads=(4, 4),
+        mlp_ratio=(3, 3, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
         multi_conv=True,
         **kwargs,
     )
+    return CrossViT(config)
 
 
 @register_model
 def crossvit_15_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[192, 384],
-        depth=[[1, 5, 0] for _ in range(3)],
-        num_heads=[6, 6],
-        mlp_ratio=[3, 3, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(192, 384),
+        depth=((1, 5, 0), (1, 5, 0), (1, 5, 0)),
+        num_heads=(6, 6),
+        mlp_ratio=(3, 3, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
         multi_conv=True,
         **kwargs,
     )
+    return CrossViT(config)
 
 
 @register_model
 def crossvit_18_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
-    return CrossViT(
-        img_size=[240, 224],
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
+    )
+    config = _build_crossvit_config(
         num_classes=num_classes,
-        embed_dim=[224, 448],
-        depth=[[1, 6, 0] for _ in range(3)],
-        num_heads=[7, 7],
-        mlp_ratio=[3, 3, 1],
+        img_size=(240, 224),
+        patch_size=(12, 16),
+        embed_dim=(224, 448),
+        depth=((1, 6, 0), (1, 6, 0), (1, 6, 0)),
+        num_heads=(7, 7),
+        mlp_ratio=(3, 3, 1),
         qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
         multi_conv=True,
         **kwargs,
     )
+    return CrossViT(config)
