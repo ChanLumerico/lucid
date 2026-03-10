@@ -1,4 +1,5 @@
 import math
+from dataclasses import dataclass
 from functools import partial
 from typing import Callable, ClassVar, Literal, NamedTuple
 
@@ -9,7 +10,81 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 
-__all__ = ["CSPNet", "csp_resnet_50", "csp_resnext_50_32x4d", "csp_darknet_53"]
+__all__ = [
+    "CSPNet",
+    "CSPNetConfig",
+    "csp_resnet_50",
+    "csp_resnext_50_32x4d",
+    "csp_darknet_53",
+]
+
+
+def _normalize_stage_specs(
+    values: tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]],
+) -> tuple[tuple[int, int, bool], ...]:
+    normalized = tuple(tuple(spec) for spec in values)
+    if len(normalized) == 0:
+        raise ValueError("stage_specs must contain at least one stage spec")
+    for spec in normalized:
+        if len(spec) != 3:
+            raise ValueError(
+                "each stage spec must contain exactly 3 values: (stage_width, num_layers, downsample)"
+            )
+        stage_width, num_layers, downsample = spec
+        if not isinstance(stage_width, int) or stage_width <= 0:
+            raise ValueError("stage_width values must be positive integers")
+        if not isinstance(num_layers, int) or num_layers <= 0:
+            raise ValueError("num_layers values must be positive integers")
+        if not isinstance(downsample, bool):
+            raise TypeError("downsample values must be booleans")
+    return normalized  # type: ignore[return-value]
+
+
+@dataclass
+class CSPNetConfig:
+    stage_specs: tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]]
+    stack_type: Literal["resnet", "resnext", "darknet"]
+    in_channels: int = 3
+    stem_channels: int = 64
+    num_classes: int = 1000
+    norm: Callable[..., nn.Module] = nn.BatchNorm2d
+    act: Callable[..., nn.Module] = nn.ReLU
+    split_ratio: float = 0.5
+    global_pool: Literal["avg", "max"] = "avg"
+    dropout: float = 0.0
+    feature_channels: int | None = None
+    pre_kernel_size: int = 1
+    groups: int = 1
+    base_width: int = 64
+
+    def __post_init__(self) -> None:
+        self.stage_specs = _normalize_stage_specs(self.stage_specs)
+        if self.stack_type not in {"resnet", "resnext", "darknet"}:
+            raise ValueError("stack_type must be one of 'resnet', 'resnext', or 'darknet'")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.stem_channels <= 0:
+            raise ValueError("stem_channels must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if not callable(self.norm):
+            raise TypeError("norm must be callable")
+        if not callable(self.act):
+            raise TypeError("act must be callable")
+        if self.split_ratio <= 0 or self.split_ratio >= 1:
+            raise ValueError("split_ratio must be in the range (0, 1)")
+        if self.global_pool not in {"avg", "max"}:
+            raise ValueError("global_pool must be either 'avg' or 'max'")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
+        if self.feature_channels is not None and self.feature_channels <= 0:
+            raise ValueError("feature_channels must be greater than 0 when provided")
+        if self.pre_kernel_size <= 0:
+            raise ValueError("pre_kernel_size must be greater than 0")
+        if self.groups <= 0:
+            raise ValueError("groups must be greater than 0")
+        if self.base_width <= 0:
+            raise ValueError("base_width must be greater than 0")
 
 
 class _ConvBNAct(nn.Module):
@@ -266,66 +341,87 @@ class _CSPStage(nn.Module):
 
 
 class CSPNet(nn.Module):
-    def __init__(
-        self,
-        in_channels: int = 3,
-        stem_channels: int = 64,
-        stage_defs: list[tuple[int, int, Callable, bool]] | None = None,
-        num_classes: int = 1000,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        act: type[nn.Module] = nn.ReLU,
-        split_ratio: float = 0.5,
-        global_pool: Literal["avg", "max"] = "avg",
-        dropout: float = 0.0,
-        feature_channels: int | None = None,
-        pre_kernel_size: int = 1,
-    ) -> None:
+    def __init__(self, config: CSPNetConfig) -> None:
         super().__init__()
-        if stage_defs is None:
-            stage_defs = []
+        self.config = config
+
+        if config.stack_type == "darknet":
+            block_stack_fn = _darknet_stack_factory(
+                _DarknetBottleneck,
+                norm=config.norm,
+                act=config.act,
+            )
+        else:
+            block_stack_fn = _resnet_stack_factory(
+                _Bottleneck,
+                norm=config.norm,
+                act=config.act,
+                groups=config.groups,
+                base_width=config.base_width,
+            )
 
         self.stem = nn.Sequential(
-            _ConvBNAct(in_channels, stem_channels, k=3, s=2, norm=norm, act=act),
-            _ConvBNAct(stem_channels, stem_channels, k=3, s=1, norm=norm, act=act),
+            _ConvBNAct(
+                config.in_channels,
+                config.stem_channels,
+                k=3,
+                s=2,
+                norm=config.norm,
+                act=config.act,
+            ),
+            _ConvBNAct(
+                config.stem_channels,
+                config.stem_channels,
+                k=3,
+                s=1,
+                norm=config.norm,
+                act=config.act,
+            ),
         )
 
         stages = []
-        in_ch = stem_channels
-        for stage_width, num_layers, stack_fn, downsample in stage_defs:
+        in_ch = config.stem_channels
+        for stage_width, num_layers, downsample in config.stage_specs:
             stages.append(
                 _CSPStage(
                     in_ch,
                     stage_width,
                     num_layers,
-                    stack_fn,
-                    split_ratio=split_ratio,
+                    block_stack_fn,
+                    split_ratio=config.split_ratio,
                     downsample=downsample,
-                    norm=norm,
-                    act=act,
-                    pre_kernel_size=pre_kernel_size,
+                    norm=config.norm,
+                    act=config.act,
+                    pre_kernel_size=config.pre_kernel_size,
                 )
             )
             in_ch = stage_width
         self.stages = nn.Sequential(*stages)
 
-        if feature_channels is not None and feature_channels != in_ch:
+        if config.feature_channels is not None and config.feature_channels != in_ch:
             self.pre_head = _ConvBNAct(
-                in_ch, feature_channels, k=1, s=1, p=0, norm=norm, act=act
+                in_ch,
+                config.feature_channels,
+                k=1,
+                s=1,
+                p=0,
+                norm=config.norm,
+                act=config.act,
             )
-            in_ch = feature_channels
+            in_ch = config.feature_channels
         else:
             self.pre_head = nn.Identity()
 
-        self.num_classes = num_classes
+        self.num_classes = config.num_classes
         self.head_pool = (
             nn.AdaptiveAvgPool2d((1, 1))
-            if global_pool == "avg"
+            if config.global_pool == "avg"
             else nn.AdaptiveMaxPool2d((1, 1))
         )
         self.head = nn.Sequential(
             nn.Flatten(),
-            nn.Dropout(dropout) if dropout > 0.0 else nn.Identity(),
-            nn.Linear(in_ch, num_classes),
+            nn.Dropout(config.dropout) if config.dropout > 0.0 else nn.Identity(),
+            nn.Linear(in_ch, config.num_classes),
         )
 
         self.apply(self.init_weights)
@@ -357,68 +453,113 @@ class CSPNet(nn.Module):
         return x
 
 
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_cspnet_config(
+    *,
+    stage_specs: tuple[tuple[int, int, bool], ...],
+    stack_type: Literal["resnet", "resnext", "darknet"],
+    num_classes: int,
+    stem_channels: int,
+    split_ratio: float,
+    **kwargs,
+) -> CSPNetConfig:
+    return CSPNetConfig(
+        stage_specs=stage_specs,
+        stack_type=stack_type,
+        num_classes=num_classes,
+        stem_channels=stem_channels,
+        split_ratio=split_ratio,
+        **kwargs,
+    )
+
+
 @register_model
 def csp_resnet_50(
     num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 64, **kwargs
 ) -> CSPNet:
-    res_stack = _resnet_stack_factory(_Bottleneck, groups=1, base_width=64, **kwargs)
-    stage_defs = [
-        (256, 3, res_stack, False),
-        (512, 4, res_stack, True),
-        (1024, 6, res_stack, True),
-        (2048, 3, res_stack, True),
-    ]
-    return CSPNet(
-        stem_channels=stem_channels,
-        stage_defs=stage_defs,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"stage_specs", "stack_type", "groups", "base_width", "feature_channels"},
+        "factory variants do not allow overriding preset stage_specs, stack_type, groups, base_width, or feature_channels",
+    )
+    config = _build_cspnet_config(
+        stage_specs=(
+            (256, 3, False),
+            (512, 4, True),
+            (1024, 6, True),
+            (2048, 3, True),
+        ),
+        stack_type="resnet",
         num_classes=num_classes,
+        stem_channels=stem_channels,
         split_ratio=split_ratio,
+        groups=1,
+        base_width=64,
         feature_channels=1024,
         **kwargs,
     )
+    return CSPNet(config)
 
 
 @register_model
 def csp_resnext_50_32x4d(
     num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 64, **kwargs
 ) -> CSPNet:
-    resnext_stack = _resnet_stack_factory(
-        _Bottleneck, groups=32, base_width=4, **kwargs
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"stage_specs", "stack_type", "groups", "base_width", "feature_channels"},
+        "factory variants do not allow overriding preset stage_specs, stack_type, groups, base_width, or feature_channels",
     )
-    stage_defs = [
-        (256, 3, resnext_stack, False),
-        (512, 4, resnext_stack, True),
-        (1024, 6, resnext_stack, True),
-        (2048, 3, resnext_stack, True),
-    ]
-    return CSPNet(
-        stem_channels=stem_channels,
-        stage_defs=stage_defs,
+    config = _build_cspnet_config(
+        stage_specs=(
+            (256, 3, False),
+            (512, 4, True),
+            (1024, 6, True),
+            (2048, 3, True),
+        ),
+        stack_type="resnext",
         num_classes=num_classes,
+        stem_channels=stem_channels,
         split_ratio=split_ratio,
+        groups=32,
+        base_width=4,
         feature_channels=1024,
         **kwargs,
     )
+    return CSPNet(config)
 
 
 @register_model
 def csp_darknet_53(
     num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 32, **kwargs
 ) -> CSPNet:
-    dark_stack = _darknet_stack_factory(_DarknetBottleneck, **kwargs)
-    stage_defs = [
-        (64, 1, dark_stack, True),
-        (128, 2, dark_stack, True),
-        (256, 8, dark_stack, True),
-        (512, 8, dark_stack, True),
-        (1024, 4, dark_stack, True),
-    ]
-    return CSPNet(
-        stem_channels=stem_channels,
-        stage_defs=stage_defs,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"stage_specs", "stack_type", "feature_channels", "pre_kernel_size"},
+        "factory variants do not allow overriding preset stage_specs, stack_type, feature_channels, or pre_kernel_size",
+    )
+    config = _build_cspnet_config(
+        stage_specs=(
+            (64, 1, True),
+            (128, 2, True),
+            (256, 8, True),
+            (512, 8, True),
+            (1024, 4, True),
+        ),
+        stack_type="darknet",
         num_classes=num_classes,
+        stem_channels=stem_channels,
         split_ratio=split_ratio,
         feature_channels=1024,
         pre_kernel_size=3,
         **kwargs,
     )
+    return CSPNet(config)
