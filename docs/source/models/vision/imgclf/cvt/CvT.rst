@@ -5,6 +5,7 @@ CvT
     :maxdepth: 1
     :hidden:
 
+    CvTConfig.rst
     cvt_13.rst
     cvt_21.rst
     cvt_w24.rst
@@ -18,7 +19,7 @@ that integrates convolutional layers into the self-attention mechanism. Unlike t
 Vision Transformers (ViTs), CvT introduces depthwise convolutional projections in the query,
 key, and value transformations, which enhances inductive biases and improves efficiency.
 This hybrid approach helps in capturing both local and global features effectively while
-reducing computational cost.
+reducing computational cost. Model structure is defined through `CvTConfig`.
 
 .. mermaid::
     :name: CvT
@@ -74,30 +75,14 @@ Class Signature
 
 .. code-block:: python
 
-    class CvT(
-        in_channels: int = 3,
-        num_classes: int = 1000,
-        act_layer: Type[nn.Module] = nn.GELU,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        spec: CvTSpec | None = None,
-    )
+    class CvT(nn.Module):
+        def __init__(self, config: CvTConfig) -> None
 
 Parameters
 ----------
-- **in_channels** (*int*):
-  Number of input channels (e.g., 3 for RGB images).
-
-- **num_classes** (*int*):
-  Number of output classes for classification.
-
-- **act_layer** (*Type[nn.Module]*):
-  Activation function used in the model (default is `nn.GELU`).
-
-- **norm_layer** (*Type[nn.Module]*):
-  Normalization layer to be used (default is `nn.LayerNorm`).
-
-- **spec** (*CvTSpec | None*):
-  Optional model specification defining the architecture details.
+- **config** (*CvTConfig*):
+  Configuration object describing the stage layout, convolutional embedding
+  parameters, attention heads, classifier settings, and optional token behavior.
 
 Examples
 --------
@@ -105,8 +90,13 @@ Examples
 .. code-block:: python
 
     >>> import lucid.models as models
-    >>> cvt = models.CvT(
-    ...     in_channels=3,
-    ...     num_classes=1000,
+    >>> config = models.CvTConfig(
+    ...     num_stages=3,
+    ...     patch_size=(7, 3, 3),
+    ...     patch_stride=(4, 2, 2),
+    ...     patch_padding=(2, 1, 1),
+    ...     dim_embed=(64, 192, 384),
+    ...     num_heads=(1, 3, 6),
+    ...     depth=(1, 2, 10),
     ... )
-
+    >>> cvt = models.CvT(config)
