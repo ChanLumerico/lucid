@@ -5,16 +5,17 @@ Xception
     :maxdepth: 1
     :hidden:
 
+    XceptionConfig.rst
     xception.rst
 
-|convnet-badge| 
+|convnet-badge|
 
 .. autoclass:: lucid.models.Xception
 
-The `Xception` class implements the base Xception architecture, 
-leveraging depthwise separable convolutions for efficient and scalable feature extraction. 
-This model is designed for classification tasks and provides flexibility 
-for the number of output classes.
+The `Xception` class implements the Xception architecture with depthwise separable
+convolutions and residual entry, middle, and exit flows. Model structure is defined
+through `XceptionConfig`, which captures the classifier size, input channels, and
+the channel widths and repeat counts used across the three flows.
 
 .. mermaid::
     :name: Xception
@@ -118,59 +119,33 @@ Class Signature
 
 .. code-block:: python
 
-    class lucid.models.Xception(num_classes: int = 1000) -> None
+    class Xception(nn.Module):
+        def __init__(self, config: XceptionConfig)
 
 Parameters
 ----------
 
-- **num_classes** (*int*, optional):
-  The number of output classes for classification. Default is 1000.
+- **config** (*XceptionConfig*):
+  Configuration object describing the classifier size, input channels, and the
+  entry, middle, and exit flow channel widths used to assemble the model.
 
 Attributes
 ----------
 
-- **features** (*Module*):
-  The sequential feature extractor composed of depthwise separable convolutions.
-
-- **classifier** (*Module*):
-  The fully connected classification head.
-
-Forward Pass
-------------
-
-The forward method applies the feature extractor to the input tensor, 
-followed by the classifier for prediction. 
-
-The overall structure can be summarized as:
-
-.. math::
-
-    \mathbf{y} = \text{classifier}(\text{features}(\mathbf{x}))
-
-Where:
-- :math:`\mathbf{x}` is the input tensor.
-- :math:`\text{features}` is the feature extraction module.
-- :math:`\text{classifier}` is the fully connected head.
-- :math:`\mathbf{y}` is the output tensor.
+- **config** (*XceptionConfig*):
+  The configuration used to construct the model.
+- **conv1**, **conv2**, **block1**, **block2**, **block3**, **mid_blocks**, **end_block**, **conv3**, **bn3**, **conv4**, **bn4**, **avgpool**, **fc**:
+  Stem layers, entry/middle/exit flow blocks, and classifier head.
 
 Examples
 --------
 
-**Basic Usage:**
-
 .. code-block:: python
 
+    >>> import lucid
     >>> import lucid.models as models
-    >>> model = models.Xception(num_classes=1000)
-    >>> input_tensor = lucid.random.randn(1, 3, 299, 299)  # Example input with shape (batch_size, channels, height, width)
-    >>> output = model(input_tensor)
+    >>> config = models.XceptionConfig(num_classes=10, in_channels=1)
+    >>> model = models.Xception(config)
+    >>> output = model(lucid.zeros(1, 1, 299, 299))
     >>> print(output.shape)
-    (1, 1000)
-
-**Modifying Output Classes:**
-
-.. code-block:: python
-
-    >>> model = models.Xception(num_classes=1000)
-    >>> print(model)
-    ...
+    (1, 10)
