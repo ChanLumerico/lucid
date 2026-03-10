@@ -6,7 +6,7 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 
-from .resnet import ResNet
+from .resnet import ResNet, ResNetConfig
 
 __all__ = [
     "ResNeSt",
@@ -184,12 +184,14 @@ class ResNeSt(ResNet):
             base_width=base_width, cardinality=cardinality, radix=radix, avd=avd
         )
         super().__init__(
-            block,
-            layers,
-            num_classes,
-            stem_width=stem_width,
-            stem_type="deep",
-            block_args=block_args,
+            ResNetConfig(
+                block=block,
+                layers=layers,
+                num_classes=num_classes,
+                stem_width=stem_width,
+                stem_type="deep",
+                block_args=block_args,
+            )
         )
 
 

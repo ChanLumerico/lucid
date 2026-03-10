@@ -3,9 +3,8 @@ wide_resnet_50
 
 .. autofunction:: lucid.models.wide_resnet_50
 
-The `wide_resnet_50` function is a registered model that creates a Wide ResNet-50 
-architecture. This is a variant of the ResNet-50 model with a wider bottleneck configuration, 
-often used to enhance the representational capacity of the network.
+The `wide_resnet_50` function creates a Wide ResNet-50 architecture, a ResNet-50
+variant with wider bottleneck layers for increased representational capacity.
 
 **Total Parameters**: 78,973,224
 
@@ -18,31 +17,30 @@ Function Signature
 
 Parameters
 ----------
-- **num_classes** (*int*, optional):
-  The number of output classes for the final fully connected layer. 
-  Default is 1000, suitable for ImageNet classification.
 
+- **num_classes** (*int*, optional):
+  The number of output classes for the final fully connected layer. Default is 1000.
 - **kwargs** (*dict*, optional):
-  Additional keyword arguments passed to the `ResNet` constructor. 
-  These can include options for customization such as initialization or 
-  model-specific settings.
+  Additional keyword arguments forwarded to `ResNetConfig`, excluding the preset
+  `block` and `layers` fields. Any provided `block_args` are merged with the
+  default `{"base_width": 128}` wide bottleneck setting.
 
 Returns
 -------
+
 - **ResNet**:
-  A Wide ResNet-50 model configured with the specified number of output classes 
+  A Wide ResNet-50 model configured with the specified number of output classes
   and additional options.
 
 Architecture Details
----------------------
-Wide ResNet-50 is characterized by its wider bottleneck layers compared 
-to the standard ResNet-50. Specifically, the `base_width` parameter determines 
-the width of the bottleneck layers, with a default value of 128 in this implementation.
+--------------------
+
+Wide ResNet-50 uses the preset `ResNetConfig(block="bottleneck", layers=[3, 4, 6, 3],
+block_args={"base_width": 128})`.
 
 .. note::
 
-   The architecture comprises 4 stages with layers [3, 4, 6, 3], 
-   corresponding to the number of residual blocks in each stage.
+   The architecture comprises 4 stages with layers `[3, 4, 6, 3]` and wider bottleneck blocks.
 
 Examples
 --------
@@ -53,8 +51,5 @@ Examples
 
     import lucid.models as models
 
-    # Create the model
     model = models.wide_resnet_50(num_classes=1000)
-
-    # Print model summary
-    models.summarize(model)
+    print(model)

@@ -4,7 +4,7 @@ import lucid.nn as nn
 from lucid import register_model
 from lucid._tensor import Tensor
 
-from .resnet import ResNet
+from .resnet import ResNet, ResNetConfig
 
 __all__ = [
     "SKNet",
@@ -26,16 +26,23 @@ class SKNet(ResNet):
         cardinality: int = 1,
         **resnet_args: Any,
     ) -> None:
+        block_args = {
+            "kernel_sizes": kernel_sizes,
+            "base_width": base_width,
+            "cardinality": cardinality,
+        }
+        extra_block_args = resnet_args.pop("block_args", None)
+        if extra_block_args is not None:
+            block_args.update(extra_block_args)
+
         super().__init__(
-            block,
-            layers,
-            num_classes,
-            block_args={
-                "kernel_sizes": kernel_sizes,
-                "base_width": base_width,
-                "cardinality": cardinality,
-            },
-            **resnet_args,
+            ResNetConfig(
+                block=block,
+                layers=layers,
+                num_classes=num_classes,
+                block_args=block_args,
+                **resnet_args,
+            )
         )
 
 

@@ -5,7 +5,7 @@ import lucid.nn as nn
 from lucid import register_model
 from lucid._tensor import Tensor
 
-from .resnet import ResNet, _Bottleneck
+from .resnet import ResNet, ResNetConfig, _Bottleneck
 
 __all__ = [
     "SENet",
@@ -30,11 +30,14 @@ class SENet(ResNet):
         reduction: int = 16,
         block_args: dict = {},
     ) -> None:
+        block_args = {"se": True, "se_args": dict(reduction=reduction), **block_args}
         super().__init__(
-            block,
-            layers,
-            num_classes,
-            block_args={"se": True, "se_args": dict(reduction=reduction), **block_args},
+            ResNetConfig(
+                block=block,
+                layers=layers,
+                num_classes=num_classes,
+                block_args=block_args,
+            )
         )
 
 

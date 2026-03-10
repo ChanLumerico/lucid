@@ -1,7 +1,7 @@
 import lucid.nn as nn
 
 from lucid import register_model
-from .resnet import ResNet, _Bottleneck
+from .resnet import ResNet, ResNetConfig, _Bottleneck
 from lucid.models.base import PreTrainedModelMixin
 
 __all__ = [
@@ -25,7 +25,14 @@ class ResNeXt(ResNet, PreTrainedModelMixin):
         num_classes: int = 1000,
     ) -> None:
         block_args = {"cardinality": cardinality, "base_width": base_width}
-        super().__init__(block, layers, num_classes, block_args=block_args)
+        super().__init__(
+            ResNetConfig(
+                block=block,
+                layers=layers,
+                num_classes=num_classes,
+                block_args=block_args,
+            )
+        )
 
 
 @register_model
