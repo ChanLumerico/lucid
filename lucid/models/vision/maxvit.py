@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Callable
 from functools import partial
 import math
@@ -10,6 +11,7 @@ from lucid._tensor import Tensor
 
 __all__ = [
     "MaxViT",
+    "MaxViTConfig",
     "maxvit_tiny",
     "maxvit_small",
     "maxvit_base",
@@ -20,6 +22,62 @@ __all__ = [
 
 def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
     return (val, val)
+
+
+@dataclass
+class MaxViTConfig:
+    in_channels: int = 3
+    depths: tuple[int, ...] | list[int] = (2, 2, 5, 2)
+    channels: tuple[int, ...] | list[int] = (64, 128, 256, 512)
+    num_classes: int = 1000
+    embed_dim: int = 64
+    num_heads: int = 32
+    grid_window_size: tuple[int, int] | list[int] = (7, 7)
+    attn_drop: float = 0.0
+    drop: float = 0.0
+    drop_path: float = 0.0
+    mlp_ratio: float = 4.0
+    act_layer: type[nn.Module] = nn.GELU
+    norm_layer: type[nn.Module] = nn.BatchNorm2d
+    norm_layer_tf: type[nn.Module] = nn.LayerNorm
+
+    def __post_init__(self) -> None:
+        self.depths = tuple(self.depths)
+        self.channels = tuple(self.channels)
+        self.grid_window_size = tuple(self.grid_window_size)
+
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if len(self.depths) == 0 or any(depth <= 0 for depth in self.depths):
+            raise ValueError("depths must contain at least one positive integer")
+        if len(self.channels) != len(self.depths):
+            raise ValueError("channels must provide one positive width per stage")
+        if any(channel <= 0 for channel in self.channels):
+            raise ValueError("channels must contain only positive integers")
+        if self.num_classes < 0:
+            raise ValueError("num_classes must be greater than or equal to 0")
+        if self.embed_dim <= 0:
+            raise ValueError("embed_dim must be greater than 0")
+        if self.num_heads <= 0:
+            raise ValueError("num_heads must be greater than 0")
+        if (
+            len(self.grid_window_size) != 2
+            or self.grid_window_size[0] <= 0
+            or self.grid_window_size[1] <= 0
+        ):
+            raise ValueError(
+                "grid_window_size must contain exactly two positive integers"
+            )
+        if self.attn_drop < 0 or self.attn_drop >= 1:
+            raise ValueError("attn_drop must be in the range [0, 1)")
+        if self.drop < 0 or self.drop >= 1:
+            raise ValueError("drop must be in the range [0, 1)")
+        if self.drop_path < 0 or self.drop_path >= 1:
+            raise ValueError("drop_path must be in the range [0, 1)")
+        if self.mlp_ratio <= 0:
+            raise ValueError("mlp_ratio must be greater than 0")
+        if any(channel % self.num_heads != 0 for channel in self.channels):
+            raise ValueError("channels must be divisible by num_heads")
 
 
 class _MLP(nn.Module):
@@ -421,58 +479,59 @@ class _MaxViTStage(nn.Module):
 
 
 class MaxViT(nn.Module):
-    def __init__(
-        self,
-        in_channels: int = 3,
-        depths: tuple[int, ...] = (2, 2, 5, 2),
-        channels: tuple[int, ...] = (64, 128, 256, 512),
-        num_classes: int = 1000,
-        embed_dim: int = 64,
-        num_heads: int = 32,
-        grid_window_size: tuple[int, int] = (7, 7),
-        attn_drop: float = 0.0,
-        drop: float = 0.0,
-        drop_path: float = 0.0,
-        mlp_ratio: float = 4.0,
-        act_layer: type[nn.Module] = nn.GELU,
-        norm_layer: type[nn.Module] = nn.BatchNorm2d,
-        norm_layer_tf: type[nn.Module] = nn.LayerNorm,
-    ) -> None:
+    def __init__(self, config: MaxViTConfig) -> None:
         super().__init__()
-        assert len(depths) == len(
-            channels
-        ), "Channel dims must be given for each stage."
-
-        self.num_classes = num_classes
+        self.config = config
+        self.num_classes = config.num_classes
         self.stem = nn.Sequential(
-            nn.Conv2d(in_channels, embed_dim, kernel_size=3, stride=2, padding=1),
-            act_layer(),
-            nn.Conv2d(embed_dim, embed_dim, kernel_size=3, stride=1, padding=1),
-            act_layer(),
+            nn.Conv2d(
+                config.in_channels,
+                config.embed_dim,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+            ),
+            config.act_layer(),
+            nn.Conv2d(
+                config.embed_dim,
+                config.embed_dim,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+            ),
+            config.act_layer(),
         )
 
-        drop_path = lucid.linspace(0, drop_path, sum(depths))
+        drop_path = lucid.linspace(0, config.drop_path, sum(config.depths))
         stages = []
-        for idx, (depth, channel) in enumerate(zip(depths, channels)):
+        for idx, (depth, channel) in enumerate(zip(config.depths, config.channels)):
             stages.append(
                 _MaxViTStage(
                     depth=depth,
-                    in_channels=embed_dim if idx == 0 else channels[idx - 1],
+                    in_channels=(
+                        config.embed_dim if idx == 0 else config.channels[idx - 1]
+                    ),
                     out_channels=channel,
-                    num_heads=num_heads,
-                    grid_window_size=grid_window_size,
-                    attn_drop=attn_drop,
-                    drop=drop,
-                    drop_path=drop_path[sum(depths[:idx]) : sum(depths[: idx + 1])],
-                    mlp_ratio=mlp_ratio,
-                    act_layer=act_layer,
-                    norm_layer=norm_layer,
-                    norm_layer_tf=norm_layer_tf,
+                    num_heads=config.num_heads,
+                    grid_window_size=config.grid_window_size,
+                    attn_drop=config.attn_drop,
+                    drop=config.drop,
+                    drop_path=drop_path[
+                        sum(config.depths[:idx]) : sum(config.depths[: idx + 1])
+                    ],
+                    mlp_ratio=config.mlp_ratio,
+                    act_layer=config.act_layer,
+                    norm_layer=config.norm_layer,
+                    norm_layer_tf=config.norm_layer_tf,
                 )
             )
 
         self.stages = nn.ModuleList(stages)
-        self.head = nn.Linear(channels[-1], num_classes)
+        self.head = (
+            nn.Linear(config.channels[-1], config.num_classes)
+            if config.num_classes > 0
+            else nn.Identity()
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.stem(x)
@@ -484,61 +543,120 @@ class MaxViT(nn.Module):
         return out
 
 
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_maxvit_config(
+    *,
+    in_channels: int,
+    num_classes: int,
+    depths: tuple[int, ...] | list[int],
+    channels: tuple[int, ...] | list[int],
+    embed_dim: int,
+    **kwargs,
+) -> MaxViTConfig:
+    params = {
+        "in_channels": in_channels,
+        "num_classes": num_classes,
+        "depths": depths,
+        "channels": channels,
+        "embed_dim": embed_dim,
+    }
+    params.update(kwargs)
+    return MaxViTConfig(**params)
+
+
 @register_model
 def maxvit_tiny(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
-    return MaxViT(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "channels", "embed_dim"},
+        "factory variants do not allow overriding preset depths, channels, or embed_dim",
+    )
+    config = _build_maxvit_config(
         in_channels=in_channels,
         num_classes=num_classes,
         depths=(2, 2, 5, 2),
         channels=(64, 128, 256, 512),
         embed_dim=64,
-        **kwargs
+        **kwargs,
     )
+    return MaxViT(config)
 
 
 @register_model
 def maxvit_small(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
-    return MaxViT(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "channels", "embed_dim"},
+        "factory variants do not allow overriding preset depths, channels, or embed_dim",
+    )
+    config = _build_maxvit_config(
         in_channels=in_channels,
         num_classes=num_classes,
         depths=(2, 2, 5, 2),
         channels=(96, 192, 384, 768),
         embed_dim=64,
-        **kwargs
+        **kwargs,
     )
+    return MaxViT(config)
 
 
 @register_model
 def maxvit_base(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
-    return MaxViT(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "channels", "embed_dim"},
+        "factory variants do not allow overriding preset depths, channels, or embed_dim",
+    )
+    config = _build_maxvit_config(
         in_channels=in_channels,
         num_classes=num_classes,
         depths=(2, 6, 14, 2),
         channels=(96, 192, 384, 768),
         embed_dim=64,
-        **kwargs
+        **kwargs,
     )
+    return MaxViT(config)
 
 
 @register_model
 def maxvit_large(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
-    return MaxViT(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "channels", "embed_dim"},
+        "factory variants do not allow overriding preset depths, channels, or embed_dim",
+    )
+    config = _build_maxvit_config(
         in_channels=in_channels,
         num_classes=num_classes,
         depths=(2, 6, 14, 2),
         channels=(128, 256, 512, 1024),
         embed_dim=128,
-        **kwargs
+        **kwargs,
     )
+    return MaxViT(config)
 
 
 @register_model
 def maxvit_xlarge(in_channels: int = 3, num_classes: int = 1000, **kwargs) -> MaxViT:
-    return MaxViT(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "channels", "embed_dim"},
+        "factory variants do not allow overriding preset depths, channels, or embed_dim",
+    )
+    config = _build_maxvit_config(
         in_channels=in_channels,
         num_classes=num_classes,
         depths=(2, 6, 14, 2),
         channels=(192, 384, 768, 1536),
         embed_dim=192,
-        **kwargs
+        **kwargs,
     )
+    return MaxViT(config)
