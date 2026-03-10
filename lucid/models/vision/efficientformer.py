@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Callable
 from functools import partial
 import math
@@ -11,6 +12,7 @@ from lucid._tensor import Tensor
 
 __all__ = [
     "EfficientFormer",
+    "EfficientFormerConfig",
     "efficientformer_l1",
     "efficientformer_l3",
     "efficientformer_l7",
@@ -19,6 +21,59 @@ __all__ = [
 
 def _to_2_tuple(val: int | float) -> tuple:
     return (val, val)
+
+
+@dataclass
+class EfficientFormerConfig:
+    depths: tuple[int, ...] | list[int]
+    embed_dims: tuple[int, ...] | list[int]
+    in_channels: int = 3
+    num_classes: int = 1000
+    global_pool: bool = True
+    downsamples: tuple[bool, ...] | list[bool] | None = None
+    num_vit: int = 0
+    mlp_ratios: float = 4.0
+    pool_size: int = 3
+    layer_scale_init_value: float = 1e-5
+    act_layer: type[nn.Module] = nn.GELU
+    norm_layer: type[nn.Module] = nn.BatchNorm2d
+    norm_layer_cl: type[nn.Module] = nn.LayerNorm
+    drop_rate: float = 0.0
+    proj_drop_rate: float = 0.0
+    drop_path_rate: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.depths = tuple(self.depths)
+        self.embed_dims = tuple(self.embed_dims)
+        if self.downsamples is not None:
+            self.downsamples = tuple(self.downsamples)
+
+        if len(self.depths) == 0 or any(depth <= 0 for depth in self.depths):
+            raise ValueError("depths must contain at least one positive integer")
+        if len(self.embed_dims) != len(self.depths):
+            raise ValueError("embed_dims must provide one positive width per stage")
+        if any(dim <= 0 for dim in self.embed_dims):
+            raise ValueError("embed_dims must contain only positive integers")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.num_classes < 0:
+            raise ValueError("num_classes must be greater than or equal to 0")
+        if self.downsamples is not None and len(self.downsamples) != len(self.depths):
+            raise ValueError("downsamples must match the number of stages")
+        if self.num_vit < 0:
+            raise ValueError("num_vit must be greater than or equal to 0")
+        if self.mlp_ratios <= 0:
+            raise ValueError("mlp_ratios must be greater than 0")
+        if self.pool_size <= 0:
+            raise ValueError("pool_size must be greater than 0")
+        if self.layer_scale_init_value < 0:
+            raise ValueError("layer_scale_init_value must be non-negative")
+        if self.drop_rate < 0 or self.drop_rate >= 1:
+            raise ValueError("drop_rate must be in the range [0, 1)")
+        if self.proj_drop_rate < 0 or self.proj_drop_rate >= 1:
+            raise ValueError("proj_drop_rate must be in the range [0, 1)")
+        if self.drop_path_rate < 0 or self.drop_path_rate >= 1:
+            raise ValueError("drop_path_rate must be in the range [0, 1)")
 
 
 class _MLP(nn.Module):
@@ -354,68 +409,55 @@ class _EfficientFormerStage(nn.Module):
 
 
 class EfficientFormer(nn.Module):
-    def __init__(
-        self,
-        depths: list[int],
-        embed_dims: int | None = None,
-        in_channels: int = 3,
-        num_classes: int = 1000,
-        global_pool: bool = True,
-        downsamples: list[bool] | None = None,
-        num_vit: int = 0,
-        mlp_ratios: float = 4.0,
-        pool_size: int = 3,
-        layer_scale_init_value: float = 1e-5,
-        act_layer: type[nn.Module] = nn.GELU,
-        norm_layer: type[nn.Module] = nn.BatchNorm2d,
-        norm_layer_cl: type[nn.Module] = nn.LayerNorm,
-        drop_rate: float = 0.0,
-        proj_drop_rate: float = 0.0,
-        drop_path_rate: float = 0.0,
-    ) -> None:
+    def __init__(self, config: EfficientFormerConfig) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.global_pool = global_pool
+        self.config = config
+        self.num_classes = config.num_classes
+        self.global_pool = config.global_pool
 
-        self.stem = _Stem(in_channels, embed_dims[0], norm_layer=norm_layer)
-        prev_dim = embed_dims[0]
+        self.stem = _Stem(
+            config.in_channels, config.embed_dims[0], norm_layer=config.norm_layer
+        )
+        prev_dim = config.embed_dims[0]
 
-        self.num_stages = len(depths)
+        self.num_stages = len(config.depths)
         last_stage = self.num_stages - 1
         dpr = [
             x.tolist()
-            for x in lucid.linspace(0, drop_path_rate, sum(depths)).split(depths)
+            for x in lucid.linspace(0, config.drop_path_rate, sum(config.depths)).split(
+                config.depths
+            )
         ]
-        downsamples = downsamples or (False,) + (True,) * (self.num_stages - 1)
+        downsamples = config.downsamples or (False,) + (True,) * (self.num_stages - 1)
 
         stages = []
         for i in range(self.num_stages):
             stage = _EfficientFormerStage(
                 prev_dim,
-                embed_dims[i],
-                depths[i],
+                config.embed_dims[i],
+                config.depths[i],
                 downsample=downsamples[i],
-                num_vit=num_vit if i == last_stage else 0,
-                pool_size=pool_size,
-                mlp_ratio=mlp_ratios,
-                act_layer=act_layer,
-                norm_layer_cl=norm_layer_cl,
-                norm_layer=norm_layer,
-                proj_drop=proj_drop_rate,
+                num_vit=config.num_vit if i == last_stage else 0,
+                pool_size=config.pool_size,
+                mlp_ratio=config.mlp_ratios,
+                act_layer=config.act_layer,
+                norm_layer_cl=config.norm_layer_cl,
+                norm_layer=config.norm_layer,
+                proj_drop=config.proj_drop_rate,
                 drop_path=dpr[i],
-                layer_scale_init_value=layer_scale_init_value,
+                layer_scale_init_value=config.layer_scale_init_value,
             )
-            prev_dim = embed_dims[i]
+            prev_dim = config.embed_dims[i]
             stages.append(stage)
 
         self.stages = nn.Sequential(*stages)
 
-        self.num_features = embed_dims[-1]
-        self.norm = norm_layer_cl(self.num_features)
-        self.head_drop = nn.Dropout(drop_rate)
+        self.num_features = config.embed_dims[-1]
+        self.norm = config.norm_layer_cl(self.num_features)
+        self.head_drop = nn.Dropout(config.drop_rate)
         self.head = (
-            nn.Linear(self.num_features, num_classes)
-            if num_classes > 0
+            nn.Linear(self.num_features, config.num_classes)
+            if config.num_classes > 0
             else nn.Identity()
         )
 
@@ -463,34 +505,79 @@ EfficientFormer_depth = {
 }
 
 
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_efficientformer_config(
+    *,
+    num_classes: int,
+    depths: tuple[int, ...] | list[int],
+    embed_dims: tuple[int, ...] | list[int],
+    num_vit: int,
+    **kwargs,
+) -> EfficientFormerConfig:
+    params = {
+        "num_classes": num_classes,
+        "depths": depths,
+        "embed_dims": embed_dims,
+        "num_vit": num_vit,
+    }
+    params.update(kwargs)
+    return EfficientFormerConfig(**params)
+
+
 @register_model
 def efficientformer_l1(num_classes: int = 1000, **kwargs) -> EfficientFormer:
-    return EfficientFormer(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "embed_dims", "num_vit"},
+        "factory variants do not allow overriding preset depths, embed_dims, or num_vit",
+    )
+    config = _build_efficientformer_config(
         depths=EfficientFormer_depth["l1"],
         embed_dims=EfficientFormer_width["l1"],
         num_vit=1,
         num_classes=num_classes,
         **kwargs,
     )
+    return EfficientFormer(config)
 
 
 @register_model
 def efficientformer_l3(num_classes: int = 1000, **kwargs) -> EfficientFormer:
-    return EfficientFormer(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "embed_dims", "num_vit"},
+        "factory variants do not allow overriding preset depths, embed_dims, or num_vit",
+    )
+    config = _build_efficientformer_config(
         depths=EfficientFormer_depth["l3"],
         embed_dims=EfficientFormer_width["l3"],
         num_vit=4,
         num_classes=num_classes,
         **kwargs,
     )
+    return EfficientFormer(config)
 
 
 @register_model
 def efficientformer_l7(num_classes: int = 1000, **kwargs) -> EfficientFormer:
-    return EfficientFormer(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "embed_dims", "num_vit"},
+        "factory variants do not allow overriding preset depths, embed_dims, or num_vit",
+    )
+    config = _build_efficientformer_config(
         depths=EfficientFormer_depth["l7"],
         embed_dims=EfficientFormer_width["l7"],
         num_vit=8,
         num_classes=num_classes,
         **kwargs,
     )
+    return EfficientFormer(config)
