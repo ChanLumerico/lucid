@@ -436,9 +436,7 @@ class CvTConfig:
 
         for field_name in stage_sequences:
             if len(getattr(self, field_name)) != self.num_stages:
-                raise ValueError(
-                    f"{field_name} must contain exactly num_stages values"
-                )
+                raise ValueError(f"{field_name} must contain exactly num_stages values")
 
         positive_int_fields = (
             "patch_size",
@@ -567,7 +565,15 @@ def _build_cvt_config(num_classes: int, **kwargs) -> CvTConfig:
 def cvt_13(num_classes: int = 1000, **kwargs) -> CvT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"num_stages", "patch_size", "patch_stride", "patch_padding", "dim_embed", "num_heads", "depth"},
+        {
+            "num_stages",
+            "patch_size",
+            "patch_stride",
+            "patch_padding",
+            "dim_embed",
+            "num_heads",
+            "depth",
+        },
         "factory variants do not allow overriding preset num_stages, patch_size, patch_stride, patch_padding, dim_embed, num_heads, or depth",
     )
     config = _build_cvt_config(
@@ -588,7 +594,15 @@ def cvt_13(num_classes: int = 1000, **kwargs) -> CvT:
 def cvt_21(num_classes: int = 1000, **kwargs) -> CvT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"num_stages", "patch_size", "patch_stride", "patch_padding", "dim_embed", "num_heads", "depth"},
+        {
+            "num_stages",
+            "patch_size",
+            "patch_stride",
+            "patch_padding",
+            "dim_embed",
+            "num_heads",
+            "depth",
+        },
         "factory variants do not allow overriding preset num_stages, patch_size, patch_stride, patch_padding, dim_embed, num_heads, or depth",
     )
     config = _build_cvt_config(
@@ -609,7 +623,15 @@ def cvt_21(num_classes: int = 1000, **kwargs) -> CvT:
 def cvt_w24(num_classes: int = 1000, **kwargs) -> CvT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"num_stages", "patch_size", "patch_stride", "patch_padding", "dim_embed", "num_heads", "depth"},
+        {
+            "num_stages",
+            "patch_size",
+            "patch_stride",
+            "patch_padding",
+            "dim_embed",
+            "num_heads",
+            "depth",
+        },
         "factory variants do not allow overriding preset num_stages, patch_size, patch_stride, patch_padding, dim_embed, num_heads, or depth",
     )
     config = _build_cvt_config(

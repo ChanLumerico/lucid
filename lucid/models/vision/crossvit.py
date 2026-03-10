@@ -91,9 +91,7 @@ class CrossViTConfig:
         if self.drop_path_rate < 0 or self.drop_path_rate >= 1:
             raise ValueError("drop_path_rate must be in the range [0, 1)")
         if self.multi_conv and any(size not in {12, 16} for size in self.patch_size):
-            raise ValueError(
-                "multi_conv presets require patch_size values of 12 or 16"
-            )
+            raise ValueError("multi_conv presets require patch_size values of 12 or 16")
 
 
 def _get_num_patches(img_size: tuple[int, int], patches: tuple[int, int]) -> list[int]:
@@ -514,7 +512,9 @@ class CrossViT(nn.Module):
         self.patch_embed = nn.ModuleList()
         for im_s, p, d in zip(config.img_size, config.patch_size, config.embed_dim):
             self.patch_embed.append(
-                _PatchEmbed(im_s, p, config.in_channels, d, multi_conv=config.multi_conv)
+                _PatchEmbed(
+                    im_s, p, config.in_channels, d, multi_conv=config.multi_conv
+                )
             )
 
         self.pos_drop = nn.Dropout(config.drop_rate)
@@ -643,7 +643,17 @@ def _build_crossvit_config(
 def crossvit_tiny(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(
@@ -665,7 +675,17 @@ def crossvit_tiny(num_classes: int = 1000, **kwargs) -> CrossViT:
 def crossvit_small(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(
@@ -687,7 +707,17 @@ def crossvit_small(num_classes: int = 1000, **kwargs) -> CrossViT:
 def crossvit_base(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(
@@ -709,7 +739,17 @@ def crossvit_base(num_classes: int = 1000, **kwargs) -> CrossViT:
 def crossvit_9(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(
@@ -731,7 +771,17 @@ def crossvit_9(num_classes: int = 1000, **kwargs) -> CrossViT:
 def crossvit_15(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(
@@ -753,7 +803,17 @@ def crossvit_15(num_classes: int = 1000, **kwargs) -> CrossViT:
 def crossvit_18(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(
@@ -775,7 +835,17 @@ def crossvit_18(num_classes: int = 1000, **kwargs) -> CrossViT:
 def crossvit_9_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(
@@ -797,7 +867,17 @@ def crossvit_9_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
 def crossvit_15_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(
@@ -819,7 +899,17 @@ def crossvit_15_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
 def crossvit_18_dagger(num_classes: int = 1000, **kwargs) -> CrossViT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"img_size", "patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "multi_conv"},
+        {
+            "img_size",
+            "patch_size",
+            "embed_dim",
+            "depth",
+            "num_heads",
+            "mlp_ratio",
+            "qkv_bias",
+            "norm_layer",
+            "multi_conv",
+        },
         "factory variants do not allow overriding preset img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, norm_layer, or multi_conv",
     )
     config = _build_crossvit_config(

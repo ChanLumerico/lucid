@@ -629,9 +629,7 @@ class SwinTransformer(nn.Module):
                 qk_scale=config.qk_scale,
                 drop=config.drop_rate,
                 attn_drop=config.attn_drop_rate,
-                drop_path=dpr[
-                    sum(config.depths[:i]) : sum(config.depths[: i + 1])
-                ],
+                drop_path=dpr[sum(config.depths[:i]) : sum(config.depths[: i + 1])],
                 norm_layer=config.norm_layer,
                 downsample=_PatchMerging if i < self.num_layers - 1 else None,
                 _version=self._version,

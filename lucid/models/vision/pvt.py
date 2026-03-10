@@ -33,7 +33,9 @@ def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
     return (val, val)
 
 
-def _conv_output_size(size: int, kernel_size: int, stride: int, padding: int = 0) -> int:
+def _conv_output_size(
+    size: int, kernel_size: int, stride: int, padding: int = 0
+) -> int:
     return (size + 2 * padding - kernel_size) // stride + 1
 
 
@@ -70,8 +72,19 @@ class PVTConfig:
             raise ValueError("patch_size must be greater than 0")
         if self.in_channels <= 0:
             raise ValueError("in_channels must be greater than 0")
-        if any(len(values) != 4 for values in (self.embed_dims, self.num_heads, self.mlp_ratios, self.depths, self.sr_ratios)):
-            raise ValueError("embed_dims, num_heads, mlp_ratios, depths, and sr_ratios must each contain exactly 4 values")
+        if any(
+            len(values) != 4
+            for values in (
+                self.embed_dims,
+                self.num_heads,
+                self.mlp_ratios,
+                self.depths,
+                self.sr_ratios,
+            )
+        ):
+            raise ValueError(
+                "embed_dims, num_heads, mlp_ratios, depths, and sr_ratios must each contain exactly 4 values"
+            )
         if any(value <= 0 for value in self.embed_dims):
             raise ValueError("embed_dims must contain positive integers")
         if any(value <= 0 for value in self.num_heads):
@@ -133,7 +146,9 @@ class PVTV2Config:
         if self.patch_size <= 0:
             raise ValueError("patch_size must be greater than 0")
         if self.patch_size <= 4:
-            raise ValueError("patch_size must be greater than 4 for the first overlap patch embedding")
+            raise ValueError(
+                "patch_size must be greater than 4 for the first overlap patch embedding"
+            )
         if self.in_channels <= 0:
             raise ValueError("in_channels must be greater than 0")
         if self.num_classes < 0:
@@ -142,9 +157,17 @@ class PVTV2Config:
             raise ValueError("num_stages must be greater than 0")
         if any(
             len(values) != self.num_stages
-            for values in (self.embed_dims, self.num_heads, self.mlp_ratios, self.depths, self.sr_ratios)
+            for values in (
+                self.embed_dims,
+                self.num_heads,
+                self.mlp_ratios,
+                self.depths,
+                self.sr_ratios,
+            )
         ):
-            raise ValueError("embed_dims, num_heads, mlp_ratios, depths, and sr_ratios must each contain exactly num_stages values")
+            raise ValueError(
+                "embed_dims, num_heads, mlp_ratios, depths, and sr_ratios must each contain exactly num_stages values"
+            )
         if any(value <= 0 for value in self.embed_dims):
             raise ValueError("embed_dims must contain positive integers")
         if any(value <= 0 for value in self.num_heads):
@@ -165,9 +188,13 @@ class PVTV2Config:
         if self.drop_path_rate < 0 or self.drop_path_rate >= 1:
             raise ValueError("drop_path_rate must be in the range [0, 1)")
 
-        stage_size = _conv_output_size(self.img_size, self.patch_size, 4, self.patch_size // 2)
+        stage_size = _conv_output_size(
+            self.img_size, self.patch_size, 4, self.patch_size // 2
+        )
         if stage_size <= 0:
-            raise ValueError("img_size is too small for the configured first-stage patch embedding")
+            raise ValueError(
+                "img_size is too small for the configured first-stage patch embedding"
+            )
         for _ in range(1, self.num_stages):
             stage_size = _conv_output_size(stage_size, 3, 2, 1)
             if stage_size <= 0:
@@ -440,9 +467,15 @@ class PVT(nn.Module):
             config.in_channels,
             config.embed_dims[0],
         )
-        self.patch_emb2 = _PatchEmbed(stage1_size, 2, config.embed_dims[0], config.embed_dims[1])
-        self.patch_emb3 = _PatchEmbed(stage2_size, 2, config.embed_dims[1], config.embed_dims[2])
-        self.patch_emb4 = _PatchEmbed(stage3_size, 2, config.embed_dims[2], config.embed_dims[3])
+        self.patch_emb2 = _PatchEmbed(
+            stage1_size, 2, config.embed_dims[0], config.embed_dims[1]
+        )
+        self.patch_emb3 = _PatchEmbed(
+            stage2_size, 2, config.embed_dims[1], config.embed_dims[2]
+        )
+        self.patch_emb4 = _PatchEmbed(
+            stage3_size, 2, config.embed_dims[2], config.embed_dims[3]
+        )
 
         self.pos_emb1 = nn.Parameter(
             lucid.zeros(1, self.patch_emb1.num_patches, config.embed_dims[0])
@@ -879,7 +912,16 @@ class PVT_V2(nn.Module):
 def pvt_tiny(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, or sr_ratios",
     )
     config = _build_pvt_config(
@@ -901,7 +943,16 @@ def pvt_tiny(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
 def pvt_small(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, or sr_ratios",
     )
     config = _build_pvt_config(
@@ -923,7 +974,16 @@ def pvt_small(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
 def pvt_medium(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, or sr_ratios",
     )
     config = _build_pvt_config(
@@ -945,7 +1005,16 @@ def pvt_medium(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
 def pvt_large(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, or sr_ratios",
     )
     config = _build_pvt_config(
@@ -967,7 +1036,17 @@ def pvt_large(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
 def pvt_huge(img_size: int = 224, num_classes: int = 1000, **kwargs) -> PVT:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios", "drop_path_rate"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+            "drop_path_rate",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, sr_ratios, or drop_path_rate",
     )
     config = _build_pvt_config(
@@ -992,7 +1071,17 @@ def pvt_v2_b0(
 ) -> PVT_V2:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios", "num_stages"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+            "num_stages",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, sr_ratios, or num_stages",
     )
     config = _build_pvt_v2_config(
@@ -1018,7 +1107,17 @@ def pvt_v2_b1(
 ) -> PVT_V2:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios", "num_stages"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+            "num_stages",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, sr_ratios, or num_stages",
     )
     config = _build_pvt_v2_config(
@@ -1044,7 +1143,17 @@ def pvt_v2_b2(
 ) -> PVT_V2:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios", "num_stages"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+            "num_stages",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, sr_ratios, or num_stages",
     )
     config = _build_pvt_v2_config(
@@ -1070,7 +1179,18 @@ def pvt_v2_b2_li(
 ) -> PVT_V2:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios", "num_stages", "linear"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+            "num_stages",
+            "linear",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, sr_ratios, num_stages, or linear",
     )
     config = _build_pvt_v2_config(
@@ -1097,7 +1217,17 @@ def pvt_v2_b3(
 ) -> PVT_V2:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios", "num_stages"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+            "num_stages",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, sr_ratios, or num_stages",
     )
     config = _build_pvt_v2_config(
@@ -1123,7 +1253,17 @@ def pvt_v2_b4(
 ) -> PVT_V2:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios", "num_stages"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+            "num_stages",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, sr_ratios, or num_stages",
     )
     config = _build_pvt_v2_config(
@@ -1149,7 +1289,17 @@ def pvt_v2_b5(
 ) -> PVT_V2:
     _raise_for_locked_factory_kwargs(
         kwargs,
-        {"patch_size", "embed_dims", "num_heads", "mlp_ratios", "qkv_bias", "norm_layer", "depths", "sr_ratios", "num_stages"},
+        {
+            "patch_size",
+            "embed_dims",
+            "num_heads",
+            "mlp_ratios",
+            "qkv_bias",
+            "norm_layer",
+            "depths",
+            "sr_ratios",
+            "num_stages",
+        },
         "factory variants do not allow overriding preset patch_size, embed_dims, num_heads, mlp_ratios, qkv_bias, norm_layer, depths, sr_ratios, or num_stages",
     )
     config = _build_pvt_v2_config(
