@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import math
 from typing import Sequence
 
@@ -11,7 +12,53 @@ from lucid import register_model
 from lucid.models.utils import DetectionDict
 from lucid.models.vision.resnet import ResNet, resnet_50, resnet_101
 
-__all__ = ["DETR", "detr_r50", "detr_r101"]
+__all__ = ["DETR", "DETRConfig", "detr_r50", "detr_r101"]
+
+
+@dataclass
+class DETRConfig:
+    backbone: nn.Module
+    transformer: nn.Module
+    num_classes: int
+    num_queries: int = 100
+    aux_loss: bool = True
+    matcher: nn.Module | None = None
+    class_loss_coef: float = 1.0
+    bbox_loss_coef: float = 5.0
+    giou_loss_coef: float = 2.0
+    eos_coef: float = 0.1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.backbone, nn.Module):
+            raise TypeError("backbone must be an nn.Module")
+        if not isinstance(getattr(self.backbone, "num_channels", None), int):
+            raise TypeError("backbone must define a positive integer num_channels")
+        if self.backbone.num_channels <= 0:
+            raise ValueError("backbone.num_channels must be greater than 0")
+
+        if not isinstance(self.transformer, nn.Module):
+            raise TypeError("transformer must be an nn.Module")
+        if not isinstance(getattr(self.transformer, "d_model", None), int):
+            raise TypeError("transformer must define a positive integer d_model")
+        if self.transformer.d_model <= 0:
+            raise ValueError("transformer.d_model must be greater than 0")
+
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.num_queries <= 0:
+            raise ValueError("num_queries must be greater than 0")
+        if not isinstance(self.aux_loss, bool):
+            raise TypeError("aux_loss must be a bool")
+        if self.matcher is not None and not isinstance(self.matcher, nn.Module):
+            raise TypeError("matcher must be an nn.Module or None")
+        if self.class_loss_coef < 0:
+            raise ValueError("class_loss_coef must be non-negative")
+        if self.bbox_loss_coef < 0:
+            raise ValueError("bbox_loss_coef must be non-negative")
+        if self.giou_loss_coef < 0:
+            raise ValueError("giou_loss_coef must be non-negative")
+        if not 0.0 <= self.eos_coef <= 1.0:
+            raise ValueError("eos_coef must be in the range [0, 1]")
 
 
 class _MLP(nn.Module):
@@ -446,10 +493,10 @@ class _HungarianMatcher(nn.Module):
         path = lucid.zeros((size * 2, 2), dtype=lucid.Int32)
 
         def _step1() -> None:
-            padded -= padded.min(axis=1, keepdims=True)
+            padded[:] = padded - lucid.min(padded, axis=1, keepdims=True)
 
         def _step2() -> None:
-            padded -= padded.min(axis=0)
+            padded[:] = padded - lucid.min(padded, axis=0)
 
         def _step3() -> None:
             for i in range(size):
@@ -468,7 +515,7 @@ class _HungarianMatcher(nn.Module):
 
         def _step4() -> bool:
             for j in range(size):
-                if lucid.any(mask[:, j] == 1):
+                if (mask[:, j] == 1).any():
                     col_cover[j] = True
             return int(col_cover.sum().item()) >= n_rows
 
@@ -508,7 +555,7 @@ class _HungarianMatcher(nn.Module):
         def _step6() -> None:
             uncovered_rows = ~row_cover
             uncovered_cols = ~col_cover
-            if not lucid.any(uncovered_rows) or not lucid.any(uncovered_cols):
+            if not uncovered_rows.any() or not uncovered_cols.any():
                 return
 
             min_val = lucid.min(padded[uncovered_rows][:, uncovered_cols])
@@ -600,8 +647,8 @@ class _HungarianMatcher(nn.Module):
             row_ind, col_ind = self._linear_sum_assignment(total_cost_cpu)
             results.append(
                 (
-                    Tensor(row_ind, dtype=lucid.Int32, device=pred_logits.device),
-                    Tensor(col_ind, dtype=lucid.Int32, device=pred_logits.device),
+                    Tensor(row_ind.tolist(), dtype=lucid.Int32, device=pred_logits.device),
+                    Tensor(col_ind.tolist(), dtype=lucid.Int32, device=pred_logits.device),
                 )
             )
 
@@ -630,48 +677,39 @@ class _BackboneBase(nn.Module):
 
 
 class DETR(nn.Module):
-    def __init__(
-        self,
-        backbone: _BackboneBase,
-        transformer: _Transformer,
-        num_classes: int,
-        num_queries: int = 100,
-        aux_loss: bool = True,
-        matcher: _HungarianMatcher | None = None,
-        class_loss_coef: float = 1.0,
-        bbox_loss_coef: float = 5.0,
-        giou_loss_coef: float = 2.0,
-        eos_coef: float = 0.1,
-    ) -> None:
+    def __init__(self, config: DETRConfig) -> None:
         super().__init__()
-        self.backbone = backbone
-        self.position_embedding = _SpatialPosEncoding(transformer.d_model)
+        self.config = config
+        self.backbone = config.backbone
+        self.position_embedding = _SpatialPosEncoding(config.transformer.d_model)
 
-        self.transformer = transformer
-        self.num_queries = num_queries
-        self.num_classes = num_classes
-        self.aux_loss = aux_loss
+        self.transformer = config.transformer
+        self.num_queries = config.num_queries
+        self.num_classes = config.num_classes
+        self.aux_loss = config.aux_loss
 
-        hidden_dim = transformer.d_model
-        self.query_embed = nn.Embedding(num_queries, hidden_dim)
-        self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
-        self.class_embed = nn.Linear(hidden_dim, num_classes + 1)
+        hidden_dim = config.transformer.d_model
+        self.query_embed = nn.Embedding(config.num_queries, hidden_dim)
+        self.input_proj = nn.Conv2d(
+            config.backbone.num_channels, hidden_dim, kernel_size=1
+        )
+        self.class_embed = nn.Linear(hidden_dim, config.num_classes + 1)
         self.bbox_embed = _MLP(hidden_dim, hidden_dim, 4, num_layers=3)
 
         self.matcher = (
-            matcher
-            if matcher is not None
+            config.matcher
+            if config.matcher is not None
             else _HungarianMatcher(
-                cost_class=class_loss_coef,
-                cost_bbox=bbox_loss_coef,
-                cost_giou=giou_loss_coef,
+                cost_class=config.class_loss_coef,
+                cost_bbox=config.bbox_loss_coef,
+                cost_giou=config.giou_loss_coef,
             )
         )
 
-        self.class_loss_coef = class_loss_coef
-        self.bbox_loss_coef = bbox_loss_coef
-        self.giou_loss_coef = giou_loss_coef
-        self.eos_coef = eos_coef
+        self.class_loss_coef = config.class_loss_coef
+        self.bbox_loss_coef = config.bbox_loss_coef
+        self.giou_loss_coef = config.giou_loss_coef
+        self.eos_coef = config.eos_coef
 
     def _get_src_permutation_idx(
         self, indices: Sequence[tuple[Tensor, Tensor]]
@@ -916,16 +954,21 @@ def detr_r50(
     pretrained_backbone: bool = False,
     **kwargs,
 ) -> DETR:
-    backbone = _build_backbone("resnet_50", pretrained_backbone)
-    transformer = _Transformer(
-        d_model=256,
-        n_head=8,
-        num_encoder_layers=6,
-        num_decoder_layers=6,
-        dim_feedforward=2048,
-        dropout=0.1,
-    )
-    return DETR(backbone, transformer, num_classes, num_queries, **kwargs)
+    config_kwargs = {
+        "backbone": _build_backbone("resnet_50", pretrained_backbone),
+        "transformer": _Transformer(
+            d_model=256,
+            n_head=8,
+            num_encoder_layers=6,
+            num_decoder_layers=6,
+            dim_feedforward=2048,
+            dropout=0.1,
+        ),
+        "num_classes": num_classes,
+        "num_queries": num_queries,
+    }
+    config_kwargs.update(kwargs)
+    return DETR(DETRConfig(**config_kwargs))
 
 
 @register_model
@@ -935,13 +978,18 @@ def detr_r101(
     pretrained_backbone: bool = False,
     **kwargs,
 ) -> DETR:
-    backbone = _build_backbone("resnet_101", pretrained_backbone)
-    transformer = _Transformer(
-        d_model=256,
-        n_head=8,
-        num_encoder_layers=6,
-        num_decoder_layers=6,
-        dim_feedforward=2048,
-        dropout=0.1,
-    )
-    return DETR(backbone, transformer, num_classes, num_queries, **kwargs)
+    config_kwargs = {
+        "backbone": _build_backbone("resnet_101", pretrained_backbone),
+        "transformer": _Transformer(
+            d_model=256,
+            n_head=8,
+            num_encoder_layers=6,
+            num_decoder_layers=6,
+            dim_feedforward=2048,
+            dropout=0.1,
+        ),
+        "num_classes": num_classes,
+        "num_queries": num_queries,
+    }
+    config_kwargs.update(kwargs)
+    return DETR(DETRConfig(**config_kwargs))

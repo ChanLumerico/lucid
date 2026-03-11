@@ -6,6 +6,7 @@ DETR
     :maxdepth: 1
     :hidden:
 
+    DETRConfig.rst
     detr_r50.rst
     detr_r101.rst
 
@@ -143,38 +144,35 @@ Class Signature
 .. code-block:: python
 
     class DETR(nn.Module):
-        def __init__(
-            self,
-            backbone: _BackboneBase,
-            transformer: _Transformer,
-            num_classes: int,
-            num_queries: int = 100,
-            aux_loss: bool = True,
-            matcher: _HungarianMatcher | None = None,
-            class_loss_coef: float = 1.0,
-            bbox_loss_coef: float = 5.0,
-            giou_loss_coef: float = 2.0,
-            eos_coef: float = 0.1,
-        ) -> None
+        def __init__(self, config: DETRConfig) -> None
 
 Parameters
 ----------
-- **backbone** (`_BackboneBase`): CNN feature extractor (e.g., ResNet-50/101).
-  Outputs a single stride-32 feature map `(B, C_backbone, H, W)` and a padding mask `(B, H, W)`.
+- **config** (`DETRConfig`): Configuration object that packages the backbone,
+  transformer, query count, loss coefficients, and optional matcher used to
+  build the detector.
 
-- **transformer** (`_Transformer`): Encoder-decoder with hidden size `d_model` (e.g., 256),
-  8 heads, 6 layers enc/dec by default. **Positional encoding** must also use `d_model`.
+Configuration
+-------------
+- **backbone** (`nn.Module`): CNN feature extractor (e.g., ResNet-50/101).
+  It must expose a positive integer `num_channels` attribute and return a
+  stride-32 feature map of shape `(B, C_backbone, H, W)`.
+
+- **transformer** (`nn.Module`): Encoder-decoder with hidden size `d_model`
+  (e.g., 256). It must expose a positive integer `d_model` attribute and return
+  DETR decoder states from its `forward`.
 
 - **num_classes** (`int`): Number of foreground categories (COCO: 91).
-- **num_queries** (`int`, default `100`): Learned object queries = maximum detections per image.
-- **aux_loss** (`bool`, default `True`): If `True`, returns and trains on intermediate decoder outputs.
-- **matcher** (`_HungarianMatcher | None`): Bipartite matcher used during training.
-  Defaults to standard DETR costs if `None`.
-
-- **class_loss_coef** (`float`, default `1.0`): Weight for classification (CE) loss.
-- **bbox_loss_coef** (`float`, default `5.0`): Weight for L1 loss on boxes.
-- **giou_loss_coef** (`float`, default `2.0`): Weight for (1 - GIoU) loss on boxes.
-- **eos_coef** (`float`, default `0.1`): Weight for the "no-object" class in CE (down-weights background).
+- **num_queries** (`int`, default `100`): Learned object queries; maximum
+  detections per image.
+- **aux_loss** (`bool`, default `True`): If `True`, returns and trains on
+  intermediate decoder outputs.
+- **matcher** (`nn.Module | None`): Bipartite matcher used during training.
+  Defaults to the standard DETR Hungarian matcher if `None`.
+- **class_loss_coef** (`float`, default `1.0`): Weight for classification loss.
+- **bbox_loss_coef** (`float`, default `5.0`): Weight for L1 box loss.
+- **giou_loss_coef** (`float`, default `2.0`): Weight for generalized IoU loss.
+- **eos_coef** (`float`, default `0.1`): Weight for the "no-object" class.
 
 Inputs
 ------
