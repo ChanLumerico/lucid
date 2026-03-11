@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Callable
 import lucid
 import lucid.nn as nn
@@ -13,37 +14,70 @@ from lucid.models.utils import (
     clip_boxes,
 )
 
-__all__ = ["FastRCNN"]
+__all__ = ["FastRCNN", "FastRCNNConfig"]
+
+
+@dataclass
+class FastRCNNConfig:
+    backbone: nn.Module
+    feat_channels: int
+    num_classes: int
+    pool_size: tuple[int, int] | list[int] = (7, 7)
+    hidden_dim: int = 4096
+    bbox_reg_means: tuple[float, ...] | list[float] = (0.0, 0.0, 0.0, 0.0)
+    bbox_reg_stds: tuple[float, ...] | list[float] = (0.1, 0.1, 0.2, 0.2)
+    dropout: float = 0.5
+    proposal_generator: Callable[..., Tensor] | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.backbone, nn.Module):
+            raise TypeError("backbone must be an nn.Module")
+        if self.feat_channels <= 0:
+            raise ValueError("feat_channels must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+
+        self.pool_size = tuple(self.pool_size)
+        self.bbox_reg_means = tuple(self.bbox_reg_means)
+        self.bbox_reg_stds = tuple(self.bbox_reg_stds)
+
+        if len(self.pool_size) != 2 or self.pool_size[0] <= 0 or self.pool_size[1] <= 0:
+            raise ValueError("pool_size must contain exactly two positive integers")
+        if self.hidden_dim <= 0:
+            raise ValueError("hidden_dim must be greater than 0")
+        if len(self.bbox_reg_means) != 4:
+            raise ValueError("bbox_reg_means must contain exactly four values")
+        if len(self.bbox_reg_stds) != 4 or any(std <= 0 for std in self.bbox_reg_stds):
+            raise ValueError("bbox_reg_stds must contain exactly four positive values")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
+        if self.proposal_generator is not None and not callable(
+            self.proposal_generator
+        ):
+            raise TypeError("proposal_generator must be callable or None")
 
 
 class FastRCNN(nn.Module):
-    def __init__(
-        self,
-        backbone: nn.Module,
-        feat_channels: int,
-        num_classes: int,
-        pool_size: tuple[int, int] = (7, 7),
-        hidden_dim: int = 4096,
-        bbox_reg_means: tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
-        bbox_reg_stds: tuple[float, ...] = (0.1, 0.1, 0.2, 0.2),
-        dropout: float = 0.5,
-        proposal_generator: Callable[..., Tensor] | None = None,
-    ) -> None:
+    def __init__(self, config: FastRCNNConfig) -> None:
         super().__init__()
-        self.backbone = backbone
-        self.roipool = ROIAlign(output_size=pool_size)
-        self.proposal_generator = proposal_generator or SelectiveSearch()
+        self.config = config
+        self.backbone = config.backbone
+        self.roipool = ROIAlign(output_size=config.pool_size)
+        self.proposal_generator = config.proposal_generator or SelectiveSearch()
 
-        self.fc1 = nn.Linear(feat_channels * pool_size[0] * pool_size[1], hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
+        self.fc1 = nn.Linear(
+            config.feat_channels * config.pool_size[0] * config.pool_size[1],
+            config.hidden_dim,
+        )
+        self.fc2 = nn.Linear(config.hidden_dim, config.hidden_dim)
+        self.dropout1 = nn.Dropout(config.dropout)
+        self.dropout2 = nn.Dropout(config.dropout)
 
-        self.cls_score = nn.Linear(hidden_dim, num_classes)
-        self.bbox_pred = nn.Linear(hidden_dim, num_classes * 4)
+        self.cls_score = nn.Linear(config.hidden_dim, config.num_classes)
+        self.bbox_pred = nn.Linear(config.hidden_dim, config.num_classes * 4)
 
-        self.bbox_reg_means = Tensor(bbox_reg_means, dtype=lucid.Float32)
-        self.bbox_reg_stds = Tensor(bbox_reg_stds, dtype=lucid.Float32)
+        self.bbox_reg_means = Tensor(config.bbox_reg_means, dtype=lucid.Float32)
+        self.bbox_reg_stds = Tensor(config.bbox_reg_stds, dtype=lucid.Float32)
 
     def forward(
         self,
@@ -157,7 +191,7 @@ class FastRCNN(nn.Module):
 
             preds: list[Tensor] = []
             for i, c in enumerate(labels_fg):
-                start = c * 4
+                start = int(c.item()) * 4
                 preds.append(deltas_fg[i, start : start + 4])
 
             preds = lucid.stack(preds, axis=0)
