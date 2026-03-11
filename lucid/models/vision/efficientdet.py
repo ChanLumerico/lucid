@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import math
 from typing import Literal
 
@@ -14,6 +15,7 @@ from lucid.models.utils import iou, nms, DetectionDict
 
 __all__ = [
     "EfficientDet",
+    "EfficientDetConfig",
     "efficientdet_d0",
     "efficientdet_d1",
     "efficientdet_d2",
@@ -26,6 +28,21 @@ __all__ = [
 
 
 _CompoundCoefLiteral = Literal[0, 1, 2, 3, 4, 5, 6, 7]
+
+
+@dataclass
+class EfficientDetConfig:
+    compound_coef: _CompoundCoefLiteral = 0
+    num_anchors: int = 9
+    num_classes: int = 80
+
+    def __post_init__(self) -> None:
+        if self.compound_coef not in range(8):
+            raise ValueError("compound_coef must be an integer in the range [0, 7]")
+        if self.num_anchors != 9:
+            raise ValueError("num_anchors must be 9 for the current anchor generator")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
 
 
 class _ConvBlock(nn.Module):
@@ -355,8 +372,8 @@ class _ClipBoxes(nn.Module):
         boxes[:, :, 0] = lucid.clip(boxes[:, :, 0], min_value=0)
         boxes[:, :, 1] = lucid.clip(boxes[:, :, 1], min_value=0)
 
-        boxes[:, :, 2] = lucid.clip(boxes[:, :, 2], min_value=images.shape[3])
-        boxes[:, :, 3] = lucid.clip(boxes[:, :, 3], min_value=images.shape[2])
+        boxes[:, :, 2] = lucid.clip(boxes[:, :, 2], max_value=images.shape[3])
+        boxes[:, :, 3] = lucid.clip(boxes[:, :, 3], max_value=images.shape[2])
 
         return boxes
 
@@ -387,7 +404,7 @@ class _FocalLoss(nn.Module):
             reg = regs[i, :, :]
 
             box_annot = annotations[i, :, :]
-            box_annot = box_annot[box_annot[:, 4] != 1]
+            box_annot = box_annot[box_annot[:, 4] != -1]
 
             if len(box_annot) == 0:
                 reg_losses.append(lucid.zeros(1, dtype=lucid.Float32, device=device))
@@ -405,6 +422,11 @@ class _FocalLoss(nn.Module):
 
             pos_indices = iou_max >= 0.5
             num_pos_anchors = pos_indices.sum()
+            pos_denom = lucid.where(
+                num_pos_anchors > 0,
+                num_pos_anchors.astype(lucid.Float32),
+                lucid.ones((), dtype=lucid.Float32, device=device),
+            )
             assigned_annot = box_annot[iou_argmax, :]
 
             targets[pos_indices, :] = 0
@@ -426,7 +448,7 @@ class _FocalLoss(nn.Module):
             )
 
             clf_losses.append(
-                cls_loss.sum() / lucid.clip(num_pos_anchors, min_value=1.0)
+                cls_loss.sum() / pos_denom
             )
 
             if pos_indices.sum() > 0:
@@ -500,15 +522,11 @@ _backbone_channels: dict[int, tuple[int]] = {
 
 
 class EfficientDet(nn.Module):
-    def __init__(
-        self,
-        compound_coef: _CompoundCoefLiteral = 0,
-        num_anchors: int = 9,
-        num_classes: int = 80,
-    ) -> None:
+    def __init__(self, config: EfficientDetConfig) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.compound_coef = compound_coef
+        self.config = config
+        self.num_classes = config.num_classes
+        self.compound_coef = config.compound_coef
 
         base_channels = 64
         self.num_channels = int(round(base_channels * (1.4**self.compound_coef)))
@@ -533,12 +551,14 @@ class EfficientDet(nn.Module):
             *[_BiFPN(self.num_channels) for _ in range(min(2 + self.compound_coef, 8))]
         )
         self.regressor = _BBoxRegressor(
-            self.num_channels, num_anchors, num_layers=3 + self.compound_coef // 3
+            self.num_channels,
+            config.num_anchors,
+            num_layers=3 + self.compound_coef // 3,
         )
         self.classifier = _Classifier(
             self.num_channels,
-            num_anchors,
-            num_classes,
+            config.num_anchors,
+            config.num_classes,
             num_layers=3 + self.compound_coef // 3,
         )
 
@@ -633,8 +653,8 @@ class EfficientDet(nn.Module):
         cls_preds, box_preds, anchors = self.forward(x)
 
         max_n = max(t.shape[0] for t in targets)
-        padded = lucid.zeros(
-            (len(targets), max_n, 5), dtype=lucid.Float32, device=x.device
+        padded = lucid.full(
+            (len(targets), max_n, 5), -1.0, dtype=lucid.Float32, device=x.device
         )
         for i, t in enumerate(targets):
             padded[i, : t.shape[0]] = t
@@ -647,39 +667,79 @@ class EfficientDet(nn.Module):
 
 @register_model
 def efficientdet_d0(num_classes: int = 80, **kwargs) -> EfficientDet:
-    return EfficientDet(compound_coef=0, num_classes=num_classes, **kwargs)
+    config_kwargs = {
+        "compound_coef": 0,
+        "num_classes": num_classes,
+    }
+    config_kwargs.update(kwargs)
+    return EfficientDet(EfficientDetConfig(**config_kwargs))
 
 
 @register_model
 def efficientdet_d1(num_classes: int = 80, **kwargs) -> EfficientDet:
-    return EfficientDet(compound_coef=1, num_classes=num_classes, **kwargs)
+    config_kwargs = {
+        "compound_coef": 1,
+        "num_classes": num_classes,
+    }
+    config_kwargs.update(kwargs)
+    return EfficientDet(EfficientDetConfig(**config_kwargs))
 
 
 @register_model
 def efficientdet_d2(num_classes: int = 80, **kwargs) -> EfficientDet:
-    return EfficientDet(compound_coef=2, num_classes=num_classes, **kwargs)
+    config_kwargs = {
+        "compound_coef": 2,
+        "num_classes": num_classes,
+    }
+    config_kwargs.update(kwargs)
+    return EfficientDet(EfficientDetConfig(**config_kwargs))
 
 
 @register_model
 def efficientdet_d3(num_classes: int = 80, **kwargs) -> EfficientDet:
-    return EfficientDet(compound_coef=3, num_classes=num_classes, **kwargs)
+    config_kwargs = {
+        "compound_coef": 3,
+        "num_classes": num_classes,
+    }
+    config_kwargs.update(kwargs)
+    return EfficientDet(EfficientDetConfig(**config_kwargs))
 
 
 @register_model
 def efficientdet_d4(num_classes: int = 80, **kwargs) -> EfficientDet:
-    return EfficientDet(compound_coef=4, num_classes=num_classes, **kwargs)
+    config_kwargs = {
+        "compound_coef": 4,
+        "num_classes": num_classes,
+    }
+    config_kwargs.update(kwargs)
+    return EfficientDet(EfficientDetConfig(**config_kwargs))
 
 
 @register_model
 def efficientdet_d5(num_classes: int = 80, **kwargs) -> EfficientDet:
-    return EfficientDet(compound_coef=5, num_classes=num_classes, **kwargs)
+    config_kwargs = {
+        "compound_coef": 5,
+        "num_classes": num_classes,
+    }
+    config_kwargs.update(kwargs)
+    return EfficientDet(EfficientDetConfig(**config_kwargs))
 
 
 @register_model
 def efficientdet_d6(num_classes: int = 80, **kwargs) -> EfficientDet:
-    return EfficientDet(compound_coef=6, num_classes=num_classes, **kwargs)
+    config_kwargs = {
+        "compound_coef": 6,
+        "num_classes": num_classes,
+    }
+    config_kwargs.update(kwargs)
+    return EfficientDet(EfficientDetConfig(**config_kwargs))
 
 
 @register_model
 def efficientdet_d7(num_classes: int = 80, **kwargs) -> EfficientDet:
-    return EfficientDet(compound_coef=7, num_classes=num_classes, **kwargs)
+    config_kwargs = {
+        "compound_coef": 7,
+        "num_classes": num_classes,
+    }
+    config_kwargs.update(kwargs)
+    return EfficientDet(EfficientDetConfig(**config_kwargs))
