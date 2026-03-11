@@ -6,6 +6,7 @@ Faster R-CNN
     :maxdepth: 1
     :hidden:
 
+    FasterRCNNConfig.rst
     faster_rcnn_resnet_50_fpn.rst
     faster_rcnn_resnet_101_fpn.rst
 
@@ -14,7 +15,8 @@ Faster R-CNN
 `FasterRCNN` implements the Faster Region-based Convolutional Neural Network,
 an improvement over Fast R-CNN that introduces a learnable Region Proposal Network (RPN).
 This architecture eliminates the need for external proposal methods by jointly learning
-region proposals and object classification in a unified network.
+region proposals and object classification in a unified network. Model structure
+is defined through `FasterRCNNConfig`.
 
 .. mermaid::
     :name: FasterRCNN
@@ -105,55 +107,15 @@ Class Signature
 .. code-block:: python
 
     class FasterRCNN(nn.Module):
-        def __init__(
-            self,
-            backbone: nn.Module,
-            feat_channels: int,
-            num_classes: int,
-            *,
-            use_fpn: bool = False,
-            anchor_sizes: tuple[int, ...] = (128, 256, 512),
-            aspect_ratios: tuple[float, ...] = (0.5, 1.0, 2.0),
-            anchor_stride: int = 16,
-            pool_size: tuple[int, int] = (7, 7),
-            hidden_dim: int = 4096,
-            dropout: float = 0.5,
-        )
+        def __init__(self, config: FasterRCNNConfig) -> None
 
 Parameters
 ----------
 
-- **backbone** (*nn.Module*):  
-  Feature extraction network applied once per image to produce a feature map.
-
-- **feat_channels** (*int*):  
-  Number of output channels from the backbone's final feature map.
-
-- **num_classes** (*int*):  
-  Number of object categories (excluding background).
-
-- **use_fpn** (*bool*, optional):
-  Whether to use Feature Pyramid Network (FPN) for backbone feature extraction.
-  Default is `False`. When set to `True`, the user should attach backbone model that
-  supports FPN feature returns.
-
-- **anchor_sizes** (*tuple[int, ...]*, optional):  
-  Set of anchor box scales used by the RPN. Default is `(128, 256, 512)`.
-
-- **aspect_ratios** (*tuple[float, ...]*, optional):  
-  Set of aspect ratios for the anchors. Default is `(0.5, 1.0, 2.0)`.
-
-- **anchor_stride** (*int*, optional):  
-  Stride of the anchor generation relative to the backbone feature map. Default is `16`.
-
-- **pool_size** (*tuple[int, int]*, optional):  
-  Spatial size of each RoI feature after pooling. Default is `(7, 7)`.
-
-- **hidden_dim** (*int*, optional):  
-  Number of units in the fully connected head. Default is `4096`.
-
-- **dropout** (*float*, optional):  
-  Dropout probability used in the classification and regression head. Default is `0.5`.
+- **config** (*FasterRCNNConfig*):
+  Configuration object describing the backbone, feature-map channel width,
+  FPN usage, anchor generation parameters, RoI pooling size, head width,
+  and dropout used by the detection head.
 
 Architecture
 ------------
@@ -202,12 +164,11 @@ for both RPN and RoI heads.
 Examples
 --------
 
-**Basic Usage**
-
 .. code-block:: python
 
+    import lucid
+    import lucid.models as models
     import lucid.nn as nn
-    import lucid.random
 
     class SimpleBackbone(nn.Module):
         def __init__(self):
@@ -223,18 +184,7 @@ Examples
             return self.conv(x)
 
     backbone = SimpleBackbone()
-    model = nn.FasterRCNN(backbone, feat_channels=128, num_classes=5)
-
-    image = lucid.random.randn(1, 3, 512, 512)
-    output = model.predict(image)
-    print(output["boxes"].shape, output["scores"].shape, output["labels"].shape)
-
-**Custom Configuration**
-
-.. code-block:: python
-
-    backbone = SimpleBackbone()
-    model = nn.FasterRCNN(
+    config = models.FasterRCNNConfig(
         backbone=backbone,
         feat_channels=128,
         num_classes=5,
@@ -244,13 +194,13 @@ Examples
         hidden_dim=2048,
         dropout=0.4,
     )
-
+    model = models.FasterRCNN(config)
     image = lucid.random.randn(1, 3, 384, 384)
-    output = model.predict(image)
-    print(output["boxes"].shape, output["scores"].shape, output["labels"].shape)
+    detections = model.predict(image)
+    first = detections[0]
+    print(first["boxes"].shape, first["scores"].shape, first["labels"].shape)
 
 .. tip::
 
    For training, use `model.get_loss()` with the predicted and ground-truth targets
    to compute total and component-wise loss terms.
-

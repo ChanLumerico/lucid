@@ -498,8 +498,13 @@ class MultiScaleROIAlign(nn.Module):
             feat = features[level - 2]
             rois_l = rois[mask]
             idx_l = roi_idx[mask]
+            valid = (rois_l[:, 2] > rois_l[:, 0]) & (rois_l[:, 3] > rois_l[:, 1])
+            if lucid.sum(valid) == 0:
+                continue
+
+            valid_idx = valid.nonzero().squeeze(axis=1)
             pooled.append(self.align(feat, rois_l, idx_l))
-            pooled_indices.append(mask)
+            pooled_indices.append(mask[valid_idx])
 
         if pooled:
             pooled_cat = lucid.concatenate(pooled, axis=0)

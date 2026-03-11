@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import math
 from typing import TypedDict
 
@@ -25,9 +26,53 @@ from lucid.models.vision.resnet import resnet_50, resnet_101
 
 __all__ = [
     "FasterRCNN",
+    "FasterRCNNConfig",
     "faster_rcnn_resnet_50_fpn",
     "faster_rcnn_resnet_101_fpn",
 ]
+
+
+@dataclass
+class FasterRCNNConfig:
+    backbone: nn.Module
+    feat_channels: int
+    num_classes: int
+    use_fpn: bool = False
+    anchor_sizes: tuple[int, ...] | list[int] = (128, 256, 512)
+    aspect_ratios: tuple[float, ...] | list[float] = (0.5, 1.0, 2.0)
+    anchor_stride: int = 16
+    pool_size: tuple[int, int] | list[int] = (7, 7)
+    hidden_dim: int = 4096
+    dropout: float = 0.5
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.backbone, nn.Module):
+            raise TypeError("backbone must be an nn.Module")
+        if self.feat_channels <= 0:
+            raise ValueError("feat_channels must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if not isinstance(self.use_fpn, bool):
+            raise TypeError("use_fpn must be a bool")
+
+        self.anchor_sizes = tuple(self.anchor_sizes)
+        self.aspect_ratios = tuple(self.aspect_ratios)
+        self.pool_size = tuple(self.pool_size)
+
+        if len(self.anchor_sizes) == 0 or any(size <= 0 for size in self.anchor_sizes):
+            raise ValueError("anchor_sizes must contain at least one positive value")
+        if len(self.aspect_ratios) == 0 or any(
+            ratio <= 0 for ratio in self.aspect_ratios
+        ):
+            raise ValueError("aspect_ratios must contain at least one positive value")
+        if self.anchor_stride <= 0:
+            raise ValueError("anchor_stride must be greater than 0")
+        if len(self.pool_size) != 2 or any(size <= 0 for size in self.pool_size):
+            raise ValueError("pool_size must contain exactly two positive integers")
+        if self.hidden_dim <= 0:
+            raise ValueError("hidden_dim must be greater than 0")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
 
 
 class _AnchorGenerator(nn.Module):
@@ -254,39 +299,29 @@ class _FasterRCNNLoss(TypedDict):
 
 
 class FasterRCNN(nn.Module):
-    def __init__(
-        self,
-        backbone: nn.Module,
-        feat_channels: int,
-        num_classes: int,
-        *,
-        use_fpn: bool = False,
-        anchor_sizes: tuple[int, ...] = (128, 256, 512),
-        aspect_ratios: tuple[float, ...] = (0.5, 1.0, 2.0),
-        anchor_stride: int = 16,
-        pool_size: tuple[int, int] = (7, 7),
-        hidden_dim: int = 4096,
-        dropout: float = 0.5,
-    ) -> None:
+    def __init__(self, config: FasterRCNNConfig) -> None:
         super().__init__()
-        self.backbone = backbone
+        self.config = config
+        self.backbone = config.backbone
         self.anchor_generator = _AnchorGenerator(
-            anchor_sizes, aspect_ratios, anchor_stride
+            config.anchor_sizes, config.aspect_ratios, config.anchor_stride
         )
-        self.rpn = _RegionProposalNetwork(feat_channels, self.anchor_generator)
-        self.use_fpn = use_fpn
+        self.rpn = _RegionProposalNetwork(config.feat_channels, self.anchor_generator)
+        self.use_fpn = config.use_fpn
         self.roipool = (
-            MultiScaleROIAlign(pool_size) if self.use_fpn else ROIAlign(pool_size)
+            MultiScaleROIAlign(config.pool_size)
+            if self.use_fpn
+            else ROIAlign(config.pool_size)
         )
 
-        fc_in = feat_channels * pool_size[0] * pool_size[1]
-        self.fc1 = nn.Linear(fc_in, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.drop1 = nn.Dropout(dropout)
-        self.drop2 = nn.Dropout(dropout)
+        fc_in = config.feat_channels * config.pool_size[0] * config.pool_size[1]
+        self.fc1 = nn.Linear(fc_in, config.hidden_dim)
+        self.fc2 = nn.Linear(config.hidden_dim, config.hidden_dim)
+        self.drop1 = nn.Dropout(config.dropout)
+        self.drop2 = nn.Dropout(config.dropout)
 
-        self.cls_score = nn.Linear(hidden_dim, num_classes)
-        self.bbox_pred = nn.Linear(hidden_dim, num_classes * 4)
+        self.cls_score = nn.Linear(config.hidden_dim, config.num_classes)
+        self.bbox_pred = nn.Linear(config.hidden_dim, config.num_classes * 4)
 
         self.bbox_reg_means: nn.Buffer
         self.bbox_reg_stds: nn.Buffer
@@ -475,6 +510,12 @@ class FasterRCNN(nn.Module):
                 )
                 all_deltas.append(lucid.empty(0, 4, device=props.device))
                 continue
+            if gt_boxes.size == 0:
+                all_labels.append(
+                    lucid.zeros(props.shape[0], dtype=lucid.Int32, device=props.device)
+                )
+                all_deltas.append(lucid.zeros(props.shape[0], 4, device=props.device))
+                continue
 
             ious = iou(props, gt_boxes)
             max_iou = lucid.max(ious, axis=1)
@@ -483,7 +524,7 @@ class FasterRCNN(nn.Module):
             labels = gt_labels[argmax].astype(lucid.Int32)
             labels[max_iou < 0.5] = 0
 
-            deltas = bbox_to_delta(props, gt_labels[argmax])
+            deltas = bbox_to_delta(props, gt_boxes[argmax])
             all_labels.append(labels)
             all_deltas.append(deltas)
 
@@ -590,7 +631,7 @@ class FasterRCNN(nn.Module):
         if fg.shape[0] > 0:
             preds = []
             for j, c in enumerate(sb_labels[fg]):
-                start = c * 4
+                start = int(c.item()) * 4
                 preds.append(bbox_deltas[fg[j], start : start + 4])
 
             preds = lucid.stack(preds, axis=0)
@@ -640,14 +681,15 @@ def faster_rcnn_resnet_50_fpn(
 ) -> FasterRCNN:
     backbone = resnet_50(backbone_num_classes)
     backbone = _ResNetFPNBackbone(backbone)
-    return FasterRCNN(
-        backbone,
+    config = FasterRCNNConfig(
+        backbone=backbone,
         feat_channels=256,
         num_classes=num_classes,
         use_fpn=True,
         hidden_dim=1024,
         **kwargs,
     )
+    return FasterRCNN(config)
 
 
 @register_model
@@ -656,11 +698,12 @@ def faster_rcnn_resnet_101_fpn(
 ) -> FasterRCNN:
     backbone = resnet_101(backbone_num_classes)
     backbone = _ResNetFPNBackbone(backbone)
-    return FasterRCNN(
-        backbone,
+    config = FasterRCNNConfig(
+        backbone=backbone,
         feat_channels=256,
         num_classes=num_classes,
         use_fpn=True,
         hidden_dim=1024,
         **kwargs,
     )
+    return FasterRCNN(config)
