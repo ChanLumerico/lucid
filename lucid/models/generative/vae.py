@@ -65,7 +65,9 @@ class VAE(nn.Module):
 
         self.encoders = nn.ModuleList(config.encoders)
         self.decoders = nn.ModuleList(config.decoders)
-        self.priors = nn.ModuleList(config.priors) if config.priors is not None else None
+        self.priors = (
+            nn.ModuleList(config.priors) if config.priors is not None else None
+        )
 
         self.reconstruction_loss = config.reconstruction_loss
         self.base_kl_weight = config.kl_weight

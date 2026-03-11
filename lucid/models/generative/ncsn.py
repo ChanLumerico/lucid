@@ -29,7 +29,9 @@ class NCSNConfig:
             raise ValueError("num_classes must be greater than 0")
 
         self.dilations = tuple(self.dilations)
-        if len(self.dilations) != 4 or any(dilation <= 0 for dilation in self.dilations):
+        if len(self.dilations) != 4 or any(
+            dilation <= 0 for dilation in self.dilations
+        ):
             raise ValueError("dilations must contain exactly four positive integers")
         if not isinstance(self.scale_by_sigma, bool):
             raise TypeError("scale_by_sigma must be a bool")
@@ -277,9 +279,15 @@ class NCSN(nn.Module):
         )
 
         self.refine4 = _RefineBlock([config.nf], config.nf, config.num_classes)
-        self.refine3 = _RefineBlock([config.nf, config.nf], config.nf, config.num_classes)
-        self.refine2 = _RefineBlock([config.nf, config.nf], config.nf, config.num_classes)
-        self.refine1 = _RefineBlock([config.nf, config.nf], config.nf, config.num_classes)
+        self.refine3 = _RefineBlock(
+            [config.nf, config.nf], config.nf, config.num_classes
+        )
+        self.refine2 = _RefineBlock(
+            [config.nf, config.nf], config.nf, config.num_classes
+        )
+        self.refine1 = _RefineBlock(
+            [config.nf, config.nf], config.nf, config.num_classes
+        )
 
         self.end_norm = _CondInstanceNorm(config.nf, config.num_classes)
         self.end_act = nn.ELU()
