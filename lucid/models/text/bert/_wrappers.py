@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -11,6 +13,8 @@ from ._model import BERT, BERTConfig
 from ._tokenizer import BERTTokenizerFast
 
 __all__ = [
+    "BERTForSequenceClassificationConfig",
+    "BERTForTokenClassificationConfig",
     "BERTForPreTraining",
     "BERTForMaskedLM",
     "BERTForCausalLM",
@@ -19,6 +23,30 @@ __all__ = [
     "BERTForTokenClassification",
     "BERTForQuestionAnswering",
 ]
+
+
+@dataclass
+class BERTForSequenceClassificationConfig:
+    bert_config: BERTConfig
+    num_labels: int = 2
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.bert_config, BERTConfig):
+            raise TypeError("bert_config must be an instance of BERTConfig")
+        if self.num_labels <= 0:
+            raise ValueError("num_labels must be greater than 0")
+
+
+@dataclass
+class BERTForTokenClassificationConfig:
+    bert_config: BERTConfig
+    num_labels: int = 2
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.bert_config, BERTConfig):
+            raise TypeError("bert_config must be an instance of BERTConfig")
+        if self.num_labels <= 0:
+            raise ValueError("num_labels must be greater than 0")
 
 
 class _BERTTaskWrapperMixin:
@@ -1361,18 +1389,18 @@ class BERTForNextSentencePrediction(
 class BERTForSequenceClassification(
     _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
 ):
-    def __init__(self, config: BERTConfig, num_labels: int = 2) -> None:
+    def __init__(self, config: BERTForSequenceClassificationConfig) -> None:
         super().__init__()
         self.config = config
-        self.bert = BERT(config)
-        self.num_labels = num_labels
+        self.bert = BERT(config.bert_config)
+        self.num_labels = config.num_labels
 
-        classifier_dropout = config.classifier_dropout
+        classifier_dropout = config.bert_config.classifier_dropout
         if classifier_dropout is None:
-            classifier_dropout = config.hidden_dropout_prob
+            classifier_dropout = config.bert_config.hidden_dropout_prob
 
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = nn.Linear(config.hidden_size, num_labels)
+        self.classifier = nn.Linear(config.bert_config.hidden_size, config.num_labels)
         self.classifier.apply(self.bert._init_weights)
 
     def forward(
@@ -1548,18 +1576,18 @@ class BERTForSequenceClassification(
 class BERTForTokenClassification(
     _BERTTaskWrapperMixin, PreTrainedModelMixin, nn.Module
 ):
-    def __init__(self, config: BERTConfig, num_labels: int = 2) -> None:
+    def __init__(self, config: BERTForTokenClassificationConfig) -> None:
         super().__init__()
         self.config = config
-        self.bert = BERT(config)
-        self.num_labels = num_labels
+        self.bert = BERT(config.bert_config)
+        self.num_labels = config.num_labels
 
-        classifier_dropout = config.classifier_dropout
+        classifier_dropout = config.bert_config.classifier_dropout
         if classifier_dropout is None:
-            classifier_dropout = config.hidden_dropout_prob
+            classifier_dropout = config.bert_config.hidden_dropout_prob
 
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = nn.Linear(config.hidden_size, num_labels)
+        self.classifier = nn.Linear(config.bert_config.hidden_size, config.num_labels)
         self.classifier.apply(self.bert._init_weights)
 
     def forward(

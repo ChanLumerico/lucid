@@ -1,6 +1,12 @@
 RoFormerForTokenClassification
 ==============================
 
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    RoFormerForTokenClassificationConfig.rst
+
 .. autoclass:: lucid.models.RoFormerForTokenClassification
 
 The `RoFormerForTokenClassification` class predicts labels for each token
@@ -11,12 +17,12 @@ Class Signature
 
 .. code-block:: python
 
-    class RoFormerForTokenClassification(config: RoFormerConfig, num_labels: int = 2)
+    class RoFormerForTokenClassification(config: RoFormerForTokenClassificationConfig)
 
 Parameters
 ----------
-- **config** (*RoFormerConfig*): RoFormer configuration for token-level outputs.
-- **num_labels** (*int*, optional): Number of target classes. Default is 2.
+- **config** (*RoFormerForTokenClassificationConfig*):
+  Wrapper configuration containing the RoFormer backbone config and token label count.
 
 Methods
 -------
@@ -45,7 +51,10 @@ Examples
 .. code-block:: python
 
     >>> import lucid.models as models
-    >>> config = models.RoFormerConfig.base(vocab_size=50000)
-    >>> model = models.RoFormerForTokenClassification(config, num_labels=5)
+    >>> config = models.RoFormerForTokenClassificationConfig(
+    ...     roformer_config=models.RoFormerConfig.base(vocab_size=50000),
+    ...     num_labels=5,
+    ... )
+    >>> model = models.RoFormerForTokenClassification(config)
     >>> print(model)
     RoFormerForTokenClassification(...)

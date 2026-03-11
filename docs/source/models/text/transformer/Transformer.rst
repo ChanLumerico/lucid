@@ -5,6 +5,7 @@ Transformer
     :maxdepth: 1
     :hidden:
 
+    TransformerConfig.rst
     transformer_base.rst
     transformer_big.rst
 
@@ -137,42 +138,34 @@ Class Signature
 
 .. code-block:: python
 
-    class Transformer(
-        src_vocab_size: int,
-        tgt_vocab_size: int,
-        d_model: int,
-        num_heads: int,
-        num_encoder_layers: int,
-        num_decoder_layers: int,
-        dim_feedforward: int,
-        dropout: float = 0.1,
-    )
+    class Transformer(config: TransformerConfig)
 
 Parameters
 ----------
+- **config** (*TransformerConfig*):
+  Configuration object that stores vocabulary sizes, model width, layer counts,
+  feedforward width, dropout, and positional encoding length.
+
+Configuration
+-------------
 - **src_vocab_size** (*int*):
   Size of the source vocabulary.
-
 - **tgt_vocab_size** (*int*):
   Size of the target vocabulary.
-
 - **d_model** (*int*):
   Dimension of the model’s hidden representations.
-
 - **num_heads** (*int*):
-  Number of attention heads in the multi-head self-attention mechanism.
-
+  Number of attention heads.
 - **num_encoder_layers** (*int*):
-  Number of encoder layers in the Transformer.
-
+  Number of encoder layers.
 - **num_decoder_layers** (*int*):
-  Number of decoder layers in the Transformer.
-
+  Number of decoder layers.
 - **dim_feedforward** (*int*):
-  Dimension of the feedforward network within each layer.
-
-- **dropout** (*float*, optional):
-  Dropout probability applied throughout the model. Default is 0.1.
+  Feedforward width inside each Transformer block.
+- **dropout** (*float*):
+  Dropout probability applied throughout the model.
+- **max_len** (*int*):
+  Maximum positional encoding length.
 
 Examples
 --------
@@ -181,14 +174,16 @@ Examples
 
     >>> import lucid.models as models
     >>> transformer = models.Transformer(
-    ...     src_vocab_size=5000,
-    ...     tgt_vocab_size=5000,
-    ...     d_model=512,
-    ...     num_heads=8,
-    ...     num_encoder_layers=6,
-    ...     num_decoder_layers=6,
-    ...     dim_feedforward=2048,
-    ...     dropout=0.1
+    ...     models.TransformerConfig(
+    ...         src_vocab_size=5000,
+    ...         tgt_vocab_size=5000,
+    ...         d_model=512,
+    ...         num_heads=8,
+    ...         num_encoder_layers=6,
+    ...         num_decoder_layers=6,
+    ...         dim_feedforward=2048,
+    ...         dropout=0.1,
+    ...     )
     ... )
     >>> print(transformer)
     Transformer(src_vocab_size=5000, tgt_vocab_size=5000, d_model=512, ...)
