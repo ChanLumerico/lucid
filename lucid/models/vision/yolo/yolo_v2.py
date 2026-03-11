@@ -1,3 +1,5 @@
+from copy import deepcopy
+from dataclasses import dataclass, field
 from typing import ClassVar
 from lucid import register_model
 
@@ -8,7 +10,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.models.utils import nms, DetectionDict
 
-__all__ = ["YOLO_V2", "yolo_v2", "yolo_v2_tiny"]
+__all__ = ["YOLO_V2", "YOLO_V2Config", "yolo_v2", "yolo_v2_tiny"]
 
 
 def _convblock(
@@ -115,43 +117,79 @@ _default_anchors = [
 ]
 
 
+@dataclass
+class YOLO_V2Config:
+    num_classes: int
+    num_anchors: int = 5
+    anchors: list[tuple[float, float]] = field(
+        default_factory=lambda: deepcopy(_default_anchors)
+    )
+    lambda_coord: float = 5.0
+    lambda_noobj: float = 0.5
+    darknet: nn.Module | None = None
+    route_layer: int | None = None
+    image_size: int = 416
+    use_passthrough: bool = True
+
+    def __post_init__(self) -> None:
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.num_anchors <= 0:
+            raise ValueError("num_anchors must be greater than 0")
+        if self.lambda_coord < 0:
+            raise ValueError("lambda_coord must be non-negative")
+        if self.lambda_noobj < 0:
+            raise ValueError("lambda_noobj must be non-negative")
+        if self.image_size <= 0:
+            raise ValueError("image_size must be greater than 0")
+        if not isinstance(self.use_passthrough, bool):
+            raise TypeError("use_passthrough must be a bool")
+        if self.darknet is not None and not isinstance(self.darknet, nn.Module):
+            raise TypeError("darknet must be an nn.Module or None")
+        if self.route_layer is not None and self.route_layer < 0:
+            raise ValueError("route_layer must be non-negative or None")
+
+        self.anchors = [tuple(anchor) for anchor in deepcopy(self.anchors)]
+        if len(self.anchors) != self.num_anchors:
+            raise ValueError("anchors must contain exactly num_anchors entries")
+        for anchor in self.anchors:
+            if (
+                len(anchor) != 2
+                or not all(isinstance(v, (int, float)) for v in anchor)
+                or anchor[0] <= 0
+                or anchor[1] <= 0
+            ):
+                raise ValueError(
+                    "anchors must contain (width, height) pairs with positive values"
+                )
+
+
 @nn.set_state_dict_pass_attr("darknet_19")
 class YOLO_V2(nn.Module):
     default_anchors: ClassVar[list[tuple[float, float]]] = _default_anchors
 
-    def __init__(
-        self,
-        num_classes: int,
-        num_anchors: int = 5,
-        anchors: list[tuple[float, float]] | None = None,
-        lambda_coord: float = 5.0,
-        lambda_noobj: float = 0.5,
-        darknet: nn.Module | None = None,
-        route_layer: int | None = None,
-        image_size: int = 416,
-        use_passthrough: bool = True,
-    ) -> None:
+    def __init__(self, config: YOLO_V2Config) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.num_anchors = num_anchors
-        self.lambda_coord = lambda_coord
-        self.lambda_noobj = lambda_noobj
-        self.use_passthrough = use_passthrough
+        self.config = config
+        self.num_classes = config.num_classes
+        self.num_anchors = config.num_anchors
+        self.lambda_coord = config.lambda_coord
+        self.lambda_noobj = config.lambda_noobj
+        self.use_passthrough = config.use_passthrough
+        self.image_size = config.image_size
 
-        if anchors is None:
-            anchors = YOLO_V2.default_anchors
-        self.anchors = nn.Buffer(anchors, dtype=lucid.Float32)
+        self.anchors = nn.Buffer(config.anchors, dtype=lucid.Float32)
 
-        if darknet is None:
+        if config.darknet is None:
             self.setattr_raw("darknet_19", _DarkNet_19())
             self.darknet = self.darknet_19.conv
             self.route_layer = 28
         else:
-            self.darknet = darknet
-            if route_layer is None and self.use_passthrough:
-                self.route_layer = self._auto_route_index(self.darknet, image_size)
+            self.darknet = config.darknet
+            if config.route_layer is None and self.use_passthrough:
+                self.route_layer = self._auto_route_index(self.darknet, config.image_size)
             else:
-                self.route_layer = route_layer
+                self.route_layer = config.route_layer
 
         out_c = self._darknet_out_channels(self.darknet)
 
@@ -190,7 +228,11 @@ class YOLO_V2(nn.Module):
                 nn.LeakyReLU(0.1),
             )
 
-        self.detector = nn.Conv2d(1024, num_anchors * (5 + num_classes), kernel_size=1)
+        self.detector = nn.Conv2d(
+            1024,
+            self.num_anchors * (5 + self.num_classes),
+            kernel_size=1,
+        )
 
     @staticmethod
     def _darknet_out_channels(darknet: nn.Module) -> int:
@@ -312,11 +354,12 @@ class YOLO_V2(nn.Module):
     def predict(
         self, x: Tensor, conf_thresh: float = 0.5, iou_thresh: float = 0.5
     ) -> list[list[DetectionDict]]:
-        N, _, H, W = x.shape
+        N = x.shape[0]
         B, C = self.num_anchors, self.num_classes
-        stride = self.img_size / H
 
         x = self.forward(x)
+        H, W = x.shape[2:]
+        stride = self.image_size / H
         x = x.reshape(N, B, 5 + C, H, W).transpose((0, 3, 4, 1, 2))
 
         pred_xy = F.sigmoid(x[..., 0:2])
@@ -365,20 +408,29 @@ class YOLO_V2(nn.Module):
 
 @register_model
 def yolo_v2(num_classes: int = 20, **kwargs) -> YOLO_V2:
-    return YOLO_V2(num_classes=num_classes, num_anchors=5, image_size=416, **kwargs)
+    config_kwargs = {
+        "num_classes": num_classes,
+        "num_anchors": 5,
+        "anchors": deepcopy(_default_anchors),
+        "image_size": 416,
+    }
+    config_kwargs.update(kwargs)
+    return YOLO_V2(YOLO_V2Config(**config_kwargs))
 
 
 @register_model
 def yolo_v2_tiny(num_classes: int = 20, **kwargs) -> YOLO_V2:
     darknet_tiny = _DarkNet_19_Tiny()
-    model = YOLO_V2(
-        num_classes=num_classes,
-        num_anchors=5,
-        image_size=416,
-        darknet=darknet_tiny.conv,
-        route_layer=None,
-        use_passthrough=False,
-        **kwargs,
-    )
+    config_kwargs = {
+        "num_classes": num_classes,
+        "num_anchors": 5,
+        "anchors": deepcopy(_default_anchors),
+        "image_size": 416,
+        "darknet": darknet_tiny.conv,
+        "route_layer": None,
+        "use_passthrough": False,
+    }
+    config_kwargs.update(kwargs)
+    model = YOLO_V2(YOLO_V2Config(**config_kwargs))
     model.setattr_raw("darknet_19", darknet_tiny)
     return model
