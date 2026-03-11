@@ -1,3 +1,5 @@
+from copy import deepcopy
+from dataclasses import dataclass, field
 from lucid import register_model
 
 import lucid
@@ -7,7 +9,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.models.utils import iou
 
-__all__ = ["YOLO_V1", "yolo_v1", "yolo_v1_tiny"]
+__all__ = ["YOLO_V1", "YOLO_V1Config", "yolo_v1", "yolo_v1_tiny"]
 
 
 arch_config = [
@@ -50,6 +52,81 @@ arch_config_tiny = [
 ]
 
 
+def _parse_conv_spec(spec: object) -> int:
+    if isinstance(spec, tuple):
+        if len(spec) != 4 or any(not isinstance(v, int) for v in spec):
+            raise ValueError(
+                "conv_config tuple entries must contain four integer values"
+            )
+        out_channels, kernel_size, stride, padding = spec
+        if out_channels <= 0 or kernel_size <= 0 or stride <= 0 or padding < 0:
+            raise ValueError(
+                "conv_config tuple entries must use positive output channels, "
+                "kernel sizes, strides, and non-negative padding"
+            )
+        return out_channels
+
+    if isinstance(spec, str):
+        if spec != "M":
+            raise ValueError("conv_config string entries must be 'M'")
+        return -1
+
+    if isinstance(spec, list):
+        if len(spec) != 3 or not isinstance(spec[2], int) or spec[2] <= 0:
+            raise ValueError(
+                "conv_config repeated-block entries must have the form "
+                "[conv1, conv2, positive_repeat_count]"
+            )
+        conv1_out = _parse_conv_spec(spec[0])
+        conv2_out = _parse_conv_spec(spec[1])
+        if conv1_out <= 0 or conv2_out <= 0:
+            raise ValueError(
+                "conv_config repeated-block convolution specs must be tuples"
+            )
+        return conv2_out
+
+    raise TypeError(
+        "conv_config entries must be tuples, 'M', or repeated-block lists"
+    )
+
+
+@dataclass
+class YOLO_V1Config:
+    in_channels: int = 3
+    split_size: int = 7
+    num_boxes: int = 2
+    num_classes: int = 20
+    lambda_coord: float = 5.0
+    lambda_noobj: float = 0.5
+    conv_config: list[object] = field(default_factory=lambda: deepcopy(arch_config))
+
+    def __post_init__(self) -> None:
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.split_size <= 0:
+            raise ValueError("split_size must be greater than 0")
+        if self.num_boxes <= 0:
+            raise ValueError("num_boxes must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.lambda_coord < 0:
+            raise ValueError("lambda_coord must be non-negative")
+        if self.lambda_noobj < 0:
+            raise ValueError("lambda_noobj must be non-negative")
+        if not isinstance(self.conv_config, list) or len(self.conv_config) == 0:
+            raise ValueError("conv_config must be a non-empty list")
+
+        self.conv_config = deepcopy(self.conv_config)
+        final_out_channels = -1
+        for spec in self.conv_config:
+            out_channels = _parse_conv_spec(spec)
+            if out_channels > 0:
+                final_out_channels = out_channels
+
+        if final_out_channels != 1024:
+            raise ValueError("conv_config must end with a 1024-channel convolution")
+
+
 class _ConvBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, **kwargs) -> None:
         super().__init__()
@@ -62,30 +139,24 @@ class _ConvBlock(nn.Module):
 
 
 class YOLO_V1(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        split_size: int,
-        num_boxes: int,
-        num_classes: int,
-        lambda_coord: float = 5.0,
-        lambda_noobj: float = 0.5,
-        conv_config: list | None = None,
-    ) -> None:
+    def __init__(self, config: YOLO_V1Config) -> None:
         super().__init__()
-        self.in_channels = in_channels
-        self.split_size = split_size
-        self.num_boxes = num_boxes
-        self.num_classes = num_classes
-        self.lambda_coord = lambda_coord
-        self.lambda_noobj = lambda_noobj
+        self.config = config
+        self.in_channels = config.in_channels
+        self.split_size = config.split_size
+        self.num_boxes = config.num_boxes
+        self.num_classes = config.num_classes
+        self.lambda_coord = config.lambda_coord
+        self.lambda_noobj = config.lambda_noobj
 
-        config = conv_config if conv_config is not None else arch_config
-        self.darknet = self._create_conv_layers(arch=config)
+        self.darknet = self._create_conv_layers(arch=config.conv_config)
         self.fcs = nn.Sequential(
-            nn.Linear(1024 * split_size**2, 4096),
+            nn.Linear(1024 * config.split_size**2, 4096),
             nn.LeakyReLU(0.1),
-            nn.Linear(4096, split_size**2 * (num_boxes * 5 + num_classes)),
+            nn.Linear(
+                4096,
+                config.split_size**2 * (config.num_boxes * 5 + config.num_classes),
+            ),
         )
 
     def _create_conv_layers(self, arch: list) -> nn.Sequential:
@@ -189,9 +260,11 @@ class YOLO_V1(nn.Module):
         tgt_wh = target_box[..., 2:4]
 
         loss_xy = F.mse_loss(pred_xy * obj_mask, tgt_xy * obj_mask, reduction="sum")
+        pred_wh_sqrt = lucid.sign(pred_wh) * lucid.sqrt(lucid.abs(pred_wh) + 1e-6)
+        tgt_wh_sqrt = lucid.sqrt(tgt_wh.clip(min_value=0) + 1e-6)
         loss_wh = F.mse_loss(
-            lucid.sqrt(pred_wh + 1e-6) * obj_mask,
-            lucid.sqrt(tgt_wh) * obj_mask,
+            pred_wh_sqrt * obj_mask,
+            tgt_wh_sqrt * obj_mask,
             reduction="sum",
         )
 
@@ -226,26 +299,29 @@ class YOLO_V1(nn.Module):
 
 @register_model
 def yolo_v1(num_classes: int = 20, **kwargs) -> YOLO_V1:
-    return YOLO_V1(
-        in_channels=3,
-        split_size=7,
-        num_boxes=2,
-        num_classes=num_classes,
-        lambda_coord=5.0,
-        lambda_noobj=0.5,
-        **kwargs
-    )
+    config_kwargs = {
+        "in_channels": 3,
+        "split_size": 7,
+        "num_boxes": 2,
+        "num_classes": num_classes,
+        "lambda_coord": 5.0,
+        "lambda_noobj": 0.5,
+        "conv_config": deepcopy(arch_config),
+    }
+    config_kwargs.update(kwargs)
+    return YOLO_V1(YOLO_V1Config(**config_kwargs))
 
 
 @register_model
 def yolo_v1_tiny(num_classes: int = 20, **kwargs) -> YOLO_V1:
-    return YOLO_V1(
-        in_channels=3,
-        split_size=7,
-        num_boxes=2,
-        num_classes=num_classes,
-        lambda_coord=5.0,
-        lambda_noobj=0.5,
-        conv_config=arch_config_tiny,
-        **kwargs
-    )
+    config_kwargs = {
+        "in_channels": 3,
+        "split_size": 7,
+        "num_boxes": 2,
+        "num_classes": num_classes,
+        "lambda_coord": 5.0,
+        "lambda_noobj": 0.5,
+        "conv_config": deepcopy(arch_config_tiny),
+    }
+    config_kwargs.update(kwargs)
+    return YOLO_V1(YOLO_V1Config(**config_kwargs))

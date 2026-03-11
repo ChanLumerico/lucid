@@ -25,12 +25,9 @@ Parameters
   Number of object classes to detect. Default is 20 (PASCAL VOC).
 
 - **kwargs** (*dict*, optional):  
-  Additional arguments to override defaults in `YOLO_V1`, such as:
-  
-  - `split_size` (int): Grid size for dividing the input image (default: 7).
-  - `num_boxes` (int): Number of bounding boxes per grid cell (default: 2).
-  - `lambda_coord` (float): Weight for coordinate loss (default: 5.0).
-  - `lambda_noobj` (float): Weight for no-object confidence loss (default: 0.5).
+  Additional keyword arguments passed to `YOLO_V1Config`. By default this
+  factory uses the original YOLO-v1 backbone spec with `in_channels=3`,
+  `split_size=7`, `num_boxes=2`, `lambda_coord=5.0`, and `lambda_noobj=0.5`.
 
 Returns
 -------
@@ -45,18 +42,19 @@ Examples
 
 .. code-block:: python
 
+    import lucid
     from lucid.models import yolo_v1
 
     # Create YOLOv1 model with 20 target classes
     model = yolo_v1(num_classes=20)
 
     # Input: batch of images with shape (N, 3, 448, 448)
-    x = lucid.rand(8, 3, 448, 448)
+    x = lucid.ones(8, 3, 448, 448)
 
     # Output: tensor of shape (N, 7, 7, 30) for VOC (20 classes, 2 boxes)
     preds = model(x)
 
-    print(preds.shape)  # (8, 7, 7, 30)
+    print(preds.shape)  # (8, 1470)
 
 Training Notes
 --------------
