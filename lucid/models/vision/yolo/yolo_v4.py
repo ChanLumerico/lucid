@@ -1,3 +1,5 @@
+from copy import deepcopy
+from dataclasses import dataclass, field
 from lucid import register_model
 
 import lucid
@@ -10,7 +12,7 @@ from lucid.types import _DeviceType
 from lucid.models.vision.cspnet import csp_darknet_53
 from lucid.models.utils import DetectionDict
 
-__all__ = ["YOLO_V4", "yolo_v4"]
+__all__ = ["YOLO_V4", "YOLO_V4Config", "yolo_v4"]
 
 
 DEFAULT_ANCHORS: list[list[tuple[int, int]]] = [
@@ -19,6 +21,89 @@ DEFAULT_ANCHORS: list[list[tuple[int, int]]] = [
     [(142, 110), (192, 243), (459, 401)],
 ]
 DEFAULT_STRIDES: list[int] = [8, 16, 32]
+
+
+@dataclass
+class YOLO_V4Config:
+    num_classes: int
+    anchors: list[list[tuple[int, int]]] = field(
+        default_factory=lambda: deepcopy(DEFAULT_ANCHORS)
+    )
+    strides: list[int] = field(default_factory=lambda: deepcopy(DEFAULT_STRIDES))
+    backbone: nn.Module | None = None
+    backbone_out_channels: tuple[int, int, int] | None = None
+    in_channels: tuple[int, int, int] = (256, 512, 1024)
+    pos_iou_thr: float = 0.25
+    ignore_iou_thr: float = 0.5
+    obj_balance: tuple[float, float, float] = (4.0, 1.0, 0.4)
+    cls_label_smoothing: float = 0.0
+    iou_aware_alpha: float = 0.5
+    iou_branch_weight: float = 1.0
+
+    def __post_init__(self) -> None:
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.backbone is not None and not isinstance(self.backbone, nn.Module):
+            raise TypeError("backbone must be an nn.Module or None")
+
+        self.anchors = [
+            [tuple(anchor) for anchor in scale]
+            for scale in deepcopy(self.anchors)
+        ]
+        if len(self.anchors) != 3 or any(len(scale) != 3 for scale in self.anchors):
+            raise ValueError("anchors must contain three scales with three anchors each")
+        for scale in self.anchors:
+            for anchor in scale:
+                if (
+                    len(anchor) != 2
+                    or not all(isinstance(v, int) for v in anchor)
+                    or anchor[0] <= 0
+                    or anchor[1] <= 0
+                ):
+                    raise ValueError(
+                        "anchors must contain positive integer (width, height) pairs"
+                    )
+
+        self.strides = list(self.strides)
+        if len(self.strides) != 3 or any(stride <= 0 for stride in self.strides):
+            raise ValueError("strides must contain exactly three positive values")
+        if len(self.in_channels) != 3 or any(ch <= 0 for ch in self.in_channels):
+            raise ValueError("in_channels must contain exactly three positive integers")
+        if self.backbone is None:
+            if self.backbone_out_channels is not None:
+                raise ValueError(
+                    "backbone_out_channels must be None when using the default backbone"
+                )
+        else:
+            if self.backbone_out_channels is None:
+                raise ValueError(
+                    "backbone_out_channels is required when providing a custom backbone"
+                )
+            if (
+                len(self.backbone_out_channels) != 3
+                or any(ch <= 0 for ch in self.backbone_out_channels)
+            ):
+                raise ValueError(
+                    "backbone_out_channels must contain exactly three positive integers"
+                )
+
+        if not 0.0 <= self.pos_iou_thr <= 1.0:
+            raise ValueError("pos_iou_thr must be in the range [0, 1]")
+        if not 0.0 <= self.ignore_iou_thr <= 1.0:
+            raise ValueError("ignore_iou_thr must be in the range [0, 1]")
+        if (
+            len(self.obj_balance) != 3
+            or any(balance <= 0 for balance in self.obj_balance)
+        ):
+            raise ValueError(
+                "obj_balance must contain exactly three positive values"
+            )
+        if not 0.0 <= self.cls_label_smoothing < 1.0:
+            raise ValueError("cls_label_smoothing must be in the range [0, 1)")
+        if not 0.0 <= self.iou_aware_alpha <= 1.0:
+            raise ValueError("iou_aware_alpha must be in the range [0, 1]")
+        if self.iou_branch_weight < 0:
+            raise ValueError("iou_branch_weight must be non-negative")
 
 
 def _to_xyxy(xywh: Tensor) -> tuple[Tensor, Tensor]:
@@ -257,7 +342,7 @@ class _YOLOHead(nn.Module):
         self.num_classes = num_classes
         self.detect = nn.ModuleList()
 
-        out_per_anchor = 6 + num_classes + (1 if iou_aware_alpha > 0 else 0)
+        out_per_anchor = 6 + num_classes
         for c in in_channels:
             self.detect.append(
                 nn.Sequential(
@@ -271,52 +356,50 @@ class _YOLOHead(nn.Module):
 
 
 class YOLO_V4(nn.Module):
-    def __init__(
-        self,
-        num_classes: int,
-        anchors: list[list[tuple[int, int]]] | None = None,
-        strides: list[int] | None = None,
-        backbone: nn.Module | None = None,
-        backbone_out_channels: tuple[int, int, int] | None = None,
-        in_channels: tuple[int, int, int] = (256, 512, 1024),
-        pos_iou_thr: float = 0.25,
-        ignore_iou_thr: float = 0.5,
-        obj_balance: tuple[float, float, float] = (4.0, 1.0, 0.4),
-        cls_label_smoothing: float = 0.0,
-        iou_aware_alpha: float = 0.5,
-        iou_branch_weight: float = 1.0,
-    ) -> None:
+    def __init__(self, config: YOLO_V4Config) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.anchors = anchors if anchors is not None else DEFAULT_ANCHORS
-        self.strides = strides if strides is not None else DEFAULT_STRIDES
+        self.config = config
+        self.num_classes = config.num_classes
+        self.anchors = config.anchors
+        self.strides = config.strides
 
-        self.backbone = backbone if backbone is not None else _DefaultCSPDarkNet53()
-        self.neck = _PANetNeck(in_channels, in_channels)
-        self.head = _YOLOHead(in_channels, len(self.anchors[0]), num_classes)
+        self.backbone = (
+            config.backbone if config.backbone is not None else _DefaultCSPDarkNet53()
+        )
+        self.neck = _PANetNeck(config.in_channels, config.in_channels)
+        self.head = _YOLOHead(
+            config.in_channels,
+            len(self.anchors[0]),
+            self.num_classes,
+            config.iou_aware_alpha,
+        )
 
-        if backbone is None:
-            assert backbone_out_channels is None
+        if config.backbone is None:
+            assert config.backbone_out_channels is None
             backbone_out_channels = (128, 256, 512)
         else:
-            assert backbone_out_channels is not None
+            backbone_out_channels = config.backbone_out_channels
 
         self.backbone_out_channels = backbone_out_channels
-        self.in_channels = in_channels
+        self.in_channels = config.in_channels
 
-        self.c3_conv = _ConvBNAct(backbone_out_channels[0], in_channels[0], k=1)
-        self.c4_conv = _ConvBNAct(backbone_out_channels[1], in_channels[1], k=1)
-        self.c5_conv = _ConvBNAct(backbone_out_channels[2], in_channels[2], k=1)
+        self.c3_conv = _ConvBNAct(
+            backbone_out_channels[0], config.in_channels[0], k=1
+        )
+        self.c4_conv = _ConvBNAct(
+            backbone_out_channels[1], config.in_channels[1], k=1
+        )
+        self.c5_conv = _ConvBNAct(
+            backbone_out_channels[2], config.in_channels[2], k=1
+        )
 
-        self.pos_iou_thr = pos_iou_thr
-        self.ignore_iou_thr = ignore_iou_thr
-        self.obj_balance = obj_balance
-        self.cls_eps = cls_label_smoothing
+        self.pos_iou_thr = config.pos_iou_thr
+        self.ignore_iou_thr = config.ignore_iou_thr
+        self.obj_balance = config.obj_balance
+        self.cls_eps = config.cls_label_smoothing
 
-        self.iou_aware_alpha = iou_aware_alpha
-        self.iou_branch_weight = iou_branch_weight
-
-        self._bce = nn.BCEWithLogitsLoss(reduction="mean")
+        self.iou_aware_alpha = config.iou_aware_alpha
+        self.iou_branch_weight = config.iou_branch_weight
 
     def forward(self, x: Tensor) -> tuple[Tensor, ...]:
         c3, c4, c5 = self.backbone(x)
@@ -360,7 +443,7 @@ class YOLO_V4(nn.Module):
             stride = self.strides[s]
 
             xy = (F.sigmoid(p[..., 0:2]) + grid) * stride
-            wh = F.exp(p[..., 2:4]) * anc
+            wh = lucid.exp(p[..., 2:4]) * anc
             objp = F.sigmoid(p[..., 4])
             ioup = F.sigmoid(p[..., 5])
             cl = F.sigmoid(p[..., 6:])
@@ -391,7 +474,9 @@ class YOLO_V4(nn.Module):
             return lucid.zeros(0, 6, requires_grad=det.requires_grad, device=det.device)
 
         obj, cl = det[:, 4:5], det[:, 5:]
-        conf, cl_id = (obj * cl).max(axis=1)
+        scores = obj * cl
+        conf = lucid.max(scores, axis=1)
+        cl_id = lucid.argmax(scores, axis=1)
         mask = conf > conf_thresh
         if mask.sum() == 0:
             return lucid.zeros(0, 6, requires_grad=det.requires_grad, device=det.device)
@@ -551,14 +636,18 @@ class YOLO_V4(nn.Module):
             neg_mask = (~pos_mask) & (~ignore[s])
 
             if pos_mask.any():
-                lobj_pos = self._bce(
-                    obj_logit[pos_mask], lucid.ones_like(obj_logit[pos_mask])
+                lobj_pos = F.binary_cross_entropy_with_logits(
+                    obj_logit[pos_mask],
+                    lucid.ones_like(obj_logit[pos_mask]),
+                    reduction="mean",
                 )
                 lobj += self.obj_balance[s] * lobj_pos
 
             if neg_mask.any():
-                lobj_neg = self._bce(
-                    obj_logit[neg_mask], lucid.zeros_like(obj_logit[neg_mask])
+                lobj_neg = F.binary_cross_entropy_with_logits(
+                    obj_logit[neg_mask],
+                    lucid.zeros_like(obj_logit[neg_mask]),
+                    reduction="mean",
                 )
                 lobj += self.obj_balance[s] * lobj_neg
 
@@ -577,8 +666,8 @@ class YOLO_V4(nn.Module):
 
             px = (F.sigmoid(ps[:, 0]) + gi.astype(lucid.Float32)) * stride
             py = (F.sigmoid(ps[:, 1]) + gj.astype(lucid.Float32)) * stride
-            pw = F.exp(ps[:, 2]) * anc[:, 0]
-            ph = F.exp(ps[:, 3]) * anc[:, 1]
+            pw = lucid.exp(ps[:, 2]) * anc[:, 0]
+            ph = lucid.exp(ps[:, 3]) * anc[:, 1]
 
             pred_xywh = lucid.stack([px, py, pw, ph], axis=1)
 
@@ -589,7 +678,12 @@ class YOLO_V4(nn.Module):
 
             with lucid.no_grad():
                 iou_target = _bbox_iou_xywh(pred_xywh, tbox[s]).clip(0.0, 1.0)
-            liou += self._bce(ps[:, 5], iou_target) * self.iou_branch_weight
+            liou += (
+                F.binary_cross_entropy_with_logits(
+                    ps[:, 5], iou_target, reduction="mean"
+                )
+                * self.iou_branch_weight
+            )
 
             if C > 1:
                 t = lucid.full((ps.shape[0], C), neg_t, device=device)
@@ -627,13 +721,16 @@ class YOLO_V4(nn.Module):
 
 @register_model
 def yolo_v4(num_classes: int = 80, **kwargs) -> YOLO_V4:
-    return YOLO_V4(
-        num_classes=num_classes,
-        pos_iou_thr=0.213,
-        ignore_iou_thr=0.7,
-        obj_balance=(1.0, 1.0, 1.0),
-        cls_label_smoothing=0.0,
-        iou_aware_alpha=0.0,
-        iou_branch_weight=0.0,
-        **kwargs,
-    )
+    config_kwargs = {
+        "num_classes": num_classes,
+        "anchors": deepcopy(DEFAULT_ANCHORS),
+        "strides": deepcopy(DEFAULT_STRIDES),
+        "pos_iou_thr": 0.213,
+        "ignore_iou_thr": 0.7,
+        "obj_balance": (1.0, 1.0, 1.0),
+        "cls_label_smoothing": 0.0,
+        "iou_aware_alpha": 0.0,
+        "iou_branch_weight": 0.0,
+    }
+    config_kwargs.update(kwargs)
+    return YOLO_V4(YOLO_V4Config(**config_kwargs))
