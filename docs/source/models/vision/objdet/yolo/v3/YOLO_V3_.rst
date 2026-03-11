@@ -6,6 +6,7 @@ YOLO-v3
     :maxdepth: 1
     :hidden:
 
+    YOLO_V3Config.rst
     yolo_v3.rst
     yolo_v3_tiny.rst
 
@@ -13,6 +14,7 @@ YOLO-v3
 
 The `YOLO_V3` class implements the YOLO-v3 object detection model, extending YOLO-v2 
 by using multi-scale feature maps, residual connections, and deeper backbones (Darknet-53).
+Model structure is defined through `YOLO_V3Config`.
 
 .. mermaid::
     :name: YOLO-V3
@@ -38,32 +40,14 @@ Class Signature
 
 .. code-block:: python
 
-    class YOLO_V3(
-        num_classes: int,
-        anchors: list[tuple[float, float]] | None = None,
-        image_size: int = 416,
-        darknet: nn.Module | None = None,
-    )
+    class YOLO_V3(nn.Module):
+        def __init__(self, config: YOLO_V3Config) -> None
 
 Parameters
 ----------
-- **num_classes** (*int*):
-  Number of object classes for detection.
-
-- **anchors** (*list[tuple[float, float]]*, optional):
-  List of predefined anchor box sizes. If `None`, the model uses the default 9 YOLO-v3 anchors.
-
-- **darknet** (*nn.Module*, optional):
-  Optional custom Darknet-53-style backbone. If not provided, the model uses the default one.
-
-  .. important::
-
-      To pre-train Darknet-53 as a classification task, set `classification=True` 
-      in the forward pass of `YOLO_V3.darknet`. This returns the classification logits 
-      rather than multi-scale feature maps for detection tasks.
-
-- **image_size** (*int*):
-  Size of the input image (default is 416).
+- **config** (*YOLO_V3Config*):
+  Configuration object describing the class count, 9-anchor set, input image size,
+  and optional custom 3-scale backbone with explicit output channel widths.
 
 Attributes
 ----------
@@ -160,9 +144,11 @@ Example Usage
 
     .. code-block:: python
 
-        >>> from lucid.models import YOLO_V3
-        >>> model = YOLO_V3(num_classes=80)
-        >>> x = lucid.random.rand(2, 3, 416, 416)
+        >>> import lucid
+        >>> import lucid.models as models
+        >>> config = models.YOLO_V3Config(num_classes=80)
+        >>> model = models.YOLO_V3(config)
+        >>> x = lucid.ones(2, 3, 416, 416)
         >>> preds = model.predict(x)
         >>> print(preds[0][0])
 
