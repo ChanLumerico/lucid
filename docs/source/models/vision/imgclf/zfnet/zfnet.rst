@@ -5,7 +5,8 @@ zfnet
 
 The `zfnet` function in `lucid.models` provides a convenient way to 
 create an instance of the `ZFNet` module, a convolutional neural network 
-designed for image classification with enhanced feature learning.
+designed for image classification with enhanced feature learning. It builds
+`ZFNetConfig` internally and forwards extra keyword arguments to that config.
 
 **Total Parameters**: 62,357,608
 
@@ -24,14 +25,15 @@ Parameters
   The number of output classes for classification. Default is 1000.
 
 - **kwargs** (*dict*, optional):
-  Additional keyword arguments to customize the `ZFNet` module.
+  Additional keyword arguments forwarded to `ZFNetConfig`, such as
+  `in_channels`, `dropout`, or `classifier_hidden_features`.
 
 Returns
 -------
 
 - **ZFNet**:
   An instance of the `ZFNet` module configured with the specified number 
-  of classes and any additional arguments.
+  of classes and any additional config overrides.
 
 Examples
 --------
@@ -55,3 +57,16 @@ Examples
     model = models.zfnet(num_classes=10)
 
     print(model)  # Displays the ZFNet architecture with modified output
+
+**Custom Config Overrides**
+
+.. code-block:: python
+
+    model = models.zfnet(
+        num_classes=10,
+        in_channels=1,
+        dropout=0.25,
+        classifier_hidden_features=(512, 256),
+    )
+
+    print(model.config)

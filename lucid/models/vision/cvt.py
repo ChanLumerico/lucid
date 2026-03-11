@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Literal, Type
+from typing import Callable, Literal, Type
 from dataclasses import dataclass, field
 
 import lucid
@@ -9,7 +9,7 @@ import lucid.nn.functional as F
 from lucid import register_model
 from lucid._tensor import Tensor
 
-__all__ = ["CvT", "cvt_13", "cvt_21", "cvt_w24"]
+__all__ = ["CvT", "CvTConfig", "cvt_13", "cvt_21", "cvt_w24"]
 
 
 def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
@@ -356,88 +356,174 @@ class _VisionTransformer(nn.Module):
 
 
 @dataclass
-class CvTSpec:
+class CvTConfig:
     num_stages: int
-    patch_size: list[int]
-    patch_stride: list[int]
-    patch_padding: list[int]
-    dim_embed: list[int]
-    num_heads: list[int]
-    depth: list[int]
+    patch_size: tuple[int, ...] | list[int]
+    patch_stride: tuple[int, ...] | list[int]
+    patch_padding: tuple[int, ...] | list[int]
+    dim_embed: tuple[int, ...] | list[int]
+    num_heads: tuple[int, ...] | list[int]
+    depth: tuple[int, ...] | list[int]
+    in_channels: int = 3
+    num_classes: int = 1000
+    act_layer: Callable[..., nn.Module] = nn.GELU
+    norm_layer: Callable[..., nn.Module] = nn.LayerNorm
 
-    mlp_ratio: list[float] = field(default_factory=lambda: [4.0, 4.0, 4.0])
-    attn_drop_rate: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
-    drop_rate: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
-    drop_path_rate: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.1])
+    mlp_ratio: tuple[float, ...] | list[float] = field(
+        default_factory=lambda: [4.0, 4.0, 4.0]
+    )
+    attn_drop_rate: tuple[float, ...] | list[float] = field(
+        default_factory=lambda: [0.0, 0.0, 0.0]
+    )
+    drop_rate: tuple[float, ...] | list[float] = field(
+        default_factory=lambda: [0.0, 0.0, 0.0]
+    )
+    drop_path_rate: tuple[float, ...] | list[float] = field(
+        default_factory=lambda: [0.0, 0.0, 0.1]
+    )
 
-    qkv_bias: list[bool] = field(default_factory=lambda: [True, True, True])
-    cls_token: list[bool] = field(default_factory=lambda: [False, False, True])
-    pos_embed: list[bool] = field(default_factory=lambda: [False, False, False])
+    qkv_bias: tuple[bool, ...] | list[bool] = field(
+        default_factory=lambda: [True, True, True]
+    )
+    cls_token: tuple[bool, ...] | list[bool] = field(
+        default_factory=lambda: [False, False, True]
+    )
+    pos_embed: tuple[bool, ...] | list[bool] = field(
+        default_factory=lambda: [False, False, False]
+    )
 
-    qkv_proj_method: list[str] = field(
+    qkv_proj_method: tuple[str, ...] | list[str] = field(
         default_factory=lambda: ["dw_bn", "dw_bn", "dw_bn"]
     )
 
-    kernel_qkv: list[int] = field(default_factory=lambda: [3, 3, 3])
-    padding_kv: list[int] = field(default_factory=lambda: [1, 1, 1])
-    stride_kv: list[int] = field(default_factory=lambda: [2, 2, 2])
-    padding_q: list[int] = field(default_factory=lambda: [1, 1, 1])
-    stride_q: list[int] = field(default_factory=lambda: [1, 1, 1])
+    kernel_qkv: tuple[int, ...] | list[int] = field(default_factory=lambda: [3, 3, 3])
+    padding_kv: tuple[int, ...] | list[int] = field(default_factory=lambda: [1, 1, 1])
+    stride_kv: tuple[int, ...] | list[int] = field(default_factory=lambda: [2, 2, 2])
+    padding_q: tuple[int, ...] | list[int] = field(default_factory=lambda: [1, 1, 1])
+    stride_q: tuple[int, ...] | list[int] = field(default_factory=lambda: [1, 1, 1])
+
+    def __post_init__(self) -> None:
+        stage_sequences = (
+            "patch_size",
+            "patch_stride",
+            "patch_padding",
+            "dim_embed",
+            "num_heads",
+            "depth",
+            "mlp_ratio",
+            "attn_drop_rate",
+            "drop_rate",
+            "drop_path_rate",
+            "qkv_bias",
+            "cls_token",
+            "pos_embed",
+            "qkv_proj_method",
+            "kernel_qkv",
+            "padding_kv",
+            "stride_kv",
+            "padding_q",
+            "stride_q",
+        )
+        for field_name in stage_sequences:
+            setattr(self, field_name, tuple(getattr(self, field_name)))
+
+        if self.num_stages <= 0:
+            raise ValueError("num_stages must be greater than 0")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.num_classes < 0:
+            raise ValueError("num_classes must be greater than or equal to 0")
+
+        for field_name in stage_sequences:
+            if len(getattr(self, field_name)) != self.num_stages:
+                raise ValueError(f"{field_name} must contain exactly num_stages values")
+
+        positive_int_fields = (
+            "patch_size",
+            "patch_stride",
+            "dim_embed",
+            "num_heads",
+            "depth",
+            "kernel_qkv",
+            "stride_kv",
+            "stride_q",
+        )
+        for field_name in positive_int_fields:
+            values = getattr(self, field_name)
+            if any(value <= 0 for value in values):
+                raise ValueError(f"{field_name} must contain positive integers")
+        for field_name in ("patch_padding", "padding_kv", "padding_q"):
+            values = getattr(self, field_name)
+            if any(value < 0 for value in values):
+                raise ValueError(f"{field_name} must contain non-negative integers")
+
+        if any(ratio <= 0 for ratio in self.mlp_ratio):
+            raise ValueError("mlp_ratio must contain positive values")
+        for field_name in ("attn_drop_rate", "drop_rate", "drop_path_rate"):
+            values = getattr(self, field_name)
+            if any(value < 0 or value >= 1 for value in values):
+                raise ValueError(f"{field_name} values must be in the range [0, 1)")
+
+        if any(
+            method not in {"dw_bn", "avg", "lin"} for method in self.qkv_proj_method
+        ):
+            raise ValueError("qkv_proj_method values must be dw_bn, avg, or lin")
+        for dim, heads in zip(self.dim_embed, self.num_heads):
+            if dim % heads != 0:
+                raise ValueError("dim_embed values must be divisible by num_heads")
 
 
 class CvT(nn.Module):
-    def __init__(
-        self,
-        in_channels: int = 3,
-        num_classes: int = 1000,
-        act_layer: Type[nn.Module] = nn.GELU,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        spec: CvTSpec | None = None,
-    ) -> None:
+    def __init__(self, config: CvTConfig) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.num_stages = spec.num_stages
+        self.config = config
+        self.num_classes = config.num_classes
+        self.num_stages = config.num_stages
+        in_channels = config.in_channels
 
         for i in range(self.num_stages):
             kwargs = dict(
-                patch_size=spec.patch_size[i],
-                patch_stride=spec.patch_stride[i],
-                patch_padding=spec.patch_padding[i],
-                embed_dim=spec.dim_embed[i],
-                depth=spec.depth[i],
-                num_heads=spec.num_heads[i],
-                mlp_ratio=spec.mlp_ratio[i],
-                qkv_bias=spec.qkv_bias[i],
-                drop_rate=spec.drop_rate[i],
-                attn_drop_rate=spec.attn_drop_rate[i],
-                drop_path_rate=spec.drop_path_rate[i],
-                with_cls_token=spec.cls_token[i],
-                method=spec.qkv_proj_method[i],
-                kernel_size=spec.kernel_qkv[i],
-                padding_q=spec.padding_q[i],
-                padding_kv=spec.padding_kv[i],
-                stride_kv=spec.stride_kv[i],
-                stride_q=spec.stride_q[i],
+                patch_size=config.patch_size[i],
+                patch_stride=config.patch_stride[i],
+                patch_padding=config.patch_padding[i],
+                embed_dim=config.dim_embed[i],
+                depth=config.depth[i],
+                num_heads=config.num_heads[i],
+                mlp_ratio=config.mlp_ratio[i],
+                qkv_bias=config.qkv_bias[i],
+                drop_rate=config.drop_rate[i],
+                attn_drop_rate=config.attn_drop_rate[i],
+                drop_path_rate=config.drop_path_rate[i],
+                with_cls_token=config.cls_token[i],
+                method=config.qkv_proj_method[i],
+                kernel_size=config.kernel_qkv[i],
+                padding_q=config.padding_q[i],
+                padding_kv=config.padding_kv[i],
+                stride_kv=config.stride_kv[i],
+                stride_q=config.stride_q[i],
             )
 
             stage = _VisionTransformer(
                 in_channels=in_channels,
-                act_layer=act_layer,
-                norm_layer=norm_layer,
+                act_layer=config.act_layer,
+                norm_layer=config.norm_layer,
                 **kwargs,
             )
             setattr(self, f"stage{i}", stage)
 
-            in_channels = spec.dim_embed[i]
+            in_channels = config.dim_embed[i]
 
-        dim_embed = spec.dim_embed[-1]
-        self.norm = norm_layer(dim_embed)
-        self.cls_token = spec.cls_token[-1]
+        dim_embed = config.dim_embed[-1]
+        self.norm = config.norm_layer(dim_embed)
+        self.cls_token = config.cls_token[-1]
 
         self.head = (
-            nn.Linear(dim_embed, num_classes) if num_classes > 0 else nn.Identity()
+            nn.Linear(dim_embed, config.num_classes)
+            if config.num_classes > 0
+            else nn.Identity()
         )
-        nn.init.normal(self.head.weight, std=0.02)
+        if isinstance(self.head, nn.Linear):
+            nn.init.normal(self.head.weight, std=0.02)
 
     def forward(self, x: Tensor) -> Tensor:
         for i in range(self.num_stages):
@@ -455,9 +541,43 @@ class CvT(nn.Module):
         return x
 
 
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_cvt_config(num_classes: int, **kwargs) -> CvTConfig:
+    params = {
+        "in_channels": 3,
+        "num_classes": num_classes,
+        "act_layer": _QuickGELU,
+        "norm_layer": partial(nn.LayerNorm, eps=1e-5),
+    }
+    params.update(kwargs)
+    return CvTConfig(**params)
+
+
 @register_model
 def cvt_13(num_classes: int = 1000, **kwargs) -> CvT:
-    spec = CvTSpec(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {
+            "num_stages",
+            "patch_size",
+            "patch_stride",
+            "patch_padding",
+            "dim_embed",
+            "num_heads",
+            "depth",
+        },
+        "factory variants do not allow overriding preset num_stages, patch_size, patch_stride, patch_padding, dim_embed, num_heads, or depth",
+    )
+    config = _build_cvt_config(
+        num_classes,
         num_stages=3,
         patch_size=[7, 3, 3],
         patch_stride=[4, 2, 2],
@@ -467,18 +587,26 @@ def cvt_13(num_classes: int = 1000, **kwargs) -> CvT:
         depth=[1, 2, 10],
         **kwargs,
     )
-    return CvT(
-        in_channels=3,
-        num_classes=num_classes,
-        act_layer=_QuickGELU,
-        norm_layer=partial(nn.LayerNorm, eps=1e-5),
-        spec=spec,
-    )
+    return CvT(config)
 
 
 @register_model
 def cvt_21(num_classes: int = 1000, **kwargs) -> CvT:
-    spec = CvTSpec(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {
+            "num_stages",
+            "patch_size",
+            "patch_stride",
+            "patch_padding",
+            "dim_embed",
+            "num_heads",
+            "depth",
+        },
+        "factory variants do not allow overriding preset num_stages, patch_size, patch_stride, patch_padding, dim_embed, num_heads, or depth",
+    )
+    config = _build_cvt_config(
+        num_classes,
         num_stages=3,
         patch_size=[7, 3, 3],
         patch_stride=[4, 2, 2],
@@ -488,18 +616,26 @@ def cvt_21(num_classes: int = 1000, **kwargs) -> CvT:
         depth=[1, 4, 16],
         **kwargs,
     )
-    return CvT(
-        in_channels=3,
-        num_classes=num_classes,
-        act_layer=_QuickGELU,
-        norm_layer=partial(nn.LayerNorm, eps=1e-5),
-        spec=spec,
-    )
+    return CvT(config)
 
 
 @register_model
 def cvt_w24(num_classes: int = 1000, **kwargs) -> CvT:
-    spec = CvTSpec(
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {
+            "num_stages",
+            "patch_size",
+            "patch_stride",
+            "patch_padding",
+            "dim_embed",
+            "num_heads",
+            "depth",
+        },
+        "factory variants do not allow overriding preset num_stages, patch_size, patch_stride, patch_padding, dim_embed, num_heads, or depth",
+    )
+    config = _build_cvt_config(
+        num_classes,
         num_stages=3,
         patch_size=[7, 3, 3],
         patch_stride=[4, 2, 2],
@@ -510,10 +646,4 @@ def cvt_w24(num_classes: int = 1000, **kwargs) -> CvT:
         drop_path_rate=[0.0, 0.0, 0.3],
         **kwargs,
     )
-    return CvT(
-        in_channels=3,
-        num_classes=num_classes,
-        act_layer=_QuickGELU,
-        norm_layer=partial(nn.LayerNorm, eps=1e-5),
-        spec=spec,
-    )
+    return CvT(config)

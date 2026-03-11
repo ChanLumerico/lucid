@@ -6,11 +6,12 @@ resnet_152
 Overview
 --------
 
-The `resnet_152` function constructs a ResNet-152 model, a very deep residual network 
+The `resnet_152` function constructs a ResNet-152 model, a very deep residual network
 suitable for complex and large-scale image classification tasks.
 
-It uses `Bottleneck` as the building block and is designed for datasets with 
-`num_classes` categories.
+It uses the preset `ResNetConfig(block="bottleneck", layers=[3, 8, 36, 3])` and accepts
+additional `ResNetConfig` keyword overrides such as `in_channels`, `stem_type`,
+`stem_width`, `avg_down`, `channels`, and `block_args`.
 
 **Total Parameters**: 60,192,808
 
@@ -27,9 +28,9 @@ Parameters
 
 - **num_classes** (*int*, optional):
   Number of output classes for the classification task. Default is 1000.
-
 - **kwargs**:
-  Additional keyword arguments to customize the model.
+  Additional keyword arguments forwarded to `ResNetConfig`, excluding the preset
+  `block` and `layers` fields.
 
 Returns
 -------
@@ -49,5 +50,5 @@ Creating a ResNet-152 model for 1000 classes:
 
 .. note::
 
-  - `ResNet-152` uses a configuration of `[3, 8, 36, 3]` for its layers.
-  - By default, it initializes weights internally unless specified otherwise through `kwargs`.
+  - `ResNet-152` uses `Bottleneck` with a stage configuration of `[3, 8, 36, 3]`.
+  - The returned model is equivalent to `ResNet(ResNetConfig(...))` with the preset values above.

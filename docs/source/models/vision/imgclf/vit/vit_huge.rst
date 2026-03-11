@@ -4,8 +4,8 @@ vit_huge
 .. autofunction:: lucid.models.vit_huge
 
 The `vit_huge` function instantiates a Vision Transformer (ViT-H) model
-with a predefined architecture. This model provides state-of-the-art accuracy
-and is designed for large-scale vision tasks with extreme computational power.
+with a predefined architecture. This preset uses the default `ViTConfig`
+transformer dimensions for the huge variant.
 
 **Total Parameters**: 632,199,400
 
@@ -34,20 +34,10 @@ Parameters
   The number of output classes for classification. Default is 1000.
 
 - **kwargs** (*dict*, optional):
-  Additional parameters for customization.
+  Additional keyword arguments forwarded to `ViTConfig`, excluding the preset
+  `embedding_dim`, `depth`, `num_heads`, and `mlp_dim` fields.
 
 Returns
 -------
 - **ViT**:
-  An instance of the `ViT` class configured as a high-capacity vision transformer.
-
-Examples
---------
-
-.. code-block:: python
-
-    >>> import lucid.models as models
-    >>> model = models.vit_huge()
-    >>> print(model)
-    ViT(img_size=224, patch_size=16, num_classes=1000, ...)
-
+  A ViT model instance constructed from the huge preset config.

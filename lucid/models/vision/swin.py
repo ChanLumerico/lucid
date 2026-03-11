@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import ClassVar, Literal, Type, override
 
 import lucid
@@ -9,7 +10,9 @@ from lucid._tensor import Tensor
 
 __all__ = [
     "SwinTransformer",
+    "SwinTransformerConfig",
     "SwinTransformer_V2",
+    "SwinTransformerV2Config",
     "swin_tiny",
     "swin_small",
     "swin_base",
@@ -21,6 +24,76 @@ __all__ = [
     "swin_v2_huge",
     "swin_v2_giant",
 ]
+
+
+@dataclass
+class SwinTransformerConfig:
+    img_size: int = 224
+    patch_size: int = 4
+    in_channels: int = 3
+    num_classes: int = 1000
+    embed_dim: int = 96
+    depths: tuple[int, ...] | list[int] = (2, 2, 6, 2)
+    num_heads: tuple[int, ...] | list[int] = (3, 6, 12, 24)
+    window_size: int = 7
+    mlp_ratio: float = 4.0
+    qkv_bias: bool = True
+    qk_scale: float | None = None
+    drop_rate: float = 0.0
+    attn_drop_rate: float = 0.0
+    drop_path_rate: float = 0.1
+    norm_layer: Type[nn.Module] = nn.LayerNorm
+    abs_pos_emb: bool = False
+    patch_norm: bool = True
+
+    def __post_init__(self) -> None:
+        self.depths = tuple(self.depths)
+        self.num_heads = tuple(self.num_heads)
+
+        if self.img_size <= 0:
+            raise ValueError("img_size must be greater than 0")
+        if self.patch_size <= 0:
+            raise ValueError("patch_size must be greater than 0")
+        if self.img_size < self.patch_size:
+            raise ValueError("img_size must be greater than or equal to patch_size")
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.num_classes < 0:
+            raise ValueError("num_classes must be greater than or equal to 0")
+        if self.embed_dim <= 0:
+            raise ValueError("embed_dim must be greater than 0")
+        if len(self.depths) == 0:
+            raise ValueError("depths must contain at least one stage")
+        if len(self.depths) != len(self.num_heads):
+            raise ValueError("depths and num_heads must have the same length")
+        if any(depth <= 0 for depth in self.depths):
+            raise ValueError("depths must contain positive integers")
+        if any(head <= 0 for head in self.num_heads):
+            raise ValueError("num_heads must contain positive integers")
+        for stage_index, heads in enumerate(self.num_heads):
+            if (self.embed_dim * 2**stage_index) % heads != 0:
+                raise ValueError(
+                    "stage embedding dimensions must be divisible by num_heads"
+                )
+        if self.img_size // self.patch_size < 2 ** (len(self.depths) - 1):
+            raise ValueError(
+                "img_size and patch_size do not provide enough resolution for the configured number of stages"
+            )
+        if self.window_size <= 0:
+            raise ValueError("window_size must be greater than 0")
+        if self.mlp_ratio <= 0:
+            raise ValueError("mlp_ratio must be greater than 0")
+        if self.drop_rate < 0 or self.drop_rate >= 1:
+            raise ValueError("drop_rate must be in the range [0, 1)")
+        if self.attn_drop_rate < 0 or self.attn_drop_rate >= 1:
+            raise ValueError("attn_drop_rate must be in the range [0, 1)")
+        if self.drop_path_rate < 0 or self.drop_path_rate >= 1:
+            raise ValueError("drop_path_rate must be in the range [0, 1)")
+
+
+@dataclass
+class SwinTransformerV2Config(SwinTransformerConfig):
+    pass
 
 
 def _to_2tuple(val: int | float) -> tuple[int | float, ...]:
@@ -234,6 +307,24 @@ class _SwinTransformerBlock(nn.Module):
             return None
 
         img_mask = lucid.zeros((1, H, W, 1), device=device or "cpu")
+        pad_b = (window_size - H % window_size) % window_size
+        pad_r = (window_size - W % window_size) % window_size
+        if pad_b > 0:
+            img_mask = lucid.concatenate(
+                [img_mask, lucid.zeros((1, pad_b, W, 1), device=img_mask.device)],
+                axis=1,
+            )
+        if pad_r > 0:
+            img_mask = lucid.concatenate(
+                [
+                    img_mask,
+                    lucid.zeros(
+                        (1, H + pad_b, pad_r, 1),
+                        device=img_mask.device,
+                    ),
+                ],
+                axis=2,
+            )
         h_slices = (
             slice(0, -window_size),
             slice(-window_size, -shift_size),
@@ -491,78 +582,65 @@ class _PatchEmbed(nn.Module):
 class SwinTransformer(nn.Module):
     _version: ClassVar[str] = "v1"
 
-    def __init__(
-        self,
-        img_size: int = 224,
-        patch_size: int = 4,
-        in_channels: int = 3,
-        num_classes: int = 1000,
-        embed_dim: int = 96,
-        depths: list[int] = [2, 2, 6, 2],
-        num_heads: list[int] = [3, 6, 12, 24],
-        windows_size: int = 7,
-        mlp_ratio: float = 4.0,
-        qkv_bias: bool = True,
-        qk_scale: float | None = None,
-        drop_rate: float = 0.0,
-        attn_drop_rate: float = 0.0,
-        drop_path_rate: float = 0.1,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        abs_pos_emb: bool = False,
-        patch_norm: bool = True,
-    ) -> None:
+    def __init__(self, config: SwinTransformerConfig) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.num_layers = len(depths)
-        self.embed_dim = embed_dim
-        self.abs_pos_emb = abs_pos_emb
-        self.patch_norm = patch_norm
-        self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
-        self.mlp_ratio = mlp_ratio
+        self.config = config
+        self.num_classes = config.num_classes
+        self.num_layers = len(config.depths)
+        self.embed_dim = config.embed_dim
+        self.abs_pos_emb = config.abs_pos_emb
+        self.patch_norm = config.patch_norm
+        self.num_features = int(config.embed_dim * 2 ** (self.num_layers - 1))
+        self.mlp_ratio = config.mlp_ratio
 
         self.patch_embed = _PatchEmbed(
-            img_size,
-            patch_size,
-            in_channels,
-            embed_dim,
-            norm_layer=norm_layer if self.patch_norm else None,
+            config.img_size,
+            config.patch_size,
+            config.in_channels,
+            config.embed_dim,
+            norm_layer=config.norm_layer if self.patch_norm else None,
         )
         num_patches = self.patch_embed.num_patches
         patches_res = self.patch_embed.patches_res
         self.patches_res = patches_res
 
         if self.abs_pos_emb:
-            self.absolute_pos_emb = nn.Parameter(lucid.zeros(1, num_patches, embed_dim))
+            self.absolute_pos_emb = nn.Parameter(
+                lucid.zeros(1, num_patches, config.embed_dim)
+            )
             nn.init.normal(self.absolute_pos_emb, std=0.02)
 
-        self.pos_drop = nn.Dropout(drop_rate)
-        dpr = [x.item() for x in lucid.linspace(0, drop_path_rate, sum(depths))]
+        self.pos_drop = nn.Dropout(config.drop_rate)
+        dpr = [
+            x.item()
+            for x in lucid.linspace(0, config.drop_path_rate, sum(config.depths))
+        ]
 
         self.layers = nn.ModuleList()
         for i in range(self.num_layers):
             layer = _BasicLayer(
-                dim=int(embed_dim * 2**i),
+                dim=int(config.embed_dim * 2**i),
                 input_res=(patches_res[0] // (2**i), patches_res[1] // (2**i)),
-                depth=depths[i],
-                num_heads=num_heads[i],
-                window_size=windows_size,
+                depth=config.depths[i],
+                num_heads=config.num_heads[i],
+                window_size=config.window_size,
                 mlp_ratio=self.mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop=drop_rate,
-                attn_drop=attn_drop_rate,
-                drop_path=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
-                norm_layer=norm_layer,
+                qkv_bias=config.qkv_bias,
+                qk_scale=config.qk_scale,
+                drop=config.drop_rate,
+                attn_drop=config.attn_drop_rate,
+                drop_path=dpr[sum(config.depths[:i]) : sum(config.depths[: i + 1])],
+                norm_layer=config.norm_layer,
                 downsample=_PatchMerging if i < self.num_layers - 1 else None,
                 _version=self._version,
             )
             self.layers.append(layer)
 
-        self.norm = norm_layer(self.num_features)
+        self.norm = config.norm_layer(self.num_features)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.head = (
-            nn.Linear(self.num_features, num_classes)
-            if num_classes > 0
+            nn.Linear(self.num_features, config.num_classes)
+            if config.num_classes > 0
             else nn.Identity()
         )
 
@@ -625,8 +703,8 @@ class _WindowAttention_V2(nn.Module):
             .transpose((1, 2, 0))
             .unsqueeze(axis=0)
         )
-        rel_coords_table[..., 0] /= self.window_size[0] - 1
-        rel_coords_table[..., 1] /= self.window_size[1] - 1
+        rel_coords_table[..., 0] /= max(self.window_size[0] - 1, 1)
+        rel_coords_table[..., 1] /= max(self.window_size[1] - 1, 1)
 
         rel_coords_table *= 8
         rel_coords_table = (
@@ -676,47 +754,44 @@ class _WindowAttention_V2(nn.Module):
             qkv_bias = lucid.concatenate(
                 [self.q_bias, lucid.zeros_like(self.v_bias), self.v_bias]
             )
-            qkv = F.linear(x, self.qkv.weight, qkv_bias)
-            qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).transpose((2, 0, 3, 1, 4))
-            q, k, v = qkv[0], qkv[1], qkv[2]
 
-            attn = F.normalize(q, axis=-1) @ F.normalize(k, axis=-1).mT
-            logit_scale = lucid.clip(self.logit_scale, None, lucid.log(100.0).item())
-            attn *= lucid.exp(logit_scale)
+        qkv = F.linear(x, self.qkv.weight, qkv_bias)
+        qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).transpose((2, 0, 3, 1, 4))
+        q, k, v = qkv[0], qkv[1], qkv[2]
 
-            rel_pos_bias_table = self.cpb_mlp(self.rel_coords_table).reshape(
-                -1, self.num_heads
-            )
-            rel_pos_bias = rel_pos_bias_table[
-                self.rel_pos_index.flatten().astype(lucid.Int)
-            ].reshape(
-                self.window_size[0] * self.window_size[1],
-                self.window_size[0] * self.window_size[1],
-                -1,
-            )
-            rel_pos_bias = rel_pos_bias.transpose((2, 0, 1))
-            rel_pos_bias = 16 * F.sigmoid(rel_pos_bias)
+        attn = F.normalize(q, axis=-1) @ F.normalize(k, axis=-1).mT
+        logit_scale = lucid.clip(self.logit_scale, None, lucid.log(100.0).item())
+        attn *= lucid.exp(logit_scale)
 
-            attn += rel_pos_bias.unsqueeze(axis=0)
+        rel_pos_bias_table = self.cpb_mlp(self.rel_coords_table).reshape(
+            -1, self.num_heads
+        )
+        rel_pos_bias = rel_pos_bias_table[
+            self.rel_pos_index.flatten().astype(lucid.Int)
+        ].reshape(
+            self.window_size[0] * self.window_size[1],
+            self.window_size[0] * self.window_size[1],
+            -1,
+        )
+        rel_pos_bias = rel_pos_bias.transpose((2, 0, 1))
+        rel_pos_bias = 16 * F.sigmoid(rel_pos_bias)
 
-            if mask is not None:
-                nW = mask.shape[0]
-                attn = attn.reshape(
-                    B_ // nW, nW, self.num_heads, N, N
-                ) + mask.unsqueeze(axis=1).unsqueeze(axis=0)
+        attn += rel_pos_bias.unsqueeze(axis=0)
 
-                attn = attn.reshape(-1, self.num_heads, N, N)
-                attn = self.softmax(attn)
-            else:
-                attn = self.softmax(attn)
+        if mask is not None:
+            nW = mask.shape[0]
+            attn = attn.reshape(B_ // nW, nW, self.num_heads, N, N)
+            attn += mask.unsqueeze(axis=1).unsqueeze(axis=0)
+            attn = attn.reshape(-1, self.num_heads, N, N)
 
-            attn = self.attn_drop(attn)
+        attn = self.softmax(attn)
+        attn = self.attn_drop(attn)
 
-            x = (attn @ v).swapaxes(1, 2).reshape(B_, N, C)
-            x = self.proj(x)
-            x = self.proj_drop(x)
+        x = (attn @ v).swapaxes(1, 2).reshape(B_, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
 
-            return x
+        return x
 
 
 class _SwinTransformerBlock_V2(_SwinTransformerBlock):
@@ -827,204 +902,246 @@ class _SwinTransformerBlock_V2(_SwinTransformerBlock):
 class SwinTransformer_V2(SwinTransformer):
     _version: ClassVar[str] = "v2"
 
-    def __init__(
-        self,
-        img_size: int = 224,
-        patch_size: int = 4,
-        in_channels: int = 3,
-        num_classes: int = 1000,
-        embed_dim: int = 96,
-        depths: list[int] = [2, 2, 6, 2],
-        num_heads: list[int] = [3, 6, 12, 24],
-        windows_size: int = 7,
-        mlp_ratio: float = 4.0,
-        qkv_bias: bool = True,
-        qk_scale: float | None = None,
-        drop_rate: float = 0.0,
-        attn_drop_rate: float = 0.0,
-        drop_path_rate: float = 0.1,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        abs_pos_emb: bool = False,
-        patch_norm: bool = True,
-    ) -> None:
-        super().__init__(
-            img_size,
-            patch_size,
-            in_channels,
-            num_classes,
-            embed_dim,
-            depths,
-            num_heads,
-            windows_size,
-            mlp_ratio,
-            qkv_bias,
-            qk_scale,
-            drop_rate,
-            attn_drop_rate,
-            drop_path_rate,
-            norm_layer,
-            abs_pos_emb,
-            patch_norm,
-        )
+    def __init__(self, config: SwinTransformerV2Config) -> None:
+        super().__init__(config)
         for layer in self.layers:
             layer._init_res_post_norm()
+
+
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_swin_config(
+    config_cls: Type[SwinTransformerConfig] | Type[SwinTransformerV2Config],
+    *,
+    img_size: int,
+    num_classes: int,
+    embed_dim: int,
+    depths: tuple[int, ...] | list[int],
+    num_heads: tuple[int, ...] | list[int],
+    **kwargs,
+) -> SwinTransformerConfig | SwinTransformerV2Config:
+    return config_cls(
+        img_size=img_size,
+        num_classes=num_classes,
+        embed_dim=embed_dim,
+        depths=depths,
+        num_heads=num_heads,
+        **kwargs,
+    )
 
 
 @register_model
 def swin_tiny(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer:
-    depths = [2, 2, 6, 2]
-    num_heads = [3, 6, 12, 24]
-    return SwinTransformer(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerConfig,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=96,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 6, 2),
+        num_heads=(3, 6, 12, 24),
         **kwargs,
     )
+    return SwinTransformer(config)
 
 
 @register_model
 def swin_small(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer:
-    depths = [2, 2, 18, 2]
-    num_heads = [3, 6, 12, 24]
-    return SwinTransformer(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerConfig,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=96,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 18, 2),
+        num_heads=(3, 6, 12, 24),
         **kwargs,
     )
+    return SwinTransformer(config)
 
 
 @register_model
 def swin_base(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer:
-    depths = [2, 2, 18, 2]
-    num_heads = [4, 8, 16, 32]
-    return SwinTransformer(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerConfig,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=128,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 18, 2),
+        num_heads=(4, 8, 16, 32),
         **kwargs,
     )
+    return SwinTransformer(config)
 
 
 @register_model
 def swin_large(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer:
-    depths = [2, 2, 18, 2]
-    num_heads = [6, 12, 24, 48]
-    return SwinTransformer(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerConfig,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=192,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 18, 2),
+        num_heads=(6, 12, 24, 48),
         **kwargs,
     )
+    return SwinTransformer(config)
 
 
 @register_model
 def swin_v2_tiny(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer_V2:
-    depths = [2, 2, 6, 2]
-    num_heads = [3, 6, 12, 24]
-    return SwinTransformer_V2(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerV2Config,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=96,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 6, 2),
+        num_heads=(3, 6, 12, 24),
         **kwargs,
     )
+    return SwinTransformer_V2(config)
 
 
 @register_model
 def swin_v2_small(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer_V2:
-    depths = [2, 2, 18, 2]
-    num_heads = [3, 6, 12, 24]
-    return SwinTransformer_V2(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerV2Config,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=96,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 18, 2),
+        num_heads=(3, 6, 12, 24),
         **kwargs,
     )
+    return SwinTransformer_V2(config)
 
 
 @register_model
 def swin_v2_base(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer_V2:
-    depths = [2, 2, 18, 2]
-    num_heads = [4, 8, 16, 32]
-    return SwinTransformer_V2(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerV2Config,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=128,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 18, 2),
+        num_heads=(4, 8, 16, 32),
         **kwargs,
     )
+    return SwinTransformer_V2(config)
 
 
 @register_model
 def swin_v2_large(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer_V2:
-    depths = [2, 2, 18, 2]
-    num_heads = [6, 12, 24, 48]
-    return SwinTransformer_V2(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerV2Config,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=192,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 18, 2),
+        num_heads=(6, 12, 24, 48),
         **kwargs,
     )
+    return SwinTransformer_V2(config)
 
 
 @register_model
 def swin_v2_huge(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer_V2:
-    depths = [2, 2, 18, 2]
-    num_heads = [6, 12, 24, 48]
-    return SwinTransformer_V2(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerV2Config,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=352,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 18, 2),
+        num_heads=(11, 22, 44, 88),
         **kwargs,
     )
+    return SwinTransformer_V2(config)
 
 
 @register_model
 def swin_v2_giant(
     img_size: int = 224, num_classes: int = 1000, **kwargs
 ) -> SwinTransformer_V2:
-    depths = [2, 2, 42, 4]
-    num_heads = [6, 12, 24, 48]
-    return SwinTransformer_V2(
-        img_size,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"embed_dim", "depths", "num_heads"},
+        "factory variants do not allow overriding preset embed_dim, depths, or num_heads",
+    )
+    config = _build_swin_config(
+        SwinTransformerV2Config,
+        img_size=img_size,
         num_classes=num_classes,
         embed_dim=512,
-        depths=depths,
-        num_heads=num_heads,
+        depths=(2, 2, 42, 4),
+        num_heads=(16, 32, 64, 128),
         **kwargs,
     )
+    return SwinTransformer_V2(config)

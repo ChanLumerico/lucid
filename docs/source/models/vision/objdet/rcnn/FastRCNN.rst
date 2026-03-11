@@ -1,14 +1,22 @@
 Fast R-CNN
 ==========
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    FastRCNNConfig.rst
+
 |convnet-badge| |two-stage-det-badge| 
 
 .. autoclass:: lucid.models.FastRCNN
 
-`FastRCNN` implements the Fast Region-based Convolutional Neural Network 
-architecture for object detection, building upon the R-CNN approach by 
-introducing a more efficient detection pipeline. It replaces per-region 
-feature extraction with RoI pooling and integrates classification and 
-bounding box regression into a single forward pass.
+`FastRCNN` implements the Fast Region-based Convolutional Neural Network
+architecture for object detection, building upon the R-CNN approach by
+introducing a more efficient detection pipeline. It replaces per-region
+feature extraction with RoI pooling and integrates classification and
+bounding box regression into a single forward pass. Model structure is defined
+through `FastRCNNConfig`.
 
 .. mermaid::
     :name: FastRCNN
@@ -132,49 +140,15 @@ Class Signature
 .. code-block:: python
 
     class FastRCNN(nn.Module):
-        def __init__(
-            self,
-            backbone: nn.Module,
-            feat_channels: int,
-            num_classes: int,
-            pool_size: tuple[int, int] = (7, 7),
-            hidden_dim: int = 4096,
-            bbox_reg_means: tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
-            bbox_reg_stds: tuple[float, ...] = (0.1, 0.1, 0.2, 0.2),
-            dropout: float = 0.5,
-            proposal_generator: Callable[..., Tensor] | None = None,
-        )
+        def __init__(self, config: FastRCNNConfig) -> None
 
 Parameters
 ----------
 
-- **backbone** (*nn.Module*):  
-  Convolutional feature extractor applied over the entire image once.
-
-- **feat_channels** (*int*):  
-  Number of output channels from the backbone feature map.
-
-- **num_classes** (*int*):  
-  Number of object categories (excluding background).
-
-- **pool_size** (*tuple[int, int]*, optional):  
-  Output size of the spatial pooling operation (typically RoIAlign or RoIPool). 
-  Default is `(7, 7)`.
-
-- **hidden_dim** (*int*, optional):  
-  Number of hidden units in the fully connected layers after pooling. Default is `4096`.
-
-- **bbox_reg_means** (*tuple[float, ...]*, optional):  
-  Normalization means for bounding box regression targets. Default is `(0.0, 0.0, 0.0, 0.0)`.
-
-- **bbox_reg_stds** (*tuple[float, ...]*, optional):  
-  Normalization stds for bounding box regression targets. Default is `(0.1, 0.1, 0.2, 0.2)`.
-
-- **dropout** (*float*, optional):  
-  Dropout probability used in the fully connected layers. Default is `0.5`.
-
-- **proposal_generator** (*Callable[..., Tensor] | None*, optional):  
-  Custom region proposal function. If `None`, uses precomputed proposals.
+- **config** (*FastRCNNConfig*):
+  Configuration object describing the backbone, feature-map channel width,
+  RoIAlign output size, fully connected head width, bounding-box regression
+  normalization constants, dropout, and proposal generator.
 
 Architecture
 ------------
@@ -204,69 +178,22 @@ per image and classifying object proposals directly on this shared map:
 Examples
 --------
 
-**Basic Usage**
-
 .. code-block:: python
 
-    import lucid.nn as nn
-    import lucid.random
-    import lucid
-
-    class ToyBackbone(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.net = nn.Sequential(
-                nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),
-                nn.ReLU(),
-                nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-                nn.ReLU()
-            )
-
-        def forward(self, x):
-            return self.net(x)
-
-    # Instantiate model
-    backbone = ToyBackbone()
-    model = nn.FastRCNN(backbone, feat_channels=64, num_classes=4)
-
-    # Dummy input
-    image = lucid.random.randn(1, 3, 512, 512)
-    output = model.predict(image)
-    print(output["boxes"].shape, output["scores"].shape, output["labels"].shape)
-
-**Explanation**
-
-Fast R-CNN accelerates inference by removing redundant computation. 
-A single backbone pass generates features, which are then reused for each region proposal. 
-RoI pooling ensures a fixed-size input for classification and regression heads.
-
-**Custom Configuration**
-
-.. code-block:: python
-
-    class MiniBackbone(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.conv = nn.Sequential(
-                nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
-                nn.ReLU(),
-                nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
-                nn.ReLU()
-            )
-
-        def forward(self, x):
-            return self.conv(x)
-
-    backbone = MiniBackbone()
-    model = nn.FastRCNN(
-        backbone=backbone,
-        feat_channels=32,
-        num_classes=3,
-        pool_size=(5, 5),
-        hidden_dim=1024,
-        dropout=0.3,
-    )
-
-    image = lucid.random.randn(1, 3, 256, 256)
-    output = model.predict(image)
-    print(output["boxes"].shape, output["scores"].shape, output["labels"].shape)
+    >>> import lucid
+    >>> import lucid.models as models
+    >>> import lucid.nn as nn
+    >>> backbone = nn.Sequential(
+    ...     nn.Conv2d(3, 64, kernel_size=3, padding=1),
+    ...     nn.ReLU(),
+    ... )
+    >>> config = models.FastRCNNConfig(
+    ...     backbone=backbone,
+    ...     feat_channels=64,
+    ...     num_classes=4,
+    ... )
+    >>> model = models.FastRCNN(config)
+    >>> images = lucid.random.randn(1, 3, 256, 256)
+    >>> detections = model.predict(images)
+    >>> first = detections[0]
+    >>> print(first["boxes"].shape, first["scores"].shape, first["labels"].shape)

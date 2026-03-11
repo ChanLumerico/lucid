@@ -2,6 +2,12 @@ VAE
 ===
 |autoencoder-badge| |vae-badge|
 
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    VAEConfig.rst
+
 .. autoclass:: lucid.models.VAE
 
 The `VAE` class implements a generalized Variational Autoencoder supporting 
@@ -66,50 +72,36 @@ Class Signature
 
 .. code-block:: python
 
-    class VAE(
-        encoders: list[nn.Module],
-        decoders: list[nn.Module],
-        priors: list[nn.Module] | None = None,
-        reconstruction_loss: Literal["mse", "bce"] = "mse",
-        kl_weight: float = 1.0,
-        beta_schedule: Callable[[int], float] | None = None,
-        hierarchical_kl: bool = True,
-        depth: int | None = None,
-    )
+    class VAE(config: VAEConfig)
 
 Parameters
 ----------
 
-- **encoders** (*list[nn.Module]*):  
-  A list of encoder modules. Each encoder should output a tensor of shape 
-  `(N, 2 * D)` where the first half encodes the mean and the second half the 
-  log-variance of the Gaussian latent variable.
+- **config** (*VAEConfig*):
+  Configuration object that stores the encoder stack, decoder stack, optional
+  hierarchical priors, reconstruction loss mode, and KL weighting strategy.
 
-- **decoders** (*list[nn.Module]*):  
-  A list of decoder modules. Decoding starts from the deepest latent and 
-  reconstructs to the original data space.
+Configuration
+-------------
 
-- **priors** (*list[nn.Module] | None*):  
-  Optional list of prior modules that map the latent from the next layer into 
-  a prior distribution (output shape must be `(N, 2 * D)`).
-
-- **reconstruction_loss** (*Literal["mse", "bce"]*):  
-  Type of reconstruction loss to apply. Either Mean Squared Error (MSE) or 
-  Binary Cross Entropy (BCE).
-
-- **kl_weight** (*float*):  
-  The default :math:`\beta` weighting applied to KL divergence.
-
-- **beta_schedule** (*Callable[[int], float] | None*):  
-  Optional function that outputs :math:`\beta` for each training step.
-
-- **hierarchical_kl** (*bool*):  
-  If True, distributes KL loss over all latent layers; otherwise applies :math:`\beta` 
-  to each layer equally.
-
-- **depth** (*int | None*):  
-  Optionally set the number of latent layers manually. If not provided, 
-  it defaults to the number of encoders.
+- **encoders** (*list[nn.Module]*):
+  Encoder modules. Each encoder must output `(N, 2 * D)` so it can be split into
+  mean and log-variance tensors.
+- **decoders** (*list[nn.Module]*):
+  Decoder modules applied in reverse order from the deepest latent sample.
+- **priors** (*list[nn.Module] | None*):
+  Optional hierarchical prior modules. When provided, the current implementation
+  expects exactly `depth - 1` modules.
+- **reconstruction_loss** (*Literal["mse", "bce"]*):
+  Reconstruction loss mode.
+- **kl_weight** (*float*):
+  Base :math:`\beta` multiplier for KL divergence.
+- **beta_schedule** (*Callable[[int], float] | None*):
+  Optional schedule that overrides :math:`\beta` per training step.
+- **hierarchical_kl** (*bool*):
+  If `True`, distributes KL weighting across latent levels.
+- **depth** (*int | None*):
+  Latent depth. If omitted, it defaults to the encoder count.
 
 Returns
 -------
@@ -186,10 +178,13 @@ Examples
         nn.Linear(512, 784),
     )
 
+    from lucid.models import VAEConfig
+
     vae = VAE(
-        encoders=[encoder],
-        decoders=[decoder],
-        input_shape=(784,),
+        VAEConfig(
+            encoders=[encoder],
+            decoders=[decoder],
+        )
     )
 
     x = lucid.randn(32, 784)

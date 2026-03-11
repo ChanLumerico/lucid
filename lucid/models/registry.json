@@ -67,6 +67,16 @@
                     "factory_type": "class"
                 }
             }
+        },
+        "transformer": {
+            "transformer_base": {
+                "parameter_size": 7415848,
+                "submodule_count": 45
+            },
+            "transformer_big": {
+                "parameter_size": 29511720,
+                "submodule_count": 45
+            }
         }
     },
     "vision": {

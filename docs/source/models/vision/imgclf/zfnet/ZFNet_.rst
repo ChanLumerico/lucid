@@ -5,15 +5,17 @@ ZFNet
     :maxdepth: 1
     :hidden:
 
+    ZFNetConfig.rst
     zfnet.rst
 
 |convnet-badge| 
 
 .. autoclass:: lucid.models.ZFNet
 
-The `ZFNet` module in `lucid.nn` implements the Zeiler and Fergus Net, 
+The `ZFNet` module in `lucid.models` implements the Zeiler and Fergus Net,
 an improvement over AlexNet with smaller convolutional filters and enhanced 
-visualization techniques for understanding feature learning.
+visualization techniques for understanding feature learning. It is configured
+through `ZFNetConfig`.
 
 .. mermaid::
     :name: ZFNet
@@ -105,24 +107,28 @@ Class Signature
 .. code-block:: python
 
     class ZFNet(nn.Module):
-        def __init__(self, num_classes: int = 1000)
+        def __init__(self, config: ZFNetConfig)
 
 Parameters
 ----------
 
-- **num_classes** (*int*, optional):
-  The number of output classes for classification. Default is 1000.
+- **config** (*ZFNetConfig*):
+  A configuration object describing the output class count, input channels,
+  dropout rate, and classifier hidden dimensions.
 
 Attributes
 ----------
 
-- **features** (*nn.Sequential*):
+- **config** (*ZFNetConfig*):
+  The configuration used to build the model.
+
+- **conv** (*nn.Sequential*):
   The convolutional layers, including pooling and ReLU activations.
 
 - **avgpool** (*nn.AdaptiveAvgPool2d*):
   Adaptive average pooling layer to reduce spatial dimensions to (6, 6).
 
-- **classifier** (*nn.Sequential*):
+- **fc** (*nn.Sequential*):
   The fully connected layers with dropout and ReLU activations for classification.
 
 Architecture
@@ -149,10 +155,10 @@ Examples
 
 .. code-block:: python
 
-    import lucid.nn as nn
+    import lucid.models as models
 
-    # Create ZFNet with default 1000 classes
-    model = nn.ZFNet(num_classes=1000)
+    config = models.ZFNetConfig()
+    model = models.ZFNet(config)
 
     # Input tensor with shape (1, 3, 224, 224)
     input_ = Tensor.randn(1, 3, 224, 224)
@@ -171,10 +177,15 @@ producing logits for 1000 classes.
 
 .. code-block:: python
 
-    # Create ZFNet with custom 10 classes
-    model = nn.ZFNet(num_classes=10)
+    config = models.ZFNetConfig(
+        num_classes=10,
+        in_channels=1,
+        dropout=0.25,
+        classifier_hidden_features=(512, 256),
+    )
+    model = models.ZFNet(config)
 
-    input_ = Tensor.randn(1, 3, 224, 224)
+    input_ = Tensor.randn(1, 1, 224, 224)
 
     output = model(input_)
     print(output.shape)  # Shape: (1, 10)

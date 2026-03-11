@@ -4,8 +4,8 @@ vit_small
 .. autofunction:: lucid.models.vit_small
 
 The `vit_small` function instantiates a small Vision Transformer (ViT-S) model
-with a predefined architecture. This model is a balance between efficiency and performance,
-making it suitable for mid-scale vision tasks.
+with a predefined architecture. This preset uses the default `ViTConfig`
+transformer dimensions for the small variant.
 
 **Total Parameters**: 22,050,664
 
@@ -34,20 +34,10 @@ Parameters
   The number of output classes for classification. Default is 1000.
 
 - **kwargs** (*dict*, optional):
-  Additional parameters for customization.
+  Additional keyword arguments forwarded to `ViTConfig`, excluding the preset
+  `embedding_dim`, `depth`, `num_heads`, and `mlp_dim` fields.
 
 Returns
 -------
 - **ViT**:
-  An instance of the `ViT` class configured as a small vision transformer.
-
-Examples
---------
-
-.. code-block:: python
-
-    >>> import lucid.models as models
-    >>> model = models.vit_small()
-    >>> print(model)
-    ViT(img_size=224, patch_size=16, num_classes=1000, ...)
-
+  A ViT model instance constructed from the small preset config.

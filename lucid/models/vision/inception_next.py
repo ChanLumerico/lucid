@@ -1,5 +1,6 @@
-from typing import Type
+from dataclasses import dataclass
 from functools import partial
+from typing import Type
 
 import lucid
 import lucid.nn as nn
@@ -9,11 +10,92 @@ from lucid._tensor import Tensor
 
 __all__ = [
     "InceptionNeXt",
+    "InceptionNeXtConfig",
     "inception_next_atto",
     "inception_next_tiny",
     "inception_next_small",
     "inception_next_base",
 ]
+
+
+def _normalize_positive_int_sequence(
+    values: tuple[int, ...] | list[int],
+    name: str,
+) -> tuple[int, ...]:
+    normalized = tuple(values)
+    if len(normalized) == 0:
+        raise ValueError(f"{name} must contain at least one stage value")
+    if any(not isinstance(value, int) or value <= 0 for value in normalized):
+        raise ValueError(f"{name} values must be positive integers")
+    return normalized
+
+
+@dataclass
+class InceptionNeXtConfig:
+    num_classes: int = 1000
+    depths: tuple[int, ...] | list[int] = (3, 3, 9, 3)
+    dims: tuple[int, ...] | list[int] = (96, 192, 384, 768)
+    token_mixers: object | None = None
+    mlp_ratios: int | tuple[int, ...] | list[int] = (4, 4, 4, 3)
+    head_fn: object | None = None
+    drop_rate: float = 0.0
+    drop_path_rate: float = 0.0
+    ls_init_value: float = 1e-6
+
+    def __post_init__(self) -> None:
+        self.depths = _normalize_positive_int_sequence(self.depths, "depths")
+        self.dims = _normalize_positive_int_sequence(self.dims, "dims")
+        num_stage = len(self.depths)
+
+        if len(self.dims) != num_stage:
+            raise ValueError("dims must have the same number of stages as depths")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+
+        if self.token_mixers is None:
+            self.token_mixers = _InceptionDWConv2d
+
+        if isinstance(self.token_mixers, (list, tuple)):
+            if len(self.token_mixers) != num_stage:
+                raise ValueError(
+                    "token_mixers must have the same number of stages as depths"
+                )
+            if any(not callable(token_mixer) for token_mixer in self.token_mixers):
+                raise TypeError("token_mixers entries must be callable")
+            self.token_mixers = tuple(self.token_mixers)
+        elif callable(self.token_mixers):
+            self.token_mixers = tuple(self.token_mixers for _ in range(num_stage))
+        else:
+            raise TypeError("token_mixers must be callable or a sequence of callables")
+
+        if isinstance(self.mlp_ratios, (list, tuple)):
+            if len(self.mlp_ratios) != num_stage:
+                raise ValueError(
+                    "mlp_ratios must have the same number of stages as depths"
+                )
+            if any(
+                not isinstance(mlp_ratio, int) or mlp_ratio <= 0
+                for mlp_ratio in self.mlp_ratios
+            ):
+                raise ValueError("mlp_ratios values must be positive integers")
+            self.mlp_ratios = tuple(self.mlp_ratios)
+        elif isinstance(self.mlp_ratios, int) and self.mlp_ratios > 0:
+            self.mlp_ratios = tuple(self.mlp_ratios for _ in range(num_stage))
+        else:
+            raise ValueError(
+                "mlp_ratios must be a positive integer or sequence of positive integers"
+            )
+
+        if self.head_fn is None:
+            self.head_fn = _MLPHead
+        if not callable(self.head_fn):
+            raise TypeError("head_fn must be callable")
+        if self.drop_rate < 0 or self.drop_rate >= 1:
+            raise ValueError("drop_rate must be in the range [0, 1)")
+        if self.drop_path_rate < 0 or self.drop_path_rate > 1:
+            raise ValueError("drop_path_rate must be in the range [0, 1]")
+        if self.ls_init_value < 0:
+            raise ValueError("ls_init_value must be greater than or equal to 0")
 
 
 class _InceptionDWConv2d(nn.Module):
@@ -195,57 +277,52 @@ class _IncepNeXtStage(nn.Module):
 
 
 class InceptionNeXt(nn.Module):
-    def __init__(
-        self,
-        num_classes: int = 1000,
-        depths: list[int] = [3, 3, 9, 3],
-        dims: list[int] = [96, 192, 384, 768],
-        token_mixers: Type[nn.Module] = nn.Identity,
-        mlp_ratios: list[int] = [4, 4, 4, 3],
-        head_fn: Type[nn.Module] = _MLPHead,
-        drop_rate: float = 0.0,
-        drop_path_rate: float = 0.0,
-        ls_init_value: float = 1e-6,
-    ) -> None:
+    def __init__(self, config: InceptionNeXtConfig) -> None:
         super().__init__()
-        num_stage = len(depths)
-        if not isinstance(token_mixers, (list, tuple)):
-            token_mixers = [token_mixers] * num_stage
+        self.config = config
+        num_stage = len(config.depths)
 
-        if not isinstance(mlp_ratios, (list, tuple)):
-            mlp_ratios = [mlp_ratios] * num_stage
-
-        self.num_classes = num_classes
-        self.drop_rate = drop_rate
+        self.num_classes = config.num_classes
+        self.drop_rate = config.drop_rate
         self.stem = nn.Sequential(
-            nn.Conv2d(3, dims[0], kernel_size=4, stride=4), nn.BatchNorm2d(dims[0])
+            nn.Conv2d(3, config.dims[0], kernel_size=4, stride=4),
+            nn.BatchNorm2d(config.dims[0]),
         )
 
         self.stages = None
-        dp_rates = [x.item() for x in lucid.linspace(0, drop_path_rate, sum(depths))]
+        dp_rates = [
+            x.item()
+            for x in lucid.linspace(0, config.drop_path_rate, sum(config.depths))
+        ]
         stages = []
-        prev_channels = dims[0]
+        prev_channels = config.dims[0]
+        cur = 0
 
         for i in range(num_stage):
-            out_channels = dims[i]
+            out_channels = config.dims[i]
             stage = _IncepNeXtStage(
                 prev_channels,
                 out_channels,
                 ds_stride=2 if i > 0 else 1,
-                depth=depths[i],
-                drop_path_rates=dp_rates[i],
-                ls_init_value=ls_init_value,
-                token_mixer=token_mixers[i],
+                depth=config.depths[i],
+                drop_path_rates=dp_rates[cur : cur + config.depths[i]],
+                ls_init_value=config.ls_init_value,
+                token_mixer=config.token_mixers[i],
                 norm_layer=nn.BatchNorm2d,
-                mlp_ratio=mlp_ratios[i],
+                mlp_ratio=config.mlp_ratios[i],
             )
             stages.append(stage)
             prev_channels = out_channels
+            cur += config.depths[i]
 
         self.stages = nn.Sequential(*stages)
 
         self.num_features = prev_channels
-        self.head = head_fn(self.num_features, num_classes, drop=drop_rate)
+        self.head = config.head_fn(
+            self.num_features,
+            config.num_classes,
+            drop=config.drop_rate,
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.stem(x)
@@ -255,45 +332,95 @@ class InceptionNeXt(nn.Module):
         return x
 
 
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_inception_next_config(
+    *,
+    num_classes: int,
+    depths: tuple[int, ...],
+    dims: tuple[int, ...],
+    token_mixers: object,
+    **kwargs,
+) -> InceptionNeXtConfig:
+    return InceptionNeXtConfig(
+        num_classes=num_classes,
+        depths=depths,
+        dims=dims,
+        token_mixers=token_mixers,
+        **kwargs,
+    )
+
+
 @register_model
 def inception_next_atto(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
-    return InceptionNeXt(
-        num_classes,
-        depths=[2, 2, 6, 2],
-        dims=[40, 80, 160, 320],
-        token_mixers=partial(_InceptionDWConv2d, band_kernel_size=9),
-        **kwargs
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "dims", "token_mixers"},
+        "factory variants do not allow overriding preset depths, dims, or token_mixers",
     )
+    config = _build_inception_next_config(
+        num_classes=num_classes,
+        depths=(2, 2, 6, 2),
+        dims=(40, 80, 160, 320),
+        token_mixers=partial(_InceptionDWConv2d, band_kernel_size=9),
+        **kwargs,
+    )
+    return InceptionNeXt(config)
 
 
 @register_model
 def inception_next_tiny(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
-    return InceptionNeXt(
-        num_classes,
-        depths=[3, 3, 9, 3],
-        dims=[96, 192, 384, 768],
-        token_mixers=_InceptionDWConv2d,
-        **kwargs
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "dims", "token_mixers"},
+        "factory variants do not allow overriding preset depths, dims, or token_mixers",
     )
+    config = _build_inception_next_config(
+        num_classes=num_classes,
+        depths=(3, 3, 9, 3),
+        dims=(96, 192, 384, 768),
+        token_mixers=_InceptionDWConv2d,
+        **kwargs,
+    )
+    return InceptionNeXt(config)
 
 
 @register_model
 def inception_next_small(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
-    return InceptionNeXt(
-        num_classes,
-        depths=[3, 3, 27, 3],
-        dims=[96, 192, 384, 768],
-        token_mixers=_InceptionDWConv2d,
-        **kwargs
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "dims", "token_mixers"},
+        "factory variants do not allow overriding preset depths, dims, or token_mixers",
     )
+    config = _build_inception_next_config(
+        num_classes=num_classes,
+        depths=(3, 3, 27, 3),
+        dims=(96, 192, 384, 768),
+        token_mixers=_InceptionDWConv2d,
+        **kwargs,
+    )
+    return InceptionNeXt(config)
 
 
 @register_model
 def inception_next_base(num_classes: int = 1000, **kwargs) -> InceptionNeXt:
-    return InceptionNeXt(
-        num_classes,
-        depths=[3, 3, 27, 3],
-        dims=[128, 256, 512, 1024],
-        token_mixers=_InceptionDWConv2d,
-        **kwargs
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"depths", "dims", "token_mixers"},
+        "factory variants do not allow overriding preset depths, dims, or token_mixers",
     )
+    config = _build_inception_next_config(
+        num_classes=num_classes,
+        depths=(3, 3, 27, 3),
+        dims=(128, 256, 512, 1024),
+        token_mixers=_InceptionDWConv2d,
+        **kwargs,
+    )
+    return InceptionNeXt(config)

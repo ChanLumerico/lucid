@@ -1,7 +1,8 @@
+import math
+from dataclasses import dataclass
 from typing import Type
 
 import lucid.nn as nn
-import math
 
 import lucid
 from lucid import register_model
@@ -9,7 +10,9 @@ from lucid._tensor import Tensor
 
 __all__ = [
     "EfficientNet",
+    "EfficientNetConfig",
     "EfficientNet_V2",
+    "EfficientNetV2Config",
     "efficientnet_b0",
     "efficientnet_b1",
     "efficientnet_b2",
@@ -25,6 +28,46 @@ __all__ = [
 ]
 
 
+_EFFICIENTNET_V2_S_BLOCK_CFG = (
+    (True, 24, 3, 2, 1, 2, 0),
+    (True, 48, 3, 2, 4, 4, 0),
+    (True, 64, 3, 2, 4, 4, 0),
+    (False, 128, 3, 2, 4, 6, 4),
+    (False, 160, 3, 1, 6, 9, 4),
+    (False, 256, 3, 2, 6, 15, 4),
+)
+
+_EFFICIENTNET_V2_M_BLOCK_CFG = (
+    (True, 24, 3, 2, 1, 3, 0),
+    (True, 48, 3, 2, 4, 5, 0),
+    (True, 80, 3, 2, 4, 5, 0),
+    (False, 160, 3, 2, 4, 7, 4),
+    (False, 176, 3, 1, 6, 14, 4),
+    (False, 304, 3, 2, 6, 18, 4),
+    (False, 512, 3, 1, 6, 5, 4),
+)
+
+_EFFICIENTNET_V2_L_BLOCK_CFG = (
+    (True, 32, 3, 2, 1, 4, 0),
+    (True, 64, 3, 2, 4, 7, 0),
+    (True, 96, 3, 2, 4, 7, 0),
+    (False, 192, 3, 2, 4, 10, 4),
+    (False, 224, 3, 1, 6, 19, 4),
+    (False, 384, 3, 2, 6, 25, 4),
+    (False, 640, 3, 1, 6, 7, 4),
+)
+
+_EFFICIENTNET_V2_XL_BLOCK_CFG = (
+    (True, 32, 3, 2, 1, 4, 0),
+    (True, 64, 3, 2, 4, 8, 0),
+    (True, 96, 3, 2, 4, 8, 0),
+    (False, 192, 3, 2, 4, 16, 4),
+    (False, 256, 3, 1, 6, 24, 4),
+    (False, 512, 3, 2, 6, 32, 4),
+    (False, 640, 3, 1, 6, 8, 4),
+)
+
+
 def _make_divisible(v: int, divisor: int, min_value: int | None = None) -> int:
     if min_value is None:
         min_value = divisor
@@ -34,6 +77,90 @@ def _make_divisible(v: int, divisor: int, min_value: int | None = None) -> int:
         new_v += divisor
 
     return int(new_v)
+
+
+@dataclass
+class EfficientNetConfig:
+    num_classes: int = 1000
+    width_coef: float = 1.0
+    depth_coef: float = 1.0
+    scale: float = 1.0
+    dropout: float = 0.2
+    se_scale: int = 4
+    stochastic_depth: bool = False
+    p: float = 0.5
+
+    def __post_init__(self) -> None:
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.width_coef <= 0:
+            raise ValueError("width_coef must be greater than 0")
+        if self.depth_coef <= 0:
+            raise ValueError("depth_coef must be greater than 0")
+        if self.scale <= 0:
+            raise ValueError("scale must be greater than 0")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
+        if not isinstance(self.se_scale, int) or self.se_scale <= 0:
+            raise ValueError("se_scale must be a positive integer")
+        if not isinstance(self.stochastic_depth, bool):
+            raise TypeError("stochastic_depth must be a boolean")
+        if self.p < 0 or self.p > 1:
+            raise ValueError("p must be in the range [0, 1]")
+
+
+@dataclass
+class EfficientNetV2Config:
+    block_cfg: (
+        tuple[tuple[object, ...], ...] | list[tuple[object, ...]] | list[list[object]]
+    )
+    num_classes: int = 1000
+    dropout: float = 0.2
+    drop_path_rate: float = 0.2
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.block_cfg, (list, tuple)) or len(self.block_cfg) == 0:
+            raise ValueError("block_cfg must contain at least one block spec")
+
+        normalized_block_cfg = []
+        for spec in self.block_cfg:
+            if not isinstance(spec, (list, tuple)) or len(spec) != 7:
+                raise ValueError(
+                    "each block spec must contain exactly 7 values: (fused, out_channels, kernel_size, stride, expansion, repeats, se_scale)"
+                )
+            fused, out_channels, kernel_size, stride, expansion, repeats, se_scale = (
+                spec
+            )
+            if not isinstance(fused, bool):
+                raise TypeError("block spec fused value must be a boolean")
+            positive_int_values = (
+                out_channels,
+                kernel_size,
+                stride,
+                expansion,
+                repeats,
+            )
+            if any(
+                not isinstance(value, int) or value <= 0
+                for value in positive_int_values
+            ):
+                raise ValueError(
+                    "block spec out_channels, kernel_size, stride, expansion, and repeats values must be positive integers"
+                )
+            if not isinstance(se_scale, int) or se_scale < 0:
+                raise ValueError(
+                    "block spec se_scale value must be a non-negative integer"
+                )
+            normalized_block_cfg.append(tuple(spec))
+
+        self.block_cfg = tuple(normalized_block_cfg)
+
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
+        if self.drop_path_rate < 0 or self.drop_path_rate > 1:
+            raise ValueError("drop_path_rate must be in the range [0, 1]")
 
 
 class _SEBlock(nn.Module):
@@ -118,39 +245,33 @@ class _MBConv(nn.Module):
 
 
 class EfficientNet(nn.Module):
-    def __init__(
-        self,
-        num_classes: int = 1000,
-        width_coef: float = 1.0,
-        depth_coef: float = 1.0,
-        scale: float = 1.0,
-        dropout: float = 0.2,
-        se_scale: int = 4,
-        stochastic_depth: bool = False,
-        p: float = 0.5,
-    ) -> None:
+    def __init__(self, config: EfficientNetConfig) -> None:
         super().__init__()
+        self.config = config
         channels = [32, 16, 24, 40, 80, 112, 192, 320, 1280]
         repeats = [1, 2, 2, 3, 3, 4, 1]
         strides = [1, 2, 2, 2, 1, 2, 1]
         kernel_sizes = [3, 3, 5, 3, 5, 5, 3]
         expands = [1, 6, 6, 6, 6, 6, 6]
 
-        depth = depth_coef
-        width = width_coef
+        depth = config.depth_coef
+        width = config.width_coef
 
         channels = [_make_divisible(ch * width, 8) for ch in channels]
         repeats = [math.ceil(rep * depth) for rep in repeats]
 
-        if stochastic_depth:
-            self.p = p
-            self.step = 0.5 / (sum(repeats - 1))
+        if config.stochastic_depth:
+            self.p = config.p
+            stochastic_depth_steps = sum(rep - 1 for rep in repeats)
+            self.step = (
+                0.5 / stochastic_depth_steps if stochastic_depth_steps > 0 else 0.0
+            )
         else:
             self.p = 1.0
             self.step = 0.0
 
         self.upsample = nn.Upsample(
-            scale_factor=scale, mode="bilinear", align_corners=False
+            scale_factor=config.scale, mode="bilinear", align_corners=False
         )
 
         self.stage1 = nn.Sequential(
@@ -167,7 +288,7 @@ class EfficientNet(nn.Module):
                 kernel_sizes[i],
                 strides[i],
                 expands[i],
-                se_scale,
+                config.se_scale,
             )
             self.add_module(f"stage{i + 2}", block)
 
@@ -178,8 +299,8 @@ class EfficientNet(nn.Module):
         )
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.dropout = nn.Dropout(p=dropout)
-        self.fc = nn.Linear(channels[8], num_classes)
+        self.dropout = nn.Dropout(p=config.dropout)
+        self.fc = nn.Linear(channels[8], config.num_classes)
 
     def _make_block(
         self,
@@ -295,14 +416,10 @@ class _FusedMBConv(nn.Module):
 
 
 class EfficientNet_V2(nn.Module):
-    def __init__(
-        self,
-        block_cfg: list,
-        num_classes: int = 1000,
-        dropout: float = 0.2,
-        drop_path_rate: float = 0.2,
-    ) -> None:
+    def __init__(self, config: EfficientNetV2Config) -> None:
         super().__init__()
+        self.config = config
+        block_cfg = config.block_cfg
         stem_out = block_cfg[0][1]
         self.stem = nn.Sequential(
             nn.Conv2d(3, stem_out, kernel_size=3, stride=2, padding=1, bias=False),
@@ -317,7 +434,7 @@ class EfficientNet_V2(nn.Module):
         in_channels = stem_out
         for fused, cout, k, s, e, r, se_scale in block_cfg:
             for i in range(r):
-                drop_prob = 1.0 - (dp_index / total_repeats) * drop_path_rate
+                drop_prob = 1.0 - (dp_index / total_repeats) * config.drop_path_rate
                 dp_index += 1
 
                 if fused:
@@ -342,8 +459,8 @@ class EfficientNet_V2(nn.Module):
         )
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.dropout = nn.Dropout(p=dropout)
-        self.fc = nn.Linear(head_ch, num_classes)
+        self.dropout = nn.Dropout(p=config.dropout)
+        self.fc = nn.Linear(head_ch, config.num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.stem(x)
@@ -358,152 +475,268 @@ class EfficientNet_V2(nn.Module):
         return x
 
 
+def _build_efficientnet_config(
+    *,
+    num_classes: int,
+    width_coef: float,
+    depth_coef: float,
+    scale: float,
+    dropout: float,
+    **kwargs,
+) -> EfficientNetConfig:
+    locked_fields = {"width_coef", "depth_coef", "scale", "dropout"}
+    if locked_fields & kwargs.keys():
+        raise TypeError(
+            "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout"
+        )
+    return EfficientNetConfig(
+        num_classes=num_classes,
+        width_coef=width_coef,
+        depth_coef=depth_coef,
+        scale=scale,
+        dropout=dropout,
+        **kwargs,
+    )
+
+
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_efficientnet_v2_config(
+    *,
+    block_cfg: tuple[tuple[object, ...], ...],
+    num_classes: int,
+    dropout: float,
+    drop_path_rate: float,
+    **kwargs,
+) -> EfficientNetV2Config:
+    locked_fields = {"block_cfg", "dropout", "drop_path_rate"}
+    if locked_fields & kwargs.keys():
+        raise TypeError(
+            "factory variants do not allow overriding preset block_cfg, dropout, or drop_path_rate"
+        )
+    return EfficientNetV2Config(
+        block_cfg=block_cfg,
+        num_classes=num_classes,
+        dropout=dropout,
+        drop_path_rate=drop_path_rate,
+        **kwargs,
+    )
+
+
 @register_model
 def efficientnet_b0(num_classes: int = 1000, **kwargs) -> EfficientNet:
-    return EfficientNet(
-        num_classes,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"width_coef", "depth_coef", "scale", "dropout"},
+        "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout",
+    )
+    config = _build_efficientnet_config(
+        num_classes=num_classes,
         width_coef=1.0,
         depth_coef=1.0,
         scale=224 / 224,
         dropout=0.2,
         **kwargs,
     )
+    return EfficientNet(config)
 
 
 @register_model
 def efficientnet_b1(num_classes: int = 1000, **kwargs) -> EfficientNet:
-    return EfficientNet(
-        num_classes,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"width_coef", "depth_coef", "scale", "dropout"},
+        "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout",
+    )
+    config = _build_efficientnet_config(
+        num_classes=num_classes,
         width_coef=1.0,
         depth_coef=1.1,
         scale=240 / 224,
         dropout=0.2,
         **kwargs,
     )
+    return EfficientNet(config)
 
 
 @register_model
 def efficientnet_b2(num_classes: int = 1000, **kwargs) -> EfficientNet:
-    return EfficientNet(
-        num_classes,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"width_coef", "depth_coef", "scale", "dropout"},
+        "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout",
+    )
+    config = _build_efficientnet_config(
+        num_classes=num_classes,
         width_coef=1.1,
         depth_coef=1.2,
         scale=260 / 224,
         dropout=0.3,
         **kwargs,
     )
+    return EfficientNet(config)
 
 
 @register_model
 def efficientnet_b3(num_classes: int = 1000, **kwargs) -> EfficientNet:
-    return EfficientNet(
-        num_classes,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"width_coef", "depth_coef", "scale", "dropout"},
+        "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout",
+    )
+    config = _build_efficientnet_config(
+        num_classes=num_classes,
         width_coef=1.2,
         depth_coef=1.4,
         scale=300 / 224,
         dropout=0.3,
         **kwargs,
     )
+    return EfficientNet(config)
 
 
 @register_model
 def efficientnet_b4(num_classes: int = 1000, **kwargs) -> EfficientNet:
-    return EfficientNet(
-        num_classes,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"width_coef", "depth_coef", "scale", "dropout"},
+        "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout",
+    )
+    config = _build_efficientnet_config(
+        num_classes=num_classes,
         width_coef=1.4,
         depth_coef=1.8,
         scale=380 / 224,
         dropout=0.4,
         **kwargs,
     )
+    return EfficientNet(config)
 
 
 @register_model
 def efficientnet_b5(num_classes: int = 1000, **kwargs) -> EfficientNet:
-    return EfficientNet(
-        num_classes,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"width_coef", "depth_coef", "scale", "dropout"},
+        "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout",
+    )
+    config = _build_efficientnet_config(
+        num_classes=num_classes,
         width_coef=1.6,
         depth_coef=2.2,
         scale=456 / 224,
         dropout=0.4,
         **kwargs,
     )
+    return EfficientNet(config)
 
 
 @register_model
 def efficientnet_b6(num_classes: int = 1000, **kwargs) -> EfficientNet:
-    return EfficientNet(
-        num_classes,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"width_coef", "depth_coef", "scale", "dropout"},
+        "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout",
+    )
+    config = _build_efficientnet_config(
+        num_classes=num_classes,
         width_coef=1.8,
         depth_coef=2.6,
         scale=528 / 224,
         dropout=0.5,
         **kwargs,
     )
+    return EfficientNet(config)
 
 
 @register_model
 def efficientnet_b7(num_classes: int = 1000, **kwargs) -> EfficientNet:
-    return EfficientNet(
-        num_classes,
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"width_coef", "depth_coef", "scale", "dropout"},
+        "factory variants do not allow overriding preset width_coef, depth_coef, scale, or dropout",
+    )
+    config = _build_efficientnet_config(
+        num_classes=num_classes,
         width_coef=2.0,
         depth_coef=3.1,
         scale=600 / 224,
         dropout=0.5,
         **kwargs,
     )
+    return EfficientNet(config)
 
 
 @register_model
 def efficientnet_v2_s(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
-    cfg = [
-        [True, 24, 3, 2, 1, 2, 0],
-        [True, 48, 3, 2, 4, 4, 0],
-        [True, 64, 3, 2, 4, 4, 0],
-        [False, 128, 3, 2, 4, 6, 4],
-        [False, 160, 3, 1, 6, 9, 4],
-        [False, 256, 3, 2, 6, 15, 4],
-    ]
-    return EfficientNet_V2(cfg, num_classes, dropout=0.2, drop_path_rate=0.2, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"block_cfg", "dropout", "drop_path_rate"},
+        "factory variants do not allow overriding preset block_cfg, dropout, or drop_path_rate",
+    )
+    config = _build_efficientnet_v2_config(
+        block_cfg=_EFFICIENTNET_V2_S_BLOCK_CFG,
+        num_classes=num_classes,
+        dropout=0.2,
+        drop_path_rate=0.2,
+        **kwargs,
+    )
+    return EfficientNet_V2(config)
 
 
 @register_model
 def efficientnet_v2_m(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
-    cfg = [
-        [True, 24, 3, 2, 1, 3, 0],
-        [True, 48, 3, 2, 4, 5, 0],
-        [True, 80, 3, 2, 4, 5, 0],
-        [False, 160, 3, 2, 4, 7, 4],
-        [False, 176, 3, 1, 6, 14, 4],
-        [False, 304, 3, 2, 6, 18, 4],
-        [False, 512, 3, 1, 6, 5, 4],
-    ]
-    return EfficientNet_V2(cfg, num_classes, dropout=0.3, drop_path_rate=0.2, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"block_cfg", "dropout", "drop_path_rate"},
+        "factory variants do not allow overriding preset block_cfg, dropout, or drop_path_rate",
+    )
+    config = _build_efficientnet_v2_config(
+        block_cfg=_EFFICIENTNET_V2_M_BLOCK_CFG,
+        num_classes=num_classes,
+        dropout=0.3,
+        drop_path_rate=0.2,
+        **kwargs,
+    )
+    return EfficientNet_V2(config)
 
 
 @register_model
 def efficientnet_v2_l(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
-    cfg = [
-        [True, 32, 3, 2, 1, 4, 0],
-        [True, 64, 3, 2, 4, 7, 0],
-        [True, 96, 3, 2, 4, 7, 0],
-        [False, 192, 3, 2, 4, 10, 4],
-        [False, 224, 3, 1, 6, 19, 4],
-        [False, 384, 3, 2, 6, 25, 4],
-        [False, 640, 3, 1, 6, 7, 4],
-    ]
-    return EfficientNet_V2(cfg, num_classes, dropout=0.4, drop_path_rate=0.3, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"block_cfg", "dropout", "drop_path_rate"},
+        "factory variants do not allow overriding preset block_cfg, dropout, or drop_path_rate",
+    )
+    config = _build_efficientnet_v2_config(
+        block_cfg=_EFFICIENTNET_V2_L_BLOCK_CFG,
+        num_classes=num_classes,
+        dropout=0.4,
+        drop_path_rate=0.3,
+        **kwargs,
+    )
+    return EfficientNet_V2(config)
 
 
 @register_model
 def efficientnet_v2_xl(num_classes: int = 1000, **kwargs) -> EfficientNet_V2:
-    cfg = [
-        [True, 32, 3, 2, 1, 4, 0],
-        [True, 64, 3, 2, 4, 8, 0],
-        [True, 96, 3, 2, 4, 8, 0],
-        [False, 192, 3, 2, 4, 16, 4],
-        [False, 256, 3, 1, 6, 24, 4],
-        [False, 512, 3, 2, 6, 32, 4],
-        [False, 640, 3, 1, 6, 8, 4],
-    ]
-    return EfficientNet_V2(cfg, num_classes, dropout=0.5, drop_path_rate=0.4, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"block_cfg", "dropout", "drop_path_rate"},
+        "factory variants do not allow overriding preset block_cfg, dropout, or drop_path_rate",
+    )
+    config = _build_efficientnet_v2_config(
+        block_cfg=_EFFICIENTNET_V2_XL_BLOCK_CFG,
+        num_classes=num_classes,
+        dropout=0.5,
+        drop_path_rate=0.4,
+        **kwargs,
+    )
+    return EfficientNet_V2(config)

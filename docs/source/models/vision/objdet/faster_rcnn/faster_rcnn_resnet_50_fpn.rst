@@ -34,8 +34,9 @@ Parameters
   This affects the initial backbone setup and should match the pretraining phase if any.
 
 - **kwargs** (*dict*, optional):  
-  Additional keyword arguments to customize `FasterRCNN`, such as anchor sizes, 
-  NMS thresholds, etc.
+  Additional keyword arguments passed to `FasterRCNNConfig`, excluding the
+  preset `backbone`, `feat_channels`, `num_classes`, `use_fpn`, and `hidden_dim`
+  fields fixed by this factory.
 
 Returns
 -------
@@ -50,6 +51,7 @@ Examples
 
 .. code-block:: python
 
+    import lucid
     from lucid.models import faster_rcnn_resnet_50_fpn
 
     # Create the model with 21 object classes (VOC-style)
@@ -58,11 +60,9 @@ Examples
     # Input tensor: 1 image with 3 channels and 224x224 spatial dimensions
     x = lucid.random.randn(1, 3, 224, 224)
 
-    # Forward pass
-    cls_logits, bbox_deltas = model(x)
-
-    print(cls_logits.shape)   # (N, R, C), e.g., (1, 300, 21)
-    print(bbox_deltas.shape)  # (N, R, 4),   e.g., (1, 300, 4)
+    detections = model.predict(x)
+    first = detections[0]
+    print(first["boxes"].shape, first["scores"].shape, first["labels"].shape)
 
 Training Notes
 --------------
@@ -110,4 +110,3 @@ To train `faster_rcnn_resnet_50_fpn` properly, follow this two-stage strategy:
 
    Ensure the backbone's `backbone_num_classes` matches the number of output classes 
    used during pretraining. Otherwise, classifier weights will mismatch and must be discarded.
-

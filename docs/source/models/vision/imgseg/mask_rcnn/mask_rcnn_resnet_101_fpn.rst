@@ -30,8 +30,8 @@ Parameters
   Number of classes used to initialize the internal ResNet-101 backbone.
 
 - **kwargs** (*dict*, optional):
-  Additional arguments passed to `MaskRCNN` (for example mask head size,
-  anchor settings, pooling sizes, and hidden dimensions).
+  Additional keyword arguments passed to `MaskRCNNConfig`. This factory fixes
+  the ResNet-101 FPN backbone preset and the default feature width.
 
 Returns
 -------

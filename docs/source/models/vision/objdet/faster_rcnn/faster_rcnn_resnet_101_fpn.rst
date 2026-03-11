@@ -34,8 +34,9 @@ Parameters
   This should match the classification task used for pretraining. Default is 1000.
 
 - **kwargs** (*dict*, optional):  
-  Additional keyword arguments for configuring the `FasterRCNN` model, 
-  such as anchor settings, thresholds, etc.
+  Additional keyword arguments passed to `FasterRCNNConfig`, excluding the
+  preset `backbone`, `feat_channels`, `num_classes`, `use_fpn`, and `hidden_dim`
+  fields fixed by this factory.
 
 Returns
 -------
@@ -50,6 +51,7 @@ Examples
 
 .. code-block:: python
 
+    import lucid
     from lucid.models import faster_rcnn_resnet_101_fpn
 
     # Construct model for 21 object classes
@@ -58,11 +60,9 @@ Examples
     # Dummy input image
     x = lucid.random.randn(1, 3, 224, 224)
 
-    # Inference
-    cls_logits, bbox_deltas = model(x)
-
-    print(cls_logits.shape)   # (1, 300, 21)
-    print(bbox_deltas.shape)  # (1, 300, 4)
+    detections = model.predict(x)
+    first = detections[0]
+    print(first["boxes"].shape, first["scores"].shape, first["labels"].shape)
 
 Training Notes
 --------------

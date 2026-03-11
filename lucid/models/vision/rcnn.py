@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -6,7 +8,46 @@ from lucid._tensor import Tensor
 
 from lucid.models.utils import SelectiveSearch, apply_deltas, nms
 
-__all__ = ["RCNN"]
+__all__ = ["RCNN", "RCNNConfig"]
+
+
+@dataclass
+class RCNNConfig:
+    backbone: nn.Module
+    feat_dim: int
+    num_classes: int
+    image_means: tuple[float, float, float] | list[float] = (0.485, 0.456, 0.406)
+    pixel_scale: float = 1.0
+    warper_output_size: tuple[int, int] | list[int] = (224, 224)
+    nms_iou_thresh: float = 0.3
+    score_thresh: float = 0.0
+    add_one: bool = True
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.backbone, nn.Module):
+            raise TypeError("backbone must be an nn.Module")
+        if self.feat_dim <= 0:
+            raise ValueError("feat_dim must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+
+        self.image_means = tuple(self.image_means)
+        self.warper_output_size = tuple(self.warper_output_size)
+
+        if len(self.image_means) != 3:
+            raise ValueError("image_means must contain exactly three values")
+        if self.pixel_scale <= 0:
+            raise ValueError("pixel_scale must be greater than 0")
+        if (
+            len(self.warper_output_size) != 2
+            or self.warper_output_size[0] <= 0
+            or self.warper_output_size[1] <= 0
+        ):
+            raise ValueError(
+                "warper_output_size must contain exactly two positive integers"
+            )
+        if self.nms_iou_thresh < 0 or self.nms_iou_thresh > 1:
+            raise ValueError("nms_iou_thresh must be in the range [0, 1]")
 
 
 class _RegionWarper(nn.Module):
@@ -73,34 +114,24 @@ class _BBoxRegressor(nn.Module):
 
 
 class RCNN(nn.Module):
-    def __init__(
-        self,
-        backbone: nn.Module,
-        feat_dim: int,
-        num_classes: int,
-        *,
-        image_means: tuple[float, float, float] = (0.485, 0.456, 0.406),
-        pixel_scale: float = 1.0,
-        warper_output_size: tuple[int, int] = (224, 224),
-        nms_iou_thresh: float = 0.3,
-        score_thresh: float = 0.0,
-        add_one: bool = True,
-    ) -> None:
+    def __init__(self, config: RCNNConfig) -> None:
         super().__init__()
-        self.backbone = backbone
+        self.config = config
+        self.backbone = config.backbone
         self.ss = SelectiveSearch()
-        self.warper = _RegionWarper(warper_output_size)
-        self.svm = _LinearSVM(feat_dim, num_classes)
-        self.bbox_reg = _BBoxRegressor(feat_dim, num_classes)
+        self.warper = _RegionWarper(config.warper_output_size)
+        self.svm = _LinearSVM(config.feat_dim, config.num_classes)
+        self.bbox_reg = _BBoxRegressor(config.feat_dim, config.num_classes)
 
         self.image_means: nn.Buffer
         self.register_buffer(
-            "image_means", lucid.Tensor(image_means).reshape(1, 3, 1, 1) / pixel_scale
+            "image_means",
+            lucid.Tensor(config.image_means).reshape(1, 3, 1, 1) / config.pixel_scale,
         )
 
-        self.nms_iou_thresh = nms_iou_thresh
-        self.score_thresh = score_thresh
-        self.add_one = 1.0 if add_one else 0.0
+        self.nms_iou_thresh = config.nms_iou_thresh
+        self.score_thresh = config.score_thresh
+        self.add_one = 1.0 if config.add_one else 0.0
 
     def forward(
         self,
@@ -173,14 +204,14 @@ class RCNN(nn.Module):
                 res["boxes"].append(det_boxes[keep])
                 res["scores"].append(det_scores[keep])
                 res["labels"].append(
-                    lucid.full((keep.size,), c, dtype=int, device=device)
+                    lucid.full((keep.size,), c, dtype=lucid.Int32, device=device)
                 )
 
         for res in results:
             if not res["boxes"]:
                 res["boxes"] = lucid.empty(0, 4, device=device)
                 res["scores"] = lucid.empty(0, device=device)
-                res["labels"] = lucid.empty(0, dtype=int, device=device)
+                res["labels"] = lucid.empty(0, dtype=lucid.Int32, device=device)
             else:
                 res["boxes"] = lucid.concatenate(res["boxes"])
                 res["scores"] = lucid.concatenate(res["scores"])

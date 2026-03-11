@@ -34,9 +34,9 @@ Parameters
   If `True`, initializes the ResNet-50 backbone with pretrained weights and (by default) 
   **fine-tunes** it.
 
-- **kwargs**:  
-  Additional keyword arguments forwarded to the underlying :class:`DETR` 
-  constructor (e.g., `aux_loss`, loss coefficients, custom matcher, etc.).
+- **kwargs**:
+  Additional keyword arguments passed to `DETRConfig`. This factory fixes the
+  ResNet-50 backbone preset and the default DETR transformer dimensions.
 
 Returns
 -------

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import math
 
 import lucid
@@ -6,7 +7,42 @@ import lucid.nn as nn
 from lucid import register_model
 from lucid._tensor import Tensor
 
-__all__ = ["Transformer", "transformer_base", "transformer_big"]
+__all__ = ["Transformer", "TransformerConfig", "transformer_base", "transformer_big"]
+
+
+@dataclass
+class TransformerConfig:
+    src_vocab_size: int
+    tgt_vocab_size: int
+    d_model: int
+    num_heads: int
+    num_encoder_layers: int
+    num_decoder_layers: int
+    dim_feedforward: int
+    dropout: float = 0.1
+    max_len: int = 5000
+
+    def __post_init__(self) -> None:
+        if self.src_vocab_size <= 0:
+            raise ValueError("src_vocab_size must be greater than 0")
+        if self.tgt_vocab_size <= 0:
+            raise ValueError("tgt_vocab_size must be greater than 0")
+        if self.d_model <= 0:
+            raise ValueError("d_model must be greater than 0")
+        if self.num_heads <= 0:
+            raise ValueError("num_heads must be greater than 0")
+        if self.d_model % self.num_heads != 0:
+            raise ValueError("d_model must be divisible by num_heads")
+        if self.num_encoder_layers <= 0:
+            raise ValueError("num_encoder_layers must be greater than 0")
+        if self.num_decoder_layers <= 0:
+            raise ValueError("num_decoder_layers must be greater than 0")
+        if self.dim_feedforward <= 0:
+            raise ValueError("dim_feedforward must be greater than 0")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
+        if self.max_len <= 0:
+            raise ValueError("max_len must be greater than 0")
 
 
 class _PositionalEncoding(nn.Module):
@@ -32,34 +68,27 @@ class _PositionalEncoding(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(
-        self,
-        src_vocab_size: int,
-        tgt_vocab_size: int,
-        d_model: int,
-        num_heads: int,
-        num_encoder_layers: int,
-        num_decoder_layers: int,
-        dim_feedforward: int,
-        dropout: float = 0.1,
-    ) -> None:
+    def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
-        self.d_model = d_model
+        self.config = config
+        self.d_model = config.d_model
 
-        self.src_tok_emb = nn.Embedding(src_vocab_size, d_model)
-        self.tgt_tok_emb = nn.Embedding(tgt_vocab_size, d_model)
+        self.src_tok_emb = nn.Embedding(config.src_vocab_size, config.d_model)
+        self.tgt_tok_emb = nn.Embedding(config.tgt_vocab_size, config.d_model)
 
-        self.positional_encoding = _PositionalEncoding(d_model, dropout)
+        self.positional_encoding = _PositionalEncoding(
+            config.d_model, config.dropout, config.max_len
+        )
 
         self.transformer = nn.Transformer(
-            d_model=d_model,
-            num_heads=num_heads,
-            num_encoder_layers=num_encoder_layers,
-            num_decoder_layers=num_decoder_layers,
-            dim_feedforward=dim_feedforward,
-            dropout=dropout,
+            d_model=config.d_model,
+            num_heads=config.num_heads,
+            num_encoder_layers=config.num_encoder_layers,
+            num_decoder_layers=config.num_decoder_layers,
+            dim_feedforward=config.dim_feedforward,
+            dropout=config.dropout,
         )
-        self.fc_out = nn.Linear(d_model, tgt_vocab_size)
+        self.fc_out = nn.Linear(config.d_model, config.tgt_vocab_size)
 
     def forward(
         self,
@@ -111,31 +140,35 @@ class Transformer(nn.Module):
 
 @register_model
 def transformer_base(
-    src_vocab_size: int = 12000, tgt_vocab_size: int = 12000
+    src_vocab_size: int = 12000, tgt_vocab_size: int = 12000, **kwargs
 ) -> Transformer:
-    return Transformer(
-        src_vocab_size,
-        tgt_vocab_size,
-        d_model=512,
-        num_heads=8,
-        num_encoder_layers=6,
-        num_decoder_layers=6,
-        dim_feedforward=2048,
-        dropout=0.1,
-    )
+    config_kwargs = {
+        "src_vocab_size": src_vocab_size,
+        "tgt_vocab_size": tgt_vocab_size,
+        "d_model": 512,
+        "num_heads": 8,
+        "num_encoder_layers": 6,
+        "num_decoder_layers": 6,
+        "dim_feedforward": 2048,
+        "dropout": 0.1,
+    }
+    config_kwargs.update(kwargs)
+    return Transformer(TransformerConfig(**config_kwargs))
 
 
 @register_model
 def transformer_big(
-    src_vocab_size: int = 12000, tgt_vocab_size: int = 12000
+    src_vocab_size: int = 12000, tgt_vocab_size: int = 12000, **kwargs
 ) -> Transformer:
-    return Transformer(
-        src_vocab_size,
-        tgt_vocab_size,
-        d_model=1024,
-        num_heads=16,
-        num_encoder_layers=6,
-        num_decoder_layers=6,
-        dim_feedforward=4096,
-        dropout=0.3,
-    )
+    config_kwargs = {
+        "src_vocab_size": src_vocab_size,
+        "tgt_vocab_size": tgt_vocab_size,
+        "d_model": 1024,
+        "num_heads": 16,
+        "num_encoder_layers": 6,
+        "num_decoder_layers": 6,
+        "dim_feedforward": 4096,
+        "dropout": 0.3,
+    }
+    config_kwargs.update(kwargs)
+    return Transformer(TransformerConfig(**config_kwargs))

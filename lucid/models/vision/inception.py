@@ -1,4 +1,5 @@
-from typing import Optional, Tuple, override
+from dataclasses import dataclass
+from typing import Literal, Optional, Tuple, override
 
 import lucid
 import lucid.nn as nn
@@ -6,18 +7,253 @@ import lucid.nn as nn
 from lucid import register_model
 from lucid._tensor import Tensor
 
-__all__ = ["Inception", "inception_v1", "inception_v3", "inception_v4"]
+__all__ = [
+    "Inception",
+    "InceptionConfig",
+    "inception_v1",
+    "inception_v3",
+    "inception_v4",
+]
+
+
+@dataclass
+class InceptionConfig:
+    variant: Literal["v1", "v3", "v4"]
+    num_classes: int = 1000
+    in_channels: int = 3
+    use_aux: bool | None = None
+    dropout_prob: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.variant not in {"v1", "v3", "v4"}:
+            raise ValueError("Inception variant must be one of {'v1', 'v3', 'v4'}.")
+
+        if self.num_classes <= 0:
+            raise ValueError("Inception num_classes must be greater than 0.")
+
+        if self.in_channels <= 0:
+            raise ValueError("Inception in_channels must be greater than 0.")
+
+        if self.dropout_prob is not None and not 0.0 <= self.dropout_prob < 1.0:
+            raise ValueError("Inception dropout_prob must be in the range [0.0, 1.0).")
+
+        if self.variant in {"v1", "v3"}:
+            if self.use_aux is None:
+                self.use_aux = True
+            elif not isinstance(self.use_aux, bool):
+                raise ValueError(
+                    f"Inception {self.variant} use_aux must be a boolean value."
+                )
+
+        if self.variant == "v4":
+            if self.use_aux is None:
+                self.use_aux = False
+            elif self.use_aux is not False:
+                raise ValueError("Inception v4 does not support auxiliary classifiers.")
 
 
 class Inception(nn.Module):
-    def __init__(self, num_classes: int, use_aux: bool | None = True) -> None:
+    def __init__(self, config: InceptionConfig) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.use_aux = use_aux
+        self.config = config
+        self.variant = config.variant
+        self.num_classes = config.num_classes
+        self.use_aux = config.use_aux
+
+        builders = {
+            "v1": self._build_v1,
+            "v3": self._build_v3,
+            "v4": self._build_v4,
+        }
+        builders[self.variant]()
+
+    def _build_v1(self) -> None:
+        in_channels = self.config.in_channels
+        dropout_prob = (
+            0.4 if self.config.dropout_prob is None else self.config.dropout_prob
+        )
+
+        self.conv1 = nn.ConvBNReLU2d(
+            in_channels, 64, kernel_size=7, stride=2, padding=3
+        )
+        self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.conv2 = nn.Sequential(
+            nn.ConvBNReLU2d(64, 64, kernel_size=1),
+            nn.ConvBNReLU2d(64, 192, kernel_size=3, stride=1, padding=1),
+        )
+        self.maxpool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.incep_3 = nn.Sequential(
+            _InceptionModule(192, 64, 96, 128, 16, 32, 32),
+            _InceptionModule(256, 128, 128, 192, 32, 96, 64),
+        )
+        self.maxpool3 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.incep_4a = _InceptionModule(480, 192, 96, 208, 16, 48, 64)
+        self.incep_4bcd = nn.Sequential(
+            _InceptionModule(512, 160, 112, 224, 24, 64, 64),
+            _InceptionModule(512, 128, 128, 256, 24, 64, 64),
+            _InceptionModule(512, 112, 144, 288, 32, 64, 64),
+        )
+        self.incep_4e = _InceptionModule(528, 256, 160, 320, 32, 128, 128)
+        self.maxpool4 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.incep_5 = nn.Sequential(
+            _InceptionModule(832, 256, 160, 320, 32, 128, 128),
+            _InceptionModule(832, 384, 192, 384, 48, 128, 128),
+        )
+
+        if self.use_aux:
+            self.aux1 = _InceptionAux(512, self.num_classes, pool_size=(4, 4))
+            self.aux2 = _InceptionAux(528, self.num_classes, pool_size=(4, 4))
+        else:
+            self.aux1 = None
+            self.aux2 = None
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=dropout_prob)
+        self.fc = nn.Linear(1024, self.num_classes)
+
+    def _build_v3(self) -> None:
+        in_channels = self.config.in_channels
+        dropout_prob = (
+            0.5 if self.config.dropout_prob is None else self.config.dropout_prob
+        )
+
+        self.conv1 = nn.Sequential(
+            nn.ConvBNReLU2d(in_channels, 32, kernel_size=3, stride=2, conv_bias=False),
+            nn.ConvBNReLU2d(32, 32, kernel_size=3, conv_bias=False),
+            nn.ConvBNReLU2d(32, 64, kernel_size=3, padding=1, conv_bias=False),
+        )
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2)
+
+        self.conv2 = nn.Sequential(
+            nn.ConvBNReLU2d(64, 80, kernel_size=1, conv_bias=False),
+            nn.ConvBNReLU2d(80, 192, kernel_size=3, stride=2, conv_bias=False),
+            nn.ConvBNReLU2d(192, 288, kernel_size=3, padding=1, conv_bias=False),
+        )
+
+        self.incep_3 = nn.Sequential(
+            _InceptionModule_V2A(288),
+            _InceptionModule_V2A(288),
+            _InceptionModule_V2A(288),
+        )
+        self.incep_red1 = _InceptionReduce_V2A(288)
+
+        self.incep_4 = nn.Sequential(
+            _InceptionModule_V2B(768, 128),
+            _InceptionModule_V2B(768, 160),
+            _InceptionModule_V2B(768, 160),
+            _InceptionModule_V2B(768, 160),
+            _InceptionModule_V2B(768, 192),
+        )
+        self.incep_red2 = _InceptionReduce_V2B(768)
+
+        if self.use_aux:
+            self.aux = _InceptionAux(768, self.num_classes, pool_size=(5, 5))
+        else:
+            self.aux = None
+
+        self.incep_5 = nn.Sequential(
+            _InceptionModule_V2C(1280), _InceptionModule_V2C(2048)
+        )
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=dropout_prob)
+        self.fc = nn.Linear(2048, self.num_classes)
+
+    def _build_v4(self) -> None:
+        in_channels = self.config.in_channels
+        dropout_prob = (
+            0.8 if self.config.dropout_prob is None else self.config.dropout_prob
+        )
+
+        modules = []
+        modules.append(_InceptionStem_V4(in_channels))
+
+        for _ in range(4):
+            modules.append(_InceptionModule_V4A(384))
+        modules.append(_InceptionReduce_V4A(384, k=192, l=224, m=256, n=384))
+
+        for _ in range(7):
+            modules.append(_InceptionModule_V4B(1024))
+        modules.append(_InceptionReduce_V4B(1024))
+
+        for _ in range(3):
+            modules.append(_InceptionModule_V4C(1536))
+
+        self.conv = nn.Sequential(*modules)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=dropout_prob)
+        self.fc = nn.Linear(1536, self.num_classes)
+
+    def _forward_v1(
+        self, x: Tensor
+    ) -> Tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
+        x = self.maxpool1(self.conv1(x))
+        x = self.maxpool2(self.conv2(x))
+
+        x = self.maxpool3(self.incep_3(x))
+        x = self.incep_4a(x)
+        if self.aux1 is not None and self.training:
+            aux1 = self.aux1(x)
+        else:
+            aux1 = None
+
+        x = self.incep_4bcd(x)
+        if self.aux2 is not None and self.training:
+            aux2 = self.aux2(x)
+        else:
+            aux2 = None
+
+        x = self.maxpool4(self.incep_4e(x))
+        x = self.avgpool(self.incep_5(x))
+
+        x = x.reshape(x.shape[0], -1)
+        x = self.dropout(x)
+        x = self.fc(x)
+
+        return x, aux2, aux1
+
+    def _forward_v3(self, x: Tensor) -> Tuple[Tensor, Optional[Tensor] | Tensor]:
+        x = self.maxpool(self.conv1(x))
+        x = self.conv2(x)
+
+        x = self.incep_3(x)
+        x = self.incep_red1(x)
+        x = self.incep_4(x)
+
+        if self.aux is not None and self.training:
+            aux = self.aux(x)
+        else:
+            aux = None
+
+        x = self.incep_red2(x)
+        x = self.avgpool(self.incep_5(x))
+
+        x = x.reshape(x.shape[0], -1)
+        x = self.dropout(x)
+        x = self.fc(x)
+
+        return x, aux if self.aux is not None else x
+
+    def _forward_v4(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.avgpool(x)
+
+        x = x.reshape(x.shape[0], -1)
+        x = self.dropout(x)
+        x = self.fc(x)
+
+        return x
 
     @override
-    def forward(self, x: Tensor) -> Tuple[Tensor | None, ...]:
-        return super().forward(x)
+    def forward(self, x: Tensor) -> Tensor | Tuple[Tensor | None, ...]:
+        if self.variant == "v1":
+            return self._forward_v1(x)
+        if self.variant == "v3":
+            return self._forward_v3(x)
+        return self._forward_v4(x)
 
 
 class _InceptionModule(nn.Module):
@@ -79,80 +315,6 @@ class _InceptionAux(nn.Module):
         x = self.fc2(x)
 
         return x
-
-
-class Inception_V1(Inception):
-    def __init__(self, num_classes: int = 1000, use_aux: bool = True) -> None:
-        super().__init__(num_classes, use_aux)
-        in_channels = 3
-
-        self.conv1 = nn.ConvBNReLU2d(
-            in_channels, 64, kernel_size=7, stride=2, padding=3
-        )
-        self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        self.conv2 = nn.Sequential(
-            nn.ConvBNReLU2d(64, 64, kernel_size=1),
-            nn.ConvBNReLU2d(64, 192, kernel_size=3, stride=1, padding=1),
-        )
-        self.maxpool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        self.incep_3 = nn.Sequential(
-            _InceptionModule(192, 64, 96, 128, 16, 32, 32),
-            _InceptionModule(256, 128, 128, 192, 32, 96, 64),
-        )
-        self.maxpool3 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        self.incep_4a = _InceptionModule(480, 192, 96, 208, 16, 48, 64)
-        self.incep_4bcd = nn.Sequential(
-            _InceptionModule(512, 160, 112, 224, 24, 64, 64),
-            _InceptionModule(512, 128, 128, 256, 24, 64, 64),
-            _InceptionModule(512, 112, 144, 288, 32, 64, 64),
-        )
-        self.incep_4e = _InceptionModule(528, 256, 160, 320, 32, 128, 128)
-        self.maxpool4 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        self.incep_5 = nn.Sequential(
-            _InceptionModule(832, 256, 160, 320, 32, 128, 128),
-            _InceptionModule(832, 384, 192, 384, 48, 128, 128),
-        )
-
-        if use_aux:
-            self.aux1 = _InceptionAux(512, num_classes, pool_size=(4, 4))
-            self.aux2 = _InceptionAux(528, num_classes, pool_size=(4, 4))
-        else:
-            self.aux1 = None
-            self.aux2 = None
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.dropout = nn.Dropout(p=0.4)
-        self.fc = nn.Linear(1024, num_classes)
-
-    def forward(self, x: Tensor) -> Tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
-        x = self.maxpool1(self.conv1(x))
-        x = self.maxpool2(self.conv2(x))
-
-        x = self.maxpool3(self.incep_3(x))
-        x = self.incep_4a(x)
-        if self.aux1 is not None and self.training:
-            aux1 = self.aux1(x)
-        else:
-            aux1 = None
-
-        x = self.incep_4bcd(x)
-        if self.aux2 is not None and self.training:
-            aux2 = self.aux2(x)
-        else:
-            aux2 = None
-
-        x = self.maxpool4(self.incep_4e(x))
-        x = self.avgpool(self.incep_5(x))
-
-        x = x.reshape(x.shape[0], -1)
-        x = self.dropout(x)
-        x = self.fc(x)
-
-        return x, aux2, aux1
 
 
 class _InceptionModule_V2A(nn.Module):
@@ -313,80 +475,6 @@ class _InceptionReduce_V2B(nn.Module):
         return lucid.concatenate(
             [self.branch1(x), self.branch2(x), self.branch3(x)], axis=1
         )
-
-
-class Inception_V3(Inception):
-    def __init__(
-        self,
-        num_classes: int = 1000,
-        use_aux: bool = True,
-        dropout_prob: float = 0.5,
-    ) -> None:
-        super().__init__(num_classes, use_aux)
-        in_channels = 3
-
-        self.conv1 = nn.Sequential(
-            nn.ConvBNReLU2d(in_channels, 32, kernel_size=3, stride=2, conv_bias=False),
-            nn.ConvBNReLU2d(32, 32, kernel_size=3, conv_bias=False),
-            nn.ConvBNReLU2d(32, 64, kernel_size=3, padding=1, conv_bias=False),
-        )
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2)
-
-        self.conv2 = nn.Sequential(
-            nn.ConvBNReLU2d(64, 80, kernel_size=1, conv_bias=False),
-            nn.ConvBNReLU2d(80, 192, kernel_size=3, stride=2, conv_bias=False),
-            nn.ConvBNReLU2d(192, 288, kernel_size=3, padding=1, conv_bias=False),
-        )
-
-        self.incep_3 = nn.Sequential(
-            _InceptionModule_V2A(288),
-            _InceptionModule_V2A(288),
-            _InceptionModule_V2A(288),
-        )
-        self.incep_red1 = _InceptionReduce_V2A(288)
-
-        self.incep_4 = nn.Sequential(
-            _InceptionModule_V2B(768, 128),
-            _InceptionModule_V2B(768, 160),
-            _InceptionModule_V2B(768, 160),
-            _InceptionModule_V2B(768, 160),
-            _InceptionModule_V2B(768, 192),
-        )
-        self.incep_red2 = _InceptionReduce_V2B(768)
-
-        if use_aux:
-            self.aux = _InceptionAux(768, num_classes, pool_size=(5, 5))
-        else:
-            self.aux = None
-
-        self.incep_5 = nn.Sequential(
-            _InceptionModule_V2C(1280), _InceptionModule_V2C(2048)
-        )
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.dropout = nn.Dropout(p=dropout_prob)
-        self.fc = nn.Linear(2048, num_classes)
-
-    def forward(self, x: Tensor) -> Tuple[Tensor, Optional[Tensor]]:
-        x = self.maxpool(self.conv1(x))
-        x = self.conv2(x)
-
-        x = self.incep_3(x)
-        x = self.incep_red1(x)
-        x = self.incep_4(x)
-
-        if self.aux is not None and self.training:
-            aux = self.aux(x)
-        else:
-            aux = None
-
-        x = self.incep_red2(x)
-        x = self.avgpool(self.incep_5(x))
-
-        x = x.reshape(x.shape[0], -1)
-        x = self.dropout(x)
-        x = self.fc(x)
-
-        return x, aux if self.aux is not None else x
 
 
 class _InceptionStem_V4(nn.Module):
@@ -574,48 +662,16 @@ class _InceptionReduce_V4B(nn.Module):
         )
 
 
-class Inception_V4(Inception):
-    def __init__(self, num_classes: int = 1000, use_aux: bool = True):
-        super().__init__(num_classes, use_aux)
-        in_channels = 3
-
-        modules = []
-        modules.append(_InceptionStem_V4(in_channels))
-
-        for _ in range(4):
-            modules.append(_InceptionModule_V4A(384))
-        modules.append(_InceptionReduce_V4A(384, k=192, l=224, m=256, n=384))
-
-        for _ in range(7):
-            modules.append(_InceptionModule_V4B(1024))
-        modules.append(_InceptionReduce_V4B(1024))
-
-        for _ in range(3):
-            modules.append(_InceptionModule_V4C(1536))
-
-        self.conv = nn.Sequential(*modules)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.dropout = nn.Dropout(p=0.8)
-        self.fc = nn.Linear(1536, num_classes)
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.conv(x)
-        x = self.avgpool(x)
-
-        x = x.reshape(x.shape[0], -1)
-        x = self.dropout(x)
-        x = self.fc(x)
-
-        return x
-
-
 @register_model
 def inception_v1(
     num_classes: int = 1000,
     use_aux: bool = True,
     **kwargs,
 ) -> Inception:
-    return Inception_V1(num_classes, use_aux, **kwargs)
+    config = InceptionConfig(
+        variant="v1", num_classes=num_classes, use_aux=use_aux, **kwargs
+    )
+    return Inception(config)
 
 
 @register_model
@@ -625,9 +681,19 @@ def inception_v3(
     dropout_prob: float = 0.5,
     **kwargs,
 ) -> Inception:
-    return Inception_V3(num_classes, use_aux, dropout_prob, **kwargs)
+    config = InceptionConfig(
+        variant="v3",
+        num_classes=num_classes,
+        use_aux=use_aux,
+        dropout_prob=dropout_prob,
+        **kwargs,
+    )
+    return Inception(config)
 
 
 @register_model
 def inception_v4(num_classes: int = 1000, **kwargs) -> Inception:
-    return Inception_V4(num_classes, None, **kwargs)
+    config = InceptionConfig(
+        variant="v4", num_classes=num_classes, use_aux=False, **kwargs
+    )
+    return Inception(config)

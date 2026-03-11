@@ -5,6 +5,7 @@ EfficientNet
     :maxdepth: 1
     :hidden:
 
+    EfficientNetConfig.rst
     efficientnet_b0.rst
     efficientnet_b1.rst
     efficientnet_b2.rst
@@ -20,7 +21,7 @@ EfficientNet
 
 The `EfficientNet` class implements a scalable and efficient convolutional 
 neural network architecture that can be configured to encompass all EfficientNet-B0 
-to B7 variants.
+to B7 variants. Model structure is defined through `EfficientNetConfig`.
 
 .. mermaid::
     :name: EfficientNet
@@ -89,45 +90,15 @@ Class Signature
 .. code-block:: python
 
     class EfficientNet(nn.Module):
-        def __init__(
-            self,
-            num_classes: int = 1000,
-            width_coef: float = 1.0,
-            depth_coef: float = 1.0,
-            scale: float = 1.0,
-            dropout: float = 0.2,
-            se_scale: int = 4,
-            stochastic_depth: bool = False,
-            p: float = 0.5,
-        ) -> None
+        def __init__(self, config: EfficientNetConfig) -> None
 
 Parameters
 ----------
 
-- **num_classes** (*int*, optional):
-  Number of output classes for the final classification layer. 
-  Defaults to 1000 (e.g., for ImageNet).
-
-- **width_coef** (*float*, optional):
-  Coefficient to scale the width (number of channels) of the network. Defaults to 1.0.
-
-- **depth_coef** (*float*, optional):
-  Coefficient to scale the depth (number of layers) of the network. Defaults to 1.0.
-
-- **scale** (*float*, optional):
-  Global scaling factor applied to the input resolution. Defaults to 1.0.
-
-- **dropout** (*float*, optional):
-  Dropout rate applied to the final fully connected layer. Defaults to 0.2.
-
-- **se_scale** (*int*, optional):
-  Reduction ratio for the squeeze-and-excitation (SE) block. Defaults to 4.
-
-- **stochastic_depth** (*bool*, optional):
-  Whether to use stochastic depth regularization. Defaults to False.
-
-- **p** (*float*, optional):
-  Probability for stochastic depth when enabled. Defaults to 0.5.
+- **config** (*EfficientNetConfig*):
+  Configuration object describing the compound scaling coefficients, input
+  resolution scale factor, classifier size, squeeze-and-excitation reduction,
+  and optional stochastic depth settings.
 
 Configurations
 --------------
@@ -196,20 +167,30 @@ Examples
 
 .. code-block:: python
 
-    from lucid.models import EfficientNet
+    import lucid
+    from lucid.models import EfficientNet, EfficientNetConfig
 
-    # Instantiate EfficientNet-B0
-    model_b0 = EfficientNet(num_classes=1000, width_coef=1.0, depth_coef=1.0, scale=1.0)
+    config_b0 = EfficientNetConfig(
+        num_classes=1000,
+        width_coef=1.0,
+        depth_coef=1.0,
+        scale=1.0,
+    )
+    model_b0 = EfficientNet(config_b0)
 
-    # Forward pass with a random input
-    input_tensor = lucid.random.randn(1, 3, 224, 224)  # Batch size of 1, ImageNet resolution
+    input_tensor = lucid.random.randn(1, 3, 224, 224)
     output = model_b0(input_tensor)
-    print(output.shape)  # Output shape: (1, 1000)
+    print(output.shape)
 
-    # Instantiate EfficientNet-B7
-    model_b7 = EfficientNet(num_classes=1000, width_coef=2.0, depth_coef=3.1, scale=2.0)
+    config_b7 = EfficientNetConfig(
+        num_classes=1000,
+        width_coef=2.0,
+        depth_coef=3.1,
+        scale=600 / 224,
+        dropout=0.5,
+    )
+    model_b7 = EfficientNet(config_b7)
 
-    # Forward pass
-    input_tensor = lucid.random.randn(1, 3, 600, 600)  # Larger resolution for B7
+    input_tensor = lucid.random.randn(1, 3, 600, 600)
     output = model_b7(input_tensor)
-    print(output.shape)  # Output shape: (1, 1000)
+    print(output.shape)

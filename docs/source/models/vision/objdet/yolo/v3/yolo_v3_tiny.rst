@@ -21,13 +21,9 @@ Parameters
   per anchor.
 
 - **kwargs**:  
-  Additional keyword arguments forwarded to the `YOLO_V3` constructor.
-
-  Preconfigured values:
-
-  - `darknet` is set to a lightweight custom `_DarkNet_53_Tiny` backbone
-  - `darknet_out_channels_arr=[128, 256, 512]` 
-    (used to match the 3 feature map channels with head input)
+  Additional keyword arguments passed to `YOLO_V3Config`. By default this
+  factory uses the tiny 3-scale backbone with
+  `darknet_out_channels_arr=[128, 256, 512]` and `image_size=416`.
 
 Returns
 -------
@@ -39,11 +35,12 @@ Example Usage
 -------------
 .. code-block:: python
 
+    >>> import lucid
     >>> from lucid.models import yolo_v3_tiny
     >>> model = yolo_v3_tiny(num_classes=80)
     >>> print(model)
 
-    >>> x = lucid.rand(1, 3, 416, 416)
+    >>> x = lucid.ones(1, 3, 416, 416)
     >>> out = model(x)
     >>> for o in out:
     ...     print(o.shape)

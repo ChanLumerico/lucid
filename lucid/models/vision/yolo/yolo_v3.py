@@ -1,3 +1,5 @@
+from copy import deepcopy
+from dataclasses import dataclass, field
 from typing import ClassVar
 from lucid import register_model
 
@@ -8,7 +10,7 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid.models.utils import nms, iou, DetectionDict
 
-__all__ = ["YOLO_V3", "yolo_v3", "yolo_v3_tiny"]
+__all__ = ["YOLO_V3", "YOLO_V3Config", "yolo_v3", "yolo_v3_tiny"]
 
 
 def _convblock(
@@ -132,36 +134,72 @@ _default_anchors = [
 ]
 
 
+@dataclass
+class YOLO_V3Config:
+    num_classes: int
+    anchors: list[tuple[int, int]] = field(
+        default_factory=lambda: deepcopy(_default_anchors)
+    )
+    image_size: int = 416
+    darknet: nn.Module | None = None
+    darknet_out_channels_arr: list[int] | None = None
+
+    def __post_init__(self) -> None:
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.image_size <= 0:
+            raise ValueError("image_size must be greater than 0")
+        if self.darknet is not None and not isinstance(self.darknet, nn.Module):
+            raise TypeError("darknet must be an nn.Module or None")
+
+        self.anchors = [tuple(anchor) for anchor in deepcopy(self.anchors)]
+        if len(self.anchors) != 9:
+            raise ValueError("anchors must contain exactly nine entries")
+        for anchor in self.anchors:
+            if (
+                len(anchor) != 2
+                or not all(isinstance(v, int) for v in anchor)
+                or anchor[0] <= 0
+                or anchor[1] <= 0
+            ):
+                raise ValueError(
+                    "anchors must contain positive integer (width, height) pairs"
+                )
+
+        if self.darknet is None:
+            if self.darknet_out_channels_arr is not None:
+                raise ValueError(
+                    "darknet_out_channels_arr must be None when using the default darknet"
+                )
+        else:
+            if self.darknet_out_channels_arr is None:
+                raise ValueError(
+                    "darknet_out_channels_arr is required when providing a custom darknet"
+                )
+            if len(self.darknet_out_channels_arr) != 3 or any(
+                ch <= 0 for ch in self.darknet_out_channels_arr
+            ):
+                raise ValueError(
+                    "darknet_out_channels_arr must contain exactly three positive integers"
+                )
+
+
 class YOLO_V3(nn.Module):
     default_anchors: ClassVar[list[tuple[int, int]]] = _default_anchors
 
-    def __init__(
-        self,
-        num_classes: int,
-        anchors: list[tuple[int, int]] | None = None,
-        image_size: int = 416,
-        darknet: nn.Module | None = None,
-        darknet_out_channels_arr: list[int] | None = None,
-    ) -> None:
+    def __init__(self, config: YOLO_V3Config) -> None:
         super().__init__()
-        self.num_classes = num_classes
-        self.image_size = image_size
-
-        if anchors is None:
-            anchors = YOLO_V3.default_anchors
-        self.anchors = nn.Buffer(anchors, dtype=lucid.Float32)
+        self.config = config
+        self.num_classes = config.num_classes
+        self.image_size = config.image_size
+        self.anchors = nn.Buffer(config.anchors, dtype=lucid.Float32)
         self.anchor_masks = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
 
-        self.darknet = _DarkNet_53() if darknet is None else darknet
-        if darknet is None:
+        self.darknet = _DarkNet_53() if config.darknet is None else config.darknet
+        if config.darknet is None:
             dark_out_chs = [256, 512, 1024]
         else:
-            if darknet_out_channels_arr is None:
-                raise ValueError(
-                    "If providing a custom darknet, you must also specify "
-                    "`darknet_out_channels_arr`."
-                )
-            dark_out_chs = darknet_out_channels_arr
+            dark_out_chs = config.darknet_out_channels_arr
 
         self.head1_pre = nn.Sequential(
             *_convblock(dark_out_chs[2], 512, 1),
@@ -217,7 +255,7 @@ class YOLO_V3(nn.Module):
             ),
         )
 
-    def forward(self, x: Tensor) -> tuple[Tensor]:
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         r1, r2, r3 = self.darknet(x)
 
         x = self.head1_pre(r3)
@@ -329,7 +367,7 @@ class YOLO_V3(nn.Module):
 
     def get_loss(self, x: Tensor, target: tuple[Tensor]) -> Tensor:
         preds = self.forward(x)
-        loss = 0.0
+        loss = lucid.zeros((), dtype=lucid.Float32, device=x.device)
         for p, t, mask in zip(preds, target, self.anchor_masks):
             anchors = self.anchors[mask]
             loss += self._loss_per_scale(p, t, anchors)
@@ -354,7 +392,7 @@ class YOLO_V3(nn.Module):
                 stride = self.image_size / H
                 anchor = self.anchors[mask] / stride
 
-                pi = p[i].reshape(B, 5 + C, H, W).transpose((1, 2, 3, 0))
+                pi = p[i].reshape(B, 5 + C, H, W).transpose((2, 3, 0, 1))
 
                 pred_xy = F.sigmoid(pi[..., 0:2])
                 pred_wh = lucid.exp(pi[..., 2:4]) * anchor.reshape(1, 1, B, 2)
@@ -411,15 +449,23 @@ class YOLO_V3(nn.Module):
 
 @register_model
 def yolo_v3(num_classes: int = 80, **kwargs) -> YOLO_V3:
-    return YOLO_V3(num_classes=num_classes, image_size=416, **kwargs)
+    config_kwargs = {
+        "num_classes": num_classes,
+        "anchors": deepcopy(_default_anchors),
+        "image_size": 416,
+    }
+    config_kwargs.update(kwargs)
+    return YOLO_V3(YOLO_V3Config(**config_kwargs))
 
 
 @register_model
 def yolo_v3_tiny(num_classes: int = 80, **kwargs) -> YOLO_V3:
-    return YOLO_V3(
-        num_classes=num_classes,
-        image_size=416,
-        darknet=_DarkNet_53_Tiny(),
-        darknet_out_channels_arr=[128, 256, 512],
-        **kwargs,
-    )
+    config_kwargs = {
+        "num_classes": num_classes,
+        "anchors": deepcopy(_default_anchors),
+        "image_size": 416,
+        "darknet": _DarkNet_53_Tiny(),
+        "darknet_out_channels_arr": [128, 256, 512],
+    }
+    config_kwargs.update(kwargs)
+    return YOLO_V3(YOLO_V3Config(**config_kwargs))

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Type
 
 import lucid
@@ -8,6 +9,7 @@ from lucid._tensor import Tensor
 
 __all__ = [
     "CoAtNet",
+    "CoAtNetConfig",
     "coatnet_0",
     "coatnet_1",
     "coatnet_2",
@@ -17,6 +19,83 @@ __all__ = [
     "coatnet_6",
     "coatnet_7",
 ]
+
+
+def _normalize_positive_int_sequence(
+    values: tuple[int, ...] | list[int],
+    name: str,
+    *,
+    expected_length: int | None = None,
+) -> tuple[int, ...]:
+    normalized = tuple(values)
+    if expected_length is not None and len(normalized) != expected_length:
+        raise ValueError(f"{name} must contain exactly {expected_length} values")
+    if len(normalized) == 0:
+        raise ValueError(f"{name} must contain at least one value")
+    if any(not isinstance(value, int) or value <= 0 for value in normalized):
+        raise ValueError(f"{name} values must be positive integers")
+    return normalized
+
+
+@dataclass
+class CoAtNetConfig:
+    img_size: tuple[int, int] | list[int]
+    in_channels: int
+    num_blocks: tuple[int, ...] | list[int]
+    channels: tuple[int, ...] | list[int]
+    num_classes: int = 1000
+    num_heads: int = 32
+    block_types: tuple[str, ...] | list[str] = ("C", "C", "T", "T")
+    scaled_num_blocks: tuple[int, int] | list[int] | None = None
+    scaled_channels: tuple[int, int] | list[int] | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.img_size, (list, tuple)) or len(self.img_size) != 2:
+            raise ValueError("img_size must contain exactly two values")
+        self.img_size = tuple(self.img_size)
+        if any(not isinstance(value, int) or value < 32 for value in self.img_size):
+            raise ValueError(
+                "img_size values must be integers greater than or equal to 32"
+            )
+
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if self.num_heads <= 0:
+            raise ValueError("num_heads must be greater than 0")
+
+        self.num_blocks = _normalize_positive_int_sequence(
+            self.num_blocks, "num_blocks", expected_length=5
+        )
+        self.channels = _normalize_positive_int_sequence(
+            self.channels, "channels", expected_length=5
+        )
+
+        if not isinstance(self.block_types, (list, tuple)):
+            raise TypeError("block_types must be a sequence")
+        self.block_types = tuple(self.block_types)
+        if len(self.block_types) != 4:
+            raise ValueError("block_types must contain exactly 4 values")
+        if any(block_type not in {"C", "T"} for block_type in self.block_types):
+            raise ValueError("block_types values must be 'C' or 'T'")
+
+        if (self.scaled_num_blocks is None) ^ (self.scaled_channels is None):
+            raise ValueError(
+                "scaled_num_blocks and scaled_channels must both be provided together"
+            )
+
+        if self.scaled_num_blocks is not None:
+            self.scaled_num_blocks = _normalize_positive_int_sequence(
+                self.scaled_num_blocks,
+                "scaled_num_blocks",
+                expected_length=2,
+            )
+            self.scaled_channels = _normalize_positive_int_sequence(
+                self.scaled_channels,
+                "scaled_channels",
+                expected_length=2,
+            )
 
 
 def conv_3x3_bn(
@@ -90,7 +169,7 @@ class _MBConv(nn.Module):
         out_channels: int,
         downsample: bool = False,
         expansion: int = 4,
-        **kwargs
+        **kwargs,
     ) -> None:
         super().__init__()
         self.downsample = downsample
@@ -284,55 +363,61 @@ class _Transformer(nn.Module):
 
 
 class CoAtNet(nn.Module):
-    def __init__(
-        self,
-        img_size: tuple[int, int],
-        in_channels: int,
-        num_blocks: list[int],
-        channels: list[int],
-        num_classes: int = 1000,
-        num_heads: int = 32,
-        block_types: list[str] = ["C", "C", "T", "T"],
-        _scaled_num_blocks: list[int] | None = None,
-        _scaled_channels: list[int] | None = None,
-    ) -> None:
+    def __init__(self, config: CoAtNetConfig) -> None:
         super().__init__()
+        self.config = config
         block = {"C": _MBConv, "T": _Transformer}
-        get_block = lambda i: block[block_types[i]]
+        get_block = lambda i: block[config.block_types[i]]
 
-        self.ih, self.iw = img_size
-        self.channels = channels
-        self.num_heads = num_heads
+        self.ih, self.iw = config.img_size
+        self.channels = config.channels
+        self.num_heads = config.num_heads
 
-        self._do_scale = _scaled_num_blocks is not None and _scaled_channels is not None
+        self._do_scale = (
+            config.scaled_num_blocks is not None and config.scaled_channels is not None
+        )
 
         self.s0 = self._make_layer(
-            0, conv_3x3_bn, in_channels, channels[0], num_blocks[0]
+            0, conv_3x3_bn, config.in_channels, config.channels[0], config.num_blocks[0]
         )
         self.s1 = self._make_layer(
-            1, get_block(0), channels[0], channels[1], num_blocks[1]
+            1,
+            get_block(0),
+            config.channels[0],
+            config.channels[1],
+            config.num_blocks[1],
         )
         self.s2 = self._make_layer(
-            2, get_block(1), channels[1], channels[2], num_blocks[2]
+            2,
+            get_block(1),
+            config.channels[1],
+            config.channels[2],
+            config.num_blocks[2],
         )
         self.s3 = (
-            self._make_layer(3, get_block(2), channels[2], channels[3], num_blocks[3])
+            self._make_layer(
+                3,
+                get_block(2),
+                config.channels[2],
+                config.channels[3],
+                config.num_blocks[3],
+            )
             if not self._do_scale
             else nn.Identity()
         )
         self.s4 = self._make_layer(
             4,
             get_block(3),
-            channels[3] if not self._do_scale else _scaled_channels[1],
-            channels[4],
-            num_blocks[4],
+            config.channels[3] if not self._do_scale else config.scaled_channels[1],
+            config.channels[4],
+            config.num_blocks[4],
         )
 
-        self.pool = nn.AvgPool2d(kernel_size=self.ih // 32)
-        self.fc = nn.Linear(channels[-1], num_classes, bias=False)
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(config.channels[-1], config.num_classes, bias=False)
 
         if self._do_scale:
-            self._scale_s3(_scaled_num_blocks, _scaled_channels)
+            self._scale_s3(config.scaled_num_blocks, config.scaled_channels)
 
     def _make_layer(
         self,
@@ -341,26 +426,37 @@ class CoAtNet(nn.Module):
         in_channels: int,
         out_channels: int,
         depth: int,
+        downsample_first: bool = True,
     ) -> nn.Sequential:
         img_size = (self.ih // (2 ** (i + 1)), self.iw // (2 ** (i + 1)))
 
         layers = nn.ModuleList()
-        for i in range(depth):
+        for block_index in range(depth):
             new_block = block(
-                in_channels if i == 0 else out_channels,
+                in_channels if block_index == 0 else out_channels,
                 out_channels,
                 img_size=img_size,
                 num_heads=self.num_heads,
-                downsample=True if i == 0 else False,
+                downsample=downsample_first if block_index == 0 else False,
             )
             layers.append(new_block)
 
         return nn.Sequential(*layers)
 
-    def _scale_s3(self, depths: list[int, int], channels: list[int, int]) -> None:
+    def _scale_s3(
+        self,
+        depths: tuple[int, int],
+        channels: tuple[int, int],
+    ) -> None:
         self.s3_tandem = nn.Sequential(
             self._make_layer(3, _MBConv, self.channels[2], channels[0], depths[0]),
-            self._make_layer(3, _Transformer, channels[0], channels[1], depths[1]),
+            self._make_layer(
+                4,
+                _Transformer,
+                channels[0],
+                channels[1],
+                depths[1],
+            ),
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -376,79 +472,196 @@ class CoAtNet(nn.Module):
         return x
 
 
+def _raise_for_locked_factory_kwargs(
+    kwargs: dict[str, object],
+    locked_fields: set[str],
+    message: str,
+) -> None:
+    if locked_fields & kwargs.keys():
+        raise TypeError(message)
+
+
+def _build_coatnet_config(
+    *,
+    img_size: tuple[int, int],
+    in_channels: int,
+    num_blocks: tuple[int, ...],
+    channels: tuple[int, ...],
+    num_classes: int,
+    **kwargs,
+) -> CoAtNetConfig:
+    return CoAtNetConfig(
+        img_size=img_size,
+        in_channels=in_channels,
+        num_blocks=num_blocks,
+        channels=channels,
+        num_classes=num_classes,
+        **kwargs,
+    )
+
+
 @register_model
 def coatnet_0(num_classes: int = 1000, **kwargs) -> CoAtNet:
-    num_blocks = [2, 2, 3, 5, 2]
-    channels = [64, 96, 192, 384, 768]
-    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "in_channels", "num_blocks", "channels"},
+        "factory variants do not allow overriding preset img_size, in_channels, num_blocks, or channels",
+    )
+    config = _build_coatnet_config(
+        img_size=(224, 224),
+        in_channels=3,
+        num_blocks=(2, 2, 3, 5, 2),
+        channels=(64, 96, 192, 384, 768),
+        num_classes=num_classes,
+        **kwargs,
+    )
+    return CoAtNet(config)
 
 
 @register_model
 def coatnet_1(num_classes: int = 1000, **kwargs) -> CoAtNet:
-    num_blocks = [2, 2, 6, 14, 2]
-    channels = [64, 96, 192, 384, 768]
-    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "in_channels", "num_blocks", "channels"},
+        "factory variants do not allow overriding preset img_size, in_channels, num_blocks, or channels",
+    )
+    config = _build_coatnet_config(
+        img_size=(224, 224),
+        in_channels=3,
+        num_blocks=(2, 2, 6, 14, 2),
+        channels=(64, 96, 192, 384, 768),
+        num_classes=num_classes,
+        **kwargs,
+    )
+    return CoAtNet(config)
 
 
 @register_model
 def coatnet_2(num_classes: int = 1000, **kwargs) -> CoAtNet:
-    num_blocks = [2, 2, 6, 14, 2]
-    channels = [128, 128, 256, 512, 1024]
-    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "in_channels", "num_blocks", "channels"},
+        "factory variants do not allow overriding preset img_size, in_channels, num_blocks, or channels",
+    )
+    config = _build_coatnet_config(
+        img_size=(224, 224),
+        in_channels=3,
+        num_blocks=(2, 2, 6, 14, 2),
+        channels=(128, 128, 256, 512, 1024),
+        num_classes=num_classes,
+        **kwargs,
+    )
+    return CoAtNet(config)
 
 
 @register_model
 def coatnet_3(num_classes: int = 1000, **kwargs) -> CoAtNet:
-    num_blocks = [2, 2, 6, 14, 2]
-    channels = [192, 192, 384, 768, 1536]
-    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "in_channels", "num_blocks", "channels"},
+        "factory variants do not allow overriding preset img_size, in_channels, num_blocks, or channels",
+    )
+    config = _build_coatnet_config(
+        img_size=(224, 224),
+        in_channels=3,
+        num_blocks=(2, 2, 6, 14, 2),
+        channels=(192, 192, 384, 768, 1536),
+        num_classes=num_classes,
+        **kwargs,
+    )
+    return CoAtNet(config)
 
 
 @register_model
 def coatnet_4(num_classes: int = 1000, **kwargs) -> CoAtNet:
-    num_blocks = [2, 2, 12, 28, 2]
-    channels = [192, 192, 384, 768, 1536]
-    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes, **kwargs)
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "in_channels", "num_blocks", "channels"},
+        "factory variants do not allow overriding preset img_size, in_channels, num_blocks, or channels",
+    )
+    config = _build_coatnet_config(
+        img_size=(224, 224),
+        in_channels=3,
+        num_blocks=(2, 2, 12, 28, 2),
+        channels=(192, 192, 384, 768, 1536),
+        num_classes=num_classes,
+        **kwargs,
+    )
+    return CoAtNet(config)
 
 
 @register_model
 def coatnet_5(num_classes: int = 1000, **kwargs) -> CoAtNet:
-    num_blocks = [2, 2, 12, 28, 2]
-    channels = [192, 256, 512, 1280, 2048]
-    return CoAtNet(
-        (224, 224), 3, num_blocks, channels, num_classes, num_heads=64, **kwargs
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {"img_size", "in_channels", "num_blocks", "channels", "num_heads"},
+        "factory variants do not allow overriding preset img_size, in_channels, num_blocks, channels, or num_heads",
     )
+    config = _build_coatnet_config(
+        img_size=(224, 224),
+        in_channels=3,
+        num_blocks=(2, 2, 12, 28, 2),
+        channels=(192, 256, 512, 1280, 2048),
+        num_classes=num_classes,
+        num_heads=64,
+        **kwargs,
+    )
+    return CoAtNet(config)
 
 
 @register_model
 def coatnet_6(num_classes: int = 1000, **kwargs) -> CoAtNet:
-    num_blocks = [2, 2, 4, 8, 2]
-    channels = [192, 192, 384, 768, 2048]
-    return CoAtNet(
-        (224, 224),
-        3,
-        num_blocks,
-        channels,
-        num_classes,
-        num_heads=128,
-        _scaled_num_blocks=[8, 42],
-        _scaled_channels=[768, 1536],
-        **kwargs
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {
+            "img_size",
+            "in_channels",
+            "num_blocks",
+            "channels",
+            "num_heads",
+            "scaled_num_blocks",
+            "scaled_channels",
+        },
+        "factory variants do not allow overriding preset img_size, in_channels, num_blocks, channels, num_heads, scaled_num_blocks, or scaled_channels",
     )
+    config = _build_coatnet_config(
+        img_size=(224, 224),
+        in_channels=3,
+        num_blocks=(2, 2, 4, 8, 2),
+        channels=(192, 192, 384, 768, 2048),
+        num_classes=num_classes,
+        num_heads=128,
+        scaled_num_blocks=(8, 42),
+        scaled_channels=(768, 1536),
+        **kwargs,
+    )
+    return CoAtNet(config)
 
 
 @register_model
 def coatnet_7(num_classes: int = 1000, **kwargs) -> CoAtNet:
-    num_blocks = [2, 2, 4, 8, 2]
-    channels = [192, 256, 512, 1024, 3072]
-    return CoAtNet(
-        (224, 224),
-        3,
-        num_blocks,
-        channels,
-        num_classes,
-        num_heads=128,
-        _scaled_num_blocks=[8, 42],
-        _scaled_channels=[1024, 2048],
-        **kwargs
+    _raise_for_locked_factory_kwargs(
+        kwargs,
+        {
+            "img_size",
+            "in_channels",
+            "num_blocks",
+            "channels",
+            "num_heads",
+            "scaled_num_blocks",
+            "scaled_channels",
+        },
+        "factory variants do not allow overriding preset img_size, in_channels, num_blocks, channels, num_heads, scaled_num_blocks, or scaled_channels",
     )
+    config = _build_coatnet_config(
+        img_size=(224, 224),
+        in_channels=3,
+        num_blocks=(2, 2, 4, 8, 2),
+        channels=(192, 256, 512, 1024, 3072),
+        num_classes=num_classes,
+        num_heads=128,
+        scaled_num_blocks=(8, 42),
+        scaled_channels=(1024, 2048),
+        **kwargs,
+    )
+    return CoAtNet(config)

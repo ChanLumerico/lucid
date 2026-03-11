@@ -6,6 +6,7 @@ YOLO-v2
     :maxdepth: 1
     :hidden:
 
+    YOLO_V2Config.rst
     yolo_v2.rst
     yolo_v2_tiny.rst
 
@@ -14,6 +15,7 @@ YOLO-v2
 The `YOLO_V2` class implements the YOLO-v2 object detection model. 
 It is an improvement over YOLO-v1, designed to detect objects in images using 
 anchor-based bounding boxes, batch normalization, and a stronger backbone (Darknet-19).
+Model structure is defined through `YOLO_V2Config`.
 
 .. mermaid::
     :name: YOLO-V2
@@ -47,22 +49,14 @@ Class Signature
 
 .. code-block:: python
 
-    class YOLO_V2(
-        num_classes: int,
-        num_anchors: int = 5,
-        anchors: list[tuple[float, float]] | None = None,
-        lambda_coord: float = 5.0,
-        lambda_noobj: float = 0.5,
-        darknet: nn.Module | None = None,
-        route_layer: int | None = None,
-        image_size: int = 416,
-    )
+    class YOLO_V2(nn.Module):
+        def __init__(self, config: YOLO_V2Config) -> None
 
 Parameters
 ----------
-- **darknet** (*nn.Module*, optional):
-  A custom backbone model for feature extraction. If set to `None` (default), 
-  the model uses the pre-configured Darknet-19 architecture.
+- **config** (*YOLO_V2Config*):
+  Configuration object describing the class count, anchors, loss weights,
+  backbone selection, route layer, input image size, and passthrough usage.
 
 Attributes
 ----------
@@ -96,7 +90,7 @@ This can be done using `.darknet_19`:
 
 .. code-block:: python
     
-    yolo_v2_model = YOLO_V2()
+    yolo_v2_model = YOLO_V2(YOLO_V2Config(num_classes=20))
     darknet_model = yolo_v2_model.darknet_19
 
 After training on the classification task, the trained **darknet** 
@@ -207,7 +201,7 @@ Example Usage
 
         >>> import lucid
         >>> import lucid.models as models
-        >>> model = models.YOLO_V2()  # Uses default Darknet-19 backbone
+        >>> model = models.YOLO_V2(models.YOLO_V2Config(num_classes=20))
         >>> input_tensor = lucid.Tensor(..., requires_grad=False)
         >>> output = model(input_tensor)
         >>> print(output.shape)
@@ -217,7 +211,12 @@ Example Usage
     .. code-block:: python
 
         >>> custom_darknet = ...  # Define or load your custom backbone
-        >>> model = models.YOLO_V2(darknet=custom_darknet)
+        >>> config = models.YOLO_V2Config(
+        ...     num_classes=20,
+        ...     darknet=custom_darknet,
+        ...     use_passthrough=False,
+        ... )
+        >>> model = models.YOLO_V2(config)
         >>> input_tensor = lucid.Tensor(..., requires_grad=False)
         >>> output = model(input_tensor)
         >>> print(output.shape)

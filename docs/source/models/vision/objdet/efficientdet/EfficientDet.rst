@@ -6,6 +6,7 @@ EfficientDet
     :maxdepth: 1
     :hidden:
 
+    EfficientDetConfig.rst
     efficientdet_d0.rst
     efficientdet_d1.rst
     efficientdet_d2.rst
@@ -21,7 +22,8 @@ The `EfficientDet` class implements a family of **Efficient Object Detection** m
 based on the architecture proposed by Tan et al. (2020).
 
 It combines EfficientNet backbones with **BiFPN (Bidirectional Feature Pyramid Networks)** 
-for scalable and efficient multi-scale detection.
+for scalable and efficient multi-scale detection. Model structure is defined
+through `EfficientDetConfig`.
 
 .. mermaid::
     :name: EfficientDet
@@ -238,23 +240,15 @@ Class Signature
 
 .. code-block:: python
 
-    class EfficientDet(
-        compound_coef: Literal[0, 1, 2, 3, 4, 5, 6, 7] = 0,
-        num_anchors: int = 9,
-        num_classes: int = 80,
-    )
+    class EfficientDet(nn.Module):
+        def __init__(self, config: EfficientDetConfig) -> None
 
 Parameters
 ----------
 
-- **compound_coef** (*Literal[0-7]*):  
-  Compound scaling coefficient controlling backbone depth, width, and input resolution.
-
-- **num_anchors** (*int*):  
-  Number of anchor boxes per feature level, typically `9`.
-
-- **num_classes** (*int*):  
-  Number of target object classes.
+- **config** (*EfficientDetConfig*):
+  Configuration object describing the compound scaling coefficient, anchor count,
+  and class count used to build the EfficientDet variant.
 
 Backbone Network
 ----------------
@@ -275,7 +269,7 @@ The backbone network of EfficientDet, a truncated EfficientNet model can be acce
     .. code-block:: python
         
         pretrained = efficientnet_b0(...)  # Pre-trained for Image Classification
-        model = EfficientDet(...)
+        model = EfficientDet(EfficientDetConfig(...))
 
         # Migrate Weights Stage-by-Stage
         for i in range(7):

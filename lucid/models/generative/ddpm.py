@@ -1,10 +1,42 @@
+from dataclasses import dataclass
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
-__all__ = ["DDPM"]
+__all__ = ["DDPM", "DDPMConfig"]
+
+
+@dataclass
+class DDPMConfig:
+    model: nn.Module | None = None
+    image_size: int = 32
+    channels: int = 3
+    timesteps: int = 1000
+    diffuser: nn.Module | None = None
+    clip_denoised: bool = True
+
+    def __post_init__(self) -> None:
+        if self.model is not None and not isinstance(self.model, nn.Module):
+            raise TypeError("model must be an nn.Module or None")
+        if self.image_size <= 0:
+            raise ValueError("image_size must be greater than 0")
+        if self.channels <= 0:
+            raise ValueError("channels must be greater than 0")
+        if self.timesteps <= 0:
+            raise ValueError("timesteps must be greater than 0")
+        if self.diffuser is not None and not isinstance(self.diffuser, nn.Module):
+            raise TypeError("diffuser must be an nn.Module or None")
+        if not isinstance(self.clip_denoised, bool):
+            raise TypeError("clip_denoised must be a bool")
+        if (
+            self.diffuser is not None
+            and hasattr(self.diffuser, "timesteps")
+            and int(self.diffuser.timesteps) != self.timesteps
+        ):
+            raise ValueError("diffuser.timesteps must match timesteps")
 
 
 class _ResBlock(nn.Module):
@@ -267,25 +299,20 @@ class _GaussianDiffuser(nn.Module):
 
 
 class DDPM(nn.Module):
-    def __init__(
-        self,
-        model: nn.Module | None = None,
-        image_size: int = 32,
-        channels: int = 3,
-        timesteps: int = 1000,
-        diffuser: nn.Module | None = None,
-        clip_denoised: bool = True,
-    ) -> None:
+    def __init__(self, config: DDPMConfig) -> None:
         super().__init__()
-        self.model = model or _UNet(
-            in_channels=channels, out_channels=channels, image_size=image_size
+        self.config = config
+        self.model = config.model or _UNet(
+            in_channels=config.channels,
+            out_channels=config.channels,
+            image_size=config.image_size,
         )
-        self.diffuser = diffuser or _GaussianDiffuser(timesteps)
+        self.diffuser = config.diffuser or _GaussianDiffuser(config.timesteps)
 
-        self.image_size = image_size
-        self.channels = channels
-        self.timesteps = timesteps
-        self.clip_denoised = clip_denoised
+        self.image_size = config.image_size
+        self.channels = config.channels
+        self.timesteps = config.timesteps
+        self.clip_denoised = config.clip_denoised
 
     def forward(self, x: Tensor) -> Tensor:
         return self.get_loss(x)

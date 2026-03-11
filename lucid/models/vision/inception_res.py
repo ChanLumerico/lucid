@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Literal
 
 import lucid
@@ -8,17 +9,108 @@ from lucid._tensor import Tensor
 
 from .inception import _InceptionStem_V4, _InceptionReduce_V4A
 
-__all__ = ["InceptionResNet", "inception_resnet_v1", "inception_resnet_v2"]
+__all__ = [
+    "InceptionResNet",
+    "InceptionResNetConfig",
+    "inception_resnet_v1",
+    "inception_resnet_v2",
+]
+
+
+@dataclass
+class InceptionResNetConfig:
+    variant: Literal["v1", "v2"]
+    num_classes: int = 1000
+    in_channels: int = 3
+    dropout_prob: float = 0.8
+
+    def __post_init__(self) -> None:
+        if self.variant not in {"v1", "v2"}:
+            raise ValueError("InceptionResNet variant must be one of {'v1', 'v2'}.")
+
+        if self.num_classes <= 0:
+            raise ValueError("InceptionResNet num_classes must be greater than 0.")
+
+        if self.in_channels <= 0:
+            raise ValueError("InceptionResNet in_channels must be greater than 0.")
+
+        if not 0.0 <= self.dropout_prob < 1.0:
+            raise ValueError(
+                "InceptionResNet dropout_prob must be in the range [0.0, 1.0)."
+            )
 
 
 class InceptionResNet(nn.Module):
-    def __init__(self, num_classes: int) -> None:
+    def __init__(self, config: InceptionResNetConfig) -> None:
         super().__init__()
-        self.num_classes = num_classes
+        self.config = config
+        self.variant = config.variant
+        self.num_classes = config.num_classes
 
         self.stem: nn.Module
         self.conv: nn.Sequential
         self.fc: nn.Sequential
+
+        builders = {
+            "v1": self._build_v1,
+            "v2": self._build_v2,
+        }
+        builders[self.variant]()
+
+    def _build_v1(self) -> None:
+        in_channels = self.config.in_channels
+
+        self.stem = _InceptionResStem(in_channels)
+
+        modules = []
+        for _ in range(5):
+            modules.append(_InceptionResModule_A(256, version="v1"))
+        modules.append(_InceptionReduce_V4A(256, k=192, l=192, m=256, n=384))
+
+        for _ in range(10):
+            modules.append(_InceptionResModule_B(896, version="v1"))
+        modules.append(_InceptionResReduce(896, version="v1"))
+
+        for _ in range(5):
+            modules.append(_InceptionResModule_C(1792, version="v1"))
+
+        self.conv = nn.Sequential(*modules)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=self.config.dropout_prob)
+        self.fc = nn.Linear(1792, self.num_classes)
+
+    def _build_v2(self) -> None:
+        in_channels = self.config.in_channels
+
+        self.stem = _InceptionStem_V4(in_channels)
+
+        modules = []
+        for _ in range(5):
+            modules.append(_InceptionResModule_A(384, version="v2"))
+        modules.append(_InceptionReduce_V4A(384, k=256, l=256, m=384, n=384))
+
+        for _ in range(10):
+            modules.append(_InceptionResModule_B(1152, version="v2"))
+        modules.append(_InceptionResReduce(1152, version="v2"))
+
+        for _ in range(5):
+            modules.append(_InceptionResModule_C(2144, version="v2"))
+
+        self.conv = nn.Sequential(*modules)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=self.config.dropout_prob)
+        self.fc = nn.Linear(2144, self.num_classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.stem(x)
+        x = self.conv(x)
+        x = self.avgpool(x)
+
+        x = x.reshape(x.shape[0], -1)
+        x = self.dropout(x)
+        x = self.fc(x)
+
+        return x
 
 
 class _InceptionResStem(nn.Module):
@@ -185,83 +277,13 @@ class _InceptionResReduce(nn.Module):
         )
 
 
-class InceptionResNet_V1(InceptionResNet):
-    def __init__(self, num_classes: int = 1000) -> None:
-        super().__init__(num_classes)
-        in_channels = 3
-
-        self.stem = _InceptionResStem(in_channels)
-
-        modules = []
-        for _ in range(5):
-            modules.append(_InceptionResModule_A(256, version="v1"))
-        modules.append(_InceptionReduce_V4A(256, k=192, l=192, m=256, n=384))
-
-        for _ in range(10):
-            modules.append(_InceptionResModule_B(896, version="v1"))
-        modules.append(_InceptionResReduce(896, version="v1"))
-
-        for _ in range(5):
-            modules.append(_InceptionResModule_C(1792, version="v1"))
-
-        self.conv = nn.Sequential(*modules)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.dropout = nn.Dropout(p=0.8)
-        self.fc = nn.Linear(1792, num_classes)
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.stem(x)
-        x = self.conv(x)
-        x = self.avgpool(x)
-
-        x = x.reshape(x.shape[0], -1)
-        x = self.dropout(x)
-        x = self.fc(x)
-
-        return x
-
-
-class InceptionResNet_V2(InceptionResNet):
-    def __init__(self, num_classes: int = 1000) -> None:
-        super().__init__(num_classes)
-        in_channels = 3
-
-        self.stem = _InceptionStem_V4(in_channels)
-
-        modules = []
-        for _ in range(5):
-            modules.append(_InceptionResModule_A(384, version="v2"))
-        modules.append(_InceptionReduce_V4A(384, k=256, l=256, m=384, n=384))
-
-        for _ in range(10):
-            modules.append(_InceptionResModule_B(1152, version="v2"))
-        modules.append(_InceptionResReduce(1152, version="v2"))
-
-        for _ in range(5):
-            modules.append(_InceptionResModule_C(2144, version="v2"))
-
-        self.conv = nn.Sequential(*modules)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.dropout = nn.Dropout(p=0.8)
-        self.fc = nn.Linear(2144, num_classes)
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.stem(x)
-        x = self.conv(x)
-        x = self.avgpool(x)
-
-        x = x.reshape(x.shape[0], -1)
-        x = self.dropout(x)
-        x = self.fc(x)
-
-        return x
-
-
 @register_model
 def inception_resnet_v1(num_classes: int = 1000, **kwargs) -> InceptionResNet:
-    return InceptionResNet_V1(num_classes, **kwargs)
+    config = InceptionResNetConfig(variant="v1", num_classes=num_classes, **kwargs)
+    return InceptionResNet(config)
 
 
 @register_model
 def inception_resnet_v2(num_classes: int = 1000, **kwargs) -> InceptionResNet:
-    return InceptionResNet_V2(num_classes, **kwargs)
+    config = InceptionResNetConfig(variant="v2", num_classes=num_classes, **kwargs)
+    return InceptionResNet(config)
