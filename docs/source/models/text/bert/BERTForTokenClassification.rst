@@ -1,12 +1,6 @@
 BERTForTokenClassification
 ==========================
 
-.. toctree::
-    :maxdepth: 1
-    :hidden:
-
-    BERTForTokenClassificationConfig.rst
-
 .. autoclass:: lucid.models.BERTForTokenClassification
 
 The `BERTForTokenClassification` class predicts labels for each token
@@ -17,12 +11,12 @@ Class Signature
 
 .. code-block:: python
 
-    class BERTForTokenClassification(config: BERTForTokenClassificationConfig)
+    class BERTForTokenClassification(config: BERTConfig, num_labels: int = 2)
 
 Parameters
 ----------
-- **config** (*BERTForTokenClassificationConfig*):
-  Wrapper configuration containing the BERT backbone config and token label count.
+- **config** (*BERTConfig*): BERT configuration for token-level outputs.
+- **num_labels** (*int*, optional): Number of target classes. Default is 2.
 
 Methods
 -------
@@ -64,10 +58,8 @@ Examples
 
     >>> import lucid.models as models
     >>> model = models.BERTForTokenClassification(
-    ...     models.BERTForTokenClassificationConfig(
-    ...         bert_config=models.BERTConfig.base(add_pooling_layer=True),
-    ...         num_labels=2,
-    ...     )
+    ...     models.BERTConfig.base(add_pooling_layer=True),
+    ...     num_labels=2,
     ... )
     >>> print(model)
     BERTForTokenClassification(...)

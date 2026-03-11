@@ -1,12 +1,6 @@
 BERTForSequenceClassification
 =============================
 
-.. toctree::
-    :maxdepth: 1
-    :hidden:
-
-    BERTForSequenceClassificationConfig.rst
-
 .. autoclass:: lucid.models.BERTForSequenceClassification
 
 The `BERTForSequenceClassification` class applies a classification head
@@ -17,13 +11,12 @@ Class Signature
 
 .. code-block:: python
 
-    class BERTForSequenceClassification(config: BERTForSequenceClassificationConfig)
+    class BERTForSequenceClassification(config: BERTConfig, num_labels: int = 2)
 
 Parameters
 ----------
-- **config** (*BERTForSequenceClassificationConfig*):
-  Wrapper configuration containing the pooled BERT backbone config and the
-  target class count.
+- **config** (*BERTConfig*): BERT configuration with pooling enabled.
+- **num_labels** (*int*, optional): Number of target classes. Default is 2.
 
 Methods
 -------
@@ -75,10 +68,8 @@ Examples
 
     >>> import lucid.models as models
     >>> model = models.BERTForSequenceClassification(
-    ...     models.BERTForSequenceClassificationConfig(
-    ...         bert_config=models.BERTConfig.base(add_pooling_layer=True),
-    ...         num_labels=2,
-    ...     )
+    ...     models.BERTConfig.base(add_pooling_layer=True),
+    ...     num_labels=2,
     ... )
     >>> print(model)
     BERTForSequenceClassification(...)

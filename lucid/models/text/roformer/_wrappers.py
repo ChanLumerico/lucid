@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import lucid
 import lucid.nn as nn
 
@@ -11,38 +9,12 @@ from lucid.models.text.bert import _wrappers as bert
 from ._model import RoFormer, RoFormerConfig
 
 __all__ = [
-    "RoFormerForSequenceClassificationConfig",
-    "RoFormerForTokenClassificationConfig",
     "RoFormerForMaskedLM",
     "RoFormerForSequenceClassification",
     "RoFormerForTokenClassification",
     "RoFormerForMultipleChoice",
     "RoFormerForQuestionAnswering",
 ]
-
-
-@dataclass
-class RoFormerForSequenceClassificationConfig:
-    roformer_config: RoFormerConfig
-    num_labels: int = 2
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.roformer_config, RoFormerConfig):
-            raise TypeError("roformer_config must be an instance of RoFormerConfig")
-        if self.num_labels <= 0:
-            raise ValueError("num_labels must be greater than 0")
-
-
-@dataclass
-class RoFormerForTokenClassificationConfig:
-    roformer_config: RoFormerConfig
-    num_labels: int = 2
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.roformer_config, RoFormerConfig):
-            raise TypeError("roformer_config must be an instance of RoFormerConfig")
-        if self.num_labels <= 0:
-            raise ValueError("num_labels must be greater than 0")
 
 
 @register_model
@@ -56,29 +28,17 @@ class RoFormerForMaskedLM(bert.BERTForMaskedLM):
 
 @register_model
 class RoFormerForSequenceClassification(bert.BERTForSequenceClassification):
-    def __init__(self, config: RoFormerForSequenceClassificationConfig) -> None:
-        super().__init__(
-            bert.BERTForSequenceClassificationConfig(
-                bert_config=config.roformer_config,
-                num_labels=config.num_labels,
-            )
-        )
-        self.config = config
-        self.bert = RoFormer(config.roformer_config)
+    def __init__(self, config: RoFormerConfig, num_labels: int = 2) -> None:
+        super().__init__(config, num_labels=num_labels)
+        self.bert = RoFormer(config)
         self.classifier.apply(self.bert._init_weights)
 
 
 @register_model
 class RoFormerForTokenClassification(bert.BERTForTokenClassification):
-    def __init__(self, config: RoFormerForTokenClassificationConfig) -> None:
-        super().__init__(
-            bert.BERTForTokenClassificationConfig(
-                bert_config=config.roformer_config,
-                num_labels=config.num_labels,
-            )
-        )
-        self.config = config
-        self.bert = RoFormer(config.roformer_config)
+    def __init__(self, config: RoFormerConfig, num_labels: int = 2) -> None:
+        super().__init__(config, num_labels=num_labels)
+        self.bert = RoFormer(config)
         self.classifier.apply(self.bert._init_weights)
 
 

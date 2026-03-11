@@ -1,12 +1,6 @@
 RoFormerForSequenceClassification
 =================================
 
-.. toctree::
-    :maxdepth: 1
-    :hidden:
-
-    RoFormerForSequenceClassificationConfig.rst
-
 .. autoclass:: lucid.models.RoFormerForSequenceClassification
 
 The `RoFormerForSequenceClassification` class applies a classification head
@@ -17,13 +11,12 @@ Class Signature
 
 .. code-block:: python
 
-    class RoFormerForSequenceClassification(config: RoFormerForSequenceClassificationConfig)
+    class RoFormerForSequenceClassification(config: RoFormerConfig, num_labels: int = 2)
 
 Parameters
 ----------
-- **config** (*RoFormerForSequenceClassificationConfig*):
-  Wrapper configuration containing the pooled RoFormer backbone config and
-  the target class count.
+- **config** (*RoFormerConfig*): RoFormer configuration with pooling enabled.
+- **num_labels** (*int*, optional): Number of target classes. Default is 2.
 
 Methods
 -------
@@ -58,10 +51,7 @@ Examples
 .. code-block:: python
 
     >>> import lucid.models as models
-    >>> config = models.RoFormerForSequenceClassificationConfig(
-    ...     roformer_config=models.RoFormerConfig.base(vocab_size=50000),
-    ...     num_labels=3,
-    ... )
-    >>> model = models.RoFormerForSequenceClassification(config)
+    >>> config = models.RoFormerConfig.base(vocab_size=50000)
+    >>> model = models.RoFormerForSequenceClassification(config, num_labels=3)
     >>> print(model)
     RoFormerForSequenceClassification(...)
