@@ -2,6 +2,12 @@ DDPM
 ====
 |diffusion-badge|
 
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    DDPMConfig.rst
+
 .. autoclass:: lucid.models.DDPM
 
 The `DDPM` class implements a Denoising Diffusion Probabilistic Model, 
@@ -164,51 +170,31 @@ Class Signature
 
 .. code-block:: python
 
-    class DDPM(
-        model: nn.Module | None = None,
-        image_size: int = 32,
-        channels: int = 3,
-        timesteps: int = 1000,
-        diffuser: nn.Module | None = None,
-        clip_denoised: bool = True,
-    )
+    class DDPM(config: DDPMConfig)
 
 Parameters
 ----------
 
-- **model** (*nn.Module | None*):  
-  The noise prediction model :math:`\epsilon_\theta(\mathbf{x}_t, t)`. If not given, a default `UNet` is used.
+- **config** (*DDPMConfig*):
+  Configuration object that stores the optional noise predictor, image shape,
+  diffusion step count, optional diffuser module, and denoised clipping policy.
 
-  Required **forward** signature:
+Configuration
+-------------
 
-  .. code-block:: python
-
-      def forward(self, x: Tensor, t: Tensor) -> Tensor
-
-  where `x` is of shape `(N, C, H, W)` and `t` of shape `(N,)`.
-
-- **image_size** (*int*):  
-  Size of the (square) input image.
-
-- **channels** (*int*):  
-  Number of channels in the input image.
-
-- **timesteps** (*int*):  
-  Total number of diffusion steps. Controls the length of the forward/reverse process.
-
-- **diffuser** (*nn.Module | None*):  
-  Module implementing the diffusion process. If not provided, defaults to `GaussianDiffuser`.
-
-  Required methods in `diffuser`:
-
-  .. code-block:: python
-
-      def sample_timesteps(self, batch_size: int) -> Tensor
-      def add_noise(self, x_start: Tensor, t: Tensor, noise: Tensor) -> Tensor
-      def denoise(self, model: nn.Module, x: Tensor, t: Tensor, clip_denoised: bool) -> Tensor
-
-- **clip_denoised** (*bool*):  
-  Whether to clip final denoised outputs to [0, 1].
+- **model** (*nn.Module | None*):
+  Noise prediction model :math:`\epsilon_\theta(\mathbf{x}_t, t)`. If omitted,
+  `DDPM` builds the default internal U-Net.
+- **image_size** (*int*):
+  Side length of the square training and sampling images.
+- **channels** (*int*):
+  Number of image channels.
+- **timesteps** (*int*):
+  Number of diffusion steps.
+- **diffuser** (*nn.Module | None*):
+  Diffusion process module. If omitted, `DDPM` builds the default Gaussian diffuser.
+- **clip_denoised** (*bool*):
+  Whether reverse-process outputs are clipped to `[0, 1]`.
 
 Returns
 -------

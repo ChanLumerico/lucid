@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import math
 from typing import Literal, Sequence
 
@@ -7,7 +8,44 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
-__all__ = ["NCSN"]
+__all__ = ["NCSN", "NCSNConfig"]
+
+
+@dataclass
+class NCSNConfig:
+    in_channels: int = 3
+    nf: int = 128
+    num_classes: int = 10
+    dilations: Sequence[int] = (1, 2, 4, 8)
+    scale_by_sigma: bool = True
+    sigmas: Tensor | Sequence[float] | None = None
+
+    def __post_init__(self) -> None:
+        if self.in_channels <= 0:
+            raise ValueError("in_channels must be greater than 0")
+        if self.nf <= 0:
+            raise ValueError("nf must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+
+        self.dilations = tuple(self.dilations)
+        if len(self.dilations) != 4 or any(dilation <= 0 for dilation in self.dilations):
+            raise ValueError("dilations must contain exactly four positive integers")
+        if not isinstance(self.scale_by_sigma, bool):
+            raise TypeError("scale_by_sigma must be a bool")
+
+        if self.sigmas is not None:
+            if isinstance(self.sigmas, Tensor):
+                if self.sigmas.ndim != 1:
+                    raise ValueError("sigmas must be 1D when provided")
+                if self.sigmas.size != self.num_classes:
+                    raise ValueError("sigmas length must match num_classes")
+            else:
+                self.sigmas = tuple(float(sigma) for sigma in self.sigmas)
+                if len(self.sigmas) != self.num_classes:
+                    raise ValueError("sigmas length must match num_classes")
+                if any(sigma <= 0 for sigma in self.sigmas):
+                    raise ValueError("sigmas must contain only positive values")
 
 
 class _CondInstanceNorm(nn.Module):
@@ -209,43 +247,54 @@ class _RefineBlock(nn.Module):
 
 @nn.set_state_dict_pass_attr("sigmas")
 class NCSN(nn.Module):
-    def __init__(
-        self,
-        in_channels: int = 3,
-        nf: int = 128,
-        num_classes: int = 10,
-        dilations: Sequence[int] = (1, 2, 4, 8),
-        scale_by_sigma: bool = True,
-    ) -> None:
+    def __init__(self, config: NCSNConfig) -> None:
         super().__init__()
-        if len(dilations) != 4:
-            raise ValueError("Expected 4 dilation values (for 4 RefineNet stages).")
+        self.config = config
 
-        self.in_channels = in_channels
-        self.nf = nf
-        self.num_classes = num_classes
-        self.scale_by_sigma = bool(scale_by_sigma)
+        self.in_channels = config.in_channels
+        self.nf = config.nf
+        self.num_classes = config.num_classes
+        self.scale_by_sigma = config.scale_by_sigma
 
         self.sigmas: nn.Buffer
-        self.register_buffer("sigmas", lucid.empty(num_classes))
+        self.register_buffer("sigmas", lucid.empty(config.num_classes))
 
-        self.begin_conv = nn.Conv2d(in_channels, nf, kernel_size=3, stride=1, padding=1)
+        self.begin_conv = nn.Conv2d(
+            config.in_channels, config.nf, kernel_size=3, stride=1, padding=1
+        )
 
-        self.stage1 = _RCUBlock(nf, num_classes, num_units=2, dilation=dilations[0])
-        self.stage2 = _RCUBlock(nf, num_classes, num_units=2, dilation=dilations[1])
-        self.stage3 = _RCUBlock(nf, num_classes, num_units=2, dilation=dilations[2])
-        self.stage4 = _RCUBlock(nf, num_classes, num_units=2, dilation=dilations[3])
+        self.stage1 = _RCUBlock(
+            config.nf, config.num_classes, num_units=2, dilation=config.dilations[0]
+        )
+        self.stage2 = _RCUBlock(
+            config.nf, config.num_classes, num_units=2, dilation=config.dilations[1]
+        )
+        self.stage3 = _RCUBlock(
+            config.nf, config.num_classes, num_units=2, dilation=config.dilations[2]
+        )
+        self.stage4 = _RCUBlock(
+            config.nf, config.num_classes, num_units=2, dilation=config.dilations[3]
+        )
 
-        self.refine4 = _RefineBlock([nf], nf, num_classes)
-        self.refine3 = _RefineBlock([nf, nf], nf, num_classes)
-        self.refine2 = _RefineBlock([nf, nf], nf, num_classes)
-        self.refine1 = _RefineBlock([nf, nf], nf, num_classes)
+        self.refine4 = _RefineBlock([config.nf], config.nf, config.num_classes)
+        self.refine3 = _RefineBlock([config.nf, config.nf], config.nf, config.num_classes)
+        self.refine2 = _RefineBlock([config.nf, config.nf], config.nf, config.num_classes)
+        self.refine1 = _RefineBlock([config.nf, config.nf], config.nf, config.num_classes)
 
-        self.end_norm = _CondInstanceNorm(nf, num_classes)
+        self.end_norm = _CondInstanceNorm(config.nf, config.num_classes)
         self.end_act = nn.ELU()
-        self.end_conv = nn.Conv2d(nf, in_channels, kernel_size=3, stride=1, padding=1)
+        self.end_conv = nn.Conv2d(
+            config.nf, config.in_channels, kernel_size=3, stride=1, padding=1
+        )
 
         self.apply(self._init_weights)
+        if config.sigmas is not None:
+            sigmas = (
+                config.sigmas
+                if isinstance(config.sigmas, Tensor)
+                else Tensor(config.sigmas, dtype=lucid.Float32)
+            )
+            self.set_sigmas(sigmas)
 
     @staticmethod
     def _init_weights(m: nn.Module) -> None:
@@ -292,8 +341,8 @@ class NCSN(nn.Module):
                 f"num_classes ({self.num_classes})."
             )
         tmp = sigmas.detach()
-        tmp.to(self.sigmas.device)
-        tmp.to(self.sigmas.dtype)
+        tmp = tmp.to(self.sigmas.device)
+        tmp = tmp.to(self.sigmas.dtype)
         self.sigmas.data = tmp.data
 
     @staticmethod
