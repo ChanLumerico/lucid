@@ -6,6 +6,7 @@ Mask R-CNN
     :maxdepth: 1
     :hidden:
 
+    MaskRCNNConfig.rst
     mask_rcnn_resnet_50_fpn.rst
     mask_rcnn_resnet_101_fpn.rst
 
@@ -90,65 +91,45 @@ Class Signature
 .. code-block:: python
 
     class MaskRCNN(nn.Module):
-        def __init__(
-            self,
-            backbone: nn.Module,
-            feat_channels: int,
-            num_classes: int,
-            *,
-            use_fpn: bool = False,
-            anchor_sizes: tuple[int, ...] = (128, 256, 512),
-            aspect_ratios: tuple[float, ...] = (0.5, 1.0, 2.0),
-            anchor_stride: int = 16,
-            pool_size: tuple[int, int] = (7, 7),
-            hidden_dim: int = 4096,
-            dropout: float = 0.5,
-            mask_pool_size: tuple[int, int] = (14, 14),
-            mask_hidden_channels: int = 256,
-            mask_out_size: int = 28,
-        )
+        def __init__(self, config: MaskRCNNConfig)
 
 Parameters
 ----------
 
+- **config** (*MaskRCNNConfig*):
+  Configuration object that packages the backbone, proposal settings, RoI head
+  dimensions, and mask head dimensions used to build the detector.
+
+Configuration
+-------------
+
 - **backbone** (*nn.Module*):
   Backbone feature extractor used by both proposal and RoI heads.
-
 - **feat_channels** (*int*):
-  Number of channels in the backbone feature map consumed by detection/mask heads.
-
+  Number of channels in the feature map consumed by detection and mask heads.
 - **num_classes** (*int*):
-  Number of target classes (background excluded).
-
-- **use_fpn** (*bool*, optional):
+  Number of target classes, excluding background.
+- **use_fpn** (*bool*):
   If `True`, uses `MultiScaleROIAlign` for FPN multi-level features.
-
-- **anchor_sizes** (*tuple[int, ...]*, optional):
+- **anchor_sizes** (*tuple[int, ...]*):
   Anchor scales used by the RPN.
-
-- **aspect_ratios** (*tuple[float, ...]*, optional):
+- **aspect_ratios** (*tuple[float, ...]*):
   Anchor aspect ratios used by the RPN.
-
-- **anchor_stride** (*int*, optional):
+- **anchor_stride** (*int*):
   Anchor stride on the feature map.
-
-- **pool_size** (*tuple[int, int]*, optional):
-  RoI pooling resolution for classification/regression heads.
-
-- **hidden_dim** (*int*, optional):
-  Hidden dimension of the two-layer MLP box/class head.
-
-- **dropout** (*float*, optional):
-  Dropout probability for the MLP detection head.
-
-- **mask_pool_size** (*tuple[int, int]*, optional):
+- **pool_size** (*tuple[int, int]*):
+  RoI pooling resolution for classification and box regression.
+- **hidden_dim** (*int*):
+  Hidden dimension of the two-layer MLP detection head.
+- **dropout** (*float*):
+  Dropout probability for the detection head.
+- **mask_pool_size** (*tuple[int, int]*):
   RoI pooling size for mask features.
-
-- **mask_hidden_channels** (*int*, optional):
+- **mask_hidden_channels** (*int*):
   Hidden channels in the mask head convolution stack.
-
-- **mask_out_size** (*int*, optional):
-  Final mask target/output size per instance.
+- **mask_out_size** (*int*):
+  Final pooled target size for masks. The current implementation requires this
+  to equal `2 * mask_pool_size[0]`.
 
 Architecture
 ------------
@@ -216,7 +197,11 @@ Examples
         def forward(self, x):
             return self.net(x)
 
-    model = MaskRCNN(backbone=SimpleBackbone(), feat_channels=128, num_classes=5)
+    from lucid.models.vision.mask_rcnn import MaskRCNNConfig
+
+    model = MaskRCNN(
+        MaskRCNNConfig(backbone=SimpleBackbone(), feat_channels=128, num_classes=5)
+    )
     x = lucid.random.randn(1, 3, 512, 512)
     cls_logits, bbox_deltas, mask_logits = model(x)
     print(cls_logits.shape, bbox_deltas.shape, mask_logits.shape)

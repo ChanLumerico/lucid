@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import TypedDict
 
 import lucid
@@ -26,9 +27,71 @@ from lucid.models.vision.resnet import resnet_50, resnet_101
 
 __all__ = [
     "MaskRCNN",
+    "MaskRCNNConfig",
     "mask_rcnn_resnet_50_fpn",
     "mask_rcnn_resnet_101_fpn",
 ]
+
+
+@dataclass
+class MaskRCNNConfig:
+    backbone: nn.Module
+    feat_channels: int
+    num_classes: int
+    use_fpn: bool = False
+    anchor_sizes: tuple[int, ...] | list[int] = (128, 256, 512)
+    aspect_ratios: tuple[float, ...] | list[float] = (0.5, 1.0, 2.0)
+    anchor_stride: int = 16
+    pool_size: tuple[int, int] | list[int] = (7, 7)
+    hidden_dim: int = 4096
+    dropout: float = 0.5
+    mask_pool_size: tuple[int, int] | list[int] = (14, 14)
+    mask_hidden_channels: int = 256
+    mask_out_size: int = 28
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.backbone, nn.Module):
+            raise TypeError("backbone must be an nn.Module")
+        if self.feat_channels <= 0:
+            raise ValueError("feat_channels must be greater than 0")
+        if self.num_classes <= 0:
+            raise ValueError("num_classes must be greater than 0")
+        if not isinstance(self.use_fpn, bool):
+            raise TypeError("use_fpn must be a bool")
+
+        self.anchor_sizes = tuple(self.anchor_sizes)
+        self.aspect_ratios = tuple(self.aspect_ratios)
+        self.pool_size = tuple(self.pool_size)
+        self.mask_pool_size = tuple(self.mask_pool_size)
+
+        if len(self.anchor_sizes) == 0 or any(size <= 0 for size in self.anchor_sizes):
+            raise ValueError("anchor_sizes must contain at least one positive value")
+        if len(self.aspect_ratios) == 0 or any(
+            ratio <= 0 for ratio in self.aspect_ratios
+        ):
+            raise ValueError("aspect_ratios must contain at least one positive value")
+        if self.anchor_stride <= 0:
+            raise ValueError("anchor_stride must be greater than 0")
+        if len(self.pool_size) != 2 or any(size <= 0 for size in self.pool_size):
+            raise ValueError("pool_size must contain exactly two positive integers")
+        if self.hidden_dim <= 0:
+            raise ValueError("hidden_dim must be greater than 0")
+        if self.dropout < 0 or self.dropout >= 1:
+            raise ValueError("dropout must be in the range [0, 1)")
+        if len(self.mask_pool_size) != 2 or any(
+            size <= 0 for size in self.mask_pool_size
+        ):
+            raise ValueError(
+                "mask_pool_size must contain exactly two positive integers"
+            )
+        if self.mask_pool_size[0] != self.mask_pool_size[1]:
+            raise ValueError("mask_pool_size must be square")
+        if self.mask_hidden_channels <= 0:
+            raise ValueError("mask_hidden_channels must be greater than 0")
+        if self.mask_out_size <= 0:
+            raise ValueError("mask_out_size must be greater than 0")
+        if self.mask_out_size != self.mask_pool_size[0] * 2:
+            raise ValueError("mask_out_size must equal 2 * mask_pool_size[0]")
 
 
 class _MaskHead(nn.Module):
@@ -69,54 +132,43 @@ class _MaskRCNNLoss(TypedDict):
 
 
 class MaskRCNN(nn.Module):
-    def __init__(
-        self,
-        backbone: nn.Module,
-        feat_channels: int,
-        num_classes: int,
-        *,
-        use_fpn: bool = False,
-        anchor_sizes: tuple[int, ...] = (128, 256, 512),
-        aspect_ratios: tuple[float, ...] = (0.5, 1.0, 2.0),
-        anchor_stride: int = 16,
-        pool_size: tuple[int, int] = (7, 7),
-        hidden_dim: int = 4096,
-        dropout: float = 0.5,
-        mask_pool_size: tuple[int, int] = (14, 14),
-        mask_hidden_channels: int = 256,
-        mask_out_size: int = 28,
-    ) -> None:
+    def __init__(self, config: MaskRCNNConfig) -> None:
         super().__init__()
-        self.backbone = backbone
+        self.config = config
+        self.backbone = config.backbone
         self.anchor_generator = _AnchorGenerator(
-            anchor_sizes, aspect_ratios, anchor_stride
+            config.anchor_sizes, config.aspect_ratios, config.anchor_stride
         )
-        self.rpn = _RegionProposalNetwork(feat_channels, self.anchor_generator)
+        self.rpn = _RegionProposalNetwork(config.feat_channels, self.anchor_generator)
 
-        self.use_fpn = use_fpn
+        self.use_fpn = config.use_fpn
         self.roipool = (
-            MultiScaleROIAlign(pool_size) if self.use_fpn else ROIAlign(pool_size)
+            MultiScaleROIAlign(config.pool_size)
+            if self.use_fpn
+            else ROIAlign(config.pool_size)
         )
         self.mask_roipool = (
-            MultiScaleROIAlign(mask_pool_size)
+            MultiScaleROIAlign(config.mask_pool_size)
             if self.use_fpn
-            else ROIAlign(mask_pool_size)
+            else ROIAlign(config.mask_pool_size)
         )
 
-        fc_in = feat_channels * pool_size[0] * pool_size[1]
-        self.fc1 = nn.Linear(fc_in, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.drop1 = nn.Dropout(dropout)
-        self.drop2 = nn.Dropout(dropout)
+        fc_in = config.feat_channels * config.pool_size[0] * config.pool_size[1]
+        self.fc1 = nn.Linear(fc_in, config.hidden_dim)
+        self.fc2 = nn.Linear(config.hidden_dim, config.hidden_dim)
+        self.drop1 = nn.Dropout(config.dropout)
+        self.drop2 = nn.Dropout(config.dropout)
 
-        self.cls_score = nn.Linear(hidden_dim, num_classes)
-        self.bbox_pred = nn.Linear(hidden_dim, num_classes * 4)
+        self.cls_score = nn.Linear(config.hidden_dim, config.num_classes)
+        self.bbox_pred = nn.Linear(config.hidden_dim, config.num_classes * 4)
         self.mask_head = _MaskHead(
-            feat_channels, num_classes, hidden_channels=mask_hidden_channels
+            config.feat_channels,
+            config.num_classes,
+            hidden_channels=config.mask_hidden_channels,
         )
 
-        self.mask_out_size = mask_out_size
-        self.mask_target_pool = ROIAlign((mask_out_size, mask_out_size))
+        self.mask_out_size = config.mask_out_size
+        self.mask_target_pool = ROIAlign((config.mask_out_size, config.mask_out_size))
 
         self.bbox_reg_means: nn.Buffer
         self.bbox_reg_stds: nn.Buffer
@@ -165,6 +217,11 @@ class MaskRCNN(nn.Module):
     ) -> tuple[Tensor, Tensor]:
         pooled = self.roipool(feats, rois, roi_idx)
         N = pooled.shape[0]
+        if N == 0:
+            return (
+                lucid.empty(0, self.cls_score.weight.shape[0], device=rois.device),
+                lucid.empty(0, self.bbox_pred.weight.shape[0], device=rois.device),
+            )
 
         x = pooled.reshape(N, -1)
         x = F.relu(self.fc1(x))
@@ -181,6 +238,14 @@ class MaskRCNN(nn.Module):
         self, feats: Tensor | list[Tensor], rois: Tensor, roi_idx: Tensor
     ) -> Tensor:
         pooled = self.mask_roipool(feats, rois, roi_idx)
+        if pooled.shape[0] == 0:
+            return lucid.empty(
+                0,
+                self.mask_head.mask_predictor.weight.shape[0],
+                self.mask_out_size,
+                self.mask_out_size,
+                device=rois.device,
+            )
         return self.mask_head(pooled)
 
     def forward(
@@ -278,6 +343,31 @@ class MaskRCNN(nn.Module):
         rois_px, roi_idx = self._flatten_proposals(proposals, images.device)
         rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
         rois_norm = rois_norm.to(images.device)
+
+        valid = (rois_norm[:, 2] > rois_norm[:, 0]) & (rois_norm[:, 3] > rois_norm[:, 1])
+        if lucid.sum(valid) == 0:
+            empty_boxes = lucid.empty(0, 4, device=images.device)
+            empty_scores = lucid.empty(0, device=images.device)
+            empty_labels = lucid.empty(0, dtype=lucid.Int32, device=images.device)
+            empty_masks = lucid.empty(
+                0,
+                self.mask_out_size,
+                self.mask_out_size,
+                device=images.device,
+            )
+            return [
+                {
+                    "boxes": empty_boxes,
+                    "scores": empty_scores,
+                    "labels": empty_labels,
+                    "masks": empty_masks,
+                }
+                for _ in range(B)
+            ]
+
+        rois_px = rois_px[valid]
+        rois_norm = rois_norm[valid]
+        roi_idx = roi_idx[valid]
 
         cls_logits, bbox_deltas = self.roi_forward(feature_roi, rois_norm, roi_idx)
         scores = F.softmax(cls_logits, axis=1)
@@ -548,29 +638,27 @@ class MaskRCNN(nn.Module):
 def mask_rcnn_resnet_50_fpn(
     num_classes: int = 21, backbone_num_classes: int = 1000, **kwargs
 ) -> MaskRCNN:
-    backbone = resnet_50(backbone_num_classes)
-    backbone = _ResNetFPNBackbone(backbone)
-    return MaskRCNN(
-        backbone,
-        feat_channels=256,
-        num_classes=num_classes,
-        use_fpn=True,
-        hidden_dim=1024,
-        **kwargs,
-    )
+    config_kwargs = {
+        "backbone": _ResNetFPNBackbone(resnet_50(backbone_num_classes)),
+        "feat_channels": 256,
+        "num_classes": num_classes,
+        "use_fpn": True,
+        "hidden_dim": 1024,
+    }
+    config_kwargs.update(kwargs)
+    return MaskRCNN(MaskRCNNConfig(**config_kwargs))
 
 
 @register_model
 def mask_rcnn_resnet_101_fpn(
     num_classes: int = 21, backbone_num_classes: int = 1000, **kwargs
 ) -> MaskRCNN:
-    backbone = resnet_101(backbone_num_classes)
-    backbone = _ResNetFPNBackbone(backbone)
-    return MaskRCNN(
-        backbone,
-        feat_channels=256,
-        num_classes=num_classes,
-        use_fpn=True,
-        hidden_dim=1024,
-        **kwargs,
-    )
+    config_kwargs = {
+        "backbone": _ResNetFPNBackbone(resnet_101(backbone_num_classes)),
+        "feat_channels": 256,
+        "num_classes": num_classes,
+        "use_fpn": True,
+        "hidden_dim": 1024,
+    }
+    config_kwargs.update(kwargs)
+    return MaskRCNN(MaskRCNNConfig(**config_kwargs))
