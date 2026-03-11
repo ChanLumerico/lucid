@@ -344,7 +344,9 @@ class MaskRCNN(nn.Module):
         rois_norm = rois_px / lucid.Tensor([W, H, W, H], dtype=lucid.Float32)
         rois_norm = rois_norm.to(images.device)
 
-        valid = (rois_norm[:, 2] > rois_norm[:, 0]) & (rois_norm[:, 3] > rois_norm[:, 1])
+        valid = (rois_norm[:, 2] > rois_norm[:, 0]) & (
+            rois_norm[:, 3] > rois_norm[:, 1]
+        )
         if lucid.sum(valid) == 0:
             empty_boxes = lucid.empty(0, 4, device=images.device)
             empty_scores = lucid.empty(0, device=images.device)

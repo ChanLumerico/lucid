@@ -137,7 +137,9 @@ _default_anchors = [
 @dataclass
 class YOLO_V3Config:
     num_classes: int
-    anchors: list[tuple[int, int]] = field(default_factory=lambda: deepcopy(_default_anchors))
+    anchors: list[tuple[int, int]] = field(
+        default_factory=lambda: deepcopy(_default_anchors)
+    )
     image_size: int = 416
     darknet: nn.Module | None = None
     darknet_out_channels_arr: list[int] | None = None
@@ -174,9 +176,8 @@ class YOLO_V3Config:
                 raise ValueError(
                     "darknet_out_channels_arr is required when providing a custom darknet"
                 )
-            if (
-                len(self.darknet_out_channels_arr) != 3
-                or any(ch <= 0 for ch in self.darknet_out_channels_arr)
+            if len(self.darknet_out_channels_arr) != 3 or any(
+                ch <= 0 for ch in self.darknet_out_channels_arr
             ):
                 raise ValueError(
                     "darknet_out_channels_arr must contain exactly three positive integers"

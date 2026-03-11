@@ -47,11 +47,12 @@ class YOLO_V4Config:
             raise TypeError("backbone must be an nn.Module or None")
 
         self.anchors = [
-            [tuple(anchor) for anchor in scale]
-            for scale in deepcopy(self.anchors)
+            [tuple(anchor) for anchor in scale] for scale in deepcopy(self.anchors)
         ]
         if len(self.anchors) != 3 or any(len(scale) != 3 for scale in self.anchors):
-            raise ValueError("anchors must contain three scales with three anchors each")
+            raise ValueError(
+                "anchors must contain three scales with three anchors each"
+            )
         for scale in self.anchors:
             for anchor in scale:
                 if (
@@ -79,9 +80,8 @@ class YOLO_V4Config:
                 raise ValueError(
                     "backbone_out_channels is required when providing a custom backbone"
                 )
-            if (
-                len(self.backbone_out_channels) != 3
-                or any(ch <= 0 for ch in self.backbone_out_channels)
+            if len(self.backbone_out_channels) != 3 or any(
+                ch <= 0 for ch in self.backbone_out_channels
             ):
                 raise ValueError(
                     "backbone_out_channels must contain exactly three positive integers"
@@ -91,13 +91,10 @@ class YOLO_V4Config:
             raise ValueError("pos_iou_thr must be in the range [0, 1]")
         if not 0.0 <= self.ignore_iou_thr <= 1.0:
             raise ValueError("ignore_iou_thr must be in the range [0, 1]")
-        if (
-            len(self.obj_balance) != 3
-            or any(balance <= 0 for balance in self.obj_balance)
+        if len(self.obj_balance) != 3 or any(
+            balance <= 0 for balance in self.obj_balance
         ):
-            raise ValueError(
-                "obj_balance must contain exactly three positive values"
-            )
+            raise ValueError("obj_balance must contain exactly three positive values")
         if not 0.0 <= self.cls_label_smoothing < 1.0:
             raise ValueError("cls_label_smoothing must be in the range [0, 1)")
         if not 0.0 <= self.iou_aware_alpha <= 1.0:
@@ -383,15 +380,9 @@ class YOLO_V4(nn.Module):
         self.backbone_out_channels = backbone_out_channels
         self.in_channels = config.in_channels
 
-        self.c3_conv = _ConvBNAct(
-            backbone_out_channels[0], config.in_channels[0], k=1
-        )
-        self.c4_conv = _ConvBNAct(
-            backbone_out_channels[1], config.in_channels[1], k=1
-        )
-        self.c5_conv = _ConvBNAct(
-            backbone_out_channels[2], config.in_channels[2], k=1
-        )
+        self.c3_conv = _ConvBNAct(backbone_out_channels[0], config.in_channels[0], k=1)
+        self.c4_conv = _ConvBNAct(backbone_out_channels[1], config.in_channels[1], k=1)
+        self.c5_conv = _ConvBNAct(backbone_out_channels[2], config.in_channels[2], k=1)
 
         self.pos_iou_thr = config.pos_iou_thr
         self.ignore_iou_thr = config.ignore_iou_thr

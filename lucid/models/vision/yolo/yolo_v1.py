@@ -85,9 +85,7 @@ def _parse_conv_spec(spec: object) -> int:
             )
         return conv2_out
 
-    raise TypeError(
-        "conv_config entries must be tuples, 'M', or repeated-block lists"
-    )
+    raise TypeError("conv_config entries must be tuples, 'M', or repeated-block lists")
 
 
 @dataclass

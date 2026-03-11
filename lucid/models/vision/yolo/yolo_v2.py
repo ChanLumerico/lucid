@@ -187,7 +187,9 @@ class YOLO_V2(nn.Module):
         else:
             self.darknet = config.darknet
             if config.route_layer is None and self.use_passthrough:
-                self.route_layer = self._auto_route_index(self.darknet, config.image_size)
+                self.route_layer = self._auto_route_index(
+                    self.darknet, config.image_size
+                )
             else:
                 self.route_layer = config.route_layer
 

@@ -647,8 +647,12 @@ class _HungarianMatcher(nn.Module):
             row_ind, col_ind = self._linear_sum_assignment(total_cost_cpu)
             results.append(
                 (
-                    Tensor(row_ind.tolist(), dtype=lucid.Int32, device=pred_logits.device),
-                    Tensor(col_ind.tolist(), dtype=lucid.Int32, device=pred_logits.device),
+                    Tensor(
+                        row_ind.tolist(), dtype=lucid.Int32, device=pred_logits.device
+                    ),
+                    Tensor(
+                        col_ind.tolist(), dtype=lucid.Int32, device=pred_logits.device
+                    ),
                 )
             )
 

@@ -447,9 +447,7 @@ class _FocalLoss(nn.Module):
                 lucid.zeros(*cls_loss.shape, device=device),
             )
 
-            clf_losses.append(
-                cls_loss.sum() / pos_denom
-            )
+            clf_losses.append(cls_loss.sum() / pos_denom)
 
             if pos_indices.sum() > 0:
                 assigned_annot = assigned_annot[pos_indices, :]
