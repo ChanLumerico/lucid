@@ -4,8 +4,8 @@ efficientnet_b0
 .. autofunction:: lucid.models.efficientnet_b0
 
 The `efficientnet_b0` function creates an instance of the `EfficientNet-B0` model, 
-a lightweight and efficient convolutional neural network preconfigured with parameters 
-suitable for EfficientNet-B0.
+a lightweight and efficient convolutional neural network preset built from the
+default `EfficientNetConfig` values for EfficientNet-B0.
 
 **Total Parameters**: 5,289,636
 
@@ -25,25 +25,11 @@ Parameters
    Defaults to 1000 (e.g., for ImageNet).
 
 - **kwargs** (*dict*, optional):
-   Additional keyword arguments passed to the `EfficientNet` class for further customization.
+   Additional keyword arguments forwarded to `EfficientNetConfig`, excluding the
+   preset `width_coef`, `depth_coef`, `scale`, and `dropout` fields.
 
 Returns
 -------
 
 - **EfficientNet**:
-   An instance of the `EfficientNet` class configured with parameters for EfficientNet-B0.
-
-Examples
---------
-
-.. code-block:: python
-
-    from lucid.models import efficientnet_b0
-
-    # Create an EfficientNet-B0 model
-    model = efficientnet_b0(num_classes=1000)
-
-    # Forward pass with a random input
-    input_tensor = lucid.random.randn(1, 3, 224, 224)  # Batch size of 1, ImageNet resolution
-    output = model(input_tensor)
-    print(output.shape)  # Output shape: (1, 1000)
+   An instance of the `EfficientNet` class constructed from the EfficientNet-B0 preset.

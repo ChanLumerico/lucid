@@ -6,12 +6,12 @@ resnet_1001
 Overview
 --------
 
-The `resnet_1001` function constructs a ResNet-1001 model, an extremely deep residual network 
-built with pre-activation bottleneck blocks, designed for large-scale and computationally 
-intensive image classification tasks.
+The `resnet_1001` function constructs a ResNet-1001 model, an extremely deep residual network
+built with pre-activation bottleneck blocks for research-scale image classification experiments.
 
-It uses `PreActBottleneck` as the building block and is designed for datasets with 
-`num_classes` categories.
+It uses the preset `ResNetConfig(block="preact_bottleneck", layers=[3, 94, 94, 3])`
+and accepts additional `ResNetConfig` keyword overrides such as `in_channels`,
+`stem_type`, `stem_width`, `avg_down`, `channels`, and `block_args`.
 
 **Total Parameters**: 149,071,016
 
@@ -28,9 +28,9 @@ Parameters
 
 - **num_classes** (*int*, optional):
   Number of output classes for the classification task. Default is 1000.
-
 - **kwargs**:
-  Additional keyword arguments to customize the model.
+  Additional keyword arguments forwarded to `ResNetConfig`, excluding the preset
+  `block` and `layers` fields.
 
 Returns
 -------
@@ -50,5 +50,5 @@ Creating a ResNet-1001 model for 1000 classes:
 
 .. note::
 
-  - `ResNet-1001` uses a configuration of `[3, 94, 94, 3]` for its layers.
-  - By default, it initializes weights internally unless specified otherwise through `kwargs`.
+  - `ResNet-1001` uses `PreActBottleneck` with a stage configuration of `[3, 94, 94, 3]`.
+  - The returned model is equivalent to `ResNet(ResNetConfig(...))` with the preset values above.

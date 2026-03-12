@@ -6,11 +6,12 @@ resnet_269
 Overview
 --------
 
-The `resnet_269` function constructs a ResNet-269 model, an ultra-deep residual network 
-built with pre-activation bottleneck blocks, suitable for large-scale and complex image classification tasks.
+The `resnet_269` function constructs a ResNet-269 model, an ultra-deep residual network
+built with pre-activation bottleneck blocks for large-scale image classification.
 
-It uses `PreActBottleneck` as the building block and is designed for datasets with 
-`num_classes` categories.
+It uses the preset `ResNetConfig(block="preact_bottleneck", layers=[3, 30, 48, 8])`
+and accepts additional `ResNetConfig` keyword overrides such as `in_channels`,
+`stem_type`, `stem_width`, `avg_down`, `channels`, and `block_args`.
 
 **Total Parameters**: 102,069,416
 
@@ -27,9 +28,9 @@ Parameters
 
 - **num_classes** (*int*, optional):
   Number of output classes for the classification task. Default is 1000.
-
 - **kwargs**:
-  Additional keyword arguments to customize the model.
+  Additional keyword arguments forwarded to `ResNetConfig`, excluding the preset
+  `block` and `layers` fields.
 
 Returns
 -------
@@ -49,5 +50,5 @@ Creating a ResNet-269 model for 1000 classes:
 
 .. note::
 
-  - `ResNet-269` uses a configuration of `[3, 30, 48, 8]` for its layers.
-  - By default, it initializes weights internally unless specified otherwise through `kwargs`.
+  - `ResNet-269` uses `PreActBottleneck` with a stage configuration of `[3, 30, 48, 8]`.
+  - The returned model is equivalent to `ResNet(ResNetConfig(...))` with the preset values above.

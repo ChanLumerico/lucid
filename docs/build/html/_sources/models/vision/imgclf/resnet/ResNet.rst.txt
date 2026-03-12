@@ -5,6 +5,7 @@ ResNet
     :maxdepth: 1
     :hidden:
 
+    ResNetConfig.rst
     resnet_18.rst
     resnet_34.rst
     resnet_50.rst
@@ -21,9 +22,10 @@ ResNet
 
 .. autoclass:: lucid.models.ResNet
 
-The `ResNet` class provides an implementation of the ResNet architecture. It allows flexibility
-in specifying custom block types, layer configurations, and hyperparameters, making it suitable
-for a wide range of tasks in computer vision.
+The `ResNet` class provides a configurable implementation of the residual network
+architecture. Model structure is described by `ResNetConfig`, which controls the
+residual block family, stage depths, input stem, stage widths, and block-level
+keyword arguments for custom ResNet variants.
 
 .. mermaid::
     :name: ResNet
@@ -79,66 +81,45 @@ Class Signature
 
 .. code-block:: python
 
-    class lucid.nn.ResNet(
-        block: nn.Module,
-        layers: list[int],
-        num_classes: int = 1000,
-        in_channels: int = 3,
-        stem_width: int = 64,
-        stem_type: Literal["deep"] | None = None,
-        channels: tuple[int] = (64, 128, 256, 512),
-        block_args: dict[str, Any] = {},
-    )
+    class ResNet(nn.Module):
+        def __init__(self, config: ResNetConfig)
 
 Parameters
 ----------
-- **block** (*nn.Module*):
-    The building block module used for the ResNet layers. Typically, 
-    this is a residual block such as `BasicBlock` or `Bottleneck`.
-
-- **layers** (*list[int]*):
-    Specifies the number of blocks in each stage of the network.
-
-- **num_classes** (*int*, optional):
-    Number of output classes for the final fully connected layer. Default: 1000.
-
-- **in_channels** (*int*, optional):
-    Number of input channels for the input images. Default: 3.
-
-- **stem_width** (*int*, optional):
-    Number of output channels for the initial convolutional stem. Default: 64.
-
-- **stem_type** (*Literal["deep"] | None*, optional):
-    Specifies the type of stem. If "deep," a deeper stem with multiple layers is used.
-    If None, a standard single-layer stem is used. Default: None.
-
-- **channels** (*tuple[int]*, optional):
-    Defines the output channel sizes for each stage of the network. 
-    Default: (64, 128, 256, 512).
-
-- **block_args** (*dict[str, Any]*, optional):
-    Additional keyword arguments passed to the `block` module during construction.
+- **config** (*ResNetConfig*):
+    Configuration object that defines the residual block family, stage depths,
+    classifier size, input channels, stem settings, stage widths, and extra
+    per-block keyword arguments.
 
 Attributes
 ----------
+- **config** (*ResNetConfig*):
+    The configuration used to construct the model.
+
 - **stem** (*nn.Module*):
     The initial stem layer that processes the input tensor.
 
-- **layers** (*list[nn.Module]*):
-    A list of stages, each containing a sequence of blocks.
+- **maxpool** (*nn.MaxPool2d*):
+    Downsamples the stem activations before the residual stages.
 
-- **num_classes** (*int*):
-    Stores the number of output classes.
+- **layer1**, **layer2**, **layer3**, **layer4** (*nn.Sequential*):
+    Residual stages generated from the stage depths and widths in the configuration.
 
 - **block** (*nn.Module*):
-    Stores the block type used for building the layers.
+    Stores the resolved residual block class used for building the stages.
+
+- **avgpool** (*nn.AdaptiveAvgPool2d*):
+    Global average pooling layer applied before the classifier.
+
+- **fc** (*nn.Linear*):
+    Final classification head.
 
 Forward Calculation
 --------------------
 The forward pass of the ResNet model includes:
 
 1. **Stem**: Initial convolutional layers for feature extraction.
-2. **Residual Stages**: Each stage consists of multiple blocks defined by the `layers` parameter.
+2. **Residual Stages**: Four stages of residual blocks defined by `ResNetConfig.layers`.
 3. **Global Pooling**: A global average pooling layer reduces the spatial dimensions.
 4. **Classifier**: A fully connected layer maps the features to class scores.
 
@@ -153,17 +134,25 @@ Examples
 
 .. code-block:: python
 
-    >>> import lucid.nn as nn
-    >>> from lucid.models.blocks import BasicBlock
-    >>> layers = [3, 4, 6, 3]  # Configuration for ResNet-50
-    >>> model = nn.ResNet(block=BasicBlock, layers=layers, num_classes=1000)
-    >>> input_tensor = Tensor(np.random.randn(8, 3, 224, 224))  # Shape: (N, C, H, W)
+    >>> import lucid
+    >>> import lucid.models as models
+    >>> config = models.ResNetConfig(
+    ...     block="basic",
+    ...     layers=[2, 2, 2, 2],
+    ...     num_classes=10,
+    ...     in_channels=1,
+    ...     stem_type="deep",
+    ...     stem_width=32,
+    ... )
+    >>> model = models.ResNet(config)
+    >>> input_tensor = lucid.zeros(8, 1, 224, 224)
     >>> output = model(input_tensor)  # Forward pass
     >>> print(output.shape)
-    (8, 1000)
+    (8, 10)
 
 .. note::
 
-   - The `ResNet` class supports flexible configurations for custom tasks by modifying the 
-     `block`, `layers`, or `channels` parameters.
-   - Adding a "deep" stem can improve feature extraction for larger or more complex datasets.
+   - Use `ResNetConfig` to define custom block families, stage widths, or stem settings.
+   - Factory helpers such as `resnet_50` and `wide_resnet_50` create preset configurations
+     for common historical variants.
+   - Setting `stem_type="deep"` enables the multi-layer deep stem used by some ResNet-derived models.

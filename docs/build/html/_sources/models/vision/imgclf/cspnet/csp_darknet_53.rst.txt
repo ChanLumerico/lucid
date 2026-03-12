@@ -3,14 +3,8 @@ csp_darknet_53
 
 .. autofunction:: lucid.models.csp_darknet_53
 
-The `csp_darknet_53` function builds a variant of CSPNet based on 
-DarkNet-53 architecture as used in YOLO-v4. It replaces each standard 
-residual stage with a *CSPDarkBlock*, utilizing DarkNet bottlenecks and 
-cross-stage partial connections to significantly reduce memory cost and 
-duplicate gradient paths.
-
-The model is constructed with 5 CSP stages, closely aligned with the 
-original DarkNet-53 design, while maintaining CSP semantics throughout.
+The `csp_darknet_53` function constructs the CSPDarknet-53 preset.
+This preset uses the default `CSPNetConfig` stage layout for the Darknet-style variant.
 
 **Total Parameters**: 27,278,536
 
@@ -21,41 +15,24 @@ Function Signature
 
     @register_model
     def csp_darknet_53(
-        num_classes: int = 1000, 
-        split_ratio: float = 0.5, 
-        stem_channels: int = 32, 
-        **kwargs
+        num_classes: int = 1000, split_ratio: float = 0.5, stem_channels: int = 32, **kwargs
     ) -> CSPNet
 
 Parameters
 ----------
 
-- **num_classes** (*int*, optional):  
-  Number of output classes for classification. Default is 1000.
-
-- **split_ratio** (*float*, optional):  
-  Ratio of channels going through the residual transform branch in each stage. Default is 0.5.
-
-- **stem_channels** (*int*, optional):  
-  Channels used in the stem convolution layer. Default is 32.
-
-- **kwargs** (*dict*, optional):  
-  Additional customization arguments passed to `CSPNet`.
+- **num_classes** (*int*, optional):
+  Number of output classes for classification. Default is `1000`.
+- **split_ratio** (*float*, optional):
+  CSP split ratio. Default is `0.5`.
+- **stem_channels** (*int*, optional):
+  Stem output width. Default is `32`.
+- **kwargs** (*dict*, optional):
+  Additional keyword arguments forwarded to `CSPNetConfig`, excluding the
+  preset `stage_specs`, `stack_type`, `feature_channels`, and `pre_kernel_size` fields.
 
 Returns
 -------
 
-- **CSPNet**:  
-  A CSPNet-based model using DarkNet-53 backbone structure with CSP wrapping.
-
-Examples
---------
-
-.. code-block:: python
-
-    from lucid.models import csp_darknet_53
-
-    model = csp_darknet_53(num_classes=1000)
-    x = lucid.random.randn(1, 3, 224, 224)
-    y = model(x)
-    print(y.shape)  # torch.Size([1, 1000])
+- **CSPNet**:
+  A CSPNet model instance constructed from the CSPDarknet-53 preset config.

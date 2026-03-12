@@ -5,6 +5,7 @@ EfficientNet_V2
     :maxdepth: 1
     :hidden:
 
+    EfficientNetV2Config.rst
     efficientnet_v2_s.rst
     efficientnet_v2_m.rst
     efficientnet_v2_l.rst
@@ -17,7 +18,8 @@ EfficientNet_V2
 `EfficientNet_V2` builds on the EfficientNet architecture, which employs a compound scaling method to balance
 depth, width, and resolution for optimal performance. The V2 variant introduces further improvements
 such as training with larger batch sizes, using higher-resolution images, and advanced regularization techniques
-like stochastic depth and progressive learning.
+like stochastic depth and progressive learning. Model structure is defined through
+`EfficientNetV2Config`.
 
 .. mermaid::
     :name: EfficientNetV2
@@ -109,31 +111,39 @@ Class Signature
 .. code-block:: python
 
     class EfficientNet_V2(nn.Module):
-        def __init__(
-            self,
-            block_cfg: list,
-            num_classes: int = 1000,
-            dropout: float = 0.2,
-            drop_path_rate: float = 0.2,
-        ) -> None
+        def __init__(self, config: EfficientNetV2Config) -> None
 
 Parameters
 ----------
 
-- **block_cfg** (*list*):
-  A list defining the structure and parameters of the building blocks in the network. 
-  Each entry specifies the configuration of a block, such as number of filters, stride, etc.
-
-- **num_classes** (*int*, optional):
-  The number of output classes for classification. Default is 1000.
-
-- **dropout** (*float*, optional):
-  The dropout rate applied to the final fully connected layer. Default is 0.2.
-
-- **drop_path_rate** (*float*, optional):
-  The rate for stochastic depth regularization. Default is 0.2.
+- **config** (*EfficientNetV2Config*):
+  Configuration object describing the V2 block sequence, classifier size,
+  dropout, and progressive drop-path rate.
 
 .. warning::
 
-   Ensure the `block_cfg` is well-defined to avoid shape mismatches or runtime errors
-   during the forward pass.
+   Ensure the `block_cfg` inside `EfficientNetV2Config` is well-defined to avoid
+   shape mismatches or runtime errors during the forward pass.
+
+Examples
+--------
+
+.. code-block:: python
+
+    import lucid
+    from lucid.models import EfficientNet_V2, EfficientNetV2Config
+
+    config = EfficientNetV2Config(
+        block_cfg=[
+            (True, 24, 3, 1, 1, 1, 0),
+            (False, 48, 3, 2, 4, 2, 4),
+        ],
+        num_classes=100,
+        dropout=0.2,
+        drop_path_rate=0.1,
+    )
+    model = EfficientNet_V2(config)
+
+    input_tensor = lucid.random.randn(1, 3, 224, 224)
+    output = model(input_tensor)
+    print(output.shape)

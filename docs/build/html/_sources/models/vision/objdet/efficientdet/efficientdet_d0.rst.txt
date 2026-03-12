@@ -21,7 +21,7 @@ Parameters
   Number of target object classes to detect.
 
 - **kwargs**:  
-  Additional keyword arguments passed to the `EfficientDet` constructor.
+  Additional keyword arguments passed to `EfficientDetConfig`. This factory fixes the variant-specific `compound_coef` preset.
 
 Returns
 -------
@@ -33,11 +33,12 @@ Example Usage
 -------------
 .. code-block:: python
 
+    >>> import lucid
     >>> from lucid.models import efficientdet_d0
     >>> model = efficientdet_d0(num_classes=80)
     >>> print(model)
 
-    >>> x = lucid.rand(2, 3, 512, 512)
+    >>> x = lucid.ones(2, 3, 512, 512)
     >>> out = model(x)
     >>> for o in out:
     ...     print(o.shape)

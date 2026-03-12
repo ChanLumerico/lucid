@@ -2,6 +2,12 @@ NCSN
 ====
 |diffusion-badge| |score-diffusion-badge|
 
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    NCSNConfig.rst
+
 .. autoclass:: lucid.models.NCSN
 
 The `NCSN` class implements a Noise Conditional Score Network (NCSN), a score-based
@@ -168,33 +174,30 @@ Class Signature
 
 .. code-block:: python
 
-    class NCSN(
-        in_channels: int = 3,
-        nf: int = 128,
-        num_classes: int = 10,
-        dilations: Sequence[int] = (1, 2, 4, 8),
-        scale_by_sigma: bool = True,
-    )
+    class NCSN(config: NCSNConfig)
 
 Parameters
 ----------
 
+- **config** (*NCSNConfig*):
+  Configuration object that stores the backbone width, conditional noise-level
+  count, stage dilations, sigma-scaling behavior, and optional initial sigma schedule.
+
+Configuration
+-------------
+
 - **in_channels** (*int*):
   Number of channels in the input image.
-
 - **nf** (*int*):
-  Base feature width used by the internal RefineNet-style backbone.
-
+  Base feature width used by the RefineNet-style backbone.
 - **num_classes** (*int*):
-  Number of noise levels (i.e., the length of the noise schedule). This is also the
-  number of class labels used for conditional normalization inside the network.
-
+  Number of noise levels and conditional normalization labels.
 - **dilations** (*Sequence[int]*):
   Four dilation values used in the four RCU stages.
-
 - **scale_by_sigma** (*bool*):
-  If `True`, the network output is divided by the per-sample noise level
-  :math:`\sigma` (matching the original NCSN formulation).
+  Whether the predicted score is divided by the selected sigma.
+- **sigmas** (*Tensor | Sequence[float] | None*):
+  Optional sigma schedule to preload into the model buffer.
 
 Returns
 -------
@@ -255,8 +258,20 @@ Examples
     import lucid
     from lucid.models import NCSN
 
-    model = NCSN(in_channels=3, nf=128, num_classes=10)
-    model.set_sigmas(NCSN.make_sigmas(sigma_begin=50.0, sigma_end=0.01, num_scales=10))
+    from lucid.models import NCSNConfig
+
+    model = NCSN(
+        NCSNConfig(
+            in_channels=3,
+            nf=128,
+            num_classes=10,
+            sigmas=NCSN.make_sigmas(
+                sigma_begin=50.0,
+                sigma_end=0.01,
+                num_scales=10,
+            ),
+        )
+    )
 
     # Training
     x = lucid.random.randn((32, 3, 32, 32))
@@ -278,4 +293,3 @@ Examples
 
     `set_sigmas(...)` must be called before training or sampling, otherwise the model
     does not know which noise levels to use.
-

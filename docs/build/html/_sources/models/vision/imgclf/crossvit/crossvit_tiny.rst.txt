@@ -3,9 +3,7 @@ crossvit_tiny
 
 .. autofunction:: lucid.models.crossvit_tiny
 
-The `crossvit_tiny` function provides a convenient way to create an instance of the 
-`CrossViT` module with a specific configuration optimized for smaller model size while 
-maintaining performance, following the tiny variant described in the CrossViT paper.
+The `crossvit_tiny` function constructs the tiny CrossViT preset.
 
 **Total Parameters**: 7,014,800
 
@@ -21,46 +19,26 @@ Parameters
 ----------
 
 - **num_classes** (*int*, optional):
-  The number of output classes for classification. Default is 1000.
-
+  Number of output classes for classification. Default is `1000`.
 - **kwargs** (*dict*, optional):
-  Additional keyword arguments to customize the `CrossViT` module.
+  Additional keyword arguments forwarded to `CrossViTConfig`, excluding the
+  preset `img_size`, `patch_size`, `embed_dim`, `depth`, `num_heads`,
+  `mlp_ratio`, `qkv_bias`, `norm_layer`, and `multi_conv` fields.
 
 Returns
 -------
 
 - **CrossViT**:
-  An instance of the `CrossViT` module configured with the tiny variant settings.
+  A `CrossViT` instance constructed from the tiny preset config.
 
-Specifications
---------------
+Preset Config
+-------------
 
-- **img_size**: [240, 224]
-- **embed_dim**: [96, 192]
-- **depth**: [[1, 4, 0], [1, 4, 0], [1, 4, 0]]
-- **num_heads**: [3, 3]
-- **mlp_ratio**: [4, 4, 1]
-- **qkv_bias**: True
-
-Examples
---------
-
-**Creating a Default CrossViT-Tiny Model**
-
-.. code-block:: python
-
-    import lucid.models as models
-
-    # Create a CrossViT-Tiny model with 1000 output classes
-    model = models.crossvit_tiny()
-
-    print(model)  # Displays the CrossViT-Tiny architecture
-
-**Custom Number of Classes**
-
-.. code-block:: python
-
-    # Create a CrossViT-Tiny model with 10 output classes
-    model = models.crossvit_tiny(num_classes=10)
-
-    print(model)  # Displays the CrossViT-Tiny architecture with modified output
+- **img_size**: `(240, 224)`
+- **patch_size**: `(12, 16)`
+- **embed_dim**: `(96, 192)`
+- **depth**: `((1, 4, 0), (1, 4, 0), (1, 4, 0))`
+- **num_heads**: `(3, 3)`
+- **mlp_ratio**: `(4, 4, 1)`
+- **qkv_bias**: `True`
+- **multi_conv**: `False`

@@ -21,13 +21,9 @@ Parameters
   anchor in the final detection head.
 
 - **kwargs**:  
-  Additional keyword arguments passed directly to the `YOLO_V2` constructor.
-
-  Common kwargs include:
-
-  - `darknet` (*nn.Module*, optional): custom backbone
-  - `num_anchors` (*int*, default=5): number of anchor boxes (defaults to 5)
-  - `image_size` (*int*, default=416): input image resolution
+  Additional keyword arguments passed to `YOLO_V2Config`. By default this
+  factory uses the original YOLO-v2 anchor set with `num_anchors=5` and
+  `image_size=416`.
 
 Returns
 -------
@@ -38,11 +34,12 @@ Example Usage
 -------------
 .. code-block:: python
 
+    >>> import lucid
     >>> from lucid.models import yolo_v2
     >>> model = yolo_v2(num_classes=20)
     >>> print(model)
 
-    >>> x = lucid.rand(1, 3, 416, 416)
+    >>> x = lucid.ones(1, 3, 416, 416)
     >>> out = model(x)
     >>> print(out.shape)  # shape: (1, 125, 13, 13) for Pascal-VOC (20 classes, 5 anchors)
 

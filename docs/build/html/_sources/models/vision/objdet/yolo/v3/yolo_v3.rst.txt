@@ -20,13 +20,8 @@ Parameters
   Number of object categories to detect. Determines the number of output scores per anchor.
 
 - **kwargs**:  
-  Additional keyword arguments passed directly to the `YOLO_V3` constructor.
-
-  Common kwargs include:
-
-  - `anchors` (*list[tuple[int, int]]*, optional): list of 9 anchor boxes in pixel units
-  - `image_size` (*int*, default=416): input resolution (typically 416x416)
-  - `darknet` (*nn.Module*, optional): custom Darknet-53 style backbone
+  Additional keyword arguments passed to `YOLO_V3Config`. By default this
+  factory uses the original 9-anchor YOLO-v3 setup with `image_size=416`.
 
 Returns
 -------
@@ -38,11 +33,12 @@ Example Usage
 -------------
 .. code-block:: python
 
+    >>> import lucid
     >>> from lucid.models import yolo_v3
     >>> model = yolo_v3(num_classes=80)
     >>> print(model)
 
-    >>> x = lucid.rand(1, 3, 416, 416)
+    >>> x = lucid.ones(1, 3, 416, 416)
     >>> out = model(x)
     >>> for o in out:
     ...     print(o.shape)

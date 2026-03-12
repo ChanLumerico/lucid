@@ -6,6 +6,7 @@ YOLO-v1
     :maxdepth: 1
     :hidden:
 
+    YOLO_V1Config.rst
     yolo_v1.rst
     yolo_v1_tiny.rst
 
@@ -16,6 +17,7 @@ for real-time object detection, as proposed by Redmon et al. (2016).
 
 It divides the input image into an :math:`S \times S` grid and predicts 
 bounding boxes, objectness scores, and class probabilities for each cell.
+Model structure is defined through `YOLO_V1Config`.
 
 .. mermaid::
     :name: YOLO-v1
@@ -155,35 +157,15 @@ Class Signature
 
 .. code-block:: python
 
-    class YOLO_V1(
-        in_channels: int,
-        split_size: int,
-        num_boxes: int,
-        num_classes: int,
-        lambda_coord: float = 5.0,
-        lambda_noobj: float = 0.5,
-    )
+    class YOLO_V1(nn.Module):
+        def __init__(self, config: YOLO_V1Config) -> None
 
 Parameters
 ----------
 
-- **in_channels** (*int*):  
-  Number of input image channels, typically `3` for RGB.
-
-- **split_size** (*int*):  
-  Number of grid divisions per side (S), meaning the input is divided into :math:`S \times S` cells.
-
-- **num_boxes** (*int*):  
-  Number of bounding boxes (B) predicted per grid cell.
-
-- **num_classes** (*int*):  
-  Number of object classes to predict (C).
-
-- **lambda_coord** (*float*):  
-  Weight for the coordinate loss (default: 5.0).
-
-- **lambda_noobj** (*float*):  
-  Weight for the no-object confidence loss (default: 0.5).
+- **config** (*YOLO_V1Config*):
+  Configuration object describing the input channel count, detection grid size,
+  number of boxes and classes, loss weights, and convolutional backbone layout.
 
 Input Format
 ------------
@@ -215,7 +197,8 @@ Use the `forward` method for predictions:
     preds = model(x)
 
 - **preds** (*Tensor*):  
-  Tensor of shape `(N, S, S, B * 5 + C)` containing all bounding box and classification predictions.
+  Tensor of shape `(N, S * S * (B * 5 + C))` containing the flattened detection
+  head output. `get_loss()` reshapes this into `(N, S, S, B * 5 + C)` internally.
 
 Loss is computed using:
 
@@ -263,22 +246,23 @@ Examples
 .. code-block:: python
 
     import lucid
-    import lucid.nn as nn
-    from lucid.models import YOLO_V1
+    import lucid.models as models
 
-    model = YOLO_V1(
+    config = models.YOLO_V1Config(
         in_channels=3,
-        split_size=7,
+        split_size=2,
         num_boxes=2,
-        num_classes=20
+        num_classes=20,
+        conv_config=[(1024, 1, 1, 0)],
     )
+    model = models.YOLO_V1(config)
 
     # Forward pass
-    x = lucid.rand(16, 3, 448, 448)
+    x = lucid.ones(16, 3, 2, 2)
     preds = model(x)
 
     # Compute loss
-    target = lucid.rand(16, 7, 7, 5 * 2 + 20)
+    target = lucid.zeros(16, 2, 2, 5 * 2 + 20)
     loss = model.get_loss(x, target)
 
     loss.backward()

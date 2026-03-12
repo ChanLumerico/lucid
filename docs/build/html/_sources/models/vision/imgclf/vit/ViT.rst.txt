@@ -5,6 +5,7 @@ ViT
     :maxdepth: 1
     :hidden:
 
+    ViTConfig.rst
     vit_tiny.rst
     vit_small.rst
     vit_base.rst
@@ -16,7 +17,8 @@ ViT
 .. autoclass:: lucid.models.ViT
 
 The `ViT` class provides a full implementation of the Vision Transformer model,
-including patch embedding, positional encoding, and the final classification head.
+including patch embedding, positional encoding, and the final classification
+head. Model structure is defined through `ViTConfig`.
 
 .. mermaid::
     :name: ViT
@@ -83,42 +85,38 @@ Class Signature
 
 .. code-block:: python
 
-    class ViT(
-        img_size: int,
-        patch_size: int,
-        num_classes: int,
-        d_model: int,
-        num_heads: int,
-        num_layers: int,
-        mlp_dim: int,
-        dropout: float = 0.1,
-    )
+    class ViT(nn.Module):
+        def __init__(self, config: ViTConfig) -> None
 
 Parameters
 ----------
-- **img_size** (*int*):
-  Size of the input image (assumes square images).
+- **config** (*ViTConfig*):
+  Configuration object describing the input shape, patch size, embedding width,
+  transformer depth, attention heads, MLP width, and classifier size.
 
-- **patch_size** (*int*):
-  Size of the patches the image is divided into.
+Architecture
+------------
 
-- **num_classes** (*int*):
-  Number of output classes for classification.
+The ViT model follows the standard image transformer pipeline:
 
-- **d_model** (*int*):
-  Dimension of the model’s hidden representations.
+1. **Patch Embedding**:
 
-- **num_heads** (*int*):
-  Number of attention heads in the multi-head self-attention mechanism.
+   - The input image is split into non-overlapping patches by a strided convolution.
+   - Each patch is projected into the transformer embedding space.
 
-- **num_layers** (*int*):
-  Number of Transformer encoder layers.
+2. **Class Token and Position Embedding**:
 
-- **mlp_dim** (*int*):
-  Dimension of the feedforward network within each Transformer block.
+   - A learnable class token is prepended to the patch sequence.
+   - A learnable positional embedding is added to preserve patch order.
 
-- **dropout** (*float*, optional):
-  Dropout probability applied throughout the model. Default is 0.1.
+3. **Transformer Encoder**:
+
+   - The sequence is processed by stacked encoder blocks with multi-head self-attention.
+   - Each block mixes global context and feedforward projection layers.
+
+4. **Classification Head**:
+
+   - The final class token is normalized and projected to `num_classes`.
 
 Examples
 --------
@@ -126,15 +124,15 @@ Examples
 .. code-block:: python
 
     >>> import lucid.models as models
-    >>> vit = models.ViT(
-    ...     img_size=224,
+    >>> config = models.ViTConfig(
+    ...     image_size=224,
     ...     patch_size=16,
     ...     num_classes=1000,
-    ...     d_model=768,
+    ...     embedding_dim=768,
+    ...     depth=12,
     ...     num_heads=12,
-    ...     num_layers=12,
     ...     mlp_dim=3072,
-    ...     dropout=0.1
     ... )
+    >>> vit = models.ViT(config)
     >>> print(vit)
-    ViT(img_size=224, patch_size=16, num_classes=1000, d_model=768, ...)
+    ViT()

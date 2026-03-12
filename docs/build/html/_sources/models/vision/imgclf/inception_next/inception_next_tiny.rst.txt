@@ -3,9 +3,8 @@ inception_next_tiny
 
 .. autofunction:: lucid.models.inception_next_tiny
 
-The `inception_next_tiny` function instantiates an InceptionNeXt-Tiny model,
-a compact variant of the InceptionNeXt architecture designed for a balance
-between efficiency and accuracy with moderate computational requirements.
+The `inception_next_tiny` function constructs the InceptionNeXt-Tiny preset.
+This preset uses the default `InceptionNeXtConfig` stage layout for the tiny variant.
 
 **Total Parameters**: 28,083,832
 
@@ -21,28 +20,13 @@ Parameters
 ----------
 
 - **num_classes** (*int*, optional):
-  Number of output classes for the final classification layer. Defaults to 1000.
-
+  Number of output classes for classification. Default is `1000`.
 - **kwargs** (*dict*, optional):
-  Additional arguments to customize the model configuration.
+  Additional keyword arguments forwarded to `InceptionNeXtConfig`, excluding the
+  preset `depths`, `dims`, and `token_mixers` fields.
 
 Returns
 -------
 
 - **InceptionNeXt**:
-  An instance of the `InceptionNeXt` model configured as the tiny variant.
-
-Example
--------
-
-.. code-block:: python
-
-    from lucid.models import inception_next_tiny
-
-    # Instantiate InceptionNeXt-Tiny
-    model = inception_next_tiny(num_classes=1000)
-
-    # Forward pass with a random input
-    input_tensor = lucid.random.randn(1, 3, 224, 224)
-    output = model(input_tensor)
-    print(output.shape)  # Output shape: (1, 1000)
+  An InceptionNeXt model instance constructed from the tiny preset config.

@@ -57,7 +57,10 @@ Examples
 .. code-block:: python
 
     >>> import lucid.models as models
-    >>> model = models.bert_for_token_classification_base(num_labels=2)
+    >>> model = models.BERTForTokenClassification(
+    ...     models.BERTConfig.base(add_pooling_layer=True),
+    ...     num_labels=2,
+    ... )
     >>> print(model)
     BERTForTokenClassification(...)
 

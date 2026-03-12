@@ -14,7 +14,11 @@ Function Signature
 .. code-block:: python
 
     @register_model
-    def transformer_big(src_vocab_size: int = 12000, tgt_vocab_size: int = 12000) -> Transformer
+    def transformer_big(
+        src_vocab_size: int = 12000,
+        tgt_vocab_size: int = 12000,
+        **kwargs,
+    ) -> Transformer
 
 Parameters
 ----------
@@ -23,6 +27,10 @@ Parameters
 
 - **tgt_vocab_size** (*int*, optional):
   Size of the target vocabulary. Default is 12,000.
+
+- **kwargs**:
+  Additional keyword arguments passed to `TransformerConfig`. This factory fixes
+  the default Transformer-Big depth, width, and feedforward preset.
 
 Returns
 -------
@@ -39,4 +47,3 @@ Examples
     >>> transformer = models.transformer_big()
     >>> print(transformer)
     Transformer(src_vocab_size=12000, tgt_vocab_size=12000, d_model=1024, ...)
-

@@ -4,8 +4,8 @@ vit_tiny
 .. autofunction:: lucid.models.vit_tiny
 
 The `vit_tiny` function instantiates a small Vision Transformer (ViT-Ti) model 
-with a predefined architecture. This model is useful for lightweight applications 
-requiring a Transformer-based vision model.
+with a predefined architecture. This preset uses the default `ViTConfig`
+transformer dimensions for the tiny variant.
 
 **Total Parameters**: 5,717,416
 
@@ -34,19 +34,10 @@ Parameters
   The number of output classes for classification. Default is 1000.
 
 - **kwargs** (*dict*, optional):
-  Additional parameters for customization.
+  Additional keyword arguments forwarded to `ViTConfig`, excluding the preset
+  `embedding_dim`, `depth`, `num_heads`, and `mlp_dim` fields.
 
 Returns
 -------
 - **ViT**:
-  An instance of the `ViT` class configured as a lightweight vision transformer.
-
-Examples
---------
-
-.. code-block:: python
-
-    >>> import lucid.models as models
-    >>> model = models.vit_tiny()
-    >>> print(model)
-    ViT(img_size=224, patch_size=16, num_classes=1000, ...)
+  A ViT model instance constructed from the tiny preset config.

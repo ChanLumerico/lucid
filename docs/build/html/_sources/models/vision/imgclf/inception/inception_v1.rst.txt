@@ -9,7 +9,8 @@ Overview
 The `inception_v1` function provides an implementation of the Inception v1 (GoogLeNet) architecture.
 This model was introduced in the paper "Going Deeper with Convolutions" by Szegedy et al.
 It is designed for image classification tasks and includes the option to use auxiliary 
-classifiers to improve optimization during training.
+classifiers to improve optimization during training. It builds an `InceptionConfig`
+preset internally and forwards extra keyword arguments to that config.
 
 **Total Parameters**: 13,393,352
 
@@ -37,7 +38,8 @@ Parameters
   Default is `True`.
 
 - **kwargs** (*dict*, optional):
-  Additional arguments passed to the underlying `Inception` base class or model components.
+  Additional keyword arguments forwarded to `InceptionConfig`, such as
+  `in_channels` or `dropout_prob`.
 
 Returns
 -------
@@ -63,3 +65,14 @@ Below is an example of defining and using the Inception v1 model:
    # Forward pass
    output = model(input_tensor)
    print(output)
+
+.. code-block:: python
+
+   model = models.inception_v1(
+       num_classes=10,
+       use_aux=False,
+       in_channels=1,
+       dropout_prob=0.25,
+   )
+
+   print(model.config)

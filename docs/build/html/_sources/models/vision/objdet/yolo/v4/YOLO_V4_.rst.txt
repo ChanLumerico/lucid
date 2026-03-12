@@ -6,6 +6,7 @@ YOLO-v4
     :maxdepth: 1
     :hidden:
 
+    YOLO_V4Config.rst
     yolo_v4.rst
 
 .. autoclass:: lucid.models.YOLO_V4
@@ -13,7 +14,8 @@ YOLO-v4
 The `YOLO_V4` class implements the YOLO-v4 object detection model, 
 extending YOLO-v3 with architectural and training improvements for better 
 accuracy and speed. It includes CSP-DarkNet-53 as a backbone, SPP and PANet as necks, 
-and enhancements like Mish activation and label smoothing.
+and enhancements like Mish activation and label smoothing. Model structure is
+defined through `YOLO_V4Config`.
 
 .. mermaid::
     :name: YOLO-V4
@@ -187,59 +189,14 @@ Class Signature
 
 .. code-block:: python
 
-    class YOLO_V4(
-        num_classes: int,
-        anchors: list[list[tuple[int, int]]] | None = None,
-        strides: list[int] | None = None,
-        backbone: nn.Module | None = None,
-        backbone_out_channels: tuple[int, int, int] | None = None,
-        in_channels: tuple[int, int, int] = (256, 512, 1024),
-        pos_iou_thr: float = 0.25,
-        ignore_iou_thr: float = 0.5,
-        obj_balance: tuple[float, float, float] = (4.0, 1.0, 0.4),
-        cls_label_smoothing: float = 0.0,
-        iou_aware_alpha: float = 0.5,
-        iou_branch_weight: float = 1.0,
-    )
+    class YOLO_V4(nn.Module):
+        def __init__(self, config: YOLO_V4Config) -> None
 
 Parameters
 ----------
-- **num_classes** (*int*):  
-  Number of object classes for detection.
-
-- **anchors** (*list[list[tuple[int, int]]]*, optional):  
-  3-scale list of anchor box groups. Each inner list holds 3 anchor tuples. 
-  Defaults to YOLO-v4 anchors if `None`.
-
-- **strides** (*list[int]*, optional):  
-  Strides for the 3 detection heads (typically `[8, 16, 32]`).
-
-- **backbone** (*nn.Module*, optional):  
-  Optional feature extractor (default: CSP-DarkNet-53).
-
-- **backbone_out_channels** (*tuple[int, int, int]*, optional):  
-  Output channels from backbone corresponding to 3 detection scales.
-
-- **in_channels** (*tuple[int, int, int]*):  
-  Input channels to the necks (SPP, PANet).
-
-- **pos_iou_thr** (*float*):  
-  Positive label threshold for anchor assignment.
-
-- **ignore_iou_thr** (*float*):  
-  IOU threshold above which anchor is ignored in loss.
-
-- **obj_balance** (*tuple[float, float, float]*):  
-  Weights for objectness loss at different scales.
-
-- **cls_label_smoothing** (*float*):  
-  Smoothing factor for classification targets.
-
-- **iou_aware_alpha** (*float*):  
-  Weight for combining IOU and objectness predictions.
-
-- **iou_branch_weight** (*float*):  
-  Loss weight for IOU-aware branch.
+- **config** (*YOLO_V4Config*):
+  Configuration object describing the class count, anchors, strides, backbone,
+  neck channel widths, IoU thresholds, label smoothing, and IoU-aware loss options.
 
 Attributes
 ----------

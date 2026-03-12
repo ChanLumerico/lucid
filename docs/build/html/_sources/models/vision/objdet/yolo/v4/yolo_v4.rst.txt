@@ -20,16 +20,9 @@ Parameters
   Number of object categories to detect. Determines number of logits per anchor.
 
 - **kwargs**:  
-  Additional keyword arguments passed to the `YOLO_V4` constructor.
-
-  Common options include:
-
-  - `anchors` (*list[list[tuple[int, int]]]*): 3-scale nested anchor boxes  
-  - `strides` (*list[int]*): strides for the 3 detection scales  
-  - `backbone` (*nn.Module*): CSPDarknet-53-style feature extractor  
-  - `cls_label_smoothing` (*float*): amount of label smoothing for classification  
-  - `iou_aware_alpha` (*float*): weight for IOU-aware objectness  
-  - `obj_balance` (*tuple[float, float, float]*): weights for objectness loss at each scale
+  Additional keyword arguments passed to `YOLO_V4Config`. By default this
+  factory uses the standard YOLO-v4 anchors/strides and disables the IoU-aware
+  branch weighting path with `iou_aware_alpha=0.0` and `iou_branch_weight=0.0`.
 
 Returns
 -------
@@ -41,11 +34,12 @@ Example Usage
 -------------
 .. code-block:: python
 
+    >>> import lucid
     >>> from lucid.models import yolo_v4
     >>> model = yolo_v4(num_classes=80)
     >>> print(model)
 
-    >>> x = lucid.rand(1, 3, 416, 416)
+    >>> x = lucid.ones(1, 3, 416, 416)
     >>> out = model(x)
     >>> for o in out:
     ...     print(o.shape)

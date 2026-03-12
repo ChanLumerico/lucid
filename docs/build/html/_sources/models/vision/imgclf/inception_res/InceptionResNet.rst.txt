@@ -5,6 +5,7 @@ InceptionResNet
     :maxdepth: 1
     :hidden:
 
+    InceptionResNetConfig.rst
     inception_resnet_v1.rst
     inception_resnet_v2.rst
 
@@ -22,7 +23,7 @@ classification tasks.
 
 This class serves as a foundation for specific versions like Inception-ResNet v1 and v2
 by providing essential components such as a stem network, convolutional layers, and
-fully connected layers.
+fully connected layers. It is configured through `InceptionResNetConfig`.
 
 .. mermaid::
     :name: Inception-ResNet
@@ -84,13 +85,14 @@ Class Signature
 .. code-block:: python
 
    class InceptionResNet(nn.Module):
-       def __init__(self, num_classes: int) -> None
+       def __init__(self, config: InceptionResNetConfig) -> None
 
 Parameters
 ----------
 
-- **num_classes** (*int*):
-  The number of output classes for the final classification layer.
+- **config** (*InceptionResNetConfig*):
+  A configuration object describing the selected variant, output class count,
+  input channels, and classifier dropout probability.
 
 Attributes
 ----------
