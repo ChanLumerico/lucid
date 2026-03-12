@@ -1,4 +1,5 @@
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     ItemsView,
@@ -10,6 +11,9 @@ from typing import (
     ValuesView,
     overload,
 )
+
+if TYPE_CHECKING:
+    from lucid.compile._compiled import CompiledCallable
 from collections import OrderedDict
 
 try:
@@ -198,6 +202,49 @@ class Module:
 
     def eval(self) -> Self:
         return self.train(mode=False)
+
+    def compile(
+        self,
+        *,
+        mode: str = "default",
+        dynamic: bool = False,
+        fullgraph: bool = False,
+    ) -> "CompiledCallable":
+        """Return a :class:`~lucid.compile.CompiledCallable` wrapping this module.
+
+        The compiled wrapper traces the forward pass on the first call,
+        applies graph optimisation passes, and caches the resulting
+        :class:`~lucid.compile._ir.IRGraph` keyed by input shapes.
+
+        Parameters
+        ----------
+        mode:
+            Optimisation level – ``"default"``, ``"reduce-overhead"``, or
+            ``"max-autotune"``.  See :func:`lucid.compile` for details.
+        dynamic:
+            When ``True`` shape changes silently trigger recompilation instead
+            of raising :class:`~lucid.compile.ShapeMismatchError`.
+        fullgraph:
+            Reserved for future use.
+
+        Returns
+        -------
+        CompiledCallable
+            A drop-in replacement for ``self`` that shares parameters and
+            buffers but benefits from graph-level optimisations.
+
+        Example
+        -------
+        ::
+
+            model = MyNet()
+            fast = model.compile(mode="reduce-overhead")
+            y = fast(x)
+            print(fast.stats)
+        """
+        from lucid.compile import compile as _compile
+
+        return _compile(self, mode=mode, dynamic=dynamic, fullgraph=fullgraph)
 
     def to(self, device: _DeviceType) -> Self:
         if device == self.device:

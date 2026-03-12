@@ -30,6 +30,7 @@ _GlobalFlag = bool
 
 USE_CPP_FUNC_OP: _GlobalFlag = False
 USE_BAKCWARD_FUSION: _GlobalFlag = True
+USE_COMPILE_TRACE: _GlobalFlag = True
 
 _CPP_USAGE: int = 0
 
@@ -59,6 +60,8 @@ import lucid.nn as nn
 import lucid.types as types
 import lucid.autograd as autograd
 import lucid.visual as visual
+import lucid.compile as compile
+from lucid.compile import compile as compile
 
 _grad_enabled: bool = True
 _flops_enabled: bool = False

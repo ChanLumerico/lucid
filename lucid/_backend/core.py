@@ -209,11 +209,35 @@ def _py_func_op(
                     except Exception:
                         pass
 
+            _emit_to_trace(op_self, tensors, results)
             return results if num_returns > 1 else results[0]
 
         return wrapper
 
     return decorator
+
+
+def _emit_to_trace(
+    op: "Operation",
+    input_tensors: "tuple",
+    results: "tuple",
+) -> None:
+    """Forward the current operation to the active :class:`TraceContext`, if any.
+
+    This is a thin shim that avoids importing ``lucid.compile`` at module load
+    time (preventing circular imports) while keeping the hot path cheap: a
+    single ``getattr`` on a :class:`threading.local` object, which is ``None``
+    in normal eager execution.
+    """
+    try:
+        from lucid.compile._trace import get_trace_context
+
+        ctx = get_trace_context()
+        if ctx is None:
+            return
+        ctx.record_op(op, input_tensors, results)
+    except Exception:
+        pass
 
 
 def _cpp_func_op(
