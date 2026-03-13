@@ -107,7 +107,7 @@
     Image Datasets <datasets/image/index.rst>
 
 .. toctree::
-    :maxdepth: 3
+    :maxdepth: 4
     :caption: Models
     :hidden:
 
