@@ -46,6 +46,7 @@ html_js_files = ["mermaid-zoom.js"]
 
 html_theme_options = {
     "accent_color": "indigo",
+    "toctree_maxdepth": 6,
 }
 
 # -- RST Epilogs -------------------------------------------------------------
