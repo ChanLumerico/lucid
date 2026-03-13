@@ -20,3 +20,4 @@ out/
 *.so
 
 .pytest_cache
+.claude/

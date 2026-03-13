@@ -39,8 +39,9 @@ class ForwardExecutor:
             if iv is not None and iv.live_tensor is not None:
                 value_map[vid] = iv.live_tensor
 
-        requires_grad_any = grad_enabled and any(
-            getattr(t, "requires_grad", False) for t in inputs
+        requires_grad_any = grad_enabled and (
+            any(getattr(t, "requires_grad", False) for t in inputs)
+            or any(getattr(t, "requires_grad", False) for t in param_map.values())
         )
 
         for node in plan.exec_order:
