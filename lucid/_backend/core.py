@@ -131,6 +131,41 @@ def _py_func_op(
 
             func_return_pairs = forward_func(op_self, *new_args, **kwargs)
 
+            try:
+                from lucid._jit.tracer import is_tracing, _get_active_tracer
+
+                if is_tracing():
+                    _tracer = _get_active_tracer()
+                    if _tracer is not None:
+                        _pairs = (
+                            func_return_pairs
+                            if isinstance(func_return_pairs, tuple)
+                            and isinstance(func_return_pairs[0], tuple)
+                            else (func_return_pairs,)
+                        )
+                        _out_tensors = tuple(p[0] for p in _pairs)
+                        _trace_tensors = tensors
+
+                        if op_self._inplace and inplace_target is not None:
+                            _trace_tensors = (
+                                tensors[: op_self._inplace_target]
+                                + (inplace_target,)
+                                + tensors[op_self._inplace_target + 1 :]
+                            )
+                        _tracer.record_op(
+                            op_self=op_self,
+                            input_tensors=_trace_tensors,
+                            output_tensors=_out_tensors,
+                            non_tensor_args=non_tensor_args,
+                            non_tensor_kwargs=kwargs,
+                            device=device,
+                            has_gradient=has_gradient,
+                            n_in=n_in,
+                            n_ret=n_ret,
+                        )
+            except ImportError:
+                pass
+
             tensor_refs = tuple(weakref.ref(t) for t in tensors)
 
             grad_enabled = lucid.grad_enabled()
