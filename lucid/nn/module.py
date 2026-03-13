@@ -37,6 +37,8 @@ from lucid.types import (
 
 import lucid.nn as nn
 
+from lucid._jit.api import JITModule
+
 __all__ = [
     "Module",
     "Sequential",
@@ -428,6 +430,9 @@ class Module:
 
         return output
 
+    def compile(self, **kwargs) -> JITModule:
+        return JITModule(self, **kwargs)
+
     def __repr__(self) -> str:
         extra = self.extra_repr()
         child_lines = []
@@ -439,10 +444,12 @@ class Module:
         main_str = self._get_name() + "("
         if extra:
             main_str += extra
+
         if child_lines:
             if extra:
                 main_str += "\n"
             main_str += "\n  " + "\n  ".join(child_lines) + "\n"
+
         main_str += ")"
         return main_str
 
