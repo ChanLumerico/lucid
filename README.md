@@ -28,6 +28,8 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
+- Added **JIT Compilation** system (`lucid.compile`) — trace-based graph compilation with automatic caching, optimization passes, and full training support. Achieves ~4x speedup on CPU and ~10x on MLX.
+
 - Implemented **Mask2Former** (Chang et al. 2022) `models.Mask2Former` with 8 variants.
     - Variants with Swin Transformer backbone has pre-trained weights: `weights.Mask2Former_Swin_{Tiny,Small,Base,Large}_Weights`
 

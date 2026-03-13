@@ -143,6 +143,15 @@
 
 .. toctree::
    :maxdepth: 1
+   :caption: Compilation
+   :hidden:
+
+   JIT Compilation <jit/index.rst>
+
+   jit/compile.rst
+
+.. toctree::
+   :maxdepth: 1
    :caption: Visualization
    :hidden:
 
