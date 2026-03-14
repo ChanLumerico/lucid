@@ -6,6 +6,8 @@ Image Segmentation Models
     :hidden:
 
     FCN <fcn/FCN.rst>
+    UNet <unet/UNet.rst>
+    ResUNet <unet/ResUNet.rst>
     Mask R-CNN <mask_rcnn/MaskRCNN.rst>
     MaskFormer <maskformer/MaskFormer.rst>
     Mask2Former <mask2former/Mask2Former.rst>
@@ -45,6 +47,39 @@ training.
       - :math:`(N,3,H,W)`
       - 54,314,346
       - ❌
+
+UNet Series
+-----------
+|convnet-badge| |segmentation-convnet-badge|
+
+U-Net is an encoder-decoder architecture for dense prediction that combines
+multi-scale feature extraction with skip connections between matching encoder
+and decoder stages. This implementation is configurable and can express a wide
+range of 2D segmentation variants by changing stage depth, channel widths,
+normalization, activation, skip merging, and sampling strategy.
+
+ Ronneberger, Olaf, Philipp Fischer, and Thomas Brox. "U-Net: Convolutional
+ Networks for Biomedical Image Segmentation." *Medical Image Computing and
+ Computer-Assisted Intervention* (2015): 234-241.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+
+    * - UNet
+      - `UNet <unet/UNet>`_
+      - :math:`(N,C,H,W)`
+      - *Variable*
+
+    * - ResUNet
+      - `ResUNet <unet/ResUNet>`_
+      - :math:`(N,C,H,W)`
+      - *Variable*
 
 Mask R-CNN
 ----------
