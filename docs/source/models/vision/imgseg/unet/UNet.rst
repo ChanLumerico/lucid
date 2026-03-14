@@ -1,5 +1,5 @@
-UNet
-====
+U-Net
+=====
 |convnet-badge| |segmentation-convnet-badge|
 
 .. toctree::

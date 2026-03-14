@@ -2,13 +2,6 @@ ResUNet
 ========
 |convnet-badge| |segmentation-convnet-badge|
 
-.. toctree::
-    :maxdepth: 1
-    :hidden:
-
-    UNetConfig.rst
-    UNetStageConfig.rst
-
 .. autoclass:: lucid.models.ResUNet
 
 `ResUNet` is a residual variant of :class:`lucid.models.UNet` that reuses the

@@ -48,8 +48,8 @@ training.
       - 54,314,346
       - ❌
 
-UNet Series
------------
+U-Net Series
+------------
 |convnet-badge| |segmentation-convnet-badge|
 
 U-Net is an encoder-decoder architecture for dense prediction that combines
@@ -71,7 +71,7 @@ normalization, activation, skip merging, and sampling strategy.
       - Input Shape
       - Parameter Count
 
-    * - UNet
+    * - U-Net
       - `UNet <unet/UNet>`_
       - :math:`(N,C,H,W)`
       - *Variable*
