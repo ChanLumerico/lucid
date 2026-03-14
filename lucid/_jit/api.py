@@ -1,4 +1,5 @@
 import functools
+import weakref
 from typing import Any, Callable, overload
 
 import lucid
@@ -8,9 +9,16 @@ from lucid._jit.passes import (
     DEFAULT_INFERENCE_PASSES,
     DEFAULT_TRAINING_PASSES,
 )
-from lucid._jit.executor import CompiledPlan, ForwardExecutor
+from lucid._jit.executor import (
+    CompiledPlan,
+    ForwardExecutor,
+    ForwardResult,
+    BackwardExecutor,
+)
 from lucid._jit.cache import PlanCache, CacheKey
 from lucid._tensor.tensor import Tensor
+from lucid._backend.core import BackwardOperation
+from lucid._jit.ir import IRGraph
 
 
 def _collect_tensor_inputs(args: tuple, kwargs: dict) -> tuple:
@@ -57,6 +65,52 @@ def _trace_and_compile(
     return CompiledPlan(graph, training=training)
 
 
+def _attach_compiled_backward(
+    outputs: tuple,
+    fwd_result: ForwardResult,
+    graph: IRGraph,
+) -> None:
+    leaf_tensors = [
+        fwd_result.value_map[vid]
+        for vid in fwd_result.leaf_vids
+        if fwd_result.value_map.get(vid) is not None
+        and getattr(fwd_result.value_map[vid], "requires_grad", False)
+    ]
+    leaf_refs = tuple(weakref.ref(t) for t in leaf_tensors)
+    leaf_versions = tuple(t._version for t in leaf_tensors)
+
+    for out_tensor, out_vid in zip(outputs, graph.output_ids):
+        if not getattr(out_tensor, "requires_grad", False):
+            continue
+
+        out_ref = weakref.ref(out_tensor)
+
+        def _make_closure(_out_ref, _out_vid, _fwd):
+            def _closure():
+                _out = _out_ref()
+                if _out is None or _out.grad is None:
+                    return
+                retain = getattr(_out, "keep_grad", False)
+                BackwardExecutor().execute(
+                    _fwd,
+                    output_vids=[_out_vid],
+                    output_upstream_grads={_out_vid: _out.grad},
+                    retain_grad=retain,
+                )
+
+            return _closure
+
+        out_tensor._prev = leaf_tensors
+        out_tensor._backward_op = BackwardOperation(
+            forward_op_ref=None,
+            grad_func=None,
+            tensor_refs=leaf_refs,
+            versions=leaf_versions,
+            device=None,
+            custom_closure=_make_closure(out_ref, out_vid, fwd_result),
+        )
+
+
 class JITFunction:
     def __init__(
         self,
@@ -81,7 +135,6 @@ class JITFunction:
         if plan is None:
             plan = _trace_and_compile(self._fn, args, kwargs, key)
             self._cache.put(key, plan)
-            return self._run_plan(plan, inputs, {}, lucid.grad_enabled())
 
         return self._run_plan(plan, inputs, {}, lucid.grad_enabled())
 
@@ -92,7 +145,11 @@ class JITFunction:
         param_map: dict,
         grad_enabled: bool,
     ) -> Any:
-        outputs = self._executor.execute(plan, inputs, param_map, grad_enabled)
+        outputs, fwd_result = self._executor.execute(
+            plan, inputs, param_map, grad_enabled
+        )
+        if fwd_result is not None:
+            _attach_compiled_backward(outputs, fwd_result, plan.graph)
         return outputs[0] if len(outputs) == 1 else outputs
 
     def invalidate_cache(self) -> None:
@@ -141,8 +198,13 @@ class JITModule:
                     args = result
 
         param_map = self._build_param_map(plan.graph)
-        outputs = self._executor.execute(plan, inputs, param_map, lucid.grad_enabled())
+        outputs, fwd_result = self._executor.execute(
+            plan, inputs, param_map, lucid.grad_enabled()
+        )
         output = outputs[0] if len(outputs) == 1 else outputs
+
+        if fwd_result is not None:
+            _attach_compiled_backward(outputs, fwd_result, plan.graph)
 
         for hook, with_kwargs in module._forward_hooks:
             if with_kwargs:
@@ -154,7 +216,7 @@ class JITModule:
 
         return output
 
-    def _build_param_map(self, graph) -> dict[int, Any]:
+    def _build_param_map(self, graph) -> dict:
         result = {}
         for vid in graph.param_ids:
             iv = graph.values.get(vid)

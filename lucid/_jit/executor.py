@@ -1,8 +1,7 @@
-import weakref
-from typing import Any
+from dataclasses import dataclass
 
+import lucid
 from lucid._jit.ir import IRGraph, IRNode
-from lucid._backend.core import BackwardOperation
 from lucid._tensor.tensor import Tensor as _Tensor
 
 
@@ -18,16 +17,85 @@ class CompiledPlan:
         )
 
 
+@dataclass
+class ForwardResult:
+    grad_func_map: dict
+    value_map: dict
+    exec_order: list
+    leaf_vids: frozenset
+    node_device_map: dict
+
+
+class BackwardExecutor:
+    def execute(
+        self,
+        forward_result: ForwardResult,
+        output_vids: list,
+        output_upstream_grads: dict,
+        retain_grad: bool = False,
+    ) -> None:
+        grad_map: dict = {}
+        for vid in output_vids:
+            g = output_upstream_grads.get(vid)
+            if g is None:
+                t = forward_result.value_map.get(vid)
+                if t is not None:
+                    g = t.grad
+            if g is not None:
+                grad_map[vid] = g
+
+        for node in reversed(forward_result.exec_order):
+            if not node.has_gradient:
+                continue
+
+            device = forward_result.node_device_map[node.node_id]
+
+            for out_id in node.output_ids:
+                upstream = grad_map.get(out_id)
+                if upstream is None:
+                    continue
+                grad_func = forward_result.grad_func_map.get(out_id)
+                if grad_func is None:
+                    continue
+
+                result_tensor = forward_result.value_map[out_id]
+                result_tensor.grad = upstream
+
+                raw_grads = grad_func()
+                if not isinstance(raw_grads, tuple):
+                    raw_grads = (raw_grads,)
+
+                for in_vid, g in zip(node.input_ids, raw_grads):
+                    if g is None:
+                        continue
+
+                    in_tensor = forward_result.value_map.get(in_vid)
+                    if in_tensor is None or not in_tensor.requires_grad:
+                        continue
+
+                    matched = lucid._match_grad_shape(in_tensor.data, g, device=device)
+                    if in_vid in forward_result.leaf_vids:
+                        lucid._set_tensor_grad(in_tensor, matched)
+                    else:
+                        existing = grad_map.get(in_vid)
+                        grad_map[in_vid] = (
+                            matched if existing is None else existing + matched
+                        )
+
+                if not retain_grad:
+                    result_tensor.grad = None
+
+
 class ForwardExecutor:
     def execute(
         self,
         plan: CompiledPlan,
         inputs: tuple,
-        param_map: dict[int, Any],
+        param_map: dict,
         grad_enabled: bool,
     ) -> tuple:
         graph = plan.graph
-        value_map: dict[int, Any] = {}
+        value_map: dict = {}
 
         for vid, tensor in zip(graph.input_ids, inputs):
             value_map[vid] = tensor
@@ -43,6 +111,9 @@ class ForwardExecutor:
             any(getattr(t, "requires_grad", False) for t in inputs)
             or any(getattr(t, "requires_grad", False) for t in param_map.values())
         )
+
+        build_backward = plan.training and requires_grad_any and grad_enabled
+        grad_func_map: dict = {}
 
         for node in plan.exec_order:
             input_tensors = tuple(value_map[vid] for vid in node.input_ids)
@@ -90,19 +161,21 @@ class ForwardExecutor:
             for out_id, (result_tensor, grad_func) in zip(node.output_ids, pairs):
                 result_tensor.requires_grad = result_needs_grad
 
-                if plan.training and result_needs_grad:
-                    tensor_refs = tuple(weakref.ref(t) for t in input_tensors)
-                    result_tensor._backward_op = BackwardOperation(
-                        forward_op_ref=weakref.ref(op),
-                        grad_func=grad_func,
-                        tensor_refs=tensor_refs,
-                        versions=tuple(t._version for t in input_tensors),
-                        device=node.device,
-                    )
-                    result_tensor._prev = list(input_tensors)
-                    result_tensor._op = op
+                if build_backward and result_needs_grad:
+                    grad_func_map[out_id] = grad_func
 
                 value_map[out_id] = result_tensor
 
         outputs = tuple(value_map[vid] for vid in graph.output_ids)
-        return outputs
+
+        fwd_result = None
+        if build_backward:
+            fwd_result = ForwardResult(
+                grad_func_map=grad_func_map,
+                value_map=value_map,
+                exec_order=plan.exec_order,
+                leaf_vids=frozenset(graph.input_ids) | graph.param_ids,
+                node_device_map={n.node_id: n.device for n in plan.exec_order},
+            )
+
+        return outputs, fwd_result
