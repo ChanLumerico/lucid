@@ -29,6 +29,7 @@ from .resnext import *
 from .senet import *
 from .sknet import *
 from .swin import *
+from .unet import *
 from .vgg import *
 from .vit import *
 from .xception import *
