@@ -6,7 +6,7 @@ Image Segmentation Models
     :hidden:
 
     FCN <fcn/FCN.rst>
-    UNet <unet/UNet.rst>
+    U-Net <unet/UNet.rst>
     ResUNet <unet/ResUNet.rst>
     Attention U-Net <attention_unet/AttentionUNet.rst>
     Mask R-CNN <mask_rcnn/MaskRCNN.rst>

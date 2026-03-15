@@ -920,7 +920,7 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l4"><a class="reference internal" href="../fcn/fcn_resnet_101.html">fcn_resnet_101</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../unet/UNet.html">UNet</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../unet/UNet.html">U-Net</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../unet/UNetConfig.html">UNetConfig</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../unet/UNetStageConfig.html">UNetStageConfig</a></li>
 </ul>
@@ -1185,7 +1185,7 @@ skip-merge behavior to match the Attention U-Net formulation.</p>
 </span><span data-line="7">    <span class="n">downsample_mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;conv&quot;</span><span class="p">,</span> <span class="s2">&quot;maxpool&quot;</span><span class="p">,</span> <span class="s2">&quot;avgpool&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;maxpool&quot;</span>
 </span><span data-line="8">    <span class="n">upsample_mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;transpose&quot;</span><span class="p">,</span> <span class="s2">&quot;bilinear&quot;</span><span class="p">,</span> <span class="s2">&quot;nearest&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;bilinear&quot;</span>
 </span><span data-line="9">    <span class="n">deep_supervision</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
-</span><span data-line="10">    <span class="n">attention</span><span class="p">:</span> <span class="n">AttentionGateConfig</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">AttentionGateConfig</span><span class="p">)</span>
+</span><span data-line="10">    <span class="n">attention</span><span class="p">:</span> <span class="n">AttentionUNetGateConfig</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">AttentionUNetGateConfig</span><span class="p">)</span>
 </span></pre></div>
 </div>
 </section>
@@ -1211,7 +1211,7 @@ operation used between encoder stages. The paper-style default is <cite>maxpool<
 operation used between decoder stages. The paper-style default is <cite>bilinear</cite>.</p></li>
 <li><p><strong>deep_supervision</strong> (<em>bool</em>): Whether to attach auxiliary output heads to
 intermediate decoder stages.</p></li>
-<li><p><strong>attention</strong> (<em>AttentionGateConfig</em>): Attention gate settings applied to
+<li><p><strong>attention</strong> (<em>AttentionUNetGateConfig</em>): Attention gate settings applied to
 decoder-side skip connections.</p></li>
 </ul>
 </section>
@@ -1233,7 +1233,7 @@ decoder-side skip connections.</p></li>
 </span><span data-line="5">    <span class="n">out_channels</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
 </span><span data-line="6">    <span class="n">channels</span><span class="o">=</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
 </span><span data-line="7">    <span class="n">num_blocks</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-</span><span data-line="8">    <span class="n">attention</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">AttentionGateConfig</span><span class="p">(</span>
+</span><span data-line="8">    <span class="n">attention</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">AttentionUNetGateConfig</span><span class="p">(</span>
 </span><span data-line="9">        <span class="n">inter_channels</span><span class="o">=</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
 </span><span data-line="10">    <span class="p">),</span>
 </span><span data-line="11"><span class="p">)</span>

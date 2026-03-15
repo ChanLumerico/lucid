@@ -22,7 +22,7 @@ Class Signature
         downsample_mode: Literal["conv", "maxpool", "avgpool"] = "maxpool"
         upsample_mode: Literal["transpose", "bilinear", "nearest"] = "bilinear"
         deep_supervision: bool = True
-        attention: AttentionGateConfig = field(default_factory=AttentionGateConfig)
+        attention: AttentionUNetGateConfig = field(default_factory=AttentionUNetGateConfig)
 
 Parameters
 ----------
@@ -46,7 +46,7 @@ Parameters
   operation used between decoder stages. The paper-style default is `bilinear`.
 - **deep_supervision** (*bool*): Whether to attach auxiliary output heads to
   intermediate decoder stages.
-- **attention** (*AttentionGateConfig*): Attention gate settings applied to
+- **attention** (*AttentionUNetGateConfig*): Attention gate settings applied to
   decoder-side skip connections.
 
 Inherited Parameters
@@ -69,7 +69,7 @@ Usage
         out_channels=3,
         channels=(32, 64, 128, 256),
         num_blocks=2,
-        attention=models.AttentionGateConfig(
+        attention=models.AttentionUNetGateConfig(
             inter_channels=(32, 64, 64),
         ),
     )
