@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.functional.interpolate - Lucid 2.15.5 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.rotate" href="rotate.html" /><link rel="prev" title="Utility Functions" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nn.functional.interpolate - Lucid 2.15.6 documentation</title><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="nn.functional.rotate" href="rotate.html" /><link rel="prev" title="Utility Functions" href="index.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/nn/functions/util/interpolate.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -920,15 +920,27 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/fcn/fcn_resnet_101.html">fcn_resnet_101</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../../../models/vision/imgseg/unet/UNet.html">U-Net</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../models/vision/imgseg/unet/index.html">U-Net</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/unet/UNetConfig.html">UNetConfig</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/unet/UNetStageConfig.html">UNetStageConfig</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/unet/UNet2d.html">U-Net 2D</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/unet/UNet3d.html">U-Net 3D</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../../../models/vision/imgseg/unet/ResUNet.html">ResUNet</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../../models/vision/imgseg/attention_unet/AttentionUNet.html">Attention U-Net</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../models/vision/imgseg/resunet/index.html">ResUNet</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/resunet/ResUNet2d.html">ResUNet 2D</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/resunet/ResUNet3d.html">ResUNet 3D</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../models/vision/imgseg/attention_unet/index.html">Attention U-Net</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/attention_unet/AttentionUNetConfig.html">AttentionUNetConfig</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/attention_unet/AttentionUNetGateConfig.html">AttentionUNetGateConfig</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/attention_unet/AttentionUNet2d.html">Attention U-Net 2D</a><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../../models/vision/imgseg/attention_unet/AttentionUNetConfig.html">AttentionUNetConfig</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../../models/vision/imgseg/attention_unet/AttentionUNetGateConfig.html">AttentionUNetGateConfig</a></li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="../../../models/vision/imgseg/attention_unet/AttentionUNet3d.html">Attention U-Net 3D</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../../models/vision/imgseg/mask_rcnn/MaskRCNN.html">Mask R-CNN</a><ul>
@@ -1165,17 +1177,21 @@ data-aria-dark="Switch to auto color mode">
 <h1>nn.functional.interpolate<a class="headerlink" href="#nn-functional-interpolate" title="Link to this heading">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="lucid.nn.functional.interpolate">
-<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">interpolate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'bilinear'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'nearest'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'area'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'bilinear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">align_corners</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.interpolate" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">lucid.nn.functional.</span></span><span class="sig-name descname"><span class="pre">interpolate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'bilinear'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'trilinear'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'nearest'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'area'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'bilinear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">align_corners</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></span><a class="headerlink" href="#lucid.nn.functional.interpolate" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <p>The <cite>interpolate</cite> function resizes an input tensor to a specified size using different
-interpolation modes. It supports multiple modes, including bilinear, nearest, and area
-interpolation.</p>
+interpolation modes. It supports both 2D image tensors <span class="math notranslate nohighlight">\((N, C, H, W)\)</span> and 3D
+volumetric tensors <span class="math notranslate nohighlight">\((N, C, D, H, W)\)</span>, with modes including bilinear, trilinear,
+nearest, and area interpolation.</p>
 <section id="function-signature">
 <h2>Function Signature<a class="headerlink" href="#function-signature" title="Link to this heading">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">def</span><span class="w"> </span><span class="nf">interpolate</span><span class="p">(</span>
-</span><span data-line="2">    <span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="n">align_corners</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span data-line="3"><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+</span><span data-line="2">    <span class="n">input_</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
+</span><span data-line="3">    <span class="n">size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+</span><span data-line="4">    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;bilinear&#39;</span><span class="p">,</span>
+</span><span data-line="5">    <span class="n">align_corners</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span data-line="6"><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </span></pre></div>
 </div>
 </section>
@@ -1183,25 +1199,26 @@ interpolation.</p>
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of shape <cite>(N, C, H, W)</cite>, where <cite>N</cite> is the batch size,
-<cite>C</cite> is the number of channels, <cite>H</cite> is the height, and <cite>W</cite> is the width.</p>
+<dt><strong>input_</strong> (<em>Tensor</em>):</dt><dd><p>The input tensor of shape <cite>(N, C, H, W)</cite> for 2D interpolation or
+<cite>(N, C, D, H, W)</cite> for 3D (trilinear) interpolation.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>size</strong> (<em>tuple[int, int]</em>):</dt><dd><p>The target output size as <cite>(height, width)</cite>.</p>
+<dt><strong>size</strong> (<em>tuple[int, int] | tuple[int, int, int]</em>):</dt><dd><p>The target output spatial size. Pass <cite>(height, width)</cite> for 2D modes or
+<cite>(depth, height, width)</cite> for trilinear mode.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt><strong>mode</strong> (<em>str</em>, optional):</dt><dd><p>The interpolation mode to use. Options are <cite>‘bilinear’</cite>, <cite>‘nearest’</cite>, and <cite>‘area’</cite>.
-Default is <cite>‘bilinear’</cite>.</p>
+<dt><strong>mode</strong> (<em>str</em>, optional):</dt><dd><p>The interpolation mode to use. Options are <cite>‘bilinear’</cite>, <cite>‘trilinear’</cite>,
+<cite>‘nearest’</cite>, and <cite>‘area’</cite>. Default is <cite>‘bilinear’</cite>.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt><strong>align_corners</strong> (<em>bool</em>, optional):</dt><dd><p>If True, aligns the corners of the input and output tensors.
-This parameter is only relevant for <cite>‘bilinear’</cite> mode. Default is False.</p>
+Relevant for <cite>‘bilinear’</cite> and <cite>‘trilinear’</cite> modes. Default is False.</p>
 </dd>
 </dl>
 </li>
@@ -1211,8 +1228,9 @@ This parameter is only relevant for <cite>‘bilinear’</cite> mode. Default is
 <h2>Returns<a class="headerlink" href="#returns" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
-<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> containing the result of the interpolation. The shape of the output tensor
-is <cite>(N, C, size[0], size[1])</cite>. If the input requires gradients,
+<dt><strong>Tensor</strong>:</dt><dd><p>A new <cite>Tensor</cite> containing the result of the interpolation. For 2D modes the
+output shape is <cite>(N, C, size[0], size[1])</cite>; for trilinear mode it is
+<cite>(N, C, size[0], size[1], size[2])</cite>. If the input requires gradients,
 the resulting tensor will also require gradients.</p>
 </dd>
 </dl>
@@ -1223,7 +1241,7 @@ the resulting tensor will also require gradients.</p>
 <h2>Forward Calculation<a class="headerlink" href="#forward-calculation" title="Link to this heading">¶</a></h2>
 <p>The forward calculation for the <cite>interpolate</cite> operation varies depending on the selected mode:</p>
 <ul>
-<li><p><strong>Bilinear Interpolation</strong>:</p>
+<li><p><strong>Bilinear Interpolation</strong> (2D):</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[\mathbf{out}_{ij} = (1 - h_{lerp}) (1 - w_{lerp}) \cdot \mathbf{I}_{top\_left}
@@ -1234,13 +1252,26 @@ the resulting tensor will also require gradients.</p>
 <p>Where <span class="math notranslate nohighlight">\(h_{lerp}\)</span> and <span class="math notranslate nohighlight">\(w_{lerp}\)</span> are the interpolation coefficients along
 the height and width dimensions.</p>
 </li>
+<li><p><strong>Trilinear Interpolation</strong> (3D):</p>
+<p>Linear interpolation extended to three spatial dimensions. For each output voxel,
+the eight surrounding input voxels are gathered and blended using three independent
+lerp weights <span class="math notranslate nohighlight">\(d_{lerp}\)</span>, <span class="math notranslate nohighlight">\(h_{lerp}\)</span>, <span class="math notranslate nohighlight">\(w_{lerp}\)</span>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathbf{out}_{ijk} = \sum_{a,b,c \;\in\; \{0,1\}}
+    w^{d}_{a} \cdot w^{h}_{b} \cdot w^{w}_{c}
+    \cdot \mathbf{I}_{d_a,\, h_b,\, w_c}\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(w^{d}_0 = 1 - d_{lerp}\)</span>,  <span class="math notranslate nohighlight">\(w^{d}_1 = d_{lerp}\)</span>, and similarly
+for the height and width axes.</p>
+</li>
 <li><p><strong>Nearest Neighbor Interpolation</strong>:</p>
 <p>The value from the nearest neighbor in the input is assigned to the corresponding
-location in the output.</p>
+location in the output. Supports both 4D and 5D input tensors.</p>
 </li>
 <li><p><strong>Area Interpolation</strong>:</p>
 <p>The output pixel is computed as the average of input values within
-the corresponding region.</p>
+the corresponding region (2D only).</p>
 </li>
 </ul>
 </section>
@@ -1252,6 +1283,8 @@ the gradients with respect to the output (<strong>out</strong>) are computed as 
 <ul class="simple">
 <li><p><strong>Bilinear Interpolation</strong>: Gradients are propagated back according to the interpolation
 weights used in the forward pass.</p></li>
+<li><p><strong>Trilinear Interpolation</strong>: Gradients are propagated back according to all eight
+corner weights, following the trilinear blending formula.</p></li>
 <li><p><strong>Nearest Neighbor Interpolation</strong>: The gradient is passed directly to the nearest neighbor
 used in the forward pass.</p></li>
 <li><p><strong>Area Interpolation</strong>: The gradient is distributed equally to all input pixels
@@ -1275,6 +1308,16 @@ that contributed to the corresponding output pixel.</p></li>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 </span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">input_</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
 </span><span data-line="3"><span class="go"># Gradient values corresponding to bilinear interpolation</span>
+</span></pre></div>
+</div>
+<p><strong>Using `interpolate` with trilinear interpolation:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+</span><span data-line="2"><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
+</span><span data-line="3"><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Shape: (1, 1, 2, 2, 2) — batch=1, channels=1, depth=2, height=2, width=2</span>
+</span><span data-line="4"><span class="gp">&gt;&gt;&gt; </span><span class="n">input_</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</span><span data-line="5"><span class="gp">&gt;&gt;&gt; </span><span class="n">out</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;trilinear&#39;</span><span class="p">)</span>  <span class="c1"># Shape: (1, 1, 4, 4, 4)</span>
+</span><span data-line="6"><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</span><span data-line="7"><span class="go">(1, 1, 4, 4, 4)</span>
 </span></pre></div>
 </div>
 <p><strong>Using `interpolate` with nearest neighbor interpolation:</strong></p>
@@ -1345,7 +1388,7 @@ that contributed to the corresponding output pixel.</p></li>
     </div>
   </div>
 </footer>
-      <script src="../../../_static/documentation_options.js?v=526af1f4"></script>
+      <script src="../../../_static/documentation_options.js?v=65927b9e"></script>
       <script src="../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../_static/design-tabs.js?v=f930bc37"></script>

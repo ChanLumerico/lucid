@@ -67,6 +67,132 @@ def _interpolate_bilinear(
     return interpolated
 
 
+def _interpolate_trilinear(
+    input_: Tensor, size: tuple[int, int, int], align_corners: bool = False
+) -> Tensor:
+    _, _, D, H, W = input_.shape
+    out_d, out_h, out_w = size
+    if (D, H, W) == (out_d, out_h, out_w):
+        return input_
+
+    device = input_.device
+    if align_corners:
+        indices_d = (
+            lucid.zeros((out_d,), dtype=lucid.Float32, device=device)
+            if out_d == 1
+            else lucid.arange(out_d, dtype=lucid.Float32, device=device)
+            * (D - 1)
+            / (out_d - 1)
+        )
+        indices_h = (
+            lucid.zeros((out_h,), dtype=lucid.Float32, device=device)
+            if out_h == 1
+            else lucid.arange(out_h, dtype=lucid.Float32, device=device)
+            * (H - 1)
+            / (out_h - 1)
+        )
+        indices_w = (
+            lucid.zeros((out_w,), dtype=lucid.Float32, device=device)
+            if out_w == 1
+            else lucid.arange(out_w, dtype=lucid.Float32, device=device)
+            * (W - 1)
+            / (out_w - 1)
+        )
+    else:
+        indices_d = (lucid.arange(out_d, dtype=lucid.Float32, device=device) + 0.5) * (
+            D / out_d
+        ) - 0.5
+        indices_h = (lucid.arange(out_h, dtype=lucid.Float32, device=device) + 0.5) * (
+            H / out_h
+        ) - 0.5
+        indices_w = (lucid.arange(out_w, dtype=lucid.Float32, device=device) + 0.5) * (
+            W / out_w
+        ) - 0.5
+
+    indices_d = indices_d.clip(0, D - 1)
+    indices_h = indices_h.clip(0, H - 1)
+    indices_w = indices_w.clip(0, W - 1)
+
+    d0_f = lucid.floor(indices_d)
+    h0_f = lucid.floor(indices_h)
+    w0_f = lucid.floor(indices_w)
+
+    d0 = d0_f.astype(lucid.Int)
+    d1 = (d0_f + 1).clip(0, D - 1).astype(lucid.Int)
+    h0 = h0_f.astype(lucid.Int)
+    h1 = (h0_f + 1).clip(0, H - 1).astype(lucid.Int)
+    w0 = w0_f.astype(lucid.Int)
+    w1 = (w0_f + 1).clip(0, W - 1).astype(lucid.Int)
+
+    d_lerp = indices_d - d0_f
+    h_lerp = indices_h - h0_f
+    w_lerp = indices_w - w0_f
+
+    c000 = input_[:, :, d0[:, None, None], h0[None, :, None], w0[None, None, :]]
+    c001 = input_[:, :, d0[:, None, None], h0[None, :, None], w1[None, None, :]]
+
+    c010 = input_[:, :, d0[:, None, None], h1[None, :, None], w0[None, None, :]]
+    c011 = input_[:, :, d0[:, None, None], h1[None, :, None], w1[None, None, :]]
+
+    c100 = input_[:, :, d1[:, None, None], h0[None, :, None], w0[None, None, :]]
+    c101 = input_[:, :, d1[:, None, None], h0[None, :, None], w1[None, None, :]]
+
+    c110 = input_[:, :, d1[:, None, None], h1[None, :, None], w0[None, None, :]]
+    c111 = input_[:, :, d1[:, None, None], h1[None, :, None], w1[None, None, :]]
+
+    c00 = c000 * (1 - w_lerp) + c001 * w_lerp
+    c01 = c010 * (1 - w_lerp) + c011 * w_lerp
+    c10 = c100 * (1 - w_lerp) + c101 * w_lerp
+    c11 = c110 * (1 - w_lerp) + c111 * w_lerp
+
+    c0 = c00 * (1 - h_lerp[:, None]) + c01 * h_lerp[:, None]
+    c1 = c10 * (1 - h_lerp[:, None]) + c11 * h_lerp[:, None]
+
+    return c0 * (1 - d_lerp[:, None, None]) + c1 * d_lerp[:, None, None]
+
+
+def _interpolate_nearest_3d(
+    input_: Tensor, size: tuple[int, int, int], align_corners: bool = False
+) -> Tensor:
+    _ = align_corners
+    _, _, D, H, W = input_.shape
+    device = input_.device
+    out_d, out_h, out_w = size
+
+    if (D, H, W) == (out_d, out_h, out_w):
+        return input_
+
+    indices_d = (
+        lucid.floor(
+            lucid.arange(out_d, dtype=lucid.Float32, device=device) * (D / out_d)
+        )
+        .clip(0, D - 1)
+        .astype(lucid.Int32)
+    )
+    indices_h = (
+        lucid.floor(
+            lucid.arange(out_h, dtype=lucid.Float32, device=device) * (H / out_h)
+        )
+        .clip(0, H - 1)
+        .astype(lucid.Int32)
+    )
+    indices_w = (
+        lucid.floor(
+            lucid.arange(out_w, dtype=lucid.Float32, device=device) * (W / out_w)
+        )
+        .clip(0, W - 1)
+        .astype(lucid.Int32)
+    )
+
+    return input_[
+        :,
+        :,
+        indices_d[:, None, None],
+        indices_h[None, :, None],
+        indices_w[None, None, :],
+    ]
+
+
 def _interpolate_nearest(
     input_: Tensor, size: tuple[int, int], align_corners: bool = False
 ) -> Tensor:

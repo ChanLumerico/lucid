@@ -2,8 +2,8 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Attention U-Net - Lucid 2.15.5 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="AttentionUNetConfig" href="AttentionUNetConfig.html" /><link rel="prev" title="ResUNet" href="../unet/ResUNet.html" />
-      <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/vision/imgseg/attention_unet/AttentionUNet.html" /><script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Attention U-Net 3D - Lucid 2.15.6 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="Mask R-CNN" href="../mask_rcnn/MaskRCNN.html" /><link rel="prev" title="Attention U-Net 2D" href="AttentionUNet2d.html" />
+      <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/vision/imgseg/attention_unet/AttentionUNet3d.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
   </script><link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=e1a1ceaf" />
@@ -22,8 +22,8 @@
 }
 </style>
     <meta property="og:type" content="website"/>
-  <meta property="og:url" content="https://chanlumerico.github.io/lucid/models/vision/imgseg/attention_unet/AttentionUNet.html"/>
-  <meta property="og:title" content="Attention U-Net"/>
+  <meta property="og:url" content="https://chanlumerico.github.io/lucid/models/vision/imgseg/attention_unet/AttentionUNet3d.html"/>
+  <meta property="og:title" content="Attention U-Net 3D"/>
     <meta name="twitter:card" content="summary"/>
   </head>
 <body><div class="sy-head">
@@ -920,15 +920,27 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l4"><a class="reference internal" href="../fcn/fcn_resnet_101.html">fcn_resnet_101</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../unet/UNet.html">U-Net</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../unet/index.html">U-Net</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../unet/UNetConfig.html">UNetConfig</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../unet/UNetStageConfig.html">UNetStageConfig</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../unet/UNet2d.html">U-Net 2D</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../unet/UNet3d.html">U-Net 3D</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../unet/ResUNet.html">ResUNet</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">Attention U-Net</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../resunet/index.html">ResUNet</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../resunet/ResUNet2d.html">ResUNet 2D</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../resunet/ResUNet3d.html">ResUNet 3D</a></li>
+</ul>
+</li>
+<li class="toctree-l3 current"><a class="reference internal" href="index.html">Attention U-Net</a><ul class="current">
 <li class="toctree-l4"><a class="reference internal" href="AttentionUNetConfig.html">AttentionUNetConfig</a></li>
 <li class="toctree-l4"><a class="reference internal" href="AttentionUNetGateConfig.html">AttentionUNetGateConfig</a></li>
+<li class="toctree-l4"><a class="reference internal" href="AttentionUNet2d.html">Attention U-Net 2D</a><ul>
+<li class="toctree-l5"><a class="reference internal" href="AttentionUNetConfig.html">AttentionUNetConfig</a></li>
+<li class="toctree-l5"><a class="reference internal" href="AttentionUNetGateConfig.html">AttentionUNetGateConfig</a></li>
+</ul>
+</li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">Attention U-Net 3D</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../mask_rcnn/MaskRCNN.html">Mask R-CNN</a><ul>
@@ -1081,11 +1093,11 @@ data-aria-dark="Switch to auto color mode">
       <i class="i-lucide close"></i>
     </button>
     <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#lucid.models.AttentionUNet"><code class="docutils literal notranslate"><span class="pre">AttentionUNet</span></code></a></li>
+<li><a class="reference internal" href="#lucid.models.AttentionUNet3d"><code class="docutils literal notranslate"><span class="pre">AttentionUNet3d</span></code></a></li>
 <li><a class="reference internal" href="#class-signature">Class Signature</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#methods">Methods</a><ul>
-<li><a class="reference internal" href="#lucid.models.AttentionUNet.forward"><code class="docutils literal notranslate">forward()</span></code></a></li>
+<li><a class="reference internal" href="#lucid.models.AttentionUNet3d.forward"><code class="docutils literal notranslate">forward()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
@@ -1115,8 +1127,12 @@ data-aria-dark="Switch to auto color mode">
         <span>/</span>
         <meta itemprop="position" content="3" />
       </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-        <strong itemprop="name">Attention U-Net</strong>
+        <a itemprop="item" href="index.html"><span itemprop="name">Attention U-Net</span></a>
+        <span>/</span>
         <meta itemprop="position" content="4" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <strong itemprop="name">Attention U-Net 3D</strong>
+        <meta itemprop="position" content="5" />
       </li></ol>
     <div class="xl:hidden ml-1">
       <button class="js-menu" aria-label="Show table of contents" type="button" aria-controls="rside"
@@ -1132,7 +1148,7 @@ data-aria-dark="Switch to auto color mode">
     <button
       type="button"
       class="js-copy px-3 py-1 inline-flex items-center gap-1"
-      data-url="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet.rst.txt"
+      data-url="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet3d.rst.txt"
     >
       <i class="i-lucide" data-icon="copy"></i>
       <span>Copy page</span>
@@ -1146,45 +1162,46 @@ data-aria-dark="Switch to auto color mode">
     <div role="presentation">
       <div class="flex flex-col" role="group">
         <button class="js-copy" type="button" role="menuitem"
-          data-url="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet.rst.txt">
+          data-url="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet3d.rst.txt">
           <span class="iconify-icon">
             <i class="i-lucide" data-icon="copy"></i>
           </span>
           <span>Copy page</span>
         </button>
-        <a role="menuitem" href="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet.rst.txt" target="_blank" rel="nofollow"><iconify-icon icon="bi:code-slash"></iconify-icon>
-            <span>View Source</span></a><a role="menuitem" href="https://chatgpt.com/?hints=search&q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
+        <a role="menuitem" href="https://chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet3d.rst.txt" target="_blank" rel="nofollow"><iconify-icon icon="bi:code-slash"></iconify-icon>
+            <span>View Source</span></a><a role="menuitem" href="https://chatgpt.com/?hints=search&q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet3d.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
           <iconify-icon icon="bi:openai"></iconify-icon>
           <span>Open in ChatGPT</span>
-        </a><a role="menuitem" href="https://claude.ai/new?q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
+        </a><a role="menuitem" href="https://claude.ai/new?q=Read%20https%3A//chanlumerico.github.io/lucid/_sources/models/vision/imgseg/attention_unet/AttentionUNet3d.rst.txt%20so%20I%20can%20ask%20questions%20about%20it." target="_blank" rel="nofollow">
           <iconify-icon icon="bi:claude"></iconify-icon>
           <span>Open in Claude</span>
         </a></div>
     </div>
   </div>
 </div><article class="yue" role="main">
-          <section id="attention-u-net">
-<h1>Attention U-Net<a class="headerlink" href="#attention-u-net" title="Link to this heading">¶</a></h1>
+          <section id="attention-u-net-3d">
+<h1>Attention U-Net 3D<a class="headerlink" href="#attention-u-net-3d" title="Link to this heading">¶</a></h1>
 <p><span class="badge convnet">ConvNet</span> <span class="badge segmentation_convnet">Segmentation ConvNet</span></p>
-<div class="toctree-wrapper compound">
-</div>
 <dl class="py class">
-<dt class="sig sig-object py" id="lucid.models.AttentionUNet">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">AttentionUNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="AttentionUNetConfig.html#lucid.models.AttentionUNetConfig" title="lucid.models.vision.attention_unet.AttentionUNetConfig"><span class="pre">AttentionUNetConfig</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.AttentionUNet" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.models.AttentionUNet3d">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lucid.models.</span></span><span class="sig-name descname"><span class="pre">AttentionUNet3d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="AttentionUNetConfig.html#lucid.models.AttentionUNetConfig" title="lucid.models.vision.attention_unet.AttentionUNetConfig"><span class="pre">AttentionUNetConfig</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lucid.models.AttentionUNet3d" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p><cite>AttentionUNet</cite> is a paper-faithful attention-gated variant of
-<a class="reference internal" href="../unet/UNet.html#lucid.models.UNet" title="lucid.models.UNet"><code class="xref py py-class docutils literal notranslate"><span class="pre">lucid.models.UNet</span></code></a>. It preserves the encoder-decoder segmentation
-structure of U-Net but inserts additive attention gates on skip connections so
-decoder-side gating features can suppress irrelevant encoder responses before
-concatenation.</p>
+<p><cite>AttentionUNet3d</cite> is a 3D attention-gated variant of
+<a class="reference internal" href="../unet/UNet3d.html#lucid.models.UNet3d" title="lucid.models.UNet3d"><code class="xref py py-class docutils literal notranslate"><span class="pre">lucid.models.UNet3d</span></code></a>. It extends the volumetric encoder-decoder
+structure with additive attention gates on skip connections, enabling
+decoder-side gating signals to suppress irrelevant encoder responses before
+concatenation — the same mechanism as <a class="reference internal" href="AttentionUNet2d.html#lucid.models.AttentionUNet2d" title="lucid.models.AttentionUNet2d"><code class="xref py py-class docutils literal notranslate"><span class="pre">lucid.models.AttentionUNet2d</span></code></a>
+but applied over <span class="math notranslate nohighlight">\((D, H, W)\)</span> spatial dimensions.</p>
+<p>Typical use cases include volumetric medical image segmentation (CT/MRI) where
+attention over 3D anatomical structures improves localization accuracy.</p>
 <blockquote>
 <div><p>Oktay, Ozan, et al. “Attention U-Net: Learning Where to Look for the
 Pancreas.” <em>arXiv preprint arXiv:1804.03999</em> (2018).</p>
 </div></blockquote>
 <section id="class-signature">
 <h2>Class Signature<a class="headerlink" href="#class-signature" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">class</span><span class="w"> </span><span class="nc">AttentionUNet</span><span class="p">(</span><span class="n">UNet</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="k">class</span><span class="w"> </span><span class="nc">AttentionUNet3d</span><span class="p">(</span><span class="n">UNet3d</span><span class="p">):</span>
 </span><span data-line="2">    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">AttentionUNetConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></pre></div>
 </div>
@@ -1194,20 +1211,22 @@ Pancreas.” <em>arXiv preprint arXiv:1804.03999</em> (2018).</p>
 <ul class="simple">
 <li><p><strong>config</strong> (<em>AttentionUNetConfig</em>):
 Attention U-Net configuration describing the encoder/decoder stage layout,
-skip-gating strategy, and segmentation output space.</p></li>
+skip-gating strategy, and segmentation output space. Set
+<cite>upsample_mode=”trilinear”</cite> for 3D-native upsampling; passing <cite>“bilinear”</cite>
+is also accepted and automatically remapped.</p></li>
 </ul>
 </section>
 <section id="methods">
 <h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
 <dl class="py method">
-<dt class="sig sig-object py" id="lucid.models.AttentionUNet.forward">
-<span class="sig-prename descclassname"><span class="pre">AttentionUNet.</span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.AttentionUNet.forward" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="lucid.models.AttentionUNet3d.forward">
+<span class="sig-prename descclassname"><span class="pre">AttentionUNet3d.</span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.AttentionUNet3d.forward" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p><strong>Build a Paper-Style Attention U-Net</strong></p>
+<p><strong>Build a Volumetric Attention U-Net</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid</span>
 </span><span data-line="2"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">models</span>
 </span><span data-line="3">
@@ -1216,16 +1235,18 @@ skip-gating strategy, and segmentation output space.</p></li>
 </span><span data-line="6">    <span class="n">out_channels</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
 </span><span data-line="7">    <span class="n">channels</span><span class="o">=</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
 </span><span data-line="8">    <span class="n">num_blocks</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-</span><span data-line="9"><span class="p">)</span>
-</span><span data-line="10"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">AttentionUNet</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
-</span><span data-line="11">
-</span><span data-line="12"><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span>
-</span><span data-line="13"><span class="n">out</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-</span><span data-line="14"><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;out&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
-</span><span data-line="15"><span class="nb">print</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;aux&quot;</span><span class="p">]))</span>
+</span><span data-line="9">    <span class="n">upsample_mode</span><span class="o">=</span><span class="s2">&quot;trilinear&quot;</span><span class="p">,</span>
+</span><span data-line="10"><span class="p">)</span>
+</span><span data-line="11"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">AttentionUNet3d</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+</span><span data-line="12">
+</span><span data-line="13"><span class="c1"># (batch, channels, depth, height, width)</span>
+</span><span data-line="14"><span class="n">x</span> <span class="o">=</span> <span class="n">lucid</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
+</span><span data-line="15"><span class="n">out</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</span><span data-line="16"><span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;out&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>  <span class="c1"># (1, 3, 32, 64, 64)</span>
+</span><span data-line="17"><span class="nb">print</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;aux&quot;</span><span class="p">]))</span>   <span class="c1"># 2</span>
 </span></pre></div>
 </div>
-<p><strong>Customize Gate Widths</strong></p>
+<p><strong>Customize Gate Widths for 3D</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="kn">import</span><span class="w"> </span><span class="nn">lucid.models</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">models</span>
 </span><span data-line="2">
 </span><span data-line="3"><span class="n">cfg</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">AttentionUNetConfig</span><span class="p">(</span>
@@ -1237,24 +1258,29 @@ skip-gating strategy, and segmentation output space.</p></li>
 </span><span data-line="9">        <span class="n">models</span><span class="o">.</span><span class="n">UNetStageConfig</span><span class="p">(</span><span class="n">channels</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">num_blocks</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
 </span><span data-line="10">        <span class="n">models</span><span class="o">.</span><span class="n">UNetStageConfig</span><span class="p">(</span><span class="n">channels</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">num_blocks</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
 </span><span data-line="11">    <span class="p">],</span>
-</span><span data-line="12">    <span class="n">attention</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">AttentionUNetGateConfig</span><span class="p">(</span>
-</span><span data-line="13">        <span class="n">inter_channels</span><span class="o">=</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
-</span><span data-line="14">    <span class="p">),</span>
-</span><span data-line="15"><span class="p">)</span>
-</span><span data-line="16"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">AttentionUNet</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+</span><span data-line="12">    <span class="n">upsample_mode</span><span class="o">=</span><span class="s2">&quot;trilinear&quot;</span><span class="p">,</span>
+</span><span data-line="13">    <span class="n">attention</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">AttentionUNetGateConfig</span><span class="p">(</span>
+</span><span data-line="14">        <span class="n">inter_channels</span><span class="o">=</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
+</span><span data-line="15">    <span class="p">),</span>
+</span><span data-line="16"><span class="p">)</span>
+</span><span data-line="17"><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">AttentionUNet3d</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
 </span></pre></div>
 </div>
 </section>
 <section id="notes">
 <h2>Notes<a class="headerlink" href="#notes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>The implementation is 2D-only and expects tensors with shape
-<span class="math notranslate nohighlight">\((N, C, H, W)\)</span>.</p></li>
+<li><p><cite>AttentionUNet3d</cite> expects volumetric tensors with shape
+<span class="math notranslate nohighlight">\((N, C, D, H, W)\)</span>. For 2D image inputs, use
+<a class="reference internal" href="AttentionUNet2d.html#lucid.models.AttentionUNet2d" title="lucid.models.AttentionUNet2d"><code class="xref py py-class docutils literal notranslate"><span class="pre">lucid.models.AttentionUNet2d</span></code></a>.</p></li>
+<li><p>The gate resampling mode follows <cite>AttentionUNetGateConfig.resample_mode</cite>.
+Passing <cite>“bilinear”</cite> is automatically remapped to <cite>“trilinear”</cite> inside the
+3D attention gate for compatibility with 2D configs.</p></li>
 <li><p>It is intentionally constrained to the paper-faithful setting:
 <cite>block=”basic”</cite>, <cite>skip_merge=”concat”</cite>, additive gates, sigmoid attention
 coefficients, and grid attention.</p></li>
 <li><p>The current default enables deep supervision, so
-<a class="reference internal" href="#lucid.models.AttentionUNet.forward" title="lucid.models.AttentionUNet.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">lucid.models.AttentionUNet.forward()</span></code></a> returns a dictionary with <cite>out</cite>
+<a class="reference internal" href="#lucid.models.AttentionUNet3d.forward" title="lucid.models.AttentionUNet3d.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">lucid.models.AttentionUNet3d.forward()</span></code></a> returns a dictionary with <cite>out</cite>
 and <cite>aux</cite> predictions unless <cite>deep_supervision=False</cite>.</p></li>
 </ul>
 </section>
@@ -1266,16 +1292,16 @@ and <cite>aux</cite> predictions unless <cite>deep_supervision=False</cite>.</p>
   </svg>
   <span>Back to top</span>
 </button><div class="navigation flex print:hidden"><div class="navigation-prev">
-    <a href="../unet/ResUNet.html">
+    <a href="AttentionUNet2d.html">
       <i class="i-lucide chevron-left"></i>
       <div class="page-info">
-        <span>Previous</span><div class="title">ResUNet</div></div>
+        <span>Previous</span><div class="title">Attention U-Net 2D</div></div>
     </a>
   </div><div class="navigation-next">
-    <a href="AttentionUNetConfig.html">
+    <a href="../mask_rcnn/MaskRCNN.html">
       <div class="page-info">
         <span>Next</span>
-        <div class="title">AttentionUNetConfig</div>
+        <div class="title">Mask R-CNN</div>
       </div>
       <i class="i-lucide chevron-right"></i>
     </a>
@@ -1300,7 +1326,7 @@ and <cite>aux</cite> predictions unless <cite>deep_supervision=False</cite>.</p>
     </div>
   </div>
 </footer>
-      <script src="../../../../_static/documentation_options.js?v=526af1f4"></script>
+      <script src="../../../../_static/documentation_options.js?v=65927b9e"></script>
       <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>

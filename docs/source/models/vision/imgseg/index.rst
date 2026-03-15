@@ -6,9 +6,9 @@ Image Segmentation Models
     :hidden:
 
     FCN <fcn/FCN.rst>
-    U-Net <unet/UNet.rst>
-    ResUNet <unet/ResUNet.rst>
-    Attention U-Net <attention_unet/AttentionUNet.rst>
+    U-Net <unet/index.rst>
+    ResUNet <resunet/index.rst>
+    Attention U-Net <attention_unet/index.rst>
     Mask R-CNN <mask_rcnn/MaskRCNN.rst>
     MaskFormer <maskformer/MaskFormer.rst>
     Mask2Former <mask2former/Mask2Former.rst>
@@ -49,14 +49,14 @@ training.
       - 54,314,346
       - ❌
 
-U-Net Series
-------------
+U-Net
+-----
 |convnet-badge| |segmentation-convnet-badge|
 
 U-Net is an encoder-decoder architecture for dense prediction that combines
 multi-scale feature extraction with skip connections between matching encoder
 and decoder stages. This implementation is configurable and can express a wide
-range of 2D segmentation variants by changing stage depth, channel widths,
+range of 2D and 3D segmentation variants by changing stage depth, channel widths,
 normalization, activation, skip merging, and sampling strategy.
 
  Ronneberger, Olaf, Philipp Fischer, and Thomas Brox. "U-Net: Convolutional
@@ -72,14 +72,36 @@ normalization, activation, skip merging, and sampling strategy.
       - Input Shape
       - Parameter Count
 
-    * - U-Net
-      - `UNet <unet/UNet>`_
+    * - U-Net 2D
+      - `UNet2d <unet/UNet2d>`_
       - :math:`(N,C,H,W)`
       - *Variable*
 
-    * - ResUNet
-      - `ResUNet <unet/ResUNet>`_
+    * - U-Net 3D
+      - `UNet3d <unet/UNet3d>`_
+      - :math:`(N,C,D,H,W)`
+      - *Variable*
+
+ResUNet
+-------
+|convnet-badge| |segmentation-convnet-badge|
+
+ResUNet is an encoder-decoder architecture for dense prediction that integrates 
+residual learning units with multi-scale feature extraction and skip connections. 
+By replacing standard convolutional blocks with shortcut connections, it facilitates 
+deeper network training and mitigates gradient vanishing. 
+
+ Zhang, Zhengxin, Qingjie Liu, and Yunhong Wang. "Road extraction by deep residual u-net." 
+ *IEEE Geoscience and Remote Sensing Letters* 15.5 (2018): 749-753.
+    
+    * - ResUNet 2D
+      - `ResUNet2d <resunet/ResUNet2d>`_
       - :math:`(N,C,H,W)`
+      - *Variable*
+
+    * - ResUNet 3D
+      - `ResUNet3d <resunet/ResUNet3d>`_
+      - :math:`(N,C,D,H,W)`
       - *Variable*
 
 Attention U-Net
@@ -103,9 +125,14 @@ preserving the familiar multi-scale segmentation pipeline.
       - Input Shape
       - Parameter Count
 
-    * - Attention U-Net
-      - `AttentionUNet <attention_unet/AttentionUNet>`_
+    * - Attention U-Net 2D
+      - `AttentionUNet2d <attention_unet/AttentionUNet2d>`_
       - :math:`(N,C,H,W)`
+      - *Variable*
+
+    * - Attention U-Net 3D
+      - `AttentionUNet3d <attention_unet/AttentionUNet3d>`_
+      - :math:`(N,C,D,H,W)`
       - *Variable*
 
 Mask R-CNN

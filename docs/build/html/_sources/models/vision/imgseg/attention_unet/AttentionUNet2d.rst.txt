@@ -1,5 +1,5 @@
-Attention U-Net
-===============
+Attention U-Net 2D
+==================
 |convnet-badge| |segmentation-convnet-badge|
 
 .. toctree::
@@ -9,13 +9,16 @@ Attention U-Net
     AttentionUNetConfig.rst
     AttentionUNetGateConfig.rst
 
-.. autoclass:: lucid.models.AttentionUNet
+.. autoclass:: lucid.models.AttentionUNet2d
 
-`AttentionUNet` is a paper-faithful attention-gated variant of
-:class:`lucid.models.UNet`. It preserves the encoder-decoder segmentation
+`AttentionUNet2d` is a paper-faithful attention-gated variant of
+:class:`lucid.models.UNet2d`. It preserves the encoder-decoder segmentation
 structure of U-Net but inserts additive attention gates on skip connections so
 decoder-side gating features can suppress irrelevant encoder responses before
 concatenation.
+
+For volumetric inputs with shape :math:`(N, C, D, H, W)`, see
+:class:`lucid.models.AttentionUNet3d`.
 
  Oktay, Ozan, et al. "Attention U-Net: Learning Where to Look for the
  Pancreas." *arXiv preprint arXiv:1804.03999* (2018).
@@ -25,7 +28,7 @@ Class Signature
 
 .. code-block:: python
 
-    class AttentionUNet(UNet):
+    class AttentionUNet2d(UNet2d):
         def __init__(self, config: AttentionUNetConfig) -> None
 
 Parameters
@@ -38,12 +41,12 @@ Parameters
 Methods
 -------
 
-.. automethod:: lucid.models.AttentionUNet.forward
+.. automethod:: lucid.models.AttentionUNet2d.forward
 
 Examples
 --------
 
-**Build a Paper-Style Attention U-Net**
+**Build a Paper-Style Attention U-Net 2D**
 
 .. code-block:: python
 
@@ -56,12 +59,12 @@ Examples
         channels=(32, 64, 128, 256),
         num_blocks=2,
     )
-    model = models.AttentionUNet(cfg)
+    model = models.AttentionUNet2d(cfg)
 
     x = lucid.random.randn(2, 1, 128, 128)
     out = model(x)
-    print(out["out"].shape)
-    print(len(out["aux"]))
+    print(out["out"].shape)  # (2, 3, 128, 128)
+    print(len(out["aux"]))   # 2
 
 **Customize Gate Widths**
 
@@ -82,16 +85,17 @@ Examples
             inter_channels=(32, 64, 64),
         ),
     )
-    model = models.AttentionUNet(cfg)
+    model = models.AttentionUNet2d(cfg)
 
 Notes
 -----
 
-- The implementation is 2D-only and expects tensors with shape
-  :math:`(N, C, H, W)`.
+- `AttentionUNet2d` expects image tensors with shape :math:`(N, C, H, W)`.
+  For 3D volumetric inputs :math:`(N, C, D, H, W)`, use
+  :class:`lucid.models.AttentionUNet3d`.
 - It is intentionally constrained to the paper-faithful setting:
   `block="basic"`, `skip_merge="concat"`, additive gates, sigmoid attention
   coefficients, and grid attention.
 - The current default enables deep supervision, so
-  :meth:`lucid.models.AttentionUNet.forward` returns a dictionary with `out`
+  :meth:`lucid.models.AttentionUNet2d.forward` returns a dictionary with `out`
   and `aux` predictions unless `deep_supervision=False`.

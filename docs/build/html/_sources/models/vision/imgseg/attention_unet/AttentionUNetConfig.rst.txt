@@ -4,9 +4,10 @@ AttentionUNetConfig
 .. autoclass:: lucid.models.AttentionUNetConfig
 
 `AttentionUNetConfig` extends :class:`lucid.models.UNetConfig` with
-paper-faithful attention gate settings for :class:`lucid.models.AttentionUNet`.
-It keeps the same configurable stage layout while constraining the block and
-skip-merge behavior to match the Attention U-Net formulation.
+paper-faithful attention gate settings for :class:`lucid.models.AttentionUNet2d`
+and :class:`lucid.models.AttentionUNet3d`. It keeps the same configurable stage
+layout while constraining the block and skip-merge behavior to match the
+Attention U-Net formulation.
 
 Class Signature
 ---------------
@@ -20,7 +21,7 @@ Class Signature
         act: Literal["relu", "leaky_relu", "gelu", "silu"] = "relu"
         skip_merge: Literal["concat"] = "concat"
         downsample_mode: Literal["conv", "maxpool", "avgpool"] = "maxpool"
-        upsample_mode: Literal["transpose", "bilinear", "nearest"] = "bilinear"
+        upsample_mode: Literal["transpose", "bilinear", "trilinear", "nearest"] = "bilinear"
         deep_supervision: bool = True
         attention: AttentionUNetGateConfig = field(default_factory=AttentionUNetGateConfig)
 
@@ -42,8 +43,9 @@ Parameters
   function used inside blocks and the stem.
 - **downsample_mode** (*Literal["conv", "maxpool", "avgpool"]*): Downsampling
   operation used between encoder stages. The paper-style default is `maxpool`.
-- **upsample_mode** (*Literal["transpose", "bilinear", "nearest"]*): Upsampling
-  operation used between decoder stages. The paper-style default is `bilinear`.
+- **upsample_mode** (*Literal["transpose", "bilinear", "trilinear", "nearest"]*):
+  Upsampling operation used between decoder stages. The paper-style 2D default
+  is `bilinear`; use `"trilinear"` for :class:`lucid.models.AttentionUNet3d`.
 - **deep_supervision** (*bool*): Whether to attach auxiliary output heads to
   intermediate decoder stages.
 - **attention** (*AttentionUNetGateConfig*): Attention gate settings applied to
@@ -60,6 +62,8 @@ Inherited Parameters
 Usage
 -----
 
+**2D (image segmentation)**
+
 .. code-block:: python
 
     import lucid.models as models
@@ -74,4 +78,23 @@ Usage
         ),
     )
 
-    model = models.AttentionUNet(cfg)
+    model = models.AttentionUNet2d(cfg)
+
+**3D (volumetric segmentation)**
+
+.. code-block:: python
+
+    import lucid.models as models
+
+    cfg = models.AttentionUNetConfig.from_channels(
+        in_channels=1,
+        out_channels=3,
+        channels=(32, 64, 128, 256),
+        num_blocks=2,
+        upsample_mode="trilinear",
+        attention=models.AttentionUNetGateConfig(
+            inter_channels=(32, 64, 64),
+        ),
+    )
+
+    model = models.AttentionUNet3d(cfg)

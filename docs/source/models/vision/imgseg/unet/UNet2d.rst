@@ -1,28 +1,24 @@
-U-Net
-=====
+U-Net 2D
+========
 |convnet-badge| |segmentation-convnet-badge|
 
-.. toctree::
-    :maxdepth: 1
-    :hidden:
+.. autoclass:: lucid.models.UNet2d
 
-    UNetConfig.rst
-    UNetStageConfig.rst
-
-.. autoclass:: lucid.models.UNet
-
-`UNet` is a configurable 2D encoder-decoder segmentation model with skip
+`UNet2d` is a configurable 2D encoder-decoder segmentation model with skip
 connections between encoder and decoder stages. The implementation supports
 custom stage widths and depths, optional per-stage attention, different
 normalization and activation choices, multiple downsampling and upsampling
 strategies, and optional deep supervision heads.
+
+For volumetric inputs with shape :math:`(N, C, D, H, W)`, see
+:class:`lucid.models.UNet3d`.
 
 Class Signature
 ---------------
 
 .. code-block:: python
 
-    class UNet(nn.Module):
+    class UNet2d(nn.Module):
         def __init__(self, config: UNetConfig) -> None
 
 Parameters
@@ -35,12 +31,12 @@ Parameters
 Methods
 -------
 
-.. automethod:: lucid.models.UNet.forward
+.. automethod:: lucid.models.UNet2d.forward
 
 Examples
 --------
 
-**Build a Basic U-Net**
+**Build a Basic U-Net 2D**
 
 .. code-block:: python
 
@@ -54,13 +50,13 @@ Examples
         num_blocks=2,
         block="basic",
     )
-    model = models.UNet(cfg)
+    model = models.UNet2d(cfg)
 
     x = lucid.random.randn(1, 3, 256, 256)
     logits = model(x)
-    print(logits.shape)
+    print(logits.shape)  # (1, 1, 256, 256)
 
-**Build a Residual U-Net with Deep Supervision**
+**Build a Residual U-Net 2D with Deep Supervision**
 
 .. code-block:: python
 
@@ -82,20 +78,21 @@ Examples
         upsample_mode="bilinear",
         deep_supervision=True,
     )
-    model = models.UNet(cfg)
+    model = models.UNet2d(cfg)
 
     x = lucid.random.randn(2, 3, 256, 256)
     out = model(x)
-    print(out["out"].shape)
-    print(len(out["aux"]))
+    print(out["out"].shape)   # (2, 4, 256, 256)
+    print(len(out["aux"]))    # 2
 
 Notes
 -----
 
-- The current implementation is 2D-only and expects image tensors with shape
-  :math:`(N, C, H, W)`.
+- `UNet2d` expects image tensors with shape :math:`(N, C, H, W)`.
+  For 3D volumetric inputs :math:`(N, C, D, H, W)`, use
+  :class:`lucid.models.UNet3d`.
 - The current implementation supports `block="basic"` and `block="res"`.
   Although the config type reserves `convnext`, that block is not implemented yet.
-- When `deep_supervision=False`, :meth:`lucid.models.UNet.forward` returns a
+- When `deep_supervision=False`, :meth:`lucid.models.UNet2d.forward` returns a
   single output tensor. When enabled, it returns a dictionary with `out` and
   `aux` predictions.

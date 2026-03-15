@@ -441,19 +441,23 @@ def huber_loss(
     return _loss.huber_loss(input_, target, delta, reduction)
 
 
-_InterpolateType = Literal["bilinear", "nearest", "area"]
+_InterpolateType = Literal["bilinear", "trilinear", "nearest", "area"]
 
 
 def interpolate(
     input_: Tensor,
-    size: tuple[int, int],
+    size: tuple[int, int] | tuple[int, int, int],
     mode: _InterpolateType = "bilinear",
     align_corners: bool = False,
 ) -> Tensor:
     match mode:
         case "bilinear":
             return _utils._interpolate_bilinear(input_, size, align_corners)
+        case "trilinear":
+            return _utils._interpolate_trilinear(input_, size, align_corners)
         case "nearest":
+            if input_.ndim == 5:
+                return _utils._interpolate_nearest_3d(input_, size, align_corners)
             return _utils._interpolate_nearest(input_, size, align_corners)
         case "area":
             return _utils._interpolate_area(input_, size, align_corners)

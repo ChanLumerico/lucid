@@ -9,7 +9,14 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
-__all__ = ["UNetConfig", "UNetStageConfig", "UNet", "ResUNet"]
+__all__ = [
+    "UNetConfig",
+    "UNetStageConfig",
+    "UNet2d",
+    "ResUNet2d",
+    "UNet3d",
+    "ResUNet3d",
+]
 
 
 @dataclass
@@ -41,7 +48,7 @@ _UNetBlockName = Literal["basic", "res", "convnext"]
 _UNetSkipMerge = Literal["concat", "add"]
 
 _UNetDownsample = Literal["conv", "maxpool", "avgpool"]
-_UNetUpsample = Literal["transpose", "bilinear", "nearest"]
+_UNetUpsample = Literal["transpose", "bilinear", "trilinear", "nearest"]
 
 
 @dataclass
@@ -402,7 +409,247 @@ class _Upsample(nn.Module):
         return x
 
 
-class UNet(nn.Module):
+def _make_norm3d(norm: _UNetNormName, channels: int) -> nn.Module:
+    if norm == "batch":
+        return nn.BatchNorm3d(channels)
+    if norm == "instance":
+        return nn.InstanceNorm3d(channels)
+    if norm == "group":
+        num_groups = min(32, channels)
+        while channels % num_groups != 0:
+            num_groups -= 1
+        return nn.GroupNorm(num_groups, channels)
+    if norm == "none":
+        return nn.Identity()
+
+    raise ValueError(f"Unsupported norm: '{norm}'")
+
+
+class _BasicBlock3d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        *,
+        kernel_size: int,
+        dilation: int,
+        norm: _UNetNormName,
+        act: _UNetActName,
+        dropout: float,
+        bias: bool,
+    ) -> None:
+        super().__init__()
+        padding = _same_padding(kernel_size, dilation)
+        self.block = nn.Sequential(
+            nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel_size,
+                padding=padding,
+                dilation=dilation,
+                bias=bias,
+            ),
+            _make_norm3d(norm, out_channels),
+            _make_act(act),
+            nn.Dropout3d(dropout) if dropout > 0.0 else nn.Identity(),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.block(x)
+
+
+class _ResBlock3d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        *,
+        kernel_size: int,
+        dilation: int,
+        norm: _UNetNormName,
+        act: _UNetActName,
+        dropout: float,
+        bias: bool,
+    ) -> None:
+        super().__init__()
+        padding = _same_padding(kernel_size, dilation)
+
+        self.norm1 = _make_norm3d(norm, in_channels)
+        self.act1 = _make_act(act)
+        self.conv1 = nn.Conv3d(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
+
+        self.norm2 = _make_norm3d(norm, out_channels)
+        self.act2 = _make_act(act)
+        self.dropout = nn.Dropout3d(dropout) if dropout > 0.0 else nn.Identity()
+        self.conv2 = nn.Conv3d(
+            out_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
+
+        self.shortcut = (
+            nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=bias)
+            if in_channels != out_channels
+            else nn.Identity()
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        h = self.conv1(self.act1(self.norm1(x)))
+        h = self.conv2(self.dropout(self.act2(self.norm2(h))))
+        return h + self.shortcut(x)
+
+
+class _SelfAttention3d(nn.Module):
+    def __init__(self, channels: int, *, norm: _UNetNormName, bias: bool) -> None:
+        super().__init__()
+        self.norm = _make_norm3d(norm, channels)
+        self.qkv = nn.Conv3d(channels, channels * 3, kernel_size=1, bias=bias)
+        self.proj = nn.Conv3d(channels, channels, kernel_size=1, bias=bias)
+
+    def forward(self, x: Tensor) -> Tensor:
+        b, c, d, h, w = x.shape
+        q, k, v = self.qkv(self.norm(x)).chunk(3, axis=1)
+
+        q = q.reshape(b, c, d * h * w)
+        k = k.reshape(b, c, d * h * w)
+        v = v.reshape(b, c, d * h * w)
+
+        attn = (q.mT @ k) / math.sqrt(c)
+        attn = F.softmax(attn, axis=-1)
+
+        out = v @ attn.mT
+        out = out.reshape(b, c, d, h, w)
+
+        return x + self.proj(out)
+
+
+class _UNetStage3d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        stage_config: UNetStageConfig,
+        *,
+        block: _UNetBlockName,
+        norm: _UNetNormName,
+        act: _UNetActName,
+        bias: bool,
+    ) -> None:
+        super().__init__()
+        if block == "basic":
+            block_cls = _BasicBlock3d
+        elif block == "res":
+            block_cls = _ResBlock3d
+        else:
+            raise ValueError(
+                f"Unsupported block type: {block}.",
+                "This implementation supports only 'basic' and 'res'.",
+            )
+
+        layers = []
+        cur_channels = in_channels
+        for _ in range(stage_config.num_blocks):
+            layers.append(
+                block_cls(
+                    cur_channels,
+                    stage_config.channels,
+                    kernel_size=stage_config.kernel_size,
+                    dilation=stage_config.dilation,
+                    norm=norm,
+                    act=act,
+                    dropout=stage_config.dropout,
+                    bias=bias,
+                )
+            )
+            cur_channels = stage_config.channels
+
+        self.blocks = nn.Sequential(*layers)
+        self.attn = (
+            _SelfAttention3d(stage_config.channels, norm=norm, bias=bias)
+            if stage_config.use_attention
+            else nn.Identity()
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.blocks(x)
+        x = self.attn(x)
+        return x
+
+
+class _Downsample3d(nn.Module):
+    def __init__(self, channels: int, mode: _UNetDownsample, *, bias: bool) -> None:
+        super().__init__()
+        if mode == "conv":
+            self.op = nn.Conv3d(
+                channels, channels, kernel_size=3, stride=2, padding=1, bias=bias
+            )
+        elif mode == "maxpool":
+            self.op = nn.MaxPool3d(kernel_size=2, stride=2)
+        elif mode == "avgpool":
+            self.op = nn.AvgPool3d(kernel_size=2, stride=2)
+        else:
+            raise ValueError(f"Unsupported downsample mode: '{mode}'")
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.op(x)
+
+
+class _Upsample3d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        mode: _UNetUpsample,
+        *,
+        align_corners: bool,
+        bias: bool,
+    ) -> None:
+        super().__init__()
+        if mode == "bilinear":
+            mode = "trilinear"
+        self.mode = mode
+        self.align_corners = align_corners
+
+        if mode == "transpose":
+            self.op = nn.ConvTranspose3d(
+                in_channels, out_channels, kernel_size=2, stride=2, bias=bias
+            )
+        elif mode in {"trilinear", "nearest"}:
+            self.op = nn.Sequential(
+                nn.Upsample(
+                    scale_factor=2,
+                    mode=mode,
+                    align_corners=align_corners if mode == "trilinear" else False,
+                ),
+                nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=bias),
+            )
+        else:
+            raise ValueError(f"Unsupported upsample mode for 3D: '{mode}'")
+
+    def forward(
+        self, x: Tensor, target_size: tuple[int, int, int] | None = None
+    ) -> Tensor:
+        x = self.op(x)
+        if target_size is not None and target_size != x.shape[-3:]:
+            x = F.interpolate(
+                x,
+                size=target_size,
+                mode="trilinear",
+                align_corners=self.align_corners,
+            )
+        return x
+
+
+class UNet2d(nn.Module):
     def __init__(self, config: UNetConfig) -> None:
         super().__init__()
         self.config = config
@@ -560,7 +807,177 @@ class UNet(nn.Module):
         return out
 
 
-class ResUNet(UNet):
+class ResUNet2d(UNet2d):
+    def __init__(self, config: UNetConfig) -> None:
+        if config.block != "res":
+            config = replace(config, block="res")
+        super().__init__(config)
+
+
+class UNet3d(nn.Module):
+    def __init__(self, config: UNetConfig) -> None:
+        super().__init__()
+        self.config = config
+
+        stem_channels = (
+            config.stem_channels
+            if config.stem_channels is not None
+            else config.encoder_stages[0].channels
+        )
+        head_padding = _same_padding(config.final_kernel_size)
+
+        self.stem = nn.Sequential(
+            nn.Conv3d(
+                config.in_channels,
+                stem_channels,
+                kernel_size=3,
+                padding=1,
+                bias=config.bias,
+            ),
+            _make_norm3d(config.norm, stem_channels),
+            _make_act(config.act),
+        )
+        self.encoder = nn.ModuleList()
+        self.downsamplers = nn.ModuleList()
+
+        cur_channels = stem_channels
+        for idx, stage_cfg in enumerate(config.encoder_stages):
+            self.encoder.append(
+                _UNetStage3d(
+                    cur_channels,
+                    stage_cfg,
+                    block=config.block,
+                    norm=config.norm,
+                    act=config.act,
+                    bias=config.bias,
+                )
+            )
+            cur_channels = stage_cfg.channels
+
+            if idx < len(config.encoder_stages) - 1:
+                self.downsamplers.append(
+                    _Downsample3d(
+                        cur_channels, config.downsample_mode, bias=config.bias
+                    )
+                )
+
+        self.bottleneck = _UNetStage3d(
+            cur_channels,
+            config.bottleneck,
+            block=config.block,
+            norm=config.norm,
+            act=config.act,
+            bias=config.bias,
+        )
+        cur_channels = config.bottleneck.channels
+
+        self.upsamplers = nn.ModuleList()
+        self.decoder = nn.ModuleList()
+
+        skip_channels = [stage.channels for stage in config.encoder_stages[:-1]]
+        reversed_skip_channels = list(reversed(skip_channels))
+
+        for dec_cfg, skip_ch in zip(config.decoder_stages, reversed_skip_channels):
+            self.upsamplers.append(
+                _Upsample3d(
+                    cur_channels,
+                    dec_cfg.channels,
+                    config.upsample_mode,
+                    align_corners=config.align_corners,
+                    bias=config.bias,
+                )
+            )
+
+            stage_in_channels = (
+                dec_cfg.channels + skip_ch
+                if config.skip_merge == "concat"
+                else dec_cfg.channels
+            )
+
+            self.decoder.append(
+                _UNetStage3d(
+                    stage_in_channels,
+                    dec_cfg,
+                    block=config.block,
+                    norm=config.norm,
+                    act=config.act,
+                    bias=config.bias,
+                )
+            )
+            cur_channels = dec_cfg.channels
+
+        self.head = nn.Conv3d(
+            cur_channels,
+            config.out_channels,
+            kernel_size=config.final_kernel_size,
+            padding=head_padding,
+            bias=True,
+        )
+
+        self.aux_heads = nn.ModuleList()
+        if config.deep_supervision:
+            for dec_cfg in config.decoder_stages[:-1]:
+                self.aux_heads.append(
+                    nn.Conv3d(
+                        dec_cfg.channels, config.out_channels, kernel_size=1, bias=True
+                    )
+                )
+
+    def _merge_skip(self, x: Tensor, skip: Tensor) -> Tensor:
+        if self.config.skip_merge == "concat":
+            return lucid.concatenate([x, skip], axis=1)
+        if self.config.skip_merge == "add":
+            return x + skip
+        raise ValueError(f"Unsupported skip_merge: '{self.config.skip_merge}'")
+
+    def _resize_to_input(self, x: Tensor, input_size: tuple[int, int, int]) -> Tensor:
+        if x.shape[-3:] == input_size:
+            return x
+        return F.interpolate(
+            x,
+            size=input_size,
+            mode="trilinear",
+            align_corners=self.config.align_corners,
+        )
+
+    def forward(self, x: Tensor) -> Tensor | dict[str, Tensor | list[Tensor]]:
+        input_size = x.shape[-3:]
+        x = self.stem(x)
+
+        skips: list[Tensor] = []
+        for idx, stage in enumerate(self.encoder):
+            x = stage(x)
+            skips.append(x)
+
+            if idx < len(self.downsamplers):
+                x = self.downsamplers[idx](x)
+
+        x = self.bottleneck(x)
+
+        aux_outputs: list[Tensor] = []
+        decode_skips = list(reversed(skips[:-1]))
+
+        for idx, (upsample, stage, skip) in enumerate(
+            zip(self.upsamplers, self.decoder, decode_skips)
+        ):
+            x = upsample(x, target_size=skip.shape[-3:])
+            x = self._merge_skip(x, skip)
+            x = stage(x)
+
+            if self.config.deep_supervision and idx < len(self.aux_heads):
+                aux = self.aux_heads[idx](x)
+                aux_outputs.append(self._resize_to_input(aux, input_size))
+
+        out = self.head(x)
+        out = self._resize_to_input(out, input_size)
+
+        if self.config.deep_supervision:
+            return {"out": out, "aux": aux_outputs}
+
+        return out
+
+
+class ResUNet3d(UNet3d):
     def __init__(self, config: UNetConfig) -> None:
         if config.block != "res":
             config = replace(config, block="res")

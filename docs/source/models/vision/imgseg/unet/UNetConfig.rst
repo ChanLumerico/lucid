@@ -4,9 +4,9 @@ UNetConfig
 .. autoclass:: lucid.models.UNetConfig
 
 `UNetConfig` stores the architectural choices used by
-:class:`lucid.models.UNet`. It defines the stage layout for the encoder and
-decoder along with block type, normalization, activation, skip merge behavior,
-sampling strategy, and output head options.
+:class:`lucid.models.UNet2d` and :class:`lucid.models.UNet3d`. It defines the
+stage layout for the encoder and decoder along with block type, normalization,
+activation, skip merge behavior, sampling strategy, and output head options.
 
 Class Signature
 ---------------
@@ -25,7 +25,7 @@ Class Signature
         act: Literal["relu", "leaky_relu", "gelu", "silu"] = "relu"
         skip_merge: Literal["concat", "add"] = "concat"
         downsample_mode: Literal["conv", "maxpool", "avgpool"] = "conv"
-        upsample_mode: Literal["transpose", "bilinear", "nearest"] = "transpose"
+        upsample_mode: Literal["transpose", "bilinear", "trilinear", "nearest"] = "transpose"
         stem_channels: int | None = None
         final_kernel_size: int = 1
         deep_supervision: bool = False
@@ -54,8 +54,9 @@ Parameters
 - **skip_merge** (*Literal["concat", "add"]*): Skip connection merge strategy.
 - **downsample_mode** (*Literal["conv", "maxpool", "avgpool"]*): Downsampling
   operation used between encoder stages.
-- **upsample_mode** (*Literal["transpose", "bilinear", "nearest"]*): Upsampling
-  operation used between decoder stages.
+- **upsample_mode** (*Literal["transpose", "bilinear", "trilinear", "nearest"]*):
+  Upsampling operation used between decoder stages. Use `"trilinear"` (or
+  `"bilinear"`, which is automatically remapped) for :class:`lucid.models.UNet3d`.
 - **stem_channels** (*int | None*): Output width of the input stem. If `None`,
   the first encoder stage width is used.
 - **final_kernel_size** (*int*): Kernel size of the final output projection.
@@ -83,4 +84,4 @@ Usage
         upsample_mode="bilinear",
     )
 
-    model = models.UNet(cfg)
+    model = models.UNet2d(cfg)
