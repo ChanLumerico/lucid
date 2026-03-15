@@ -93,7 +93,11 @@ deeper network training and mitigates gradient vanishing.
 
  Zhang, Zhengxin, Qingjie Liu, and Yunhong Wang. "Road extraction by deep residual u-net." 
  *IEEE Geoscience and Remote Sensing Letters* 15.5 (2018): 749-753.
-    
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
     * - ResUNet 2D
       - `ResUNet2d <resunet/ResUNet2d>`_
       - :math:`(N,C,H,W)`

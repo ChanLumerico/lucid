@@ -2,13 +2,6 @@ Attention U-Net 2D
 ==================
 |convnet-badge| |segmentation-convnet-badge|
 
-.. toctree::
-    :maxdepth: 1
-    :hidden:
-
-    AttentionUNetConfig.rst
-    AttentionUNetGateConfig.rst
-
 .. autoclass:: lucid.models.AttentionUNet2d
 
 `AttentionUNet2d` is a paper-faithful attention-gated variant of
