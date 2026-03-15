@@ -8,6 +8,7 @@ Image Segmentation Models
     FCN <fcn/FCN.rst>
     UNet <unet/UNet.rst>
     ResUNet <unet/ResUNet.rst>
+    Attention U-Net <attention_unet/AttentionUNet.rst>
     Mask R-CNN <mask_rcnn/MaskRCNN.rst>
     MaskFormer <maskformer/MaskFormer.rst>
     Mask2Former <mask2former/Mask2Former.rst>
@@ -78,6 +79,32 @@ normalization, activation, skip merging, and sampling strategy.
 
     * - ResUNet
       - `ResUNet <unet/ResUNet>`_
+      - :math:`(N,C,H,W)`
+      - *Variable*
+
+Attention U-Net
+---------------
+|convnet-badge| |segmentation-convnet-badge|
+
+Attention U-Net extends the encoder-decoder structure of U-Net with additive
+attention gates on skip connections. Decoder-side gating signals suppress
+irrelevant encoder responses before concatenation, improving localization while
+preserving the familiar multi-scale segmentation pipeline.
+
+ Oktay, Ozan, et al. "Attention U-Net: Learning Where to Look for the
+ Pancreas." *arXiv preprint arXiv:1804.03999* (2018).
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+
+    * - Attention U-Net
+      - `AttentionUNet <attention_unet/AttentionUNet>`_
       - :math:`(N,C,H,W)`
       - *Variable*
 

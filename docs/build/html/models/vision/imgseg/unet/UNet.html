@@ -2,7 +2,7 @@
 <html lang="en" data-accent-color="indigo" data-content_root="../../../../">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>U-Net - Lucid 2.15.3 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="UNetConfig" href="UNetConfig.html" /><link rel="prev" title="fcn_resnet_101" href="../fcn/fcn_resnet_101.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>U-Net - Lucid 2.15.4 documentation</title><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" /><link rel="next" title="UNetConfig" href="UNetConfig.html" /><link rel="prev" title="fcn_resnet_101" href="../fcn/fcn_resnet_101.html" />
       <link rel="canonical" href="https://chanlumerico.github.io/lucid/models/vision/imgseg/unet/UNet.html" /><script>
     function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
     setColorMode(localStorage._theme||"auto");
@@ -926,6 +926,11 @@ data-aria-dark="Switch to auto color mode">
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="ResUNet.html">ResUNet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../attention_unet/AttentionUNet.html">Attention U-Net</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../attention_unet/AttentionUNetConfig.html">AttentionUNetConfig</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../attention_unet/AttentionUNetGateConfig.html">AttentionUNetGateConfig</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="../mask_rcnn/MaskRCNN.html">Mask R-CNN</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../mask_rcnn/MaskRCNNConfig.html">MaskRCNNConfig</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../mask_rcnn/mask_rcnn_resnet_50_fpn.html">mask_rcnn_resnet_50_fpn</a></li>
@@ -1192,7 +1197,7 @@ skip merge behavior, sampling strategy, and segmentation output space.</p></li>
 <h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
 <dl class="py method">
 <dt class="sig sig-object py" id="lucid.models.UNet.forward">
-<span class="sig-prename descclassname"><span class="pre">UNet.</span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.UNet.forward" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">UNet.</span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../../../tensor/Tensor_.html#lucid.Tensor" title="lucid._tensor.tensor.Tensor"><span class="pre">Tensor</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lucid.models.UNet.forward" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </section>
@@ -1298,7 +1303,7 @@ single output tensor. When enabled, it returns a dictionary with <cite>out</cite
     </div>
   </div>
 </footer>
-      <script src="../../../../_static/documentation_options.js?v=3d9be520"></script>
+      <script src="../../../../_static/documentation_options.js?v=f61275ed"></script>
       <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>

@@ -1,4 +1,5 @@
 from .alex import *
+from .attention_unet import *
 from .coatnet import *
 from .convnext import *
 from .crossvit import *

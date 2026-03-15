@@ -457,14 +457,14 @@ class UNet(nn.Module):
         )
         cur_channels = config.bottleneck.channels
 
-        self.upsampleers = nn.ModuleList()
+        self.upsamplers = nn.ModuleList()
         self.decoder = nn.ModuleList()
 
         skip_channels = [stage.channels for stage in config.encoder_stages[:-1]]
         reversed_skip_channels = list(reversed(skip_channels))
 
         for dec_cfg, skip_ch in zip(config.decoder_stages, reversed_skip_channels):
-            self.upsampleers.append(
+            self.upsamplers.append(
                 _Upsample(
                     cur_channels,
                     dec_cfg.channels,
@@ -523,7 +523,7 @@ class UNet(nn.Module):
             x, size=input_size, mode="bilinear", align_corners=self.config.align_corners
         )
 
-    def forward(self, x: Tensor) -> Tensor | dict[str, Tensor]:
+    def forward(self, x: Tensor) -> Tensor | dict[str, Tensor | list[Tensor]]:
         input_size = x.shape[-2:]
         x = self.stem(x)
 
@@ -541,7 +541,7 @@ class UNet(nn.Module):
         decode_skips = list(reversed(skips[:-1]))
 
         for idx, (upsample, stage, skip) in enumerate(
-            zip(self.upsampleers, self.decoder, decode_skips)
+            zip(self.upsamplers, self.decoder, decode_skips)
         ):
             x = upsample(x, target_size=skip.shape[-2:])
             x = self._merge_skip(x, skip)

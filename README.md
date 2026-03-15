@@ -28,17 +28,17 @@ Whether you're a student, educator, or an advanced researcher seeking to demysti
 
 ### 🔥 What's New
 
-- Implemented **U-Net** and **ResUNet**(Residual U-Net): `lucid.models.UNet` and `lucid.models.ResUNet`
-
 - Added **JIT Compilation** system (`lucid.compile`) — trace-based graph compilation with automatic caching, optimization passes, and full training support. Achieves ~4x speedup on CPU and ~10x on MLX.
 
-- Implemented **Mask2Former** (Chang et al. 2022) `models.Mask2Former` with 8 variants.
+- Implemeneted **Attention U-Net** (Oktay et al., 2018): `lucid.models.AttentionUNet`
+
+- Implemented **U-Net** and **ResUNet**(Residual U-Net): `lucid.models.UNet` and `lucid.models.ResUNet`
+
+- Implemented **Mask2Former** (Chang et al., 2022) `models.Mask2Former` with 8 variants.
     - Variants with Swin Transformer backbone has pre-trained weights: `weights.Mask2Former_Swin_{Tiny,Small,Base,Large}_Weights`
 
-- Implemented **MaskFormer** (Cheng et al. 2021) `models.MaskFormer` with 4 variants:
+- Implemented **MaskFormer** (Cheng et al., 2021) `models.MaskFormer` with 4 variants:
     - `models.maskformer_resnet_{18, 34, 50, 101}` with 2 pre-trained weights available `weights.MaskFormer_ResNet_{50, 101}_ADE20K`
-
-- Added **Image Segmentation** model category, starting with `lucid.models.MaskRCNN`.
 
 ## 🔧 How to Install
 
