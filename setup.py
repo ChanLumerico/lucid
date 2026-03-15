@@ -65,6 +65,10 @@ setuptools.setup(
         "openml",
         "mlx; platform_system == 'Darwin' and platform_machine == 'arm64'",
     ],
+    package_data={
+        "lucid.weights": ["registry.json", "__init__.pyi"],
+        "lucid.models": ["registry.json"],
+    },
     ext_modules=ext_modules,
     include_package_data=True,
 )

@@ -1,2 +1,3 @@
 include .extensions/cpp_extensions.json
 recursive-include lucid/_backend/_C *.hpp *.h *.pyi
+recursive-include lucid *.json *.pyi
