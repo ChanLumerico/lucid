@@ -98,6 +98,11 @@ deeper network training and mitigates gradient vanishing.
     :header-rows: 1
     :align: left
 
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+
     * - ResUNet 2D
       - `ResUNet2d <resunet/ResUNet2d>`_
       - :math:`(N,C,H,W)`
