@@ -16,6 +16,7 @@ from lucid._jit.executor import (
     BackwardExecutor,
 )
 from lucid._jit.cache import PlanCache, CacheKey
+from lucid._jit.pytree import flatten_output, unflatten_output
 from lucid._tensor.tensor import Tensor
 from lucid._backend.core import BackwardOperation
 from lucid._jit.ir import IRGraph
@@ -55,14 +56,14 @@ def _trace_and_compile(
         _trace_local.active = False
         _trace_local.tracer = None
 
-    outputs_tuple = outputs if isinstance(outputs, tuple) else (outputs,)
-    graph = ctx.finalize(outputs_tuple)
+    flat_tensors, output_treespec = flatten_output(outputs)
+    graph = ctx.finalize(tuple(flat_tensors))
 
     training = key.grad_enabled and key.training_mode
     pass_classes = DEFAULT_TRAINING_PASSES if training else DEFAULT_INFERENCE_PASSES
     graph = run_passes(graph, [p() for p in pass_classes])
 
-    return CompiledPlan(graph, training=training)
+    return CompiledPlan(graph, training=training, output_treespec=output_treespec)
 
 
 def _attach_compiled_backward(
@@ -150,7 +151,7 @@ class JITFunction:
         )
         if fwd_result is not None:
             _attach_compiled_backward(outputs, fwd_result, plan.graph)
-        return outputs[0] if len(outputs) == 1 else outputs
+        return unflatten_output(list(outputs), plan.output_treespec)
 
     def invalidate_cache(self) -> None:
         self._cache.invalidate()
@@ -201,10 +202,11 @@ class JITModule:
         outputs, fwd_result = self._executor.execute(
             plan, inputs, param_map, lucid.grad_enabled()
         )
-        output = outputs[0] if len(outputs) == 1 else outputs
 
         if fwd_result is not None:
             _attach_compiled_backward(outputs, fwd_result, plan.graph)
+
+        output = unflatten_output(list(outputs), plan.output_treespec)
 
         for hook, with_kwargs in module._forward_hooks:
             if with_kwargs:

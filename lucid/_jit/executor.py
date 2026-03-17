@@ -6,9 +6,12 @@ from lucid._tensor.tensor import Tensor as _Tensor
 
 
 class CompiledPlan:
-    def __init__(self, graph: IRGraph, training: bool) -> None:
+    def __init__(
+        self, graph: IRGraph, training: bool, output_treespec: object = None
+    ) -> None:
         self.graph = graph
         self.training = training
+        self.output_treespec = output_treespec
         self.exec_order: list[IRNode] = list(graph.nodes)
 
     def __repr__(self) -> str:
