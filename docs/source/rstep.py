@@ -37,6 +37,10 @@ ARCH_EP = """
 
     <span class="badge encoder_only_transformer">Encoder-Only Transformer</span>
 
+.. |decoder-only-transformer-badge| raw:: html
+
+    <span class="badge decoder_only_transformer">Decoder-Only Transformer</span>
+
 .. |segmentation-transformer-badge| raw:: html
 
     <span class="badge segmentation_transformer">Segmentation Transformer</span>

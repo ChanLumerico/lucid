@@ -130,8 +130,8 @@ def roll(
     return func.roll(shifts, axis)(a)
 
 
-def gather(a: Tensor, /, dim: int, index: Tensor) -> Tensor:
-    return func.gather(dim)(a, index)
+def gather(a: Tensor, /, axis: int, index: Tensor) -> Tensor:
+    return func.gather(axis)(a, index)
 
 
 def unbind(a: Tensor, /, axis: int = 0) -> tuple[Tensor, ...]:

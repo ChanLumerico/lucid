@@ -4,6 +4,7 @@ import lucid
 
 from lucid._tensor import Tensor
 from lucid.types import _Scalar
+from lucid.nn.module import Module
 
 __all__ = [
     "grad_norm",
@@ -12,6 +13,7 @@ __all__ = [
     "clip_grad_value",
     "apply_chunking_to_forward",
     "get_activation_from_name",
+    "get_activation_module_from_name",
 ]
 
 
@@ -143,3 +145,13 @@ def get_activation_from_name(act_name: str) -> Callable[[Tensor], Tensor] | None
     from lucid.nn.functional import _activation
 
     return getattr(_activation, act_name, None)
+
+
+def get_activation_module_from_name(act_name: str) -> Module | None:
+    from lucid.nn.modules import activation as _activation
+
+    for attr_name in _activation.__all__:
+        attr = getattr(_activation, attr_name, None)
+        if issubclass(attr, Module):
+            if attr.__name__.lower() == act_name:
+                return attr

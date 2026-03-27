@@ -760,14 +760,14 @@ class masked_fill(Operation):
 
 
 class gather(Operation):
-    def __init__(self, dim: int) -> None:
+    def __init__(self, axis: int) -> None:
         super().__init__()
-        self.dim = dim
+        self.axis = axis
 
     def _normalize_dim(self, ndim: int) -> int:
-        dim = self.dim + ndim if self.dim < 0 else self.dim
+        dim = self.axis + ndim if self.axis < 0 else self.axis
         if dim < 0 or dim >= ndim:
-            raise ValueError(f"Dimension out of range (got dim={self.dim}).")
+            raise ValueError(f"Dimension out of range (got dim={self.axis}).")
         return dim
 
     def _validate_inputs(self, a: Tensor, index: Tensor) -> int:

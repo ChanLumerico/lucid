@@ -8,6 +8,7 @@ Text Models
     Transformer <transformer/Transformer.rst>
     BERT <bert/BERT.rst>
     RoFormer <roformer/RoFormer.rst>
+    GPT <gpt/GPT.rst>
 
 Transformer
 -----------
@@ -173,4 +174,47 @@ embedding usage in self-attention with RoPE.
 
     Parameter counts are based on the smallest known variants for each model families.
 
-*To be implemented...🔮*
+GPT
+---
+|transformer-badge| |decoder-only-transformer-badge|
+
+GPT is the first large-scale decoder-only Transformer trained with unsupervised
+pre-training followed by supervised fine-tuning, demonstrating strong transfer
+across diverse language understanding tasks.
+
+ Radford, Alec, et al. "Improving Language Understanding by Generative
+ Pre-Training." OpenAI, 2018.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Pre-Trained
+
+    * - :math:`\text{GPT}`
+      - `GPT <gpt/GPT>`_
+      - :math:`(N,L)`
+      - 116,534,784
+      - –
+
+    * - :math:`\text{GPT}_\text{LM}`
+      - `GPTLMHeadModel <gpt/GPTLMHeadModel>`_
+      - :math:`(N,L)`
+      - 116,534,784
+      - ❌
+
+    * - :math:`\text{GPT}_\text{DH}`
+      - `GPTDoubleHeadsModel <gpt/GPTDoubleHeadsModel>`_
+      - :math:`(N,C,L)`
+      - 116,535,553
+      - ❌
+
+    * - :math:`\text{GPT}_\text{SC}`
+      - `GPTForSequenceClassification <gpt/GPTForSequenceClassification>`_
+      - :math:`(N,L)`
+      - 116,536,320
+      - ❌
