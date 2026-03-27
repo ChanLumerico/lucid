@@ -63,8 +63,8 @@
 }
 
 .badge.decoder_only_transformer {
-    color: #c084fc;
-    border-color: #c084fc;
+    color: #ff8dd9;
+    border-color: #ff8dd9;
 }
 
 .badge.segmentation_transformer {
