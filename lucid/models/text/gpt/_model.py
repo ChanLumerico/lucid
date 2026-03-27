@@ -6,7 +6,6 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 from lucid.models.base import PreTrainedModelMixin
-from lucid import register_model
 
 __all__ = ["GPTConfig", "GPT"]
 
@@ -145,7 +144,7 @@ class _GPTMLP(nn.Module):
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
         self.c_fc = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.c_proj = nn.Linear(config.intermediate_size, config.hiddensi)
+        self.c_proj = nn.Linear(config.intermediate_size, config.hidden_size)
 
         self.drop = nn.Dropout(config.hidden_dropout_prob)
         self.act = nn.utils.get_activation_module_from_name(config.hidden_act)
@@ -197,7 +196,7 @@ class _GPTDecoder(nn.Module):
         hidden_states: Tensor,
         attention_mask: Tensor | None = None,
         past_key_values: list[nn.KVCache] | None = None,
-        cache_position: Tensor = None,
+        cache_position: Tensor | None = None,
         use_cache: bool = False,
     ) -> tuple[Tensor, list[nn.KVCache] | None]:
         presents: list[nn.KVCache] | None = [] if use_cache else None
@@ -206,7 +205,7 @@ class _GPTDecoder(nn.Module):
             hidden_states, present = block(
                 hidden_states,
                 attention_mask=attention_mask,
-                past_key_values=pkv,
+                past_key_value=pkv,
                 cache_position=cache_position,
                 use_cache=use_cache,
             )
@@ -223,7 +222,6 @@ class GPT(PreTrainedModelMixin, nn.Module):
         self.embeddings = _GPTEmbedding(config)
         self.decoder = _GPTDecoder(config)
 
-        self.ln_f = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.apply(self._init_weights)
 
     def _init_weights(self, module: nn.Module) -> None:
@@ -242,7 +240,7 @@ class GPT(PreTrainedModelMixin, nn.Module):
     def get_input_embeddings(self) -> nn.Embedding:
         return self.embeddings.tokens_embed
 
-    def set_input_embedding(self, value: nn.Embedding) -> None:
+    def set_input_embeddings(self, value: nn.Embedding) -> None:
         self.embeddings.tokens_embed = value
 
     def forward(
@@ -265,5 +263,4 @@ class GPT(PreTrainedModelMixin, nn.Module):
             cache_position=cache_position,
             use_cache=use_cache,
         )
-        hidden_states = self.ln_f(hidden_states)
         return hidden_states, presents
