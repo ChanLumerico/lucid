@@ -6,6 +6,7 @@ GPT
     :hidden:
 
     GPTConfig.rst
+    GPTTokenizerFast.rst
     GPTLMHeadModel.rst
     GPTDoubleHeadsModel.rst
     GPTForSequenceClassification.rst
