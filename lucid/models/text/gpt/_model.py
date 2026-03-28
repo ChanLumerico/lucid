@@ -147,7 +147,7 @@ class _GPTMLP(nn.Module):
         self.c_proj = nn.Linear(config.intermediate_size, config.hidden_size)
 
         self.drop = nn.Dropout(config.hidden_dropout_prob)
-        self.act = nn.utils.get_activation_module_from_name(config.hidden_act)
+        self.act = nn.utils.get_activation_module_from_name(config.hidden_act)()
         if self.act is None:
             raise ValueError(f"Invalid activation name: '{config.hidden_act}'")
 

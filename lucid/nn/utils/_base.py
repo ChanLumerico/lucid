@@ -147,7 +147,7 @@ def get_activation_from_name(act_name: str) -> Callable[[Tensor], Tensor] | None
     return getattr(_activation, act_name, None)
 
 
-def get_activation_module_from_name(act_name: str) -> Module | None:
+def get_activation_module_from_name(act_name: str) -> type[Module] | None:
     from lucid.nn.modules import activation as _activation
 
     for attr_name in _activation.__all__:

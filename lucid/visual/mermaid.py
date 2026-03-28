@@ -287,6 +287,7 @@ def build_module_mermaid_chart(
     edge_curve: str = "natural",
     node_spacing: int = 50,
     rank_spacing: int = 50,
+    input_dtype: type | None = None,
     **forward_kwargs,
 ) -> str | list[str]:
     if inputs is None and input_shape is None:
@@ -390,13 +391,16 @@ def build_module_mermaid_chart(
 
     try:
         if inputs is None:
+
+            def _make_input(shape):
+                if input_dtype is not None and issubclass(input_dtype, int):
+                    return lucid.random.randint(0, 128, shape, device=module.device)
+                return lucid.random.randn(shape, device=module.device)
+
             if isinstance(input_shape, list):
-                input_tensors = [
-                    lucid.random.randn(shape, device=module.device)
-                    for shape in input_shape
-                ]
+                input_tensors = [_make_input(shape) for shape in input_shape]
             else:
-                input_tensors = [lucid.random.randn(input_shape, device=module.device)]
+                input_tensors = [_make_input(input_shape)]
         else:
             if isinstance(inputs, Tensor):
                 input_tensors = [inputs]
