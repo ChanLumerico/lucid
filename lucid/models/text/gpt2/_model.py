@@ -3,16 +3,24 @@ from dataclasses import dataclass
 import lucid.nn as nn
 
 from lucid._tensor import Tensor
+from lucid import register_model
 from lucid.models.text.gpt import GPT, GPTConfig
 
-__all__ = ["GPT2Config", "GPT2"]
+__all__ = [
+    "GPT2Config",
+    "GPT2",
+    "gpt2_small",
+    "gpt2_medium",
+    "gpt2_large",
+    "gpt2_xlarge",
+]
 
 
 @dataclass
 class GPT2Config(GPTConfig):
     vocab_size: int = 50257
     max_position_embeddings: int = 1024
-    hidden_act: str = "gelu_new"
+    hidden_act: str = "gelu"
 
     @classmethod
     def small(cls, **kwargs) -> GPT2Config:
@@ -84,3 +92,23 @@ class GPT2(GPT):
             use_cache,
         )
         return self.ln_f(hidden_states), presents
+
+
+@register_model
+def gpt2_small(**kwargs) -> GPT2:
+    return GPT2(GPT2Config.small(**kwargs))
+
+
+@register_model
+def gpt2_medium(**kwargs) -> GPT2:
+    return GPT2(GPT2Config.medium(**kwargs))
+
+
+@register_model
+def gpt2_large(**kwargs) -> GPT2:
+    return GPT2(GPT2Config.large(**kwargs))
+
+
+@register_model
+def gpt2_xlarge(**kwargs) -> GPT2:
+    return GPT2(GPT2Config.xl(**kwargs))

@@ -242,25 +242,25 @@ and a final LayerNorm before the language modeling head.
       - Pre-Trained
 
     * - :math:`\text{GPT-2}_\text{Small}`
-      - `GPT2 <gpt2/GPT2>`_
+      - `gpt2_small <gpt2/gpt2_small>`_
       - :math:`(N,L)`
       - 124,439,808
       - –
 
     * - :math:`\text{GPT-2}_\text{Medium}`
-      - `GPT2 <gpt2/GPT2>`_
+      - `gpt2_medium <gpt2/gpt2_medium>`_
       - :math:`(N,L)`
       - 354,798,592
       - –
 
     * - :math:`\text{GPT-2}_\text{Large}`
-      - `GPT2 <gpt2/GPT2>`_
+      - `gpt2_large <gpt2/gpt2_large>`_
       - :math:`(N,L)`
       - 774,030,080
       - –
 
     * - :math:`\text{GPT-2}_\text{XL}`
-      - `GPT2 <gpt2/GPT2>`_
+      - `gpt2_xlarge <gpt2/gpt2_xlarge>`_
       - :math:`(N,L)`
       - 1,557,611,200
       - –
