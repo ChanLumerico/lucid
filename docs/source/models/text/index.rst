@@ -9,6 +9,7 @@ Text Models
     BERT <bert/BERT.rst>
     RoFormer <roformer/RoFormer.rst>
     GPT <gpt/GPT.rst>
+    GPT-2 <gpt2/GPT2.rst>
 
 Transformer
 -----------
@@ -217,4 +218,67 @@ across diverse language understanding tasks.
       - `GPTForSequenceClassification <gpt/GPTForSequenceClassification>`_
       - :math:`(N,L)`
       - 116,536,320
+      - ❌
+
+GPT-2
+-----
+|transformer-badge| |decoder-only-transformer-badge|
+
+GPT-2 is a scaled-up decoder-only Transformer that extends GPT-1 with a larger
+vocabulary (50,257 byte-level BPE tokens), a longer context window (1024 tokens),
+and a final LayerNorm before the language modeling head.
+
+ Radford, Alec, et al. "Language Models are Unsupervised Multitask Learners."
+ OpenAI, 2019.
+
+.. list-table::
+    :header-rows: 1
+    :align: left
+
+    * - Name
+      - Model
+      - Input Shape
+      - Parameter Count
+      - Pre-Trained
+
+    * - :math:`\text{GPT-2}_\text{Small}`
+      - `GPT2 <gpt2/GPT2>`_
+      - :math:`(N,L)`
+      - 124,439,808
+      - –
+
+    * - :math:`\text{GPT-2}_\text{Medium}`
+      - `GPT2 <gpt2/GPT2>`_
+      - :math:`(N,L)`
+      - 354,798,592
+      - –
+
+    * - :math:`\text{GPT-2}_\text{Large}`
+      - `GPT2 <gpt2/GPT2>`_
+      - :math:`(N,L)`
+      - 774,030,080
+      - –
+
+    * - :math:`\text{GPT-2}_\text{XL}`
+      - `GPT2 <gpt2/GPT2>`_
+      - :math:`(N,L)`
+      - 1,557,611,200
+      - –
+
+    * - :math:`\text{GPT-2}_\text{LM}`
+      - `GPT2LMHeadModel <gpt2/GPT2LMHeadModel>`_
+      - :math:`(N,L)`
+      - 124,439,808
+      - ❌
+
+    * - :math:`\text{GPT-2}_\text{DH}`
+      - `GPT2DoubleHeadsModel <gpt2/GPT2DoubleHeadsModel>`_
+      - :math:`(N,C,L)`
+      - 124,440,577
+      - ❌
+
+    * - :math:`\text{GPT-2}_\text{SC}`
+      - `GPT2ForSequenceClassification <gpt2/GPT2ForSequenceClassification>`_
+      - :math:`(N,L)`
+      - 124,441,344
       - ❌

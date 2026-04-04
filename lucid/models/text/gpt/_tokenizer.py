@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from lucid.data.tokenizers import SpecialTokens
 from lucid.data.tokenizers.bpe import BPETokenizerFast
 
 __all__ = ["GPTTokenizerFast"]
 
-_EOT: str = "<|endoftext|>"
+_EOT: Final[str] = "<|endoftext|>"
 
 
 class GPTTokenizerFast(BPETokenizerFast):
