@@ -1,9 +1,8 @@
-from typing import Never
 import lucid
 from lucid._tensor import Tensor
 
 
-def _prob_check(p: float) -> Never:
+def _prob_check(p: float) -> None:
     if not 0 <= p < 1:
         raise ValueError("Dropout probability `p` must be in the range [0, 1).")
 

@@ -186,7 +186,8 @@ class norm(Operation):
             denom = r
             if not keepdims and axis is not None:
                 denom = lib_.expand_dims(r, axis=axis)
-            grad = lib_.where(lib_.all(r != 0), x / denom, lib_.zeros_like(x))
+            safe_denom = lib_.where(denom != 0, denom, lib_.ones_like(denom))
+            grad = lib_.where(denom != 0, x / safe_denom, lib_.zeros_like(x))
 
         elif ord == 1:
             grad = lib_.sign(x)
@@ -195,9 +196,10 @@ class norm(Operation):
             denom = r
             if not keepdims and axis is not None:
                 denom = lib_.expand_dims(r, axis=axis)
+            safe_denom = lib_.where(denom != 0, denom, lib_.ones_like(denom))
             grad = lib_.where(
-                lib_.all(r != 0),
-                (lib_.abs(x) ** (ord - 1)) * lib_.sign(x) / (denom ** (ord - 1)),
+                denom != 0,
+                (lib_.abs(x) ** (ord - 1)) * lib_.sign(x) / (safe_denom ** (ord - 1)),
                 lib_.zeros_like(x),
             )
 
@@ -210,10 +212,9 @@ class norm(Operation):
         if self.axis is None:
             reduced_size = a.size
         else:
-            if isinstance(self.axis, int):
-                self.axis = (self.axis,)
+            axis_t = (self.axis,) if isinstance(self.axis, int) else self.axis
             reduced_size = 1
-            for ax in self.axis:
+            for ax in axis_t:
                 reduced_size *= a.shape[ax]
 
         out_size = a.size // reduced_size

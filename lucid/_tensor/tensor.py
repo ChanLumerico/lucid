@@ -414,18 +414,20 @@ class Tensor(Generic[DType], _TensorBase, _TensorInplace):
                     data = value.to(self.device).data
                 else:
                     raise lucid.DeviceMismatchError(to=self.device, from_=value.device)
-            data = value.data
+            else:
+                data = value.data
         else:
             data = value
         self.data[new_idx] = data
 
     def __len__(self) -> int:
         if self.ndim == 0:
-            return self.size
-        else:
-            return self.shape[0]
+            raise TypeError("len() of a 0-d tensor")
+        return self.shape[0]
 
     def __iter__(self) -> Iterator[Self]:
+        if self.ndim == 0:
+            raise TypeError("iteration over a 0-d tensor")
         for i in range(self.shape[0]):
             yield self[i]
 

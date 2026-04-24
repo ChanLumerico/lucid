@@ -13,7 +13,7 @@ def _resolve_lengths_from_fractions(fractions: Sequence[float], n: int) -> list[
     if not fractions:
         raise ValueError("fractions must be non-empty.")
     if any(f < 0 for f in fractions):
-        raise ValueError("Fractional lengths mus be non-negative.")
+        raise ValueError("Fractional lengths must be non-negative.")
 
     s = sum(fractions)
     if not math.isclose(s, 1.0, rel_tol=1e-6, abs_tol=1e-6):
@@ -38,7 +38,7 @@ def random_split(
     all_float = all(isinstance(l, float) for l in lengths)
 
     if not (all_int or all_float):
-        return TypeError("lengths must be all integers or all floats.")
+        raise TypeError("lengths must be all integers or all floats.")
 
     if all_float:
         int_lengths = _resolve_lengths_from_fractions(lengths, n)

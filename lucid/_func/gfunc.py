@@ -1,6 +1,7 @@
 import numpy as np
 
 from lucid._tensor import Tensor
+from lucid._backend.metal import mx
 from lucid import types
 from lucid.types import (
     _ShapeLike,
@@ -54,7 +55,8 @@ def zeros_like(
     device: _DeviceType | None = None,
 ) -> Tensor:
     data, dtype, device = _get_tensor_specs(a, dtype, device)
-    return Tensor(np.zeros_like(data), requires_grad, keep_grad, dtype, device)
+    lib = mx if device == "gpu" else np
+    return Tensor(lib.zeros(data.shape), requires_grad, keep_grad, dtype, device)
 
 
 def ones(
@@ -75,7 +77,8 @@ def ones_like(
     device: _DeviceType | None = None,
 ) -> Tensor:
     data, dtype, device = _get_tensor_specs(a, dtype, device)
-    return Tensor(np.ones_like(data), requires_grad, keep_grad, dtype, device)
+    lib = mx if device == "gpu" else np
+    return Tensor(lib.ones(data.shape), requires_grad, keep_grad, dtype, device)
 
 
 def eye(
@@ -136,7 +139,11 @@ def empty_like(
     device: _DeviceType | None = None,
 ) -> Tensor:
     data, dtype, device = _get_tensor_specs(a, dtype, device)
-    return Tensor(np.empty_like(data), requires_grad, keep_grad, dtype, device)
+    if device == "gpu":
+        arr = mx.zeros(data.shape)
+    else:
+        arr = np.empty_like(data)
+    return Tensor(arr, requires_grad, keep_grad, dtype, device)
 
 
 def linspace(
@@ -173,6 +180,8 @@ def full_like(
     device: _DeviceType | None = None,
 ) -> Tensor:
     data, dtype, device = _get_tensor_specs(a, dtype, device)
-    return Tensor(
-        np.full_like(data, fill_value), requires_grad, keep_grad, dtype, device
-    )
+    if device == "gpu":
+        arr = mx.full(data.shape, fill_value)
+    else:
+        arr = np.full_like(data, fill_value)
+    return Tensor(arr, requires_grad, keep_grad, dtype, device)

@@ -107,7 +107,7 @@ class _ConvNd(nn.Module):
         if in_channels % groups != 0:
             raise ValueError("in_channels must be divisible by groups.")
         if out_channels % groups != 0:
-            raise ValueError("out_channels mube be divisible by groups.")
+            raise ValueError("out_channels must be divisible by groups.")
 
         weight_ = lucid.empty(out_channels, in_channels // groups, *self.kernel_size)
         self.weight = nn.Parameter(weight_)

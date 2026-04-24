@@ -385,7 +385,7 @@ def nms(boxes: Tensor, scores: Tensor, iou_thresh: float = 0.3) -> Tensor:
     h = (yy2 - yy1 + 1).clip(min_value=0)
     inter = w * h
 
-    iou = inter / (areas.unsqueeze(1) + areas - inter)
+    iou = inter / (areas.unsqueeze(1) + areas - inter + 1e-9)
 
     keep_mask = lucid.ones(N, dtype=bool, device=boxes.device)
     eye = lucid.eye(N, dtype=bool, device=boxes.device)

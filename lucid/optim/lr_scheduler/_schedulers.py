@@ -97,7 +97,7 @@ class ExponentialLR(LRScheduler):
         super().__init__(optimizer, last_epoch, verbose)
 
     def get_lr(self) -> list[float]:
-        factor = self.gamma**self.last_epoch
+        factor = self.gamma ** (self.last_epoch + 1)
         return [base_lr * factor for base_lr in self.base_lrs]
 
 

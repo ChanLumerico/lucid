@@ -658,7 +658,7 @@ class TestGather(_UtilsTorchOpBase):
         np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float64),
         np.array([[2, 0, 1], [1, 2, 0]], dtype=np.int64),
     )
-    forward_op = staticmethod(lambda a, idx: lucid.gather(a, dim=1, index=idx))
+    forward_op = staticmethod(lambda a, idx: lucid.gather(a, axis=1, index=idx))
     torch_forward = staticmethod(lambda a, idx: torch.gather(a, dim=1, index=idx))
     expected_forward = np.array([[3.0, 1.0, 2.0], [5.0, 6.0, 4.0]], dtype=np.float64)
     input_dtypes = (None, lucid.Int64)

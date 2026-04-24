@@ -189,7 +189,7 @@ class LayerNorm(nn.Module):
                 bias_ = lucid.zeros(self.normalized_shape)
                 self.bias = nn.Parameter(bias_)
             else:
-                self.bias = None
+                self.register_parameter("bias", None)
         else:
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
@@ -215,8 +215,8 @@ class GroupNorm(nn.Module):
             self.weight = nn.Parameter(lucid.ones(num_channels))
             self.bias = nn.Parameter(lucid.zeros(num_channels))
         else:
-            self.weight = None
-            self.bias = None
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
 
     def forward(self, input_: Tensor) -> Tensor:
         return F.group_norm(input_, self.num_groups, self.weight, self.bias, self.eps)

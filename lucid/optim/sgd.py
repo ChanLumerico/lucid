@@ -45,9 +45,7 @@ class SGD(optim.Optimizer):
                     if momentum != 0:
                         param_state = self.state[param]
                         if "momentum_buffer" not in param_state:
-                            buf = param_state["momentum_buffer"] = Tensor.copy_grad(
-                                param.grad
-                            )
+                            buf = param_state["momentum_buffer"] = Tensor.copy_data(grad)
                         else:
                             buf = param_state["momentum_buffer"]
                             buf = momentum * buf + grad

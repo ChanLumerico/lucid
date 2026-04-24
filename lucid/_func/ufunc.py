@@ -690,11 +690,10 @@ class mean(Operation):
     def __flops__(self, a: Tensor) -> int:
         if self.axis is None:
             return a.size
-        if isinstance(self.axis, int):
-            self.axis = (self.axis,)
+        axis_t = (self.axis,) if isinstance(self.axis, int) else self.axis
 
         reduced_size = 1
-        for ax in self.axis:
+        for ax in axis_t:
             reduced_size *= a.shape[ax]
 
         output_size = a.size // reduced_size

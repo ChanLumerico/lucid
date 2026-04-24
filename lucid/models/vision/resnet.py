@@ -272,9 +272,10 @@ class _Bottleneck(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         se: bool = False,
-        se_args: dict = {},
+        se_args: dict | None = None,
     ) -> None:
         super().__init__()
+        se_args = se_args if se_args is not None else {}
         width = int(math.floor(out_channels * (base_width / 64)) * cardinality)
 
         self.conv1 = nn.ConvBNReLU2d(
