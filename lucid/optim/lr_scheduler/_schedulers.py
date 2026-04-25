@@ -34,7 +34,7 @@ class LambdaLR(LRScheduler):
         super().__init__(optimizer, last_epoch, verbose)
 
     def get_lr(self) -> list[float]:
-        factor = self.lr_lambda(self.last_epoch)
+        factor = self.lr_lambda(self.last_epoch + 1)
         return [base_lr * factor for base_lr in self.base_lrs]
 
 
@@ -78,7 +78,8 @@ class MultiStepLR(LRScheduler):
         super().__init__(optimizer, last_epoch, verbose)
 
     def get_lr(self) -> list[float]:
-        factor = self.gamma ** sum(self.last_epoch >= m for m in self.milestones)
+        epoch = self.last_epoch + 1
+        factor = self.gamma ** sum(epoch >= m for m in self.milestones)
         return [base_lr * factor for base_lr in self.base_lrs]
 
 
@@ -118,10 +119,11 @@ class CosineAnnealingLR(LRScheduler):
         super().__init__(optimizer, last_epoch, verbose)
 
     def get_lr(self) -> list[float]:
+        epoch = self.last_epoch + 1
         return [
             self.eta_min
             + (base_lr - self.eta_min)
-            * (1 + math.cos(math.pi * self.last_epoch / self.T_max))
+            * (1 + math.cos(math.pi * epoch / self.T_max))
             / 2
             for base_lr in self.base_lrs
         ]

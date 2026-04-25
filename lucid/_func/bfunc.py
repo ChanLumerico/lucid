@@ -469,11 +469,29 @@ class matmul(Operation):
 
     def __grad__(self, a: Tensor, b: Tensor, lib_: ModuleType) -> _GradType:
         grad = self.result.grad
-        if grad.ndim == 0:
-            grad = lib_.reshape(grad, (1, 1))
+        a_data, b_data = a.data, b.data
+        a_1d = a_data.ndim == 1
+        b_1d = b_data.ndim == 1
 
-        grad_a = lib_.matmul(grad, lib_.swapaxes(b.data, -1, -2))
-        grad_b = lib_.matmul(lib_.swapaxes(a.data, -1, -2), grad)
+        a_2d = a_data[None, :] if a_1d else a_data
+        b_2d = b_data[:, None] if b_1d else b_data
+
+        if grad.ndim == 0:
+            grad_2d = lib_.reshape(grad, (1, 1))
+        elif a_1d and not b_1d:
+            grad_2d = lib_.expand_dims(grad, axis=-2)
+        elif not a_1d and b_1d:
+            grad_2d = lib_.expand_dims(grad, axis=-1)
+        else:
+            grad_2d = grad
+
+        grad_a = lib_.matmul(grad_2d, lib_.swapaxes(b_2d, -1, -2))
+        grad_b = lib_.matmul(lib_.swapaxes(a_2d, -1, -2), grad_2d)
+
+        if a_1d:
+            grad_a = lib_.squeeze(grad_a, axis=-2)
+        if b_1d:
+            grad_b = lib_.squeeze(grad_b, axis=-1)
 
         grad_a = self._reduce_broadcast_shape(grad_a, a.shape, lib_)
         grad_b = self._reduce_broadcast_shape(grad_b, b.shape, lib_)

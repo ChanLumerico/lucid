@@ -208,29 +208,30 @@ class NAdam(optim.Optimizer):
                         state["step"] = 0
                         state["exp_avg"] = lucid.zeros_like(param).data
                         state["exp_avg_sq"] = lucid.zeros_like(param).data
+                        state["mu_product"] = 1.0
 
                     state["step"] += 1
-
                     step = state["step"]
                     exp_avg = state["exp_avg"]
                     exp_avg_sq = state["exp_avg_sq"]
 
-                    exp_avg[:] *= 1 - momentum_decay
+                    mu = beta1 * (1.0 - 0.5 * (0.96 ** (step * momentum_decay)))
+                    mu_next = beta1 * (
+                        1.0 - 0.5 * (0.96 ** ((step + 1) * momentum_decay))
+                    )
+                    state["mu_product"] *= mu
+                    mu_product = state["mu_product"]
+                    mu_product_next = mu_product * mu_next
+
                     exp_avg[:] = beta1 * exp_avg + (1 - beta1) * grad
                     exp_avg_sq[:] = beta2 * exp_avg_sq + (1 - beta2) * (grad**2)
 
-                    bias_correct1 = 1 - beta1**step
                     bias_correct2 = 1 - beta2**step
+                    denom = (lucid.sqrt(exp_avg_sq / bias_correct2) + eps).data
 
-                    m_t_hat = exp_avg / bias_correct1
-                    v_t_hat = exp_avg_sq / bias_correct2
-
-                    lookahead_term = (1 - beta1) / (1 - beta1**step) * grad
-                    step_size = lr * (bias_correct2**0.5) / bias_correct1
+                    param.data -= lr * (1.0 - mu) / (1.0 - mu_product) * (grad / denom)
                     param.data -= (
-                        step_size
-                        * (m_t_hat * beta1 + lookahead_term)
-                        / (lucid.sqrt(v_t_hat) + eps).data
+                        lr * mu_next / (1.0 - mu_product_next) * (exp_avg / denom)
                     )
 
                     post_step_eval(param, self.state.get(param))
@@ -291,25 +292,26 @@ class RAdam(optim.Optimizer):
 
                     bias_correct1 = 1 - beta1**step
                     bias_correct2 = 1 - beta2**step
+                    bias_correct2_sqrt = bias_correct2**0.5
 
                     m_t_hat = exp_avg / bias_correct1
 
                     rho_inf = 2 / (1 - beta2) - 1
                     rho_t = rho_inf - 2 * step * beta2**step / (1 - beta2**step)
 
-                    if rho_t > 4:
+                    if rho_t > 5.0:
                         r_t = (
                             (rho_t - 4)
                             * (rho_t - 2)
                             * rho_inf
-                            / ((rho_inf - 4) * (rho_inf - 2))
+                            / ((rho_inf - 4) * (rho_inf - 2) * rho_t)
                         ) ** 0.5
-                        v_t_hat = exp_avg_sq / bias_correct2
-                        step_size = lr * r_t / (lucid.sqrt(v_t_hat) + eps).data
+                        adaptive = (
+                            bias_correct2_sqrt / (lucid.sqrt(exp_avg_sq) + eps).data
+                        )
+                        param.data -= lr * r_t * m_t_hat * adaptive
                     else:
-                        step_size = lr
-
-                    param.data -= step_size * m_t_hat
+                        param.data -= lr * m_t_hat
 
                     post_step_eval(param, self.state.get(param))
 

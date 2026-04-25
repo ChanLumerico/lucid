@@ -80,9 +80,12 @@ def _attach_compiled_backward(
     leaf_refs = tuple(weakref.ref(t) for t in leaf_tensors)
     leaf_versions = tuple(t._version for t in leaf_tensors)
 
+    if not leaf_tensors:
+        return
+
     for out_tensor, out_vid in zip(outputs, graph.output_ids):
         if not getattr(out_tensor, "requires_grad", False):
-            continue
+            out_tensor.requires_grad = True
 
         out_ref = weakref.ref(out_tensor)
 
@@ -126,10 +129,12 @@ class JITFunction:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         inputs = _collect_tensor_inputs(args, kwargs)
+        any_grad = any(getattr(t, "requires_grad", False) for t in inputs)
+        training_mode = lucid.grad_enabled() and any_grad
         key = CacheKey.from_inputs(
             inputs,
             grad_enabled=lucid.grad_enabled(),
-            training_mode=False,
+            training_mode=training_mode,
         )
         plan = self._cache.get(key)
 

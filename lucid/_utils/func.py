@@ -146,7 +146,7 @@ class stack(Operation):
 
     def __grad__(self, arr: tuple[Tensor], lib_: ModuleType) -> _GradType:
         split_grads = lib_.split(self.result.grad, len(arr), axis=self.axis)
-        return tuple(split_grads)
+        return tuple(lib_.squeeze(g, axis=self.axis) for g in split_grads)
 
 
 class hstack(stack):
@@ -159,7 +159,7 @@ class hstack(stack):
         data_arr = [a.data if a.ndim > 1 else a.data.reshape(-1, 1) for a in arr]
         self.result = Tensor(np.hstack(data_arr))
 
-        return self.result, partial(self.__grad__, arr=arr, lib_=np)
+        return self.result, partial(self.__grad_concat__, arr=arr)
 
     @override
     @poly_func_op(device="gpu")
@@ -167,7 +167,22 @@ class hstack(stack):
         data_arr = [t.data if t.ndim > 1 else t.data.reshape(-1, 1) for t in arr]
         self.result = Tensor(mx.concatenate(data_arr, axis=1))
 
-        return self.result, partial(self.__grad__, arr=arr, lib_=mx)
+        return self.result, partial(self.__grad_concat__, arr=arr)
+
+    def __grad_concat__(self, arr: tuple[Tensor, ...]) -> tuple:
+        split_sizes = [a.shape[self.axis] if a.ndim > 1 else 1 for a in arr]
+        grad = self.result.grad
+        outputs, start = [], 0
+        for a, size in zip(arr, split_sizes):
+            end = start + size
+            slicer = [slice(None)] * grad.ndim
+            slicer[self.axis] = slice(start, end)
+            g = grad[tuple(slicer)]
+            if a.ndim <= 1:
+                g = g.reshape(a.shape)
+            outputs.append(g)
+            start = end
+        return tuple(outputs)
 
 
 class vstack(stack):
@@ -180,7 +195,7 @@ class vstack(stack):
         data_arr = [a.data if a.ndim > 1 else a.data.reshape(1, -1) for a in arr]
         self.result = Tensor(np.vstack(data_arr))
 
-        return self.result, partial(self.__grad__, arr=arr, lib_=np)
+        return self.result, partial(self.__grad_concat__, arr=arr)
 
     @override
     @poly_func_op(device="gpu")
@@ -188,7 +203,22 @@ class vstack(stack):
         data_arr = [t.data if t.ndim > 1 else t.data.reshape(1, -1) for t in arr]
         self.result = Tensor(mx.concatenate(data_arr, axis=0))
 
-        return self.result, partial(self.__grad__, arr=arr, lib_=mx)
+        return self.result, partial(self.__grad_concat__, arr=arr)
+
+    def __grad_concat__(self, arr: tuple[Tensor, ...]) -> tuple:
+        split_sizes = [a.shape[self.axis] if a.ndim > 1 else 1 for a in arr]
+        grad = self.result.grad
+        outputs, start = [], 0
+        for a, size in zip(arr, split_sizes):
+            end = start + size
+            slicer = [slice(None)] * grad.ndim
+            slicer[self.axis] = slice(start, end)
+            g = grad[tuple(slicer)]
+            if a.ndim <= 1:
+                g = g.reshape(a.shape)
+            outputs.append(g)
+            start = end
+        return tuple(outputs)
 
 
 class concatenate(Operation):
@@ -749,9 +779,7 @@ class masked_fill(Operation):
         return self.result, self.__grad_gpu__
 
     def __grad_cpu__(self) -> _GradType:
-        grad = self.result.grad.copy()
-        grad[self.mask.data] = 0
-        return grad
+        return np.where(self.mask.data.astype(bool), 0, self.result.grad)
 
     def __grad_gpu__(self) -> _GradType:
         grad = mx.array(self.result.grad)

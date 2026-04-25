@@ -142,13 +142,13 @@ class Rprop(optim.Optimizer):
                     step_size = lib_.where(
                         sign_change < 0, step_size * etaminus, step_size
                     )
-
-                    step_size[:] = lucid.clip(step_size, step_min, step_max).data
+                    step_size = lib_.clip(step_size, step_min, step_max)
+                    state["step_size"] = step_size
 
                     grad = lib_.where(sign_change < 0, 0, grad)
                     state["prev_grad"] = Tensor.copy_grad(grad)
 
-                    param.data -= lucid.sign(grad).data * step_size
+                    param.data -= lib_.sign(grad) * step_size
 
                     post_step_eval(param, self.state.get(param))
 

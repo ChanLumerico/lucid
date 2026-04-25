@@ -535,7 +535,7 @@ class _T(Operation):
         return self.result, self.__grad__
 
     def __grad__(self) -> _GradType:
-        return self.result.grad
+        return self.result.grad.T
 
 
 class _mT(Operation):
@@ -647,8 +647,13 @@ class trace(Operation):
         return self.result, partial(self.__grad__, a=a, lib_=mx)
 
     def __grad__(self, a: Tensor, lib_: ModuleType) -> _GradType:
-        grad = lib_.eye(a.data.shape[0], dtype=a.data.dtype)
-        return grad * self.result.grad
+        d0, d1 = a.data.shape[0], a.data.shape[1]
+        eye = lib_.eye(d0, d1, dtype=a.data.dtype)
+        grad_out = self.result.grad
+        if a.data.ndim > 2:
+            eye = lib_.reshape(eye, (d0, d1) + (1,) * (a.data.ndim - 2))
+            grad_out = lib_.reshape(grad_out, (1, 1) + tuple(grad_out.shape))
+        return eye * grad_out
 
     def __flops__(self, a: Tensor) -> int:
         return min(a.shape) - 1

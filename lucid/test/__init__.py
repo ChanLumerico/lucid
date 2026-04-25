@@ -1,7 +1,11 @@
 import importlib
+
 from collections.abc import Sequence
+
 from typing import Any, Callable
+
 from pathlib import Path
+
 import sys
 
 __all__ = ["run_tests"]
@@ -55,14 +59,11 @@ def _run_pytest_with_progress(
     _ = single_line
     if not show_progress:
         return _run_pytest(paths, raise_on_fail=raise_on_fail)
-
     try:
         from tqdm import tqdm
     except Exception as exc:
         raise RuntimeError("tqdm is required for progress display.") from exc
-
     plugin = _TqdmProgressPlugin(tqdm, concise_failures=concise_failures)
-
     exit_code = _get_pytest_main()(
         ["-q", "-p", "no:terminalreporter", *paths], plugins=[plugin]
     )
@@ -92,7 +93,7 @@ class _PytestProgressPluginBase:
     def _colorize(text: str, color_code: str = "") -> str:
         if not sys.stderr.isatty():
             return text
-        return f"\033[{color_code}m{text}\033[0m"
+        return f"\x1b[{color_code}m{text}\x1b[0m"
 
     def _green(self, text: str) -> str:
         return self._colorize(text, "92")
@@ -114,7 +115,7 @@ class _PytestProgressPluginBase:
         max_label_len = max(8, self._label_chars)
         short_label = label.split("::")[-1]
         if len(short_label) > max_label_len:
-            short_label = f"{short_label[: max_label_len - 3]}..."
+            short_label = f"{short_label[:max_label_len - 3]}..."
         return short_label
 
     def _record_case_result(self, report: Any) -> None:
@@ -147,7 +148,6 @@ class _PytestProgressPluginBase:
             ),
             file=sys.stderr,
         )
-
         if self._concise_failures and self._failure_infos:
             print(file=sys.stderr)
             print(self._yellow("Failing cases:"), file=sys.stderr)
@@ -186,7 +186,6 @@ class _TqdmProgressPlugin(_PytestProgressPluginBase):
             return
         if report.nodeid in self._counted:
             return
-
         self._counted.add(report.nodeid)
         self._record_case_result(report)
         self._set_postfix(report.nodeid)

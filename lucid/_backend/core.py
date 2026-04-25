@@ -410,7 +410,7 @@ class BackwardOperation:
             )
 
         grads = self.grad_func()
-        if self.num_inputs == 1 or not isinstance(grads, tuple):
+        if not isinstance(grads, tuple):
             grads = (grads,)
 
         if len(grads) != len(live_tensors):

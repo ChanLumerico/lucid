@@ -177,7 +177,7 @@ class LSTMCell(nn.Module):
         gates = F.linear(input_, self.weight_ih, self.bias_ih)
         gates += F.linear(h_t, self.weight_hh, self.bias_hh)
 
-        i_t, f_t, g_t, o_t = lucid.split(gates, 4, axis=1)
+        i_t, f_t, g_t, o_t = lucid.chunk(gates, 4, axis=1)
         i_t = F.sigmoid(i_t)
         f_t = F.sigmoid(f_t)
         g_t = F.tanh(g_t)
@@ -256,8 +256,8 @@ class GRUCell(nn.Module):
         input_gates = F.linear(input_, self.weight_ih, self.bias_ih)
         hidden_gates = F.linear(hx, self.weight_hh, self.bias_hh)
 
-        i_r, i_z, i_n = lucid.split(input_gates, 3, axis=1)
-        h_r, h_z, h_n = lucid.split(hidden_gates, 3, axis=1)
+        i_r, i_z, i_n = lucid.chunk(input_gates, 3, axis=1)
+        h_r, h_z, h_n = lucid.chunk(hidden_gates, 3, axis=1)
 
         r_t = F.sigmoid(i_r + h_r)
         z_t = F.sigmoid(i_z + h_z)
@@ -391,7 +391,7 @@ class RNNBase(nn.Module):
         gates = F.linear(input_, w_ih, b_ih)
         gates += F.linear(hx, w_hh, b_hh)
 
-        i_t, f_t, g_t, o_t = lucid.split(gates, 4, axis=1)
+        i_t, f_t, g_t, o_t = lucid.chunk(gates, 4, axis=1)
         i_t = F.sigmoid(i_t)
         f_t = F.sigmoid(f_t)
         g_t = F.tanh(g_t)
@@ -414,8 +414,8 @@ class RNNBase(nn.Module):
         input_gates = F.linear(input_, w_ih, b_ih)
         hidden_gates = F.linear(hx, w_hh, b_hh)
 
-        i_r, i_z, i_n = lucid.split(input_gates, 3, axis=1)
-        h_r, h_z, h_n = lucid.split(hidden_gates, 3, axis=1)
+        i_r, i_z, i_n = lucid.chunk(input_gates, 3, axis=1)
+        h_r, h_z, h_n = lucid.chunk(hidden_gates, 3, axis=1)
 
         r_t = F.sigmoid(i_r + h_r)
         z_t = F.sigmoid(i_z + h_z)
