@@ -15,11 +15,10 @@ namespace lucid {
 TensorImplPtr inv_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     if (!a) throw LucidError("inv: null input");
-    require_gpu(a, "inv");
     OpScope scope{"inv", a->device_, a->dtype_, a->shape_};
-    const auto& ga = std::get<GpuStorage>(a->storage_);
-    auto out = ::mlx::core::linalg::inv(*ga.arr, kMlxCpu);
-    return fresh(Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)},
+    auto in = as_mlx_array(a);
+    auto out = ::mlx::core::linalg::inv(in, kMlxCpu);
+    return fresh(wrap_result(std::move(out), a->dtype_, a->device_, a->shape_),
                  a->shape_, a->dtype_, a->device_);
 }
 

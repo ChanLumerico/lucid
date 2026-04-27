@@ -15,12 +15,11 @@ namespace lucid {
 TensorImplPtr pinv_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     if (!a) throw LucidError("pinv: null input");
-    require_gpu(a, "pinv");
     OpScope scope{"pinv", a->device_, a->dtype_, a->shape_};
-    const auto& ga = std::get<GpuStorage>(a->storage_);
-    auto out = ::mlx::core::linalg::pinv(*ga.arr, kMlxCpu);
+    auto in = as_mlx_array(a);
+    auto out = ::mlx::core::linalg::pinv(in, kMlxCpu);
     Shape sh = mlx_shape_to_lucid(out.shape());
-    return fresh(Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)},
+    return fresh(wrap_result(std::move(out), a->dtype_, a->device_, sh),
                  std::move(sh), a->dtype_, a->device_);
 }
 

@@ -59,62 +59,175 @@ CpuStorage cpu_matmul(const CpuStorage& a, const CpuStorage& b,
     return out;
 }
 
+// CPU N-D matmul: a [..., M, K] @ b [..., K, N] → out [..., M, N]
+// Leading dims of a/b are broadcast-aligned; the kernel iterates over the
+// flattened batch dim and calls sgemm/dgemm per slice.
+struct NdMatmulInfo {
+    Shape out_shape;
+    Shape a_bcast_shape;
+    Shape b_bcast_shape;
+    int M, K, N;
+    std::size_t batch;
+};
+
+NdMatmulInfo plan_nd_matmul(const Shape& a, const Shape& b) {
+    if (a.size() < 2 || b.size() < 2)
+        throw ShapeMismatch(a, b, "matmul: both operands must be ≥2-D");
+    const std::size_t na = a.size(), nb = b.size();
+    const std::int64_t M = a[na - 2], Ka = a[na - 1];
+    const std::int64_t Kb = b[nb - 2], N = b[nb - 1];
+    if (Ka != Kb)
+        throw ShapeMismatch(a, b, "matmul: inner dim mismatch");
+
+    Shape ba(a.begin(), a.end() - 2);
+    Shape bb(b.begin(), b.end() - 2);
+    Shape out_b;
+    if (ba.empty()) out_b = bb;
+    else if (bb.empty()) out_b = ba;
+    else {
+        // Broadcast leading batch dims.
+        const std::size_t r = std::max(ba.size(), bb.size());
+        out_b.assign(r, 1);
+        for (std::size_t i = 0; i < r; ++i) {
+            const std::size_t ai = (ba.size() >= r - i) ? ba.size() - (r - i) : SIZE_MAX;
+            const std::size_t bi = (bb.size() >= r - i) ? bb.size() - (r - i) : SIZE_MAX;
+            const std::int64_t da = (ai != SIZE_MAX) ? ba[ai] : 1;
+            const std::int64_t db = (bi != SIZE_MAX) ? bb[bi] : 1;
+            if (da == db || da == 1 || db == 1) out_b[i] = da == 1 ? db : da;
+            else throw ShapeMismatch(a, b, "matmul: incompatible batch dims");
+        }
+    }
+    NdMatmulInfo info;
+    info.out_shape = out_b;
+    info.out_shape.push_back(M);
+    info.out_shape.push_back(N);
+    info.a_bcast_shape = out_b;
+    info.a_bcast_shape.push_back(M);
+    info.a_bcast_shape.push_back(Ka);
+    info.b_bcast_shape = out_b;
+    info.b_bcast_shape.push_back(Kb);
+    info.b_bcast_shape.push_back(N);
+    info.M = static_cast<int>(M);
+    info.K = static_cast<int>(Ka);
+    info.N = static_cast<int>(N);
+    std::size_t batch = 1;
+    for (auto d : out_b) batch *= static_cast<std::size_t>(d);
+    info.batch = batch;
+    return info;
+}
+
+CpuStorage cpu_matmul_nd(const CpuStorage& a, const CpuStorage& b,
+                          const NdMatmulInfo& info, bool transA, bool transB,
+                          Dtype dt) {
+    const std::size_t batch = info.batch;
+    const int M = info.M, K = info.K, N = info.N;
+    const std::size_t a_step = static_cast<std::size_t>(M) * K;
+    const std::size_t b_step = static_cast<std::size_t>(K) * N;
+    const std::size_t o_step = static_cast<std::size_t>(M) * N;
+    CpuStorage out;
+    out.dtype  = dt;
+    out.nbytes = batch * o_step * dtype_size(dt);
+    out.ptr    = allocate_aligned_bytes(out.nbytes);
+    if (M == 0 || N == 0 || K == 0) {
+        if (out.nbytes) std::memset(out.ptr.get(), 0, out.nbytes);
+        return out;
+    }
+    auto run = [&](auto type_tag) {
+        using T = decltype(type_tag);
+        const T* ap = reinterpret_cast<const T*>(a.ptr.get());
+        const T* bp = reinterpret_cast<const T*>(b.ptr.get());
+        T* op = reinterpret_cast<T*>(out.ptr.get());
+        const int lda = transA ? M : K;
+        const int ldb = transB ? K : N;
+        for (std::size_t bi = 0; bi < batch; ++bi) {
+            if constexpr (std::is_same_v<T, float>) {
+                backend::cpu::sgemm(transA, transB, M, N, K, 1.0f,
+                                      ap + bi * a_step, lda,
+                                      bp + bi * b_step, ldb, 0.0f,
+                                      op + bi * o_step, N);
+            } else {
+                backend::cpu::dgemm(transA, transB, M, N, K, 1.0,
+                                      ap + bi * a_step, lda,
+                                      bp + bi * b_step, ldb, 0.0,
+                                      op + bi * o_step, N);
+            }
+        }
+    };
+    if (dt == Dtype::F32) run(float{});
+    else if (dt == Dtype::F64) run(double{});
+    else throw NotImplementedError("matmul: dtype not supported (F32/F64)");
+    return out;
+}
+
 }  // namespace
 
 std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
-    // Saved: input_shapes_[0] = [M, K], input_shapes_[1] = [K, N]
-    // grad_out: [M, N], saved_inputs_[0] = A, saved_inputs_[1] = B.
-    const int M = static_cast<int>(input_shapes_[0][0]);
-    const int K = static_cast<int>(input_shapes_[0][1]);
-    const int N = static_cast<int>(input_shapes_[1][1]);
+    // For batched / broadcast matmul: dA = grad @ B^T, dB = A^T @ grad,
+    // each computed at the broadcast shape (info.a_bcast_shape /
+    // .b_bcast_shape) and then reduced back to the original input shapes
+    // via reduce_grad_to_shape (handles broadcast-undo).
+    const auto info = plan_nd_matmul(input_shapes_[0], input_shapes_[1]);
 
     if (device_ == Device::GPU) {
         const auto& gA = std::get<GpuStorage>(saved_inputs_[0]);
         const auto& gB = std::get<GpuStorage>(saved_inputs_[1]);
         const auto& gG = std::get<GpuStorage>(grad_out);
-        if (!gA.arr || !gB.arr || !gG.arr) {
+        if (!gA.arr || !gB.arr || !gG.arr)
             throw LucidError("matmul backward: null GPU array");
-        }
-        // dA = grad @ B^T ; dB = A^T @ grad. MLX has no separate transpose
-        // flag on matmul; use ::mlx::core::transpose explicitly. Empty cases
-        // (M/N/K == 0) fall through naturally — MLX returns empty arrays.
-        if (M == 0 || N == 0 || K == 0) {
-            auto za = ::mlx::core::zeros(gpu::to_mlx_shape(input_shapes_[0]),
-                                         gpu::to_mlx_dtype(dtype_));
-            auto zb = ::mlx::core::zeros(gpu::to_mlx_shape(input_shapes_[1]),
-                                         gpu::to_mlx_dtype(dtype_));
-            return {Storage{gpu::wrap_mlx_array(std::move(za), dtype_)},
-                    Storage{gpu::wrap_mlx_array(std::move(zb), dtype_)}};
-        }
-        auto bT = ::mlx::core::transpose(*gB.arr);
-        auto aT = ::mlx::core::transpose(*gA.arr);
+        // dA = grad @ B^T  (B^T = swapaxes(B, -2, -1))
+        // dB = A^T @ grad
+        auto bT = ::mlx::core::swapaxes(*gB.arr, -2, -1);
+        auto aT = ::mlx::core::swapaxes(*gA.arr, -2, -1);
         auto dA = ::mlx::core::matmul(*gG.arr, bT);
         auto dB = ::mlx::core::matmul(aT, *gG.arr);
-        return {Storage{gpu::wrap_mlx_array(std::move(dA), dtype_)},
-                Storage{gpu::wrap_mlx_array(std::move(dB), dtype_)}};
+        // reduce_grad_to_shape collapses any broadcast batch dims back to
+        // the original input shapes.
+        Storage dA_s{gpu::wrap_mlx_array(std::move(dA), dtype_)};
+        Storage dB_s{gpu::wrap_mlx_array(std::move(dB), dtype_)};
+        dA_s = reduce_grad_to_shape(std::move(dA_s), info.a_bcast_shape,
+                                       input_shapes_[0], dtype_, device_);
+        dB_s = reduce_grad_to_shape(std::move(dB_s), info.b_bcast_shape,
+                                       input_shapes_[1], dtype_, device_);
+        return {std::move(dA_s), std::move(dB_s)};
     }
 
-    const auto& g_cpu = std::get<CpuStorage>(grad_out);
-    const auto& a_cpu = std::get<CpuStorage>(saved_inputs_[0]);
-    const auto& b_cpu = std::get<CpuStorage>(saved_inputs_[1]);
+    // CPU: per-slice GEMM with transA / transB at the broadcast shape.
+    const CpuStorage& aRaw = std::get<CpuStorage>(saved_inputs_[0]);
+    const CpuStorage& bRaw = std::get<CpuStorage>(saved_inputs_[1]);
+    const CpuStorage& gRaw = std::get<CpuStorage>(grad_out);
 
-    // Item #7 — empty case: cblas rejects 0-sized BLAS calls. Allocate
-    // zero-filled grads of the right shape instead.
-    auto empty_grad = [this](int rows, int cols) -> Storage {
-        auto cpu = allocate_2d(rows, cols, this->dtype_);
-        if (cpu.nbytes > 0) std::memset(cpu.ptr.get(), 0, cpu.nbytes);
-        return Storage{std::move(cpu)};
-    };
+    CpuStorage aBuf, bBuf;
+    const CpuStorage* aUse = &aRaw;
+    const CpuStorage* bUse = &bRaw;
+    if (input_shapes_[0] != info.a_bcast_shape) {
+        aBuf = detail::broadcast_cpu(aRaw, input_shapes_[0], info.a_bcast_shape, dtype_);
+        aUse = &aBuf;
+    }
+    if (input_shapes_[1] != info.b_bcast_shape) {
+        bBuf = detail::broadcast_cpu(bRaw, input_shapes_[1], info.b_bcast_shape, dtype_);
+        bUse = &bBuf;
+    }
 
-    Storage dA = (M == 0 || K == 0 || N == 0)
-        ? empty_grad(M, K)
-        : Storage{cpu_matmul(g_cpu, b_cpu, M, K, N,
-                             /*transA=*/false, /*transB=*/true, dtype_)};
-    Storage dB = (K == 0 || N == 0 || M == 0)
-        ? empty_grad(K, N)
-        : Storage{cpu_matmul(a_cpu, g_cpu, K, N, M,
-                             /*transA=*/true, /*transB=*/false, dtype_)};
-    return {std::move(dA), std::move(dB)};
+    // Build the "a-shaped" backward result: grad @ B^T (per slice).
+    NdMatmulInfo dA_info = info;
+    dA_info.M = info.M; dA_info.N = info.K;
+    NdMatmulInfo dB_info = info;
+    dB_info.M = info.K; dB_info.N = info.N;
+
+    CpuStorage dA_cpu = cpu_matmul_nd(gRaw, *bUse, NdMatmulInfo{
+        info.a_bcast_shape, {}, {}, info.M, info.N, info.K, info.batch},
+        /*transA=*/false, /*transB=*/true, dtype_);
+    CpuStorage dB_cpu = cpu_matmul_nd(*aUse, gRaw, NdMatmulInfo{
+        info.b_bcast_shape, {}, {}, info.K, info.M, info.N, info.batch},
+        /*transA=*/true, /*transB=*/false, dtype_);
+
+    Storage dA_s{std::move(dA_cpu)};
+    Storage dB_s{std::move(dB_cpu)};
+    dA_s = reduce_grad_to_shape(std::move(dA_s), info.a_bcast_shape,
+                                   input_shapes_[0], dtype_, device_);
+    dB_s = reduce_grad_to_shape(std::move(dB_s), info.b_bcast_shape,
+                                   input_shapes_[1], dtype_, device_);
+    return {std::move(dA_s), std::move(dB_s)};
 }
 
 TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPtr& b) {
@@ -125,12 +238,9 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
     if (a->device_ != b->device_)
         throw DeviceMismatch(std::string(device_name(a->device_)),
                              std::string(device_name(b->device_)), "matmul");
-    if (a->shape_.size() != 2 || b->shape_.size() != 2) {
+    if (a->shape_.size() < 2 || b->shape_.size() < 2) {
         throw ShapeMismatch(a->shape_, b->shape_,
-                            "matmul (Phase 3.1: 2-D only)");
-    }
-    if (a->shape_[1] != b->shape_[0]) {
-        throw ShapeMismatch(a->shape_, b->shape_, "matmul (inner dim mismatch)");
+                            "matmul: both operands must be ≥2-D");
     }
     // Item #8 — non-contiguous input guard. CPU only (GPU stride is internal).
     if (a->device_ == Device::CPU &&
@@ -140,49 +250,43 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
             "(call .contiguous() first)");
     }
 
-    const int M = static_cast<int>(a->shape_[0]);
-    const int K = static_cast<int>(a->shape_[1]);
-    const int N = static_cast<int>(b->shape_[1]);
+    const auto info = plan_nd_matmul(a->shape_, b->shape_);
+    const int M = info.M, N = info.N, K = info.K;
 
     OpScope scope{MatmulBackward::schema_v1.name, a->device_, a->dtype_,
-                  Shape{a->shape_[0], b->shape_[1]}};
-    scope.set_flops(static_cast<std::int64_t>(2) * M * N * K);  // 2*M*N*K standard
+                  info.out_shape};
+    scope.set_flops(static_cast<std::int64_t>(2) * info.batch * M * N * K);
 
     Storage out_storage;
     if (a->device_ == Device::GPU) {
-        if (M == 0 || N == 0 || K == 0) {
-            auto z = ::mlx::core::zeros(
-                gpu::to_mlx_shape(Shape{a->shape_[0], b->shape_[1]}),
-                gpu::to_mlx_dtype(a->dtype_));
-            out_storage = Storage{gpu::wrap_mlx_array(std::move(z), a->dtype_)};
-        } else {
-            const auto& gA = std::get<GpuStorage>(a->storage_);
-            const auto& gB = std::get<GpuStorage>(b->storage_);
-            auto out = ::mlx::core::matmul(*gA.arr, *gB.arr);
-            out_storage =
-                Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
-        }
+        const auto& gA = std::get<GpuStorage>(a->storage_);
+        const auto& gB = std::get<GpuStorage>(b->storage_);
+        // MLX matmul handles batched N-D inputs natively (with broadcasting
+        // over leading axes). No manual reshape needed.
+        auto out = ::mlx::core::matmul(*gA.arr, *gB.arr);
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
     } else {
-        // Item #7 — empty inner dim: cblas_sgemm rejects K=0 with
-        // "lda >= max(K,1)". Empty matmul over an empty inner dim produces an
-        // all-zeros output (empty sum convention).
-        CpuStorage out_storage_cpu;
-        if (M == 0 || N == 0 || K == 0) {
-            out_storage_cpu = allocate_2d(M, N, a->dtype_);
-            if (out_storage_cpu.nbytes > 0) {
-                std::memset(out_storage_cpu.ptr.get(), 0, out_storage_cpu.nbytes);
-            }
-        } else {
-            out_storage_cpu = cpu_matmul(std::get<CpuStorage>(a->storage_),
-                                         std::get<CpuStorage>(b->storage_),
-                                         M, N, K, /*transA=*/false,
-                                         /*transB=*/false, a->dtype_);
+        // CPU: materialize broadcast for batch dims, then per-slice GEMM.
+        const CpuStorage& aRaw = std::get<CpuStorage>(a->storage_);
+        const CpuStorage& bRaw = std::get<CpuStorage>(b->storage_);
+        CpuStorage aBuf, bBuf;
+        const CpuStorage* aUse = &aRaw;
+        const CpuStorage* bUse = &bRaw;
+        if (a->shape_ != info.a_bcast_shape) {
+            aBuf = detail::broadcast_cpu(aRaw, a->shape_, info.a_bcast_shape, a->dtype_);
+            aUse = &aBuf;
         }
-        out_storage = Storage{std::move(out_storage_cpu)};
+        if (b->shape_ != info.b_bcast_shape) {
+            bBuf = detail::broadcast_cpu(bRaw, b->shape_, info.b_bcast_shape, a->dtype_);
+            bUse = &bBuf;
+        }
+        out_storage = Storage{cpu_matmul_nd(*aUse, *bUse, info,
+                                              /*transA=*/false,
+                                              /*transB=*/false, a->dtype_)};
     }
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            Shape{a->shape_[0], b->shape_[1]},
+                                            info.out_shape,
                                             a->dtype_, a->device_,
                                             /*requires_grad=*/false);
 

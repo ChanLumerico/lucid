@@ -17,15 +17,14 @@ TensorImplPtr norm_op(const TensorImplPtr& a, double ord,
                       std::vector<int> axis, bool keepdims) {
     using namespace linalg_detail;
     if (!a) throw LucidError("norm: null input");
-    require_gpu(a, "norm");
     OpScope scope{"norm", a->device_, a->dtype_, a->shape_};
-    const auto& ga = std::get<GpuStorage>(a->storage_);
+    auto in = as_mlx_array(a);
     std::optional<std::vector<int>> axis_opt;
     if (!axis.empty()) axis_opt = std::move(axis);
-    auto out = ::mlx::core::linalg::norm(*ga.arr, ord, axis_opt, keepdims,
+    auto out = ::mlx::core::linalg::norm(in, ord, axis_opt, keepdims,
                                           kMlxCpu);
     Shape sh = mlx_shape_to_lucid(out.shape());
-    return fresh(Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)},
+    return fresh(wrap_result(std::move(out), a->dtype_, a->device_, sh),
                  std::move(sh), a->dtype_, a->device_);
 }
 
