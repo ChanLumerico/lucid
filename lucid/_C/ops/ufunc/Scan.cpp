@@ -118,6 +118,92 @@ public:
     }
 };
 
+// cumprod backward.
+//   y_k = x_0 * x_1 * ... * x_k
+//   dx_j = sum_{k >= j} (g_k * y_k) / x_j
+//        = reverse_cumsum(g * y)_j / x_j
+// We materialize this via:
+//   1. forward y = cumprod(x, axis)            (saved at forward time)
+//   2. p = g * y
+//   3. q = reverse_cumsum(p, axis)
+//   4. dx = q / x   (NaN at zeros — same convention as PyTorch)
+class CumprodBackward : public Node {
+public:
+    Shape input_shape_;
+    Dtype dtype_;
+    Device device_;
+    int axis_;
+    Storage saved_x_;
+    Storage saved_y_;
+
+    std::vector<Storage> apply(Storage grad_out) override {
+        if (device_ == Device::GPU) {
+            const auto& gx = std::get<GpuStorage>(saved_x_);
+            const auto& gy = std::get<GpuStorage>(saved_y_);
+            const auto& gg = std::get<GpuStorage>(grad_out);
+            auto p = ::mlx::core::multiply(*gg.arr, *gy.arr);
+            // reverse along axis, cumsum, reverse back
+            std::vector<std::int32_t> idx(input_shape_[axis_]);
+            for (std::int64_t i = 0; i < input_shape_[axis_]; ++i)
+                idx[i] = static_cast<std::int32_t>(input_shape_[axis_] - 1 - i);
+            ::mlx::core::Shape idx_shape(input_shape_.size(), 1);
+            idx_shape[axis_] = input_shape_[axis_];
+            ::mlx::core::array idx_arr(idx.data(), idx_shape, ::mlx::core::int32);
+            idx_arr = ::mlx::core::broadcast_to(idx_arr, gpu::to_mlx_shape(input_shape_));
+            auto p_rev = ::mlx::core::take_along_axis(p, idx_arr, axis_);
+            auto cs = ::mlx::core::cumsum(p_rev, axis_);
+            auto q = ::mlx::core::take_along_axis(cs, idx_arr, axis_);
+            auto dx = ::mlx::core::divide(q, *gx.arr);
+            return {Storage{gpu::wrap_mlx_array(std::move(dx), dtype_)}};
+        }
+        // CPU path: same recipe via the existing reverse/cumsum helpers.
+        const auto& cx = std::get<CpuStorage>(saved_x_);
+        const auto& cy = std::get<CpuStorage>(saved_y_);
+        const auto& cg = std::get<CpuStorage>(grad_out);
+
+        // p = g * y (allocate fresh)
+        CpuStorage p;
+        p.dtype  = dtype_;
+        p.nbytes = cg.nbytes;
+        p.ptr    = allocate_aligned_bytes(p.nbytes);
+        const std::size_t total = shape_numel(input_shape_);
+        auto mul_kernel = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const T* gp = reinterpret_cast<const T*>(cg.ptr.get());
+            const T* yp = reinterpret_cast<const T*>(cy.ptr.get());
+            T* op = reinterpret_cast<T*>(p.ptr.get());
+            for (std::size_t i = 0; i < total; ++i) op[i] = gp[i] * yp[i];
+        };
+        if (dtype_ == Dtype::F32) mul_kernel(float{});
+        else if (dtype_ == Dtype::F64) mul_kernel(double{});
+        else throw NotImplementedError("cumprod backward: dtype not supported");
+
+        Storage p_s{std::move(p)};
+        Storage rev = reverse_along_axis_storage(p_s, input_shape_,
+                                                   axis_, dtype_, device_);
+        Storage cs  = cumsum_storage_along(rev, input_shape_, axis_,
+                                             dtype_, device_);
+        Storage q   = reverse_along_axis_storage(cs, input_shape_,
+                                                   axis_, dtype_, device_);
+        // dx = q / x
+        const auto& cq = std::get<CpuStorage>(q);
+        CpuStorage dx;
+        dx.dtype  = dtype_;
+        dx.nbytes = cq.nbytes;
+        dx.ptr    = allocate_aligned_bytes(dx.nbytes);
+        auto div_kernel = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const T* qp = reinterpret_cast<const T*>(cq.ptr.get());
+            const T* xp = reinterpret_cast<const T*>(cx.ptr.get());
+            T* dp = reinterpret_cast<T*>(dx.ptr.get());
+            for (std::size_t i = 0; i < total; ++i) dp[i] = qp[i] / xp[i];
+        };
+        if (dtype_ == Dtype::F32) div_kernel(float{});
+        else div_kernel(double{});
+        return {Storage{std::move(dx)}};
+    }
+};
+
 template <typename T, bool IsProd>
 void scan_axis(const T* in, T* out, const Shape& shape, int axis) {
     const std::size_t ndim = shape.size();
@@ -225,7 +311,26 @@ TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis) {
 }
 
 TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis) {
-    return scan_dispatch(a, axis, /*is_prod=*/true, "cumprod");
+    auto out = scan_dispatch(a, axis, /*is_prod=*/true, "cumprod");
+    if (GradMode::is_enabled() && a->requires_grad_) {
+        int ax = axis < 0 ? axis + (int)a->shape_.size() : axis;
+        auto bwd = std::make_shared<CumprodBackward>();
+        bwd->input_shape_ = a->shape_;
+        bwd->dtype_       = a->dtype_;
+        bwd->device_      = a->device_;
+        bwd->axis_        = ax;
+        bwd->saved_x_     = a->storage_;
+        bwd->saved_y_     = out->storage_;
+        auto a_edge = detail::ensure_grad_fn(a);
+        std::vector<Edge> edges;
+        edges.emplace_back(a_edge, 0);
+        bwd->set_next_edges(std::move(edges));
+        bwd->set_saved_versions({a->version_});
+        out->grad_fn_ = std::move(bwd);
+        out->is_leaf_ = false;
+        out->requires_grad_ = true;
+    }
+    return out;
 }
 
 }  // namespace lucid
