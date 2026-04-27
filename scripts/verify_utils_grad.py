@@ -4,14 +4,14 @@ import sys
 
 import numpy as np
 
-from lucid._C import engine as eng
+from lucid._C import engine as _C_engine
 
 PASSED = 0
 FAILED = 0
 
 
 def make_tensor(data, device, requires_grad=False):
-    return eng.TensorImpl(np.asarray(data), device, requires_grad)
+    return _C_engine.TensorImpl(np.asarray(data), device, requires_grad)
 
 
 def grad_np(tensor):
@@ -38,7 +38,7 @@ def check(name, got, expected, tol=1e-5):
 
 
 def backward_sum(out):
-    eng.engine_backward(eng.sum(out, [], False), retain_graph=False)
+    _C_engine.engine_backward(_C_engine.sum(out, [], False), retain_graph=False)
 
 
 def check_where(device):
@@ -49,7 +49,7 @@ def check_where(device):
     x = make_tensor(x_np, device, True)
     y = make_tensor(y_np, device, True)
 
-    backward_sum(eng.where(cond, x, y))
+    backward_sum(_C_engine.where(cond, x, y))
     check(f"where x ({device.name})", grad_np(x), cond_np.astype(np.float32))
     check(f"where y ({device.name})", grad_np(y), (~cond_np).astype(np.float32))
 
@@ -60,7 +60,7 @@ def check_masked_fill(device):
     a = make_tensor(np.arange(6, dtype=np.float32).reshape(2, 3), device, True)
     mask = make_tensor(mask_np, device)
 
-    backward_sum(eng.masked_fill(a, mask, -7.0))
+    backward_sum(_C_engine.masked_fill(a, mask, -7.0))
     check(f"masked_fill ({device.name})", grad_np(a),
           (~mask_np).astype(np.float32))
 
@@ -71,8 +71,8 @@ def check_roll(device):
     a = make_tensor(base_np, device, True)
     weight = make_tensor(weight_np, device)
 
-    out = eng.roll(a, [1, -1], [0, 1])
-    backward_sum(eng.mul(out, weight))
+    out = _C_engine.roll(a, [1, -1], [0, 1])
+    backward_sum(_C_engine.mul(out, weight))
     expected = np.roll(weight_np, shift=(-1, 1), axis=(0, 1))
     check(f"roll ({device.name})", grad_np(a), expected)
 
@@ -85,7 +85,7 @@ def check_gather(device):
     idx = make_tensor(idx_np, device)
     weight = make_tensor(weight_np, device)
 
-    backward_sum(eng.mul(eng.gather(a, idx, 1), weight))
+    backward_sum(_C_engine.mul(_C_engine.gather(a, idx, 1), weight))
     expected = np.zeros_like(src_np)
     for row in range(idx_np.shape[0]):
         for col in range(idx_np.shape[1]):
@@ -99,7 +99,7 @@ def check_diagonal(device):
     a = make_tensor(src_np, device, True)
     weight = make_tensor(weight_np, device)
 
-    backward_sum(eng.mul(eng.diagonal(a, 1, 1, 2), weight))
+    backward_sum(_C_engine.mul(_C_engine.diagonal(a, 1, 1, 2), weight))
     expected = np.zeros_like(src_np)
     for batch in range(2):
         for i in range(3):
@@ -113,12 +113,12 @@ def check_tri(device):
 
     a = make_tensor(base_np, device, True)
     weight = make_tensor(weight_np, device)
-    backward_sum(eng.mul(eng.tril(a, 0), weight))
+    backward_sum(_C_engine.mul(_C_engine.tril(a, 0), weight))
     check(f"tril ({device.name})", grad_np(a), np.tril(weight_np, 0))
 
     a = make_tensor(base_np, device, True)
     weight = make_tensor(weight_np, device)
-    backward_sum(eng.mul(eng.triu(a, 1), weight))
+    backward_sum(_C_engine.mul(_C_engine.triu(a, 1), weight))
     check(f"triu ({device.name})", grad_np(a), np.triu(weight_np, 1))
 
 
@@ -127,7 +127,7 @@ def check_sort_topk(device):
     weight_np = np.array([[10, 20, 30, 40], [1, 2, 3, 4]], dtype=np.float32)
     a = make_tensor(src_np, device, True)
     weight = make_tensor(weight_np, device)
-    backward_sum(eng.mul(eng.sort(a, 1), weight))
+    backward_sum(_C_engine.mul(_C_engine.sort(a, 1), weight))
     expected = np.zeros_like(src_np)
     order = np.argsort(src_np, axis=1)
     for row in range(src_np.shape[0]):
@@ -138,7 +138,7 @@ def check_sort_topk(device):
     weight_np = np.array([[10, 20], [1, 2]], dtype=np.float32)
     a = make_tensor(src_np, device, True)
     weight = make_tensor(weight_np, device)
-    backward_sum(eng.mul(eng.topk(a, 2, 1), weight))
+    backward_sum(_C_engine.mul(_C_engine.topk(a, 2, 1), weight))
     expected = np.zeros_like(src_np)
     order = np.argsort(src_np, axis=1)[:, ::-1][:, :2]
     for row in range(src_np.shape[0]):
@@ -155,12 +155,12 @@ def check_meshgrid(device):
 
     x = make_tensor(x_np, device, True)
     y = make_tensor(y_np, device, True)
-    gx, gy = eng.meshgrid([x, y], False)
+    gx, gy = _C_engine.meshgrid([x, y], False)
     wx = make_tensor(wx_np, device)
     wy = make_tensor(wy_np, device)
-    loss = eng.add(eng.sum(eng.mul(gx, wx), [], False),
-                   eng.sum(eng.mul(gy, wy), [], False))
-    eng.engine_backward(loss, retain_graph=False)
+    loss = _C_engine.add(_C_engine.sum(_C_engine.mul(gx, wx), [], False),
+                   _C_engine.sum(_C_engine.mul(gy, wy), [], False))
+    _C_engine.engine_backward(loss, retain_graph=False)
     check(f"meshgrid x ij ({device.name})", grad_np(x), wx_np.sum(axis=1))
     check(f"meshgrid y ij ({device.name})", grad_np(y), wy_np.sum(axis=0))
 
@@ -168,12 +168,12 @@ def check_meshgrid(device):
     wy_np = np.array([[7, 8, 9], [10, 11, 12]], dtype=np.float32)
     x = make_tensor(x_np, device, True)
     y = make_tensor(y_np, device, True)
-    gx, gy = eng.meshgrid([x, y], True)
+    gx, gy = _C_engine.meshgrid([x, y], True)
     wx = make_tensor(wx_np, device)
     wy = make_tensor(wy_np, device)
-    loss = eng.add(eng.sum(eng.mul(gx, wx), [], False),
-                   eng.sum(eng.mul(gy, wy), [], False))
-    eng.engine_backward(loss, retain_graph=False)
+    loss = _C_engine.add(_C_engine.sum(_C_engine.mul(gx, wx), [], False),
+                   _C_engine.sum(_C_engine.mul(gy, wy), [], False))
+    _C_engine.engine_backward(loss, retain_graph=False)
     check(f"meshgrid x xy ({device.name})", grad_np(x), wx_np.sum(axis=0))
     check(f"meshgrid y xy ({device.name})", grad_np(y), wy_np.sum(axis=1))
 
@@ -195,8 +195,8 @@ def check_device(device):
 
 
 def main():
-    check_device(eng.Device.CPU)
-    check_device(eng.Device.GPU)
+    check_device(_C_engine.Device.CPU)
+    check_device(_C_engine.Device.GPU)
     print(f"\n--- TOTAL: {PASSED} passed, {FAILED} failed ---")
     return 0 if FAILED == 0 else 1
 

@@ -4,14 +4,14 @@ import sys
 
 import numpy as np
 
-from lucid._C import engine as eng
+from lucid._C import engine as _C_engine
 
 PASSED = 0
 FAILED = 0
 
 
 def make_tensor(data, device, requires_grad=False):
-    return eng.TensorImpl(np.asarray(data), device, requires_grad)
+    return _C_engine.TensorImpl(np.asarray(data), device, requires_grad)
 
 
 def data_np(tensor):
@@ -43,21 +43,21 @@ def check(name, got, expected, tol=1e-5):
 
 def run_case(name, x_np, grid_np, weight_np, mode, padding_mode,
              align_corners):
-    x_cpu = make_tensor(x_np, eng.Device.CPU, True)
-    grid_cpu = make_tensor(grid_np, eng.Device.CPU, True)
-    weight_cpu = make_tensor(weight_np, eng.Device.CPU)
-    out_cpu = eng.nn.grid_sample(
+    x_cpu = make_tensor(x_np, _C_engine.Device.CPU, True)
+    grid_cpu = make_tensor(grid_np, _C_engine.Device.CPU, True)
+    weight_cpu = make_tensor(weight_np, _C_engine.Device.CPU)
+    out_cpu = _C_engine.nn.grid_sample(
         x_cpu, grid_cpu, mode, padding_mode, align_corners)
-    loss_cpu = eng.sum(eng.mul(out_cpu, weight_cpu), [], False)
-    eng.engine_backward(loss_cpu, retain_graph=False)
+    loss_cpu = _C_engine.sum(_C_engine.mul(out_cpu, weight_cpu), [], False)
+    _C_engine.engine_backward(loss_cpu, retain_graph=False)
 
-    x_gpu = make_tensor(x_np, eng.Device.GPU, True)
-    grid_gpu = make_tensor(grid_np, eng.Device.GPU, True)
-    weight_gpu = make_tensor(weight_np, eng.Device.GPU)
-    out_gpu = eng.nn.grid_sample(
+    x_gpu = make_tensor(x_np, _C_engine.Device.GPU, True)
+    grid_gpu = make_tensor(grid_np, _C_engine.Device.GPU, True)
+    weight_gpu = make_tensor(weight_np, _C_engine.Device.GPU)
+    out_gpu = _C_engine.nn.grid_sample(
         x_gpu, grid_gpu, mode, padding_mode, align_corners)
-    loss_gpu = eng.sum(eng.mul(out_gpu, weight_gpu), [], False)
-    eng.engine_backward(loss_gpu, retain_graph=False)
+    loss_gpu = _C_engine.sum(_C_engine.mul(out_gpu, weight_gpu), [], False)
+    _C_engine.engine_backward(loss_gpu, retain_graph=False)
 
     check(f"{name} forward", data_np(out_gpu), data_np(out_cpu))
     check(f"{name} input grad", grad_np(x_gpu), grad_np(x_cpu))

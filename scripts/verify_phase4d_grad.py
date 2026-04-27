@@ -16,7 +16,7 @@ The backward formulas under test:
 import sys
 import numpy as np
 
-from lucid._C import engine as eng
+from lucid._C import engine as _C_engine
 
 PASSED = 0
 FAILED = 0
@@ -27,14 +27,14 @@ def to_np(t):
 
 
 def make_leaf(arr, requires_grad=True):
-    return eng.TensorImpl(arr.copy(), eng.Device.CPU, requires_grad)
+    return _C_engine.TensorImpl(arr.copy(), _C_engine.Device.CPU, requires_grad)
 
 
 def grad_of(out, leaves):
     """Returns each leaf's gradient as a numpy array after engine_backward."""
     for leaf in leaves:
         leaf.zero_grad()
-    eng.engine_backward(out, retain_graph=False)
+    _C_engine.engine_backward(out, retain_graph=False)
     return [np.array(leaf.grad_as_python()) for leaf in leaves]
 
 
@@ -83,13 +83,13 @@ def main():
     section("var backward")
     x = rng.standard_normal((3, 4)).astype(np.float32) * 0.5
     leaf = make_leaf(x)
-    out = eng.var(leaf, [], False)  # scalar variance
+    out = _C_engine.var(leaf, [], False)  # scalar variance
     [g] = grad_of(out, [leaf])
     fd = fd_grad(lambda v: np.var(v), x)
     check("var(all)", g, fd)
 
     leaf = make_leaf(x)
-    out = eng.sum(eng.var(leaf, [1], False), [], False)  # sum-reduce so scalar
+    out = _C_engine.sum(_C_engine.var(leaf, [1], False), [], False)  # sum-reduce so scalar
     [g] = grad_of(out, [leaf])
     fd = fd_grad(lambda v: np.var(v, axis=1).sum(), x)
     check("var(axis=1)", g, fd)
@@ -97,7 +97,7 @@ def main():
     section("trace backward")
     M = rng.standard_normal((4, 4)).astype(np.float32) * 0.5
     leaf = make_leaf(M)
-    out = eng.trace(leaf)  # scalar
+    out = _C_engine.trace(leaf)  # scalar
     [g] = grad_of(out, [leaf])
     fd = fd_grad(lambda v: float(np.trace(v)), M)
     check("trace(2-D)", g, fd)
@@ -105,13 +105,13 @@ def main():
     section("cumsum backward")
     x = rng.standard_normal((3, 5)).astype(np.float32) * 0.5
     leaf = make_leaf(x)
-    out = eng.sum(eng.cumsum(leaf, 1), [], False)
+    out = _C_engine.sum(_C_engine.cumsum(leaf, 1), [], False)
     [g] = grad_of(out, [leaf])
     fd = fd_grad(lambda v: np.cumsum(v, axis=1).sum(), x)
     check("cumsum(axis=1)", g, fd)
 
     leaf = make_leaf(x)
-    out = eng.sum(eng.cumsum(leaf, 0), [], False)
+    out = _C_engine.sum(_C_engine.cumsum(leaf, 0), [], False)
     [g] = grad_of(out, [leaf])
     fd = fd_grad(lambda v: np.cumsum(v, axis=0).sum(), x)
     check("cumsum(axis=0)", g, fd)
@@ -121,7 +121,7 @@ def main():
     b = rng.standard_normal(5).astype(np.float32) * 0.5
     la = make_leaf(a)
     lb = make_leaf(b)
-    out = eng.dot(la, lb)
+    out = _C_engine.dot(la, lb)
     ga, gb = grad_of(out, [la, lb])
     fd_a = fd_grad(lambda v: float(np.dot(v, b)), a)
     fd_b = fd_grad(lambda v: float(np.dot(a, v)), b)
@@ -133,7 +133,7 @@ def main():
     B = rng.standard_normal((4, 2)).astype(np.float32) * 0.5
     lA = make_leaf(A)
     lB = make_leaf(B)
-    out = eng.sum(eng.dot(lA, lB), [], False)
+    out = _C_engine.sum(_C_engine.dot(lA, lB), [], False)
     gA, gB = grad_of(out, [lA, lB])
     fd_A = fd_grad(lambda v: float(np.dot(v, B).sum()), A)
     fd_B = fd_grad(lambda v: float(np.dot(A, v).sum()), B)
@@ -145,7 +145,7 @@ def main():
     b = rng.standard_normal(3).astype(np.float32) * 0.5
     la = make_leaf(a)
     lb = make_leaf(b)
-    out = eng.sum(eng.outer(la, lb), [], False)
+    out = _C_engine.sum(_C_engine.outer(la, lb), [], False)
     ga, gb = grad_of(out, [la, lb])
     fd_a = fd_grad(lambda v: float(np.outer(v, b).sum()), a)
     fd_b = fd_grad(lambda v: float(np.outer(a, v).sum()), b)

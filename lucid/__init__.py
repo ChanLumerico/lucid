@@ -112,8 +112,8 @@ def shape(a):
 # Top-level grad-state queries (read-only)
 def grad_enabled() -> bool:
     """True if autograd is currently enabled in this thread."""
-    from lucid._C import engine as _eng
-    return _eng.GradMode.is_enabled()
+    from lucid._C import engine as _C_engine
+    return _C_engine.GradMode.is_enabled()
 
 
 # --- Tensor arithmetic + comparison + indexing dunders ----------------------

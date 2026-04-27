@@ -9,7 +9,7 @@ so callers can pass ``lucid.Tensor`` / ``lucid.nn.Parameter`` lists
 from __future__ import annotations
 
 from typing import Iterable
-from lucid._C import engine as _eng
+from lucid._C import engine as _C_engine
 from lucid._tensor import Tensor
 
 
@@ -35,18 +35,18 @@ def _make(cls):
     return _Wrapped
 
 
-Optimizer = _eng.Optimizer
-SGD       = _make(_eng.SGD)
-Adam      = _make(_eng.Adam)
-AdamW     = _make(_eng.AdamW)
-NAdam     = _make(_eng.NAdam)
-RAdam     = _make(_eng.RAdam)
-Adamax    = _make(_eng.Adamax)
-Adagrad   = _make(_eng.Adagrad)
-Adadelta  = _make(_eng.Adadelta)
-RMSprop   = _make(_eng.RMSprop)
-Rprop     = _make(_eng.Rprop)
-ASGD      = _make(_eng.ASGD)
+Optimizer = _C_engine.Optimizer
+SGD       = _make(_C_engine.SGD)
+Adam      = _make(_C_engine.Adam)
+AdamW     = _make(_C_engine.AdamW)
+NAdam     = _make(_C_engine.NAdam)
+RAdam     = _make(_C_engine.RAdam)
+Adamax    = _make(_C_engine.Adamax)
+Adagrad   = _make(_C_engine.Adagrad)
+Adadelta  = _make(_C_engine.Adadelta)
+RMSprop   = _make(_C_engine.RMSprop)
+Rprop     = _make(_C_engine.Rprop)
+ASGD      = _make(_C_engine.ASGD)
 
 from lucid.optim import lr_scheduler  # noqa: F401
 
