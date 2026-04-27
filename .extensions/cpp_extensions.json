@@ -118,6 +118,8 @@
         "lucid/_C/nn/Attention.cpp",
         "lucid/_C/nn/Embedding.cpp",
         "lucid/_C/nn/Spatial.cpp",
+        "lucid/_C/nn/Interpolate.cpp",
+        "lucid/_C/nn/Vision.cpp",
 
         "lucid/_C/random/Random.cpp",
 
