@@ -242,16 +242,15 @@ class _ConstrainedConvNd(_ConvNd):
                     "fixed_center requires odd kernel sizes for all spatial dims."
                 )
 
-            # Build a one-hot mask whose only nonzero entry is the kernel center.
+            # One-time mask construction (init-time only; not in compute path).
             import numpy as np
-
             mask = np.zeros((1, 1, *self.kernel_size), dtype=np.float32)
             center_idx = (0, 0, *[k // 2 for k in self.kernel_size])
             mask[center_idx] = 1.0
             center_mask = Tensor(mask, device=self.device)
-
             self.register_buffer("_center_mask", center_mask)
-            self.register_buffer("_neighbor_mask", Tensor(1.0 - mask, device=self.device))
+            self.register_buffer("_neighbor_mask",
+                                  Tensor(1.0 - mask, device=self.device))
         else:
             self.register_buffer("_center_mask", None)
             self.register_buffer("_neighbor_mask", None)
