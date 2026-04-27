@@ -22,3 +22,8 @@ out/
 .pytest_cache
 .claude
 .misc
+
+# Build / packaging artifacts
+build/
+*.egg-info/
+phase0_baseline.txt

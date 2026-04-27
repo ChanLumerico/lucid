@@ -13,9 +13,11 @@
 #include "../nn/Linear.h"
 #include "../nn/Loss.h"
 #include "../nn/NormExt.h"
+#include "../nn/Interpolate.h"
 #include "../nn/PoolNd.h"
 #include "../nn/RMSNorm.h"
 #include "../nn/Spatial.h"
+#include "../nn/Vision.h"
 #include "../core/Dtype.h"
 #include "../core/Generator.h"
 #include "../core/TensorImpl.h"
@@ -317,6 +319,37 @@ void register_nn(py::module_& m) {
           py::arg("align_corners") = true,
           "2-D grid sampling. mode: 0=bilinear, 1=nearest. "
           "padding_mode: 0=zeros, 1=border.");
+
+    // ---------- Interpolation family (Phase 6-9) ----------
+    m.def("interpolate_bilinear", &interpolate_bilinear_op,
+          py::arg("input"), py::arg("H_out"), py::arg("W_out"),
+          py::arg("align_corners") = false,
+          "2-D bilinear interpolation. Input: (N, C, H, W).");
+    m.def("interpolate_trilinear", &interpolate_trilinear_op,
+          py::arg("input"), py::arg("D_out"), py::arg("H_out"), py::arg("W_out"),
+          py::arg("align_corners") = false,
+          "3-D trilinear interpolation. Input: (N, C, D, H, W).");
+    m.def("interpolate_nearest_2d", &interpolate_nearest_2d_op,
+          py::arg("input"), py::arg("H_out"), py::arg("W_out"),
+          "2-D nearest-neighbor interpolation (no autograd).");
+    m.def("interpolate_nearest_3d", &interpolate_nearest_3d_op,
+          py::arg("input"), py::arg("D_out"), py::arg("H_out"), py::arg("W_out"),
+          "3-D nearest-neighbor interpolation (no autograd).");
+
+    // ---------- Vision (Phase 6-9) ----------
+    m.def("one_hot", &one_hot_op,
+          py::arg("input"), py::arg("num_classes"),
+          py::arg("dtype") = Dtype::I8,
+          "One-hot encode integer indices. Output shape: input.shape + (C,).");
+    m.def("rotate", &rotate_op,
+          py::arg("input"), py::arg("angle_deg"),
+          py::arg("cy"), py::arg("cx"),
+          "2-D image rotation (nearest-neighbor; no autograd).");
+    m.def("bilinear_layer", &bilinear_layer_op,
+          py::arg("x1"), py::arg("x2"), py::arg("weight"),
+          py::arg("bias") = TensorImplPtr{},
+          "Learned bilinear layer: y = x1 W x2 + b. "
+          "x1: (..., D1), x2: (..., D2), W: (Dout, D1, D2), b: (Dout,).");
 }
 
 }  // namespace lucid::bindings
