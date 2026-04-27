@@ -27,6 +27,27 @@ CpuStorage to_cpu(const TensorImplPtr& a) {
     return std::get<CpuStorage>(a->storage_);
 }
 
+// Wrap a freshly-built CpuStorage as a Storage that lives on `target_device`,
+// uploading to GPU when feasible so the result tracks the input's device.
+// Histogram outputs are F64 (counts/density), which MLX-Metal does not
+// support, so when the user requests GPU we fall back to CPU here and
+// document the asymmetry — the alternative is silently downcasting to F32
+// which loses precision.
+Storage to_device_storage(CpuStorage&& cpu, Device target_device,
+                            const Shape& shape) {
+    if (target_device == Device::GPU && cpu.dtype != Dtype::F64) {
+        return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
+    }
+    return Storage{std::move(cpu)};
+}
+
+// Pick the device for histogram outputs: GPU only when the dtype can live
+// on GPU (everything except F64).
+Device pick_out_device(Device requested, Dtype dt) {
+    if (requested == Device::GPU && dt == Dtype::F64) return Device::CPU;
+    return requested;
+}
+
 // Read element `i` from a CPU storage as double.
 double read_double(const CpuStorage& s, std::size_t i, Dtype dt) {
     switch (dt) {
@@ -87,9 +108,18 @@ histogram_op(const TensorImplPtr& a, std::int64_t bins,
         for (std::int64_t i = 0; i < bins; ++i) dst[i] /= (n * step);
     }
 
-    auto counts_t = fresh(Storage{std::move(counts)}, std::move(counts_shape),
-                          Dtype::F64, Device::CPU);
-    return {counts_t, build_edges(lo, hi, bins)};
+    Device out_dev = pick_out_device(a->device_, Dtype::F64);
+    auto counts_t = fresh(to_device_storage(std::move(counts), out_dev, counts_shape),
+                          std::move(counts_shape),
+                          Dtype::F64, out_dev);
+    auto edges = build_edges(lo, hi, bins);
+    // edges share the dtype/device convention with counts.
+    if (out_dev == Device::GPU) {
+        edges = fresh(Storage{gpu::upload_cpu_to_gpu(
+                          std::get<CpuStorage>(edges->storage_), edges->shape_)},
+                       edges->shape_, Dtype::F64, Device::GPU);
+    }
+    return {counts_t, edges};
 }
 
 std::pair<TensorImplPtr, TensorImplPtr>
@@ -133,8 +163,10 @@ histogram2d_op(const TensorImplPtr& a, const TensorImplPtr& b,
             dst[i] /= area;
     }
 
-    auto counts_t = fresh(Storage{std::move(counts)}, std::move(counts_shape),
-                          Dtype::F64, Device::CPU);
+    Device out_dev = pick_out_device(a->device_, Dtype::F64);
+    auto counts_t = fresh(to_device_storage(std::move(counts), out_dev, counts_shape),
+                          std::move(counts_shape),
+                          Dtype::F64, out_dev);
     // Pack edges as a (bins_a + bins_b + 2) flat tensor: [edges_a..., edges_b...]
     auto ea = build_edges(lo_a, hi_a, bins_a);
     auto eb = build_edges(lo_b, hi_b, bins_b);
@@ -147,8 +179,9 @@ histogram2d_op(const TensorImplPtr& a, const TensorImplPtr& b,
     std::memcpy(edst + (bins_a + 1),
                 std::get<CpuStorage>(eb->storage_).ptr.get(),
                 (bins_b + 1) * sizeof(double));
-    auto edges_t = fresh(Storage{std::move(edges)}, std::move(edge_shape),
-                         Dtype::F64, Device::CPU);
+    auto edges_t = fresh(to_device_storage(std::move(edges), out_dev, edge_shape),
+                          std::move(edge_shape),
+                          Dtype::F64, out_dev);
     return {counts_t, edges_t};
 }
 
@@ -214,8 +247,10 @@ histogramdd_op(const TensorImplPtr& a,
         for (std::size_t i = 0; i < total_cells; ++i) dst[i] /= total;
     }
 
-    auto counts_t = fresh(Storage{std::move(counts)}, std::move(counts_shape),
-                          Dtype::F64, Device::CPU);
+    Device out_dev = pick_out_device(a->device_, Dtype::F64);
+    auto counts_t = fresh(to_device_storage(std::move(counts), out_dev, counts_shape),
+                          std::move(counts_shape),
+                          Dtype::F64, out_dev);
 
     // Pack all edges sequentially.
     std::int64_t edge_total = 0;
@@ -232,8 +267,9 @@ histogramdd_op(const TensorImplPtr& a,
         edst[off + bins[d]] = hi;
         off += bins[d] + 1;
     }
-    auto edges_t = fresh(Storage{std::move(edges)}, std::move(edge_shape),
-                         Dtype::F64, Device::CPU);
+    auto edges_t = fresh(to_device_storage(std::move(edges), out_dev, edge_shape),
+                          std::move(edge_shape),
+                          Dtype::F64, out_dev);
     return {counts_t, edges_t};
 }
 
