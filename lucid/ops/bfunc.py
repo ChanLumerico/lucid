@@ -134,7 +134,23 @@ def dot(a: Tensor, b: Tensor, /) -> Tensor:
 
 
 def inner(a: Tensor, b: Tensor, /) -> Tensor:
-    return Tensor._wrap(_C_engine.inner(impl_of(a), impl_of(b)))
+    # numpy.inner: contract over the last axis of each operand.  Routed
+    # through einsum so the autograd chain is intact (engine.inner has no
+    # backward).
+    if a.ndim == 0 or b.ndim == 0:
+        return multiply(a, b)
+    if a.shape[-1] != b.shape[-1]:
+        from lucid.error import ShapeMismatch  # fallback to engine error type
+        raise ValueError(
+            f"inner: last dims must match, got {a.shape} vs {b.shape}")
+    if a.ndim + b.ndim > 26:
+        raise NotImplementedError("inner: too many axes for label set")
+    a_labels = list("abcdefghijklmnopqrstuvwxyz"[:a.ndim])
+    b_labels = list("ABCDEFGHIJKLMNOPQRSTUVWXY"[:b.ndim - 1]) + [a_labels[-1]]
+    out_labels = a_labels[:-1] + b_labels[:-1]
+    pattern = f"{''.join(a_labels)},{''.join(b_labels)}->{''.join(out_labels)}"
+    from lucid.ops.einops import einsum
+    return einsum(pattern, a, b)
 
 
 def outer(a: Tensor, b: Tensor, /) -> Tensor:
@@ -154,7 +170,7 @@ def tensordot(
         n = axes
         axes_a = list(range(a.ndim - n, a.ndim))
         axes_b = list(range(n))
-    elif isinstance(axes, tuple) and len(axes) == 2:
+    elif isinstance(axes, (tuple, list)) and len(axes) == 2:
         x, y = axes
         if isinstance(x, int) and isinstance(y, int):
             axes_a, axes_b = [x], [y]
@@ -162,9 +178,39 @@ def tensordot(
             axes_a, axes_b = list(x), list(y)
     else:
         raise TypeError(f"tensordot: bad axes spec {axes!r}")
-    return Tensor._wrap(
-        _C_engine.tensordot(impl_of(a), impl_of(b), axes_a, axes_b)
+    # Route through einsum so autograd is intact.  Build labels:
+    #  - first ndim_a chars from "abc..." for a
+    #  - reuse the same letter for each contracted pair
+    #  - then continue letters for b's non-contracted axes
+    if a.ndim + b.ndim > 26:
+        raise NotImplementedError("tensordot: too many axes for label set")
+    a_labels = list("abcdefghijklmnopqrstuvwxyz"[:a.ndim])
+    used = set(a_labels)
+    b_labels = [None] * b.ndim
+    # Pair contracted labels.
+    for ai, bi in zip(axes_a, axes_b):
+        ai_p = ai if ai >= 0 else ai + a.ndim
+        bi_p = bi if bi >= 0 else bi + b.ndim
+        b_labels[bi_p] = a_labels[ai_p]
+    # Fill remaining b labels with fresh letters.
+    pool = iter("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    for i in range(b.ndim):
+        if b_labels[i] is None:
+            ch = next(pool)
+            while ch in used:
+                ch = next(pool)
+            b_labels[i] = ch
+            used.add(ch)
+    a_str = "".join(a_labels)
+    b_str = "".join(b_labels)
+    contracted = set(a_labels[ai if ai >= 0 else ai + a.ndim] for ai in axes_a)
+    out_labels = (
+        [c for c in a_labels if c not in contracted]
+        + [c for c in b_labels if c not in contracted]
     )
+    pattern = f"{a_str},{b_str}->{''.join(out_labels)}"
+    from lucid.ops.einops import einsum
+    return einsum(pattern, a, b)
 
 
 # --------------------------------------------------------------------------- #

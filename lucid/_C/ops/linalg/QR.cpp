@@ -15,16 +15,15 @@ namespace lucid {
 std::pair<TensorImplPtr, TensorImplPtr> qr_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     if (!a) throw LucidError("qr: null input");
-    require_gpu(a, "qr");
     OpScope scope{"qr", a->device_, a->dtype_, a->shape_};
-    const auto& ga = std::get<GpuStorage>(a->storage_);
-    auto [Q, R] = ::mlx::core::linalg::qr(*ga.arr, kMlxCpu);
+    auto in = as_mlx_array(a);
+    auto [Q, R] = ::mlx::core::linalg::qr(in, kMlxCpu);
     Shape qsh = mlx_shape_to_lucid(Q.shape());
     Shape rsh = mlx_shape_to_lucid(R.shape());
     return {
-        fresh(Storage{gpu::wrap_mlx_array(std::move(Q), a->dtype_)},
+        fresh(wrap_result(std::move(Q), a->dtype_, a->device_, qsh),
               std::move(qsh), a->dtype_, a->device_),
-        fresh(Storage{gpu::wrap_mlx_array(std::move(R), a->dtype_)},
+        fresh(wrap_result(std::move(R), a->dtype_, a->device_, rsh),
               std::move(rsh), a->dtype_, a->device_),
     };
 }

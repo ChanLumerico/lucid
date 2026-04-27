@@ -429,8 +429,11 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
         }
         ++row;
     }
-    return fresh(Storage{std::move(out)}, std::move(out_shape),
-                 Dtype::I64, Device::CPU);
+    Storage out_storage = (device == Device::GPU)
+        ? Storage{gpu::upload_cpu_to_gpu(out, out_shape)}
+        : Storage{std::move(out)};
+    return fresh(std::move(out_storage), std::move(out_shape),
+                 Dtype::I64, device);
 }
 
 TensorImplPtr unique_op(const TensorImplPtr& a) {
@@ -474,8 +477,10 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
         wrap(run(reinterpret_cast<const std::int64_t*>(cpu.ptr.get())));
     else
         throw NotImplementedError("unique: dtype not supported");
-    return fresh(Storage{std::move(out_cpu)}, std::move(out_shape),
-                 dt, Device::CPU);
+    Storage out_storage = (device == Device::GPU)
+        ? Storage{gpu::upload_cpu_to_gpu(out_cpu, out_shape)}
+        : Storage{std::move(out_cpu)};
+    return fresh(std::move(out_storage), std::move(out_shape), dt, device);
 }
 
 TensorImplPtr topk_op(const TensorImplPtr& a, std::int64_t k, int axis) {

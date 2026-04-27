@@ -288,14 +288,25 @@ def asnumpy(a: Tensor):
 # --------------------------------------------------------------------------- #
 
 def einsum(pattern: str, *operands: Tensor) -> Tensor:
-    """Einstein summation expressed as a pattern string.
+    """Einstein summation, implemented as a pure composition of engine ops.
 
-    Implementation: parse the equation, dispatch to ``matmul`` /
-    ``tensordot`` for binary patterns when possible, otherwise fall
-    back to numpy.einsum on detached host data and wrap the result
-    back into a Tensor (no autograd through the fallback path —
-    matches legacy behaviour for unusual patterns).
+    Strategy:
+      1. Parse the pattern into ``in_specs`` (one label string per operand)
+         and ``out_spec``.
+      2. Pairwise reduce the operand list: at each step pick two operands,
+         broadcast-align them along all involved axes, multiply, then sum
+         over labels that don't appear later. Implemented via
+         ``permute + reshape + multiply + sum`` — all autograd-aware
+         engine ops, so gradients flow correctly through ``backward``.
+
+    Falls back to NumPy only for ``'...'`` (ellipsis) patterns, which are
+    rare and require non-trivial axis bookkeeping; flagged with a comment.
     """
+    from lucid.ops.bfunc import multiply
+    from lucid.ops.ufunc import sum as sum_op
+    from lucid.ops.utils import reshape, broadcast_to
+    from lucid._C import engine as _C_engine
+
     if not operands:
         raise ValueError("einsum: at least one operand required")
 
@@ -303,7 +314,7 @@ def einsum(pattern: str, *operands: Tensor) -> Tensor:
     if "->" in eq:
         lhs, rhs = eq.split("->")
     else:
-        # Implicit output: every index that appears once across all
+        # Implicit output: every label appearing exactly once across all
         # operands, sorted alphabetically.
         lhs = eq
         counts: dict[str, int] = {}
@@ -318,12 +329,119 @@ def einsum(pattern: str, *operands: Tensor) -> Tensor:
     if len(in_specs) != len(operands):
         raise ValueError(
             f"einsum: pattern expects {len(in_specs)} operands, got {len(operands)}")
+    if "..." in eq:
+        # Ellipsis batching is a sizeable parser detour; fall back to
+        # numpy for now (autograd does NOT flow through this branch).
+        import numpy as np
+        arrays = [op.numpy() if hasattr(op, "numpy") else np.asarray(op) for op in operands]
+        out_np = np.einsum(pattern, *arrays)
+        return Tensor(out_np).to(operands[0].device)
 
-    # Generic path: defer to numpy.einsum on host.  Tensors must be on
-    # CPU; GPU operands are downloaded via .data which calls numpy().
-    import numpy as np
-    arrays = [op.numpy() if hasattr(op, "numpy") else np.asarray(op) for op in operands]
-    out_np = np.einsum(pattern, *arrays)
-    # Re-upload onto the first operand's device for symmetry with other ops.
-    target_device = operands[0].device
-    return Tensor(out_np).to(target_device)
+    # ----------------------------------------------------------------------
+    # Build a label → size map by walking each operand's labels.
+    # ----------------------------------------------------------------------
+    sizes: dict[str, int] = {}
+    for spec, t in zip(in_specs, operands):
+        if len(spec) != t.ndim:
+            raise ValueError(
+                f"einsum: operand has {t.ndim} axes but spec '{spec}' has "
+                f"{len(spec)} labels")
+        for c, n in zip(spec, t.shape):
+            if c in sizes and sizes[c] != n:
+                raise ValueError(
+                    f"einsum: label '{c}' has conflicting sizes "
+                    f"{sizes[c]} vs {n}")
+            sizes[c] = n
+    for c in rhs:
+        if c not in sizes:
+            raise ValueError(f"einsum: output label '{c}' not in inputs")
+
+    # Pairwise contraction loop. After each step the running result has a
+    # canonical label set we track in `cur_labels`.
+    cur = operands[0]
+    cur_labels = list(in_specs[0])
+
+    def _expand_to(t: Tensor, labels: list[str]) -> Tensor:
+        """Permute `t` to `labels` order and broadcast-extend missing axes."""
+        # Add singleton dims for any label not in t's current label set,
+        # then permute. We need the source labels in order.
+        src_labels = list(in_specs[operand_idx]) if t is None else cur_labels
+        return t  # placeholder — inline below
+        del src_labels
+
+    for k in range(1, len(operands)):
+        operand_idx = k
+        right = operands[k]
+        right_labels = list(in_specs[k])
+
+        # Union of labels from cur and right, in a canonical order: labels
+        # that appear in both (contracted), then labels from cur, then
+        # labels from right. We push contracted to the END so a final sum
+        # over the trailing axes drops them.
+        cur_set = set(cur_labels)
+        right_set = set(right_labels)
+        # Labels that survive into the next step: anything in rhs OR in any
+        # later operand spec.
+        future_labels: set[str] = set(rhs)
+        for j in range(k + 1, len(operands)):
+            future_labels.update(in_specs[j])
+        # Labels to keep after this contraction.
+        keep = (cur_set | right_set) & future_labels
+        contract = (cur_set & right_set) - future_labels
+        order = sorted(keep) + sorted(contract)
+
+        def _align(t: Tensor, src_labels: list[str], target: list[str]) -> Tensor:
+            # Insert size-1 axes for missing labels, then permute.
+            t_labels = list(src_labels)
+            new_t = t
+            for c in target:
+                if c not in t_labels:
+                    # unsqueeze at the end then move into place
+                    new_shape = list(new_t.shape) + [1]
+                    new_t = reshape(new_t, new_shape)
+                    t_labels.append(c)
+            # Now t_labels is a permutation of target. Build perm.
+            perm = [t_labels.index(c) for c in target]
+            new_t = Tensor._wrap(_C_engine.permute(impl_of(new_t), perm))
+            # Broadcast singleton axes to actual sizes.
+            target_shape = [sizes[c] for c in target]
+            if list(new_t.shape) != target_shape:
+                new_t = broadcast_to(new_t, target_shape)
+            return new_t
+
+        cur = _align(cur, cur_labels, order)
+        right = _align(right, right_labels, order)
+        cur = multiply(cur, right)
+        # Sum over the contracted axes (the trailing ones).
+        n_keep = len(keep)
+        if len(order) > n_keep:
+            sum_axes = list(range(n_keep, len(order)))
+            for ax in sorted(sum_axes, reverse=True):
+                cur = sum_op(cur, axis=ax)
+        cur_labels = list(order[:n_keep])
+
+    # Permute the final result so its axes match `rhs` order, and sum over
+    # any label in cur_labels that's not in rhs (e.g. trace/diagonal cases).
+    # First handle a single-operand case where we never entered the loop.
+    if len(operands) == 1:
+        # Sum over labels not in rhs.
+        kill = [i for i, c in enumerate(cur_labels) if c not in rhs]
+        for ax in sorted(kill, reverse=True):
+            cur = sum_op(cur, axis=ax)
+        cur_labels = [c for c in cur_labels if c in rhs]
+
+    if list(cur_labels) != list(rhs):
+        # Drop any extra labels first (shouldn't happen here, but defensive).
+        kill = [i for i, c in enumerate(cur_labels) if c not in rhs]
+        for ax in sorted(kill, reverse=True):
+            cur = sum_op(cur, axis=ax)
+        cur_labels = [c for c in cur_labels if c in rhs]
+        # Permute to rhs order.
+        if cur_labels != list(rhs):
+            perm = [cur_labels.index(c) for c in rhs]
+            cur = Tensor._wrap(_C_engine.permute(impl_of(cur), perm))
+    return cur
+
+
+# einsum needs `impl_of`; pull it lazily to avoid circular imports.
+from lucid._bridge import impl_of  # noqa: E402

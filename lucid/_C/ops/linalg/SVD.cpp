@@ -15,15 +15,14 @@ namespace lucid {
 std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
     using namespace linalg_detail;
     if (!a) throw LucidError("svd: null input");
-    require_gpu(a, "svd");
     OpScope scope{"svd", a->device_, a->dtype_, a->shape_};
-    const auto& ga = std::get<GpuStorage>(a->storage_);
-    auto pieces = ::mlx::core::linalg::svd(*ga.arr, compute_uv, kMlxCpu);
+    auto in = as_mlx_array(a);
+    auto pieces = ::mlx::core::linalg::svd(in, compute_uv, kMlxCpu);
     std::vector<TensorImplPtr> out;
     out.reserve(pieces.size());
     for (auto& p : pieces) {
         Shape sh = mlx_shape_to_lucid(p.shape());
-        out.push_back(fresh(Storage{gpu::wrap_mlx_array(std::move(p), a->dtype_)},
+        out.push_back(fresh(wrap_result(std::move(p), a->dtype_, a->device_, sh),
                             std::move(sh), a->dtype_, a->device_));
     }
     return out;
