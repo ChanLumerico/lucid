@@ -1,5 +1,14 @@
-import lucid
+"""
+lucid.nn.functional._drop — dropout family.
+
+All routes are 1:1 to C++ engine ops — no Python compositions.
+"""
+
+from __future__ import annotations
+
+from lucid._C.engine import nn as _C_nn
 from lucid._tensor import Tensor
+from lucid._bridge import impl_of
 
 
 def _prob_check(p: float) -> None:
@@ -9,83 +18,31 @@ def _prob_check(p: float) -> None:
 
 def dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     _prob_check(p)
-    if not training:
-        return input_
-
-    mask = (lucid.random.rand(*input_.shape) > p).free()
-    scale = 1.0 / (1 - p)
-    return input_ * mask * scale
+    return Tensor._wrap(_C_nn.dropout(impl_of(input_), float(p), bool(training), None))
 
 
 def dropoutnd(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     _prob_check(p)
-    if not training:
-        return input_
-
-    spatial_dim = input_.ndim - 2
-    mask = (lucid.random.rand(*input_.shape[:2], *(1,) * spatial_dim) > p).free()
-    scale = 1.0 / (1 - p)
-    return input_ * mask * scale
+    return Tensor._wrap(_C_nn.dropoutnd(impl_of(input_), float(p), bool(training), None))
 
 
 def alpha_dropout(input_: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     _prob_check(p)
-    if not training:
-        return input_
-
-    _alpha = -1.7580993408473766
-    _lambda = 1.0507009873554805
-
-    mask = (lucid.random.rand(*input_.shape) > p).free()
-    scale = 1.0 / (1 - p)
-
-    dropped = input_ * mask * scale
-    noise = (1 - mask) * _alpha * _lambda
-    return dropped + noise
+    return Tensor._wrap(
+        _C_nn.alpha_dropout(impl_of(input_), float(p), bool(training), None))
 
 
 def drop_block(
     input_: Tensor, block_size: int, p: float = 0.1, eps: float = 1e-7
 ) -> Tensor:
-    _, _, h, w = input_.shape
-    gamma = (
-        p
-        * (h * w)
-        / (block_size**2)
-        / ((h - block_size + 1) * (w - block_size + 1) + eps)
-    )
-    mask = (lucid.random.rand(*input_.shape) < gamma).astype(float)
-
-    pad = block_size // 2
-    padded_mask = lucid.pad(mask, ((0, 0), (0, 0), (pad, pad), (pad, pad)))
-    block_mask = lucid.zeros_like(mask)
-
-    for i in range(block_size):
-        for j in range(block_size):
-            block_mask = lucid.maximum(
-                block_mask, padded_mask[:, :, i : i + h, j : j + w]
-            )
-
-    block_mask = (1 - block_mask).free()
-    return input_ * block_mask / (1 - p)
+    _prob_check(p)
+    if input_.ndim != 4:
+        raise ValueError("drop_block: input must be 4-D (N, C, H, W).")
+    return Tensor._wrap(_C_nn.drop_block(
+        impl_of(input_), int(block_size), float(p), float(eps), None))
 
 
-def drop_path(input_: Tensor, p: float = 0.0, scale_by_keep: bool = True) -> Tensor:
-    if p == 0.0:
-        return input_
-
-    keep_prob = 1 - p
-    shape = (input_.shape[0],) + (1,) * (input_.ndim - 1)
-
-    random_tensor = (
-        lucid.random.bernoulli(
-            keep_prob * lucid.ones(shape, dtype=input_.dtype, device=input_.device),
-            device=input_.device,
-        )
-        .astype(input_.dtype)
-        .free()
-    )
-    if keep_prob > 0.0 and scale_by_keep:
-        random_tensor /= keep_prob
-
-    return input_ * random_tensor
+def drop_path(input_: Tensor, p: float = 0.1, scale_by_keep: bool = True) -> Tensor:
+    _prob_check(p)
+    return Tensor._wrap(_C_nn.drop_path(
+        impl_of(input_), float(p), bool(scale_by_keep), None))

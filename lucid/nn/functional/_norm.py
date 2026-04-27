@@ -1,23 +1,31 @@
-import lucid
-import lucid.nn as nn
+"""
+lucid.nn.functional._norm — normalization layers.
 
-from lucid.types import _ShapeLike
+All routes are 1:1 to engine ops:
+  * batch_norm  → batch_norm{1,2,3}d (training) or batch_norm_eval (inference).
+  * layer_norm  → engine.nn.layer_norm.
+  * group_norm  → engine.nn.group_norm.
+  * instance_norm → group_norm with num_groups = C (math identity).
+  * normalize   → engine.nn.lp_normalize.
+  * global_response_norm → engine.nn.global_response_norm.
+"""
 
+from __future__ import annotations
+
+from lucid._C import engine as _C_engine
+from lucid._C.engine import nn as _C_nn
 from lucid._tensor import Tensor
-from lucid.nn._kernel.norm import (
-    layer_norm_kernel,
-    batch_norm_kernel,
-    group_norm_kernel,
-)
+from lucid._bridge import impl_of
+from lucid.ops.gfunc import ones, zeros
+from lucid.autograd import no_grad
+from lucid.types import _ShapeLike
 
 
 def normalize(
     input_: Tensor, ord: int = 2, axis: int = 1, eps: float = 1e-12
 ) -> Tensor:
-    norm = lucid.sum(lucid.abs(input_) ** ord, axis=axis, keepdims=True) ** (1 / ord)
-    norm = lucid.maximum(norm, lucid.tensor(eps))
-
-    return input_ / norm
+    return Tensor._wrap(_C_nn.lp_normalize(
+        impl_of(input_), float(ord), int(axis), float(eps)))
 
 
 def batch_norm(
@@ -31,36 +39,39 @@ def batch_norm(
     eps: float = 1e-5,
 ) -> Tensor:
     C = input_.shape[1]
-    running_mean_ = (
-        running_mean
-        if running_mean is not None
-        else lucid.zeros((C,), device=input_.device, dtype=input_.dtype)
-    )
-    running_var_ = (
-        running_var
-        if running_var is not None
-        else lucid.ones((C,), device=input_.device, dtype=input_.dtype)
-    )
-    weight_ = (
-        weight
-        if weight is not None
-        else lucid.ones((C,), device=input_.device, dtype=input_.dtype)
-    )
-    bias_ = (
-        bias
-        if bias is not None
-        else lucid.zeros((C,), device=input_.device, dtype=input_.dtype)
-    )
+    weight_ = (weight if weight is not None
+               else ones((C,), device=input_.device, dtype=input_.dtype))
+    bias_ = (bias if bias is not None
+             else zeros((C,), device=input_.device, dtype=input_.dtype))
 
-    op = batch_norm_kernel(
-        eps=eps,
-        momentum=momentum,
-        training=training,
-        has_running=running_mean is not None and running_var is not None,
-        has_weight=weight is not None,
-        has_bias=bias is not None,
-    )
-    return op(input_, running_mean_, running_var_, weight_, bias_)
+    if training or running_mean is None or running_var is None:
+        if input_.ndim == 3:
+            out = _C_nn.batch_norm1d(impl_of(input_), impl_of(weight_),
+                                       impl_of(bias_), float(eps))
+        elif input_.ndim == 4:
+            out = _C_nn.batch_norm(impl_of(input_), impl_of(weight_),
+                                     impl_of(bias_), float(eps))
+        elif input_.ndim == 5:
+            out = _C_nn.batch_norm3d(impl_of(input_), impl_of(weight_),
+                                       impl_of(bias_), float(eps))
+        else:
+            raise ValueError(f"batch_norm: unsupported ndim {input_.ndim}")
+
+        if training and running_mean is not None and running_var is not None:
+            axes = tuple([0] + list(range(2, input_.ndim)))
+            with no_grad():
+                batch_mean = input_.mean(axis=axes)
+                batch_var = input_.var(axis=axes)
+                new_mean = momentum * batch_mean + (1 - momentum) * running_mean
+                new_var = momentum * batch_var + (1 - momentum) * running_var
+                running_mean._impl = new_mean._impl
+                running_var._impl = new_var._impl
+
+        return Tensor._wrap(out)
+
+    return Tensor._wrap(_C_nn.batch_norm_eval(
+        impl_of(input_), impl_of(running_mean), impl_of(running_var),
+        impl_of(weight_), impl_of(bias_), float(eps)))
 
 
 def layer_norm(
@@ -70,81 +81,52 @@ def layer_norm(
     bias: Tensor | None = None,
     eps: float = 1e-5,
 ) -> Tensor:
-    if input_.shape[-len(normalized_shape) :] != normalized_shape:
+    if isinstance(normalized_shape, int):
+        normalized_shape = (normalized_shape,)
+    if tuple(input_.shape[-len(normalized_shape):]) != tuple(normalized_shape):
         raise ValueError(
-            "Input tensor's normalized shape must match "
-            + "the provided `normalized_shape`."
-        )
-    if weight is None:
-        weight = lucid.ones(normalized_shape, device=input_.device)
-        has_weight = False
-    else:
-        has_weight = True
-
-    if bias is None:
-        bias = lucid.zeros(normalized_shape, device=input_.device)
-        has_bias = False
-    else:
-        has_bias = True
-
-    op = layer_norm_kernel(
-        normalized_shape, eps=eps, has_weight=has_weight, has_bias=has_bias
-    )
-    return op(input_, weight, bias)
+            "Input tensor's normalized shape must match `normalized_shape`.")
+    weight_ = (weight if weight is not None
+               else ones(normalized_shape, device=input_.device,
+                                dtype=input_.dtype))
+    bias_ = (bias if bias is not None
+             else zeros(normalized_shape, device=input_.device,
+                               dtype=input_.dtype))
+    return Tensor._wrap(_C_nn.layer_norm(
+        impl_of(input_), impl_of(weight_), impl_of(bias_), float(eps)))
 
 
 def instance_norm(
     input_: Tensor,
-    running_mean: Tensor | None,
-    running_var: Tensor | None,
+    running_mean: Tensor | None = None,
+    running_var: Tensor | None = None,
     weight: Tensor | None = None,
     bias: Tensor | None = None,
     training: bool = True,
     momentum: float = 0.1,
     eps: float = 1e-5,
 ) -> Tensor:
+    """InstanceNorm = GroupNorm with num_groups = C (each channel its own group)."""
     C = input_.shape[1]
-    spatial_dims = input_.shape[2:]
-    use_instance_stats = training or running_mean is None or running_var is None
-    axes = tuple(range(2, input_.ndim))
+    weight_ = (weight if weight is not None
+               else ones((C,), device=input_.device, dtype=input_.dtype))
+    bias_ = (bias if bias is not None
+             else zeros((C,), device=input_.device, dtype=input_.dtype))
 
-    if use_instance_stats:
-        instance_mean = input_.mean(axis=axes, keepdims=True)
-        instance_var = input_.var(axis=axes, keepdims=True)
+    out = _C_nn.group_norm(impl_of(input_), impl_of(weight_), impl_of(bias_),
+                            int(C), float(eps))
 
-        if training and running_mean is not None and running_var is not None:
-            running_stats_ = (
-                momentum * instance_mean.mean(axis=0).flatten()
-                + (1 - momentum) * running_mean,
-                momentum * instance_var.mean(axis=0).flatten()
-                + (1 - momentum) * running_var,
-            )
-
-            if isinstance(running_mean, nn.Buffer) and isinstance(
-                running_var, nn.Buffer
-            ):
-                running_mean.data = running_stats_[0].data
-                running_var.data = running_stats_[1].data
-            else:
-                running_mean, running_var = running_stats_
-
-        mean = instance_mean
-        var = instance_var
-    else:
-        mean = running_mean.reshape(1, C, *(1,) * len(spatial_dims))
-        var = running_var.reshape(1, C, *(1,) * len(spatial_dims))
-
-    normalized = (input_ - mean) / lucid.sqrt(var + eps)
-
-    if weight is not None:
-        weight = weight.reshape((1, C) + (1,) * len(spatial_dims))
-        normalized *= weight
-
-    if bias is not None:
-        bias = bias.reshape((1, C) + (1,) * len(spatial_dims))
-        normalized += bias
-
-    return normalized
+    # Update running stats if both training and stats are tracked.
+    if training and running_mean is not None and running_var is not None:
+        axes = tuple(range(2, input_.ndim))
+        with no_grad():
+            inst_mean = input_.mean(axis=axes).mean(axis=0)  # average over batch
+            inst_var = input_.var(axis=axes).mean(axis=0)
+            new_mean = momentum * inst_mean + (1 - momentum) * running_mean
+            new_var = momentum * inst_var + (1 - momentum) * running_var
+            running_mean._impl = new_mean._impl
+            running_var._impl = new_var._impl
+    return Tensor._wrap(out)
 
 
 def group_norm(
@@ -155,27 +137,17 @@ def group_norm(
     eps: float = 1e-5,
 ) -> Tensor:
     C = input_.shape[1]
-    if weight is None:
-        weight = lucid.ones((C,), device=input_.device)
-        has_weight = False
-    else:
-        has_weight = True
-
-    if bias is None:
-        bias = lucid.zeros((C,), device=input_.device)
-        has_bias = False
-    else:
-        has_bias = True
-
-    op = group_norm_kernel(
-        num_groups=num_groups, eps=eps, has_weight=has_weight, has_bias=has_bias
-    )
-    return op(input_, weight, bias)
+    weight_ = (weight if weight is not None
+               else ones((C,), device=input_.device, dtype=input_.dtype))
+    bias_ = (bias if bias is not None
+             else zeros((C,), device=input_.device, dtype=input_.dtype))
+    return Tensor._wrap(_C_nn.group_norm(
+        impl_of(input_), impl_of(weight_), impl_of(bias_),
+        int(num_groups), float(eps)))
 
 
 def global_response_norm(
     input_: Tensor, gamma: Tensor, beta: Tensor, eps: float = 1e-6
 ) -> Tensor:
-    Gx: Tensor = lucid.linalg.norm(input_, ord=2, axis=(-1, -2), keepdims=True)
-    Nx = Gx / (Gx.mean(axis=-1, keepdims=True) + eps)
-    return gamma * (input_ * Nx) + beta * input_
+    return Tensor._wrap(_C_nn.global_response_norm(
+        impl_of(input_), impl_of(gamma), impl_of(beta), float(eps)))

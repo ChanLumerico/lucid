@@ -1,0 +1,64 @@
+# Lucid C++ engine code style — see docs/STYLE.md for the spec this enforces.
+# Run on a tree:    find lucid/_C -name "*.h" -o -name "*.cpp" | xargs clang-format -i
+# Or via editor on save (most editors honor .clang-format automatically).
+---
+Language: Cpp
+BasedOnStyle: Google
+Standard: c++20
+
+ColumnLimit: 100
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: true
+
+# Pointer/reference alignment matches the rest of the codebase ("T* p", not "T *p").
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+# Includes: keep grouped by category. Order:
+#   1. The matching header (for .cpp files)
+#   2. <pybind11/...>
+#   3. C++ standard library
+#   4. Other system headers
+#   5. Project headers (relative path)
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<pybind11/'
+    Priority: 2
+  - Regex: '^<[a-z_]+>$'           # C++ stdlib, no extension
+    Priority: 3
+  - Regex: '^<.+\.h>$'             # C/system headers
+    Priority: 4
+  - Regex: '.*'
+    Priority: 5
+SortIncludes: CaseSensitive
+
+# Brace style — attached on same line.
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Line breaks for long signatures.
+BinPackParameters: false
+BinPackArguments: true
+AlwaysBreakTemplateDeclarations: Yes
+AllowAllParametersOfDeclarationOnNextLine: true
+
+# Initializer / member list formatting.
+ConstructorInitializerIndentWidth: 4
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+PackConstructorInitializers: NextLine
+
+# Comments are reflowed to ColumnLimit.
+ReflowComments: true
+SpacesBeforeTrailingComments: 2
+
+# Sensitive places to NEVER touch.
+KeepEmptyLinesAtTheStartOfBlocks: false
+EmptyLineBeforeAccessModifier: LogicalBlock

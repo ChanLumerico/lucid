@@ -1,8 +1,20 @@
+"""
+lucid.nn.modules.activation — pointwise activation modules.
+
+These are zero-parameter wrappers that delegate to the matching
+function in `lucid.nn.functional`. A few (`ReLU6`, `HardSigmoid`,
+`HardSwish`, `Mish`, `Swish`) compose primitives directly because
+the engine has no dedicated kernel for them.
+"""
+
+from __future__ import annotations
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+
 
 __all__ = [
     "ReLU",
@@ -84,7 +96,7 @@ class HardSigmoid(nn.Module):
         super().__init__()
 
     def forward(self, input_: Tensor) -> Tensor:
-        return ((input_ / 6.0) + 0.5).clip(0, 1)
+        return lucid.clip((input_ / 6.0) + 0.5, 0, 1)
 
 
 class Tanh(nn.Module):
@@ -117,7 +129,7 @@ class HardSwish(nn.Module):
         super().__init__()
 
     def forward(self, input_: Tensor) -> Tensor:
-        hard_sigmoid = ((input_ / 6.0) + 0.5).clip(0, 1)
+        hard_sigmoid = lucid.clip((input_ / 6.0) + 0.5, 0, 1)
         return input_ * hard_sigmoid
 
 

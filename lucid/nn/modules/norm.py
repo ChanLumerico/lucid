@@ -1,9 +1,20 @@
+"""
+lucid.nn.modules.norm — batch / instance / layer / group / GRN norm modules.
+
+Affine parameters and (for batch/instance) running mean & variance
+buffers are managed here; the actual math lives in
+`lucid.nn.functional`.
+"""
+
+from __future__ import annotations
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 from lucid.types import _ShapeLike
+
 
 __all__ = [
     "BatchNorm1d",
@@ -16,6 +27,13 @@ __all__ = [
     "GroupNorm",
     "GlobalResponseNorm",
 ]
+
+
+def _check_dim(input_: Tensor, dim: int) -> None:
+    if input_.ndim != dim:
+        raise ValueError(
+            f"Expected input with {dim} dimensions, got {input_.ndim}."
+        )
 
 
 class _NormBase(nn.Module):
@@ -35,11 +53,12 @@ class _NormBase(nn.Module):
         self.track_running_stats = track_running_stats
 
         if affine:
-            weight_ = lucid.ones((num_features,), dtype=lucid.Float32)
-            self.weight = nn.Parameter(weight_)
-
-            bias_ = lucid.zeros((num_features,), dtype=lucid.Float32)
-            self.bias = nn.Parameter(bias_)
+            self.weight = nn.Parameter(
+                lucid.ones((num_features,), dtype=lucid.Float32)
+            )
+            self.bias = nn.Parameter(
+                lucid.zeros((num_features,), dtype=lucid.Float32)
+            )
         else:
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
@@ -60,12 +79,14 @@ class _NormBase(nn.Module):
 
     def reset_running_stats(self) -> None:
         if self.track_running_stats:
-            self.running_mean.data = lucid.zeros(
+            new_mean = lucid.zeros(
                 (self.num_features,), dtype=lucid.Float32
-            ).data
-            self.running_var.data = lucid.ones(
+            )
+            new_var = lucid.ones(
                 (self.num_features,), dtype=lucid.Float32
-            ).data
+            )
+            self.running_mean._impl = new_mean._impl
+            self.running_var._impl = new_var._impl
 
     def reset_parameters(self) -> None:
         self.reset_running_stats()
@@ -106,19 +127,19 @@ class _BatchNorm(_NormBase):
 
 class BatchNorm1d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=3)
+        _check_dim(input_, dim=3)
         return super().forward(input_)
 
 
 class BatchNorm2d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=4)
+        _check_dim(input_, dim=4)
         return super().forward(input_)
 
 
 class BatchNorm3d(_BatchNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=5)
+        _check_dim(input_, dim=5)
         return super().forward(input_)
 
 
@@ -148,19 +169,19 @@ class _InstanceNorm(_NormBase):
 
 class InstanceNorm1d(_InstanceNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=3)
+        _check_dim(input_, dim=3)
         return super().forward(input_)
 
 
 class InstanceNorm2d(_InstanceNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=4)
+        _check_dim(input_, dim=4)
         return super().forward(input_)
 
 
 class InstanceNorm3d(_InstanceNorm):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=5)
+        _check_dim(input_, dim=5)
         return super().forward(input_)
 
 
@@ -182,12 +203,10 @@ class LayerNorm(nn.Module):
         self.elementwise_affine = elementwise_affine
 
         if elementwise_affine:
-            weight_ = lucid.ones(self.normalized_shape)
-            self.weight = nn.Parameter(weight_)
+            self.weight = nn.Parameter(lucid.ones(self.normalized_shape))
 
             if bias:
-                bias_ = lucid.zeros(self.normalized_shape)
-                self.bias = nn.Parameter(bias_)
+                self.bias = nn.Parameter(lucid.zeros(self.normalized_shape))
             else:
                 self.register_parameter("bias", None)
         else:
@@ -203,7 +222,11 @@ class LayerNorm(nn.Module):
 @nn.auto_repr("num_groups", "num_channels", "affine")
 class GroupNorm(nn.Module):
     def __init__(
-        self, num_groups: int, num_channels: int, eps: float = 1e-5, affine: bool = True
+        self,
+        num_groups: int,
+        num_channels: int,
+        eps: float = 1e-5,
+        affine: bool = True,
     ) -> None:
         super().__init__()
         self.num_groups = num_groups

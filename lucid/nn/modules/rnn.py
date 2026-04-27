@@ -1,14 +1,38 @@
-from typing import Literal
+"""
+lucid.nn.modules.rnn — vanilla RNN, LSTM, GRU cells and full layers.
+
+`RNNBase` is a single Python loop over time-steps that handles all
+three modes; `RNN`, `LSTM`, `GRU` are thin mode-fixed subclasses.
+Packed-sequence support is opt-in: if `lucid.nn.utils.rnn` ever
+becomes available it gets wired in automatically; otherwise the
+forward path treats every input as a dense `(L, N, H)` tensor.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Literal
+
+import numpy as np
 
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.nn.utils.rnn import PackedSequence
 from lucid.types import Numeric, _DeviceType
 
 from .activation import Tanh, ReLU
+
+
+# Optional packed-sequence integration. If the helper isn't shipped in
+# this build, fall back to a marker class so isinstance() checks always
+# evaluate to False without breaking the import.
+try:
+    from lucid.nn.utils.rnn import PackedSequence
+except Exception:
+    class PackedSequence:  # noqa: D401 — placeholder
+        pass
+
 
 __all__ = ["RNNCell", "LSTMCell", "GRUCell", "RNNBase", "RNN", "LSTM", "GRU"]
 
@@ -23,6 +47,17 @@ def _get_activation(nonlinearity: str) -> type[nn.Module]:
             f"Invalid nonlinearity '{nonlinearity}'. "
             "Supported nonlinearities are 'tanh' and 'relu'."
         )
+
+
+def _uniform_param(low: float, high: float, shape: tuple[int, ...]) -> Tensor:
+    """Build a fresh uniformly-distributed Tensor on CPU.
+
+    Routes through numpy because `lucid.random.uniform` uses keyword
+    `low=` / `high=` and `Parameter` ultimately re-uploads via numpy
+    anyway.
+    """
+    arr = np.random.uniform(low, high, size=shape).astype(np.float32)
+    return Tensor(arr)
 
 
 class RNNCell(nn.Module):
@@ -41,18 +76,18 @@ class RNNCell(nn.Module):
 
         sqrt_k = 1.0 / (hidden_size**0.5)
         self.weight_ih = nn.Parameter(
-            lucid.random.uniform(-sqrt_k, sqrt_k, (self.hidden_size, self.input_size))
+            _uniform_param(-sqrt_k, sqrt_k, (self.hidden_size, self.input_size))
         )
         self.weight_hh = nn.Parameter(
-            lucid.random.uniform(-sqrt_k, sqrt_k, (self.hidden_size, self.hidden_size))
+            _uniform_param(-sqrt_k, sqrt_k, (self.hidden_size, self.hidden_size))
         )
 
         if self.bias:
             self.bias_ih = nn.Parameter(
-                lucid.random.uniform(-sqrt_k, sqrt_k, self.hidden_size)
+                _uniform_param(-sqrt_k, sqrt_k, (self.hidden_size,))
             )
             self.bias_hh = nn.Parameter(
-                lucid.random.uniform(-sqrt_k, sqrt_k, self.hidden_size)
+                _uniform_param(-sqrt_k, sqrt_k, (self.hidden_size,))
             )
         else:
             self.bias_ih = None
@@ -90,7 +125,7 @@ class RNNCell(nn.Module):
                 )
 
         hy = F.linear(input_, self.weight_ih, self.bias_ih)
-        hy += F.linear(hx, self.weight_hh, self.bias_hh)
+        hy = hy + F.linear(hx, self.weight_hh, self.bias_hh)
         ret = self.nonlinearity(hy)
 
         if not is_batched:
@@ -100,7 +135,11 @@ class RNNCell(nn.Module):
 
 class LSTMCell(nn.Module):
     def __init__(
-        self, input_size: int, hidden_size: int, bias: bool = True, **kwargs
+        self,
+        input_size: int,
+        hidden_size: int,
+        bias: bool = True,
+        **kwargs: Any,
     ) -> None:
         super().__init__()
         self.input_size = input_size
@@ -109,22 +148,18 @@ class LSTMCell(nn.Module):
 
         sqrt_k = 1.0 / (hidden_size**0.5)
         self.weight_ih = nn.Parameter(
-            lucid.random.uniform(
-                -sqrt_k, sqrt_k, (4 * self.hidden_size, self.input_size)
-            )
+            _uniform_param(-sqrt_k, sqrt_k, (4 * self.hidden_size, self.input_size))
         )
         self.weight_hh = nn.Parameter(
-            lucid.random.uniform(
-                -sqrt_k, sqrt_k, (4 * self.hidden_size, self.hidden_size)
-            )
+            _uniform_param(-sqrt_k, sqrt_k, (4 * self.hidden_size, self.hidden_size))
         )
 
         if self.bias:
             self.bias_ih = nn.Parameter(
-                lucid.random.uniform(-sqrt_k, sqrt_k, 4 * self.hidden_size)
+                _uniform_param(-sqrt_k, sqrt_k, (4 * self.hidden_size,))
             )
             self.bias_hh = nn.Parameter(
-                lucid.random.uniform(-sqrt_k, sqrt_k, 4 * self.hidden_size)
+                _uniform_param(-sqrt_k, sqrt_k, (4 * self.hidden_size,))
             )
         else:
             self.bias_ih = None
@@ -175,7 +210,7 @@ class LSTMCell(nn.Module):
                 )
 
         gates = F.linear(input_, self.weight_ih, self.bias_ih)
-        gates += F.linear(h_t, self.weight_hh, self.bias_hh)
+        gates = gates + F.linear(h_t, self.weight_hh, self.bias_hh)
 
         i_t, f_t, g_t, o_t = lucid.chunk(gates, 4, axis=1)
         i_t = F.sigmoid(i_t)
@@ -201,22 +236,18 @@ class GRUCell(nn.Module):
 
         sqrt_k = 1.0 / (hidden_size**0.5)
         self.weight_ih = nn.Parameter(
-            lucid.random.uniform(
-                -sqrt_k, sqrt_k, (3 * self.hidden_size, self.input_size)
-            )
+            _uniform_param(-sqrt_k, sqrt_k, (3 * self.hidden_size, self.input_size))
         )
         self.weight_hh = nn.Parameter(
-            lucid.random.uniform(
-                -sqrt_k, sqrt_k, (3 * self.hidden_size, self.hidden_size)
-            )
+            _uniform_param(-sqrt_k, sqrt_k, (3 * self.hidden_size, self.hidden_size))
         )
 
         if self.bias:
             self.bias_ih = nn.Parameter(
-                lucid.random.uniform(-sqrt_k, sqrt_k, 3 * self.hidden_size)
+                _uniform_param(-sqrt_k, sqrt_k, (3 * self.hidden_size,))
             )
             self.bias_hh = nn.Parameter(
-                lucid.random.uniform(-sqrt_k, sqrt_k, 3 * self.hidden_size)
+                _uniform_param(-sqrt_k, sqrt_k, (3 * self.hidden_size,))
             )
         else:
             self.bias_ih = None
@@ -315,34 +346,28 @@ class RNNBase(nn.Module):
 
             if mode in ("RNN_TANH", "RNN_RELU"):
                 w_ih = nn.Parameter(
-                    lucid.random.uniform(
-                        -sqrt_k, sqrt_k, (hidden_size, layer_input_size)
-                    )
+                    _uniform_param(-sqrt_k, sqrt_k, (hidden_size, layer_input_size))
                 )
                 w_hh = nn.Parameter(
-                    lucid.random.uniform(-sqrt_k, sqrt_k, (hidden_size, hidden_size))
+                    _uniform_param(-sqrt_k, sqrt_k, (hidden_size, hidden_size))
                 )
             elif mode == "LSTM":
                 w_ih = nn.Parameter(
-                    lucid.random.uniform(
+                    _uniform_param(
                         -sqrt_k, sqrt_k, (4 * hidden_size, layer_input_size)
                     )
                 )
                 w_hh = nn.Parameter(
-                    lucid.random.uniform(
-                        -sqrt_k, sqrt_k, (4 * hidden_size, hidden_size)
-                    )
+                    _uniform_param(-sqrt_k, sqrt_k, (4 * hidden_size, hidden_size))
                 )
             else:
                 w_ih = nn.Parameter(
-                    lucid.random.uniform(
+                    _uniform_param(
                         -sqrt_k, sqrt_k, (3 * hidden_size, layer_input_size)
                     )
                 )
                 w_hh = nn.Parameter(
-                    lucid.random.uniform(
-                        -sqrt_k, sqrt_k, (3 * hidden_size, hidden_size)
-                    )
+                    _uniform_param(-sqrt_k, sqrt_k, (3 * hidden_size, hidden_size))
                 )
 
             self.register_parameter(f"weight_ih_l{layer}", w_ih)
@@ -350,10 +375,10 @@ class RNNBase(nn.Module):
 
             if bias:
                 b_ih = nn.Parameter(
-                    lucid.random.uniform(-sqrt_k, sqrt_k, w_ih.shape[0])
+                    _uniform_param(-sqrt_k, sqrt_k, (w_ih.shape[0],))
                 )
                 b_hh = nn.Parameter(
-                    lucid.random.uniform(-sqrt_k, sqrt_k, w_hh.shape[0])
+                    _uniform_param(-sqrt_k, sqrt_k, (w_hh.shape[0],))
                 )
                 self.register_parameter(f"bias_ih_l{layer}", b_ih)
                 self.register_parameter(f"bias_hh_l{layer}", b_hh)
@@ -371,7 +396,7 @@ class RNNBase(nn.Module):
         b_hh: Tensor | None,
     ) -> Tensor:
         hy = F.linear(input_, w_ih, b_ih)
-        hy += F.linear(hx, w_hh, b_hh)
+        hy = hy + F.linear(hx, w_hh, b_hh)
 
         if self.mode == "RNN_TANH":
             return F.tanh(hy)
@@ -389,7 +414,7 @@ class RNNBase(nn.Module):
         b_hh: Tensor | None,
     ) -> tuple[Tensor, Tensor]:
         gates = F.linear(input_, w_ih, b_ih)
-        gates += F.linear(hx, w_hh, b_hh)
+        gates = gates + F.linear(hx, w_hh, b_hh)
 
         i_t, f_t, g_t, o_t = lucid.chunk(gates, 4, axis=1)
         i_t = F.sigmoid(i_t)
@@ -449,11 +474,11 @@ class RNNBase(nn.Module):
 
     def forward(
         self,
-        input_: Tensor | PackedSequence,
+        input_: Tensor | "PackedSequence",
         hx: Tensor | tuple[Tensor, Tensor] | None = None,
     ) -> (
-        tuple[Tensor | PackedSequence, Tensor]
-        | tuple[Tensor | PackedSequence, tuple[Tensor, Tensor]]
+        tuple[Tensor | "PackedSequence", Tensor]
+        | tuple[Tensor | "PackedSequence", tuple[Tensor, Tensor]]
     ):
         is_packed = isinstance(input_, PackedSequence)
         if is_packed:
@@ -711,9 +736,8 @@ class LSTM(RNNBase):
         batch_first: bool = False,
         dropout: float = 0.0,
     ) -> None:
-        mode = "LSTM"
         super().__init__(
-            mode=mode,
+            mode="LSTM",
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
@@ -733,9 +757,8 @@ class GRU(RNNBase):
         batch_first: bool = False,
         dropout: float = 0.0,
     ) -> None:
-        mode = "GRU"
         super().__init__(
-            mode=mode,
+            mode="GRU",
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,

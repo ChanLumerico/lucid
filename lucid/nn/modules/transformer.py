@@ -1,12 +1,30 @@
+"""
+lucid.nn.modules.transformer — encoder/decoder layers and full Transformer.
+
+Includes positional-encoding modules: `SinusoidalPosEmbedding`,
+`LearnedPosEmbedding`, and `RotaryPosEmbedding`. The rotary cache
+is built lazily per (sequence-length, embed-dim, device) tuple and
+reused across calls.
+"""
+
+from __future__ import annotations
+
 import math
-from typing import Callable
 from copy import deepcopy
+from typing import TYPE_CHECKING, Any, Callable
 
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+
+
+if TYPE_CHECKING:
+    KVCache = Any
+else:
+    KVCache = Any
+
 
 __all__ = [
     "TransformerEncoderLayer",
@@ -43,6 +61,9 @@ class TransformerEncoderLayer(nn.Module):
         bias: bool = True,
     ) -> None:
         super().__init__()
+        self.activation = activation
+        self.norm_first = norm_first
+
         self.self_attn = nn.MultiHeadAttention(
             d_model, num_heads, dropout=dropout, bias=bias
         )
@@ -57,16 +78,13 @@ class TransformerEncoderLayer(nn.Module):
         self.norm1 = nn.LayerNorm(d_model, eps=layer_norm_eps)
         self.norm2 = nn.LayerNorm(d_model, eps=layer_norm_eps)
 
-        self.activation = activation
-        self.norm_first = norm_first
-
     def _sa_block(
         self,
         x: Tensor,
         src_mask: Tensor | None,
         src_key_padding_mask: Tensor | None,
         is_causal: bool,
-        kv_cache: nn.KVCache | None = None,
+        kv_cache: KVCache | None = None,
         use_cache: bool = False,
         cache_position: Tensor | None = None,
         cache_layer_idx: int | None = None,
@@ -102,7 +120,7 @@ class TransformerEncoderLayer(nn.Module):
         src_mask: Tensor | None = None,
         src_key_padding_mask: Tensor | None = None,
         is_causal: bool = False,
-        kv_cache: nn.KVCache | None = None,
+        kv_cache: KVCache | None = None,
         use_cache: bool = False,
         cache_position: Tensor | None = None,
         cache_layer_idx: int | None = None,
@@ -118,7 +136,7 @@ class TransformerEncoderLayer(nn.Module):
                 cache_position=cache_position,
                 cache_layer_idx=cache_layer_idx,
             )
-            x += self._ff_block(self.norm2(x))
+            x = x + self._ff_block(self.norm2(x))
         else:
             x = self.norm1(
                 src
@@ -161,6 +179,9 @@ class TransformerDecoderLayer(nn.Module):
         bias: bool = True,
     ) -> None:
         super().__init__()
+        self.activation = activation
+        self.norm_first = norm_first
+
         self.self_attn = nn.MultiHeadAttention(
             d_model, num_heads, dropout=dropout, bias=bias
         )
@@ -180,16 +201,13 @@ class TransformerDecoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model, eps=layer_norm_eps)
         self.norm3 = nn.LayerNorm(d_model, eps=layer_norm_eps)
 
-        self.activation = activation
-        self.norm_first = norm_first
-
     def _sa_block(
         self,
         x: Tensor,
         tgt_mask: Tensor | None,
         tgt_key_padding_mask: Tensor | None,
         is_causal: bool,
-        kv_cache: nn.KVCache | None = None,
+        kv_cache: KVCache | None = None,
         use_cache: bool = False,
         cache_position: Tensor | None = None,
         cache_layer_idx: int | None = None,
@@ -244,7 +262,7 @@ class TransformerDecoderLayer(nn.Module):
         mem_key_padding_mask: Tensor | None = None,
         tgt_is_causal: bool = False,
         mem_is_causal: bool = False,
-        kv_cache: nn.KVCache | None = None,
+        kv_cache: KVCache | None = None,
         use_cache: bool = False,
         cache_position: Tensor | None = None,
         cache_layer_idx: int | None = None,
@@ -260,10 +278,10 @@ class TransformerDecoderLayer(nn.Module):
                 cache_position=cache_position,
                 cache_layer_idx=cache_layer_idx,
             )
-            x += self._mha_block(
+            x = x + self._mha_block(
                 self.norm2(x), memory, mem_mask, mem_key_padding_mask, mem_is_causal
             )
-            x += self._ff_block(self.norm3(x))
+            x = x + self._ff_block(self.norm3(x))
         else:
             x = self.norm1(
                 tgt
@@ -309,7 +327,7 @@ class TransformerEncoder(nn.Module):
         src_mask: Tensor | None = None,
         src_key_padding_mask: Tensor | None = None,
         is_causal: bool = False,
-        kv_cache: nn.KVCache | None = None,
+        kv_cache: KVCache | None = None,
         use_cache: bool = False,
         cache_position: Tensor | None = None,
         cache_start_layer_idx: int = 0,
@@ -359,7 +377,7 @@ class TransformerDecoder(nn.Module):
         mem_key_padding_mask: Tensor | None = None,
         tgt_is_causal: bool = False,
         mem_is_causal: bool = False,
-        kv_cache: nn.KVCache | None = None,
+        kv_cache: KVCache | None = None,
         use_cache: bool = False,
         cache_position: Tensor | None = None,
         cache_start_layer_idx: int = 0,
@@ -418,6 +436,7 @@ class Transformer(nn.Module):
         custom_decoder: nn.Module | None = None,
     ) -> None:
         super().__init__()
+
         if custom_encoder is None:
             encoder_layer = TransformerEncoderLayer(
                 d_model,
@@ -466,11 +485,11 @@ class Transformer(nn.Module):
         src_key_padding_mask: Tensor | None = None,
         tgt_key_padding_mask: Tensor | None = None,
         mem_key_padding_mask: Tensor | None = None,
-        kv_cache: nn.KVCache | None = None,
+        kv_cache: KVCache | None = None,
         use_cache: bool = False,
         cache_position: Tensor | None = None,
         cache_start_layer_idx: int = 0,
-        encoder_kv_cache: nn.KVCache | None = None,
+        encoder_kv_cache: KVCache | None = None,
         use_encoder_cache: bool = False,
         encoder_cache_position: Tensor | None = None,
         encoder_cache_start_layer_idx: int = 0,
@@ -510,9 +529,11 @@ class SinusoidalPosEmbedding(nn.Module):
         self.seq_len = seq_len
         self.embed_dim = embed_dim
 
-    def forward(self, input_: lucid.FloatTensor) -> lucid.FloatTensor:
+    def forward(self, input_: Tensor) -> Tensor:
         if input_.ndim not in {2, 3}:
-            raise ValueError(f"{type(self).__name__} expects 2D and 3D Tensor inputs.")
+            raise ValueError(
+                f"{type(self).__name__} expects 2D and 3D Tensor inputs."
+            )
 
         if input_.dtype.base_dtype is not float:
             raise TypeError(f"'{type(self).__name__}' expects a float Tensor.")
@@ -549,9 +570,11 @@ class LearnedPosEmbedding(nn.Module):
         self.embed_dim = embed_dim
         self.pos_emb = nn.Embedding(max_len, embed_dim)
 
-    def forward(self, input_: lucid.FloatTensor, offset: int = 0) -> lucid.FloatTensor:
+    def forward(self, input_: Tensor, offset: int = 0) -> Tensor:
         if input_.ndim not in {2, 3}:
-            raise ValueError(f"{type(self).__name__} expects 2D and 3D Tensor inputs.")
+            raise ValueError(
+                f"{type(self).__name__} expects 2D and 3D Tensor inputs."
+            )
 
         if input_.dtype.base_dtype is not float:
             raise TypeError(f"'{type(self).__name__}' expects a float Tensor.")
@@ -563,7 +586,7 @@ class LearnedPosEmbedding(nn.Module):
             )
 
         if offset < 0 or seq_len + offset > self.max_len:
-            raise ValueError(f"Invalid position.")
+            raise ValueError("Invalid position.")
 
         pos_ids = lucid.arange(
             offset, offset + seq_len, device=input_.device, dtype=lucid.Long
@@ -612,8 +635,8 @@ class RotaryPosEmbedding(nn.Module):
         self._cache_seq_len = seq_len
 
     def forward(
-        self, input_: lucid.FloatTensor, position_ids: lucid.LongTensor | None = None
-    ) -> lucid.FloatTensor:
+        self, input_: Tensor, position_ids: Tensor | None = None
+    ) -> Tensor:
         if input_.ndim < 2:
             raise ValueError(f"{type(self).__name__} expects input ndim >= 2.")
 

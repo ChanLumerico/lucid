@@ -6,7 +6,7 @@ import lucid
 from lucid.data.tokenizers import SpecialTokens, Tokenizer
 from lucid.types import _DeviceType
 
-from lucid._backend._C.tokenizers.core import _C_WordPieceTokenizer
+from lucid._C.tokenizers.core import _C_WordPieceTokenizer
 
 __all__ = ["BERTTokenizerFast"]
 
