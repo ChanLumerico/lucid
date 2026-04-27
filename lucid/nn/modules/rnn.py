@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-import numpy as np
 
 import lucid
 import lucid.nn as nn
@@ -50,14 +49,9 @@ def _get_activation(nonlinearity: str) -> type[nn.Module]:
 
 
 def _uniform_param(low: float, high: float, shape: tuple[int, ...]) -> Tensor:
-    """Build a fresh uniformly-distributed Tensor on CPU.
-
-    Routes through numpy because `lucid.random.uniform` uses keyword
-    `low=` / `high=` and `Parameter` ultimately re-uploads via numpy
-    anyway.
-    """
-    arr = np.random.uniform(low, high, size=shape).astype(np.float32)
-    return Tensor(arr)
+    """Build a fresh uniformly-distributed Tensor on CPU via the engine RNG."""
+    from lucid.ops.random import uniform
+    return uniform(*shape, low=low, high=high)
 
 
 class RNNCell(nn.Module):

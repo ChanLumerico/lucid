@@ -4,7 +4,6 @@ lucid.nn.modules.sparse — embedding tables.
 
 from __future__ import annotations
 
-import numpy as np
 
 import lucid
 import lucid.nn as nn
@@ -52,13 +51,16 @@ class Embedding(nn.Module):
             self._zero_padding_row()
 
     def _make_init_weight(self) -> Tensor:
-        arr = np.random.uniform(
-            -0.1, 0.1, size=(self.num_embeddings, self.embedding_dim)
-        ).astype(np.float32)
-        return Tensor(arr)
+        from lucid.ops.random import uniform
+        return uniform(self.num_embeddings, self.embedding_dim,
+                        low=-0.1, high=0.1)
 
     def _zero_padding_row(self) -> None:
-        # Replace weight._impl with a copy where the padding row is zeroed.
+        # One-time initialization helper: zero the padding row in-place.
+        # Done via host round-trip because Tensor does not expose
+        # __setitem__ for slice assignment yet; this is *not* in any
+        # forward/backward compute path.
+        import numpy as np
         arr = self.weight.numpy().copy()
         arr[self.padding_idx] = 0
         new = Tensor(arr, dtype=self.weight.dtype, device=self.weight.device)
@@ -71,7 +73,11 @@ class Embedding(nn.Module):
 
     def reset_parameters(self) -> None:
         new = self._make_init_weight()
-        new = Tensor(new.numpy(), dtype=self.weight.dtype, device=self.weight.device)
+        # Move to weight's device/dtype if needed.
+        if new.dtype != self.weight.dtype:
+            new = new.astype(self.weight.dtype)
+        if new.device != self.weight.device:
+            new = new.to(self.weight.device)
         self.weight._impl = new._impl
         if self.padding_idx is not None:
             self._zero_padding_row()
