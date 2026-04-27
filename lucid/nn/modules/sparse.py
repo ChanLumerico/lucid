@@ -1,8 +1,17 @@
+"""
+lucid.nn.modules.sparse — embedding tables.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+
 
 __all__ = ["Embedding"]
 
@@ -35,14 +44,25 @@ class Embedding(nn.Module):
         self.norm_type = norm_type
 
         if _weight is None:
-            self.weight = nn.Parameter(
-                lucid.random.uniform(-0.1, 0.1, (num_embeddings, embedding_dim))
-            )
+            self.weight = nn.Parameter(self._make_init_weight())
         else:
             self.weight = nn.Parameter(_weight)
 
         if self.padding_idx is not None:
-            self.weight.data[self.padding_idx] = 0
+            self._zero_padding_row()
+
+    def _make_init_weight(self) -> Tensor:
+        arr = np.random.uniform(
+            -0.1, 0.1, size=(self.num_embeddings, self.embedding_dim)
+        ).astype(np.float32)
+        return Tensor(arr)
+
+    def _zero_padding_row(self) -> None:
+        # Replace weight._impl with a copy where the padding row is zeroed.
+        arr = self.weight.numpy().copy()
+        arr[self.padding_idx] = 0
+        new = Tensor(arr, dtype=self.weight.dtype, device=self.weight.device)
+        self.weight._impl = new._impl
 
     def forward(self, input_: Tensor) -> Tensor:
         return F.embedding(
@@ -50,6 +70,8 @@ class Embedding(nn.Module):
         )
 
     def reset_parameters(self) -> None:
-        self.weight.data = lucid.random.uniform(-0.1, 0.1, self.weight.shape)
+        new = self._make_init_weight()
+        new = Tensor(new.numpy(), dtype=self.weight.dtype, device=self.weight.device)
+        self.weight._impl = new._impl
         if self.padding_idx is not None:
-            self.weight.data[self.padding_idx] = 0
+            self._zero_padding_row()

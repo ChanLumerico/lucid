@@ -1,9 +1,17 @@
+"""
+lucid.nn.modules.pool — N-D pooling and adaptive pooling wrappers.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from typing import Any
+
 
 __all__ = [
     "AvgPool1d",
@@ -34,7 +42,7 @@ class _PoolNd(nn.Module):
         stride: int | tuple[int, ...],
         padding: int | tuple[int, ...],
         *,
-        D: int
+        D: int,
     ) -> None:
         super().__init__()
         self.kernel_size = _single_to_tuple(kernel_size, D)

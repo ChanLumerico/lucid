@@ -1,3 +1,9 @@
+"""
+lucid.nn.modules.vision — image-domain modules (currently `Upsample`).
+"""
+
+from __future__ import annotations
+
 from typing import Tuple
 
 import lucid
@@ -6,6 +12,7 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 from lucid.nn.functional import _InterpolateType
+
 
 __all__ = ["Upsample"]
 

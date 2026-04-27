@@ -1,3 +1,15 @@
+"""
+lucid.nn.modules.conv — convolution / transposed-convolution / unfold modules.
+
+Plain `Conv{1,2,3}d` and `ConvTranspose{1,2,3}d` are thin wrappers
+over the matching functional ops. `ConstrainedConv{1,2,3}d` adds
+weight constraints (non-negativity, sum-to-one, unit-l2, etc.) that
+can be applied either lazily during forward or eagerly via
+`project_()`.
+"""
+
+from __future__ import annotations
+
 import math
 from typing import Any, Literal
 
@@ -6,6 +18,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+
 
 __all__ = [
     "Unfold",
@@ -27,6 +40,13 @@ def _single_to_tuple(value: Any, times: int) -> tuple[Any, ...]:
     return (value,) * times
 
 
+def _check_dim(input_: Tensor, dim: int) -> None:
+    if input_.ndim != dim:
+        raise ValueError(
+            f"Expected input with {dim} dimensions, got {input_.ndim}."
+        )
+
+
 class Unfold(nn.Module):
     def __init__(
         self,
@@ -43,7 +63,7 @@ class Unfold(nn.Module):
 
     def forward(self, input_: Tensor) -> Tensor:
         if input_.ndim != 4:
-            raise ValueError(f"'nn.Unfold' only supports 4D-tensors. (i.e. images)")
+            raise ValueError("'nn.Unfold' only supports 4D-tensors. (i.e. images)")
 
         unfolded = F.unfold(
             input_, self.kernel_size, self.stride, self.padding, self.dilation
@@ -109,12 +129,12 @@ class _ConvNd(nn.Module):
         if out_channels % groups != 0:
             raise ValueError("out_channels must be divisible by groups.")
 
-        weight_ = lucid.empty(out_channels, in_channels // groups, *self.kernel_size)
-        self.weight = nn.Parameter(weight_)
+        self.weight = nn.Parameter(
+            lucid.empty(out_channels, in_channels // groups, *self.kernel_size)
+        )
 
         if bias:
-            bias_ = lucid.empty((out_channels,))
-            self.bias = nn.Parameter(bias_)
+            self.bias = nn.Parameter(lucid.empty((out_channels,)))
         else:
             self.register_parameter("bias", None)
 
@@ -222,12 +242,16 @@ class _ConstrainedConvNd(_ConvNd):
                     "fixed_center requires odd kernel sizes for all spatial dims."
                 )
 
-            center_mask = lucid.zeros(1, 1, *self.kernel_size, device=self.device)
+            # Build a one-hot mask whose only nonzero entry is the kernel center.
+            import numpy as np
+
+            mask = np.zeros((1, 1, *self.kernel_size), dtype=np.float32)
             center_idx = (0, 0, *[k // 2 for k in self.kernel_size])
-            center_mask[center_idx] = 1.0
+            mask[center_idx] = 1.0
+            center_mask = Tensor(mask, device=self.device)
 
             self.register_buffer("_center_mask", center_mask)
-            self.register_buffer("_neighbor_mask", 1.0 - center_mask)
+            self.register_buffer("_neighbor_mask", Tensor(1.0 - mask, device=self.device))
         else:
             self.register_buffer("_center_mask", None)
             self.register_buffer("_neighbor_mask", None)
@@ -275,7 +299,9 @@ class _ConstrainedConvNd(_ConvNd):
 
     def project_(self) -> "_ConstrainedConvNd":
         projected = self._apply_constraint(self.weight)
-        self.weight.data = projected.data
+        # Swap impl in place so Parameter identity (and any optimizer state
+        # keyed on it) survives the projection.
+        self.weight._impl = projected._impl
         return self
 
     def extra_repr(self) -> str:
@@ -318,7 +344,7 @@ class Conv1d(_ConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=3)
+        _check_dim(input_, dim=3)
         return F.conv1d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
@@ -354,7 +380,7 @@ class Conv2d(_ConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=4)
+        _check_dim(input_, dim=4)
         return F.conv2d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
@@ -390,7 +416,7 @@ class Conv3d(_ConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=5)
+        _check_dim(input_, dim=5)
         return F.conv3d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
@@ -439,7 +465,7 @@ class ConstrainedConv1d(_ConstrainedConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=3)
+        _check_dim(input_, dim=3)
         return F.conv1d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
@@ -488,7 +514,7 @@ class ConstrainedConv2d(_ConstrainedConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=4)
+        _check_dim(input_, dim=4)
         return F.conv2d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
@@ -537,7 +563,7 @@ class ConstrainedConv3d(_ConstrainedConvNd):
     def _conv_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=5)
+        _check_dim(input_, dim=5)
         return F.conv3d(
             input_, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
@@ -591,12 +617,12 @@ class _ConvTransposeNd(nn.Module):
         if out_channels % groups != 0:
             raise ValueError("out_channels must be divisible by groups.")
 
-        weight_ = lucid.empty(in_channels, out_channels // groups, *self.kernel_size)
-        self.weight = nn.Parameter(weight_)
+        self.weight = nn.Parameter(
+            lucid.empty(in_channels, out_channels // groups, *self.kernel_size)
+        )
 
         if bias:
-            bias_ = lucid.empty((out_channels,))
-            self.bias = nn.Parameter(bias_)
+            self.bias = nn.Parameter(lucid.empty((out_channels,)))
         else:
             self.register_parameter("bias", None)
 
@@ -658,7 +684,7 @@ class ConvTranspose1d(_ConvTransposeNd):
     def _conv_transpose_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=3)
+        _check_dim(input_, dim=3)
         return F.conv_transpose1d(
             input_,
             weight,
@@ -703,7 +729,7 @@ class ConvTranspose2d(_ConvTransposeNd):
     def _conv_transpose_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=4)
+        _check_dim(input_, dim=4)
         return F.conv_transpose2d(
             input_,
             weight,
@@ -748,7 +774,7 @@ class ConvTranspose3d(_ConvTransposeNd):
     def _conv_transpose_forward(
         self, input_: Tensor, weight: Tensor, bias: Tensor | None
     ) -> Tensor:
-        lucid._check_input_dim(input_, dim=5)
+        _check_dim(input_, dim=5)
         return F.conv_transpose3d(
             input_,
             weight,

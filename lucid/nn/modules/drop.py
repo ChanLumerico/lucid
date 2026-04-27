@@ -1,8 +1,18 @@
+"""
+lucid.nn.modules.drop — dropout-family modules.
+
+`DropBlock` and `DropPath` short-circuit when not training so the
+forward pass is a no-op at eval time.
+"""
+
+from __future__ import annotations
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+
 
 __all__ = [
     "Dropout",
@@ -13,6 +23,13 @@ __all__ = [
     "DropBlock",
     "DropPath",
 ]
+
+
+def _check_dim(input_: Tensor, dim: int) -> None:
+    if input_.ndim != dim:
+        raise ValueError(
+            f"Expected input with {dim} dimensions, got {input_.ndim}."
+        )
 
 
 class _DropoutNd(nn.Module):
@@ -32,19 +49,19 @@ class Dropout(_DropoutNd):
 
 class Dropout1d(_DropoutNd):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=3)
+        _check_dim(input_, dim=3)
         return F.dropout1d(input_, self.p, self.training)
 
 
 class Dropout2d(_DropoutNd):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=4)
+        _check_dim(input_, dim=4)
         return F.dropout2d(input_, self.p, self.training)
 
 
 class Dropout3d(_DropoutNd):
     def forward(self, input_: Tensor) -> Tensor:
-        lucid._check_input_dim(input_, dim=5)
+        _check_dim(input_, dim=5)
         return F.dropout3d(input_, self.p, self.training)
 
 

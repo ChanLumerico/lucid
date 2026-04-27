@@ -1,10 +1,20 @@
+"""
+lucid.nn.modules.loss — loss-function modules.
+
+Each holds a `reduction` (and optional class-weight buffer) and
+delegates the math to `lucid.nn.functional`.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
-from typing import Literal, override
 
 __all__ = [
     "MSELoss",
@@ -27,15 +37,16 @@ class _Loss(nn.Module):
             raise ValueError(f"Got an unexpected reduction type: {reduction}.")
         self.reduction = reduction
 
-    @override
     def forward(self, input_: Tensor, target: Tensor) -> Tensor:
-        NotImplemented
+        raise NotImplementedError
 
 
 @nn.auto_repr("reduction")
 class _WeightedLoss(nn.Module):
     def __init__(
-        self, weight: Tensor | None = None, reduction: _ReductionType | None = "mean"
+        self,
+        weight: Tensor | None = None,
+        reduction: _ReductionType | None = "mean",
     ) -> None:
         super().__init__()
         if reduction not in {"mean", "sum", None}:
@@ -45,9 +56,8 @@ class _WeightedLoss(nn.Module):
         self.weight: Tensor | None
         self.register_buffer("weight", weight)
 
-    @override
     def forward(self, input_: Tensor, target: Tensor) -> Tensor:
-        NotImplemented
+        raise NotImplementedError
 
 
 class MSELoss(_Loss):
@@ -83,7 +93,7 @@ class BCEWithLogitsLoss(_WeightedLoss):
 
     def forward(self, input_: Tensor, target: Tensor) -> Tensor:
         return F.binary_cross_entropy_with_logits(
-            input_, target, weight=self.weight, reduction=self.reduction, eps=self.eps
+            input_, target, weight=self.weight, reduction=self.reduction
         )
 
 
@@ -105,16 +115,22 @@ class CrossEntropyLoss(_WeightedLoss):
 
 class NLLLoss(_WeightedLoss):
     def forward(self, input_: Tensor, target: Tensor) -> Tensor:
-        return F.nll_loss(input_, target, weight=self.weight, reduction=self.reduction)
+        return F.nll_loss(
+            input_, target, weight=self.weight, reduction=self.reduction
+        )
 
 
 @nn.auto_repr("reduction", "delta")
 class HuberLoss(_Loss):
     def __init__(
-        self, reduction: _ReductionType | None = "mean", delta: float = 1.0
+        self,
+        reduction: _ReductionType | None = "mean",
+        delta: float = 1.0,
     ) -> None:
         super().__init__(reduction)
         self.delta = delta
 
     def forward(self, input_: Tensor, target: Tensor) -> Tensor:
-        return F.huber_loss(input_, target, delta=self.delta, reduction=self.reduction)
+        return F.huber_loss(
+            input_, target, delta=self.delta, reduction=self.reduction
+        )

@@ -1,4 +1,16 @@
+"""
+lucid.nn.modules.attention — scaled-dot-product and multi-head attention.
+
+`MultiHeadAttention` supports the two PyTorch projection styles:
+fused `in_proj_weight` for self-attention, or separate per-stream
+linear projections. Optional `kv_cache` integration is plumbed
+through but optional — passing `None` skips it.
+"""
+
+from __future__ import annotations
+
 import math
+from typing import TYPE_CHECKING, Any
 
 import lucid
 import lucid.nn as nn
@@ -6,6 +18,15 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 from lucid.types import _Scalar
+
+
+if TYPE_CHECKING:
+    # `KVCache` will land in lucid.nn alongside the model layer; until
+    # then we only need its name for type hints.
+    KVCache = Any
+else:
+    KVCache = Any
+
 
 __all__ = ["ScaledDotProductAttention", "MultiHeadAttention"]
 
@@ -87,11 +108,9 @@ class MultiHeadAttention(nn.Module):
                     "in_proj_weight requires kdim and vdim to equal embed_dim."
                 )
 
-            weight_ = lucid.empty(3 * embed_dim, embed_dim)
-            self.in_proj_weight = nn.Parameter(weight_)
+            self.in_proj_weight = nn.Parameter(lucid.empty(3 * embed_dim, embed_dim))
             if bias:
-                bias_ = lucid.empty(3 * embed_dim)
-                self.in_proj_bias = nn.Parameter(bias_)
+                self.in_proj_bias = nn.Parameter(lucid.empty(3 * embed_dim))
             else:
                 self.register_parameter("in_proj_bias", None)
 
@@ -129,7 +148,7 @@ class MultiHeadAttention(nn.Module):
         key_padding_mask: Tensor | None = None,
         attn_mask: Tensor | None = None,
         is_causal: bool = False,
-        kv_cache: nn.KVCache | None = None,
+        kv_cache: KVCache | None = None,
         use_cache: bool = False,
         cache_position: Tensor | None = None,
         cache_layer_idx: int | None = None,

@@ -1,3 +1,9 @@
+"""
+lucid.nn.modules.linear — affine and bilinear layers, plus shape utilities.
+"""
+
+from __future__ import annotations
+
 import math
 
 import lucid
@@ -5,6 +11,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
+
 
 __all__ = ["Identity", "Flatten", "Linear", "Bilinear"]
 
@@ -25,17 +32,17 @@ class Flatten(nn.Module):
 
 
 class Linear(nn.Module):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
+    def __init__(
+        self, in_features: int, out_features: int, bias: bool = True
+    ) -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
 
-        weight_ = lucid.empty(out_features, in_features)
-        self.weight = nn.Parameter(weight_)
+        self.weight = nn.Parameter(lucid.empty(out_features, in_features))
 
         if bias:
-            bias_ = lucid.empty(out_features)
-            self.bias = nn.Parameter(bias_)
+            self.bias = nn.Parameter(lucid.empty(out_features))
         else:
             self.register_parameter("bias", None)
 
@@ -53,24 +60,31 @@ class Linear(nn.Module):
         return F.linear(input_, self.weight, self.bias)
 
     def extra_repr(self) -> str:
-        return f"{self.in_features}, {self.out_features}, bias={self.bias is not None}"
+        return (
+            f"{self.in_features}, {self.out_features}, "
+            f"bias={self.bias is not None}"
+        )
 
 
 class Bilinear(nn.Module):
     def __init__(
-        self, in1_features: int, in2_features: int, out_features: int, bias: bool = True
+        self,
+        in1_features: int,
+        in2_features: int,
+        out_features: int,
+        bias: bool = True,
     ) -> None:
         super().__init__()
         self.in1_features = in1_features
         self.in2_features = in2_features
         self.out_features = out_features
 
-        weight_ = lucid.empty(out_features, in1_features, in2_features)
-        self.weight = nn.Parameter(weight_)
+        self.weight = nn.Parameter(
+            lucid.empty(out_features, in1_features, in2_features)
+        )
 
         if bias:
-            bias_ = lucid.empty(out_features)
-            self.bias = nn.Parameter(bias_)
+            self.bias = nn.Parameter(lucid.empty(out_features))
         else:
             self.register_parameter("bias", None)
 

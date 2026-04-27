@@ -6,14 +6,6 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
-[project.optional-dependencies]
-test = [
-    "pytest>=7.0",
-    "torch>=2.3,<2.7",
-    "einops>=0.8",
-    "tqdm",
-]
-
 [tool.pytest.ini_options]
 markers = [
     "parity: lucid<->torch numerical parity test",

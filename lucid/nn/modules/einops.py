@@ -1,16 +1,21 @@
+"""
+lucid.nn.modules.einops — module wrapper for einops `rearrange`.
+"""
+
+from __future__ import annotations
+
 import lucid
 import lucid.nn as nn
-import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
-from lucid.einops._func import _EinopsPattern
+
 
 __all__ = ["Rearrange"]
 
 
 @nn.auto_repr("pattern")
 class Rearrange(nn.Module):
-    def __init__(self, pattern: _EinopsPattern, **shapes: int) -> None:
+    def __init__(self, pattern: str, **shapes: int) -> None:
         super().__init__()
         self.pattern = pattern
         self.shapes = shapes
