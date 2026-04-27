@@ -19,8 +19,9 @@ from lucid.types import (
 
 __all__ = [
     "Generator", "default_generator",
-    "manual_seed", "set_deterministic", "is_deterministic",
+    "manual_seed", "seed", "set_deterministic", "is_deterministic",
     "rand", "randn", "uniform", "normal", "randint", "bernoulli",
+    "permutation",
 ]
 
 
@@ -164,3 +165,33 @@ def bernoulli(
     return Tensor._wrap(_C_engine.bernoulli(
         sh, float(p), to_engine_dtype(dtype),
         to_engine_device(device), _gen_obj(generator)))
+
+
+def permutation(
+    n: int,
+    dtype: _BuiltinNumeric | Numeric | None = None,
+    device: _DeviceType = "cpu",
+    generator: Generator | None = None,
+) -> Tensor:
+    """Return a permutation of [0, n) sampled via Fisher-Yates with the
+    engine's Philox generator. Pure-engine path: arange + sort by random
+    keys (so determinism follows manual_seed/Generator).
+    """
+    if n < 0:
+        raise ValueError("permutation: n must be non-negative")
+    if dtype is None:
+        from lucid.types import Int64
+        dtype = Int64
+    # Sample float keys, sort, take indices.
+    from lucid.ops.utils import argsort
+    from lucid.ops.gfunc import arange
+    keys = uniform(n, low=0.0, high=1.0, device=device, generator=generator)
+    perm = argsort(keys, axis=0)
+    if dtype is not None:
+        perm = perm.astype(dtype)
+    return perm
+
+
+def seed(value: int) -> None:
+    """Legacy alias for ``manual_seed``."""
+    manual_seed(int(value))

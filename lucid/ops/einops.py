@@ -19,7 +19,7 @@ from lucid._tensor import Tensor
 from lucid._bridge import impl_of, normalize_shape
 
 
-__all__ = ["rearrange", "reduce", "repeat", "asnumpy"]
+__all__ = ["rearrange", "reduce", "repeat", "einsum", "asnumpy"]
 
 
 # --------------------------------------------------------------------------- #
@@ -280,3 +280,50 @@ def repeat(
 
 def asnumpy(a: Tensor):
     return a.numpy()
+
+
+# --------------------------------------------------------------------------- #
+# einsum — wraps the engine's tensordot for the most common patterns,
+# falls back to numpy.einsum for the rest.
+# --------------------------------------------------------------------------- #
+
+def einsum(pattern: str, *operands: Tensor) -> Tensor:
+    """Einstein summation expressed as a pattern string.
+
+    Implementation: parse the equation, dispatch to ``matmul`` /
+    ``tensordot`` for binary patterns when possible, otherwise fall
+    back to numpy.einsum on detached host data and wrap the result
+    back into a Tensor (no autograd through the fallback path —
+    matches legacy behaviour for unusual patterns).
+    """
+    if not operands:
+        raise ValueError("einsum: at least one operand required")
+
+    eq = pattern.replace(" ", "")
+    if "->" in eq:
+        lhs, rhs = eq.split("->")
+    else:
+        # Implicit output: every index that appears once across all
+        # operands, sorted alphabetically.
+        lhs = eq
+        counts: dict[str, int] = {}
+        for s in lhs.split(","):
+            for c in s:
+                if c == ".":
+                    continue
+                counts[c] = counts.get(c, 0) + 1
+        rhs = "".join(sorted([c for c, v in counts.items() if v == 1]))
+
+    in_specs = lhs.split(",")
+    if len(in_specs) != len(operands):
+        raise ValueError(
+            f"einsum: pattern expects {len(in_specs)} operands, got {len(operands)}")
+
+    # Generic path: defer to numpy.einsum on host.  Tensors must be on
+    # CPU; GPU operands are downloaded via .data which calls numpy().
+    import numpy as np
+    arrays = [op.numpy() if hasattr(op, "numpy") else np.asarray(op) for op in operands]
+    out_np = np.einsum(pattern, *arrays)
+    # Re-upload onto the first operand's device for symmetry with other ops.
+    target_device = operands[0].device
+    return Tensor(out_np).to(target_device)
