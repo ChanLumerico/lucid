@@ -5,14 +5,14 @@ import sys
 
 import numpy as np
 
-from lucid._C import engine as eng
+from lucid._C import engine as _C_engine
 
 PASSED = 0
 FAILED = 0
 
 
 def make_tensor(data, device, requires_grad=False):
-    return eng.TensorImpl(np.asarray(data), device, requires_grad)
+    return _C_engine.TensorImpl(np.asarray(data), device, requires_grad)
 
 
 def data_np(tensor):
@@ -41,7 +41,7 @@ def check(name, got, expected, tol=1e-5):
 
 
 def backward_sum(out):
-    eng.engine_backward(eng.sum(out, [], False), retain_graph=False)
+    _C_engine.engine_backward(_C_engine.sum(out, [], False), retain_graph=False)
 
 
 def unfold_np(x, kernel, stride, pad, dilation):
@@ -108,19 +108,19 @@ def check_device(device):
     perm = [2, 0, 1]
     weight = np.arange(24, dtype=np.float32).reshape(4, 2, 3) / 7.0
     x = make_tensor(base, device, True)
-    y = eng.permute(x, perm)
+    y = _C_engine.permute(x, perm)
     check(f"permute forward ({device.name})", data_np(y),
           np.transpose(base, perm))
-    backward_sum(eng.mul(y, make_tensor(weight, device)))
+    backward_sum(_C_engine.mul(y, make_tensor(weight, device)))
     check(f"permute backward ({device.name})", grad_np(x),
           np.transpose(weight, np.argsort(perm)))
 
     base = np.arange(12, dtype=np.float32).reshape(3, 4)
     weight = np.arange(12, dtype=np.float32).reshape(4, 3) / 5.0
     x = make_tensor(base, device, True)
-    y = eng.contiguous(eng.transpose(x))
+    y = _C_engine.contiguous(_C_engine.transpose(x))
     check(f"contiguous transpose forward ({device.name})", data_np(y), base.T)
-    backward_sum(eng.mul(y, make_tensor(weight, device)))
+    backward_sum(_C_engine.mul(y, make_tensor(weight, device)))
     check(f"contiguous transpose backward ({device.name})", grad_np(x),
           weight.T)
 
@@ -132,16 +132,16 @@ def check_device(device):
     expected = unfold_np(x_np, kernel, stride, pad, dilation)
     weight = np.arange(expected.size, dtype=np.float32).reshape(expected.shape) / 13.0
     x = make_tensor(x_np, device, True)
-    y = eng.nn.unfold(x, kernel, stride, pad, dilation)
+    y = _C_engine.nn.unfold(x, kernel, stride, pad, dilation)
     check(f"unfold2d forward ({device.name})", data_np(y), expected)
-    backward_sum(eng.mul(y, make_tensor(weight, device)))
+    backward_sum(_C_engine.mul(y, make_tensor(weight, device)))
     check(f"unfold2d backward ({device.name})", grad_np(x),
           col2im_np(weight, x_np.shape, kernel, stride, pad, dilation))
 
 
 def main():
-    check_device(eng.Device.CPU)
-    check_device(eng.Device.GPU)
+    check_device(_C_engine.Device.CPU)
+    check_device(_C_engine.Device.GPU)
     print(f"\n--- TOTAL: {PASSED} passed, {FAILED} failed ---")
     return 0 if FAILED == 0 else 1
 

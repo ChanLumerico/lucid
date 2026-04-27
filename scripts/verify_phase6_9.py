@@ -7,14 +7,14 @@ import numpy as np
 
 import lucid
 from lucid._tensor import Tensor
-from lucid._C import engine as _E
+from lucid._C import engine as _C_engine
 from lucid.ops.bfunc import multiply
 from lucid.ops.ufunc import sum as sum_op
 import lucid.nn.functional as F
 
 
 def gpu_t(arr: np.ndarray, requires_grad: bool = False) -> Tensor:
-    return Tensor._wrap(_E.TensorImpl(arr, _E.Device.GPU, requires_grad))
+    return Tensor._wrap(_C_engine.TensorImpl(arr, _C_engine.Device.GPU, requires_grad))
 
 
 _pass = 0

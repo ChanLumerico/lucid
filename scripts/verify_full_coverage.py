@@ -14,7 +14,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor import Tensor
-from lucid._C import engine as _E
+from lucid._C import engine as _C_engine
 
 
 _pass, _fail = 0, 0
@@ -29,7 +29,7 @@ def _check(name, ok, detail=""):
 
 
 def gpu_t(arr, rg=False):
-    return Tensor._wrap(_E.TensorImpl(arr, _E.Device.GPU, rg))
+    return Tensor._wrap(_C_engine.TensorImpl(arr, _C_engine.Device.GPU, rg))
 
 
 # === Top-level namespace exposure ===
@@ -166,9 +166,9 @@ print("\n=== GPU forward smoke ===")
 xn_gpu = gpu_t(xn)
 c_gpu = nn.Conv2d(3, 4, 3, padding=1)
 # Move conv weights to GPU
-c_gpu.weight._impl = _E.TensorImpl(c_gpu.weight.numpy(), _E.Device.GPU, True)
+c_gpu.weight._impl = _C_engine.TensorImpl(c_gpu.weight.numpy(), _C_engine.Device.GPU, True)
 if c_gpu.bias is not None:
-    c_gpu.bias._impl = _E.TensorImpl(c_gpu.bias.numpy(), _E.Device.GPU, True)
+    c_gpu.bias._impl = _C_engine.TensorImpl(c_gpu.bias.numpy(), _C_engine.Device.GPU, True)
 y_gpu = c_gpu(xn_gpu)
 _check("Conv2d GPU forward", y_gpu.shape == (2, 4, 8, 8))
 
