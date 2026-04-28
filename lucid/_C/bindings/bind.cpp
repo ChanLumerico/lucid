@@ -40,6 +40,7 @@ void register_bfunc(py::module_& m);
 void register_ufunc(py::module_& m);
 void register_utils(py::module_& m);
 void register_linalg(py::module_& m);
+void register_einops(py::module_& m);
 }  // namespace lucid::bindings
 
 PYBIND11_MODULE(engine, m) {
@@ -72,4 +73,7 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_utils(m);
     auto linalg = m.def_submodule("linalg", "Linear-algebra ops.");
     lucid::bindings::register_linalg(linalg);
+    auto einops = m.def_submodule("einops",
+                                  "einops-style rearrange/reduce/repeat/einsum.");
+    lucid::bindings::register_einops(einops);
 }
