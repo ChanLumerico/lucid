@@ -41,8 +41,7 @@ struct LUCID_API Edge {
     std::uint32_t input_nr = 0;
 
     Edge() = default;
-    Edge(std::shared_ptr<Node> n, std::uint32_t i = 0)
-        : node(std::move(n)), input_nr(i) {}
+    Edge(std::shared_ptr<Node> n, std::uint32_t i = 0) : node(std::move(n)), input_nr(i) {}
 
     bool is_valid() const { return node != nullptr; }
 };
@@ -68,18 +67,12 @@ public:
     void set_sequence_nr(std::uint64_t n) { sequence_nr_ = n; }
 
     const std::vector<Edge>& next_edges() const { return next_edges_; }
-    void set_next_edges(std::vector<Edge> edges) {
-        next_edges_ = std::move(edges);
-    }
+    void set_next_edges(std::vector<Edge> edges) { next_edges_ = std::move(edges); }
 
     // Saved input/output versions to detect in-place mutation between forward
     // and backward, mirroring the Python `_version` check.
-    const std::vector<std::int64_t>& saved_versions() const {
-        return saved_versions_;
-    }
-    void set_saved_versions(std::vector<std::int64_t> v) {
-        saved_versions_ = std::move(v);
-    }
+    const std::vector<std::int64_t>& saved_versions() const { return saved_versions_; }
+    void set_saved_versions(std::vector<std::int64_t> v) { saved_versions_ = std::move(v); }
 
 protected:
     std::uint64_t sequence_nr_;

@@ -8,9 +8,12 @@ namespace lucid {
 
 const char* amp_policy_name(AmpPolicy p) {
     switch (p) {
-        case AmpPolicy::Promote:    return "Promote";
-        case AmpPolicy::KeepInput:  return "KeepInput";
-        case AmpPolicy::ForceFP32:  return "ForceFP32";
+        case AmpPolicy::Promote:
+            return "Promote";
+        case AmpPolicy::KeepInput:
+            return "KeepInput";
+        case AmpPolicy::ForceFP32:
+            return "ForceFP32";
     }
     throw LucidError("amp_policy_name: unknown AmpPolicy");
 }
@@ -23,14 +26,16 @@ thread_local Dtype g_target = Dtype::F32;
 }  // namespace
 
 std::optional<Dtype> active_dtype() {
-    if (!g_active) return std::nullopt;
+    if (!g_active)
+        return std::nullopt;
     return g_target;
 }
 
-bool is_active() { return g_active; }
+bool is_active() {
+    return g_active;
+}
 
-AutocastGuard::AutocastGuard(Dtype target)
-    : prev_active_(g_active), prev_dtype_(g_target) {
+AutocastGuard::AutocastGuard(Dtype target) : prev_active_(g_active), prev_dtype_(g_target) {
     g_active = true;
     g_target = target;
 }

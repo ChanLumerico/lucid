@@ -24,7 +24,7 @@ namespace lucid {
 
 class LUCID_API ExpBackward : public UnaryOp<ExpBackward> {
 public:
-    static constexpr bool kSavesInput  = false;
+    static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
     static CpuStorage cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt);
@@ -50,7 +50,7 @@ public:
 
 class LUCID_API SqrtBackward : public UnaryOp<SqrtBackward> {
 public:
-    static constexpr bool kSavesInput  = false;
+    static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
     static CpuStorage cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt);

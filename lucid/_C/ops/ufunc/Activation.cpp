@@ -6,6 +6,9 @@
 
 #include <mlx/ops.h>
 
+#include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/Helpers.h"
+#include "../../autograd/Node.h"
 #include "../../backend/cpu/Vdsp.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
@@ -14,9 +17,6 @@
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/TensorImpl.h"
-#include "../../autograd/AccumulateGrad.h"
-#include "../../autograd/Helpers.h"
-#include "../../autograd/Node.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -24,9 +24,9 @@ namespace lucid {
 namespace {
 CpuStorage allocate_unary(const Shape& out_shape, Dtype dt) {
     CpuStorage out;
-    out.dtype  = dt;
+    out.dtype = dt;
     out.nbytes = shape_numel(out_shape) * dtype_size(dt);
-    out.ptr    = allocate_aligned_bytes(out.nbytes);
+    out.ptr = allocate_aligned_bytes(out.nbytes);
     return out;
 }
 }  // namespace
@@ -36,19 +36,17 @@ const OpSchema ReluBackward::schema_v1{"relu", 1, AmpPolicy::KeepInput, true};
 CpuStorage ReluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
     const std::size_t numel = shape_numel(out_shape);
     CpuStorage out;
-    out.dtype  = dt;
+    out.dtype = dt;
     out.nbytes = numel * dtype_size(dt);
-    out.ptr    = allocate_aligned_bytes(out.nbytes);
+    out.ptr = allocate_aligned_bytes(out.nbytes);
     switch (dt) {
         case Dtype::F32:
-            backend::cpu::vrelu_f32(
-                reinterpret_cast<const float*>(a.ptr.get()),
-                reinterpret_cast<float*>(out.ptr.get()), numel);
+            backend::cpu::vrelu_f32(reinterpret_cast<const float*>(a.ptr.get()),
+                                    reinterpret_cast<float*>(out.ptr.get()), numel);
             break;
         case Dtype::F64:
-            backend::cpu::vrelu_f64(
-                reinterpret_cast<const double*>(a.ptr.get()),
-                reinterpret_cast<double*>(out.ptr.get()), numel);
+            backend::cpu::vrelu_f64(reinterpret_cast<const double*>(a.ptr.get()),
+                                    reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
             throw NotImplementedError("relu: dtype not supported");
@@ -62,14 +60,15 @@ Storage ReluBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, mask, n, dtype_, device_);
 }
 
-TensorImplPtr relu_op(const TensorImplPtr& a) { return ReluBackward::forward(a); }
+TensorImplPtr relu_op(const TensorImplPtr& a) {
+    return ReluBackward::forward(a);
+}
 LUCID_REGISTER_OP(ReluBackward)
 
 // =================== Sigmoid ===================
 const OpSchema SigmoidBackward::schema_v1{"sigmoid", 1, AmpPolicy::Promote, true};
 
-CpuStorage SigmoidBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                       Dtype dt) {
+CpuStorage SigmoidBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
     const std::size_t n = shape_numel(out_shape);
     Storage tmp = sigmoid_storage(Storage{a}, n, dt, Device::CPU);
     return std::get<CpuStorage>(std::move(tmp));
@@ -78,13 +77,15 @@ CpuStorage SigmoidBackward::cpu_kernel(const CpuStorage& a, const Shape& out_sha
 Storage SigmoidBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     // dx = z (1 - z) g, z = saved output.
-    Storage neg_z   = mul_scalar_storage(saved_output_, -1.0, n, dtype_, device_);
+    Storage neg_z = mul_scalar_storage(saved_output_, -1.0, n, dtype_, device_);
     Storage one_m_z = add_scalar_storage(neg_z, 1.0, n, dtype_, device_);
-    Storage z_omz   = multiply_storages(saved_output_, one_m_z, n, dtype_, device_);
+    Storage z_omz = multiply_storages(saved_output_, one_m_z, n, dtype_, device_);
     return multiply_storages(z_omz, g, n, dtype_, device_);
 }
 
-TensorImplPtr sigmoid_op(const TensorImplPtr& a) { return SigmoidBackward::forward(a); }
+TensorImplPtr sigmoid_op(const TensorImplPtr& a) {
+    return SigmoidBackward::forward(a);
+}
 LUCID_REGISTER_OP(SigmoidBackward)
 
 // =================== SiLU (Swish) ===================
@@ -100,16 +101,18 @@ CpuStorage SiluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
 Storage SiluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     // dx = σ(x) + x · σ(x) · (1 - σ(x)) = σ(x) · (1 + x(1 - σ(x)))
-    Storage sx       = sigmoid_storage(saved_inputs_[0], n, dtype_, device_);
-    Storage neg_sx   = mul_scalar_storage(sx, -1.0, n, dtype_, device_);
+    Storage sx = sigmoid_storage(saved_inputs_[0], n, dtype_, device_);
+    Storage neg_sx = mul_scalar_storage(sx, -1.0, n, dtype_, device_);
     Storage one_m_sx = add_scalar_storage(neg_sx, 1.0, n, dtype_, device_);
-    Storage x_omsx   = multiply_storages(saved_inputs_[0], one_m_sx, n, dtype_, device_);
-    Storage one_p    = add_scalar_storage(x_omsx, 1.0, n, dtype_, device_);
-    Storage dx       = multiply_storages(sx, one_p, n, dtype_, device_);
+    Storage x_omsx = multiply_storages(saved_inputs_[0], one_m_sx, n, dtype_, device_);
+    Storage one_p = add_scalar_storage(x_omsx, 1.0, n, dtype_, device_);
+    Storage dx = multiply_storages(sx, one_p, n, dtype_, device_);
     return multiply_storages(dx, g, n, dtype_, device_);
 }
 
-TensorImplPtr silu_op(const TensorImplPtr& a) { return SiluBackward::forward(a); }
+TensorImplPtr silu_op(const TensorImplPtr& a) {
+    return SiluBackward::forward(a);
+}
 LUCID_REGISTER_OP(SiluBackward)
 
 // =================== GeLU (tanh approximation) ===================
@@ -127,7 +130,7 @@ const OpSchema GeluBackward::schema_v1{"gelu", 1, AmpPolicy::ForceFP32, true};
 namespace {
 constexpr double kGeluC1 = 0.7978845608028654;  // √(2/π)
 constexpr double kGeluC2 = 0.044715;
-}
+}  // namespace
 
 CpuStorage GeluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
     const std::size_t n = shape_numel(out_shape);
@@ -178,17 +181,16 @@ Storage GeluBackward::grad_formula(const Storage& g) {
 
         auto x2 = ::mlx::core::multiply(x_arr, x_arr);
         auto x3 = ::mlx::core::multiply(x2, x_arr);
-        auto inner = ::mlx::core::multiply(
-            c1, ::mlx::core::add(x_arr, ::mlx::core::multiply(c2, x3)));
+        auto inner =
+            ::mlx::core::multiply(c1, ::mlx::core::add(x_arr, ::mlx::core::multiply(c2, x3)));
         auto t = ::mlx::core::tanh(inner);
         auto dinner = ::mlx::core::multiply(
-            c1, ::mlx::core::add(one,
-                ::mlx::core::multiply(three, ::mlx::core::multiply(c2, x2))));
+            c1, ::mlx::core::add(one, ::mlx::core::multiply(three, ::mlx::core::multiply(c2, x2))));
         auto t2 = ::mlx::core::multiply(t, t);
         auto term1 = ::mlx::core::multiply(half, ::mlx::core::add(one, t));
-        auto term2 = ::mlx::core::multiply(half,
-            ::mlx::core::multiply(x_arr,
-                ::mlx::core::multiply(::mlx::core::subtract(one, t2), dinner)));
+        auto term2 = ::mlx::core::multiply(
+            half, ::mlx::core::multiply(
+                      x_arr, ::mlx::core::multiply(::mlx::core::subtract(one, t2), dinner)));
         auto dx = ::mlx::core::add(term1, term2);
         auto out = ::mlx::core::multiply(dx, g_arr);
         return Storage{gpu::wrap_mlx_array(std::move(out), dtype_)};
@@ -197,9 +199,9 @@ Storage GeluBackward::grad_formula(const Storage& g) {
     const auto& x_cpu = std::get<CpuStorage>(saved_inputs_[0]);
     const auto& g_cpu = std::get<CpuStorage>(g);
     CpuStorage out;
-    out.dtype  = dtype_;
+    out.dtype = dtype_;
     out.nbytes = n * dtype_size(dtype_);
-    out.ptr    = allocate_aligned_bytes(out.nbytes);
+    out.ptr = allocate_aligned_bytes(out.nbytes);
 
     switch (dtype_) {
         case Dtype::F32: {
@@ -238,14 +240,18 @@ Storage GeluBackward::grad_formula(const Storage& g) {
     return Storage{std::move(out)};
 }
 
-TensorImplPtr gelu_op(const TensorImplPtr& a) { return GeluBackward::forward(a); }
+TensorImplPtr gelu_op(const TensorImplPtr& a) {
+    return GeluBackward::forward(a);
+}
 LUCID_REGISTER_OP(GeluBackward)
 
 // =================== LeakyReLU ===================
 const OpSchema LeakyReluBackward::schema_v1{"leaky_relu", 1, AmpPolicy::KeepInput, true};
 
-CpuStorage LeakyReluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                         Dtype dt, double slope) {
+CpuStorage LeakyReluBackward::cpu_kernel(const CpuStorage& a,
+                                         const Shape& out_shape,
+                                         Dtype dt,
+                                         double slope) {
     const std::size_t n = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
@@ -253,13 +259,15 @@ CpuStorage LeakyReluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_s
             auto* p = reinterpret_cast<const float*>(a.ptr.get());
             auto* q = reinterpret_cast<float*>(out.ptr.get());
             const auto fs = static_cast<float>(slope);
-            for (std::size_t i = 0; i < n; ++i) q[i] = (p[i] >= 0.f) ? p[i] : fs * p[i];
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = (p[i] >= 0.f) ? p[i] : fs * p[i];
             break;
         }
         case Dtype::F64: {
             auto* p = reinterpret_cast<const double*>(a.ptr.get());
             auto* q = reinterpret_cast<double*>(out.ptr.get());
-            for (std::size_t i = 0; i < n; ++i) q[i] = (p[i] >= 0.0) ? p[i] : slope * p[i];
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = (p[i] >= 0.0) ? p[i] : slope * p[i];
             break;
         }
         default:
@@ -275,7 +283,8 @@ Storage LeakyReluBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
-    if (!a) throw LucidError("leaky_relu: null input");
+    if (!a)
+        throw LucidError("leaky_relu: null input");
     if (a->device_ == Device::CPU && !a->is_contiguous())
         throw NotImplementedError(
             "leaky_relu: non-contiguous input not supported (call .contiguous() first)");
@@ -284,7 +293,8 @@ TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
-        if (!g.arr) throw LucidError("leaky_relu: null GPU input");
+        if (!g.arr)
+            throw LucidError("leaky_relu: null GPU input");
         ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype_));
         ::mlx::core::array slope_arr(slope, gpu::to_mlx_dtype(a->dtype_));
         // y = where(x >= 0, x, slope * x)
@@ -293,29 +303,30 @@ TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
         auto out = ::mlx::core::where(pos_mask, *g.arr, neg_branch);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
     } else {
-        out_storage = Storage{cpu_kernel(std::get<CpuStorage>(a->storage_),
-                                         a->shape_, a->dtype_, slope)};
+        out_storage =
+            Storage{cpu_kernel(std::get<CpuStorage>(a->storage_), a->shape_, a->dtype_, slope)};
     }
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_,
-                                            a->dtype_, a->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
+                                            a->device_, false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_) return out;
+    if (!GradMode::is_enabled() || !a->requires_grad_)
+        return out;
 
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<LeakyReluBackward>();
-    bwd->input_shapes_  = {a->shape_};
-    bwd->out_shape_     = a->shape_;
-    bwd->dtype_         = a->dtype_;
-    bwd->device_        = a->device_;
+    bwd->input_shapes_ = {a->shape_};
+    bwd->out_shape_ = a->shape_;
+    bwd->dtype_ = a->dtype_;
+    bwd->device_ = a->device_;
     bwd->input_tensors_ = {a};
-    bwd->saved_inputs_  = {a->storage_};
-    bwd->slope_         = slope;
+    bwd->saved_inputs_ = {a->storage_};
+    bwd->slope_ = slope;
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
     bwd->set_saved_versions({a->version_});
 
-    out->grad_fn_       = std::move(bwd);
-    out->is_leaf_       = false;
+    out->grad_fn_ = std::move(bwd);
+    out->is_leaf_ = false;
     out->requires_grad_ = true;
     return out;
 }
@@ -331,8 +342,7 @@ LUCID_REGISTER_OP(LeakyReluBackward)
 // Backward: dx = σ(x) · g
 const OpSchema SoftplusBackward::schema_v1{"softplus", 1, AmpPolicy::ForceFP32, true};
 
-CpuStorage SoftplusBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                        Dtype dt) {
+CpuStorage SoftplusBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
     const std::size_t n = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
@@ -368,7 +378,9 @@ Storage SoftplusBackward::grad_formula(const Storage& g) {
     return multiply_storages(sx, g, n, dtype_, device_);
 }
 
-TensorImplPtr softplus_op(const TensorImplPtr& a) { return SoftplusBackward::forward(a); }
+TensorImplPtr softplus_op(const TensorImplPtr& a) {
+    return SoftplusBackward::forward(a);
+}
 LUCID_REGISTER_OP(SoftplusBackward)
 
 // =================== ELU(x; α) ===================
@@ -381,8 +393,10 @@ LUCID_REGISTER_OP(SoftplusBackward)
 
 const OpSchema EluBackward::schema_v1{"elu", 1, AmpPolicy::ForceFP32, true};
 
-CpuStorage EluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                    Dtype dt, double alpha) {
+CpuStorage EluBackward::cpu_kernel(const CpuStorage& a,
+                                   const Shape& out_shape,
+                                   Dtype dt,
+                                   double alpha) {
     const std::size_t n = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
@@ -462,7 +476,8 @@ Storage EluBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
-    if (!a) throw LucidError("elu: null input");
+    if (!a)
+        throw LucidError("elu: null input");
     if (a->device_ == Device::CPU && !a->is_contiguous())
         throw NotImplementedError(
             "elu: non-contiguous input not supported (call .contiguous() first)");
@@ -471,38 +486,39 @@ TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
-        if (!g.arr) throw LucidError("elu: null GPU input");
+        if (!g.arr)
+            throw LucidError("elu: null GPU input");
         ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype_));
         ::mlx::core::array one(1.0, gpu::to_mlx_dtype(a->dtype_));
         ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(a->dtype_));
         auto pos_mask = ::mlx::core::greater_equal(*g.arr, zero);
-        auto neg = ::mlx::core::multiply(
-            alpha_arr,
-            ::mlx::core::subtract(::mlx::core::exp(*g.arr), one));
+        auto neg =
+            ::mlx::core::multiply(alpha_arr, ::mlx::core::subtract(::mlx::core::exp(*g.arr), one));
         auto out = ::mlx::core::where(pos_mask, *g.arr, neg);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
     } else {
-        out_storage = Storage{cpu_kernel(std::get<CpuStorage>(a->storage_),
-                                          a->shape_, a->dtype_, alpha)};
+        out_storage =
+            Storage{cpu_kernel(std::get<CpuStorage>(a->storage_), a->shape_, a->dtype_, alpha)};
     }
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_,
-                                             a->dtype_, a->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
+                                            a->device_, false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_) return out;
+    if (!GradMode::is_enabled() || !a->requires_grad_)
+        return out;
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<EluBackward>();
-    bwd->input_shapes_  = {a->shape_};
-    bwd->out_shape_     = a->shape_;
-    bwd->dtype_         = a->dtype_;
-    bwd->device_        = a->device_;
+    bwd->input_shapes_ = {a->shape_};
+    bwd->out_shape_ = a->shape_;
+    bwd->dtype_ = a->dtype_;
+    bwd->device_ = a->device_;
     bwd->input_tensors_ = {a};
-    bwd->saved_inputs_  = {a->storage_};
-    bwd->alpha_         = alpha;
+    bwd->saved_inputs_ = {a->storage_};
+    bwd->alpha_ = alpha;
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
     bwd->set_saved_versions({a->version_});
-    out->grad_fn_       = std::move(bwd);
-    out->is_leaf_       = false;
+    out->grad_fn_ = std::move(bwd);
+    out->is_leaf_ = false;
     out->requires_grad_ = true;
     return out;
 }
@@ -516,7 +532,7 @@ LUCID_REGISTER_OP(EluBackward)
 namespace {
 constexpr double kSeluScale = 1.0507009873554805;
 constexpr double kSeluAlpha = 1.6732632423543772;
-}
+}  // namespace
 
 const OpSchema SeluBackward::schema_v1{"selu", 1, AmpPolicy::ForceFP32, true};
 
@@ -540,8 +556,7 @@ CpuStorage SeluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
             auto* q = reinterpret_cast<double*>(out.ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
                 const double x = p[i];
-                q[i] = (x >= 0.0) ? kSeluScale * x
-                                   : kSeluScale * kSeluAlpha * (std::exp(x) - 1.0);
+                q[i] = (x >= 0.0) ? kSeluScale * x : kSeluScale * kSeluAlpha * (std::exp(x) - 1.0);
             }
             break;
         }
@@ -592,8 +607,7 @@ Storage SeluBackward::grad_formula(const Storage& g) {
             auto* qp = reinterpret_cast<double*>(out.ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
                 const double x = xp[i];
-                const double dx = (x >= 0.0) ? kSeluScale
-                                              : kSeluScale * kSeluAlpha * std::exp(x);
+                const double dx = (x >= 0.0) ? kSeluScale : kSeluScale * kSeluAlpha * std::exp(x);
                 qp[i] = dx * gp[i];
             }
             break;
@@ -604,7 +618,9 @@ Storage SeluBackward::grad_formula(const Storage& g) {
     return Storage{std::move(out)};
 }
 
-TensorImplPtr selu_op(const TensorImplPtr& a) { return SeluBackward::forward(a); }
+TensorImplPtr selu_op(const TensorImplPtr& a) {
+    return SeluBackward::forward(a);
+}
 LUCID_REGISTER_OP(SeluBackward)
 
 // =================== Mish ===================
@@ -670,8 +686,7 @@ Storage MishBackward::grad_formula(const Storage& g) {
         ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dtype_));
         auto one_minus_t2 = ::mlx::core::subtract(one, ::mlx::core::square(t));
         auto deriv = ::mlx::core::add(
-            t, ::mlx::core::multiply(*gx.arr,
-                                     ::mlx::core::multiply(one_minus_t2, sig)));
+            t, ::mlx::core::multiply(*gx.arr, ::mlx::core::multiply(one_minus_t2, sig)));
         auto out = ::mlx::core::multiply(deriv, *gg.arr);
         return Storage{gpu::wrap_mlx_array(std::move(out), dtype_)};
     }
@@ -714,7 +729,9 @@ Storage MishBackward::grad_formula(const Storage& g) {
     return Storage{std::move(out)};
 }
 
-TensorImplPtr mish_op(const TensorImplPtr& a) { return MishBackward::forward(a); }
+TensorImplPtr mish_op(const TensorImplPtr& a) {
+    return MishBackward::forward(a);
+}
 LUCID_REGISTER_OP(MishBackward)
 
 // =================== HardSigmoid ===================
@@ -723,8 +740,7 @@ LUCID_REGISTER_OP(MishBackward)
 
 const OpSchema HardSigmoidBackward::schema_v1{"hard_sigmoid", 1, AmpPolicy::KeepInput, true};
 
-CpuStorage HardSigmoidBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                            Dtype dt) {
+CpuStorage HardSigmoidBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
     const std::size_t n = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
@@ -761,9 +777,8 @@ Storage HardSigmoidBackward::grad_formula(const Storage& g) {
         ::mlx::core::array p3(3.0, gpu::to_mlx_dtype(dtype_));
         ::mlx::core::array s(1.0 / 6.0, gpu::to_mlx_dtype(dtype_));
         ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dtype_));
-        auto in_range = ::mlx::core::logical_and(
-            ::mlx::core::greater(*gx.arr, m3),
-            ::mlx::core::less(*gx.arr, p3));
+        auto in_range = ::mlx::core::logical_and(::mlx::core::greater(*gx.arr, m3),
+                                                 ::mlx::core::less(*gx.arr, p3));
         auto s_b = ::mlx::core::broadcast_to(s, gx.arr->shape());
         auto z_b = ::mlx::core::broadcast_to(zero, gx.arr->shape());
         auto deriv = ::mlx::core::where(in_range, s_b, z_b);
@@ -816,8 +831,7 @@ LUCID_REGISTER_OP(HardSigmoidBackward)
 
 const OpSchema HardSwishBackward::schema_v1{"hard_swish", 1, AmpPolicy::KeepInput, true};
 
-CpuStorage HardSwishBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                          Dtype dt) {
+CpuStorage HardSwishBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
     const std::size_t n = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
@@ -858,8 +872,7 @@ Storage HardSwishBackward::grad_formula(const Storage& g) {
         ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dtype_));
         ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dtype_));
         ::mlx::core::array third(1.0 / 3.0, gpu::to_mlx_dtype(dtype_));
-        auto mid_branch = ::mlx::core::add(
-            ::mlx::core::multiply(*gx.arr, third), half);
+        auto mid_branch = ::mlx::core::add(::mlx::core::multiply(*gx.arr, third), half);
         auto le_m3 = ::mlx::core::less_equal(*gx.arr, m3);
         auto ge_p3 = ::mlx::core::greater_equal(*gx.arr, p3);
         auto z_b = ::mlx::core::broadcast_to(zero, gx.arr->shape());
@@ -883,9 +896,12 @@ Storage HardSwishBackward::grad_formula(const Storage& g) {
             for (std::size_t i = 0; i < n; ++i) {
                 const float x = xp[i];
                 float dx;
-                if (x <= -3.f) dx = 0.f;
-                else if (x >= 3.f) dx = 1.f;
-                else dx = x / 3.f + 0.5f;
+                if (x <= -3.f)
+                    dx = 0.f;
+                else if (x >= 3.f)
+                    dx = 1.f;
+                else
+                    dx = x / 3.f + 0.5f;
                 qp[i] = dx * gp[i];
             }
             break;
@@ -897,9 +913,12 @@ Storage HardSwishBackward::grad_formula(const Storage& g) {
             for (std::size_t i = 0; i < n; ++i) {
                 const double x = xp[i];
                 double dx;
-                if (x <= -3.0) dx = 0.0;
-                else if (x >= 3.0) dx = 1.0;
-                else dx = x / 3.0 + 0.5;
+                if (x <= -3.0)
+                    dx = 0.0;
+                else if (x >= 3.0)
+                    dx = 1.0;
+                else
+                    dx = x / 3.0 + 0.5;
                 qp[i] = dx * gp[i];
             }
             break;
@@ -928,13 +947,15 @@ CpuStorage Relu6Backward::cpu_kernel(const CpuStorage& a, const Shape& out_shape
         case Dtype::F32: {
             auto* p = reinterpret_cast<const float*>(a.ptr.get());
             auto* q = reinterpret_cast<float*>(out.ptr.get());
-            for (std::size_t i = 0; i < n; ++i) q[i] = std::min(std::max(p[i], 0.f), 6.f);
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = std::min(std::max(p[i], 0.f), 6.f);
             break;
         }
         case Dtype::F64: {
             auto* p = reinterpret_cast<const double*>(a.ptr.get());
             auto* q = reinterpret_cast<double*>(out.ptr.get());
-            for (std::size_t i = 0; i < n; ++i) q[i] = std::min(std::max(p[i], 0.0), 6.0);
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = std::min(std::max(p[i], 0.0), 6.0);
             break;
         }
         default:
@@ -945,12 +966,13 @@ CpuStorage Relu6Backward::cpu_kernel(const CpuStorage& a, const Shape& out_shape
 
 Storage Relu6Backward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    Storage mask = in_range_mask_storage(saved_inputs_[0], 0.0, 6.0, n,
-                                          dtype_, device_);
+    Storage mask = in_range_mask_storage(saved_inputs_[0], 0.0, 6.0, n, dtype_, device_);
     return multiply_storages(g, mask, n, dtype_, device_);
 }
 
-TensorImplPtr relu6_op(const TensorImplPtr& a) { return Relu6Backward::forward(a); }
+TensorImplPtr relu6_op(const TensorImplPtr& a) {
+    return Relu6Backward::forward(a);
+}
 LUCID_REGISTER_OP(Relu6Backward)
 
 }  // namespace lucid

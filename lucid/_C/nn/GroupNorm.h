@@ -22,30 +22,34 @@
 #include <vector>
 
 #include "../api.h"
+#include "../autograd/FuncOp.h"
 #include "../core/AmpPolicy.h"
 #include "../core/OpSchema.h"
 #include "../core/Storage.h"
 #include "../core/fwd.h"
-#include "../autograd/FuncOp.h"
 
 namespace lucid {
 
 class LUCID_API GroupNormBackward : public FuncOp<GroupNormBackward, 3> {
 public:
     static const OpSchema schema_v1;
-    Storage saved_mean_;            // shape (B, G)
-    Storage saved_rstd_;            // shape (B, G)
-    int B_=0, C_=0, G_=0;
-    std::vector<int> spatial_dims_; // arbitrary spatial rank (size N)
+    Storage saved_mean_;  // shape (B, G)
+    Storage saved_rstd_;  // shape (B, G)
+    int B_ = 0, C_ = 0, G_ = 0;
+    std::vector<int> spatial_dims_;  // arbitrary spatial rank (size N)
 
-    static TensorImplPtr forward(const TensorImplPtr& x, const TensorImplPtr& gamma,
-                                 const TensorImplPtr& beta, int num_groups, double eps);
+    static TensorImplPtr forward(const TensorImplPtr& x,
+                                 const TensorImplPtr& gamma,
+                                 const TensorImplPtr& beta,
+                                 int num_groups,
+                                 double eps);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
 LUCID_API TensorImplPtr group_norm_op(const TensorImplPtr& x,
                                       const TensorImplPtr& gamma,
                                       const TensorImplPtr& beta,
-                                      int num_groups, double eps);
+                                      int num_groups,
+                                      double eps);
 
 }  // namespace lucid

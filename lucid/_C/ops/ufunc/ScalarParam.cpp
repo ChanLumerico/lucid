@@ -5,6 +5,7 @@
 
 #include <mlx/ops.h>
 
+#include "../../autograd/AccumulateGrad.h"
 #include "../../backend/cpu/Vforce.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
@@ -13,7 +14,6 @@
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/TensorImpl.h"
-#include "../../autograd/AccumulateGrad.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -22,9 +22,9 @@ namespace {
 
 CpuStorage allocate_unary(const Shape& out_shape, Dtype dt) {
     CpuStorage out;
-    out.dtype  = dt;
+    out.dtype = dt;
     out.nbytes = shape_numel(out_shape) * dtype_size(dt);
-    out.ptr    = allocate_aligned_bytes(out.nbytes);
+    out.ptr = allocate_aligned_bytes(out.nbytes);
     return out;
 }
 
@@ -37,8 +37,8 @@ void wire_grad_node(const std::shared_ptr<TensorImpl>& a,
     auto a_edge = detail::ensure_grad_fn(a);
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
     bwd->set_saved_versions({a->version_});
-    out->grad_fn_       = bwd;
-    out->is_leaf_       = false;
+    out->grad_fn_ = bwd;
+    out->is_leaf_ = false;
     out->requires_grad_ = true;
 }
 
@@ -48,8 +48,10 @@ void wire_grad_node(const std::shared_ptr<TensorImpl>& a,
 
 const OpSchema PowScalarBackward::schema_v1{"pow_scalar", 1, AmpPolicy::ForceFP32, true};
 
-CpuStorage PowScalarBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                         Dtype dt, double exp) {
+CpuStorage PowScalarBackward::cpu_kernel(const CpuStorage& a,
+                                         const Shape& out_shape,
+                                         Dtype dt,
+                                         double exp) {
     // Reuse vpow with a tensor-of-exp filled with `exp`; cheap for backward
     // because we save the input only (exp is a tiny scalar).
     const std::size_t numel = shape_numel(out_shape);
@@ -57,18 +59,14 @@ CpuStorage PowScalarBackward::cpu_kernel(const CpuStorage& a, const Shape& out_s
     switch (dt) {
         case Dtype::F32: {
             std::vector<float> exp_buf(numel, static_cast<float>(exp));
-            backend::cpu::vpow_f32(
-                reinterpret_cast<const float*>(a.ptr.get()),
-                exp_buf.data(),
-                reinterpret_cast<float*>(out.ptr.get()), numel);
+            backend::cpu::vpow_f32(reinterpret_cast<const float*>(a.ptr.get()), exp_buf.data(),
+                                   reinterpret_cast<float*>(out.ptr.get()), numel);
             break;
         }
         case Dtype::F64: {
             std::vector<double> exp_buf(numel, exp);
-            backend::cpu::vpow_f64(
-                reinterpret_cast<const double*>(a.ptr.get()),
-                exp_buf.data(),
-                reinterpret_cast<double*>(out.ptr.get()), numel);
+            backend::cpu::vpow_f64(reinterpret_cast<const double*>(a.ptr.get()), exp_buf.data(),
+                                   reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         }
         default:
@@ -90,18 +88,14 @@ Storage PowScalarBackward::grad_formula(const Storage& g) {
         switch (dtype_) {
             case Dtype::F32: {
                 std::vector<float> ev(n, static_cast<float>(e));
-                backend::cpu::vpow_f32(
-                    reinterpret_cast<const float*>(s.ptr.get()),
-                    ev.data(),
-                    reinterpret_cast<float*>(out.ptr.get()), n);
+                backend::cpu::vpow_f32(reinterpret_cast<const float*>(s.ptr.get()), ev.data(),
+                                       reinterpret_cast<float*>(out.ptr.get()), n);
                 break;
             }
             case Dtype::F64: {
                 std::vector<double> ev(n, e);
-                backend::cpu::vpow_f64(
-                    reinterpret_cast<const double*>(s.ptr.get()),
-                    ev.data(),
-                    reinterpret_cast<double*>(out.ptr.get()), n);
+                backend::cpu::vpow_f64(reinterpret_cast<const double*>(s.ptr.get()), ev.data(),
+                                       reinterpret_cast<double*>(out.ptr.get()), n);
                 break;
             }
             default:
@@ -111,12 +105,13 @@ Storage PowScalarBackward::grad_formula(const Storage& g) {
     };
 
     Storage x_pow_em1 = pow_kernel(saved_inputs_[0], exp_ - 1.0);
-    Storage scaled    = mul_scalar_storage(x_pow_em1, exp_, n, dtype_, device_);
+    Storage scaled = mul_scalar_storage(x_pow_em1, exp_, n, dtype_, device_);
     return multiply_storages(scaled, g, n, dtype_, device_);
 }
 
 TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a, double exp) {
-    if (!a) throw LucidError("pow_scalar: null input");
+    if (!a)
+        throw LucidError("pow_scalar: null input");
     if (a->device_ == Device::CPU && !a->is_contiguous())
         throw NotImplementedError(
             "pow_scalar: non-contiguous input not supported (call .contiguous() first)");
@@ -125,28 +120,30 @@ TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a, double exp) {
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
-        if (!g.arr) throw LucidError("pow_scalar: null GPU input");
+        if (!g.arr)
+            throw LucidError("pow_scalar: null GPU input");
         ::mlx::core::array c(exp, gpu::to_mlx_dtype(a->dtype_));
         auto out = ::mlx::core::power(*g.arr, c);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
     } else {
-        out_storage = Storage{cpu_kernel(std::get<CpuStorage>(a->storage_),
-                                         a->shape_, a->dtype_, exp)};
+        out_storage =
+            Storage{cpu_kernel(std::get<CpuStorage>(a->storage_), a->shape_, a->dtype_, exp)};
     }
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_,
-                                            a->dtype_, a->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
+                                            a->device_, false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()) * 11);
 
-    if (!GradMode::is_enabled() || !a->requires_grad_) return out;
+    if (!GradMode::is_enabled() || !a->requires_grad_)
+        return out;
 
     auto bwd = std::make_shared<PowScalarBackward>();
     bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_    = a->shape_;
-    bwd->dtype_        = a->dtype_;
-    bwd->device_       = a->device_;
+    bwd->out_shape_ = a->shape_;
+    bwd->dtype_ = a->dtype_;
+    bwd->device_ = a->device_;
     bwd->saved_inputs_ = {a->storage_};
     bwd->input_tensors_ = {a};  // Item #9 — for version check
-    bwd->exp_          = exp;
+    bwd->exp_ = exp;
     wire_grad_node(a, out, bwd);
     return out;
 }
@@ -160,25 +157,23 @@ LUCID_REGISTER_OP(PowScalarBackward)
 
 const OpSchema RPowScalarBackward::schema_v1{"rpow_scalar", 1, AmpPolicy::ForceFP32, true};
 
-CpuStorage RPowScalarBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                          Dtype dt, double base) {
+CpuStorage RPowScalarBackward::cpu_kernel(const CpuStorage& a,
+                                          const Shape& out_shape,
+                                          Dtype dt,
+                                          double base) {
     const std::size_t numel = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
         case Dtype::F32: {
             std::vector<float> base_buf(numel, static_cast<float>(base));
-            backend::cpu::vpow_f32(
-                base_buf.data(),
-                reinterpret_cast<const float*>(a.ptr.get()),
-                reinterpret_cast<float*>(out.ptr.get()), numel);
+            backend::cpu::vpow_f32(base_buf.data(), reinterpret_cast<const float*>(a.ptr.get()),
+                                   reinterpret_cast<float*>(out.ptr.get()), numel);
             break;
         }
         case Dtype::F64: {
             std::vector<double> base_buf(numel, base);
-            backend::cpu::vpow_f64(
-                base_buf.data(),
-                reinterpret_cast<const double*>(a.ptr.get()),
-                reinterpret_cast<double*>(out.ptr.get()), numel);
+            backend::cpu::vpow_f64(base_buf.data(), reinterpret_cast<const double*>(a.ptr.get()),
+                                   reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         }
         default:
@@ -196,7 +191,8 @@ Storage RPowScalarBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
-    if (!a) throw LucidError("rpow_scalar: null input");
+    if (!a)
+        throw LucidError("rpow_scalar: null input");
     if (a->device_ == Device::CPU && !a->is_contiguous())
         throw NotImplementedError(
             "rpow_scalar: non-contiguous input not supported (call .contiguous() first)");
@@ -205,28 +201,30 @@ TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
-        if (!g.arr) throw LucidError("rpow_scalar: null GPU input");
+        if (!g.arr)
+            throw LucidError("rpow_scalar: null GPU input");
         ::mlx::core::array c(base, gpu::to_mlx_dtype(a->dtype_));
         auto out = ::mlx::core::power(c, *g.arr);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
     } else {
-        out_storage = Storage{cpu_kernel(std::get<CpuStorage>(a->storage_),
-                                         a->shape_, a->dtype_, base)};
+        out_storage =
+            Storage{cpu_kernel(std::get<CpuStorage>(a->storage_), a->shape_, a->dtype_, base)};
     }
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_,
-                                            a->dtype_, a->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
+                                            a->device_, false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()) * 11);
 
-    if (!GradMode::is_enabled() || !a->requires_grad_) return out;
+    if (!GradMode::is_enabled() || !a->requires_grad_)
+        return out;
 
     auto bwd = std::make_shared<RPowScalarBackward>();
     bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_    = a->shape_;
-    bwd->dtype_        = a->dtype_;
-    bwd->device_       = a->device_;
+    bwd->out_shape_ = a->shape_;
+    bwd->dtype_ = a->dtype_;
+    bwd->device_ = a->device_;
     bwd->saved_output_ = out->storage_;
     bwd->input_tensors_ = {a};  // Item #9 — for version check
-    bwd->base_         = base;
+    bwd->base_ = base;
     wire_grad_node(a, out, bwd);
     return out;
 }
@@ -240,8 +238,8 @@ LUCID_REGISTER_OP(RPowScalarBackward)
 
 const OpSchema ClipBackward::schema_v1{"clip", 1, AmpPolicy::KeepInput, true};
 
-CpuStorage ClipBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                    Dtype dt, double min_v, double max_v) {
+CpuStorage ClipBackward::cpu_kernel(
+    const CpuStorage& a, const Shape& out_shape, Dtype dt, double min_v, double max_v) {
     const std::size_t numel = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
@@ -252,8 +250,10 @@ CpuStorage ClipBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
             const auto fhi = static_cast<float>(max_v);
             for (std::size_t i = 0; i < numel; ++i) {
                 float v = p[i];
-                if (v < flo) v = flo;
-                else if (v > fhi) v = fhi;
+                if (v < flo)
+                    v = flo;
+                else if (v > fhi)
+                    v = fhi;
                 q[i] = v;
             }
             break;
@@ -263,8 +263,10 @@ CpuStorage ClipBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
             auto* q = reinterpret_cast<double*>(out.ptr.get());
             for (std::size_t i = 0; i < numel; ++i) {
                 double v = p[i];
-                if (v < min_v) v = min_v;
-                else if (v > max_v) v = max_v;
+                if (v < min_v)
+                    v = min_v;
+                else if (v > max_v)
+                    v = max_v;
                 q[i] = v;
             }
             break;
@@ -282,7 +284,8 @@ Storage ClipBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double max_v) {
-    if (!a) throw LucidError("clip: null input");
+    if (!a)
+        throw LucidError("clip: null input");
     if (a->device_ == Device::CPU && !a->is_contiguous())
         throw NotImplementedError(
             "clip: non-contiguous input not supported (call .contiguous() first)");
@@ -291,30 +294,32 @@ TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
-        if (!g.arr) throw LucidError("clip: null GPU input");
+        if (!g.arr)
+            throw LucidError("clip: null GPU input");
         ::mlx::core::array lo(min_v, gpu::to_mlx_dtype(a->dtype_));
         ::mlx::core::array hi(max_v, gpu::to_mlx_dtype(a->dtype_));
         auto out = ::mlx::core::clip(*g.arr, lo, hi);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
     } else {
-        out_storage = Storage{cpu_kernel(std::get<CpuStorage>(a->storage_),
-                                         a->shape_, a->dtype_, min_v, max_v)};
+        out_storage = Storage{
+            cpu_kernel(std::get<CpuStorage>(a->storage_), a->shape_, a->dtype_, min_v, max_v)};
     }
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_,
-                                            a->dtype_, a->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
+                                            a->device_, false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_) return out;
+    if (!GradMode::is_enabled() || !a->requires_grad_)
+        return out;
 
     auto bwd = std::make_shared<ClipBackward>();
     bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_    = a->shape_;
-    bwd->dtype_        = a->dtype_;
-    bwd->device_       = a->device_;
+    bwd->out_shape_ = a->shape_;
+    bwd->dtype_ = a->dtype_;
+    bwd->device_ = a->device_;
     bwd->saved_inputs_ = {a->storage_};
     bwd->input_tensors_ = {a};  // Item #9 — for version check
-    bwd->min_          = min_v;
-    bwd->max_          = max_v;
+    bwd->min_ = min_v;
+    bwd->max_ = max_v;
     wire_grad_node(a, out, bwd);
     return out;
 }

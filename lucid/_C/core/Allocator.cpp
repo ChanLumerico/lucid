@@ -8,8 +8,7 @@
 
 namespace lucid {
 
-std::shared_ptr<std::byte[]> allocate_aligned_bytes(std::size_t nbytes,
-                                                    Device device) {
+std::shared_ptr<std::byte[]> allocate_aligned_bytes(std::size_t nbytes, Device device) {
     if (nbytes == 0) {
         return {};
     }

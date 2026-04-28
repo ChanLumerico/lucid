@@ -26,24 +26,24 @@ template <typename T>
 inline void set_eye(T* out, int n) {
     const std::size_t total = static_cast<std::size_t>(n) * n;
     std::memset(out, 0, total * sizeof(T));
-    for (int i = 0; i < n; ++i) out[i * n + i] = T{1};
+    for (int i = 0; i < n; ++i)
+        out[i * n + i] = T{1};
 }
 
 // out (n×n) = a (n×n) @ b (n×n) row-major.
 inline void matmul_one_f32(const float* a, const float* b, float* out, int n) {
-    backend::cpu::sgemm(false, false, n, n, n, 1.0f,
-                         a, n, b, n, 0.0f, out, n);
+    backend::cpu::sgemm(false, false, n, n, n, 1.0f, a, n, b, n, 0.0f, out, n);
 }
 inline void matmul_one_f64(const double* a, const double* b, double* out, int n) {
-    backend::cpu::dgemm(false, false, n, n, n, 1.0,
-                         a, n, b, n, 0.0, out, n);
+    backend::cpu::dgemm(false, false, n, n, n, 1.0, a, n, b, n, 0.0, out, n);
 }
 
 }  // namespace
 
 TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
     using namespace linalg_detail;
-    if (!a) throw LucidError("matrix_power: null input");
+    if (!a)
+        throw LucidError("matrix_power: null input");
     require_float(a->dtype_, "matrix_power");
     require_square_2d(a->shape_, "matrix_power");
     OpScope scope{"matrix_power", a->device_, a->dtype_, a->shape_};
@@ -60,22 +60,19 @@ TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
             // Broadcast identity across batch dims (if any).
             if (sh.size() > 2) {
                 ::mlx::core::Shape target;
-                for (auto d : sh) target.push_back(static_cast<int>(d));
+                for (auto d : sh)
+                    target.push_back(static_cast<int>(d));
                 eye = ::mlx::core::broadcast_to(eye, target);
                 eye = ::mlx::core::contiguous(eye);
             }
-            return fresh(wrap_gpu_result(std::move(eye), a->dtype_),
-                         sh, a->dtype_, a->device_);
+            return fresh(wrap_gpu_result(std::move(eye), a->dtype_), sh, a->dtype_, a->device_);
         }
         const int reps = std::abs(p);
-        auto base = (p < 0)
-            ? ::mlx::core::linalg::inv(in, kMlxLinalgStream)
-            : in;
+        auto base = (p < 0) ? ::mlx::core::linalg::inv(in, kMlxLinalgStream) : in;
         ::mlx::core::array result = base;
         for (int i = 1; i < reps; ++i)
             result = ::mlx::core::matmul(result, base);
-        return fresh(wrap_gpu_result(std::move(result), a->dtype_),
-                     sh, a->dtype_, a->device_);
+        return fresh(wrap_gpu_result(std::move(result), a->dtype_), sh, a->dtype_, a->device_);
     }
 
     // CPU path: per-batch sgemm/dgemm chain. p=0 → identity. p<0 → inv first.
@@ -91,7 +88,10 @@ TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
         std::vector<T> base(per_mat), tmp(per_mat);
         for (std::int64_t b = 0; b < batch; ++b) {
             T* result = out_p + b * per_mat;
-            if (p == 0) { set_eye(result, n); continue; }
+            if (p == 0) {
+                set_eye(result, n);
+                continue;
+            }
 
             // base = (p<0) ? inv(A_b) : A_b
             std::memcpy(base.data(), in_p + b * per_mat, per_mat * sizeof(T));
@@ -115,8 +115,10 @@ TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
         }
     };
 
-    if (a->dtype_ == Dtype::F32) run(float{});
-    else                          run(double{});
+    if (a->dtype_ == Dtype::F32)
+        run(float{});
+    else
+        run(double{});
     return fresh(Storage{std::move(out_cpu)}, sh, a->dtype_, a->device_);
 }
 

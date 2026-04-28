@@ -26,32 +26,35 @@ class Generator;
 
 /// Uniform [0, 1). dtype must be F32 or F64. If `gen` is null, uses the
 /// process-default generator (`default_generator()`).
-LUCID_API TensorImplPtr rand_op(const Shape& shape, Dtype dt, Device device,
+LUCID_API TensorImplPtr rand_op(const Shape& shape,
+                                Dtype dt,
+                                Device device,
                                 Generator* gen = nullptr);
 
 /// Uniform [low, high). F32 or F64.
-LUCID_API TensorImplPtr uniform_op(const Shape& shape, double low, double high,
-                                   Dtype dt, Device device,
-                                   Generator* gen = nullptr);
+LUCID_API TensorImplPtr uniform_op(
+    const Shape& shape, double low, double high, Dtype dt, Device device, Generator* gen = nullptr);
 
 /// Standard normal N(0, 1) via Box-Muller. F32 or F64.
-LUCID_API TensorImplPtr randn_op(const Shape& shape, Dtype dt, Device device,
+LUCID_API TensorImplPtr randn_op(const Shape& shape,
+                                 Dtype dt,
+                                 Device device,
                                  Generator* gen = nullptr);
 
 /// Normal(mean, std). F32 or F64.
-LUCID_API TensorImplPtr normal_op(const Shape& shape, double mean, double std,
-                                  Dtype dt, Device device,
-                                  Generator* gen = nullptr);
+LUCID_API TensorImplPtr normal_op(
+    const Shape& shape, double mean, double std, Dtype dt, Device device, Generator* gen = nullptr);
 
 /// Uniform integer in [low, high). dtype must be I32 or I64.
 LUCID_API TensorImplPtr randint_op(const Shape& shape,
-                                   std::int64_t low, std::int64_t high,
-                                   Dtype dt, Device device,
+                                   std::int64_t low,
+                                   std::int64_t high,
+                                   Dtype dt,
+                                   Device device,
                                    Generator* gen = nullptr);
 
 /// Bernoulli(p) with output cast to the requested float dtype (1.0 or 0.0).
-LUCID_API TensorImplPtr bernoulli_op(const Shape& shape, double p,
-                                     Dtype dt, Device device,
-                                     Generator* gen = nullptr);
+LUCID_API TensorImplPtr
+bernoulli_op(const Shape& shape, double p, Dtype dt, Device device, Generator* gen = nullptr);
 
 }  // namespace lucid

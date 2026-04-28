@@ -66,9 +66,13 @@ LUCID_INTERNAL void vle_mask_f64(const double* a, const double* b, double* out, 
 // Integer fallbacks (vDSP doesn't ship these natively; we use scalar loops
 // — they exist so the dispatch table is complete in Phase 3.0. Phase 3.1+
 // can replace with platform-specific accelerated paths if profiling demands.)
-LUCID_INTERNAL void vadd_i32(const std::int32_t* a, const std::int32_t* b,
-                             std::int32_t* out, std::size_t n);
-LUCID_INTERNAL void vadd_i64(const std::int64_t* a, const std::int64_t* b,
-                             std::int64_t* out, std::size_t n);
+LUCID_INTERNAL void vadd_i32(const std::int32_t* a,
+                             const std::int32_t* b,
+                             std::int32_t* out,
+                             std::size_t n);
+LUCID_INTERNAL void vadd_i64(const std::int64_t* a,
+                             const std::int64_t* b,
+                             std::int64_t* out,
+                             std::size_t n);
 
 }  // namespace lucid::backend::cpu

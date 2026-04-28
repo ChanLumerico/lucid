@@ -17,11 +17,11 @@
 #include <vector>
 
 #include "../api.h"
+#include "../autograd/FuncOp.h"
 #include "../core/AmpPolicy.h"
 #include "../core/OpSchema.h"
 #include "../core/Storage.h"
 #include "../core/fwd.h"
-#include "../autograd/FuncOp.h"
 
 namespace lucid {
 
@@ -65,25 +65,45 @@ using AvgPool3dBackward = AvgPoolNdBackward<3>;
 
 LUCID_API TensorImplPtr max_pool1d_op(const TensorImplPtr& x,
                                       int KL,
-                                      int stride_l = 0, int pad_l = 0);
+                                      int stride_l = 0,
+                                      int pad_l = 0);
 LUCID_API TensorImplPtr max_pool2d_op(const TensorImplPtr& x,
-                                      int KH, int KW,
-                                      int stride_h = 0, int stride_w = 0,
-                                      int pad_h = 0, int pad_w = 0);
+                                      int KH,
+                                      int KW,
+                                      int stride_h = 0,
+                                      int stride_w = 0,
+                                      int pad_h = 0,
+                                      int pad_w = 0);
 LUCID_API TensorImplPtr max_pool3d_op(const TensorImplPtr& x,
-                                      int KD, int KH, int KW,
-                                      int stride_d = 0, int stride_h = 0, int stride_w = 0,
-                                      int pad_d = 0, int pad_h = 0, int pad_w = 0);
+                                      int KD,
+                                      int KH,
+                                      int KW,
+                                      int stride_d = 0,
+                                      int stride_h = 0,
+                                      int stride_w = 0,
+                                      int pad_d = 0,
+                                      int pad_h = 0,
+                                      int pad_w = 0);
 LUCID_API TensorImplPtr avg_pool1d_op(const TensorImplPtr& x,
                                       int KL,
-                                      int stride_l = 0, int pad_l = 0);
+                                      int stride_l = 0,
+                                      int pad_l = 0);
 LUCID_API TensorImplPtr avg_pool2d_op(const TensorImplPtr& x,
-                                      int KH, int KW,
-                                      int stride_h = 0, int stride_w = 0,
-                                      int pad_h = 0, int pad_w = 0);
+                                      int KH,
+                                      int KW,
+                                      int stride_h = 0,
+                                      int stride_w = 0,
+                                      int pad_h = 0,
+                                      int pad_w = 0);
 LUCID_API TensorImplPtr avg_pool3d_op(const TensorImplPtr& x,
-                                      int KD, int KH, int KW,
-                                      int stride_d = 0, int stride_h = 0, int stride_w = 0,
-                                      int pad_d = 0, int pad_h = 0, int pad_w = 0);
+                                      int KD,
+                                      int KH,
+                                      int KW,
+                                      int stride_d = 0,
+                                      int stride_h = 0,
+                                      int stride_w = 0,
+                                      int pad_d = 0,
+                                      int pad_h = 0,
+                                      int pad_w = 0);
 
 }  // namespace lucid

@@ -17,7 +17,8 @@ namespace lucid {
 
 std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
     using namespace linalg_detail;
-    if (!a) throw LucidError("svd: null input");
+    if (!a)
+        throw LucidError("svd: null input");
     require_float(a->dtype_, "svd");
     if (a->shape_.size() < 2)
         throw LucidError("svd: input must be at least 2-D");
@@ -25,14 +26,13 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
 
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
-        auto pieces = ::mlx::core::linalg::svd(in, compute_uv,
-                                                kMlxLinalgStream);
+        auto pieces = ::mlx::core::linalg::svd(in, compute_uv, kMlxLinalgStream);
         std::vector<TensorImplPtr> out;
         out.reserve(pieces.size());
         for (auto& p : pieces) {
             Shape sh = mlx_shape_to_lucid(p.shape());
-            out.push_back(fresh(wrap_gpu_result(std::move(p), a->dtype_),
-                                std::move(sh), a->dtype_, a->device_));
+            out.push_back(fresh(wrap_gpu_result(std::move(p), a->dtype_), std::move(sh), a->dtype_,
+                                a->device_));
         }
         return out;
     }
@@ -63,9 +63,8 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
             auto* S_p = reinterpret_cast<float*>(Scpu.ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
                 backend::cpu::lapack_svd_f32(in_p + b * in_per, m, n,
-                                              /*full_matrices=*/false,
-                                              U.data(), S_p + b * s_per,
-                                              Vt.data(), &info);
+                                             /*full_matrices=*/false, U.data(), S_p + b * s_per,
+                                             Vt.data(), &info);
                 check_lapack_info(info, "svd");
             }
         } else {
@@ -74,26 +73,26 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
             auto* S_p = reinterpret_cast<double*>(Scpu.ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
                 backend::cpu::lapack_svd_f64(in_p + b * in_per, m, n,
-                                              /*full_matrices=*/false,
-                                              U.data(), S_p + b * s_per,
-                                              Vt.data(), &info);
+                                             /*full_matrices=*/false, U.data(), S_p + b * s_per,
+                                             Vt.data(), &info);
                 check_lapack_info(info, "svd");
             }
         }
         std::vector<TensorImplPtr> out;
-        out.push_back(fresh(Storage{std::move(Scpu)}, ssh, a->dtype_,
-                            a->device_));
+        out.push_back(fresh(Storage{std::move(Scpu)}, ssh, a->dtype_, a->device_));
         return out;
     }
 
     // Full triple (U, S, V^T). Match MLX's "reduced" convention: U (m,k),
     // S (k,), V^T (k,n).
     Shape ush(sh.begin(), sh.end() - 2);
-    ush.push_back(m); ush.push_back(k);
+    ush.push_back(m);
+    ush.push_back(k);
     Shape ssh(sh.begin(), sh.end() - 2);
     ssh.push_back(k);
     Shape vsh(sh.begin(), sh.end() - 2);
-    vsh.push_back(k); vsh.push_back(n);
+    vsh.push_back(k);
+    vsh.push_back(n);
 
     auto Ucpu = allocate_cpu(ush, a->dtype_);
     auto Scpu = allocate_cpu(ssh, a->dtype_);
@@ -110,10 +109,8 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
         auto* V_p = reinterpret_cast<float*>(Vcpu.ptr.get());
         for (std::int64_t b = 0; b < batch; ++b) {
             backend::cpu::lapack_svd_f32(in_p + b * in_per, m, n,
-                                          /*full_matrices=*/false,
-                                          U_p + b * u_per,
-                                          S_p + b * s_per,
-                                          V_p + b * vt_per, &info);
+                                         /*full_matrices=*/false, U_p + b * u_per, S_p + b * s_per,
+                                         V_p + b * vt_per, &info);
             check_lapack_info(info, "svd");
         }
     } else {
@@ -123,10 +120,8 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
         auto* V_p = reinterpret_cast<double*>(Vcpu.ptr.get());
         for (std::int64_t b = 0; b < batch; ++b) {
             backend::cpu::lapack_svd_f64(in_p + b * in_per, m, n,
-                                          /*full_matrices=*/false,
-                                          U_p + b * u_per,
-                                          S_p + b * s_per,
-                                          V_p + b * vt_per, &info);
+                                         /*full_matrices=*/false, U_p + b * u_per, S_p + b * s_per,
+                                         V_p + b * vt_per, &info);
             check_lapack_info(info, "svd");
         }
     }

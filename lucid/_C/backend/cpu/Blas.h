@@ -27,33 +27,57 @@ namespace lucid::backend::cpu {
 ///   C    : M x N
 ///
 /// `lda`, `ldb`, `ldc` are leading dimensions in row-major (== row stride).
-LUCID_INTERNAL void sgemm(bool transA, bool transB, int M, int N, int K,
+LUCID_INTERNAL void sgemm(bool transA,
+                          bool transB,
+                          int M,
+                          int N,
+                          int K,
                           float alpha,
-                          const float* A, int lda,
-                          const float* B, int ldb,
+                          const float* A,
+                          int lda,
+                          const float* B,
+                          int ldb,
                           float beta,
-                          float* C, int ldc);
+                          float* C,
+                          int ldc);
 
-LUCID_INTERNAL void dgemm(bool transA, bool transB, int M, int N, int K,
+LUCID_INTERNAL void dgemm(bool transA,
+                          bool transB,
+                          int M,
+                          int N,
+                          int K,
                           double alpha,
-                          const double* A, int lda,
-                          const double* B, int ldb,
+                          const double* A,
+                          int lda,
+                          const double* B,
+                          int ldb,
                           double beta,
-                          double* C, int ldc);
+                          double* C,
+                          int ldc);
 
 /// y = alpha * op(A) * x + beta * y  (row-major, F32)
-LUCID_INTERNAL void sgemv(bool transA, int M, int N,
+LUCID_INTERNAL void sgemv(bool transA,
+                          int M,
+                          int N,
                           float alpha,
-                          const float* A, int lda,
-                          const float* x, int incx,
+                          const float* A,
+                          int lda,
+                          const float* x,
+                          int incx,
                           float beta,
-                          float* y, int incy);
+                          float* y,
+                          int incy);
 
-LUCID_INTERNAL void dgemv(bool transA, int M, int N,
+LUCID_INTERNAL void dgemv(bool transA,
+                          int M,
+                          int N,
                           double alpha,
-                          const double* A, int lda,
-                          const double* x, int incx,
+                          const double* A,
+                          int lda,
+                          const double* x,
+                          int incx,
                           double beta,
-                          double* y, int incy);
+                          double* y,
+                          int incy);
 
 }  // namespace lucid::backend::cpu

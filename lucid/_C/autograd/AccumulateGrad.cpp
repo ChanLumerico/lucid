@@ -6,8 +6,7 @@
 
 namespace lucid {
 
-AccumulateGrad::AccumulateGrad(std::weak_ptr<TensorImpl> leaf)
-    : leaf_(std::move(leaf)) {}
+AccumulateGrad::AccumulateGrad(std::weak_ptr<TensorImpl> leaf) : leaf_(std::move(leaf)) {}
 
 std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
     auto t = leaf_.lock();

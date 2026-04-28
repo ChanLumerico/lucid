@@ -26,11 +26,11 @@
 // AMP policy: ForceFP32 (softmax precision-sensitive).
 
 #include "../api.h"
+#include "../autograd/FuncOp.h"
 #include "../core/AmpPolicy.h"
 #include "../core/OpSchema.h"
 #include "../core/Storage.h"
 #include "../core/fwd.h"
-#include "../autograd/FuncOp.h"
 
 namespace lucid {
 
@@ -47,10 +47,11 @@ public:
     Storage saved_weights_;
 
     static TensorImplPtr forward(const TensorImplPtr& q,
-                                  const TensorImplPtr& k,
-                                  const TensorImplPtr& v,
-                                  const TensorImplPtr& attn_mask_or_null,
-                                  double scale, bool is_causal);
+                                 const TensorImplPtr& k,
+                                 const TensorImplPtr& v,
+                                 const TensorImplPtr& attn_mask_or_null,
+                                 double scale,
+                                 bool is_causal);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
@@ -62,14 +63,19 @@ struct AttentionWithWeightsResult {
     TensorImplPtr weights;
 };
 
-LUCID_API TensorImplPtr scaled_dot_product_attention_op(
-    const TensorImplPtr& q, const TensorImplPtr& k, const TensorImplPtr& v,
-    const TensorImplPtr& attn_mask_or_null,
-    double scale, bool is_causal);
+LUCID_API TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
+                                                        const TensorImplPtr& k,
+                                                        const TensorImplPtr& v,
+                                                        const TensorImplPtr& attn_mask_or_null,
+                                                        double scale,
+                                                        bool is_causal);
 
-LUCID_API AttentionWithWeightsResult scaled_dot_product_attention_with_weights_op(
-    const TensorImplPtr& q, const TensorImplPtr& k, const TensorImplPtr& v,
-    const TensorImplPtr& attn_mask_or_null,
-    double scale, bool is_causal);
+LUCID_API AttentionWithWeightsResult
+scaled_dot_product_attention_with_weights_op(const TensorImplPtr& q,
+                                             const TensorImplPtr& k,
+                                             const TensorImplPtr& v,
+                                             const TensorImplPtr& attn_mask_or_null,
+                                             double scale,
+                                             bool is_causal);
 
 }  // namespace lucid

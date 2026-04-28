@@ -19,11 +19,11 @@
 #include <vector>
 
 #include "../api.h"
+#include "../autograd/FuncOp.h"
 #include "../core/AmpPolicy.h"
 #include "../core/OpSchema.h"
 #include "../core/Storage.h"
 #include "../core/fwd.h"
-#include "../autograd/FuncOp.h"
 
 namespace lucid {
 
@@ -33,11 +33,12 @@ public:
     Storage saved_mean_;
     Storage saved_rstd_;
     std::size_t outer_ = 0;
-    std::size_t N_     = 0;
+    std::size_t N_ = 0;
 
     static TensorImplPtr forward(const TensorImplPtr& x,
                                  const TensorImplPtr& gamma,
-                                 const TensorImplPtr& beta, double eps);
+                                 const TensorImplPtr& beta,
+                                 double eps);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 

@@ -44,6 +44,6 @@ class Engine;
 
 // Convenience aliases — preferred parameter types over raw shared_ptr.
 using TensorImplPtr = std::shared_ptr<TensorImpl>;
-using NodePtr       = std::shared_ptr<Node>;
+using NodePtr = std::shared_ptr<Node>;
 
 }  // namespace lucid

@@ -24,14 +24,16 @@ bool is_integer_or_bool(Dtype dt) {
         case Dtype::I8:
         case Dtype::I16:
         case Dtype::I32:
-        case Dtype::I64: return true;
-        default: return false;
+        case Dtype::I64:
+            return true;
+        default:
+            return false;
     }
 }
 
 template <typename Op>
-CpuStorage bit_kernel(const CpuStorage& a, const CpuStorage& b,
-                      std::size_t numel, Dtype dt, Op op) {
+CpuStorage bit_kernel(
+    const CpuStorage& a, const CpuStorage& b, std::size_t numel, Dtype dt, Op op) {
     CpuStorage out;
     out.dtype = dt;
     out.nbytes = numel * dtype_size(dt);
@@ -45,23 +47,28 @@ CpuStorage bit_kernel(const CpuStorage& a, const CpuStorage& b,
         case Dtype::I32:
             run(reinterpret_cast<std::int32_t*>(out.ptr.get()),
                 reinterpret_cast<const std::int32_t*>(a.ptr.get()),
-                reinterpret_cast<const std::int32_t*>(b.ptr.get())); break;
+                reinterpret_cast<const std::int32_t*>(b.ptr.get()));
+            break;
         case Dtype::I64:
             run(reinterpret_cast<std::int64_t*>(out.ptr.get()),
                 reinterpret_cast<const std::int64_t*>(a.ptr.get()),
-                reinterpret_cast<const std::int64_t*>(b.ptr.get())); break;
+                reinterpret_cast<const std::int64_t*>(b.ptr.get()));
+            break;
         case Dtype::I16:
             run(reinterpret_cast<std::int16_t*>(out.ptr.get()),
                 reinterpret_cast<const std::int16_t*>(a.ptr.get()),
-                reinterpret_cast<const std::int16_t*>(b.ptr.get())); break;
+                reinterpret_cast<const std::int16_t*>(b.ptr.get()));
+            break;
         case Dtype::I8:
             run(reinterpret_cast<std::int8_t*>(out.ptr.get()),
                 reinterpret_cast<const std::int8_t*>(a.ptr.get()),
-                reinterpret_cast<const std::int8_t*>(b.ptr.get())); break;
+                reinterpret_cast<const std::int8_t*>(b.ptr.get()));
+            break;
         case Dtype::Bool:
             run(reinterpret_cast<std::uint8_t*>(out.ptr.get()),
                 reinterpret_cast<const std::uint8_t*>(a.ptr.get()),
-                reinterpret_cast<const std::uint8_t*>(b.ptr.get())); break;
+                reinterpret_cast<const std::uint8_t*>(b.ptr.get()));
+            break;
         default:
             throw NotImplementedError("bitwise: dtype must be integer or bool");
     }
@@ -69,22 +76,20 @@ CpuStorage bit_kernel(const CpuStorage& a, const CpuStorage& b,
 }
 
 template <typename MlxFn, typename Op>
-TensorImplPtr bit_dispatch(const TensorImplPtr& a, const TensorImplPtr& b,
-                           const char* name, MlxFn mlx_fn, Op op) {
+TensorImplPtr bit_dispatch(
+    const TensorImplPtr& a, const TensorImplPtr& b, const char* name, MlxFn mlx_fn, Op op) {
     validate_pair_eq_shape(a, b, name);
     if (!is_integer_or_bool(a->dtype_))
-        throw LucidError(std::string(name) +
-                         ": dtype must be integer or bool");
+        throw LucidError(std::string(name) + ": dtype must be integer or bool");
     OpScope scope{name, a->device_, a->dtype_, a->shape_};
     if (a->device_ == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         const auto& gb = std::get<GpuStorage>(b->storage_);
         auto out = mlx_fn(*ga.arr, *gb.arr);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)},
-                     a->shape_, a->dtype_, a->device_);
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)}, a->shape_, a->dtype_,
+                     a->device_);
     }
-    auto out = bit_kernel(std::get<CpuStorage>(a->storage_),
-                          std::get<CpuStorage>(b->storage_),
+    auto out = bit_kernel(std::get<CpuStorage>(a->storage_), std::get<CpuStorage>(b->storage_),
                           shape_numel(a->shape_), a->dtype_, op);
     return fresh(Storage{std::move(out)}, a->shape_, a->dtype_, a->device_);
 }
@@ -92,30 +97,36 @@ TensorImplPtr bit_dispatch(const TensorImplPtr& a, const TensorImplPtr& b,
 }  // namespace
 
 TensorImplPtr bitwise_and_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    return bit_dispatch(a, b, "bitwise_and",
+    return bit_dispatch(
+        a, b, "bitwise_and",
         [](const ::mlx::core::array& x, const ::mlx::core::array& y) {
-            return ::mlx::core::bitwise_and(x, y); },
+            return ::mlx::core::bitwise_and(x, y);
+        },
         [](auto x, auto y) -> std::int64_t {
-            return static_cast<std::int64_t>(x) &
-                   static_cast<std::int64_t>(y); });
+            return static_cast<std::int64_t>(x) & static_cast<std::int64_t>(y);
+        });
 }
 
 TensorImplPtr bitwise_or_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    return bit_dispatch(a, b, "bitwise_or",
+    return bit_dispatch(
+        a, b, "bitwise_or",
         [](const ::mlx::core::array& x, const ::mlx::core::array& y) {
-            return ::mlx::core::bitwise_or(x, y); },
+            return ::mlx::core::bitwise_or(x, y);
+        },
         [](auto x, auto y) -> std::int64_t {
-            return static_cast<std::int64_t>(x) |
-                   static_cast<std::int64_t>(y); });
+            return static_cast<std::int64_t>(x) | static_cast<std::int64_t>(y);
+        });
 }
 
 TensorImplPtr bitwise_xor_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    return bit_dispatch(a, b, "bitwise_xor",
+    return bit_dispatch(
+        a, b, "bitwise_xor",
         [](const ::mlx::core::array& x, const ::mlx::core::array& y) {
-            return ::mlx::core::bitwise_xor(x, y); },
+            return ::mlx::core::bitwise_xor(x, y);
+        },
         [](auto x, auto y) -> std::int64_t {
-            return static_cast<std::int64_t>(x) ^
-                   static_cast<std::int64_t>(y); });
+            return static_cast<std::int64_t>(x) ^ static_cast<std::int64_t>(y);
+        });
 }
 
 }  // namespace lucid

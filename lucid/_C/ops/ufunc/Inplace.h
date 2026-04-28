@@ -44,7 +44,6 @@ LUCID_API TensorImplPtr floor_inplace_op(const TensorImplPtr& a);
 LUCID_API TensorImplPtr ceil_inplace_op(const TensorImplPtr& a);
 
 // Scalar-parameterized
-LUCID_API TensorImplPtr clip_inplace_op(const TensorImplPtr& a,
-                                         double lo, double hi);
+LUCID_API TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi);
 
 }  // namespace lucid

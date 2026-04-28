@@ -43,10 +43,10 @@ LUCID_INTERNAL void lapack_solve_f64(double* A, double* B, int n, int nrhs, int*
 //   L_out   : (n,n) row-major lower-triangular with unit diagonal
 //   U_out   : (n,n) row-major upper-triangular
 // Used by det_op for the (sign × prod(diag U)) form.
-LUCID_INTERNAL void lapack_lu_f32(const float* A, int n, int* ipiv,
-                                   float* L_out, float* U_out, int* info);
-LUCID_INTERNAL void lapack_lu_f64(const double* A, int n, int* ipiv,
-                                   double* L_out, double* U_out, int* info);
+LUCID_INTERNAL void lapack_lu_f32(
+    const float* A, int n, int* ipiv, float* L_out, float* U_out, int* info);
+LUCID_INTERNAL void lapack_lu_f64(
+    const double* A, int n, int* ipiv, double* L_out, double* U_out, int* info);
 
 // ----- Cholesky --------------------------------------------------------- //
 //
@@ -63,10 +63,8 @@ LUCID_INTERNAL void lapack_cholesky_f64(double* A, int n, bool lower, int* info)
 //   Q : (m, k) row-major, k = min(m,n), columns orthonormal
 //   R : (k, n) row-major, upper-triangular
 
-LUCID_INTERNAL void lapack_qr_f32(const float* A, int m, int n,
-                                   float* Q, float* R, int* info);
-LUCID_INTERNAL void lapack_qr_f64(const double* A, int m, int n,
-                                   double* Q, double* R, int* info);
+LUCID_INTERNAL void lapack_qr_f32(const float* A, int m, int n, float* Q, float* R, int* info);
+LUCID_INTERNAL void lapack_qr_f64(const double* A, int m, int n, double* Q, double* R, int* info);
 
 // ----- SVD -------------------------------------------------------------- //
 //
@@ -75,12 +73,10 @@ LUCID_INTERNAL void lapack_qr_f64(const double* A, int m, int n,
 //   S  : (k,) singular values
 //   Vt : (k, n) reduced or (n, n) full   — Vh = V^H (already transposed)
 
-LUCID_INTERNAL void lapack_svd_f32(const float* A, int m, int n,
-                                    bool full_matrices,
-                                    float* U, float* S, float* Vt, int* info);
-LUCID_INTERNAL void lapack_svd_f64(const double* A, int m, int n,
-                                    bool full_matrices,
-                                    double* U, double* S, double* Vt, int* info);
+LUCID_INTERNAL void lapack_svd_f32(
+    const float* A, int m, int n, bool full_matrices, float* U, float* S, float* Vt, int* info);
+LUCID_INTERNAL void lapack_svd_f64(
+    const double* A, int m, int n, bool full_matrices, double* U, double* S, double* Vt, int* info);
 
 // ----- Eigenvalues ------------------------------------------------------ //
 //
@@ -89,10 +85,8 @@ LUCID_INTERNAL void lapack_svd_f64(const double* A, int m, int n,
 //   w    : (n,) eigenvalues in ascending order.
 //   V_out: (n, n) row-major; columns are normalized eigenvectors.
 
-LUCID_INTERNAL void lapack_eigh_f32(const float* A, int n, float* w,
-                                     float* V_out, int* info);
-LUCID_INTERNAL void lapack_eigh_f64(const double* A, int n, double* w,
-                                     double* V_out, int* info);
+LUCID_INTERNAL void lapack_eigh_f32(const float* A, int n, float* w, float* V_out, int* info);
+LUCID_INTERNAL void lapack_eigh_f64(const double* A, int n, double* w, double* V_out, int* info);
 
 // General (non-symmetric): complex eigenpairs returned as (real, imag) parts.
 //   A     : (n,n) row-major.
@@ -100,22 +94,19 @@ LUCID_INTERNAL void lapack_eigh_f64(const double* A, int n, double* w,
 //   VR    : (n,n) right eigenvectors (real Schur form — see LAPACK docs);
 //           may be nullptr if not needed.
 
-LUCID_INTERNAL void lapack_eig_f32(const float* A, int n,
-                                    float* wr, float* wi,
-                                    float* VR, int* info);
-LUCID_INTERNAL void lapack_eig_f64(const double* A, int n,
-                                    double* wr, double* wi,
-                                    double* VR, int* info);
+LUCID_INTERNAL void lapack_eig_f32(
+    const float* A, int n, float* wr, float* wi, float* VR, int* info);
+LUCID_INTERNAL void lapack_eig_f64(
+    const double* A, int n, double* wr, double* wi, double* VR, int* info);
 
 // ----- Internal layout helpers (exposed for ops that batch manually) ---- //
 
-LUCID_INTERNAL void transpose_to_col_major_f32(const float* src, float* dst,
-                                                int rows, int cols);
-LUCID_INTERNAL void transpose_to_col_major_f64(const double* src, double* dst,
-                                                int rows, int cols);
-LUCID_INTERNAL void transpose_from_col_major_f32(const float* src, float* dst,
-                                                  int rows, int cols);
-LUCID_INTERNAL void transpose_from_col_major_f64(const double* src, double* dst,
-                                                  int rows, int cols);
+LUCID_INTERNAL void transpose_to_col_major_f32(const float* src, float* dst, int rows, int cols);
+LUCID_INTERNAL void transpose_to_col_major_f64(const double* src, double* dst, int rows, int cols);
+LUCID_INTERNAL void transpose_from_col_major_f32(const float* src, float* dst, int rows, int cols);
+LUCID_INTERNAL void transpose_from_col_major_f64(const double* src,
+                                                 double* dst,
+                                                 int rows,
+                                                 int cols);
 
 }  // namespace lucid::backend::cpu

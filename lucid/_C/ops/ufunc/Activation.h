@@ -28,7 +28,7 @@ public:
 
 class LUCID_API SigmoidBackward : public UnaryOp<SigmoidBackward> {
 public:
-    static constexpr bool kSavesInput  = false;
+    static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;  // grad uses z (1-z)
     static const OpSchema schema_v1;
     static CpuStorage cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt);
@@ -60,8 +60,10 @@ public:
     double slope_ = 0.01;
     static const OpSchema schema_v1;
     static TensorImplPtr forward(const TensorImplPtr& a, double slope);
-    static CpuStorage cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                 Dtype dt, double slope);
+    static CpuStorage cpu_kernel(const CpuStorage& a,
+                                 const Shape& out_shape,
+                                 Dtype dt,
+                                 double slope);
     Storage grad_formula(const Storage& g);
 };
 
@@ -81,8 +83,10 @@ public:
     double alpha_ = 1.0;
     static const OpSchema schema_v1;
     static TensorImplPtr forward(const TensorImplPtr& a, double alpha);
-    static CpuStorage cpu_kernel(const CpuStorage& a, const Shape& out_shape,
-                                 Dtype dt, double alpha);
+    static CpuStorage cpu_kernel(const CpuStorage& a,
+                                 const Shape& out_shape,
+                                 Dtype dt,
+                                 double alpha);
     Storage grad_formula(const Storage& g);
 };
 

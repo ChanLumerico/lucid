@@ -1,0 +1,20 @@
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        files: ^lucid/_C/.*\.(h|hpp|cpp|cc)$
+
+  - repo: local
+    hooks:
+      - id: lucid-check-layers
+        name: lucid layer dependency check
+        entry: python tools/check_layers.py
+        language: system
+        pass_filenames: false
+
+      - id: lucid-check-format
+        name: lucid clang-format check
+        entry: tools/check_format.sh --format-only
+        language: system
+        pass_filenames: false

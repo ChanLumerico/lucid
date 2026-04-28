@@ -5,6 +5,9 @@
 
 #include <mlx/ops.h>
 
+#include "../autograd/AccumulateGrad.h"
+#include "../autograd/Helpers.h"
+#include "../autograd/Node.h"
 #include "../backend/cpu/Norm.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
@@ -13,15 +16,11 @@
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
 #include "../core/TensorImpl.h"
-#include "../autograd/AccumulateGrad.h"
-#include "../autograd/Helpers.h"
-#include "../autograd/Node.h"
 #include "../ops/bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
 
-const OpSchema LayerNormBackward::schema_v1{
-    "layer_norm", 1, AmpPolicy::ForceFP32, true};
+const OpSchema LayerNormBackward::schema_v1{"layer_norm", 1, AmpPolicy::ForceFP32, true};
 
 namespace {
 
@@ -33,8 +32,7 @@ struct LayerNormShapes {
 
 LayerNormShapes resolve_shapes(const Shape& x_shape, const Shape& gamma_shape) {
     if (gamma_shape.size() > x_shape.size()) {
-        throw ShapeMismatch(x_shape, gamma_shape,
-                            "layer_norm: γ has more dims than x");
+        throw ShapeMismatch(x_shape, gamma_shape, "layer_norm: γ has more dims than x");
     }
     const std::size_t Dn = gamma_shape.size();
     const std::size_t lead = x_shape.size() - Dn;
@@ -65,8 +63,10 @@ CpuStorage allocate_size(std::size_t numel, Dtype dt) {
 
 TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                                          const TensorImplPtr& gamma,
-                                         const TensorImplPtr& beta, double eps) {
-    if (!x || !gamma || !beta) throw LucidError("layer_norm: null input");
+                                         const TensorImplPtr& beta,
+                                         double eps) {
+    if (!x || !gamma || !beta)
+        throw LucidError("layer_norm: null input");
     if (x->dtype_ != gamma->dtype_ || x->dtype_ != beta->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
                             std::string(dtype_name(gamma->dtype_)), "layer_norm");
@@ -96,8 +96,7 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
             throw LucidError("layer_norm: null GPU input");
         }
         // Flatten to (outer, N) then reshape γ/β to (1, N) so broadcast works.
-        Shape flatX{static_cast<std::int64_t>(outer),
-                    static_cast<std::int64_t>(N)};
+        Shape flatX{static_cast<std::int64_t>(outer), static_cast<std::int64_t>(N)};
         Shape flatG{1, static_cast<std::int64_t>(N)};
         auto x_2d = ::mlx::core::reshape(*gx.arr, gpu::to_mlx_shape(flatX));
         auto g_2d = ::mlx::core::reshape(*gg.arr, gpu::to_mlx_shape(flatG));
@@ -106,8 +105,8 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
         auto mean = ::mlx::core::mean(x_2d, std::vector<int>{1},
                                       /*keepdims=*/true);
         auto centered = ::mlx::core::subtract(x_2d, mean);
-        auto var = ::mlx::core::mean(::mlx::core::square(centered),
-                                     std::vector<int>{1}, /*keepdims=*/true);
+        auto var = ::mlx::core::mean(::mlx::core::square(centered), std::vector<int>{1},
+                                     /*keepdims=*/true);
         ::mlx::core::array eps_arr(eps, gpu::to_mlx_dtype(x->dtype_));
         auto rstd = ::mlx::core::rsqrt(::mlx::core::add(var, eps_arr));
         auto xnorm = ::mlx::core::multiply(centered, rstd);
@@ -118,9 +117,9 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
         saved_mean = Storage{gpu::wrap_mlx_array(std::move(mean), x->dtype_)};
         saved_rstd = Storage{gpu::wrap_mlx_array(std::move(rstd), x->dtype_)};
     } else {
-        auto y_cpu     = allocate_size(outer * N, x->dtype_);
-        auto mean_cpu  = allocate_size(outer, x->dtype_);
-        auto rstd_cpu  = allocate_size(outer, x->dtype_);
+        auto y_cpu = allocate_size(outer * N, x->dtype_);
+        auto mean_cpu = allocate_size(outer, x->dtype_);
+        auto rstd_cpu = allocate_size(outer, x->dtype_);
 
         if (outer * N > 0) {
             const auto& x_cpu = std::get<CpuStorage>(x->storage_);
@@ -134,8 +133,7 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                         reinterpret_cast<const float*>(b_cpu.ptr.get()),
                         reinterpret_cast<float*>(y_cpu.ptr.get()),
                         reinterpret_cast<float*>(mean_cpu.ptr.get()),
-                        reinterpret_cast<float*>(rstd_cpu.ptr.get()),
-                        outer, N, eps);
+                        reinterpret_cast<float*>(rstd_cpu.ptr.get()), outer, N, eps);
                     break;
                 case Dtype::F64:
                     backend::cpu::layer_norm_forward_f64(
@@ -144,8 +142,7 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                         reinterpret_cast<const double*>(b_cpu.ptr.get()),
                         reinterpret_cast<double*>(y_cpu.ptr.get()),
                         reinterpret_cast<double*>(mean_cpu.ptr.get()),
-                        reinterpret_cast<double*>(rstd_cpu.ptr.get()),
-                        outer, N, eps);
+                        reinterpret_cast<double*>(rstd_cpu.ptr.get()), outer, N, eps);
                     break;
                 default:
                     throw NotImplementedError("layer_norm: dtype not supported (F32/F64)");
@@ -157,36 +154,35 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
     }
     scope.set_flops(static_cast<std::int64_t>(outer * N) * 5);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            x->shape_, x->dtype_, x->device_,
-                                            /*requires_grad=*/false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(out_storage), x->shape_, x->dtype_, x->device_,
+                                     /*requires_grad=*/false);
 
     const bool needs_grad = GradMode::is_enabled() &&
-                            (x->requires_grad_ || gamma->requires_grad_ ||
-                             beta->requires_grad_);
-    if (!needs_grad) return out;
+                            (x->requires_grad_ || gamma->requires_grad_ || beta->requires_grad_);
+    if (!needs_grad)
+        return out;
 
     auto x_edge = detail::ensure_grad_fn(x);
     auto g_edge = detail::ensure_grad_fn(gamma);
     auto b_edge = detail::ensure_grad_fn(beta);
 
     auto bwd = std::make_shared<LayerNormBackward>();
-    bwd->input_shapes_  = {x->shape_, gamma->shape_, beta->shape_};
-    bwd->out_shape_     = out->shape_;
-    bwd->dtype_         = x->dtype_;
-    bwd->device_        = x->device_;
+    bwd->input_shapes_ = {x->shape_, gamma->shape_, beta->shape_};
+    bwd->out_shape_ = out->shape_;
+    bwd->dtype_ = x->dtype_;
+    bwd->device_ = x->device_;
     bwd->input_tensors_ = {x, gamma, beta};
-    bwd->saved_inputs_  = {x->storage_, gamma->storage_, beta->storage_};
-    bwd->saved_mean_    = std::move(saved_mean);
-    bwd->saved_rstd_    = std::move(saved_rstd);
-    bwd->outer_         = outer;
-    bwd->N_             = N;
-    bwd->set_next_edges(std::vector<Edge>{
-        Edge(x_edge, 0), Edge(g_edge, 0), Edge(b_edge, 0)});
+    bwd->saved_inputs_ = {x->storage_, gamma->storage_, beta->storage_};
+    bwd->saved_mean_ = std::move(saved_mean);
+    bwd->saved_rstd_ = std::move(saved_rstd);
+    bwd->outer_ = outer;
+    bwd->N_ = N;
+    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0), Edge(b_edge, 0)});
     bwd->set_saved_versions({x->version_, gamma->version_, beta->version_});
 
-    out->grad_fn_       = std::move(bwd);
-    out->is_leaf_       = false;
+    out->grad_fn_ = std::move(bwd);
+    out->is_leaf_ = false;
     out->requires_grad_ = true;
     return out;
 }
@@ -203,8 +199,7 @@ std::vector<Storage> LayerNormBackward::apply(Storage grad_out) {
         if (!gx.arr || !gg.arr || !gM.arr || !gR.arr || !gG.arr) {
             throw LucidError("layer_norm backward: null GPU array");
         }
-        Shape flatX{static_cast<std::int64_t>(outer_),
-                    static_cast<std::int64_t>(N_)};
+        Shape flatX{static_cast<std::int64_t>(outer_), static_cast<std::int64_t>(N_)};
         Shape flatG{1, static_cast<std::int64_t>(N_)};
         auto x_2d = ::mlx::core::reshape(*gx.arr, gpu::to_mlx_shape(flatX));
         auto g_2d = ::mlx::core::reshape(*gG.arr, gpu::to_mlx_shape(flatX));
@@ -215,44 +210,37 @@ std::vector<Storage> LayerNormBackward::apply(Storage grad_out) {
         // dbeta = sum(g, axis=0) → (N,); dgamma = sum(g * xnorm, axis=0) → (N,)
         auto dbeta_2d = ::mlx::core::sum(g_2d, std::vector<int>{0},
                                          /*keepdims=*/false);
-        auto dgamma_2d = ::mlx::core::sum(::mlx::core::multiply(g_2d, xnorm),
-                                          std::vector<int>{0},
+        auto dgamma_2d = ::mlx::core::sum(::mlx::core::multiply(g_2d, xnorm), std::vector<int>{0},
                                           /*keepdims=*/false);
         // gx = g * gamma; mean1 = mean(gx); mean2 = mean(gx * xnorm)
         // dx = rstd * (gx - mean1 - xnorm * mean2)
         auto gx_scaled = ::mlx::core::multiply(g_2d, gamma_2d);
         auto mean1 = ::mlx::core::mean(gx_scaled, std::vector<int>{1},
                                        /*keepdims=*/true);
-        auto mean2 =
-            ::mlx::core::mean(::mlx::core::multiply(gx_scaled, xnorm),
-                              std::vector<int>{1}, /*keepdims=*/true);
+        auto mean2 = ::mlx::core::mean(::mlx::core::multiply(gx_scaled, xnorm), std::vector<int>{1},
+                                       /*keepdims=*/true);
         auto dx_2d = ::mlx::core::multiply(
-            *gR.arr,
-            ::mlx::core::subtract(
-                ::mlx::core::subtract(gx_scaled, mean1),
-                ::mlx::core::multiply(xnorm, mean2)));
+            *gR.arr, ::mlx::core::subtract(::mlx::core::subtract(gx_scaled, mean1),
+                                           ::mlx::core::multiply(xnorm, mean2)));
         // Reshape outputs back: dx → input_shapes_[0]; dgamma/dbeta → γ shape
-        auto dx = ::mlx::core::reshape(dx_2d,
-                                       gpu::to_mlx_shape(input_shapes_[0]));
-        auto dgamma = ::mlx::core::reshape(
-            dgamma_2d, gpu::to_mlx_shape(input_shapes_[1]));
-        auto dbeta = ::mlx::core::reshape(
-            dbeta_2d, gpu::to_mlx_shape(input_shapes_[2]));
+        auto dx = ::mlx::core::reshape(dx_2d, gpu::to_mlx_shape(input_shapes_[0]));
+        auto dgamma = ::mlx::core::reshape(dgamma_2d, gpu::to_mlx_shape(input_shapes_[1]));
+        auto dbeta = ::mlx::core::reshape(dbeta_2d, gpu::to_mlx_shape(input_shapes_[2]));
         return {Storage{gpu::wrap_mlx_array(std::move(dx), dtype_)},
                 Storage{gpu::wrap_mlx_array(std::move(dgamma), dtype_)},
                 Storage{gpu::wrap_mlx_array(std::move(dbeta), dtype_)}};
     }
 
-    auto dx_cpu     = allocate_size(outer_ * N_, dtype_);
+    auto dx_cpu = allocate_size(outer_ * N_, dtype_);
     auto dgamma_cpu = allocate_size(N_, dtype_);
-    auto dbeta_cpu  = allocate_size(N_, dtype_);
+    auto dbeta_cpu = allocate_size(N_, dtype_);
 
     if (outer_ * N_ > 0) {
-        const auto& x_cpu     = std::get<CpuStorage>(saved_inputs_[0]);
+        const auto& x_cpu = std::get<CpuStorage>(saved_inputs_[0]);
         const auto& gamma_cpu = std::get<CpuStorage>(saved_inputs_[1]);
-        const auto& mean_cpu  = std::get<CpuStorage>(saved_mean_);
-        const auto& rstd_cpu  = std::get<CpuStorage>(saved_rstd_);
-        const auto& g_cpu     = std::get<CpuStorage>(grad_out);
+        const auto& mean_cpu = std::get<CpuStorage>(saved_mean_);
+        const auto& rstd_cpu = std::get<CpuStorage>(saved_rstd_);
+        const auto& g_cpu = std::get<CpuStorage>(grad_out);
 
         switch (dtype_) {
             case Dtype::F32:
@@ -264,8 +252,7 @@ std::vector<Storage> LayerNormBackward::apply(Storage grad_out) {
                     reinterpret_cast<const float*>(g_cpu.ptr.get()),
                     reinterpret_cast<float*>(dx_cpu.ptr.get()),
                     reinterpret_cast<float*>(dgamma_cpu.ptr.get()),
-                    reinterpret_cast<float*>(dbeta_cpu.ptr.get()),
-                    outer_, N_);
+                    reinterpret_cast<float*>(dbeta_cpu.ptr.get()), outer_, N_);
                 break;
             case Dtype::F64:
                 backend::cpu::layer_norm_backward_f64(
@@ -276,24 +263,28 @@ std::vector<Storage> LayerNormBackward::apply(Storage grad_out) {
                     reinterpret_cast<const double*>(g_cpu.ptr.get()),
                     reinterpret_cast<double*>(dx_cpu.ptr.get()),
                     reinterpret_cast<double*>(dgamma_cpu.ptr.get()),
-                    reinterpret_cast<double*>(dbeta_cpu.ptr.get()),
-                    outer_, N_);
+                    reinterpret_cast<double*>(dbeta_cpu.ptr.get()), outer_, N_);
                 break;
             default:
                 throw NotImplementedError("layer_norm backward: dtype not supported");
         }
     } else {
-        if (dx_cpu.nbytes)     std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        if (dgamma_cpu.nbytes) std::memset(dgamma_cpu.ptr.get(), 0, dgamma_cpu.nbytes);
-        if (dbeta_cpu.nbytes)  std::memset(dbeta_cpu.ptr.get(), 0, dbeta_cpu.nbytes);
+        if (dx_cpu.nbytes)
+            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+        if (dgamma_cpu.nbytes)
+            std::memset(dgamma_cpu.ptr.get(), 0, dgamma_cpu.nbytes);
+        if (dbeta_cpu.nbytes)
+            std::memset(dbeta_cpu.ptr.get(), 0, dbeta_cpu.nbytes);
     }
 
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dgamma_cpu)},
             Storage{std::move(dbeta_cpu)}};
 }
 
-TensorImplPtr layer_norm_op(const TensorImplPtr& x, const TensorImplPtr& gamma,
-                            const TensorImplPtr& beta, double eps) {
+TensorImplPtr layer_norm_op(const TensorImplPtr& x,
+                            const TensorImplPtr& gamma,
+                            const TensorImplPtr& beta,
+                            double eps) {
     return LayerNormBackward::forward(x, gamma, beta, eps);
 }
 

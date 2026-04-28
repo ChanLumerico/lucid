@@ -20,7 +20,7 @@ void register_core(py::module_& m) {
 
     py::enum_<Dtype>(m, "Dtype")
         .value("Bool", Dtype::Bool)
-        .value("I8",  Dtype::I8)
+        .value("I8", Dtype::I8)
         .value("I16", Dtype::I16)
         .value("I32", Dtype::I32)
         .value("I64", Dtype::I64)
@@ -30,17 +30,15 @@ void register_core(py::module_& m) {
         .value("C64", Dtype::C64)
         .export_values();
     m.def("dtype_size", &dtype_size);
-    m.def("dtype_name",
-          [](Dtype d) { return std::string(dtype_name(d)); });
+    m.def("dtype_name", [](Dtype d) { return std::string(dtype_name(d)); });
 
     py::class_<NoGradGuard>(m, "NoGradGuard")
         .def(py::init<>())
-        .def("__enter__", [](NoGradGuard& g) -> NoGradGuard& { return g; },
-             py::return_value_policy::reference)
+        .def(
+            "__enter__", [](NoGradGuard& g) -> NoGradGuard& { return g; },
+            py::return_value_policy::reference)
         .def("__exit__",
-             [](NoGradGuard&, py::object, py::object, py::object) {
-                 return py::none();
-             });
+             [](NoGradGuard&, py::object, py::object, py::object) { return py::none(); });
 
     m.def("grad_enabled", &GradMode::is_enabled);
     m.def("set_grad_enabled", &GradMode::set_enabled);
@@ -52,45 +50,29 @@ void register_core(py::module_& m) {
         .def_readonly("alloc_count", &MemoryStats::alloc_count)
         .def_readonly("free_count", &MemoryStats::free_count)
         .def("__repr__", [](const MemoryStats& s) {
-            return "MemoryStats(current_bytes=" +
-                   std::to_string(s.current_bytes) +
+            return "MemoryStats(current_bytes=" + std::to_string(s.current_bytes) +
                    ", peak_bytes=" + std::to_string(s.peak_bytes) +
                    ", alloc_count=" + std::to_string(s.alloc_count) +
                    ", free_count=" + std::to_string(s.free_count) + ")";
         });
     m.def("memory_stats", &MemoryTracker::get_stats, py::arg("device"));
-    m.def("reset_peak_memory_stats", &MemoryTracker::reset_peak,
-          py::arg("device"));
+    m.def("reset_peak_memory_stats", &MemoryTracker::reset_peak, py::arg("device"));
 }
 
 void register_tensor_impl(py::module_& m) {
     py::class_<TensorImpl, std::shared_ptr<TensorImpl>>(m, "TensorImpl")
         .def(py::init([](py::array arr, Device device, bool requires_grad) {
-                 return TensorImpl::from_numpy(std::move(arr), device,
-                                               requires_grad);
+                 return TensorImpl::from_numpy(std::move(arr), device, requires_grad);
              }),
-             py::arg("data"), py::arg("device") = Device::CPU,
-             py::arg("requires_grad") = false)
-        .def_property_readonly("shape",
-                               [](const TensorImpl& t) {
-                                   return py::cast(t.shape_);
-                               })
-        .def_property_readonly("stride",
-                               [](const TensorImpl& t) {
-                                   return py::cast(t.stride_);
-                               })
-        .def_property_readonly("dtype",
-                               [](const TensorImpl& t) { return t.dtype_; })
-        .def_property_readonly("device",
-                               [](const TensorImpl& t) { return t.device_; })
+             py::arg("data"), py::arg("device") = Device::CPU, py::arg("requires_grad") = false)
+        .def_property_readonly("shape", [](const TensorImpl& t) { return py::cast(t.shape_); })
+        .def_property_readonly("stride", [](const TensorImpl& t) { return py::cast(t.stride_); })
+        .def_property_readonly("dtype", [](const TensorImpl& t) { return t.dtype_; })
+        .def_property_readonly("device", [](const TensorImpl& t) { return t.device_; })
         .def_property_readonly("requires_grad",
-                               [](const TensorImpl& t) {
-                                   return t.requires_grad_;
-                               })
-        .def_property_readonly("is_leaf",
-                               [](const TensorImpl& t) { return t.is_leaf_; })
-        .def_property_readonly("version",
-                               [](const TensorImpl& t) { return t.version_; })
+                               [](const TensorImpl& t) { return t.requires_grad_; })
+        .def_property_readonly("is_leaf", [](const TensorImpl& t) { return t.is_leaf_; })
+        .def_property_readonly("version", [](const TensorImpl& t) { return t.version_; })
         .def("numel", &TensorImpl::numel)
         .def("nbytes", &TensorImpl::nbytes)
         .def("is_contiguous", &TensorImpl::is_contiguous)

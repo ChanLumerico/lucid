@@ -35,7 +35,7 @@ public:
 
 class LUCID_API TanhBackward : public UnaryOp<TanhBackward> {
 public:
-    static constexpr bool kSavesInput  = false;
+    static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
     static CpuStorage cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt);

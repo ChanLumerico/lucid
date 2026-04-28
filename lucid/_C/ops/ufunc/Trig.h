@@ -20,21 +20,19 @@
 
 namespace lucid {
 
-#define LUCID_DECLARE_TRIG_OP(CLASS, FN)                                     \
-    class LUCID_API CLASS##Backward : public UnaryOp<CLASS##Backward> {      \
-    public:                                                                  \
-        static const OpSchema schema_v1;                                     \
-        static CpuStorage cpu_kernel(const CpuStorage& a,                    \
-                                     const Shape& out_shape, Dtype dt);     \
-        static GpuStorage gpu_kernel(const GpuStorage& a,                    \
-                                     const Shape& out_shape, Dtype dt);     \
-        Storage grad_formula(const Storage& g);                              \
-    };                                                                       \
+#define LUCID_DECLARE_TRIG_OP(CLASS, FN)                                                     \
+    class LUCID_API CLASS##Backward : public UnaryOp<CLASS##Backward> {                      \
+    public:                                                                                  \
+        static const OpSchema schema_v1;                                                     \
+        static CpuStorage cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt); \
+        static GpuStorage gpu_kernel(const GpuStorage& a, const Shape& out_shape, Dtype dt); \
+        Storage grad_formula(const Storage& g);                                              \
+    };                                                                                       \
     LUCID_API TensorImplPtr FN##_op(const TensorImplPtr& a);
 
-LUCID_DECLARE_TRIG_OP(Sin,  sin)
-LUCID_DECLARE_TRIG_OP(Cos,  cos)
-LUCID_DECLARE_TRIG_OP(Tan,  tan)
+LUCID_DECLARE_TRIG_OP(Sin, sin)
+LUCID_DECLARE_TRIG_OP(Cos, cos)
+LUCID_DECLARE_TRIG_OP(Tan, tan)
 LUCID_DECLARE_TRIG_OP(Asin, arcsin)
 LUCID_DECLARE_TRIG_OP(Acos, arccos)
 LUCID_DECLARE_TRIG_OP(Atan, arctan)

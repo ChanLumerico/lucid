@@ -10,8 +10,10 @@ void Optimizer::step() {
     }
     for (std::size_t i = 0; i < params_.size(); ++i) {
         auto& p = params_[i];
-        if (!p) continue;
-        if (!p->grad_storage_.has_value()) continue;  // no grad: skip
+        if (!p)
+            continue;
+        if (!p->grad_storage_.has_value())
+            continue;  // no grad: skip
         if (!state_initialized_[i]) {
             init_state_slot(i, p);
             state_initialized_[i] = true;
@@ -25,7 +27,8 @@ void Optimizer::step() {
 
 void Optimizer::zero_grad() {
     for (auto& p : params_) {
-        if (p) p->zero_grad();
+        if (p)
+            p->zero_grad();
     }
 }
 

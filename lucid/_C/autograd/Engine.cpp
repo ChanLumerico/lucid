@@ -28,8 +28,7 @@ bool storage_is_empty(const Storage& s) {
 
 // DFS-based topological sort returning nodes in *reverse* topological order
 // (root's grad_fn first, leaves' grad_fns last).
-std::vector<std::shared_ptr<Node>>
-topo_order(const std::shared_ptr<Node>& root) {
+std::vector<std::shared_ptr<Node>> topo_order(const std::shared_ptr<Node>& root) {
     std::vector<std::shared_ptr<Node>> order;
     std::unordered_set<Node*> visited;
 
@@ -121,15 +120,14 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         if (input_grads.size() != edges.size()) {
             // AccumulateGrad returns {} (no edges to forward to).
             if (!edges.empty() && !input_grads.empty()) {
-                throw LucidError(
-                    "Engine::backward: input_grads/next_edges size mismatch");
+                throw LucidError("Engine::backward: input_grads/next_edges size mismatch");
             }
         }
 
-        for (std::size_t i = 0; i < input_grads.size() && i < edges.size();
-             ++i) {
+        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
             auto next = edges[i].node;
-            if (!next) continue;
+            if (!next)
+                continue;
             auto pit = pending.find(next.get());
             if (pit == pending.end()) {
                 pending.emplace(next.get(), input_grads[i]);

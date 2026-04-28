@@ -45,8 +45,10 @@ protected:
 // memory state so user / debugger can act on it.
 class OutOfMemory : public LucidError {
 public:
-    OutOfMemory(std::size_t requested_bytes, std::size_t current_bytes,
-                std::size_t peak_bytes, std::string device);
+    OutOfMemory(std::size_t requested_bytes,
+                std::size_t current_bytes,
+                std::size_t peak_bytes,
+                std::string device);
     std::size_t requested_bytes() const { return requested_bytes_; }
     std::size_t current_bytes() const { return current_bytes_; }
     std::size_t peak_bytes() const { return peak_bytes_; }
@@ -63,7 +65,8 @@ private:
 class ShapeMismatch : public LucidError {
 public:
     ShapeMismatch(std::vector<std::int64_t> expected,
-                  std::vector<std::int64_t> got, std::string context);
+                  std::vector<std::int64_t> got,
+                  std::string context);
     const std::vector<std::int64_t>& expected() const { return expected_; }
     const std::vector<std::int64_t>& got() const { return got_; }
 

@@ -10,6 +10,28 @@ be tagged `v3.1.0-rc1` after Phase 5.
 
 ## [Unreleased]
 
+### Added — Production refactor Phase 0 tooling gate
+- Added strict C++ warning policy to `setup.py`: all engine build modes now add
+  `-Wall -Wextra -Wpedantic -Werror`, with `-Wno-unused-parameter` for explicit
+  CRTP/backend placeholders.
+- Added `tools/check_layers.py` to enforce one-way C++ include dependencies
+  across the target architecture layers while accommodating the current
+  pre-move `nn/`, `optim/`, and `random/` directories.
+- Added `tools/check_format.sh` for clang-format diff checks and clang-tidy
+  execution through `build/compile_commands.json`.
+- Added `scripts/ci_full.sh` as the Phase 0 aggregate local gate: release
+  build, parity tests, UBSan, layer lint, compile command generation, and
+  formatting/static analysis.
+- Updated `scripts/build_compile_commands.sh` with a JSON-generation fallback
+  so clang-tidy can run without `bear`.
+- Added an opt-in `.pre-commit-config.yaml` stub for clang-format and layer
+  checks.
+- Enforced macOS arm64-only builds in `setup.py` and forced `ARCHFLAGS=-arch arm64`
+  to avoid accidental universal2/x86_64 extension builds.
+- Removed existing warnings that became hard failures under `-Werror`
+  (`kGpuStubMessage`, `mlx_neg`, `mlx_dt`, dead `cpu_matmul`, and
+  `step_size_down_`).
+
 ### Added — Phase 4b (full optimizer + LR scheduler parity with Lucid Python package)
 Brings the C++ optimizer set to **1:1 parity** with the existing
 `lucid.optim` Python package. Was missing 8 optimizers + 4 schedulers

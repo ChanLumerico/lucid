@@ -16,13 +16,14 @@ namespace lucid {
 
 TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     using namespace linalg_detail;
-    if (!a || !b) throw LucidError("solve: null input");
+    if (!a || !b)
+        throw LucidError("solve: null input");
     if (a->device_ != b->device_)
         throw DeviceMismatch(std::string(device_name(a->device_)),
-                              std::string(device_name(b->device_)), "solve");
+                             std::string(device_name(b->device_)), "solve");
     if (a->dtype_ != b->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(a->dtype_)),
-                              std::string(dtype_name(b->dtype_)), "solve");
+        throw DtypeMismatch(std::string(dtype_name(a->dtype_)), std::string(dtype_name(b->dtype_)),
+                            "solve");
     require_float(a->dtype_, "solve");
     require_square_2d(a->shape_, "solve");
     OpScope scope{"solve", a->device_, a->dtype_, a->shape_};
@@ -30,11 +31,10 @@ TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (a->device_ == Device::GPU) {
         auto in_a = as_mlx_array_gpu(a);
         auto in_b = as_mlx_array_gpu(b);
-        auto out = ::mlx::core::linalg::solve(in_a, in_b,
-                                               kMlxLinalgStream);
+        auto out = ::mlx::core::linalg::solve(in_a, in_b, kMlxLinalgStream);
         Shape sh = mlx_shape_to_lucid(out.shape());
-        return fresh(wrap_gpu_result(std::move(out), a->dtype_),
-                     std::move(sh), a->dtype_, a->device_);
+        return fresh(wrap_gpu_result(std::move(out), a->dtype_), std::move(sh), a->dtype_,
+                     a->device_);
     }
 
     // CPU path: A (..., n, n), B (..., n, k) or (..., n).
@@ -42,8 +42,7 @@ TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     const auto& sh_b = b->shape_;
     const int n = static_cast<int>(sh_a[sh_a.size() - 1]);
     const bool b_is_vec = (sh_b.size() == sh_a.size() - 1);
-    const int nrhs = b_is_vec ? 1
-                                : static_cast<int>(sh_b[sh_b.size() - 1]);
+    const int nrhs = b_is_vec ? 1 : static_cast<int>(sh_b[sh_b.size() - 1]);
     const std::int64_t batch = leading_batch_count(sh_a, /*mat_dims=*/2);
 
     // Allocate result with B's shape (X has same shape as B).
@@ -62,8 +61,7 @@ TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         auto* x_p = reinterpret_cast<float*>(out_cpu.ptr.get());
         for (std::int64_t bi = 0; bi < batch; ++bi) {
             std::memcpy(A_local.data(), a_p + bi * a_per, a_per * sizeof(float));
-            backend::cpu::lapack_solve_f32(A_local.data(), x_p + bi * b_per,
-                                            n, nrhs, &info);
+            backend::cpu::lapack_solve_f32(A_local.data(), x_p + bi * b_per, n, nrhs, &info);
             check_lapack_info(info, "solve");
         }
     } else {
@@ -72,8 +70,7 @@ TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         auto* x_p = reinterpret_cast<double*>(out_cpu.ptr.get());
         for (std::int64_t bi = 0; bi < batch; ++bi) {
             std::memcpy(A_local.data(), a_p + bi * a_per, a_per * sizeof(double));
-            backend::cpu::lapack_solve_f64(A_local.data(), x_p + bi * b_per,
-                                            n, nrhs, &info);
+            backend::cpu::lapack_solve_f64(A_local.data(), x_p + bi * b_per, n, nrhs, &info);
             check_lapack_info(info, "solve");
         }
     }

@@ -22,11 +22,11 @@
 #include <vector>
 
 #include "../api.h"
+#include "../autograd/FuncOp.h"
 #include "../core/AmpPolicy.h"
 #include "../core/OpSchema.h"
 #include "../core/Storage.h"
 #include "../core/fwd.h"
-#include "../autograd/FuncOp.h"
 
 namespace lucid {
 
@@ -39,8 +39,8 @@ public:
     Reduction reduction_ = Reduction::Mean;
     Shape orig_shape_;
     static TensorImplPtr forward(const TensorImplPtr& input,
-                                  const TensorImplPtr& target,
-                                  Reduction reduction);
+                                 const TensorImplPtr& target,
+                                 Reduction reduction);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
@@ -52,9 +52,10 @@ public:
     double eps_ = 1e-7;
     Shape orig_shape_;
     static TensorImplPtr forward(const TensorImplPtr& input,
-                                  const TensorImplPtr& target,
-                                  const TensorImplPtr& weight,
-                                  Reduction reduction, double eps);
+                                 const TensorImplPtr& target,
+                                 const TensorImplPtr& weight,
+                                 Reduction reduction,
+                                 double eps);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
@@ -65,10 +66,10 @@ public:
     Reduction reduction_ = Reduction::Mean;
     Shape orig_shape_;
     static TensorImplPtr forward(const TensorImplPtr& input,
-                                  const TensorImplPtr& target,
-                                  const TensorImplPtr& weight,
-                                  const TensorImplPtr& pos_weight,
-                                  Reduction reduction);
+                                 const TensorImplPtr& target,
+                                 const TensorImplPtr& weight,
+                                 const TensorImplPtr& pos_weight,
+                                 Reduction reduction);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
@@ -87,10 +88,11 @@ public:
     Storage saved_weight_;
     Storage saved_valid_count_;
     static TensorImplPtr forward(const TensorImplPtr& input,
-                                  const TensorImplPtr& target,
-                                  const TensorImplPtr& weight_or_null,
-                                  Reduction reduction, double eps,
-                                  int ignore_index);
+                                 const TensorImplPtr& target,
+                                 const TensorImplPtr& weight_or_null,
+                                 Reduction reduction,
+                                 double eps,
+                                 int ignore_index);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
@@ -106,9 +108,10 @@ public:
     Storage saved_weight_;
     Storage saved_valid_count_;
     static TensorImplPtr forward(const TensorImplPtr& input,
-                                  const TensorImplPtr& target,
-                                  const TensorImplPtr& weight_or_null,
-                                  Reduction reduction, int ignore_index);
+                                 const TensorImplPtr& target,
+                                 const TensorImplPtr& weight_or_null,
+                                 Reduction reduction,
+                                 int ignore_index);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
@@ -120,34 +123,39 @@ public:
     double delta_ = 1.0;
     Shape orig_shape_;
     static TensorImplPtr forward(const TensorImplPtr& input,
-                                  const TensorImplPtr& target,
-                                  double delta, Reduction reduction);
+                                 const TensorImplPtr& target,
+                                 double delta,
+                                 Reduction reduction);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
 LUCID_API TensorImplPtr mse_loss_op(const TensorImplPtr& input,
-                                     const TensorImplPtr& target,
-                                     int reduction);
+                                    const TensorImplPtr& target,
+                                    int reduction);
 LUCID_API TensorImplPtr bce_loss_op(const TensorImplPtr& input,
-                                     const TensorImplPtr& target,
-                                     const TensorImplPtr& weight,
-                                     int reduction, double eps);
+                                    const TensorImplPtr& target,
+                                    const TensorImplPtr& weight,
+                                    int reduction,
+                                    double eps);
 LUCID_API TensorImplPtr bce_with_logits_op(const TensorImplPtr& input,
-                                            const TensorImplPtr& target,
-                                            const TensorImplPtr& weight,
-                                            const TensorImplPtr& pos_weight,
-                                            int reduction);
+                                           const TensorImplPtr& target,
+                                           const TensorImplPtr& weight,
+                                           const TensorImplPtr& pos_weight,
+                                           int reduction);
 LUCID_API TensorImplPtr cross_entropy_op(const TensorImplPtr& input,
-                                          const TensorImplPtr& target,
-                                          const TensorImplPtr& weight_or_null,
-                                          int reduction, double eps,
-                                          int ignore_index);
+                                         const TensorImplPtr& target,
+                                         const TensorImplPtr& weight_or_null,
+                                         int reduction,
+                                         double eps,
+                                         int ignore_index);
 LUCID_API TensorImplPtr nll_loss_op(const TensorImplPtr& input,
-                                     const TensorImplPtr& target,
-                                     const TensorImplPtr& weight_or_null,
-                                     int reduction, int ignore_index);
+                                    const TensorImplPtr& target,
+                                    const TensorImplPtr& weight_or_null,
+                                    int reduction,
+                                    int ignore_index);
 LUCID_API TensorImplPtr huber_loss_op(const TensorImplPtr& input,
-                                       const TensorImplPtr& target,
-                                       double delta, int reduction);
+                                      const TensorImplPtr& target,
+                                      double delta,
+                                      int reduction);
 
 }  // namespace lucid

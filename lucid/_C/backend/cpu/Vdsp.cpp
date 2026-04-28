@@ -7,7 +7,9 @@ namespace lucid::backend::cpu {
 namespace {
 
 // vDSP types: vDSP_Length is `unsigned long`, vDSP_Stride is `long`.
-inline vDSP_Length L(std::size_t n) { return static_cast<vDSP_Length>(n); }
+inline vDSP_Length L(std::size_t n) {
+    return static_cast<vDSP_Length>(n);
+}
 
 }  // namespace
 
@@ -116,31 +118,35 @@ void vmin_f64(const double* a, const double* b, double* out, std::size_t n) {
 // below are simple and correct; if profiling shows hot spots we can replace
 // with NEON intrinsics.
 void vge_mask_f32(const float* a, const float* b, float* out, std::size_t n) {
-    for (std::size_t i = 0; i < n; ++i) out[i] = (a[i] >= b[i]) ? 1.0f : 0.0f;
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = (a[i] >= b[i]) ? 1.0f : 0.0f;
 }
 
 void vle_mask_f32(const float* a, const float* b, float* out, std::size_t n) {
     // Strict-less so ties go only to the >= side — matches PyTorch min/max
     // backward (no double-counting at equal values).
-    for (std::size_t i = 0; i < n; ++i) out[i] = (a[i] < b[i]) ? 1.0f : 0.0f;
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = (a[i] < b[i]) ? 1.0f : 0.0f;
 }
 
 void vge_mask_f64(const double* a, const double* b, double* out, std::size_t n) {
-    for (std::size_t i = 0; i < n; ++i) out[i] = (a[i] >= b[i]) ? 1.0 : 0.0;
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = (a[i] >= b[i]) ? 1.0 : 0.0;
 }
 
 void vle_mask_f64(const double* a, const double* b, double* out, std::size_t n) {
-    for (std::size_t i = 0; i < n; ++i) out[i] = (a[i] < b[i]) ? 1.0 : 0.0;
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = (a[i] < b[i]) ? 1.0 : 0.0;
 }
 
-void vadd_i32(const std::int32_t* a, const std::int32_t* b,
-              std::int32_t* out, std::size_t n) {
-    for (std::size_t i = 0; i < n; ++i) out[i] = a[i] + b[i];
+void vadd_i32(const std::int32_t* a, const std::int32_t* b, std::int32_t* out, std::size_t n) {
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = a[i] + b[i];
 }
 
-void vadd_i64(const std::int64_t* a, const std::int64_t* b,
-              std::int64_t* out, std::size_t n) {
-    for (std::size_t i = 0; i < n; ++i) out[i] = a[i] + b[i];
+void vadd_i64(const std::int64_t* a, const std::int64_t* b, std::int64_t* out, std::size_t n) {
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = a[i] + b[i];
 }
 
 }  // namespace lucid::backend::cpu

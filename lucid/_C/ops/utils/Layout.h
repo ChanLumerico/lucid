@@ -6,12 +6,12 @@
 // =====================================================================
 
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
 #include "../../core/AmpPolicy.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Shape.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
-#include "../../autograd/FuncOp.h"
 
 namespace lucid {
 
@@ -25,10 +25,8 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-LUCID_API TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis,
-                                   int end_axis);
-LUCID_API TensorImplPtr broadcast_to_op(const TensorImplPtr& a,
-                                        const Shape& shape);
+LUCID_API TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis);
+LUCID_API TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape);
 LUCID_API TensorImplPtr expand_op(const TensorImplPtr& a, const Shape& shape);
 
 }  // namespace lucid

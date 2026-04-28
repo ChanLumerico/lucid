@@ -1,7 +1,8 @@
 # Lucid C++ Engine — Style Guide
 
-Enforced by `.clang-format` (formatting) and `.clang-tidy` (semantics). Run
-both before pushing. CI will reject diffs.
+Enforced by `.clang-format` (formatting), `.clang-tidy` (semantics), and
+`tools/check_layers.py` (layer dependencies). Run `tools/check_format.sh` and
+`tools/check_layers.py` before pushing. CI will reject diffs.
 
 ## Principles
 
@@ -13,8 +14,11 @@ both before pushing. CI will reject diffs.
 3. **No public `.data` mutation contracts.** Internal storage is owned by
    `TensorImpl`; mutation goes through named methods (`copy_from`,
    `_apply_step`, `zero_grad`, …). Never expose raw pointers from public APIs.
-4. **Single direction of dependency.** Layer `A` may include layer `B`'s
-   headers iff `A` is to the right of `B` in `docs/ARCHITECTURE.md`.
+4. **Single direction of dependency.** Higher layers may include lower layers,
+   but lower layers may not include higher layers. The enforced order is:
+   `bindings -> optim/random/ops -> kernel -> autograd -> backend -> tensor -> core`.
+   `registry` is orthogonal: it depends only on `core`, and is consumed by
+   `kernel`/`bindings`.
 
 ## Naming
 
@@ -128,6 +132,10 @@ See `docs/concurrency.md`. In short:
   `lucid/_C/test/` for kernel-only logic.
 - Sanitizer CI: `./scripts/ci_sanitizer.sh` (UBSan default; ASan with brew
   Python).
+- Full local gate: `./scripts/ci_full.sh` runs release build, parity, UBSan,
+  layer lint, compile command generation, clang-format, and clang-tidy.
+- C++ builds use `-Wall -Wextra -Wpedantic -Werror` in every build mode, with
+  `-Wno-unused-parameter` for explicitly-unused CRTP/backend parameters.
 
 ## Forbidden in production code
 

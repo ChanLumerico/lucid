@@ -22,20 +22,23 @@
 
 namespace lucid {
 
-LUCID_API std::pair<TensorImplPtr, TensorImplPtr>
-histogram_op(const TensorImplPtr& a, std::int64_t bins,
-             double lo, double hi, bool density);
+LUCID_API std::pair<TensorImplPtr, TensorImplPtr> histogram_op(
+    const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density);
 
-LUCID_API std::pair<TensorImplPtr, TensorImplPtr>
-histogram2d_op(const TensorImplPtr& a, const TensorImplPtr& b,
-               std::int64_t bins_a, std::int64_t bins_b,
-               double lo_a, double hi_a, double lo_b, double hi_b,
-               bool density);
+LUCID_API std::pair<TensorImplPtr, TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
+                                                                 const TensorImplPtr& b,
+                                                                 std::int64_t bins_a,
+                                                                 std::int64_t bins_b,
+                                                                 double lo_a,
+                                                                 double hi_a,
+                                                                 double lo_b,
+                                                                 double hi_b,
+                                                                 bool density);
 
-LUCID_API std::pair<TensorImplPtr, TensorImplPtr>
-histogramdd_op(const TensorImplPtr& a,
-               std::vector<std::int64_t> bins,
-               std::vector<std::pair<double, double>> ranges,
-               bool density);
+LUCID_API std::pair<TensorImplPtr, TensorImplPtr> histogramdd_op(
+    const TensorImplPtr& a,
+    std::vector<std::int64_t> bins,
+    std::vector<std::pair<double, double>> ranges,
+    bool density);
 
 }  // namespace lucid

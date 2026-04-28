@@ -25,8 +25,8 @@ using ufunc_detail::allocate_cpu;
 using ufunc_detail::fresh;
 
 // Reverse a Storage along `axis` (used by cumsum backward).
-Storage reverse_along_axis_storage(const Storage& s, const Shape& shape,
-                                   int axis, Dtype dt, Device device) {
+Storage reverse_along_axis_storage(
+    const Storage& s, const Shape& shape, int axis, Dtype dt, Device device) {
     if (device == Device::GPU) {
         const auto& g = std::get<GpuStorage>(s);
         std::vector<std::int32_t> idx(shape[axis]);
@@ -47,20 +47,20 @@ Storage reverse_along_axis_storage(const Storage& s, const Shape& shape,
     const std::size_t elem = dtype_size(dt);
     const int ndim = static_cast<int>(shape.size());
     std::size_t outer = 1, inner = 1;
-    for (int d = 0; d < axis; ++d) outer *= static_cast<std::size_t>(shape[d]);
+    for (int d = 0; d < axis; ++d)
+        outer *= static_cast<std::size_t>(shape[d]);
     for (int d = axis + 1; d < ndim; ++d)
         inner *= static_cast<std::size_t>(shape[d]);
     const std::size_t L = static_cast<std::size_t>(shape[axis]);
     for (std::size_t o = 0; o < outer; ++o)
         for (std::size_t k = 0; k < L; ++k)
             std::memcpy(out.ptr.get() + ((o * L + k) * inner) * elem,
-                        cs.ptr.get() + ((o * L + (L - 1 - k)) * inner) * elem,
-                        inner * elem);
+                        cs.ptr.get() + ((o * L + (L - 1 - k)) * inner) * elem, inner * elem);
     return Storage{std::move(out)};
 }
 
-Storage cumsum_storage_along(const Storage& s, const Shape& shape, int axis,
-                             Dtype dt, Device device) {
+Storage cumsum_storage_along(
+    const Storage& s, const Shape& shape, int axis, Dtype dt, Device device) {
     if (device == Device::GPU) {
         const auto& g = std::get<GpuStorage>(s);
         auto out = ::mlx::core::cumsum(*g.arr, axis);
@@ -73,7 +73,8 @@ Storage cumsum_storage_along(const Storage& s, const Shape& shape, int axis,
     out.ptr = allocate_aligned_bytes(out.nbytes);
     const int ndim = static_cast<int>(shape.size());
     std::size_t outer = 1, inner = 1;
-    for (int d = 0; d < axis; ++d) outer *= static_cast<std::size_t>(shape[d]);
+    for (int d = 0; d < axis; ++d)
+        outer *= static_cast<std::size_t>(shape[d]);
     for (int d = axis + 1; d < ndim; ++d)
         inner *= static_cast<std::size_t>(shape[d]);
     const std::size_t L = static_cast<std::size_t>(shape[axis]);
@@ -90,8 +91,7 @@ Storage cumsum_storage_along(const Storage& s, const Shape& shape, int axis,
             }
     };
     if (dt == Dtype::F32)
-        run(reinterpret_cast<float*>(out.ptr.get()),
-            reinterpret_cast<const float*>(cs.ptr.get()));
+        run(reinterpret_cast<float*>(out.ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
     else if (dt == Dtype::F64)
         run(reinterpret_cast<double*>(out.ptr.get()),
             reinterpret_cast<const double*>(cs.ptr.get()));
@@ -108,12 +108,9 @@ public:
     int axis_;
 
     std::vector<Storage> apply(Storage grad_out) override {
-        Storage rev = reverse_along_axis_storage(grad_out, input_shape_,
-                                                  axis_, dtype_, device_);
-        Storage cs = cumsum_storage_along(rev, input_shape_, axis_,
-                                          dtype_, device_);
-        Storage dx = reverse_along_axis_storage(cs, input_shape_, axis_,
-                                                dtype_, device_);
+        Storage rev = reverse_along_axis_storage(grad_out, input_shape_, axis_, dtype_, device_);
+        Storage cs = cumsum_storage_along(rev, input_shape_, axis_, dtype_, device_);
+        Storage dx = reverse_along_axis_storage(cs, input_shape_, axis_, dtype_, device_);
         return {std::move(dx)};
     }
 };
@@ -163,43 +160,47 @@ public:
 
         // p = g * y (allocate fresh)
         CpuStorage p;
-        p.dtype  = dtype_;
+        p.dtype = dtype_;
         p.nbytes = cg.nbytes;
-        p.ptr    = allocate_aligned_bytes(p.nbytes);
+        p.ptr = allocate_aligned_bytes(p.nbytes);
         const std::size_t total = shape_numel(input_shape_);
         auto mul_kernel = [&](auto type_tag) {
             using T = decltype(type_tag);
             const T* gp = reinterpret_cast<const T*>(cg.ptr.get());
             const T* yp = reinterpret_cast<const T*>(cy.ptr.get());
             T* op = reinterpret_cast<T*>(p.ptr.get());
-            for (std::size_t i = 0; i < total; ++i) op[i] = gp[i] * yp[i];
+            for (std::size_t i = 0; i < total; ++i)
+                op[i] = gp[i] * yp[i];
         };
-        if (dtype_ == Dtype::F32) mul_kernel(float{});
-        else if (dtype_ == Dtype::F64) mul_kernel(double{});
-        else throw NotImplementedError("cumprod backward: dtype not supported");
+        if (dtype_ == Dtype::F32)
+            mul_kernel(float{});
+        else if (dtype_ == Dtype::F64)
+            mul_kernel(double{});
+        else
+            throw NotImplementedError("cumprod backward: dtype not supported");
 
         Storage p_s{std::move(p)};
-        Storage rev = reverse_along_axis_storage(p_s, input_shape_,
-                                                   axis_, dtype_, device_);
-        Storage cs  = cumsum_storage_along(rev, input_shape_, axis_,
-                                             dtype_, device_);
-        Storage q   = reverse_along_axis_storage(cs, input_shape_,
-                                                   axis_, dtype_, device_);
+        Storage rev = reverse_along_axis_storage(p_s, input_shape_, axis_, dtype_, device_);
+        Storage cs = cumsum_storage_along(rev, input_shape_, axis_, dtype_, device_);
+        Storage q = reverse_along_axis_storage(cs, input_shape_, axis_, dtype_, device_);
         // dx = q / x
         const auto& cq = std::get<CpuStorage>(q);
         CpuStorage dx;
-        dx.dtype  = dtype_;
+        dx.dtype = dtype_;
         dx.nbytes = cq.nbytes;
-        dx.ptr    = allocate_aligned_bytes(dx.nbytes);
+        dx.ptr = allocate_aligned_bytes(dx.nbytes);
         auto div_kernel = [&](auto type_tag) {
             using T = decltype(type_tag);
             const T* qp = reinterpret_cast<const T*>(cq.ptr.get());
             const T* xp = reinterpret_cast<const T*>(cx.ptr.get());
             T* dp = reinterpret_cast<T*>(dx.ptr.get());
-            for (std::size_t i = 0; i < total; ++i) dp[i] = qp[i] / xp[i];
+            for (std::size_t i = 0; i < total; ++i)
+                dp[i] = qp[i] / xp[i];
         };
-        if (dtype_ == Dtype::F32) div_kernel(float{});
-        else div_kernel(double{});
+        if (dtype_ == Dtype::F32)
+            div_kernel(float{});
+        else
+            div_kernel(double{});
         return {Storage{std::move(dx)}};
     }
 };
@@ -208,7 +209,8 @@ template <typename T, bool IsProd>
 void scan_axis(const T* in, T* out, const Shape& shape, int axis) {
     const std::size_t ndim = shape.size();
     std::size_t outer = 1, inner = 1;
-    for (int d = 0; d < axis; ++d) outer *= static_cast<std::size_t>(shape[d]);
+    for (int d = 0; d < axis; ++d)
+        outer *= static_cast<std::size_t>(shape[d]);
     for (std::size_t d = axis + 1; d < ndim; ++d)
         inner *= static_cast<std::size_t>(shape[d]);
     const std::size_t L = static_cast<std::size_t>(shape[axis]);
@@ -220,66 +222,71 @@ void scan_axis(const T* in, T* out, const Shape& shape, int axis) {
             out[base] = acc;
             for (std::size_t k = 1; k < L; ++k) {
                 const std::size_t idx = base + k * inner;
-                if constexpr (IsProd) acc = acc * in[idx];
-                else acc = acc + in[idx];
+                if constexpr (IsProd)
+                    acc = acc * in[idx];
+                else
+                    acc = acc + in[idx];
                 out[idx] = acc;
             }
         }
     }
 }
 
-TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis,
-                            bool is_prod, const char* name) {
-    if (!a) throw LucidError(std::string(name) + ": null input");
+TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, const char* name) {
+    if (!a)
+        throw LucidError(std::string(name) + ": null input");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     auto sh = a->shape_;
-    if (sh.empty()) throw LucidError(std::string(name) + ": input is scalar");
+    if (sh.empty())
+        throw LucidError(std::string(name) + ": input is scalar");
     int ax = axis;
-    if (ax < 0) ax += static_cast<int>(sh.size());
+    if (ax < 0)
+        ax += static_cast<int>(sh.size());
     if (ax < 0 || ax >= (int)sh.size())
         throw LucidError(std::string(name) + ": axis out of range");
     OpScope scope{name, device, dt, sh};
 
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
-        auto out = is_prod
-            ? ::mlx::core::cumprod(*ga.arr, ax)
-            : ::mlx::core::cumsum(*ga.arr, ax);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                     sh, dt, device);
+        auto out = is_prod ? ::mlx::core::cumprod(*ga.arr, ax) : ::mlx::core::cumsum(*ga.arr, ax);
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, sh, dt, device);
     }
 
     auto out_cpu = allocate_cpu(sh, dt);
     const auto& ca = std::get<CpuStorage>(a->storage_);
     if (dt == Dtype::F32) {
-        if (is_prod) scan_axis<float, true>(
-            reinterpret_cast<const float*>(ca.ptr.get()),
-            reinterpret_cast<float*>(out_cpu.ptr.get()), sh, ax);
-        else scan_axis<float, false>(
-            reinterpret_cast<const float*>(ca.ptr.get()),
-            reinterpret_cast<float*>(out_cpu.ptr.get()), sh, ax);
+        if (is_prod)
+            scan_axis<float, true>(reinterpret_cast<const float*>(ca.ptr.get()),
+                                   reinterpret_cast<float*>(out_cpu.ptr.get()), sh, ax);
+        else
+            scan_axis<float, false>(reinterpret_cast<const float*>(ca.ptr.get()),
+                                    reinterpret_cast<float*>(out_cpu.ptr.get()), sh, ax);
     } else if (dt == Dtype::F64) {
-        if (is_prod) scan_axis<double, true>(
-            reinterpret_cast<const double*>(ca.ptr.get()),
-            reinterpret_cast<double*>(out_cpu.ptr.get()), sh, ax);
-        else scan_axis<double, false>(
-            reinterpret_cast<const double*>(ca.ptr.get()),
-            reinterpret_cast<double*>(out_cpu.ptr.get()), sh, ax);
+        if (is_prod)
+            scan_axis<double, true>(reinterpret_cast<const double*>(ca.ptr.get()),
+                                    reinterpret_cast<double*>(out_cpu.ptr.get()), sh, ax);
+        else
+            scan_axis<double, false>(reinterpret_cast<const double*>(ca.ptr.get()),
+                                     reinterpret_cast<double*>(out_cpu.ptr.get()), sh, ax);
     } else if (dt == Dtype::I32) {
-        if (is_prod) scan_axis<std::int32_t, true>(
-            reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-            reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()), sh, ax);
-        else scan_axis<std::int32_t, false>(
-            reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-            reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()), sh, ax);
+        if (is_prod)
+            scan_axis<std::int32_t, true>(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
+                                          reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()), sh,
+                                          ax);
+        else
+            scan_axis<std::int32_t, false>(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
+                                           reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()), sh,
+                                           ax);
     } else if (dt == Dtype::I64) {
-        if (is_prod) scan_axis<std::int64_t, true>(
-            reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-            reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), sh, ax);
-        else scan_axis<std::int64_t, false>(
-            reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-            reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), sh, ax);
+        if (is_prod)
+            scan_axis<std::int64_t, true>(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
+                                          reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), sh,
+                                          ax);
+        else
+            scan_axis<std::int64_t, false>(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
+                                           reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), sh,
+                                           ax);
     } else {
         throw NotImplementedError(std::string(name) + ": dtype not supported");
     }
@@ -295,9 +302,9 @@ TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis) {
         int ax = axis < 0 ? axis + (int)a->shape_.size() : axis;
         auto bwd = std::make_shared<CumsumBackward>();
         bwd->input_shape_ = a->shape_;
-        bwd->dtype_       = a->dtype_;
-        bwd->device_      = a->device_;
-        bwd->axis_        = ax;
+        bwd->dtype_ = a->dtype_;
+        bwd->device_ = a->device_;
+        bwd->axis_ = ax;
         auto a_edge = detail::ensure_grad_fn(a);
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);
@@ -316,11 +323,11 @@ TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis) {
         int ax = axis < 0 ? axis + (int)a->shape_.size() : axis;
         auto bwd = std::make_shared<CumprodBackward>();
         bwd->input_shape_ = a->shape_;
-        bwd->dtype_       = a->dtype_;
-        bwd->device_      = a->device_;
-        bwd->axis_        = ax;
-        bwd->saved_x_     = a->storage_;
-        bwd->saved_y_     = out->storage_;
+        bwd->dtype_ = a->dtype_;
+        bwd->device_ = a->device_;
+        bwd->axis_ = ax;
+        bwd->saved_x_ = a->storage_;
+        bwd->saved_y_ = out->storage_;
         auto a_edge = detail::ensure_grad_fn(a);
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);

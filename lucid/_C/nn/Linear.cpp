@@ -5,6 +5,9 @@
 
 #include <mlx/ops.h>
 
+#include "../autograd/AccumulateGrad.h"
+#include "../autograd/Helpers.h"
+#include "../autograd/Node.h"
 #include "../backend/cpu/Blas.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
@@ -13,9 +16,6 @@
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
 #include "../core/TensorImpl.h"
-#include "../autograd/AccumulateGrad.h"
-#include "../autograd/Helpers.h"
-#include "../autograd/Node.h"
 #include "../ops/bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -44,9 +44,9 @@ FlatX flatten_x(const Shape& x_shape) {
 
 CpuStorage allocate_2d_like(std::size_t numel, Dtype dt) {
     CpuStorage s;
-    s.dtype  = dt;
+    s.dtype = dt;
     s.nbytes = numel * dtype_size(dt);
-    s.ptr    = allocate_aligned_bytes(s.nbytes);
+    s.ptr = allocate_aligned_bytes(s.nbytes);
     return s;
 }
 
@@ -60,18 +60,15 @@ void add_bias_typed(T* y, const T* b, std::size_t M, std::size_t N) {
     }
 }
 
-void add_bias(CpuStorage& y, const CpuStorage& b, std::size_t M, std::size_t N,
-              Dtype dt) {
+void add_bias(CpuStorage& y, const CpuStorage& b, std::size_t M, std::size_t N, Dtype dt) {
     switch (dt) {
         case Dtype::F32:
             add_bias_typed<float>(reinterpret_cast<float*>(y.ptr.get()),
-                                  reinterpret_cast<const float*>(b.ptr.get()),
-                                  M, N);
+                                  reinterpret_cast<const float*>(b.ptr.get()), M, N);
             break;
         case Dtype::F64:
             add_bias_typed<double>(reinterpret_cast<double*>(y.ptr.get()),
-                                   reinterpret_cast<const double*>(b.ptr.get()),
-                                   M, N);
+                                   reinterpret_cast<const double*>(b.ptr.get()), M, N);
             break;
         default:
             throw NotImplementedError("linear: bias dtype not supported");
@@ -81,7 +78,8 @@ void add_bias(CpuStorage& y, const CpuStorage& b, std::size_t M, std::size_t N,
 // db = sum(grad, axis=0..M-1) — collapse all leading dims to 1, leaving (N,).
 template <typename T>
 void sum_rows_typed(const T* g, T* db, std::size_t M, std::size_t N) {
-    for (std::size_t n = 0; n < N; ++n) db[n] = T{};
+    for (std::size_t n = 0; n < N; ++n)
+        db[n] = T{};
     for (std::size_t m = 0; m < M; ++m) {
         for (std::size_t n = 0; n < N; ++n) {
             db[n] += g[m * N + n];
@@ -94,10 +92,11 @@ void sum_rows_typed(const T* g, T* db, std::size_t M, std::size_t N) {
 TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
                                       const TensorImplPtr& W,
                                       const TensorImplPtr& b) {
-    if (!x || !W || !b) throw LucidError("linear: null input");
+    if (!x || !W || !b)
+        throw LucidError("linear: null input");
     if (x->dtype_ != W->dtype_ || x->dtype_ != b->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
-                            std::string(dtype_name(W->dtype_)), "linear");
+        throw DtypeMismatch(std::string(dtype_name(x->dtype_)), std::string(dtype_name(W->dtype_)),
+                            "linear");
     if (x->device_ != W->device_ || x->device_ != b->device_)
         throw DeviceMismatch(std::string(device_name(x->device_)),
                              std::string(device_name(W->device_)), "linear");
@@ -111,8 +110,8 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
         throw ShapeMismatch(b->shape_, Shape{}, "linear: b must be 1-D");
 
     const auto fx = flatten_x(x->shape_);
-    const std::size_t M = fx.M;  // batch product
-    const std::size_t K = fx.K;  // in_features
+    const std::size_t M = fx.M;                                    // batch product
+    const std::size_t K = fx.K;                                    // in_features
     const std::size_t N = static_cast<std::size_t>(W->shape_[0]);  // out_features
 
     if (W->shape_[1] != static_cast<std::int64_t>(K))
@@ -136,14 +135,10 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
         }
         ::mlx::core::array out_arr =
             (M == 0 || N == 0 || K == 0)
-                ? ::mlx::core::zeros(gpu::to_mlx_shape(out_shape),
-                                     gpu::to_mlx_dtype(x->dtype_))
-                : ::mlx::core::add(
-                      ::mlx::core::matmul(*gx.arr,
-                                          ::mlx::core::transpose(*gW.arr)),
-                      *gb.arr);
-        out_storage =
-            Storage{gpu::wrap_mlx_array(std::move(out_arr), x->dtype_)};
+                ? ::mlx::core::zeros(gpu::to_mlx_shape(out_shape), gpu::to_mlx_dtype(x->dtype_))
+                : ::mlx::core::add(::mlx::core::matmul(*gx.arr, ::mlx::core::transpose(*gW.arr)),
+                                   *gb.arr);
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out_arr), x->dtype_)};
     } else {
         auto out_cpu = allocate_2d_like(M * N, x->dtype_);
         // y = x @ W^T  (M,K) @ (K,N transposed-from-(N,K)) = (M,N)
@@ -152,22 +147,20 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
                 case Dtype::F32:
                     backend::cpu::sgemm(
                         /*transA=*/false, /*transB=*/true, M, N, K, 1.0f,
-                        reinterpret_cast<const float*>(
-                            std::get<CpuStorage>(x->storage_).ptr.get()), K,
-                        reinterpret_cast<const float*>(
-                            std::get<CpuStorage>(W->storage_).ptr.get()), K,
-                        0.0f,
-                        reinterpret_cast<float*>(out_cpu.ptr.get()), N);
+                        reinterpret_cast<const float*>(std::get<CpuStorage>(x->storage_).ptr.get()),
+                        K,
+                        reinterpret_cast<const float*>(std::get<CpuStorage>(W->storage_).ptr.get()),
+                        K, 0.0f, reinterpret_cast<float*>(out_cpu.ptr.get()), N);
                     break;
                 case Dtype::F64:
                     backend::cpu::dgemm(
                         /*transA=*/false, /*transB=*/true, M, N, K, 1.0,
                         reinterpret_cast<const double*>(
-                            std::get<CpuStorage>(x->storage_).ptr.get()), K,
+                            std::get<CpuStorage>(x->storage_).ptr.get()),
+                        K,
                         reinterpret_cast<const double*>(
-                            std::get<CpuStorage>(W->storage_).ptr.get()), K,
-                        0.0,
-                        reinterpret_cast<double*>(out_cpu.ptr.get()), N);
+                            std::get<CpuStorage>(W->storage_).ptr.get()),
+                        K, 0.0, reinterpret_cast<double*>(out_cpu.ptr.get()), N);
                     break;
                 default:
                     throw NotImplementedError("linear: dtype not supported (F32/F64)");
@@ -182,12 +175,10 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            std::move(out_shape), x->dtype_,
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), x->dtype_,
                                             x->device_, false);
 
-    if (!GradMode::is_enabled() ||
-        !(x->requires_grad_ || W->requires_grad_ || b->requires_grad_)) {
+    if (!GradMode::is_enabled() || !(x->requires_grad_ || W->requires_grad_ || b->requires_grad_)) {
         return out;
     }
 
@@ -196,18 +187,17 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
     auto b_edge = detail::ensure_grad_fn(b);
 
     auto bwd = std::make_shared<LinearBackward>();
-    bwd->input_shapes_  = {x->shape_, W->shape_, b->shape_};
-    bwd->out_shape_     = out->shape_;
-    bwd->dtype_         = x->dtype_;
-    bwd->device_        = x->device_;
+    bwd->input_shapes_ = {x->shape_, W->shape_, b->shape_};
+    bwd->out_shape_ = out->shape_;
+    bwd->dtype_ = x->dtype_;
+    bwd->device_ = x->device_;
     bwd->input_tensors_ = {x, W, b};
-    bwd->saved_inputs_  = {x->storage_, W->storage_, b->storage_};
-    bwd->set_next_edges(std::vector<Edge>{
-        Edge(x_edge, 0), Edge(W_edge, 0), Edge(b_edge, 0)});
+    bwd->saved_inputs_ = {x->storage_, W->storage_, b->storage_};
+    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(W_edge, 0), Edge(b_edge, 0)});
     bwd->set_saved_versions({x->version_, W->version_, b->version_});
 
-    out->grad_fn_       = std::move(bwd);
-    out->is_leaf_       = false;
+    out->grad_fn_ = std::move(bwd);
+    out->is_leaf_ = false;
     out->requires_grad_ = true;
     return out;
 }
@@ -232,20 +222,19 @@ std::vector<Storage> LinearBackward::apply(Storage grad_out) {
         auto g_2d = ::mlx::core::reshape(*gG.arr, gpu::to_mlx_shape(flatG));
         auto x_2d = ::mlx::core::reshape(*gX.arr, gpu::to_mlx_shape(flatX));
         if (M == 0 || N == 0 || K == 0) {
-            auto zx = ::mlx::core::zeros(gpu::to_mlx_shape(input_shapes_[0]),
-                                         gpu::to_mlx_dtype(dtype_));
-            auto zw = ::mlx::core::zeros(gpu::to_mlx_shape(input_shapes_[1]),
-                                         gpu::to_mlx_dtype(dtype_));
-            auto zb = ::mlx::core::zeros(gpu::to_mlx_shape(input_shapes_[2]),
-                                         gpu::to_mlx_dtype(dtype_));
+            auto zx =
+                ::mlx::core::zeros(gpu::to_mlx_shape(input_shapes_[0]), gpu::to_mlx_dtype(dtype_));
+            auto zw =
+                ::mlx::core::zeros(gpu::to_mlx_shape(input_shapes_[1]), gpu::to_mlx_dtype(dtype_));
+            auto zb =
+                ::mlx::core::zeros(gpu::to_mlx_shape(input_shapes_[2]), gpu::to_mlx_dtype(dtype_));
             return {Storage{gpu::wrap_mlx_array(std::move(zx), dtype_)},
                     Storage{gpu::wrap_mlx_array(std::move(zw), dtype_)},
                     Storage{gpu::wrap_mlx_array(std::move(zb), dtype_)}};
         }
         // dx (flat) = g @ W ; reshape back to input_shapes_[0]
         auto dx_flat = ::mlx::core::matmul(g_2d, *gW.arr);
-        auto dx = ::mlx::core::reshape(dx_flat,
-                                       gpu::to_mlx_shape(input_shapes_[0]));
+        auto dx = ::mlx::core::reshape(dx_flat, gpu::to_mlx_shape(input_shapes_[0]));
         // dW = g^T @ x : (N, M) @ (M, K) -> (N, K)
         auto dW = ::mlx::core::matmul(::mlx::core::transpose(g_2d), x_2d);
         // db = sum(g, axis=0) : (N,)
@@ -273,30 +262,22 @@ std::vector<Storage> LinearBackward::apply(Storage grad_out) {
                 const auto* gp = reinterpret_cast<const float*>(g_cpu.ptr.get());
                 const auto* xp = reinterpret_cast<const float*>(x_cpu.ptr.get());
                 const auto* wp = reinterpret_cast<const float*>(W_cpu.ptr.get());
-                backend::cpu::sgemm(false, false, M, K, N, 1.0f,
-                                    gp, N, wp, K, 0.0f,
+                backend::cpu::sgemm(false, false, M, K, N, 1.0f, gp, N, wp, K, 0.0f,
                                     reinterpret_cast<float*>(dx_cpu.ptr.get()), K);
-                backend::cpu::sgemm(true, false, N, K, M, 1.0f,
-                                    gp, N, xp, K, 0.0f,
+                backend::cpu::sgemm(true, false, N, K, M, 1.0f, gp, N, xp, K, 0.0f,
                                     reinterpret_cast<float*>(dW_cpu.ptr.get()), K);
-                sum_rows_typed<float>(gp,
-                                      reinterpret_cast<float*>(db_cpu.ptr.get()),
-                                      M, N);
+                sum_rows_typed<float>(gp, reinterpret_cast<float*>(db_cpu.ptr.get()), M, N);
                 break;
             }
             case Dtype::F64: {
                 const auto* gp = reinterpret_cast<const double*>(g_cpu.ptr.get());
                 const auto* xp = reinterpret_cast<const double*>(x_cpu.ptr.get());
                 const auto* wp = reinterpret_cast<const double*>(W_cpu.ptr.get());
-                backend::cpu::dgemm(false, false, M, K, N, 1.0,
-                                    gp, N, wp, K, 0.0,
+                backend::cpu::dgemm(false, false, M, K, N, 1.0, gp, N, wp, K, 0.0,
                                     reinterpret_cast<double*>(dx_cpu.ptr.get()), K);
-                backend::cpu::dgemm(true, false, N, K, M, 1.0,
-                                    gp, N, xp, K, 0.0,
+                backend::cpu::dgemm(true, false, N, K, M, 1.0, gp, N, xp, K, 0.0,
                                     reinterpret_cast<double*>(dW_cpu.ptr.get()), K);
-                sum_rows_typed<double>(gp,
-                                       reinterpret_cast<double*>(db_cpu.ptr.get()),
-                                       M, N);
+                sum_rows_typed<double>(gp, reinterpret_cast<double*>(db_cpu.ptr.get()), M, N);
                 break;
             }
             default:
@@ -304,17 +285,18 @@ std::vector<Storage> LinearBackward::apply(Storage grad_out) {
         }
     } else {
         // Empty case — zero-fill all grads.
-        if (dx_cpu.nbytes) std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        if (dW_cpu.nbytes) std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
-        if (db_cpu.nbytes) std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
+        if (dx_cpu.nbytes)
+            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+        if (dW_cpu.nbytes)
+            std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
+        if (db_cpu.nbytes)
+            std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
     }
 
-    return {Storage{std::move(dx_cpu)}, Storage{std::move(dW_cpu)},
-            Storage{std::move(db_cpu)}};
+    return {Storage{std::move(dx_cpu)}, Storage{std::move(dW_cpu)}, Storage{std::move(db_cpu)}};
 }
 
-TensorImplPtr linear_op(const TensorImplPtr& x, const TensorImplPtr& W,
-                        const TensorImplPtr& b) {
+TensorImplPtr linear_op(const TensorImplPtr& x, const TensorImplPtr& W, const TensorImplPtr& b) {
     return LinearBackward::forward(x, W, b);
 }
 

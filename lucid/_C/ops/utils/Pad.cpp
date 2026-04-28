@@ -5,6 +5,9 @@
 
 #include <mlx/ops.h>
 
+#include "../../autograd/FuncOp.h"
+#include "../../autograd/Helpers.h"
+#include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Exceptions.h"
@@ -12,9 +15,6 @@
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/TensorImpl.h"
-#include "../../autograd/FuncOp.h"
-#include "../../autograd/Helpers.h"
-#include "../../autograd/Node.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -27,10 +27,10 @@ using utils_detail::fresh;
 using utils_detail::mlx_shape_to_lucid;
 using utils_detail::numel;
 
-CpuStorage crop_pad_cpu(const CpuStorage& grad, const Shape& input_shape,
+CpuStorage crop_pad_cpu(const CpuStorage& grad,
+                        const Shape& input_shape,
                         const Shape& output_shape,
-                        const std::vector<std::pair<std::int64_t,
-                                                    std::int64_t>>& pad_width,
+                        const std::vector<std::pair<std::int64_t, std::int64_t>>& pad_width,
                         Dtype dt) {
     auto out = allocate_cpu(input_shape, dt);
     if (input_shape.empty()) {
@@ -45,14 +45,11 @@ CpuStorage crop_pad_cpu(const CpuStorage& grad, const Shape& input_shape,
     Stride in_stride(ndim), out_stride(ndim);
     in_stride.back() = 1;
     out_stride.back() = 1;
-    for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0;
-         --d) {
-        in_stride[static_cast<std::size_t>(d)] =
-            in_stride[static_cast<std::size_t>(d) + 1] *
-            input_shape[static_cast<std::size_t>(d) + 1];
-        out_stride[static_cast<std::size_t>(d)] =
-            out_stride[static_cast<std::size_t>(d) + 1] *
-            output_shape[static_cast<std::size_t>(d) + 1];
+    for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
+        in_stride[static_cast<std::size_t>(d)] = in_stride[static_cast<std::size_t>(d) + 1] *
+                                                 input_shape[static_cast<std::size_t>(d) + 1];
+        out_stride[static_cast<std::size_t>(d)] = out_stride[static_cast<std::size_t>(d) + 1] *
+                                                  output_shape[static_cast<std::size_t>(d) + 1];
     }
 
     const std::size_t row_in = static_cast<std::size_t>(input_shape.back());
@@ -60,23 +57,18 @@ CpuStorage crop_pad_cpu(const CpuStorage& grad, const Shape& input_shape,
     const std::size_t rows = numel(input_shape) / row_in;
     std::vector<std::int64_t> coord(ndim - 1, 0);
     for (std::size_t r = 0; r < rows; ++r) {
-        std::size_t src_off =
-            static_cast<std::size_t>(pad_width.back().first);
+        std::size_t src_off = static_cast<std::size_t>(pad_width.back().first);
         for (std::size_t d = 0; d + 1 < ndim; ++d) {
             src_off += static_cast<std::size_t>(coord[d] + pad_width[d].first) *
                        static_cast<std::size_t>(out_stride[d]);
         }
         std::size_t dst_off = 0;
         for (std::size_t d = 0; d + 1 < ndim; ++d) {
-            dst_off += static_cast<std::size_t>(coord[d]) *
-                       static_cast<std::size_t>(in_stride[d]);
+            dst_off += static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
         }
-        std::memcpy(out.ptr.get() + dst_off * elem,
-                    grad.ptr.get() + src_off * elem, row_bytes);
-        for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0;
-             --d) {
-            if (++coord[static_cast<std::size_t>(d)] <
-                input_shape[static_cast<std::size_t>(d)]) {
+        std::memcpy(out.ptr.get() + dst_off * elem, grad.ptr.get() + src_off * elem, row_bytes);
+        for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
+            if (++coord[static_cast<std::size_t>(d)] < input_shape[static_cast<std::size_t>(d)]) {
                 break;
             }
             coord[static_cast<std::size_t>(d)] = 0;
@@ -99,25 +91,25 @@ public:
             hi.reserve(input_shapes_[0].size());
             for (std::size_t d = 0; d < input_shapes_[0].size(); ++d) {
                 lo[d] = static_cast<::mlx::core::ShapeElem>(pad_width_[d].first);
-                hi.push_back(static_cast<::mlx::core::ShapeElem>(
-                    pad_width_[d].first + input_shapes_[0][d]));
+                hi.push_back(
+                    static_cast<::mlx::core::ShapeElem>(pad_width_[d].first + input_shapes_[0][d]));
             }
             auto out = ::mlx::core::slice(*g.arr, lo, hi);
             out = ::mlx::core::contiguous(out);
             return {Storage{gpu::wrap_mlx_array(std::move(out), dtype_)}};
         }
-        return {Storage{crop_pad_cpu(std::get<CpuStorage>(grad_out),
-                                     input_shapes_[0], out_shape_, pad_width_,
-                                     dtype_)}};
+        return {Storage{crop_pad_cpu(std::get<CpuStorage>(grad_out), input_shapes_[0], out_shape_,
+                                     pad_width_, dtype_)}};
     }
 };
 
 const OpSchema PadBackward::schema_v1{"pad", 1, AmpPolicy::KeepInput, true};
 
-TensorImplPtr attach_pad_grad(
-    const TensorImplPtr& a, TensorImplPtr out,
-    std::vector<std::pair<std::int64_t, std::int64_t>> pad_width) {
-    if (!GradMode::is_enabled() || !a->requires_grad_) return out;
+TensorImplPtr attach_pad_grad(const TensorImplPtr& a,
+                              TensorImplPtr out,
+                              std::vector<std::pair<std::int64_t, std::int64_t>> pad_width) {
+    if (!GradMode::is_enabled() || !a->requires_grad_)
+        return out;
 
     auto bwd = std::make_shared<PadBackward>();
     bwd->input_shapes_ = {a->shape_};
@@ -142,7 +134,8 @@ LUCID_REGISTER_OP(PadBackward)
 TensorImplPtr pad_op(const TensorImplPtr& a,
                      std::vector<std::pair<std::int64_t, std::int64_t>> pad_width,
                      double constant) {
-    if (!a) throw LucidError("pad: null input");
+    if (!a)
+        throw LucidError("pad: null input");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     OpScope scope{"pad", device, dt, a->shape_};
@@ -154,12 +147,11 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
         mlx_pad.reserve(pad_width.size());
         for (auto& [lo, hi] : pad_width)
             mlx_pad.emplace_back(static_cast<int>(lo), static_cast<int>(hi));
-        ::mlx::core::array pad_value(static_cast<float>(constant),
-                                     gpu::to_mlx_dtype(dt));
+        ::mlx::core::array pad_value(static_cast<float>(constant), gpu::to_mlx_dtype(dt));
         auto out = ::mlx::core::pad(*ga.arr, mlx_pad, pad_value);
         Shape sh = mlx_shape_to_lucid(out.shape());
-        auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                            std::move(sh), dt, device);
+        auto result =
+            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
         return attach_pad_grad(a, std::move(result), std::move(pad_width));
     }
     const std::size_t ndim = a->shape_.size();
@@ -171,23 +163,24 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
     auto fill = [&](auto* dst, std::size_t n, double value) {
         using T = std::remove_pointer_t<decltype(dst)>;
         const T v = static_cast<T>(value);
-        for (std::size_t i = 0; i < n; ++i) dst[i] = v;
+        for (std::size_t i = 0; i < n; ++i)
+            dst[i] = v;
     };
     const std::size_t out_numel = numel(out_shape);
     if (constant != 0.0) {
         switch (dt) {
             case Dtype::F32:
-                fill(reinterpret_cast<float*>(out_cpu.ptr.get()),
-                     out_numel, constant); break;
+                fill(reinterpret_cast<float*>(out_cpu.ptr.get()), out_numel, constant);
+                break;
             case Dtype::F64:
-                fill(reinterpret_cast<double*>(out_cpu.ptr.get()),
-                     out_numel, constant); break;
+                fill(reinterpret_cast<double*>(out_cpu.ptr.get()), out_numel, constant);
+                break;
             case Dtype::I32:
-                fill(reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()),
-                     out_numel, constant); break;
+                fill(reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()), out_numel, constant);
+                break;
             case Dtype::I64:
-                fill(reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()),
-                     out_numel, constant); break;
+                fill(reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), out_numel, constant);
+                break;
             default:
                 throw NotImplementedError("pad: dtype not supported");
         }
@@ -217,19 +210,16 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
                        static_cast<std::size_t>(out_stride[d]);
         std::size_t in_off = 0;
         for (std::size_t d = 0; d + 1 < ndim; ++d)
-            in_off += static_cast<std::size_t>(coord[d]) *
-                      static_cast<std::size_t>(in_stride[d]);
-        std::memcpy(out_cpu.ptr.get() + out_off * elem,
-                    ca.ptr.get() + in_off * elem,
-                    row_bytes);
+            in_off += static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
+        std::memcpy(out_cpu.ptr.get() + out_off * elem, ca.ptr.get() + in_off * elem, row_bytes);
         for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d) {
-            if (++coord[d] < a->shape_[d]) break;
+            if (++coord[d] < a->shape_[d])
+                break;
             coord[d] = 0;
         }
     }
 
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt,
-                        device);
+    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
     return attach_pad_grad(a, std::move(result), std::move(pad_width));
 }
 

@@ -6,6 +6,9 @@
 
 #include <mlx/ops.h>
 
+#include "../autograd/AccumulateGrad.h"
+#include "../autograd/Helpers.h"
+#include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
 #include "../core/Exceptions.h"
@@ -13,9 +16,6 @@
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
 #include "../core/TensorImpl.h"
-#include "../autograd/AccumulateGrad.h"
-#include "../autograd/Helpers.h"
-#include "../autograd/Node.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -33,9 +33,17 @@ CpuStorage alloc_bytes(std::size_t numel, Dtype dt) {
 }
 
 template <typename T>
-void group_norm_forward_typed(const T* x, const T* gamma, const T* beta,
-                              T* y, T* mean_bg, T* rstd_bg,
-                              int B, int C, int spatial, int G, double eps) {
+void group_norm_forward_typed(const T* x,
+                              const T* gamma,
+                              const T* beta,
+                              T* y,
+                              T* mean_bg,
+                              T* rstd_bg,
+                              int B,
+                              int C,
+                              int spatial,
+                              int G,
+                              double eps) {
     const int Cg = C / G;
     const std::size_t per_group = static_cast<std::size_t>(Cg) * spatial;
     const T inv_pg = T{1} / static_cast<T>(per_group);
@@ -47,7 +55,8 @@ void group_norm_forward_typed(const T* x, const T* gamma, const T* beta,
             for (int cc = 0; cc < Cg; ++cc) {
                 const int c = g * Cg + cc;
                 const T* xb = x + (static_cast<std::size_t>(b) * C + c) * spatial;
-                for (int i = 0; i < spatial; ++i) mean += xb[i];
+                for (int i = 0; i < spatial; ++i)
+                    mean += xb[i];
             }
             mean *= inv_pg;
             T var = T{};
@@ -66,7 +75,7 @@ void group_norm_forward_typed(const T* x, const T* gamma, const T* beta,
                 const T gc = gamma[c];
                 const T bc = beta[c];
                 const T* xb = x + (static_cast<std::size_t>(b) * C + c) * spatial;
-                T*       yb = y + (static_cast<std::size_t>(b) * C + c) * spatial;
+                T* yb = y + (static_cast<std::size_t>(b) * C + c) * spatial;
                 for (int i = 0; i < spatial; ++i) {
                     yb[i] = gc * (xb[i] - mean) * rstd + bc;
                 }
@@ -78,16 +87,26 @@ void group_norm_forward_typed(const T* x, const T* gamma, const T* beta,
 }
 
 template <typename T>
-void group_norm_backward_typed(const T* x, const T* gamma,
-                               const T* mean_bg, const T* rstd_bg,
+void group_norm_backward_typed(const T* x,
+                               const T* gamma,
+                               const T* mean_bg,
+                               const T* rstd_bg,
                                const T* g,
-                               T* dx, T* dgamma, T* dbeta,
-                               int B, int C, int spatial, int G) {
+                               T* dx,
+                               T* dgamma,
+                               T* dbeta,
+                               int B,
+                               int C,
+                               int spatial,
+                               int G) {
     const int Cg = C / G;
     const std::size_t per_group = static_cast<std::size_t>(Cg) * spatial;
     const T inv_pg = T{1} / static_cast<T>(per_group);
 
-    for (int co = 0; co < C; ++co) { dgamma[co] = T{}; dbeta[co] = T{}; }
+    for (int co = 0; co < C; ++co) {
+        dgamma[co] = T{};
+        dbeta[co] = T{};
+    }
 
     for (int b = 0; b < B; ++b) {
         for (int gi = 0; gi < G; ++gi) {
@@ -103,10 +122,10 @@ void group_norm_backward_typed(const T* x, const T* gamma,
                 for (int i = 0; i < spatial; ++i) {
                     const T xn_i = (xb[i] - m) * r;
                     const T dxn_i = gc * gb[i];
-                    sum_dxn    += dxn_i;
+                    sum_dxn += dxn_i;
                     sum_dxn_xn += dxn_i * xn_i;
                     dgamma[c] += gb[i] * xn_i;
-                    dbeta[c]  += gb[i];
+                    dbeta[c] += gb[i];
                 }
             }
             for (int cc = 0; cc < Cg; ++cc) {
@@ -114,12 +133,12 @@ void group_norm_backward_typed(const T* x, const T* gamma,
                 const T gc = gamma[c];
                 const T* xb = x + (static_cast<std::size_t>(b) * C + c) * spatial;
                 const T* gb = g + (static_cast<std::size_t>(b) * C + c) * spatial;
-                T*       dxb = dx + (static_cast<std::size_t>(b) * C + c) * spatial;
+                T* dxb = dx + (static_cast<std::size_t>(b) * C + c) * spatial;
                 for (int i = 0; i < spatial; ++i) {
                     const T xn_i = (xb[i] - m) * r;
                     const T dxn_i = gc * gb[i];
-                    dxb[i] = inv_pg * r * (static_cast<T>(per_group) * dxn_i
-                                           - sum_dxn - xn_i * sum_dxn_xn);
+                    dxb[i] = inv_pg * r *
+                             (static_cast<T>(per_group) * dxn_i - sum_dxn - xn_i * sum_dxn_xn);
                 }
             }
         }
@@ -131,8 +150,10 @@ void group_norm_backward_typed(const T* x, const T* gamma,
 TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
                                          const TensorImplPtr& gamma,
                                          const TensorImplPtr& beta,
-                                         int G, double eps) {
-    if (!x || !gamma || !beta) throw LucidError("group_norm: null input");
+                                         int G,
+                                         double eps) {
+    if (!x || !gamma || !beta)
+        throw LucidError("group_norm: null input");
     if (x->dtype_ != gamma->dtype_ || x->dtype_ != beta->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
                             std::string(dtype_name(gamma->dtype_)), "group_norm");
@@ -152,8 +173,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     if (C % G != 0)
         throw LucidError("group_norm: C must be divisible by num_groups");
     if (gamma->shape_[0] != C || beta->shape_[0] != C)
-        throw ShapeMismatch(gamma->shape_, x->shape_,
-                            "group_norm: γ/β must have length C");
+        throw ShapeMismatch(gamma->shape_, x->shape_, "group_norm: γ/β must have length C");
 
     const int N_spatial = static_cast<int>(x->shape_.size()) - 2;
     std::vector<int> S(N_spatial);
@@ -190,7 +210,8 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
         std::vector<int> reduce_axes;
         reduce_axes.reserve(N_spatial + 1);
         reduce_axes.push_back(2);  // C/G
-        for (int i = 0; i < N_spatial; ++i) reduce_axes.push_back(3 + i);
+        for (int i = 0; i < N_spatial; ++i)
+            reduce_axes.push_back(3 + i);
 
         auto mean = ::mlx::core::mean(x_g, reduce_axes, /*keepdims=*/true);
         auto centered = ::mlx::core::subtract(x_g, mean);
@@ -210,12 +231,10 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
         // Save mean/rstd at (B, G) shape.
         ::mlx::core::Shape mr{static_cast<::mlx::core::ShapeElem>(B),
                               static_cast<::mlx::core::ShapeElem>(G)};
-        saved_mean = Storage{gpu::wrap_mlx_array(
-            ::mlx::core::reshape(mean, mr), x->dtype_)};
-        saved_rstd = Storage{gpu::wrap_mlx_array(
-            ::mlx::core::reshape(rstd, mr), x->dtype_)};
+        saved_mean = Storage{gpu::wrap_mlx_array(::mlx::core::reshape(mean, mr), x->dtype_)};
+        saved_rstd = Storage{gpu::wrap_mlx_array(::mlx::core::reshape(rstd, mr), x->dtype_)};
     } else {
-        auto y_cpu    = alloc_bytes(static_cast<std::size_t>(B) * C * spatial_total, x->dtype_);
+        auto y_cpu = alloc_bytes(static_cast<std::size_t>(B) * C * spatial_total, x->dtype_);
         auto mean_cpu = alloc_bytes(static_cast<std::size_t>(B) * G, x->dtype_);
         auto rstd_cpu = alloc_bytes(static_cast<std::size_t>(B) * G, x->dtype_);
         if (B * C * spatial_total > 0) {
@@ -224,14 +243,13 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
             const auto& b_cpu = std::get<CpuStorage>(beta->storage_);
             switch (x->dtype_) {
                 case Dtype::F32:
-                    group_norm_forward_typed<float>(
-                        reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                        reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                        reinterpret_cast<const float*>(b_cpu.ptr.get()),
-                        reinterpret_cast<float*>(y_cpu.ptr.get()),
-                        reinterpret_cast<float*>(mean_cpu.ptr.get()),
-                        reinterpret_cast<float*>(rstd_cpu.ptr.get()),
-                        B, C, spatial_total, G, eps);
+                    group_norm_forward_typed<float>(reinterpret_cast<const float*>(x_cpu.ptr.get()),
+                                                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                                                    reinterpret_cast<const float*>(b_cpu.ptr.get()),
+                                                    reinterpret_cast<float*>(y_cpu.ptr.get()),
+                                                    reinterpret_cast<float*>(mean_cpu.ptr.get()),
+                                                    reinterpret_cast<float*>(rstd_cpu.ptr.get()), B,
+                                                    C, spatial_total, G, eps);
                     break;
                 case Dtype::F64:
                     group_norm_forward_typed<double>(
@@ -240,8 +258,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
                         reinterpret_cast<const double*>(b_cpu.ptr.get()),
                         reinterpret_cast<double*>(y_cpu.ptr.get()),
                         reinterpret_cast<double*>(mean_cpu.ptr.get()),
-                        reinterpret_cast<double*>(rstd_cpu.ptr.get()),
-                        B, C, spatial_total, G, eps);
+                        reinterpret_cast<double*>(rstd_cpu.ptr.get()), B, C, spatial_total, G, eps);
                     break;
                 default:
                     throw NotImplementedError("group_norm: dtype not supported (F32/F64)");
@@ -252,9 +269,8 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
         saved_rstd = Storage{std::move(rstd_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            x->shape_, x->dtype_, x->device_,
-                                            false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape_, x->dtype_,
+                                            x->device_, false);
     if (!GradMode::is_enabled() ||
         !(x->requires_grad_ || gamma->requires_grad_ || beta->requires_grad_)) {
         return out;
@@ -265,21 +281,23 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     auto b_edge = detail::ensure_grad_fn(beta);
 
     auto bwd = std::make_shared<GroupNormBackward>();
-    bwd->input_shapes_  = {x->shape_, gamma->shape_, beta->shape_};
-    bwd->out_shape_     = out->shape_;
-    bwd->dtype_         = x->dtype_;
-    bwd->device_        = x->device_;
+    bwd->input_shapes_ = {x->shape_, gamma->shape_, beta->shape_};
+    bwd->out_shape_ = out->shape_;
+    bwd->dtype_ = x->dtype_;
+    bwd->device_ = x->device_;
     bwd->input_tensors_ = {x, gamma, beta};
-    bwd->saved_inputs_  = {x->storage_, gamma->storage_, beta->storage_};
-    bwd->saved_mean_    = std::move(saved_mean);
-    bwd->saved_rstd_    = std::move(saved_rstd);
-    bwd->B_ = B; bwd->C_ = C; bwd->G_ = G;
+    bwd->saved_inputs_ = {x->storage_, gamma->storage_, beta->storage_};
+    bwd->saved_mean_ = std::move(saved_mean);
+    bwd->saved_rstd_ = std::move(saved_rstd);
+    bwd->B_ = B;
+    bwd->C_ = C;
+    bwd->G_ = G;
     bwd->spatial_dims_ = std::move(S);
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0), Edge(b_edge, 0)});
     bwd->set_saved_versions({x->version_, gamma->version_, beta->version_});
 
-    out->grad_fn_       = std::move(bwd);
-    out->is_leaf_       = false;
+    out->grad_fn_ = std::move(bwd);
+    out->is_leaf_ = false;
     out->requires_grad_ = true;
     return out;
 }
@@ -288,7 +306,8 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
     const int N_spatial = static_cast<int>(spatial_dims_.size());
     const int Cg = C_ / G_;
     int spatial_total = 1;
-    for (int s : spatial_dims_) spatial_total *= s;
+    for (int s : spatial_dims_)
+        spatial_total *= s;
 
     if (device_ == Device::GPU) {
         const auto& gx = std::get<GpuStorage>(saved_inputs_[0]);
@@ -306,13 +325,15 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
         grouped.push_back(static_cast<SE>(B_));
         grouped.push_back(static_cast<SE>(G_));
         grouped.push_back(static_cast<SE>(Cg));
-        for (int s : spatial_dims_) grouped.push_back(static_cast<SE>(s));
+        for (int s : spatial_dims_)
+            grouped.push_back(static_cast<SE>(s));
         // Mean/rstd broadcast shape: (B, G, 1, *1)
         ::mlx::core::Shape mr_shape;
         mr_shape.reserve(N_spatial + 3);
         mr_shape.push_back(static_cast<SE>(B_));
         mr_shape.push_back(static_cast<SE>(G_));
-        for (int i = 0; i < N_spatial + 1; ++i) mr_shape.push_back(1);
+        for (int i = 0; i < N_spatial + 1; ++i)
+            mr_shape.push_back(1);
         // Per-channel γ broadcast shape: (1, C, 1, *1)
         ::mlx::core::Shape brC(N_spatial + 2, 1);
         brC[1] = static_cast<SE>(C_);
@@ -327,14 +348,14 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
         auto xnorm_g = ::mlx::core::multiply(centered, rstd_g);
 
         // Per-channel grads (axes={0, 2, ..., N+1} on (B, C, *S)).
-        auto xnorm = ::mlx::core::reshape(xnorm_g,
-                                          gpu::to_mlx_shape(input_shapes_[0]));
+        auto xnorm = ::mlx::core::reshape(xnorm_g, gpu::to_mlx_shape(input_shapes_[0]));
         std::vector<int> ch_axes;
         ch_axes.reserve(N_spatial + 1);
         ch_axes.push_back(0);
-        for (int i = 0; i < N_spatial; ++i) ch_axes.push_back(2 + i);
-        auto dgamma = ::mlx::core::sum(::mlx::core::multiply(*gG.arr, xnorm),
-                                       ch_axes, /*keepdims=*/false);
+        for (int i = 0; i < N_spatial; ++i)
+            ch_axes.push_back(2 + i);
+        auto dgamma =
+            ::mlx::core::sum(::mlx::core::multiply(*gG.arr, xnorm), ch_axes, /*keepdims=*/false);
         auto dbeta = ::mlx::core::sum(*gG.arr, ch_axes, /*keepdims=*/false);
 
         // dx via standard formula on the grouped tensor.
@@ -342,16 +363,15 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
         std::vector<int> red_axes;
         red_axes.reserve(N_spatial + 1);
         red_axes.push_back(2);
-        for (int i = 0; i < N_spatial; ++i) red_axes.push_back(3 + i);
+        for (int i = 0; i < N_spatial; ++i)
+            red_axes.push_back(3 + i);
         auto gx_scaled4 = ::mlx::core::multiply(gamma_view, *gG.arr);
         auto gx_scaled_g = ::mlx::core::reshape(gx_scaled4, grouped);
         auto mean1 = ::mlx::core::mean(gx_scaled_g, red_axes, /*keepdims=*/true);
-        auto mean2 = ::mlx::core::mean(
-            ::mlx::core::multiply(gx_scaled_g, xnorm_g),
-            red_axes, /*keepdims=*/true);
-        auto inner = ::mlx::core::subtract(
-            ::mlx::core::subtract(gx_scaled_g, mean1),
-            ::mlx::core::multiply(xnorm_g, mean2));
+        auto mean2 = ::mlx::core::mean(::mlx::core::multiply(gx_scaled_g, xnorm_g), red_axes,
+                                       /*keepdims=*/true);
+        auto inner = ::mlx::core::subtract(::mlx::core::subtract(gx_scaled_g, mean1),
+                                           ::mlx::core::multiply(xnorm_g, mean2));
         auto dx_g = ::mlx::core::multiply(rstd_g, inner);
         auto dx = ::mlx::core::reshape(dx_g, gpu::to_mlx_shape(input_shapes_[0]));
         return {Storage{gpu::wrap_mlx_array(std::move(dx), dtype_)},
@@ -359,11 +379,11 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
                 Storage{gpu::wrap_mlx_array(std::move(dbeta), dtype_)}};
     }
 
-    auto dx_cpu     = alloc_bytes(static_cast<std::size_t>(B_) * C_ * spatial_total,
-                                  dtype_);
+    auto dx_cpu = alloc_bytes(static_cast<std::size_t>(B_) * C_ * spatial_total, dtype_);
     auto dgamma_cpu = alloc_bytes(static_cast<std::size_t>(C_), dtype_);
-    auto dbeta_cpu  = alloc_bytes(static_cast<std::size_t>(C_), dtype_);
-    if (dx_cpu.nbytes) std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+    auto dbeta_cpu = alloc_bytes(static_cast<std::size_t>(C_), dtype_);
+    if (dx_cpu.nbytes)
+        std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
 
     if (B_ * C_ * spatial_total > 0) {
         const auto& x_cpu = std::get<CpuStorage>(saved_inputs_[0]);
@@ -381,8 +401,7 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
                     reinterpret_cast<const float*>(g_cpu.ptr.get()),
                     reinterpret_cast<float*>(dx_cpu.ptr.get()),
                     reinterpret_cast<float*>(dgamma_cpu.ptr.get()),
-                    reinterpret_cast<float*>(dbeta_cpu.ptr.get()),
-                    B_, C_, spatial_total, G_);
+                    reinterpret_cast<float*>(dbeta_cpu.ptr.get()), B_, C_, spatial_total, G_);
                 break;
             case Dtype::F64:
                 group_norm_backward_typed<double>(
@@ -393,23 +412,27 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
                     reinterpret_cast<const double*>(g_cpu.ptr.get()),
                     reinterpret_cast<double*>(dx_cpu.ptr.get()),
                     reinterpret_cast<double*>(dgamma_cpu.ptr.get()),
-                    reinterpret_cast<double*>(dbeta_cpu.ptr.get()),
-                    B_, C_, spatial_total, G_);
+                    reinterpret_cast<double*>(dbeta_cpu.ptr.get()), B_, C_, spatial_total, G_);
                 break;
             default:
                 throw NotImplementedError("group_norm backward: dtype not supported");
         }
     } else {
-        if (dgamma_cpu.nbytes) std::memset(dgamma_cpu.ptr.get(), 0, dgamma_cpu.nbytes);
-        if (dbeta_cpu.nbytes)  std::memset(dbeta_cpu.ptr.get(), 0, dbeta_cpu.nbytes);
+        if (dgamma_cpu.nbytes)
+            std::memset(dgamma_cpu.ptr.get(), 0, dgamma_cpu.nbytes);
+        if (dbeta_cpu.nbytes)
+            std::memset(dbeta_cpu.ptr.get(), 0, dbeta_cpu.nbytes);
     }
 
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dgamma_cpu)},
             Storage{std::move(dbeta_cpu)}};
 }
 
-TensorImplPtr group_norm_op(const TensorImplPtr& x, const TensorImplPtr& gamma,
-                            const TensorImplPtr& beta, int num_groups, double eps) {
+TensorImplPtr group_norm_op(const TensorImplPtr& x,
+                            const TensorImplPtr& gamma,
+                            const TensorImplPtr& beta,
+                            int num_groups,
+                            double eps) {
     return GroupNormBackward::forward(x, gamma, beta, num_groups, eps);
 }
 

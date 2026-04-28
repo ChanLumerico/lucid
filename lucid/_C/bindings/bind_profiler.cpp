@@ -17,9 +17,8 @@ void register_profiler(py::module_& m) {
         .def_readonly("memory_delta_bytes", &OpEvent::memory_delta_bytes)
         .def_readonly("flops", &OpEvent::flops)
         .def("__repr__", [](const OpEvent& e) {
-            return "OpEvent(name='" + e.name + "', time_ns=" +
-                   std::to_string(e.time_ns) + ", flops=" +
-                   std::to_string(e.flops) + ")";
+            return "OpEvent(name='" + e.name + "', time_ns=" + std::to_string(e.time_ns) +
+                   ", flops=" + std::to_string(e.flops) + ")";
         });
 
     py::class_<Profiler>(m, "Profiler")
@@ -30,10 +29,8 @@ void register_profiler(py::module_& m) {
         .def_property_readonly("is_active", &Profiler::is_active)
         .def_property_readonly("events", &Profiler::events);
 
-    m.def("set_current_profiler", &set_current_profiler,
-          py::arg("profiler").none(true));
-    m.def("current_profiler", &current_profiler,
-          py::return_value_policy::reference);
+    m.def("set_current_profiler", &set_current_profiler, py::arg("profiler").none(true));
+    m.def("current_profiler", &current_profiler, py::return_value_policy::reference);
 }
 
 }  // namespace lucid::bindings

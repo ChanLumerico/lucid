@@ -22,8 +22,7 @@ using utils_detail::fresh;
 // Materialize an input on CPU regardless of source device.
 CpuStorage to_cpu(const TensorImplPtr& a) {
     if (a->device_ == Device::GPU)
-        return gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage_),
-                                        a->shape_);
+        return gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage_), a->shape_);
     return std::get<CpuStorage>(a->storage_);
 }
 
@@ -33,8 +32,7 @@ CpuStorage to_cpu(const TensorImplPtr& a) {
 // support, so when the user requests GPU we fall back to CPU here and
 // document the asymmetry — the alternative is silently downcasting to F32
 // which loses precision.
-Storage to_device_storage(CpuStorage&& cpu, Device target_device,
-                            const Shape& shape) {
+Storage to_device_storage(CpuStorage&& cpu, Device target_device, const Shape& shape) {
     if (target_device == Device::GPU && cpu.dtype != Dtype::F64) {
         return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
     }
@@ -44,7 +42,8 @@ Storage to_device_storage(CpuStorage&& cpu, Device target_device,
 // Pick the device for histogram outputs: GPU only when the dtype can live
 // on GPU (everything except F64).
 Device pick_out_device(Device requested, Dtype dt) {
-    if (requested == Device::GPU && dt == Dtype::F64) return Device::CPU;
+    if (requested == Device::GPU && dt == Dtype::F64)
+        return Device::CPU;
     return requested;
 }
 
@@ -73,18 +72,19 @@ TensorImplPtr build_edges(double lo, double hi, std::int64_t bins) {
     for (std::int64_t i = 0; i <= bins; ++i)
         dst[i] = lo + static_cast<double>(i) * step;
     dst[bins] = hi;  // pin to exact endpoint
-    return fresh(Storage{std::move(cpu)}, std::move(sh),
-                 Dtype::F64, Device::CPU);
+    return fresh(Storage{std::move(cpu)}, std::move(sh), Dtype::F64, Device::CPU);
 }
 
 }  // namespace
 
-std::pair<TensorImplPtr, TensorImplPtr>
-histogram_op(const TensorImplPtr& a, std::int64_t bins,
-             double lo, double hi, bool density) {
-    if (!a) throw LucidError("histogram: null input");
-    if (bins <= 0) throw LucidError("histogram: bins must be > 0");
-    if (hi <= lo) throw LucidError("histogram: hi must be > lo");
+std::pair<TensorImplPtr, TensorImplPtr> histogram_op(
+    const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
+    if (!a)
+        throw LucidError("histogram: null input");
+    if (bins <= 0)
+        throw LucidError("histogram: bins must be > 0");
+    if (hi <= lo)
+        throw LucidError("histogram: hi must be > lo");
     OpScope scope{"histogram", a->device_, a->dtype_, a->shape_};
 
     const auto cpu = to_cpu(a);
@@ -98,36 +98,43 @@ histogram_op(const TensorImplPtr& a, std::int64_t bins,
 
     for (std::size_t i = 0; i < n; ++i) {
         const double v = read_double(cpu, i, a->dtype_);
-        if (v < lo || v > hi) continue;
+        if (v < lo || v > hi)
+            continue;
         std::int64_t bin = static_cast<std::int64_t>((v - lo) / step);
-        if (bin >= bins) bin = bins - 1;  // include right edge
+        if (bin >= bins)
+            bin = bins - 1;  // include right edge
         dst[bin] += 1.0;
     }
 
     if (density) {
-        for (std::int64_t i = 0; i < bins; ++i) dst[i] /= (n * step);
+        for (std::int64_t i = 0; i < bins; ++i)
+            dst[i] /= (n * step);
     }
 
     Device out_dev = pick_out_device(a->device_, Dtype::F64);
-    auto counts_t = fresh(to_device_storage(std::move(counts), out_dev, counts_shape),
-                          std::move(counts_shape),
-                          Dtype::F64, out_dev);
+    auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
+    auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
     auto edges = build_edges(lo, hi, bins);
     // edges share the dtype/device convention with counts.
     if (out_dev == Device::GPU) {
-        edges = fresh(Storage{gpu::upload_cpu_to_gpu(
-                          std::get<CpuStorage>(edges->storage_), edges->shape_)},
-                       edges->shape_, Dtype::F64, Device::GPU);
+        edges = fresh(
+            Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(edges->storage_), edges->shape_)},
+            edges->shape_, Dtype::F64, Device::GPU);
     }
     return {counts_t, edges};
 }
 
-std::pair<TensorImplPtr, TensorImplPtr>
-histogram2d_op(const TensorImplPtr& a, const TensorImplPtr& b,
-               std::int64_t bins_a, std::int64_t bins_b,
-               double lo_a, double hi_a, double lo_b, double hi_b,
-               bool density) {
-    if (!a || !b) throw LucidError("histogram2d: null input");
+std::pair<TensorImplPtr, TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
+                                                       const TensorImplPtr& b,
+                                                       std::int64_t bins_a,
+                                                       std::int64_t bins_b,
+                                                       double lo_a,
+                                                       double hi_a,
+                                                       double lo_b,
+                                                       double hi_b,
+                                                       bool density) {
+    if (!a || !b)
+        throw LucidError("histogram2d: null input");
     if (a->shape_ != b->shape_)
         throw ShapeMismatch(a->shape_, b->shape_, "histogram2d");
     if (bins_a <= 0 || bins_b <= 0)
@@ -148,12 +155,16 @@ histogram2d_op(const TensorImplPtr& a, const TensorImplPtr& b,
     for (std::size_t i = 0; i < n; ++i) {
         const double va = read_double(ca, i, a->dtype_);
         const double vb = read_double(cb, i, b->dtype_);
-        if (va < lo_a || va > hi_a) continue;
-        if (vb < lo_b || vb > hi_b) continue;
+        if (va < lo_a || va > hi_a)
+            continue;
+        if (vb < lo_b || vb > hi_b)
+            continue;
         std::int64_t ia = static_cast<std::int64_t>((va - lo_a) / step_a);
         std::int64_t ib = static_cast<std::int64_t>((vb - lo_b) / step_b);
-        if (ia >= bins_a) ia = bins_a - 1;
-        if (ib >= bins_b) ib = bins_b - 1;
+        if (ia >= bins_a)
+            ia = bins_a - 1;
+        if (ib >= bins_b)
+            ib = bins_b - 1;
         dst[ia * bins_b + ib] += 1.0;
     }
 
@@ -164,33 +175,29 @@ histogram2d_op(const TensorImplPtr& a, const TensorImplPtr& b,
     }
 
     Device out_dev = pick_out_device(a->device_, Dtype::F64);
-    auto counts_t = fresh(to_device_storage(std::move(counts), out_dev, counts_shape),
-                          std::move(counts_shape),
-                          Dtype::F64, out_dev);
+    auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
+    auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
     // Pack edges as a (bins_a + bins_b + 2) flat tensor: [edges_a..., edges_b...]
     auto ea = build_edges(lo_a, hi_a, bins_a);
     auto eb = build_edges(lo_b, hi_b, bins_b);
     Shape edge_shape{bins_a + 1 + bins_b + 1};
     auto edges = allocate_cpu(edge_shape, Dtype::F64);
     auto* edst = reinterpret_cast<double*>(edges.ptr.get());
-    std::memcpy(edst,
-                std::get<CpuStorage>(ea->storage_).ptr.get(),
-                (bins_a + 1) * sizeof(double));
-    std::memcpy(edst + (bins_a + 1),
-                std::get<CpuStorage>(eb->storage_).ptr.get(),
+    std::memcpy(edst, std::get<CpuStorage>(ea->storage_).ptr.get(), (bins_a + 1) * sizeof(double));
+    std::memcpy(edst + (bins_a + 1), std::get<CpuStorage>(eb->storage_).ptr.get(),
                 (bins_b + 1) * sizeof(double));
-    auto edges_t = fresh(to_device_storage(std::move(edges), out_dev, edge_shape),
-                          std::move(edge_shape),
-                          Dtype::F64, out_dev);
+    auto edges_storage = to_device_storage(std::move(edges), out_dev, edge_shape);
+    auto edges_t = fresh(std::move(edges_storage), std::move(edge_shape), Dtype::F64, out_dev);
     return {counts_t, edges_t};
 }
 
-std::pair<TensorImplPtr, TensorImplPtr>
-histogramdd_op(const TensorImplPtr& a,
-               std::vector<std::int64_t> bins,
-               std::vector<std::pair<double, double>> ranges,
-               bool density) {
-    if (!a) throw LucidError("histogramdd: null input");
+std::pair<TensorImplPtr, TensorImplPtr> histogramdd_op(
+    const TensorImplPtr& a,
+    std::vector<std::int64_t> bins,
+    std::vector<std::pair<double, double>> ranges,
+    bool density) {
+    if (!a)
+        throw LucidError("histogramdd: null input");
     if (a->shape_.size() != 2)
         throw LucidError("histogramdd: input must be 2-D (N, D)");
     const std::int64_t N = a->shape_[0];
@@ -205,8 +212,7 @@ histogramdd_op(const TensorImplPtr& a,
     for (std::int64_t d = 0; d < D; ++d) {
         if (ranges[d].second <= ranges[d].first)
             throw LucidError("histogramdd: each range hi must be > lo");
-        step[d] = (ranges[d].second - ranges[d].first) /
-                  static_cast<double>(bins[d]);
+        step[d] = (ranges[d].second - ranges[d].first) / static_cast<double>(bins[d]);
     }
 
     Shape counts_shape(bins.begin(), bins.end());
@@ -230,31 +236,33 @@ histogramdd_op(const TensorImplPtr& a,
                 inside = false;
                 break;
             }
-            std::int64_t bd = static_cast<std::int64_t>(
-                (v - ranges[d].first) / step[d]);
-            if (bd >= bins[d]) bd = bins[d] - 1;
-            flat += static_cast<std::size_t>(bd) *
-                    static_cast<std::size_t>(stride[d]);
+            std::int64_t bd = static_cast<std::int64_t>((v - ranges[d].first) / step[d]);
+            if (bd >= bins[d])
+                bd = bins[d] - 1;
+            flat += static_cast<std::size_t>(bd) * static_cast<std::size_t>(stride[d]);
         }
-        if (inside) dst[flat] += 1.0;
+        if (inside)
+            dst[flat] += 1.0;
     }
 
     if (density) {
         double cell_volume = 1.0;
-        for (auto s : step) cell_volume *= s;
+        for (auto s : step)
+            cell_volume *= s;
         const double total = cell_volume * static_cast<double>(N);
         const std::size_t total_cells = shape_numel(counts_shape);
-        for (std::size_t i = 0; i < total_cells; ++i) dst[i] /= total;
+        for (std::size_t i = 0; i < total_cells; ++i)
+            dst[i] /= total;
     }
 
     Device out_dev = pick_out_device(a->device_, Dtype::F64);
-    auto counts_t = fresh(to_device_storage(std::move(counts), out_dev, counts_shape),
-                          std::move(counts_shape),
-                          Dtype::F64, out_dev);
+    auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
+    auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
 
     // Pack all edges sequentially.
     std::int64_t edge_total = 0;
-    for (auto b_ : bins) edge_total += (b_ + 1);
+    for (auto b_ : bins)
+        edge_total += (b_ + 1);
     Shape edge_shape{edge_total};
     auto edges = allocate_cpu(edge_shape, Dtype::F64);
     auto* edst = reinterpret_cast<double*>(edges.ptr.get());
@@ -267,9 +275,8 @@ histogramdd_op(const TensorImplPtr& a,
         edst[off + bins[d]] = hi;
         off += bins[d] + 1;
     }
-    auto edges_t = fresh(to_device_storage(std::move(edges), out_dev, edge_shape),
-                          std::move(edge_shape),
-                          Dtype::F64, out_dev);
+    auto edges_storage = to_device_storage(std::move(edges), out_dev, edge_shape);
+    auto edges_t = fresh(std::move(edges_storage), std::move(edge_shape), Dtype::F64, out_dev);
     return {counts_t, edges_t};
 }
 

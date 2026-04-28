@@ -15,11 +15,13 @@
 
 namespace lucid {
 
-const OpSchema AddBackward::schema_v1{
-    "add", /*version=*/1, AmpPolicy::Promote, /*deterministic=*/true};
+const OpSchema AddBackward::schema_v1{"add", /*version=*/1, AmpPolicy::Promote,
+                                      /*deterministic=*/true};
 
-CpuStorage AddBackward::cpu_kernel(const CpuStorage& a, const CpuStorage& b,
-                                   const Shape& out_shape, Dtype dt) {
+CpuStorage AddBackward::cpu_kernel(const CpuStorage& a,
+                                   const CpuStorage& b,
+                                   const Shape& out_shape,
+                                   Dtype dt) {
     const std::size_t numel = shape_numel(out_shape);
     CpuStorage out;
     out.dtype = dt;
@@ -28,39 +30,36 @@ CpuStorage AddBackward::cpu_kernel(const CpuStorage& a, const CpuStorage& b,
 
     switch (dt) {
         case Dtype::F32:
-            backend::cpu::vadd_f32(
-                reinterpret_cast<const float*>(a.ptr.get()),
-                reinterpret_cast<const float*>(b.ptr.get()),
-                reinterpret_cast<float*>(out.ptr.get()), numel);
+            backend::cpu::vadd_f32(reinterpret_cast<const float*>(a.ptr.get()),
+                                   reinterpret_cast<const float*>(b.ptr.get()),
+                                   reinterpret_cast<float*>(out.ptr.get()), numel);
             break;
         case Dtype::F64:
-            backend::cpu::vadd_f64(
-                reinterpret_cast<const double*>(a.ptr.get()),
-                reinterpret_cast<const double*>(b.ptr.get()),
-                reinterpret_cast<double*>(out.ptr.get()), numel);
+            backend::cpu::vadd_f64(reinterpret_cast<const double*>(a.ptr.get()),
+                                   reinterpret_cast<const double*>(b.ptr.get()),
+                                   reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         case Dtype::I32:
-            backend::cpu::vadd_i32(
-                reinterpret_cast<const std::int32_t*>(a.ptr.get()),
-                reinterpret_cast<const std::int32_t*>(b.ptr.get()),
-                reinterpret_cast<std::int32_t*>(out.ptr.get()), numel);
+            backend::cpu::vadd_i32(reinterpret_cast<const std::int32_t*>(a.ptr.get()),
+                                   reinterpret_cast<const std::int32_t*>(b.ptr.get()),
+                                   reinterpret_cast<std::int32_t*>(out.ptr.get()), numel);
             break;
         case Dtype::I64:
-            backend::cpu::vadd_i64(
-                reinterpret_cast<const std::int64_t*>(a.ptr.get()),
-                reinterpret_cast<const std::int64_t*>(b.ptr.get()),
-                reinterpret_cast<std::int64_t*>(out.ptr.get()), numel);
+            backend::cpu::vadd_i64(reinterpret_cast<const std::int64_t*>(a.ptr.get()),
+                                   reinterpret_cast<const std::int64_t*>(b.ptr.get()),
+                                   reinterpret_cast<std::int64_t*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError(
-                std::string("add: dtype ") + std::string(dtype_name(dt)) +
-                " not supported in Phase 3.0");
+            throw NotImplementedError(std::string("add: dtype ") + std::string(dtype_name(dt)) +
+                                      " not supported in Phase 3.0");
     }
     return out;
 }
 
-GpuStorage AddBackward::gpu_kernel(const GpuStorage& a, const GpuStorage& b,
-                                   const Shape& /*out_shape*/, Dtype dt) {
+GpuStorage AddBackward::gpu_kernel(const GpuStorage& a,
+                                   const GpuStorage& b,
+                                   const Shape& /*out_shape*/,
+                                   Dtype dt) {
     if (!a.arr || !b.arr) {
         throw LucidError("add: null GPU input");
     }
@@ -87,4 +86,3 @@ TensorImplPtr add_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 LUCID_REGISTER_OP(AddBackward)
 
 }  // namespace lucid
-

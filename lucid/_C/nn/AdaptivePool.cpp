@@ -2,9 +2,9 @@
 
 #include <vector>
 
-#include "PoolNd.h"
 #include "../core/Exceptions.h"
 #include "../core/TensorImpl.h"
+#include "PoolNd.h"
 
 namespace lucid {
 
@@ -15,19 +15,17 @@ inline void check_uniform(int S, int O, int axis, const char* op) {
         throw LucidError(std::string(op) + ": output_size must be > 0");
     if (S % O != 0) {
         throw NotImplementedError(
-            std::string(op) +
-            ": non-uniform adaptive pooling not supported (axis " +
-            std::to_string(axis) + ": input " + std::to_string(S) +
-            " not divisible by output " + std::to_string(O) +
-            "). Pad input to a divisible size or use a regular pool.");
+            std::string(op) + ": non-uniform adaptive pooling not supported (axis " +
+            std::to_string(axis) + ": input " + std::to_string(S) + " not divisible by output " +
+            std::to_string(O) + "). Pad input to a divisible size or use a regular pool.");
     }
 }
 
 inline void check_rank(const TensorImplPtr& x, int expected_rank, const char* op) {
-    if (!x) throw LucidError(std::string(op) + ": null input");
+    if (!x)
+        throw LucidError(std::string(op) + ": null input");
     if (static_cast<int>(x->shape_.size()) != expected_rank)
-        throw ShapeMismatch(x->shape_, Shape{},
-                            std::string(op) + ": x rank mismatch");
+        throw ShapeMismatch(x->shape_, Shape{}, std::string(op) + ": x rank mismatch");
 }
 
 }  // namespace
@@ -51,8 +49,7 @@ TensorImplPtr adaptive_max_pool2d_op(const TensorImplPtr& x, int OH, int OW) {
     return max_pool2d_op(x, KH, KW, KH, KW, 0, 0);
 }
 
-TensorImplPtr adaptive_max_pool3d_op(const TensorImplPtr& x,
-                                     int OD, int OH, int OW) {
+TensorImplPtr adaptive_max_pool3d_op(const TensorImplPtr& x, int OD, int OH, int OW) {
     check_rank(x, 5, "adaptive_max_pool3d");
     const int D = static_cast<int>(x->shape_[2]);
     const int H = static_cast<int>(x->shape_[3]);
@@ -83,8 +80,7 @@ TensorImplPtr adaptive_avg_pool2d_op(const TensorImplPtr& x, int OH, int OW) {
     return avg_pool2d_op(x, KH, KW, KH, KW, 0, 0);
 }
 
-TensorImplPtr adaptive_avg_pool3d_op(const TensorImplPtr& x,
-                                     int OD, int OH, int OW) {
+TensorImplPtr adaptive_avg_pool3d_op(const TensorImplPtr& x, int OD, int OH, int OW) {
     check_rank(x, 5, "adaptive_avg_pool3d");
     const int D = static_cast<int>(x->shape_[2]);
     const int H = static_cast<int>(x->shape_[3]);

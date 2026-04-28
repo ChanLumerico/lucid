@@ -15,13 +15,20 @@ namespace lucid::gpu {
 
 ::mlx::core::Dtype to_mlx_dtype(Dtype dt) {
     switch (dt) {
-        case Dtype::Bool: return ::mlx::core::bool_;
-        case Dtype::I8:   return ::mlx::core::int8;
-        case Dtype::I16:  return ::mlx::core::int16;
-        case Dtype::I32:  return ::mlx::core::int32;
-        case Dtype::I64:  return ::mlx::core::int64;
-        case Dtype::F16:  return ::mlx::core::float16;
-        case Dtype::F32:  return ::mlx::core::float32;
+        case Dtype::Bool:
+            return ::mlx::core::bool_;
+        case Dtype::I8:
+            return ::mlx::core::int8;
+        case Dtype::I16:
+            return ::mlx::core::int16;
+        case Dtype::I32:
+            return ::mlx::core::int32;
+        case Dtype::I64:
+            return ::mlx::core::int64;
+        case Dtype::F16:
+            return ::mlx::core::float16;
+        case Dtype::F32:
+            return ::mlx::core::float32;
         case Dtype::F64:
             // MLX-Metal does not support float64 on the GPU. Reject early
             // with a clear, actionable message rather than letting MLX raise
@@ -29,7 +36,8 @@ namespace lucid::gpu {
             throw NotImplementedError(
                 "float64 is not supported on GPU (MLX-Metal limitation). "
                 "Cast to float32 first, or keep the tensor on CPU.");
-        case Dtype::C64:  return ::mlx::core::complex64;
+        case Dtype::C64:
+            return ::mlx::core::complex64;
     }
     throw LucidError("to_mlx_dtype: unknown Dtype");
 }
@@ -37,15 +45,24 @@ namespace lucid::gpu {
 Dtype from_mlx_dtype(::mlx::core::Dtype dt) {
     using V = ::mlx::core::Dtype::Val;
     switch (dt.val()) {
-        case V::bool_:    return Dtype::Bool;
-        case V::int8:     return Dtype::I8;
-        case V::int16:    return Dtype::I16;
-        case V::int32:    return Dtype::I32;
-        case V::int64:    return Dtype::I64;
-        case V::float16:  return Dtype::F16;
-        case V::float32:  return Dtype::F32;
-        case V::float64:  return Dtype::F64;
-        case V::complex64: return Dtype::C64;
+        case V::bool_:
+            return Dtype::Bool;
+        case V::int8:
+            return Dtype::I8;
+        case V::int16:
+            return Dtype::I16;
+        case V::int32:
+            return Dtype::I32;
+        case V::int64:
+            return Dtype::I64;
+        case V::float16:
+            return Dtype::F16;
+        case V::float32:
+            return Dtype::F32;
+        case V::float64:
+            return Dtype::F64;
+        case V::complex64:
+            return Dtype::C64;
         default:
             throw NotImplementedError(
                 "from_mlx_dtype: unsupported MLX dtype "
@@ -71,18 +88,16 @@ namespace {
 // All shared_ptr<mlx::core::array> instances built by this bridge use the
 // same deleter pattern: free the wrapped object and notify MemoryTracker.
 // Centralizing here avoids drift between upload/wrap call sites.
-std::shared_ptr<::mlx::core::array>
-make_tracked(::mlx::core::array* raw, std::size_t bytes) {
+std::shared_ptr<::mlx::core::array> make_tracked(::mlx::core::array* raw, std::size_t bytes) {
     if (bytes > 0) {
         MemoryTracker::track_alloc(bytes, Device::GPU);
     }
-    return std::shared_ptr<::mlx::core::array>(
-        raw, [bytes](::mlx::core::array* p) {
-            delete p;
-            if (bytes > 0) {
-                MemoryTracker::track_free(bytes, Device::GPU);
-            }
-        });
+    return std::shared_ptr<::mlx::core::array>(raw, [bytes](::mlx::core::array* p) {
+        delete p;
+        if (bytes > 0) {
+            MemoryTracker::track_free(bytes, Device::GPU);
+        }
+    });
 }
 }  // namespace
 
@@ -96,9 +111,8 @@ GpuStorage upload_cpu_to_gpu(const CpuStorage& cpu, const Shape& shape) {
     auto keepalive = std::make_shared<std::shared_ptr<std::byte[]>>(cpu.ptr);
     void* raw = static_cast<void*>(cpu.ptr.get());
 
-    ::mlx::core::array external(
-        raw, std::move(mlx_shape), mlx_dt,
-        [keepalive](void* /*p*/) mutable { keepalive.reset(); });
+    ::mlx::core::array external(raw, std::move(mlx_shape), mlx_dt,
+                                [keepalive](void* /*p*/) mutable { keepalive.reset(); });
 
     // Force a copy into MLX-owned memory. The void*-constructor builds an
     // "external" array whose data is the host buffer; downstream MLX ops on
@@ -111,8 +125,7 @@ GpuStorage upload_cpu_to_gpu(const CpuStorage& cpu, const Shape& shape) {
     GpuStorage out;
     out.dtype = cpu.dtype;
     out.nbytes = cpu.nbytes;
-    out.arr = make_tracked(new ::mlx::core::array(std::move(owned)),
-                           out.nbytes);
+    out.arr = make_tracked(new ::mlx::core::array(std::move(owned)), out.nbytes);
     return out;
 }
 

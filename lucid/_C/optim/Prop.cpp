@@ -19,17 +19,27 @@ using namespace lucid::optim_detail;
 // =====================================================================
 
 RMSprop::RMSprop(std::vector<std::shared_ptr<TensorImpl>> p,
-                 double lr, double alpha, double eps, double wd,
-                 double momentum, bool centered)
+                 double lr,
+                 double alpha,
+                 double eps,
+                 double wd,
+                 double momentum,
+                 bool centered)
     : Optimizer(std::move(p)),
-      lr_(lr), alpha_(alpha), eps_(eps), weight_decay_(wd),
-      momentum_(momentum), centered_(centered) {}
+      lr_(lr),
+      alpha_(alpha),
+      eps_(eps),
+      weight_decay_(wd),
+      momentum_(momentum),
+      centered_(centered) {}
 
-void RMSprop::init_state_slot(std::size_t i,
-                              const std::shared_ptr<TensorImpl>& p) {
-    if (square_avg_.size() < params_.size()) square_avg_.resize(params_.size());
-    if (grad_avg_.size()   < params_.size()) grad_avg_.resize(params_.size());
-    if (moment_buf_.size() < params_.size()) moment_buf_.resize(params_.size());
+void RMSprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
+    if (square_avg_.size() < params_.size())
+        square_avg_.resize(params_.size());
+    if (grad_avg_.size() < params_.size())
+        grad_avg_.resize(params_.size());
+    if (moment_buf_.size() < params_.size())
+        moment_buf_.resize(params_.size());
     square_avg_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
     if (centered_)
         grad_avg_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
@@ -37,8 +47,7 @@ void RMSprop::init_state_slot(std::size_t i,
         moment_buf_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
 }
 
-void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
-                         const Storage& grad) {
+void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     const auto dt = p->dtype_;
     if (p->device_ == Device::GPU) {
         auto& pg = gpu_get(p->storage_);
@@ -46,37 +55,32 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
         auto& sq = gpu_get(square_avg_[i]);
         ::mlx::core::array g = *gg.arr;
         if (weight_decay_ != 0.0) {
-            g = ::mlx::core::add(g, ::mlx::core::multiply(
-                mlx_scalar(weight_decay_, dt), *pg.arr));
+            g = ::mlx::core::add(g, ::mlx::core::multiply(mlx_scalar(weight_decay_, dt), *pg.arr));
         }
         auto new_sq = ::mlx::core::add(
             ::mlx::core::multiply(mlx_scalar(alpha_, dt), *sq.arr),
-            ::mlx::core::multiply(mlx_scalar(1.0 - alpha_, dt),
-                                  ::mlx::core::square(g)));
+            ::mlx::core::multiply(mlx_scalar(1.0 - alpha_, dt), ::mlx::core::square(g)));
         gpu_replace(sq, ::mlx::core::array(new_sq), dt);
         ::mlx::core::array avg = new_sq;
         if (centered_) {
             auto& ga = gpu_get(grad_avg_[i]);
-            auto new_ga = ::mlx::core::add(
-                ::mlx::core::multiply(mlx_scalar(alpha_, dt), *ga.arr),
-                ::mlx::core::multiply(mlx_scalar(1.0 - alpha_, dt), g));
+            auto new_ga = ::mlx::core::add(::mlx::core::multiply(mlx_scalar(alpha_, dt), *ga.arr),
+                                           ::mlx::core::multiply(mlx_scalar(1.0 - alpha_, dt), g));
             gpu_replace(ga, ::mlx::core::array(new_ga), dt);
             avg = ::mlx::core::subtract(new_sq, ::mlx::core::square(new_ga));
         }
         // PyTorch form: denom = sqrt(avg) + eps (eps OUTSIDE the sqrt).
-        auto denom = ::mlx::core::add(::mlx::core::sqrt(avg),
-                                      mlx_scalar(eps_, dt));
+        auto denom = ::mlx::core::add(::mlx::core::sqrt(avg), mlx_scalar(eps_, dt));
         ::mlx::core::array update = ::mlx::core::divide(g, denom);
         if (momentum_ != 0.0) {
             auto& mb = gpu_get(moment_buf_[i]);
-            auto new_mb = ::mlx::core::add(
-                ::mlx::core::multiply(mlx_scalar(momentum_, dt), *mb.arr),
-                update);
+            auto new_mb =
+                ::mlx::core::add(::mlx::core::multiply(mlx_scalar(momentum_, dt), *mb.arr), update);
             gpu_replace(mb, ::mlx::core::array(new_mb), dt);
             update = new_mb;
         }
-        auto new_p = ::mlx::core::subtract(
-            *pg.arr, ::mlx::core::multiply(mlx_scalar(lr_, dt), update));
+        auto new_p =
+            ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(mlx_scalar(lr_, dt), update));
         gpu_replace(pg, std::move(new_p), dt);
         return;
     }
@@ -94,7 +98,8 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
         const T mT = static_cast<T>(momentum_);
         for (std::size_t k = 0; k < n; ++k) {
             T g = G[k];
-            if (weight_decay_ != 0.0) g += wdT * P[k];
+            if (weight_decay_ != 0.0)
+                g += wdT * P[k];
             SQ[k] = aT * SQ[k] + omaT * g * g;
             T avg = SQ[k];
             if (GA) {
@@ -104,15 +109,19 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
             // PyTorch form: denom = sqrt(avg) + eps (eps OUTSIDE the sqrt).
             const T denom = std::sqrt(avg) + epsT;
             T update = g / denom;
-            if (MB) { MB[k] = mT * MB[k] + update; update = MB[k]; }
+            if (MB) {
+                MB[k] = mT * MB[k] + update;
+                update = MB[k];
+            }
             P[k] -= lrT * update;
         }
     };
-    if (dt == Dtype::F32) step_cpu(cpu_ptr<float>(p->storage_),
-                                    cpu_cptr<float>(grad));
-    else if (dt == Dtype::F64) step_cpu(cpu_ptr<double>(p->storage_),
-                                          cpu_cptr<double>(grad));
-    else throw NotImplementedError("RMSprop: dtype not supported");
+    if (dt == Dtype::F32)
+        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+    else if (dt == Dtype::F64)
+        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+    else
+        throw NotImplementedError("RMSprop: dtype not supported");
 }
 
 // =====================================================================
@@ -120,39 +129,46 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
 // =====================================================================
 
 Rprop::Rprop(std::vector<std::shared_ptr<TensorImpl>> p,
-             double lr, double eta_minus, double eta_plus,
-             double step_min, double step_max)
+             double lr,
+             double eta_minus,
+             double eta_plus,
+             double step_min,
+             double step_max)
     : Optimizer(std::move(p)),
-      lr_(lr), eta_minus_(eta_minus), eta_plus_(eta_plus),
-      step_min_(step_min), step_max_(step_max) {}
+      lr_(lr),
+      eta_minus_(eta_minus),
+      eta_plus_(eta_plus),
+      step_min_(step_min),
+      step_max_(step_max) {}
 
-void Rprop::init_state_slot(std::size_t i,
-                            const std::shared_ptr<TensorImpl>& p) {
-    if (prev_grad_.size() < params_.size()) prev_grad_.resize(params_.size());
-    if (step_size_.size() < params_.size()) step_size_.resize(params_.size());
+void Rprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
+    if (prev_grad_.size() < params_.size())
+        prev_grad_.resize(params_.size());
+    if (step_size_.size() < params_.size())
+        step_size_.resize(params_.size());
     prev_grad_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
     // step_size starts at lr_ everywhere → ones · lr.
     step_size_[i] = make_ones_storage(p->shape_, p->dtype_, p->device_);
     if (p->device_ == Device::GPU) {
         auto& s = gpu_get(step_size_[i]);
-        auto scaled = ::mlx::core::multiply(
-            mlx_scalar(lr_, p->dtype_), *s.arr);
+        auto scaled = ::mlx::core::multiply(mlx_scalar(lr_, p->dtype_), *s.arr);
         gpu_replace(s, std::move(scaled), p->dtype_);
     } else {
         const std::size_t n = cpu_numel(*p);
         if (p->dtype_ == Dtype::F32) {
             auto* q = cpu_ptr<float>(step_size_[i]);
             const float lrf = static_cast<float>(lr_);
-            for (std::size_t k = 0; k < n; ++k) q[k] = lrf;
+            for (std::size_t k = 0; k < n; ++k)
+                q[k] = lrf;
         } else if (p->dtype_ == Dtype::F64) {
             auto* q = cpu_ptr<double>(step_size_[i]);
-            for (std::size_t k = 0; k < n; ++k) q[k] = lr_;
+            for (std::size_t k = 0; k < n; ++k)
+                q[k] = lr_;
         }
     }
 }
 
-void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
-                       const Storage& grad) {
+void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     const auto dt = p->dtype_;
     if (p->device_ == Device::GPU) {
         auto& pg = gpu_get(p->storage_);
@@ -160,8 +176,7 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
         auto& pv = gpu_get(prev_grad_[i]);
         auto& ss = gpu_get(step_size_[i]);
 
-        ::mlx::core::array sign_change =
-            ::mlx::core::multiply(*gg.arr, *pv.arr);
+        ::mlx::core::array sign_change = ::mlx::core::multiply(*gg.arr, *pv.arr);
         ::mlx::core::array zero_arr = mlx_scalar(0.0, dt);
         // step_size = where(sign_change > 0, step_size · eta+, step_size)
         auto pos_mask = ::mlx::core::greater(sign_change, zero_arr);
@@ -171,17 +186,14 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
         auto neg_mask = ::mlx::core::less(sign_change, zero_arr);
         auto dec = ::mlx::core::multiply(mlx_scalar(eta_minus_, dt), new_ss);
         new_ss = ::mlx::core::where(neg_mask, dec, new_ss);
-        new_ss = ::mlx::core::clip(new_ss,
-                                   mlx_scalar(step_min_, dt),
-                                   mlx_scalar(step_max_, dt));
+        new_ss = ::mlx::core::clip(new_ss, mlx_scalar(step_min_, dt), mlx_scalar(step_max_, dt));
         gpu_replace(ss, ::mlx::core::array(new_ss), dt);
 
         // grad = where(sign_change < 0, 0, grad)
         auto eff_g = ::mlx::core::where(neg_mask, zero_arr, *gg.arr);
         gpu_replace(pv, ::mlx::core::array(eff_g), dt);
-        auto new_p = ::mlx::core::subtract(
-            *pg.arr,
-            ::mlx::core::multiply(::mlx::core::sign(eff_g), new_ss));
+        auto new_p =
+            ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(::mlx::core::sign(eff_g), new_ss));
         gpu_replace(pg, std::move(new_p), dt);
         return;
     }
@@ -197,10 +209,14 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
         for (std::size_t k = 0; k < n; ++k) {
             const T sc = G[k] * PV[k];
             T s = SS[k];
-            if (sc > T{0}) s *= epT;
-            else if (sc < T{0}) s *= emT;
-            if (s < smin) s = smin;
-            if (s > smax) s = smax;
+            if (sc > T{0})
+                s *= epT;
+            else if (sc < T{0})
+                s *= emT;
+            if (s < smin)
+                s = smin;
+            if (s > smax)
+                s = smax;
             SS[k] = s;
             T g = (sc < T{0}) ? T{0} : G[k];
             PV[k] = g;
@@ -208,11 +224,12 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
             P[k] -= sgn * s;
         }
     };
-    if (dt == Dtype::F32) step_cpu(cpu_ptr<float>(p->storage_),
-                                    cpu_cptr<float>(grad));
-    else if (dt == Dtype::F64) step_cpu(cpu_ptr<double>(p->storage_),
-                                          cpu_cptr<double>(grad));
-    else throw NotImplementedError("Rprop: dtype not supported");
+    if (dt == Dtype::F32)
+        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+    else if (dt == Dtype::F64)
+        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+    else
+        throw NotImplementedError("Rprop: dtype not supported");
 }
 
 }  // namespace lucid

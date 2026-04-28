@@ -50,9 +50,7 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     // chain is well-formed via the primitive ops einsum is built on.
     // Pure-inference calls keep the native fast path below.
     if (GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)) {
-        return einsum_op(inner_einsum_pattern(a->shape_.size(),
-                                               b->shape_.size()),
-                         {a, b});
+        return einsum_op(inner_einsum_pattern(a->shape_.size(), b->shape_.size()), {a, b});
     }
 
     const Dtype dt = a->dtype_;
@@ -66,8 +64,8 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         Shape out_shape;
         for (auto d : out.shape())
             out_shape.push_back(static_cast<std::int64_t>(d));
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                     std::move(out_shape), dt, device);
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(out_shape), dt,
+                     device);
     }
 
     const auto& sa = a->shape_;

@@ -32,10 +32,9 @@ struct LUCID_API OpSchema {
     bool deterministic;
     std::string_view determinism_note;  // why nondeterministic, if applicable
 
-    constexpr OpSchema(std::string_view n, int v, AmpPolicy ap, bool det = true,
-                       std::string_view note = "")
-        : name(n), version(v), amp_policy(ap), deterministic(det),
-          determinism_note(note) {}
+    constexpr OpSchema(
+        std::string_view n, int v, AmpPolicy ap, bool det = true, std::string_view note = "")
+        : name(n), version(v), amp_policy(ap), deterministic(det), determinism_note(note) {}
 };
 
 /// Stable, deterministic hash of the schema. Used by Phase 5.5 to embed an

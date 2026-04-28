@@ -10,15 +10,15 @@ namespace lucid {
 namespace {
 CpuStorage allocate_unary(const Shape& out_shape, Dtype dt) {
     CpuStorage out;
-    out.dtype  = dt;
+    out.dtype = dt;
     out.nbytes = shape_numel(out_shape) * dtype_size(dt);
-    out.ptr    = allocate_aligned_bytes(out.nbytes);
+    out.ptr = allocate_aligned_bytes(out.nbytes);
     return out;
 }
 
 template <class F32Fn, class F64Fn>
-CpuStorage dispatch(const CpuStorage& a, const Shape& out_shape, Dtype dt,
-                    F32Fn f32, F64Fn f64, const char* op) {
+CpuStorage dispatch(
+    const CpuStorage& a, const Shape& out_shape, Dtype dt, F32Fn f32, F64Fn f64, const char* op) {
     const std::size_t numel = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
@@ -50,7 +50,9 @@ Storage SinhBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, cx, n, dtype_, device_);
 }
 
-TensorImplPtr sinh_op(const TensorImplPtr& a) { return SinhBackward::forward(a); }
+TensorImplPtr sinh_op(const TensorImplPtr& a) {
+    return SinhBackward::forward(a);
+}
 LUCID_REGISTER_OP(SinhBackward)
 
 // --------------- Cosh ---------------
@@ -66,7 +68,9 @@ Storage CoshBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, sx, n, dtype_, device_);
 }
 
-TensorImplPtr cosh_op(const TensorImplPtr& a) { return CoshBackward::forward(a); }
+TensorImplPtr cosh_op(const TensorImplPtr& a) {
+    return CoshBackward::forward(a);
+}
 LUCID_REGISTER_OP(CoshBackward)
 
 // --------------- Tanh ---------------
@@ -85,7 +89,9 @@ Storage TanhBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, one_minus, n, dtype_, device_);
 }
 
-TensorImplPtr tanh_op(const TensorImplPtr& a) { return TanhBackward::forward(a); }
+TensorImplPtr tanh_op(const TensorImplPtr& a) {
+    return TanhBackward::forward(a);
+}
 LUCID_REGISTER_OP(TanhBackward)
 
 }  // namespace lucid

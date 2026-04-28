@@ -39,13 +39,10 @@ public:
 
     std::vector<Storage> apply(Storage grad_out) override {
         const std::size_t n = shape_numel(input_shape_);
-        Storage centered = subtract_storages(saved_input_, saved_mean_, n,
-                                             dtype_, device_);
-        Storage g_b = broadcast_back_for_reduce(
-            grad_out, out_shape_, input_shape_, axes_, keepdims_,
-            dtype_, device_);
-        Storage scaled = mul_scalar_storage(g_b, 2.0 / (double)count_, n,
-                                            dtype_, device_);
+        Storage centered = subtract_storages(saved_input_, saved_mean_, n, dtype_, device_);
+        Storage g_b = broadcast_back_for_reduce(grad_out, out_shape_, input_shape_, axes_,
+                                                keepdims_, dtype_, device_);
+        Storage scaled = mul_scalar_storage(g_b, 2.0 / (double)count_, n, dtype_, device_);
         Storage dx = multiply_storages(centered, scaled, n, dtype_, device_);
         return {std::move(dx)};
     }
@@ -53,9 +50,9 @@ public:
 
 }  // namespace
 
-TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
-                     bool keepdims) {
-    if (!a) throw LucidError("var: null input");
+TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, bool keepdims) {
+    if (!a)
+        throw LucidError("var: null input");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     const auto axes = normalize_axes(axes_user, static_cast<int>(a->shape_.size()));
@@ -68,13 +65,14 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
         const auto& ga = std::get<GpuStorage>(a->storage_);
         std::vector<int> ax(axes.begin(), axes.end());
         auto out_mlx = ::mlx::core::var(*ga.arr, ax, keepdims, /*ddof=*/0);
-        out = fresh(Storage{gpu::wrap_mlx_array(std::move(out_mlx), dt)},
-                    out_shape, dt, device);
+        out = fresh(Storage{gpu::wrap_mlx_array(std::move(out_mlx), dt)}, out_shape, dt, device);
         // Fall through to grad-wiring at the bottom of this function.
         // We still need `reduced` for the backward; compute it now.
         std::size_t reduced_gpu = 1;
-        for (auto ax_i : axes) reduced_gpu *= static_cast<std::size_t>(a->shape_[ax_i]);
-        if (reduced_gpu == 0) reduced_gpu = 1;
+        for (auto ax_i : axes)
+            reduced_gpu *= static_cast<std::size_t>(a->shape_[ax_i]);
+        if (reduced_gpu == 0)
+            reduced_gpu = 1;
         if (GradMode::is_enabled() && a->requires_grad_) {
             // Build saved_mean storage broadcast to a's shape on GPU.
             auto m = ::mlx::core::mean(*ga.arr, ax, /*keepdims=*/true);
@@ -83,14 +81,14 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
             Storage mean_storage{gpu::wrap_mlx_array(std::move(m_b), dt)};
             auto bwd = std::make_shared<VarBackward>();
             bwd->input_shape_ = a->shape_;
-            bwd->out_shape_   = out_shape;
-            bwd->dtype_       = dt;
-            bwd->device_      = device;
-            bwd->axes_        = axes;
-            bwd->keepdims_    = keepdims;
-            bwd->count_       = static_cast<std::int64_t>(reduced_gpu);
+            bwd->out_shape_ = out_shape;
+            bwd->dtype_ = dt;
+            bwd->device_ = device;
+            bwd->axes_ = axes;
+            bwd->keepdims_ = keepdims;
+            bwd->count_ = static_cast<std::int64_t>(reduced_gpu);
             bwd->saved_input_ = a->storage_;
-            bwd->saved_mean_  = std::move(mean_storage);
+            bwd->saved_mean_ = std::move(mean_storage);
             auto a_edge = detail::ensure_grad_fn(a);
             std::vector<Edge> edges;
             edges.emplace_back(a_edge, 0);
@@ -107,8 +105,10 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
     const std::size_t in_numel = shape_numel(a->shape_);
     const std::size_t out_numel = shape_numel(out_shape);
     std::size_t reduced = 1;
-    for (auto ax : axes) reduced *= static_cast<std::size_t>(a->shape_[ax]);
-    if (reduced == 0) reduced = 1;
+    for (auto ax : axes)
+        reduced *= static_cast<std::size_t>(a->shape_[ax]);
+    if (reduced == 0)
+        reduced = 1;
 
     auto compute = [&](auto* out_p, const auto* in_p) {
         using T = std::remove_pointer_t<decltype(out_p)>;
@@ -117,7 +117,8 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
         const auto& sh = a->shape_;
 
         Shape kd_shape = sh;
-        for (auto ax : axes) kd_shape[ax] = 1;
+        for (auto ax : axes)
+            kd_shape[ax] = 1;
 
         Stride kd_stride(kd_shape.size());
         if (!kd_shape.empty()) {
@@ -144,7 +145,8 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
             std::size_t f = 0;
             for (std::size_t d = 0; d < sh.size(); ++d) {
                 std::int64_t c = coords[d];
-                if (kd_shape[d] == 1) c = 0;
+                if (kd_shape[d] == 1)
+                    c = 0;
                 f += c * static_cast<std::size_t>(kd_stride[d]);
             }
             return f;
@@ -154,7 +156,8 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
             flat_to_coord(i);
             means[kd_flat()] += static_cast<double>(in_p[i]);
         }
-        for (auto& m : means) m /= static_cast<double>(reduced);
+        for (auto& m : means)
+            m /= static_cast<double>(reduced);
 
         std::vector<double> vars(out_numel, 0.0);
         for (std::size_t i = 0; i < in_numel; ++i) {
@@ -198,7 +201,8 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
             std::vector<std::int64_t> coords(a->shape_.size(), 0);
             const auto& sh = a->shape_;
             Shape kd_shape = sh;
-            for (auto ax : axes) kd_shape[ax] = 1;
+            for (auto ax : axes)
+                kd_shape[ax] = 1;
             Stride kd_stride(kd_shape.size());
             kd_stride.back() = 1;
             for (std::ptrdiff_t i = (std::ptrdiff_t)kd_shape.size() - 2; i >= 0; --i)
@@ -222,7 +226,8 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
                     }
                     means[kf] += static_cast<double>(in_p[i]);
                 }
-                for (auto& v : means) v /= static_cast<double>(reduced);
+                for (auto& v : means)
+                    v /= static_cast<double>(reduced);
             };
             if (dt == Dtype::F32)
                 compute_means(reinterpret_cast<const float*>(ca.ptr.get()));
@@ -253,14 +258,14 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user,
 
         auto bwd = std::make_shared<VarBackward>();
         bwd->input_shape_ = a->shape_;
-        bwd->out_shape_   = out_shape;
-        bwd->dtype_       = dt;
-        bwd->device_      = device;
-        bwd->axes_        = axes;
-        bwd->keepdims_    = keepdims;
-        bwd->count_       = static_cast<std::int64_t>(reduced);
+        bwd->out_shape_ = out_shape;
+        bwd->dtype_ = dt;
+        bwd->device_ = device;
+        bwd->axes_ = axes;
+        bwd->keepdims_ = keepdims;
+        bwd->count_ = static_cast<std::int64_t>(reduced);
         bwd->saved_input_ = a->storage_;
-        bwd->saved_mean_  = std::move(mean_storage);
+        bwd->saved_mean_ = std::move(mean_storage);
 
         auto a_edge = detail::ensure_grad_fn(a);
         std::vector<Edge> edges;

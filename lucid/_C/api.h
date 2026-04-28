@@ -31,28 +31,28 @@
 // Lucid is macOS-only by design (see CLAUDE.md / README); these branches exist
 // only so the macro is well-defined on every toolchain that might tooltip-parse
 // the headers (clangd in CI, etc.).
-#  define LUCID_API_EXPORT __declspec(dllexport)
-#  define LUCID_API_IMPORT __declspec(dllimport)
-#  define LUCID_API_LOCAL
+#define LUCID_API_EXPORT __declspec(dllexport)
+#define LUCID_API_IMPORT __declspec(dllimport)
+#define LUCID_API_LOCAL
 #else
-#  define LUCID_API_EXPORT __attribute__((visibility("default")))
-#  define LUCID_API_IMPORT __attribute__((visibility("default")))
-#  define LUCID_API_LOCAL  __attribute__((visibility("hidden")))
+#define LUCID_API_EXPORT __attribute__((visibility("default")))
+#define LUCID_API_IMPORT __attribute__((visibility("default")))
+#define LUCID_API_LOCAL __attribute__((visibility("hidden")))
 #endif
 
 #if defined(LUCID_BUILDING_ENGINE)
-#  define LUCID_API LUCID_API_EXPORT
+#define LUCID_API LUCID_API_EXPORT
 #else
-#  define LUCID_API LUCID_API_IMPORT
+#define LUCID_API LUCID_API_IMPORT
 #endif
 
 #define LUCID_INTERNAL LUCID_API_LOCAL
 
 // Discourage accidental copies of large objects through the API boundary.
-#define LUCID_NOCOPY(Type)                       \
-    Type(const Type&) = delete;                  \
+#define LUCID_NOCOPY(Type)      \
+    Type(const Type&) = delete; \
     Type& operator=(const Type&) = delete
 
-#define LUCID_NOMOVE(Type)                       \
-    Type(Type&&) = delete;                       \
+#define LUCID_NOMOVE(Type) \
+    Type(Type&&) = delete; \
     Type& operator=(Type&&) = delete

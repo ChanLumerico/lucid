@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import setuptools
 import shutil
 from setuptools import Extension
@@ -16,6 +17,22 @@ except ImportError as e:
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
+
+
+def _enforce_apple_silicon_only() -> None:
+    system = platform.system()
+    machine = platform.machine()
+    if system != "Darwin" or machine != "arm64":
+        raise RuntimeError(
+            "Lucid C++ engine supports macOS arm64 Apple Silicon only "
+            f"(got system={system!r}, machine={machine!r})"
+        )
+    # Python.org macOS builds may default to universal2 extension flags. The
+    # engine links MLX and targets Apple Silicon only, so force arm64 output.
+    os.environ["ARCHFLAGS"] = "-arch arm64"
+
+
+_enforce_apple_silicon_only()
 
 
 # ----------------------------------------------------------------------
@@ -137,8 +154,28 @@ def _sanitizer_flags(mode: str) -> tuple[list[str], list[str]]:
 _SAN_COMPILE, _SAN_LINK = _sanitizer_flags(_LUCID_BUILD_MODE)
 
 
+_WARNING_FLAGS = [
+    "-Wall",
+    "-Wextra",
+    "-Wpedantic",
+    "-Werror",
+    # Explicit-unused parameters are common in CRTP hooks, pybind adapters, and
+    # backend signatures that differ only by device support.
+    "-Wno-unused-parameter",
+]
+
+
+def _with_warning_flags(flags: list[str]) -> list[str]:
+    out = list(flags)
+    for flag in _WARNING_FLAGS:
+        if flag not in out:
+            out.append(flag)
+    return out
+
+
 def _resolve_per_ext(ext_cfg: dict) -> dict:
-    include_dirs = [pybind11.get_include()]
+    include_dirs = []
+    system_include_dirs = [pybind11.get_include()]
     library_dirs: list[str] = []
     libraries: list[str] = []
     extra_link_args: list[str] = []
@@ -160,7 +197,7 @@ def _resolve_per_ext(ext_cfg: dict) -> dict:
                 f"Extension {ext_cfg['name']} requested link_mlx but mlx is not "
                 f"installed. Install it first: pip install mlx"
             ) from e
-        include_dirs.append(str(mlx_pkg / "include"))
+        system_include_dirs.append(str(mlx_pkg / "include"))
         library_dirs.append(str(mlx_pkg / "lib"))
         libraries.append("mlx")
         # Embed an rpath so the runtime linker finds libmlx.dylib without
@@ -186,6 +223,10 @@ def _resolve_per_ext(ext_cfg: dict) -> dict:
                               if not a.startswith("-O")]
         extra_compile_args.extend(_SAN_COMPILE)
         extra_link_args.extend(_SAN_LINK)
+
+    extra_compile_args = _with_warning_flags(extra_compile_args)
+    for system_include_dir in reversed(system_include_dirs):
+        extra_compile_args[:0] = ["-isystem", system_include_dir]
 
     return {
         "include_dirs": include_dirs,

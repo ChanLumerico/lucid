@@ -36,14 +36,15 @@
 namespace lucid::linalg_detail {
 
 inline TensorImplPtr fresh(Storage&& s, Shape shape, Dtype dt, Device device) {
-    return std::make_shared<TensorImpl>(std::move(s), std::move(shape), dt,
-                                        device, /*requires_grad=*/false);
+    return std::make_shared<TensorImpl>(std::move(s), std::move(shape), dt, device,
+                                        /*requires_grad=*/false);
 }
 
 inline Shape mlx_shape_to_lucid(const ::mlx::core::Shape& s) {
     Shape out;
     out.reserve(s.size());
-    for (auto d : s) out.push_back(static_cast<std::int64_t>(d));
+    for (auto d : s)
+        out.push_back(static_cast<std::int64_t>(d));
     return out;
 }
 
@@ -77,7 +78,8 @@ inline CpuStorage allocate_cpu(const Shape& shape, Dtype dt) {
     s.dtype = dt;
     s.nbytes = shape_numel(shape) * dtype_size(dt);
     s.ptr = allocate_aligned_bytes(s.nbytes);
-    if (s.nbytes > 0) std::memset(s.ptr.get(), 0, s.nbytes);
+    if (s.nbytes > 0)
+        std::memset(s.ptr.get(), 0, s.nbytes);
     return s;
 }
 
@@ -96,15 +98,15 @@ inline std::int64_t leading_batch_count(const Shape& shape, std::size_t mat_dims
     if (shape.size() < mat_dims)
         throw LucidError("linalg: input rank too small");
     std::int64_t b = 1;
-    for (std::size_t i = 0; i + mat_dims < shape.size(); ++i) b *= shape[i];
+    for (std::size_t i = 0; i + mat_dims < shape.size(); ++i)
+        b *= shape[i];
     return b;
 }
 
 inline void require_float(Dtype dt, const char* op) {
     if (dt != Dtype::F32 && dt != Dtype::F64)
-        throw NotImplementedError(
-            std::string(op) + ": only F32/F64 supported (got " +
-            std::string(dtype_name(dt)) + ")");
+        throw NotImplementedError(std::string(op) + ": only F32/F64 supported (got " +
+                                  std::string(dtype_name(dt)) + ")");
 }
 
 inline void require_square_2d(const Shape& sh, const char* op) {
@@ -116,13 +118,11 @@ inline void require_square_2d(const Shape& sh, const char* op) {
 
 inline void check_lapack_info(int info, const char* op) {
     if (info < 0)
-        throw LucidError(std::string(op) +
-                          ": LAPACK invalid argument index " +
-                          std::to_string(-info));
+        throw LucidError(std::string(op) + ": LAPACK invalid argument index " +
+                         std::to_string(-info));
     if (info > 0)
         throw LucidError(std::string(op) +
-                          ": LAPACK numerical failure (info=" +
-                          std::to_string(info) + ")");
+                         ": LAPACK numerical failure (info=" + std::to_string(info) + ")");
 }
 
 }  // namespace lucid::linalg_detail

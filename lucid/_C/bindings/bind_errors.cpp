@@ -19,28 +19,28 @@ void register_errors(py::module_& m) {
     // Subclass exceptions — created via Python `type()` so they're real
     // subclasses of LucidError, not flat aliases.
     auto make_subclass = [&](const char* name) {
-        py::object cls = py::module_::import("builtins").attr("type")(
-            py::str(name),
-            py::make_tuple(lucid_error_cls),
-            py::dict());
+        py::object cls =
+            py::module_::import("builtins")
+                .attr("type")(py::str(name), py::make_tuple(lucid_error_cls), py::dict());
         m.attr(name) = cls;
         return cls;
     };
 
-    static py::object oom_cls               = make_subclass("OutOfMemory");
-    static py::object shape_mismatch_cls    = make_subclass("ShapeMismatch");
-    static py::object dtype_mismatch_cls    = make_subclass("DtypeMismatch");
-    static py::object device_mismatch_cls   = make_subclass("DeviceMismatch");
-    static py::object version_mismatch_cls  = make_subclass("VersionMismatch");
-    static py::object gpu_unavailable_cls   = make_subclass("GpuNotAvailable");
-    static py::object index_error_cls       = make_subclass("IndexError");
-    static py::object not_implemented_cls   = make_subclass("NotImplementedError");
+    static py::object oom_cls = make_subclass("OutOfMemory");
+    static py::object shape_mismatch_cls = make_subclass("ShapeMismatch");
+    static py::object dtype_mismatch_cls = make_subclass("DtypeMismatch");
+    static py::object device_mismatch_cls = make_subclass("DeviceMismatch");
+    static py::object version_mismatch_cls = make_subclass("VersionMismatch");
+    static py::object gpu_unavailable_cls = make_subclass("GpuNotAvailable");
+    static py::object index_error_cls = make_subclass("IndexError");
+    static py::object not_implemented_cls = make_subclass("NotImplementedError");
 
     // Translator: order matters — most-derived classes first, base last,
     // because pybind11 walks the registered translators in reverse insertion
     // order. We register the base last so it's checked first.
     py::register_exception_translator([](std::exception_ptr p) {
-        if (!p) return;
+        if (!p)
+            return;
         try {
             std::rethrow_exception(p);
         } catch (const OutOfMemory& e) {

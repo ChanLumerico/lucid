@@ -5,6 +5,9 @@
 
 #include <mlx/ops.h>
 
+#include "../../autograd/FuncOp.h"
+#include "../../autograd/Helpers.h"
+#include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Exceptions.h"
@@ -12,9 +15,6 @@
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/TensorImpl.h"
-#include "../../autograd/FuncOp.h"
-#include "../../autograd/Helpers.h"
-#include "../../autograd/Node.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -28,8 +28,11 @@ using utils_detail::fresh;
 using utils_detail::mlx_shape_to_lucid;
 using utils_detail::wrap_axis;
 
-CpuStorage slice_axis_cpu(const CpuStorage& src, const Shape& src_shape,
-                          Shape slice_shape, int axis, std::int64_t offset,
+CpuStorage slice_axis_cpu(const CpuStorage& src,
+                          const Shape& src_shape,
+                          Shape slice_shape,
+                          int axis,
+                          std::int64_t offset,
                           Dtype dt) {
     auto out = allocate_cpu(slice_shape, dt);
     const std::size_t elem = dtype_size(dt);
@@ -37,35 +40,35 @@ CpuStorage slice_axis_cpu(const CpuStorage& src, const Shape& src_shape,
     for (int d = 0; d < axis; ++d)
         outer *= static_cast<std::size_t>(src_shape[d]);
     std::size_t inner_bytes = elem;
-    for (std::size_t d = static_cast<std::size_t>(axis) + 1;
-         d < src_shape.size(); ++d) {
+    for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < src_shape.size(); ++d) {
         inner_bytes *= static_cast<std::size_t>(src_shape[d]);
     }
     const std::size_t src_axis = static_cast<std::size_t>(src_shape[axis]);
-    const std::size_t slice_axis =
-        static_cast<std::size_t>(slice_shape[axis]);
+    const std::size_t slice_axis = static_cast<std::size_t>(slice_shape[axis]);
     const std::size_t copy_bytes = slice_axis * inner_bytes;
     for (std::size_t o = 0; o < outer; ++o) {
         const auto* src_ptr =
-            src.ptr.get() + (o * src_axis + static_cast<std::size_t>(offset)) *
-                                inner_bytes;
+            src.ptr.get() + (o * src_axis + static_cast<std::size_t>(offset)) * inner_bytes;
         auto* dst_ptr = out.ptr.get() + o * copy_bytes;
-        if (copy_bytes > 0) std::memcpy(dst_ptr, src_ptr, copy_bytes);
+        if (copy_bytes > 0)
+            std::memcpy(dst_ptr, src_ptr, copy_bytes);
     }
     return out;
 }
 
-CpuStorage insert_axis_slice_cpu(const CpuStorage& src, const Shape& src_shape,
-                                 const Shape& dst_shape, int axis,
-                                 std::int64_t offset, Dtype dt) {
+CpuStorage insert_axis_slice_cpu(const CpuStorage& src,
+                                 const Shape& src_shape,
+                                 const Shape& dst_shape,
+                                 int axis,
+                                 std::int64_t offset,
+                                 Dtype dt) {
     auto out = allocate_cpu(dst_shape, dt);
     const std::size_t elem = dtype_size(dt);
     std::size_t outer = 1;
     for (int d = 0; d < axis; ++d)
         outer *= static_cast<std::size_t>(dst_shape[d]);
     std::size_t inner_bytes = elem;
-    for (std::size_t d = static_cast<std::size_t>(axis) + 1;
-         d < dst_shape.size(); ++d) {
+    for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < dst_shape.size(); ++d) {
         inner_bytes *= static_cast<std::size_t>(dst_shape[d]);
     }
     const std::size_t dst_axis = static_cast<std::size_t>(dst_shape[axis]);
@@ -74,35 +77,41 @@ CpuStorage insert_axis_slice_cpu(const CpuStorage& src, const Shape& src_shape,
     for (std::size_t o = 0; o < outer; ++o) {
         const auto* src_ptr = src.ptr.get() + o * copy_bytes;
         auto* dst_ptr =
-            out.ptr.get() + (o * dst_axis + static_cast<std::size_t>(offset)) *
-                                inner_bytes;
-        if (copy_bytes > 0) std::memcpy(dst_ptr, src_ptr, copy_bytes);
+            out.ptr.get() + (o * dst_axis + static_cast<std::size_t>(offset)) * inner_bytes;
+        if (copy_bytes > 0)
+            std::memcpy(dst_ptr, src_ptr, copy_bytes);
     }
     return out;
 }
 
-Storage slice_axis_storage(const Storage& src, const Shape& src_shape,
-                           const Shape& slice_shape, int axis,
-                           std::int64_t offset, Dtype dt, Device device) {
+Storage slice_axis_storage(const Storage& src,
+                           const Shape& src_shape,
+                           const Shape& slice_shape,
+                           int axis,
+                           std::int64_t offset,
+                           Dtype dt,
+                           Device device) {
     if (device == Device::GPU) {
         const auto& g = std::get<GpuStorage>(src);
         ::mlx::core::Shape lo(src_shape.size(), 0);
         ::mlx::core::Shape hi = gpu::to_mlx_shape(src_shape);
-        lo[static_cast<std::size_t>(axis)] =
-            static_cast<::mlx::core::ShapeElem>(offset);
+        lo[static_cast<std::size_t>(axis)] = static_cast<::mlx::core::ShapeElem>(offset);
         hi[static_cast<std::size_t>(axis)] =
             static_cast<::mlx::core::ShapeElem>(offset + slice_shape[axis]);
         auto out = ::mlx::core::slice(*g.arr, lo, hi);
         out = ::mlx::core::contiguous(out);
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
-    return Storage{slice_axis_cpu(std::get<CpuStorage>(src), src_shape,
-                                  slice_shape, axis, offset, dt)};
+    return Storage{
+        slice_axis_cpu(std::get<CpuStorage>(src), src_shape, slice_shape, axis, offset, dt)};
 }
 
-Storage insert_axis_slice_storage(const Storage& src, const Shape& src_shape,
-                                  const Shape& dst_shape, int axis,
-                                  std::int64_t offset, Dtype dt,
+Storage insert_axis_slice_storage(const Storage& src,
+                                  const Shape& src_shape,
+                                  const Shape& dst_shape,
+                                  int axis,
+                                  std::int64_t offset,
+                                  Dtype dt,
                                   Device device) {
     if (device == Device::GPU) {
         const auto& g = std::get<GpuStorage>(src);
@@ -111,20 +120,18 @@ Storage insert_axis_slice_storage(const Storage& src, const Shape& src_shape,
         for (std::size_t d = 0; d < dst_shape.size(); ++d) {
             if (static_cast<int>(d) == axis) {
                 const auto before = static_cast<int>(offset);
-                const auto after = static_cast<int>(
-                    dst_shape[d] - offset - src_shape[d]);
+                const auto after = static_cast<int>(dst_shape[d] - offset - src_shape[d]);
                 pad.emplace_back(before, after);
             } else {
                 pad.emplace_back(0, 0);
             }
         }
-        ::mlx::core::array zero(static_cast<float>(0.0),
-                                gpu::to_mlx_dtype(dt));
+        ::mlx::core::array zero(static_cast<float>(0.0), gpu::to_mlx_dtype(dt));
         auto out = ::mlx::core::pad(*g.arr, pad, zero);
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
-    return Storage{insert_axis_slice_cpu(std::get<CpuStorage>(src), src_shape,
-                                         dst_shape, axis, offset, dt)};
+    return Storage{
+        insert_axis_slice_cpu(std::get<CpuStorage>(src), src_shape, dst_shape, axis, offset, dt)};
 }
 
 class ConcatBackward : public Node {
@@ -143,8 +150,8 @@ public:
         grads.reserve(input_shapes_.size());
         std::int64_t offset = 0;
         for (const auto& shape : input_shapes_) {
-            grads.push_back(slice_axis_storage(grad_out, output_shape_, shape,
-                                               axis_, offset, dtype_, device_));
+            grads.push_back(
+                slice_axis_storage(grad_out, output_shape_, shape, axis_, offset, dtype_, device_));
             offset += shape[static_cast<std::size_t>(axis_)];
         }
         return grads;
@@ -153,16 +160,13 @@ public:
     void validate_versions() override {
         for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
             check_version_match(input_tensors_[i],
-                                saved_versions_.size() > i
-                                    ? saved_versions_[i]
-                                    : 0,
-                                schema_v1.name, i);
+                                saved_versions_.size() > i ? saved_versions_[i] : 0, schema_v1.name,
+                                i);
         }
     }
 };
 
-const OpSchema ConcatBackward::schema_v1{
-    "concatenate", 1, AmpPolicy::KeepInput, true};
+const OpSchema ConcatBackward::schema_v1{"concatenate", 1, AmpPolicy::KeepInput, true};
 
 class StackBackward : public Node {
 public:
@@ -181,15 +185,12 @@ public:
         std::vector<Storage> grads;
         grads.reserve(input_tensors_.size());
         for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
-            auto piece = slice_axis_storage(
-                grad_out, output_shape_, slice_shape, axis_,
-                static_cast<std::int64_t>(i), dtype_, device_);
+            auto piece = slice_axis_storage(grad_out, output_shape_, slice_shape, axis_,
+                                            static_cast<std::int64_t>(i), dtype_, device_);
             if (device_ == Device::GPU) {
                 auto& g = std::get<GpuStorage>(piece);
-                auto reshaped =
-                    ::mlx::core::reshape(*g.arr, gpu::to_mlx_shape(input_shape_));
-                grads.push_back(
-                    Storage{gpu::wrap_mlx_array(std::move(reshaped), dtype_)});
+                auto reshaped = ::mlx::core::reshape(*g.arr, gpu::to_mlx_shape(input_shape_));
+                grads.push_back(Storage{gpu::wrap_mlx_array(std::move(reshaped), dtype_)});
             } else {
                 auto& c = std::get<CpuStorage>(piece);
                 CpuStorage out;
@@ -208,16 +209,13 @@ public:
     void validate_versions() override {
         for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
             check_version_match(input_tensors_[i],
-                                saved_versions_.size() > i
-                                    ? saved_versions_[i]
-                                    : 0,
-                                schema_v1.name, i);
+                                saved_versions_.size() > i ? saved_versions_[i] : 0, schema_v1.name,
+                                i);
         }
     }
 };
 
-const OpSchema StackBackward::schema_v1{
-    "stack", 1, AmpPolicy::KeepInput, true};
+const OpSchema StackBackward::schema_v1{"stack", 1, AmpPolicy::KeepInput, true};
 
 class SplitSliceBackward : public FuncOp<SplitSliceBackward, 1> {
 public:
@@ -233,10 +231,8 @@ public:
         if (squeeze_axis_) {
             if (device_ == Device::GPU) {
                 auto& g = std::get<GpuStorage>(slice_grad);
-                auto reshaped =
-                    ::mlx::core::reshape(*g.arr, gpu::to_mlx_shape(slice_shape_));
-                slice_grad =
-                    Storage{gpu::wrap_mlx_array(std::move(reshaped), dtype_)};
+                auto reshaped = ::mlx::core::reshape(*g.arr, gpu::to_mlx_shape(slice_shape_));
+                slice_grad = Storage{gpu::wrap_mlx_array(std::move(reshaped), dtype_)};
             } else {
                 const auto& c = std::get<CpuStorage>(slice_grad);
                 CpuStorage out;
@@ -249,23 +245,24 @@ public:
                 slice_grad = Storage{std::move(out)};
             }
         }
-        return {insert_axis_slice_storage(slice_grad, slice_shape_,
-                                          input_shapes_[0], axis_, offset_,
-                                          dtype_, device_)};
+        return {insert_axis_slice_storage(slice_grad, slice_shape_, input_shapes_[0], axis_,
+                                          offset_, dtype_, device_)};
     }
 };
 
-const OpSchema SplitSliceBackward::schema_v1{
-    "split", 1, AmpPolicy::KeepInput, true};
+const OpSchema SplitSliceBackward::schema_v1{"split", 1, AmpPolicy::KeepInput, true};
 
 TensorImplPtr attach_concat_grad(const std::vector<TensorImplPtr>& xs,
-                                 TensorImplPtr out, int axis) {
+                                 TensorImplPtr out,
+                                 int axis) {
     bool needs_grad = GradMode::is_enabled();
     if (needs_grad) {
         needs_grad = false;
-        for (const auto& t : xs) needs_grad = needs_grad || t->requires_grad_;
+        for (const auto& t : xs)
+            needs_grad = needs_grad || t->requires_grad_;
     }
-    if (!needs_grad) return out;
+    if (!needs_grad)
+        return out;
 
     auto bwd = std::make_shared<ConcatBackward>();
     bwd->input_shapes_.reserve(xs.size());
@@ -294,14 +291,15 @@ TensorImplPtr attach_concat_grad(const std::vector<TensorImplPtr>& xs,
     return out;
 }
 
-TensorImplPtr attach_stack_grad(const std::vector<TensorImplPtr>& xs,
-                                TensorImplPtr out, int axis) {
+TensorImplPtr attach_stack_grad(const std::vector<TensorImplPtr>& xs, TensorImplPtr out, int axis) {
     bool needs_grad = GradMode::is_enabled();
     if (needs_grad) {
         needs_grad = false;
-        for (const auto& t : xs) needs_grad = needs_grad || t->requires_grad_;
+        for (const auto& t : xs)
+            needs_grad = needs_grad || t->requires_grad_;
     }
-    if (!needs_grad) return out;
+    if (!needs_grad)
+        return out;
 
     auto bwd = std::make_shared<StackBackward>();
     bwd->input_shape_ = xs[0]->shape_;
@@ -329,10 +327,14 @@ TensorImplPtr attach_stack_grad(const std::vector<TensorImplPtr>& xs,
     return out;
 }
 
-TensorImplPtr attach_split_grad(const TensorImplPtr& a, TensorImplPtr out,
-                                Shape slice_shape, int axis,
-                                std::int64_t offset, bool squeeze_axis) {
-    if (!GradMode::is_enabled() || !a->requires_grad_) return out;
+TensorImplPtr attach_split_grad(const TensorImplPtr& a,
+                                TensorImplPtr out,
+                                Shape slice_shape,
+                                int axis,
+                                std::int64_t offset,
+                                bool squeeze_axis) {
+    if (!GradMode::is_enabled() || !a->requires_grad_)
+        return out;
 
     auto bwd = std::make_shared<SplitSliceBackward>();
     bwd->input_shapes_ = {a->shape_};
@@ -370,11 +372,12 @@ TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int axis) {
     if (device == Device::GPU) {
         std::vector<::mlx::core::array> arrays;
         arrays.reserve(xs.size());
-        for (auto& t : xs) arrays.push_back(*std::get<GpuStorage>(t->storage_).arr);
+        for (auto& t : xs)
+            arrays.push_back(*std::get<GpuStorage>(t->storage_).arr);
         auto out = ::mlx::core::concatenate(std::move(arrays), ax);
         Shape out_shape = mlx_shape_to_lucid(out.shape());
-        auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                            std::move(out_shape), dt, device);
+        auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(out_shape),
+                            dt, device);
         return attach_concat_grad(xs, std::move(result), ax);
     }
 
@@ -384,7 +387,8 @@ TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int axis) {
         if (t->shape_.size() != ndim)
             throw ShapeMismatch(xs[0]->shape_, t->shape_, "concatenate");
         for (std::size_t d = 0; d < ndim; ++d) {
-            if ((int)d == ax) continue;
+            if ((int)d == ax)
+                continue;
             if (t->shape_[d] != xs[0]->shape_[d])
                 throw ShapeMismatch(xs[0]->shape_, t->shape_, "concatenate");
         }
@@ -395,7 +399,8 @@ TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int axis) {
     auto out_cpu = allocate_cpu(out_shape, dt);
     const std::size_t elem = dtype_size(dt);
     std::size_t outer = 1;
-    for (int d = 0; d < ax; ++d) outer *= static_cast<std::size_t>(out_shape[d]);
+    for (int d = 0; d < ax; ++d)
+        outer *= static_cast<std::size_t>(out_shape[d]);
     std::size_t inner_per_unit = elem;
     for (std::size_t d = ax + 1; d < ndim; ++d)
         inner_per_unit *= static_cast<std::size_t>(out_shape[d]);
@@ -409,8 +414,7 @@ TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int axis) {
             dst += bytes;
         }
     }
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt,
-                        device);
+    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
     return attach_concat_grad(xs, std::move(result), ax);
 }
 
@@ -433,11 +437,12 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
     if (device == Device::GPU) {
         std::vector<::mlx::core::array> arrays;
         arrays.reserve(xs.size());
-        for (auto& t : xs) arrays.push_back(*std::get<GpuStorage>(t->storage_).arr);
+        for (auto& t : xs)
+            arrays.push_back(*std::get<GpuStorage>(t->storage_).arr);
         auto out = ::mlx::core::stack(arrays, ax);
         Shape out_shape = mlx_shape_to_lucid(out.shape());
-        auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                            std::move(out_shape), dt, device);
+        auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(out_shape),
+                            dt, device);
         return attach_stack_grad(xs, std::move(result), ax);
     }
 
@@ -446,14 +451,13 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
     auto out_cpu = allocate_cpu(out_shape, dt);
     const std::size_t elem = dtype_size(dt);
     std::size_t outer = 1;
-    for (int d = 0; d < ax; ++d) outer *= static_cast<std::size_t>(out_shape[d]);
+    for (int d = 0; d < ax; ++d)
+        outer *= static_cast<std::size_t>(out_shape[d]);
     std::size_t inner_bytes = elem;
-    for (std::size_t d = static_cast<std::size_t>(ax) + 1;
-         d < out_shape.size(); ++d) {
+    for (std::size_t d = static_cast<std::size_t>(ax) + 1; d < out_shape.size(); ++d) {
         inner_bytes *= static_cast<std::size_t>(out_shape[d]);
     }
-    const std::size_t block_bytes =
-        static_cast<std::size_t>(xs.size()) * inner_bytes;
+    const std::size_t block_bytes = static_cast<std::size_t>(xs.size()) * inner_bytes;
     for (std::size_t idx = 0; idx < xs.size(); ++idx) {
         const auto& cs = std::get<CpuStorage>(xs[idx]->storage_);
         for (std::size_t o = 0; o < outer; ++o) {
@@ -461,27 +465,28 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
                         cs.ptr.get() + o * inner_bytes, inner_bytes);
         }
     }
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt,
-                        device);
+    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
     return attach_stack_grad(xs, std::move(result), ax);
 }
 
 TensorImplPtr hstack_op(const std::vector<TensorImplPtr>& xs) {
-    if (xs.empty()) throw LucidError("hstack: empty input");
+    if (xs.empty())
+        throw LucidError("hstack: empty input");
     return concatenate_op(xs, xs[0]->shape_.size() <= 1 ? 0 : 1);
 }
 
 TensorImplPtr vstack_op(const std::vector<TensorImplPtr>& xs) {
-    if (xs.empty()) throw LucidError("vstack: empty input");
+    if (xs.empty())
+        throw LucidError("vstack: empty input");
     if (xs[0]->shape_.size() == 1) {
         return stack_op(xs, 0);
     }
     return concatenate_op(xs, 0);
 }
 
-std::vector<TensorImplPtr>
-split_op(const TensorImplPtr& a, std::int64_t num_splits, int axis) {
-    if (!a) throw LucidError("split: null input");
+std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_splits, int axis) {
+    if (!a)
+        throw LucidError("split: null input");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     OpScope scope{"split", device, dt, a->shape_};
@@ -494,8 +499,7 @@ split_op(const TensorImplPtr& a, std::int64_t num_splits, int axis) {
 
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
-        auto pieces = ::mlx::core::split(*ga.arr,
-                                         static_cast<int>(num_splits), ax);
+        auto pieces = ::mlx::core::split(*ga.arr, static_cast<int>(num_splits), ax);
         std::vector<TensorImplPtr> out;
         out.reserve(pieces.size());
         std::int64_t k = 0;
@@ -504,11 +508,8 @@ split_op(const TensorImplPtr& a, std::int64_t num_splits, int axis) {
             // matches numpy/PyTorch when downloaded.
             auto pc = ::mlx::core::contiguous(p);
             Shape sh = mlx_shape_to_lucid(pc.shape());
-            auto result =
-                fresh(Storage{gpu::wrap_mlx_array(std::move(pc), dt)}, sh,
-                      dt, device);
-            out.push_back(attach_split_grad(a, std::move(result), std::move(sh),
-                                            ax, k * piece,
+            auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(pc), dt)}, sh, dt, device);
+            out.push_back(attach_split_grad(a, std::move(result), std::move(sh), ax, k * piece,
                                             /*squeeze_axis=*/false));
             ++k;
         }
@@ -523,34 +524,34 @@ split_op(const TensorImplPtr& a, std::int64_t num_splits, int axis) {
     const auto& ca = std::get<CpuStorage>(a->storage_);
     const std::size_t elem = dtype_size(dt);
     std::size_t outer = 1;
-    for (int d = 0; d < ax; ++d) outer *= static_cast<std::size_t>(a->shape_[d]);
+    for (int d = 0; d < ax; ++d)
+        outer *= static_cast<std::size_t>(a->shape_[d]);
     std::size_t inner_per_unit = elem;
     for (std::size_t d = ax + 1; d < a->shape_.size(); ++d)
         inner_per_unit *= static_cast<std::size_t>(a->shape_[d]);
-    const std::size_t full_row_bytes =
-        static_cast<std::size_t>(a->shape_[ax]) * inner_per_unit;
-    const std::size_t piece_bytes =
-        static_cast<std::size_t>(piece) * inner_per_unit;
+    const std::size_t full_row_bytes = static_cast<std::size_t>(a->shape_[ax]) * inner_per_unit;
+    const std::size_t piece_bytes = static_cast<std::size_t>(piece) * inner_per_unit;
 
     for (std::int64_t k = 0; k < num_splits; ++k) {
         auto cpu = allocate_cpu(piece_shape, dt);
         for (std::size_t o = 0; o < outer; ++o) {
-            std::memcpy(cpu.ptr.get() + o * piece_bytes,
-                        ca.ptr.get() + o * full_row_bytes
-                            + static_cast<std::size_t>(k) * piece_bytes,
-                        piece_bytes);
+            std::memcpy(
+                cpu.ptr.get() + o * piece_bytes,
+                ca.ptr.get() + o * full_row_bytes + static_cast<std::size_t>(k) * piece_bytes,
+                piece_bytes);
         }
         auto result = fresh(Storage{std::move(cpu)}, piece_shape, dt, device);
-        out.push_back(attach_split_grad(a, std::move(result), piece_shape, ax,
-                                        k * piece, /*squeeze_axis=*/false));
+        out.push_back(attach_split_grad(a, std::move(result), piece_shape, ax, k * piece,
+                                        /*squeeze_axis=*/false));
     }
     return out;
 }
 
-std::vector<TensorImplPtr>
-split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices,
-            int axis) {
-    if (!a) throw LucidError("split_at: null input");
+std::vector<TensorImplPtr> split_at_op(const TensorImplPtr& a,
+                                       std::vector<std::int64_t> indices,
+                                       int axis) {
+    if (!a)
+        throw LucidError("split_at: null input");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     OpScope scope{"split_at", device, dt, a->shape_};
@@ -564,9 +565,7 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices,
         for (auto& p : pieces) {
             auto pc = ::mlx::core::contiguous(p);
             Shape sh = mlx_shape_to_lucid(pc.shape());
-            auto result =
-                fresh(Storage{gpu::wrap_mlx_array(std::move(pc), dt)}, sh,
-                      dt, device);
+            auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(pc), dt)}, sh, dt, device);
             out.push_back(attach_split_grad(a, std::move(result), sh, ax, off,
                                             /*squeeze_axis=*/false));
             off += sh[static_cast<std::size_t>(ax)];
@@ -585,12 +584,12 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices,
     const auto& ca = std::get<CpuStorage>(a->storage_);
     const std::size_t elem = dtype_size(dt);
     std::size_t outer = 1;
-    for (int d = 0; d < ax; ++d) outer *= static_cast<std::size_t>(a->shape_[d]);
+    for (int d = 0; d < ax; ++d)
+        outer *= static_cast<std::size_t>(a->shape_[d]);
     std::size_t inner_per_unit = elem;
     for (std::size_t d = ax + 1; d < a->shape_.size(); ++d)
         inner_per_unit *= static_cast<std::size_t>(a->shape_[d]);
-    const std::size_t full_row_bytes =
-        static_cast<std::size_t>(a->shape_[ax]) * inner_per_unit;
+    const std::size_t full_row_bytes = static_cast<std::size_t>(a->shape_[ax]) * inner_per_unit;
 
     std::vector<TensorImplPtr> out;
     out.reserve(sizes.size());
@@ -599,30 +598,28 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices,
         Shape piece_shape = a->shape_;
         piece_shape[ax] = sz;
         auto cpu = allocate_cpu(piece_shape, dt);
-        const std::size_t piece_bytes =
-            static_cast<std::size_t>(sz) * inner_per_unit;
+        const std::size_t piece_bytes = static_cast<std::size_t>(sz) * inner_per_unit;
         for (std::size_t o = 0; o < outer; ++o) {
-            std::memcpy(cpu.ptr.get() + o * piece_bytes,
-                        ca.ptr.get() + o * full_row_bytes
-                            + static_cast<std::size_t>(off) * inner_per_unit,
-                        piece_bytes);
+            std::memcpy(
+                cpu.ptr.get() + o * piece_bytes,
+                ca.ptr.get() + o * full_row_bytes + static_cast<std::size_t>(off) * inner_per_unit,
+                piece_bytes);
         }
         auto result = fresh(Storage{std::move(cpu)}, piece_shape, dt, device);
-        out.push_back(attach_split_grad(a, std::move(result), piece_shape, ax,
-                                        off, /*squeeze_axis=*/false));
+        out.push_back(
+            attach_split_grad(a, std::move(result), piece_shape, ax, off, /*squeeze_axis=*/false));
         off += sz;
     }
     return out;
 }
 
-std::vector<TensorImplPtr>
-chunk_op(const TensorImplPtr& a, std::int64_t chunks, int axis) {
+std::vector<TensorImplPtr> chunk_op(const TensorImplPtr& a, std::int64_t chunks, int axis) {
     return split_op(a, chunks, axis);
 }
 
-std::vector<TensorImplPtr>
-unbind_op(const TensorImplPtr& a, int axis) {
-    if (!a) throw LucidError("unbind: null input");
+std::vector<TensorImplPtr> unbind_op(const TensorImplPtr& a, int axis) {
+    if (!a)
+        throw LucidError("unbind: null input");
     int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
     std::vector<TensorImplPtr> out;
     out.reserve(static_cast<std::size_t>(a->shape_[ax]));
@@ -632,23 +629,19 @@ unbind_op(const TensorImplPtr& a, int axis) {
     out_shape.erase(out_shape.begin() + ax);
 
     for (std::int64_t k = 0; k < a->shape_[ax]; ++k) {
-        auto piece = slice_axis_storage(a->storage_, a->shape_, slice_shape,
-                                        ax, k, a->dtype_, a->device_);
+        auto piece =
+            slice_axis_storage(a->storage_, a->shape_, slice_shape, ax, k, a->dtype_, a->device_);
         if (a->device_ == Device::GPU) {
             auto& g = std::get<GpuStorage>(piece);
-            auto reshaped =
-                ::mlx::core::reshape(*g.arr, gpu::to_mlx_shape(out_shape));
-            auto result =
-                fresh(Storage{gpu::wrap_mlx_array(std::move(reshaped),
-                                                  a->dtype_)},
-                      out_shape, a->dtype_, a->device_);
-            out.push_back(attach_split_grad(a, std::move(result), slice_shape,
-                                            ax, k, /*squeeze_axis=*/true));
+            auto reshaped = ::mlx::core::reshape(*g.arr, gpu::to_mlx_shape(out_shape));
+            auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(reshaped), a->dtype_)},
+                                out_shape, a->dtype_, a->device_);
+            out.push_back(
+                attach_split_grad(a, std::move(result), slice_shape, ax, k, /*squeeze_axis=*/true));
         } else {
-            auto result = fresh(std::move(piece), out_shape, a->dtype_,
-                                a->device_);
-            out.push_back(attach_split_grad(a, std::move(result), slice_shape,
-                                            ax, k, /*squeeze_axis=*/true));
+            auto result = fresh(std::move(piece), out_shape, a->dtype_, a->device_);
+            out.push_back(
+                attach_split_grad(a, std::move(result), slice_shape, ax, k, /*squeeze_axis=*/true));
         }
     }
     return out;

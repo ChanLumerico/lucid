@@ -2,11 +2,11 @@
 
 #include <utility>
 
+#include "../autograd/Helpers.h"
 #include "../core/Exceptions.h"
 #include "../core/Generator.h"
 #include "../core/Profiler.h"
 #include "../core/TensorImpl.h"
-#include "../autograd/Helpers.h"
 
 namespace lucid {
 
@@ -16,10 +16,9 @@ inline Generator& resolve_gen(Generator* gen) {
     return gen ? *gen : default_generator();
 }
 
-inline TensorImplPtr finalize(Storage&& storage, Shape shape, Dtype dt,
-                              Device device) {
-    return std::make_shared<TensorImpl>(std::move(storage), std::move(shape),
-                                        dt, device, /*requires_grad=*/false);
+inline TensorImplPtr finalize(Storage&& storage, Shape shape, Dtype dt, Device device) {
+    return std::make_shared<TensorImpl>(std::move(storage), std::move(shape), dt, device,
+                                        /*requires_grad=*/false);
 }
 
 }  // namespace
@@ -30,13 +29,12 @@ TensorImplPtr rand_op(const Shape& shape, Dtype dt, Device device, Generator* ge
     return finalize(std::move(s), shape, dt, device);
 }
 
-TensorImplPtr uniform_op(const Shape& shape, double low, double high,
-                         Dtype dt, Device device, Generator* gen) {
+TensorImplPtr uniform_op(
+    const Shape& shape, double low, double high, Dtype dt, Device device, Generator* gen) {
     if (high <= low)
         throw LucidError("uniform: high must be > low");
     OpScope scope{"uniform", device, dt, shape};
-    auto s = random_uniform_storage(shape, low, high, dt, device,
-                                    resolve_gen(gen));
+    auto s = random_uniform_storage(shape, low, high, dt, device, resolve_gen(gen));
     return finalize(std::move(s), shape, dt, device);
 }
 
@@ -46,26 +44,27 @@ TensorImplPtr randn_op(const Shape& shape, Dtype dt, Device device, Generator* g
     return finalize(std::move(s), shape, dt, device);
 }
 
-TensorImplPtr normal_op(const Shape& shape, double mean, double std,
-                        Dtype dt, Device device, Generator* gen) {
+TensorImplPtr normal_op(
+    const Shape& shape, double mean, double std, Dtype dt, Device device, Generator* gen) {
     if (std < 0.0)
         throw LucidError("normal: std must be >= 0");
     OpScope scope{"normal", device, dt, shape};
-    auto s = random_normal_storage(shape, mean, std, dt, device,
-                                   resolve_gen(gen));
+    auto s = random_normal_storage(shape, mean, std, dt, device, resolve_gen(gen));
     return finalize(std::move(s), shape, dt, device);
 }
 
-TensorImplPtr randint_op(const Shape& shape, std::int64_t low, std::int64_t high,
-                         Dtype dt, Device device, Generator* gen) {
+TensorImplPtr randint_op(const Shape& shape,
+                         std::int64_t low,
+                         std::int64_t high,
+                         Dtype dt,
+                         Device device,
+                         Generator* gen) {
     OpScope scope{"randint", device, dt, shape};
-    auto s = random_randint_storage(shape, low, high, dt, device,
-                                    resolve_gen(gen));
+    auto s = random_randint_storage(shape, low, high, dt, device, resolve_gen(gen));
     return finalize(std::move(s), shape, dt, device);
 }
 
-TensorImplPtr bernoulli_op(const Shape& shape, double p,
-                           Dtype dt, Device device, Generator* gen) {
+TensorImplPtr bernoulli_op(const Shape& shape, double p, Dtype dt, Device device, Generator* gen) {
     OpScope scope{"bernoulli", device, dt, shape};
     auto s = random_bernoulli_storage(shape, p, dt, device, resolve_gen(gen));
     return finalize(std::move(s), shape, dt, device);

@@ -13,15 +13,15 @@ namespace {
 
 CpuStorage allocate_unary(const Shape& out_shape, Dtype dt) {
     CpuStorage out;
-    out.dtype  = dt;
+    out.dtype = dt;
     out.nbytes = shape_numel(out_shape) * dtype_size(dt);
-    out.ptr    = allocate_aligned_bytes(out.nbytes);
+    out.ptr = allocate_aligned_bytes(out.nbytes);
     return out;
 }
 
 template <class F32Fn, class F64Fn>
-CpuStorage dispatch(const CpuStorage& a, const Shape& out_shape, Dtype dt,
-                    F32Fn f32, F64Fn f64, const char* op) {
+CpuStorage dispatch(
+    const CpuStorage& a, const Shape& out_shape, Dtype dt, F32Fn f32, F64Fn f64, const char* op) {
     const std::size_t numel = shape_numel(out_shape);
     auto out = allocate_unary(out_shape, dt);
     switch (dt) {
@@ -54,7 +54,9 @@ Storage ExpBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, saved_output_, n, dtype_, device_);
 }
 
-TensorImplPtr exp_op(const TensorImplPtr& a) { return ExpBackward::forward(a); }
+TensorImplPtr exp_op(const TensorImplPtr& a) {
+    return ExpBackward::forward(a);
+}
 LUCID_REGISTER_OP(ExpBackward)
 
 // --------------- Log ---------------
@@ -69,7 +71,9 @@ Storage LogBackward::grad_formula(const Storage& g) {
     return divide_storages(g, saved_inputs_[0], n, dtype_, device_);
 }
 
-TensorImplPtr log_op(const TensorImplPtr& a) { return LogBackward::forward(a); }
+TensorImplPtr log_op(const TensorImplPtr& a) {
+    return LogBackward::forward(a);
+}
 LUCID_REGISTER_OP(LogBackward)
 
 // --------------- Log2 ---------------
@@ -87,7 +91,9 @@ Storage Log2Backward::grad_formula(const Storage& g) {
     return divide_storages(g, x_ln2, n, dtype_, device_);
 }
 
-TensorImplPtr log2_op(const TensorImplPtr& a) { return Log2Backward::forward(a); }
+TensorImplPtr log2_op(const TensorImplPtr& a) {
+    return Log2Backward::forward(a);
+}
 LUCID_REGISTER_OP(Log2Backward)
 
 // --------------- Sqrt ---------------
@@ -104,7 +110,9 @@ Storage SqrtBackward::grad_formula(const Storage& g) {
     return divide_storages(half_g, saved_output_, n, dtype_, device_);
 }
 
-TensorImplPtr sqrt_op(const TensorImplPtr& a) { return SqrtBackward::forward(a); }
+TensorImplPtr sqrt_op(const TensorImplPtr& a) {
+    return SqrtBackward::forward(a);
+}
 LUCID_REGISTER_OP(SqrtBackward)
 
 }  // namespace lucid

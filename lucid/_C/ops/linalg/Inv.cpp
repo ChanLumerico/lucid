@@ -16,7 +16,8 @@ namespace lucid {
 
 TensorImplPtr inv_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    if (!a) throw LucidError("inv: null input");
+    if (!a)
+        throw LucidError("inv: null input");
     require_float(a->dtype_, "inv");
     require_square_2d(a->shape_, "inv");
     OpScope scope{"inv", a->device_, a->dtype_, a->shape_};
@@ -24,8 +25,7 @@ TensorImplPtr inv_op(const TensorImplPtr& a) {
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         auto out = ::mlx::core::linalg::inv(in, kMlxLinalgStream);
-        return fresh(wrap_gpu_result(std::move(out), a->dtype_),
-                     a->shape_, a->dtype_, a->device_);
+        return fresh(wrap_gpu_result(std::move(out), a->dtype_), a->shape_, a->dtype_, a->device_);
     }
 
     // CPU path — Apple Accelerate LAPACK, batched over leading dims.

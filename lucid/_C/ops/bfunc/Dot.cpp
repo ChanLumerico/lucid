@@ -46,9 +46,8 @@ public:
         // CPU path: read scalar grad and dispatch through Accelerate-backed
         // mul_scalar_storage helper.
         const auto& cg = std::get<CpuStorage>(grad_out);
-        double g = (dtype_ == Dtype::F32)
-            ? *reinterpret_cast<const float*>(cg.ptr.get())
-            : *reinterpret_cast<const double*>(cg.ptr.get());
+        double g = (dtype_ == Dtype::F32) ? *reinterpret_cast<const float*>(cg.ptr.get())
+                                          : *reinterpret_cast<const double*>(cg.ptr.get());
         Storage da = mul_scalar_storage(saved_b_, g, numel_, dtype_, device_);
         Storage db = mul_scalar_storage(saved_a_, g, numel_, dtype_, device_);
         return {std::move(da), std::move(db)};
@@ -85,8 +84,7 @@ public:
         db.nbytes = static_cast<std::size_t>(K * N) * dtype_size(dtype_);
         da.ptr = allocate_aligned_bytes(da.nbytes);
         db.ptr = allocate_aligned_bytes(db.nbytes);
-        auto run = [&](auto* dap, auto* dbp,
-                       const auto* gp, const auto* ap, const auto* bp) {
+        auto run = [&](auto* dap, auto* dbp, const auto* gp, const auto* ap, const auto* bp) {
             using T = std::remove_pointer_t<decltype(dap)>;
             for (std::int64_t i = 0; i < M; ++i)
                 for (std::int64_t k = 0; k < K; ++k) {
@@ -104,14 +102,12 @@ public:
                 }
         };
         if (dtype_ == Dtype::F32)
-            run(reinterpret_cast<float*>(da.ptr.get()),
-                reinterpret_cast<float*>(db.ptr.get()),
+            run(reinterpret_cast<float*>(da.ptr.get()), reinterpret_cast<float*>(db.ptr.get()),
                 reinterpret_cast<const float*>(cg.ptr.get()),
                 reinterpret_cast<const float*>(ca.ptr.get()),
                 reinterpret_cast<const float*>(cb.ptr.get()));
         else if (dtype_ == Dtype::F64)
-            run(reinterpret_cast<double*>(da.ptr.get()),
-                reinterpret_cast<double*>(db.ptr.get()),
+            run(reinterpret_cast<double*>(da.ptr.get()), reinterpret_cast<double*>(db.ptr.get()),
                 reinterpret_cast<const double*>(cg.ptr.get()),
                 reinterpret_cast<const double*>(ca.ptr.get()),
                 reinterpret_cast<const double*>(cb.ptr.get()));
@@ -130,17 +126,16 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     OpScope scope{"dot", device, dt, Shape{}};
 
     auto wire_grad = [&](const TensorImplPtr& out) {
-        if (!(GradMode::is_enabled() &&
-              (a->requires_grad_ || b->requires_grad_)))
+        if (!(GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)))
             return;
         std::shared_ptr<Node> bwd;
         if (a->shape_.size() == 1 && b->shape_.size() == 1) {
             auto n = std::make_shared<Dot1DBackward>();
             n->saved_a_ = a->storage_;
             n->saved_b_ = b->storage_;
-            n->numel_   = static_cast<std::size_t>(a->shape_[0]);
-            n->dtype_   = dt;
-            n->device_  = device;
+            n->numel_ = static_cast<std::size_t>(a->shape_[0]);
+            n->dtype_ = dt;
+            n->device_ = device;
             bwd = std::move(n);
         } else if (a->shape_.size() == 2 && b->shape_.size() == 2) {
             auto n = std::make_shared<Dot2DBackward>();
@@ -148,8 +143,8 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
             n->saved_b_ = b->storage_;
             n->a_shape_ = a->shape_;
             n->b_shape_ = b->shape_;
-            n->dtype_   = dt;
-            n->device_  = device;
+            n->dtype_ = dt;
+            n->device_ = device;
             bwd = std::move(n);
         } else {
             return;
@@ -170,13 +165,13 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         const auto& gb = std::get<GpuStorage>(b->storage_);
         ::mlx::core::array out = (a->shape_.size() == 1 && b->shape_.size() == 1)
-            ? ::mlx::core::sum(::mlx::core::multiply(*ga.arr, *gb.arr))
-            : ::mlx::core::matmul(*ga.arr, *gb.arr);
+                                     ? ::mlx::core::sum(::mlx::core::multiply(*ga.arr, *gb.arr))
+                                     : ::mlx::core::matmul(*ga.arr, *gb.arr);
         Shape out_shape;
         for (auto d : out.shape())
             out_shape.push_back(static_cast<std::int64_t>(d));
-        auto t = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                       std::move(out_shape), dt, device);
+        auto t = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(out_shape), dt,
+                       device);
         wire_grad(t);
         return t;
     }
@@ -194,13 +189,15 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
             const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
             const auto* q = reinterpret_cast<const float*>(cb.ptr.get());
             float s = 0.f;
-            for (std::size_t i = 0; i < n; ++i) s += p[i] * q[i];
+            for (std::size_t i = 0; i < n; ++i)
+                s += p[i] * q[i];
             *reinterpret_cast<float*>(out_cpu.ptr.get()) = s;
         } else if (dt == Dtype::F64) {
             const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
             const auto* q = reinterpret_cast<const double*>(cb.ptr.get());
             double s = 0.0;
-            for (std::size_t i = 0; i < n; ++i) s += p[i] * q[i];
+            for (std::size_t i = 0; i < n; ++i)
+                s += p[i] * q[i];
             *reinterpret_cast<double*>(out_cpu.ptr.get()) = s;
         } else {
             throw NotImplementedError("dot: dtype not supported (CPU)");
@@ -213,7 +210,8 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (a->shape_.size() == 2 && b->shape_.size() == 2) {
         const std::int64_t M = a->shape_[0], K = a->shape_[1];
         const std::int64_t Kb = b->shape_[0], N = b->shape_[1];
-        if (K != Kb) throw ShapeMismatch(a->shape_, b->shape_, "dot");
+        if (K != Kb)
+            throw ShapeMismatch(a->shape_, b->shape_, "dot");
         Shape out_shape{M, N};
         auto out_cpu = allocate_cpu(out_shape, dt);
         auto run = [&](auto* op, const auto* ap, const auto* bp) {

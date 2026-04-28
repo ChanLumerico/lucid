@@ -36,7 +36,9 @@ inline const T* cpu_cptr(const Storage& s) {
     return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
 }
 
-inline std::size_t cpu_numel(const TensorImpl& t) { return t.numel(); }
+inline std::size_t cpu_numel(const TensorImpl& t) {
+    return t.numel();
+}
 
 inline GpuStorage& gpu_get(Storage& s) {
     return std::get<GpuStorage>(s);

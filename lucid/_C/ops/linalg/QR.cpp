@@ -17,7 +17,8 @@ namespace lucid {
 
 std::pair<TensorImplPtr, TensorImplPtr> qr_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    if (!a) throw LucidError("qr: null input");
+    if (!a)
+        throw LucidError("qr: null input");
     require_float(a->dtype_, "qr");
     if (a->shape_.size() < 2)
         throw LucidError("qr: input must be at least 2-D");
@@ -29,10 +30,8 @@ std::pair<TensorImplPtr, TensorImplPtr> qr_op(const TensorImplPtr& a) {
         Shape qsh = mlx_shape_to_lucid(Q.shape());
         Shape rsh = mlx_shape_to_lucid(R.shape());
         return {
-            fresh(wrap_gpu_result(std::move(Q), a->dtype_),
-                  std::move(qsh), a->dtype_, a->device_),
-            fresh(wrap_gpu_result(std::move(R), a->dtype_),
-                  std::move(rsh), a->dtype_, a->device_),
+            fresh(wrap_gpu_result(std::move(Q), a->dtype_), std::move(qsh), a->dtype_, a->device_),
+            fresh(wrap_gpu_result(std::move(R), a->dtype_), std::move(rsh), a->dtype_, a->device_),
         };
     }
 
@@ -47,9 +46,11 @@ std::pair<TensorImplPtr, TensorImplPtr> qr_op(const TensorImplPtr& a) {
     const std::size_t r_per = static_cast<std::size_t>(k) * n;
 
     Shape qsh(sh.begin(), sh.end() - 2);
-    qsh.push_back(m); qsh.push_back(k);
+    qsh.push_back(m);
+    qsh.push_back(k);
     Shape rsh(sh.begin(), sh.end() - 2);
-    rsh.push_back(k); rsh.push_back(n);
+    rsh.push_back(k);
+    rsh.push_back(n);
 
     auto Qcpu = allocate_cpu(qsh, a->dtype_);
     auto Rcpu = allocate_cpu(rsh, a->dtype_);
@@ -61,9 +62,8 @@ std::pair<TensorImplPtr, TensorImplPtr> qr_op(const TensorImplPtr& a) {
         auto* Q_p = reinterpret_cast<float*>(Qcpu.ptr.get());
         auto* R_p = reinterpret_cast<float*>(Rcpu.ptr.get());
         for (std::int64_t b = 0; b < batch; ++b) {
-            backend::cpu::lapack_qr_f32(in_p + b * in_per, m, n,
-                                         Q_p + b * q_per,
-                                         R_p + b * r_per, &info);
+            backend::cpu::lapack_qr_f32(in_p + b * in_per, m, n, Q_p + b * q_per, R_p + b * r_per,
+                                        &info);
             check_lapack_info(info, "qr");
         }
     } else {
@@ -71,9 +71,8 @@ std::pair<TensorImplPtr, TensorImplPtr> qr_op(const TensorImplPtr& a) {
         auto* Q_p = reinterpret_cast<double*>(Qcpu.ptr.get());
         auto* R_p = reinterpret_cast<double*>(Rcpu.ptr.get());
         for (std::int64_t b = 0; b < batch; ++b) {
-            backend::cpu::lapack_qr_f64(in_p + b * in_per, m, n,
-                                         Q_p + b * q_per,
-                                         R_p + b * r_per, &info);
+            backend::cpu::lapack_qr_f64(in_p + b * in_per, m, n, Q_p + b * q_per, R_p + b * r_per,
+                                        &info);
             check_lapack_info(info, "qr");
         }
     }

@@ -73,7 +73,6 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_utils(m);
     auto linalg = m.def_submodule("linalg", "Linear-algebra ops.");
     lucid::bindings::register_linalg(linalg);
-    auto einops = m.def_submodule("einops",
-                                  "einops-style rearrange/reduce/repeat/einsum.");
+    auto einops = m.def_submodule("einops", "einops-style rearrange/reduce/repeat/einsum.");
     lucid::bindings::register_einops(einops);
 }

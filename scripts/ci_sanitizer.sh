@@ -24,6 +24,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 MODE="${1:-ubsan}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+PYTEST_TARGET="${PYTEST_TARGET:-tests/parity/}"
 
 case "$MODE" in
     ubsan)
@@ -43,10 +45,10 @@ case "$MODE" in
 esac
 
 echo "==> Building engine with LUCID_BUILD_MODE=$BUILD_MODE"
-LUCID_BUILD_MODE="$BUILD_MODE" python3 -m pip install -e . --no-build-isolation \
+LUCID_BUILD_MODE="$BUILD_MODE" "$PYTHON_BIN" -m pip install -e . --no-build-isolation \
     2>&1 | tail -5
 
 echo "==> Running parity suite under $MODE"
-env $EXTRA_OPTS python3 -m pytest lucid/test/ -m "not slow" --tb=short -q
+env $EXTRA_OPTS "$PYTHON_BIN" -m pytest "$PYTEST_TARGET" -m "not slow" --tb=short -q
 
 echo "==> $MODE: green"

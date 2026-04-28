@@ -25,7 +25,8 @@ namespace {
 inline float ipiv_sign(const int* ipiv, int n) {
     int swaps = 0;
     for (int i = 0; i < n; ++i)
-        if (ipiv[i] != i + 1) ++swaps;
+        if (ipiv[i] != i + 1)
+            ++swaps;
     return (swaps % 2 == 0) ? 1.0f : -1.0f;
 }
 
@@ -34,10 +35,14 @@ inline float perm_index_sign(const std::uint32_t* p, std::size_t n) {
     std::vector<bool> seen(n, false);
     std::size_t cycles = 0;
     for (std::size_t i = 0; i < n; ++i) {
-        if (seen[i]) continue;
+        if (seen[i])
+            continue;
         ++cycles;
         std::size_t j = i;
-        while (!seen[j]) { seen[j] = true; j = p[j]; }
+        while (!seen[j]) {
+            seen[j] = true;
+            j = p[j];
+        }
     }
     return ((n - cycles) % 2 == 0) ? 1.0f : -1.0f;
 }
@@ -46,7 +51,8 @@ inline float perm_index_sign(const std::uint32_t* p, std::size_t n) {
 
 TensorImplPtr det_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    if (!a) throw LucidError("det: null input");
+    if (!a)
+        throw LucidError("det: null input");
     require_float(a->dtype_, "det");
     require_square_2d(a->shape_, "det");
     OpScope scope{"det", a->device_, a->dtype_, a->shape_};
@@ -76,14 +82,13 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
             signs[b] = perm_index_sign(p_data + b * N, N);
 
         ::mlx::core::Shape sign_shape;
-        for (auto d : out_shape) sign_shape.push_back(d);
+        for (auto d : out_shape)
+            sign_shape.push_back(d);
         ::mlx::core::array sign_arr(signs.data(), sign_shape, ::mlx::core::float32);
         if (a->dtype_ != Dtype::F32)
-            sign_arr = ::mlx::core::astype(sign_arr,
-                                            gpu::to_mlx_dtype(a->dtype_));
+            sign_arr = ::mlx::core::astype(sign_arr, gpu::to_mlx_dtype(a->dtype_));
         auto detA = ::mlx::core::multiply(detU, sign_arr);
-        return fresh(wrap_gpu_result(std::move(detA), a->dtype_),
-                     out_shape, a->dtype_, a->device_);
+        return fresh(wrap_gpu_result(std::move(detA), a->dtype_), out_shape, a->dtype_, a->device_);
     }
 
     // CPU path: per-batch LAPACK getrf, sign × diag product.
@@ -98,14 +103,16 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
         const auto* in_p = reinterpret_cast<const float*>(in_cpu.ptr.get());
         auto* out_p = reinterpret_cast<float*>(out_cpu.ptr.get());
         for (std::int64_t b = 0; b < batch; ++b) {
-            backend::cpu::lapack_lu_f32(in_p + b * per_mat, n, ipiv.data(),
-                                         L.data(), U.data(), &info);
-            if (info < 0) check_lapack_info(info, "det");
+            backend::cpu::lapack_lu_f32(in_p + b * per_mat, n, ipiv.data(), L.data(), U.data(),
+                                        &info);
+            if (info < 0)
+                check_lapack_info(info, "det");
             float det = ipiv_sign(ipiv.data(), n);
             if (info > 0) {
-                det = 0.0f;            // singular
+                det = 0.0f;  // singular
             } else {
-                for (int i = 0; i < n; ++i) det *= U[i * n + i];
+                for (int i = 0; i < n; ++i)
+                    det *= U[i * n + i];
             }
             out_p[b] = det;
         }
@@ -114,14 +121,16 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
         const auto* in_p = reinterpret_cast<const double*>(in_cpu.ptr.get());
         auto* out_p = reinterpret_cast<double*>(out_cpu.ptr.get());
         for (std::int64_t b = 0; b < batch; ++b) {
-            backend::cpu::lapack_lu_f64(in_p + b * per_mat, n, ipiv.data(),
-                                         L.data(), U.data(), &info);
-            if (info < 0) check_lapack_info(info, "det");
+            backend::cpu::lapack_lu_f64(in_p + b * per_mat, n, ipiv.data(), L.data(), U.data(),
+                                        &info);
+            if (info < 0)
+                check_lapack_info(info, "det");
             double det = ipiv_sign(ipiv.data(), n);
             if (info > 0) {
                 det = 0.0;
             } else {
-                for (int i = 0; i < n; ++i) det *= U[i * n + i];
+                for (int i = 0; i < n; ++i)
+                    det *= U[i * n + i];
             }
             out_p[b] = det;
         }

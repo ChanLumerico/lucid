@@ -6,6 +6,9 @@
 
 #include <mlx/ops.h>
 
+#include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/Helpers.h"
+#include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Exceptions.h"
@@ -13,9 +16,6 @@
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/TensorImpl.h"
-#include "../../autograd/AccumulateGrad.h"
-#include "../../autograd/Helpers.h"
-#include "../../autograd/Node.h"
 #include "../bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -42,8 +42,8 @@ OIR oir_for_axis(const Shape& shape, int axis) {
 }
 
 template <typename T>
-void softmax_forward_typed(const T* in, T* out, std::size_t outer,
-                           std::size_t axis_dim, std::size_t inner) {
+void softmax_forward_typed(
+    const T* in, T* out, std::size_t outer, std::size_t axis_dim, std::size_t inner) {
     for (std::size_t o = 0; o < outer; ++o) {
         for (std::size_t i = 0; i < inner; ++i) {
             // Pass 1: find max.
@@ -51,7 +51,8 @@ void softmax_forward_typed(const T* in, T* out, std::size_t outer,
             T m = base[0];
             for (std::size_t r = 1; r < axis_dim; ++r) {
                 const T v = base[r * inner];
-                if (v > m) m = v;
+                if (v > m)
+                    m = v;
             }
             // Pass 2: exp(x - m), accumulate sum.
             T* obase = out + o * axis_dim * inner + i;
@@ -71,9 +72,8 @@ void softmax_forward_typed(const T* in, T* out, std::size_t outer,
 }
 
 template <typename T>
-void softmax_backward_typed(const T* z, const T* g, T* dx,
-                            std::size_t outer, std::size_t axis_dim,
-                            std::size_t inner) {
+void softmax_backward_typed(
+    const T* z, const T* g, T* dx, std::size_t outer, std::size_t axis_dim, std::size_t inner) {
     // dx = z (g - sum(g z, axis))
     // Per (outer, inner) slice: compute sum_r (g[r] * z[r]) along axis once,
     // then dx[r] = z[r] * (g[r] - sum).
@@ -96,7 +96,8 @@ void softmax_backward_typed(const T* z, const T* g, T* dx,
 }  // namespace
 
 TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
-    if (!a) throw LucidError("softmax: null input");
+    if (!a)
+        throw LucidError("softmax: null input");
     if (a->device_ == Device::CPU && !a->is_contiguous())
         throw NotImplementedError(
             "softmax: non-contiguous input not supported (call .contiguous() first)");
@@ -111,7 +112,8 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
-        if (!g.arr) throw LucidError("softmax: null GPU input");
+        if (!g.arr)
+            throw LucidError("softmax: null GPU input");
         // MLX softmax(arr, axis, precise=true) — `precise=true` mirrors the
         // CPU path's two-pass max-subtract scheme (numerical stability).
         auto out = ::mlx::core::softmax(*g.arr, wrapped, /*precise=*/true);
@@ -120,22 +122,20 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
         const auto oir = oir_for_axis(a->shape_, wrapped);
         const auto& a_cpu = std::get<CpuStorage>(a->storage_);
         CpuStorage out;
-        out.dtype  = a->dtype_;
+        out.dtype = a->dtype_;
         out.nbytes = a_cpu.nbytes;
-        out.ptr    = allocate_aligned_bytes(out.nbytes);
+        out.ptr = allocate_aligned_bytes(out.nbytes);
         if (a->numel() > 0) {
             switch (a->dtype_) {
                 case Dtype::F32:
-                    softmax_forward_typed<float>(
-                        reinterpret_cast<const float*>(a_cpu.ptr.get()),
-                        reinterpret_cast<float*>(out.ptr.get()),
-                        oir.outer, oir.axis_dim, oir.inner);
+                    softmax_forward_typed<float>(reinterpret_cast<const float*>(a_cpu.ptr.get()),
+                                                 reinterpret_cast<float*>(out.ptr.get()), oir.outer,
+                                                 oir.axis_dim, oir.inner);
                     break;
                 case Dtype::F64:
-                    softmax_forward_typed<double>(
-                        reinterpret_cast<const double*>(a_cpu.ptr.get()),
-                        reinterpret_cast<double*>(out.ptr.get()),
-                        oir.outer, oir.axis_dim, oir.inner);
+                    softmax_forward_typed<double>(reinterpret_cast<const double*>(a_cpu.ptr.get()),
+                                                  reinterpret_cast<double*>(out.ptr.get()),
+                                                  oir.outer, oir.axis_dim, oir.inner);
                     break;
                 default:
                     throw NotImplementedError("softmax: dtype not supported");
@@ -144,27 +144,27 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
         out_storage = Storage{std::move(out)};
     }
 
-    auto result = std::make_shared<TensorImpl>(std::move(out_storage),
-                                               a->shape_, a->dtype_,
+    auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
                                                a->device_, false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()) * 5);
 
-    if (!GradMode::is_enabled() || !a->requires_grad_) return result;
+    if (!GradMode::is_enabled() || !a->requires_grad_)
+        return result;
 
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<SoftmaxBackward>();
-    bwd->input_shapes_  = {a->shape_};
-    bwd->out_shape_     = a->shape_;
-    bwd->dtype_         = a->dtype_;
-    bwd->device_        = a->device_;
+    bwd->input_shapes_ = {a->shape_};
+    bwd->out_shape_ = a->shape_;
+    bwd->dtype_ = a->dtype_;
+    bwd->device_ = a->device_;
     bwd->input_tensors_ = {a};
-    bwd->saved_output_  = result->storage_;
-    bwd->axis_          = wrapped;
+    bwd->saved_output_ = result->storage_;
+    bwd->axis_ = wrapped;
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
     bwd->set_saved_versions({a->version_});
 
-    result->grad_fn_       = std::move(bwd);
-    result->is_leaf_       = false;
+    result->grad_fn_ = std::move(bwd);
+    result->is_leaf_ = false;
     result->requires_grad_ = true;
     return result;
 }
@@ -189,25 +189,23 @@ std::vector<Storage> SoftmaxBackward::apply(Storage grad_out) {
 
     const auto oir = oir_for_axis(input_shapes_[0], axis_);
     CpuStorage dx;
-    dx.dtype  = dtype_;
+    dx.dtype = dtype_;
     dx.nbytes = z_cpu.nbytes;
-    dx.ptr    = allocate_aligned_bytes(dx.nbytes);
+    dx.ptr = allocate_aligned_bytes(dx.nbytes);
 
     if (shape_numel(input_shapes_[0]) > 0) {
         switch (dtype_) {
             case Dtype::F32:
-                softmax_backward_typed<float>(
-                    reinterpret_cast<const float*>(z_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                    reinterpret_cast<float*>(dx.ptr.get()),
-                    oir.outer, oir.axis_dim, oir.inner);
+                softmax_backward_typed<float>(reinterpret_cast<const float*>(z_cpu.ptr.get()),
+                                              reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                                              reinterpret_cast<float*>(dx.ptr.get()), oir.outer,
+                                              oir.axis_dim, oir.inner);
                 break;
             case Dtype::F64:
-                softmax_backward_typed<double>(
-                    reinterpret_cast<const double*>(z_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                    reinterpret_cast<double*>(dx.ptr.get()),
-                    oir.outer, oir.axis_dim, oir.inner);
+                softmax_backward_typed<double>(reinterpret_cast<const double*>(z_cpu.ptr.get()),
+                                               reinterpret_cast<const double*>(g_cpu.ptr.get()),
+                                               reinterpret_cast<double*>(dx.ptr.get()), oir.outer,
+                                               oir.axis_dim, oir.inner);
                 break;
             default:
                 throw NotImplementedError("softmax backward: dtype not supported");

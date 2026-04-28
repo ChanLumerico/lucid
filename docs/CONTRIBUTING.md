@@ -6,14 +6,11 @@ in flight. It supplements the user-facing README.
 ## Pre-flight checklist for every change
 
 ```
-# 1. Format
-find lucid/_C -name "*.h" -o -name "*.cpp" \
-    | xargs clang-format -i
+# 1. Format + static analysis
+tools/check_format.sh --tidy
 
-# 2. Static analysis (optional pre-push, mandatory in CI)
-./scripts/build_compile_commands.sh
-find lucid/_C -name "*.cpp" \
-    | xargs clang-tidy -p build/
+# 2. Layer dependency check
+python tools/check_layers.py
 
 # 3. Build (release + UBSan)
 python3 -m pip install -e . --no-build-isolation
@@ -25,6 +22,9 @@ pytest lucid/test/ -m "not slow" --tb=short -q
 
 # 5. CHANGELOG
 # Add an entry under "## Unreleased" — Added / Changed / Fixed / Removed.
+
+# Or run the full gate:
+./scripts/ci_full.sh
 ```
 
 ## Phase order

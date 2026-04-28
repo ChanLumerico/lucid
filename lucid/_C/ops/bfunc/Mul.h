@@ -30,11 +30,15 @@ class LUCID_API MulBackward : public BinaryOp<MulBackward> {
 public:
     static const OpSchema schema_v1;
 
-    static CpuStorage cpu_kernel(const CpuStorage& a, const CpuStorage& b,
-                                 const Shape& out_shape, Dtype dt);
+    static CpuStorage cpu_kernel(const CpuStorage& a,
+                                 const CpuStorage& b,
+                                 const Shape& out_shape,
+                                 Dtype dt);
 
-    static GpuStorage gpu_kernel(const GpuStorage& a, const GpuStorage& b,
-                                 const Shape& out_shape, Dtype dt);
+    static GpuStorage gpu_kernel(const GpuStorage& a,
+                                 const GpuStorage& b,
+                                 const Shape& out_shape,
+                                 Dtype dt);
 
     std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
 };

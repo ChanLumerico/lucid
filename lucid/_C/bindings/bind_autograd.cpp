@@ -17,14 +17,12 @@ void register_autograd(py::module_& m) {
             return "<lucid.Node seq=" + std::to_string(n.sequence_nr()) + ">";
         });
 
-    py::class_<AccumulateGrad, Node, std::shared_ptr<AccumulateGrad>>(
-        m, "AccumulateGrad");
+    py::class_<AccumulateGrad, Node, std::shared_ptr<AccumulateGrad>>(m, "AccumulateGrad");
 
     m.def(
         "engine_backward",
         [](std::shared_ptr<TensorImpl> root, bool retain_graph) {
-            Engine::backward(std::move(root), Storage{CpuStorage{}},
-                             retain_graph);
+            Engine::backward(root, Storage{CpuStorage{}}, retain_graph);
         },
         py::arg("root"), py::arg("retain_graph") = false,
         "Run backward starting at `root` with an implicit ones_like seed.");

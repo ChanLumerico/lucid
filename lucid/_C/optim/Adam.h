@@ -39,10 +39,11 @@ class LUCID_API Adam : public Optimizer {
 public:
     Adam(std::vector<std::shared_ptr<TensorImpl>> params,
          double lr = 1e-3,
-         double beta1 = 0.9, double beta2 = 0.999,
+         double beta1 = 0.9,
+         double beta2 = 0.999,
          double eps = 1e-8,
          double weight_decay = 0.0,
-         /*decoupled wd =*/ bool amsgrad = false);
+         /*decoupled wd =*/bool amsgrad = false);
     // amsgrad is reserved for future support; Phase 4 does not use it.
 
     void set_lr(double lr) override { lr_ = lr; }
@@ -57,14 +58,13 @@ protected:
     void update_one(std::size_t slot_idx,
                     std::shared_ptr<TensorImpl>& param,
                     const Storage& grad) override;
-    void init_state_slot(std::size_t slot_idx,
-                         const std::shared_ptr<TensorImpl>& param) override;
+    void init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) override;
 
 private:
     double lr_;
     double beta1_, beta2_, eps_;
     double weight_decay_;
-    bool   amsgrad_;
+    bool amsgrad_;
     std::int64_t step_count_;
 
     std::vector<Storage> m_;
@@ -75,7 +75,8 @@ class LUCID_API AdamW : public Optimizer {
 public:
     AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
           double lr = 1e-3,
-          double beta1 = 0.9, double beta2 = 0.999,
+          double beta1 = 0.9,
+          double beta2 = 0.999,
           double eps = 1e-8,
           double weight_decay = 1e-2);
 
@@ -88,8 +89,7 @@ protected:
     void update_one(std::size_t slot_idx,
                     std::shared_ptr<TensorImpl>& param,
                     const Storage& grad) override;
-    void init_state_slot(std::size_t slot_idx,
-                         const std::shared_ptr<TensorImpl>& param) override;
+    void init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) override;
 
 private:
     double lr_;
@@ -107,8 +107,11 @@ private:
 class LUCID_API NAdam : public Optimizer {
 public:
     NAdam(std::vector<std::shared_ptr<TensorImpl>> params,
-          double lr = 2e-3, double beta1 = 0.9, double beta2 = 0.999,
-          double eps = 1e-8, double weight_decay = 0.0,
+          double lr = 2e-3,
+          double beta1 = 0.9,
+          double beta2 = 0.999,
+          double eps = 1e-8,
+          double weight_decay = 0.0,
           double momentum_decay = 0.004);
 
     void set_lr(double lr) override { lr_ = lr; }
@@ -116,10 +119,8 @@ public:
     std::string state_dict_id() const override { return "nadam_v1"; }
 
 protected:
-    void update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
-                    const Storage& g) override;
-    void init_state_slot(std::size_t i,
-                         const std::shared_ptr<TensorImpl>& p) override;
+    void update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& g) override;
+    void init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) override;
 
 private:
     double lr_, beta1_, beta2_, eps_, weight_decay_, momentum_decay_;
@@ -135,18 +136,19 @@ private:
 class LUCID_API RAdam : public Optimizer {
 public:
     RAdam(std::vector<std::shared_ptr<TensorImpl>> params,
-          double lr = 1e-3, double beta1 = 0.9, double beta2 = 0.999,
-          double eps = 1e-8, double weight_decay = 0.0);
+          double lr = 1e-3,
+          double beta1 = 0.9,
+          double beta2 = 0.999,
+          double eps = 1e-8,
+          double weight_decay = 0.0);
 
     void set_lr(double lr) override { lr_ = lr; }
     double lr() const override { return lr_; }
     std::string state_dict_id() const override { return "radam_v1"; }
 
 protected:
-    void update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
-                    const Storage& g) override;
-    void init_state_slot(std::size_t i,
-                         const std::shared_ptr<TensorImpl>& p) override;
+    void update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& g) override;
+    void init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) override;
 
 private:
     double lr_, beta1_, beta2_, eps_, weight_decay_;

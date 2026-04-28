@@ -23,8 +23,7 @@ void MemoryTracker::track_alloc(std::size_t nbytes, Device device) {
     // Bump peak monotonically — CAS loop, lock-free.
     auto peak = c.peak_bytes.load(std::memory_order_relaxed);
     while (cur > peak &&
-           !c.peak_bytes.compare_exchange_weak(peak, cur,
-                                               std::memory_order_relaxed)) {
+           !c.peak_bytes.compare_exchange_weak(peak, cur, std::memory_order_relaxed)) {
         // peak got refreshed by another thread; loop until stable.
     }
 }
@@ -47,8 +46,7 @@ MemoryStats MemoryTracker::get_stats(Device device) {
 
 void MemoryTracker::reset_peak(Device device) {
     auto& c = counters_for(device);
-    c.peak_bytes.store(c.current_bytes.load(std::memory_order_relaxed),
-                       std::memory_order_relaxed);
+    c.peak_bytes.store(c.current_bytes.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
 }  // namespace lucid

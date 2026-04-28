@@ -16,17 +16,16 @@ namespace lucid {
 
 TensorImplPtr cholesky_op(const TensorImplPtr& a, bool upper) {
     using namespace linalg_detail;
-    if (!a) throw LucidError("cholesky: null input");
+    if (!a)
+        throw LucidError("cholesky: null input");
     require_float(a->dtype_, "cholesky");
     require_square_2d(a->shape_, "cholesky");
     OpScope scope{"cholesky", a->device_, a->dtype_, a->shape_};
 
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
-        auto out = ::mlx::core::linalg::cholesky(in, upper,
-                                                   kMlxLinalgStream);
-        return fresh(wrap_gpu_result(std::move(out), a->dtype_),
-                     a->shape_, a->dtype_, a->device_);
+        auto out = ::mlx::core::linalg::cholesky(in, upper, kMlxLinalgStream);
+        return fresh(wrap_gpu_result(std::move(out), a->dtype_), a->shape_, a->dtype_, a->device_);
     }
 
     const auto& sh = a->shape_;

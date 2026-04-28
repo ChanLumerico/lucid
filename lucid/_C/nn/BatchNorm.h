@@ -19,11 +19,11 @@
 #include <vector>
 
 #include "../api.h"
+#include "../autograd/FuncOp.h"
 #include "../core/AmpPolicy.h"
 #include "../core/OpSchema.h"
 #include "../core/Storage.h"
 #include "../core/fwd.h"
-#include "../autograd/FuncOp.h"
 
 namespace lucid {
 
@@ -31,13 +31,15 @@ template <int N>
 class LUCID_API BatchNormNdBackward : public FuncOp<BatchNormNdBackward<N>, 3> {
 public:
     static const OpSchema schema_v1;
-    Storage saved_mean_;   // (1, C, 1, ..., 1) for broadcast
-    Storage saved_rstd_;   // same shape
-    int B_=0, C_=0;
-    int S_[N > 0 ? N : 1];   // spatial extent (size N; placeholder when N=0)
+    Storage saved_mean_;  // (1, C, 1, ..., 1) for broadcast
+    Storage saved_rstd_;  // same shape
+    int B_ = 0, C_ = 0;
+    int S_[N > 0 ? N : 1];  // spatial extent (size N; placeholder when N=0)
 
-    static TensorImplPtr forward(const TensorImplPtr& x, const TensorImplPtr& gamma,
-                                 const TensorImplPtr& beta, double eps);
+    static TensorImplPtr forward(const TensorImplPtr& x,
+                                 const TensorImplPtr& gamma,
+                                 const TensorImplPtr& beta,
+                                 double eps);
     std::vector<Storage> apply(Storage grad_out) override;
 };
 

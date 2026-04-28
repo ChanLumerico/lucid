@@ -12,20 +12,20 @@ void register_amp(py::module_& m) {
         .value("KeepInput", AmpPolicy::KeepInput)
         .value("ForceFP32", AmpPolicy::ForceFP32)
         .export_values();
-    m.def("amp_policy_name",
-          [](AmpPolicy p) { return std::string(amp_policy_name(p)); });
+    m.def("amp_policy_name", [](AmpPolicy p) { return std::string(amp_policy_name(p)); });
 
     py::class_<amp::AutocastGuard>(m, "AutocastGuard")
         .def(py::init<Dtype>(), py::arg("target"))
-        .def("__enter__", [](amp::AutocastGuard& g) -> amp::AutocastGuard& {
-            return g;
-        }, py::return_value_policy::reference)
-        .def("__exit__", [](amp::AutocastGuard&, py::object, py::object,
-                            py::object) { return py::none(); });
+        .def(
+            "__enter__", [](amp::AutocastGuard& g) -> amp::AutocastGuard& { return g; },
+            py::return_value_policy::reference)
+        .def("__exit__",
+             [](amp::AutocastGuard&, py::object, py::object, py::object) { return py::none(); });
 
     m.def("amp_active_dtype", []() -> py::object {
         auto d = amp::active_dtype();
-        if (d) return py::cast(*d);
+        if (d)
+            return py::cast(*d);
         return py::none();
     });
     m.def("amp_is_active", &amp::is_active);

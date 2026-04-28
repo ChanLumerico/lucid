@@ -20,7 +20,7 @@
 
 #define LUCID_VERSION_STRING "0.0.1-dev"
 
-#define LUCID_ABI_VERSION   1
+#define LUCID_ABI_VERSION 1
 
 namespace lucid {
 

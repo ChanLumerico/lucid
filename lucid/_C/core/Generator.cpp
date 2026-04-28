@@ -15,8 +15,7 @@ constexpr std::uint32_t PHILOX_M1 = 0xCD9E8D57u;
 constexpr std::uint32_t PHILOX_W0 = 0x9E3779B9u;  // golden ratio
 constexpr std::uint32_t PHILOX_W1 = 0xBB67AE85u;
 
-inline void mulhilo32(std::uint32_t a, std::uint32_t b,
-                      std::uint32_t& hi, std::uint32_t& lo) {
+inline void mulhilo32(std::uint32_t a, std::uint32_t b, std::uint32_t& hi, std::uint32_t& lo) {
     const std::uint64_t product = static_cast<std::uint64_t>(a) * b;
     hi = static_cast<std::uint32_t>(product >> 32);
     lo = static_cast<std::uint32_t>(product);
@@ -41,8 +40,7 @@ inline void philox_bumpkey(std::uint32_t key[2]) {
     key[1] += PHILOX_W1;
 }
 
-void philox_4x32_10(std::uint64_t counter, std::uint64_t seed,
-                    std::uint32_t out[4]) {
+void philox_4x32_10(std::uint64_t counter, std::uint64_t seed, std::uint32_t out[4]) {
     std::uint32_t ctr[4];
     ctr[0] = static_cast<std::uint32_t>(counter);
     ctr[1] = static_cast<std::uint32_t>(counter >> 32);
@@ -55,7 +53,8 @@ void philox_4x32_10(std::uint64_t counter, std::uint64_t seed,
 
     for (int i = 0; i < 10; ++i) {
         philox_round(ctr, key);
-        if (i != 9) philox_bumpkey(key);
+        if (i != 9)
+            philox_bumpkey(key);
     }
 
     out[0] = ctr[0];

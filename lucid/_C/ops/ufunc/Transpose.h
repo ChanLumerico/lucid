@@ -19,11 +19,11 @@
 #include <vector>
 
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
 #include "../../core/AmpPolicy.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
-#include "../../autograd/FuncOp.h"
 
 namespace lucid {
 
@@ -31,10 +31,9 @@ class LUCID_API PermuteBackward : public FuncOp<PermuteBackward, 1> {
 public:
     static const OpSchema schema_v1;
 
-    std::vector<int> perm_;          // forward permutation
+    std::vector<int> perm_;  // forward permutation
 
-    static TensorImplPtr forward(const TensorImplPtr& a,
-                                 const std::vector<int>& perm);
+    static TensorImplPtr forward(const TensorImplPtr& a, const std::vector<int>& perm);
 
     std::vector<Storage> apply(Storage grad_out) override;
 };

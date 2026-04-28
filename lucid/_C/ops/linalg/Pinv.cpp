@@ -38,8 +38,7 @@ void pinv_one(const T* A, int m, int n, T* Aplus) {
 
     // rcond = eps * max(m, n).
     const T smax = (k > 0) ? *std::max_element(S.begin(), S.end()) : T{0};
-    const T rcond = std::numeric_limits<T>::epsilon() *
-                     static_cast<T>(std::max(m, n));
+    const T rcond = std::numeric_limits<T>::epsilon() * static_cast<T>(std::max(m, n));
     const T cutoff = rcond * smax;
 
     // Scale U^T by 1/s: form S_inv * U^T (k × m). U is (m, k); U^T is (k, m).
@@ -54,16 +53,10 @@ void pinv_one(const T* A, int m, int n, T* Aplus) {
     // Use cblas_*gemm: C = V^T^T * (S_inv U^T) — V^T is (k, n), so we need
     // transA=true on V^T to get V (n,k).
     if constexpr (std::is_same_v<T, float>) {
-        sgemm(/*transA=*/true, /*transB=*/false,
-              n, m, k, 1.0f,
-              Vt.data(), n,
-              S_inv_Ut.data(), m,
+        sgemm(/*transA=*/true, /*transB=*/false, n, m, k, 1.0f, Vt.data(), n, S_inv_Ut.data(), m,
               0.0f, Aplus, m);
     } else {
-        dgemm(/*transA=*/true, /*transB=*/false,
-              n, m, k, 1.0,
-              Vt.data(), n,
-              S_inv_Ut.data(), m,
+        dgemm(/*transA=*/true, /*transB=*/false, n, m, k, 1.0, Vt.data(), n, S_inv_Ut.data(), m,
               0.0, Aplus, m);
     }
 }
@@ -72,7 +65,8 @@ void pinv_one(const T* A, int m, int n, T* Aplus) {
 
 TensorImplPtr pinv_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    if (!a) throw LucidError("pinv: null input");
+    if (!a)
+        throw LucidError("pinv: null input");
     require_float(a->dtype_, "pinv");
     if (a->shape_.size() < 2)
         throw LucidError("pinv: input must be at least 2-D");
@@ -82,8 +76,8 @@ TensorImplPtr pinv_op(const TensorImplPtr& a) {
         auto in = as_mlx_array_gpu(a);
         auto out = ::mlx::core::linalg::pinv(in, kMlxLinalgStream);
         Shape sh = mlx_shape_to_lucid(out.shape());
-        return fresh(wrap_gpu_result(std::move(out), a->dtype_),
-                     std::move(sh), a->dtype_, a->device_);
+        return fresh(wrap_gpu_result(std::move(out), a->dtype_), std::move(sh), a->dtype_,
+                     a->device_);
     }
 
     const auto& sh = a->shape_;
@@ -92,7 +86,8 @@ TensorImplPtr pinv_op(const TensorImplPtr& a) {
     const std::int64_t batch = leading_batch_count(sh, /*mat_dims=*/2);
 
     Shape out_shape(sh.begin(), sh.end() - 2);
-    out_shape.push_back(n); out_shape.push_back(m);
+    out_shape.push_back(n);
+    out_shape.push_back(m);
 
     auto out_cpu = allocate_cpu(out_shape, a->dtype_);
     const auto& in_cpu = std::get<CpuStorage>(a->storage_);

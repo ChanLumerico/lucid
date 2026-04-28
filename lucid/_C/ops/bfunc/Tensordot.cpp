@@ -27,15 +27,16 @@ using bfunc_detail::validate_pair;
 
 // Build an einsum pattern equivalent to tensordot(a, b, axes_a, axes_b).
 // Contracted axes share a label; non-contracted axes get distinct labels.
-std::string tensordot_einsum_pattern(std::size_t na, std::size_t nb,
-                                      const std::vector<int>& axes_a,
-                                      const std::vector<int>& axes_b) {
-    auto norm = [](int ax, std::size_t n) {
-        return ax < 0 ? ax + static_cast<int>(n) : ax;
-    };
+std::string tensordot_einsum_pattern(std::size_t na,
+                                     std::size_t nb,
+                                     const std::vector<int>& axes_a,
+                                     const std::vector<int>& axes_b) {
+    auto norm = [](int ax, std::size_t n) { return ax < 0 ? ax + static_cast<int>(n) : ax; };
     std::set<int> ca_set, cb_set;
-    for (auto a : axes_a) ca_set.insert(norm(a, na));
-    for (auto b : axes_b) cb_set.insert(norm(b, nb));
+    for (auto a : axes_a)
+        ca_set.insert(norm(a, na));
+    for (auto b : axes_b)
+        cb_set.insert(norm(b, nb));
 
     std::string a_lhs(na, '?'), b_lhs(nb, '?'), rhs;
     char free = 'a';
@@ -68,8 +69,10 @@ std::string tensordot_einsum_pattern(std::size_t na, std::size_t nb,
 
 }  // namespace
 
-TensorImplPtr tensordot_op(const TensorImplPtr& a, const TensorImplPtr& b,
-                           std::vector<int> axes_a, std::vector<int> axes_b) {
+TensorImplPtr tensordot_op(const TensorImplPtr& a,
+                           const TensorImplPtr& b,
+                           std::vector<int> axes_a,
+                           std::vector<int> axes_b) {
     validate_pair(a, b, "tensordot");
     if (axes_a.size() != axes_b.size())
         throw LucidError("tensordot: axes_a and axes_b must have equal length");
@@ -78,10 +81,8 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a, const TensorImplPtr& b,
     // backwards stitch the gradient chain. Inference path keeps the native
     // gemm-based fast path below.
     if (GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)) {
-        return einsum_op(tensordot_einsum_pattern(a->shape_.size(),
-                                                   b->shape_.size(),
-                                                   axes_a, axes_b),
-                         {a, b});
+        return einsum_op(
+            tensordot_einsum_pattern(a->shape_.size(), b->shape_.size(), axes_a, axes_b), {a, b});
     }
 
     const Dtype dt = a->dtype_;
@@ -95,12 +96,11 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a, const TensorImplPtr& b,
         Shape out_shape;
         for (auto d : out.shape())
             out_shape.push_back(static_cast<std::int64_t>(d));
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                     std::move(out_shape), dt, device);
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(out_shape), dt,
+                     device);
     }
 
-    auto contract = [&](const TensorImplPtr& t,
-                        const std::vector<int>& axes_contract,
+    auto contract = [&](const TensorImplPtr& t, const std::vector<int>& axes_contract,
                         bool put_first) {
         const std::size_t nd = t->shape_.size();
         std::vector<bool> is_c(nd, false);
@@ -138,7 +138,8 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a, const TensorImplPtr& b,
         }
         Shape src_shape = t->shape_;
         Shape dst_shape;
-        for (auto p : perm) dst_shape.push_back(src_shape[p]);
+        for (auto p : perm)
+            dst_shape.push_back(src_shape[p]);
         const auto& cs = std::get<CpuStorage>(t->storage_);
         auto dst = allocate_cpu(dst_shape, dt);
         const std::size_t elem = dtype_size(dt);
@@ -155,10 +156,10 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a, const TensorImplPtr& b,
             for (std::size_t d = 0; d < nd; ++d)
                 src_flat += static_cast<std::size_t>(coord[d]) *
                             static_cast<std::size_t>(src_stride[perm[d]]);
-            std::memcpy(dst.ptr.get() + f * elem,
-                        cs.ptr.get() + src_flat * elem, elem);
+            std::memcpy(dst.ptr.get() + f * elem, cs.ptr.get() + src_flat * elem, elem);
             for (std::ptrdiff_t d = (std::ptrdiff_t)nd - 1; d >= 0; --d) {
-                if (++coord[d] < dst_shape[d]) break;
+                if (++coord[d] < dst_shape[d])
+                    break;
                 coord[d] = 0;
             }
         }
@@ -171,11 +172,11 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a, const TensorImplPtr& b,
     if (a_contract != b_contract)
         throw LucidError("tensordot: contracted dim sizes don't match");
 
-    const std::int64_t M = std::accumulate(a_kept.begin(), a_kept.end(),
-                                           (std::int64_t)1, std::multiplies<>());
+    const std::int64_t M =
+        std::accumulate(a_kept.begin(), a_kept.end(), (std::int64_t)1, std::multiplies<>());
     const std::int64_t K = a_contract;
-    const std::int64_t N = std::accumulate(b_kept.begin(), b_kept.end(),
-                                           (std::int64_t)1, std::multiplies<>());
+    const std::int64_t N =
+        std::accumulate(b_kept.begin(), b_kept.end(), (std::int64_t)1, std::multiplies<>());
 
     Shape out_shape(a_kept.begin(), a_kept.end());
     out_shape.insert(out_shape.end(), b_kept.begin(), b_kept.end());

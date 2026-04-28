@@ -39,9 +39,8 @@ public:
 
         if (device_ == Device::GPU) {
             const auto& gg = std::get<GpuStorage>(grad_out);
-            auto eye = ::mlx::core::eye(static_cast<int>(M),
-                                         static_cast<int>(N), 0,
-                                         gpu::to_mlx_dtype(dtype_));
+            auto eye = ::mlx::core::eye(static_cast<int>(M), static_cast<int>(N), 0,
+                                        gpu::to_mlx_dtype(dtype_));
             auto out = ::mlx::core::multiply(eye, *gg.arr);
             return {Storage{gpu::wrap_mlx_array(std::move(out), dtype_)}};
         }
@@ -71,7 +70,8 @@ public:
 }  // namespace
 
 TensorImplPtr trace_op(const TensorImplPtr& a) {
-    if (!a) throw LucidError("trace: null input");
+    if (!a)
+        throw LucidError("trace: null input");
     if (a->shape_.size() < 2)
         throw LucidError("trace: input must have ndim >= 2");
     const Dtype dt = a->dtype_;
@@ -85,9 +85,8 @@ TensorImplPtr trace_op(const TensorImplPtr& a) {
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         auto raw = ::mlx::core::trace(*ga.arr, /*offset=*/0,
-                                       /*axis1=*/0, /*axis2=*/1);
-        out = fresh(Storage{gpu::wrap_mlx_array(std::move(raw), dt)},
-                    out_shape, dt, device);
+                                      /*axis1=*/0, /*axis2=*/1);
+        out = fresh(Storage{gpu::wrap_mlx_array(std::move(raw), dt)}, out_shape, dt, device);
     } else {
         const auto& ca = std::get<CpuStorage>(a->storage_);
         const std::int64_t M = sh[0], N = sh[1];
@@ -100,8 +99,7 @@ TensorImplPtr trace_op(const TensorImplPtr& a) {
                 T sum{};
                 for (std::int64_t i = 0; i < L; ++i) {
                     const std::size_t idx = (i * N + i) * out_numel + k;
-                    sum = static_cast<T>(static_cast<double>(sum) +
-                                         static_cast<double>(in_p[idx]));
+                    sum = static_cast<T>(static_cast<double>(sum) + static_cast<double>(in_p[idx]));
                 }
                 out_p[k] = sum;
             }
@@ -120,8 +118,8 @@ TensorImplPtr trace_op(const TensorImplPtr& a) {
     if (GradMode::is_enabled() && a->requires_grad_ && a->shape_.size() == 2) {
         auto bwd = std::make_shared<TraceBackward>();
         bwd->input_shape_ = a->shape_;
-        bwd->dtype_       = dt;
-        bwd->device_      = device;
+        bwd->dtype_ = dt;
+        bwd->device_ = device;
         auto a_edge = detail::ensure_grad_fn(a);
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);

@@ -26,16 +26,16 @@
 #include <vector>
 
 #include "../../api.h"
+#include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/FuncOp.h"
+#include "../../autograd/Helpers.h"
+#include "../../autograd/Node.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
 #include "../../core/Storage.h"
 #include "../../core/TensorImpl.h"
-#include "../../autograd/AccumulateGrad.h"
-#include "../../autograd/FuncOp.h"
-#include "../../autograd/Helpers.h"
-#include "../../autograd/Node.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -53,19 +53,19 @@ concept HasReduceGpuKernel =
 template <class Derived>
 class ReduceOp : public FuncOp<Derived, 1> {
 public:
-    static constexpr bool kSavesInput  = true;
+    static constexpr bool kSavesInput = true;
     static constexpr bool kSavesOutput = false;
     static constexpr bool kHasGradient = true;
 
     // Reduce-specific saved state — populated by `forward`, consumed by
     // `apply` -> `Derived::grad_formula`.
     std::vector<int> reduce_axes_;
-    bool             keepdims_ = false;
-    Shape            full_input_shape_;
+    bool keepdims_ = false;
+    Shape full_input_shape_;
 
-    static std::shared_ptr<TensorImpl>
-    forward(const std::shared_ptr<TensorImpl>& a,
-            const std::vector<int>& axes_user, bool keepdims);
+    static std::shared_ptr<TensorImpl> forward(const std::shared_ptr<TensorImpl>& a,
+                                               const std::vector<int>& axes_user,
+                                               bool keepdims);
 
     std::vector<Storage> apply(Storage grad_out) override;
 };
@@ -73,12 +73,11 @@ public:
 // ---------------- implementation ----------------
 
 template <class Derived>
-std::shared_ptr<TensorImpl> ReduceOp<Derived>::forward(
-    const std::shared_ptr<TensorImpl>& a,
-    const std::vector<int>& axes_user, bool keepdims) {
+std::shared_ptr<TensorImpl> ReduceOp<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
+                                                       const std::vector<int>& axes_user,
+                                                       bool keepdims) {
     if (!a) {
-        throw LucidError(std::string(Derived::schema_v1.name) +
-                         ": null input tensor");
+        throw LucidError(std::string(Derived::schema_v1.name) + ": null input tensor");
     }
     // Item #8 — non-contiguous input guard. CPU only; GPU stride is internal.
     if (a->device_ == Device::CPU && !a->is_contiguous()) {
@@ -95,44 +94,44 @@ std::shared_ptr<TensorImpl> ReduceOp<Derived>::forward(
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         if constexpr (detail::HasReduceGpuKernel<Derived>) {
-            out_storage = Storage{Derived::gpu_kernel(
-                std::get<GpuStorage>(a->storage_), a->shape_, axes,
-                keepdims, a->dtype_)};
+            out_storage = Storage{Derived::gpu_kernel(std::get<GpuStorage>(a->storage_), a->shape_,
+                                                      axes, keepdims, a->dtype_)};
         } else {
-            throw NotImplementedError(
-                std::string(Derived::schema_v1.name) +
-                ": GPU kernel not yet implemented (Phase 3.7.x in progress)");
+            throw NotImplementedError(std::string(Derived::schema_v1.name) +
+                                      ": GPU kernel not yet implemented (Phase 3.7.x in progress)");
         }
     } else {
-        out_storage =
-            Storage{Derived::cpu_kernel(std::get<CpuStorage>(a->storage_),
-                                        a->shape_, axes, keepdims, a->dtype_)};
+        out_storage = Storage{Derived::cpu_kernel(std::get<CpuStorage>(a->storage_), a->shape_,
+                                                  axes, keepdims, a->dtype_)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            out_shape, a->dtype_, a->device_,
-                                            /*requires_grad=*/false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype_, a->device_,
+                                     /*requires_grad=*/false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
     if constexpr (!Derived::kHasGradient) {
         return out;
     } else {
         const bool needs_grad = GradMode::is_enabled() && a->requires_grad_;
-        if (!needs_grad) return out;
+        if (!needs_grad)
+            return out;
 
         auto a_edge = detail::ensure_grad_fn(a);
 
         auto bwd = std::make_shared<Derived>();
-        bwd->input_shapes_     = {a->shape_};
-        bwd->out_shape_        = out_shape;
-        bwd->dtype_            = a->dtype_;
-        bwd->device_           = a->device_;
-        bwd->input_tensors_    = {a};  // Item #9 — for version check
-        if constexpr (Derived::kSavesInput) bwd->saved_inputs_ = {a->storage_};
-        if constexpr (Derived::kSavesOutput) bwd->saved_output_ = out->storage_;
+        bwd->input_shapes_ = {a->shape_};
+        bwd->out_shape_ = out_shape;
+        bwd->dtype_ = a->dtype_;
+        bwd->device_ = a->device_;
+        bwd->input_tensors_ = {a};  // Item #9 — for version check
+        if constexpr (Derived::kSavesInput)
+            bwd->saved_inputs_ = {a->storage_};
+        if constexpr (Derived::kSavesOutput)
+            bwd->saved_output_ = out->storage_;
 
-        bwd->reduce_axes_      = axes;
-        bwd->keepdims_         = keepdims;
+        bwd->reduce_axes_ = axes;
+        bwd->keepdims_ = keepdims;
         bwd->full_input_shape_ = a->shape_;
 
         std::vector<Edge> edges;
@@ -140,8 +139,8 @@ std::shared_ptr<TensorImpl> ReduceOp<Derived>::forward(
         bwd->set_next_edges(std::move(edges));
         bwd->set_saved_versions({a->version_});
 
-        out->grad_fn_       = std::move(bwd);
-        out->is_leaf_       = false;
+        out->grad_fn_ = std::move(bwd);
+        out->is_leaf_ = false;
         out->requires_grad_ = true;
         return out;
     }

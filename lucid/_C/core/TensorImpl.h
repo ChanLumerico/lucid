@@ -16,12 +16,12 @@
 //
 // Layer:          core/. May include from core/ only.
 
+#include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
-
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
 
 #include "../api.h"
 #include "Device.h"
@@ -52,11 +52,9 @@ public:
     std::shared_ptr<Node> grad_fn_;
     std::optional<Storage> grad_storage_;
 
-    TensorImpl(Storage storage, Shape shape, Dtype dtype, Device device,
-               bool requires_grad);
+    TensorImpl(Storage storage, Shape shape, Dtype dtype, Device device, bool requires_grad);
 
-    static std::shared_ptr<TensorImpl>
-    from_numpy(py::array arr, Device device, bool requires_grad);
+    static std::shared_ptr<TensorImpl> from_numpy(py::array arr, Device device, bool requires_grad);
 
     std::size_t numel() const;
     std::size_t nbytes() const;

@@ -34,12 +34,10 @@ public:
 /// Register an op's schema at module init. Place at file scope, after the op
 /// class definition. Generates a unique-typed dummy struct whose constructor
 /// performs the registration.
-#define LUCID_REGISTER_OP(NAME)                                              \
-    namespace {                                                              \
-    struct LucidRegister_##NAME {                                            \
-        LucidRegister_##NAME() {                                             \
-            ::lucid::OpRegistry::register_op(NAME::schema_v1);               \
-        }                                                                    \
-    };                                                                       \
-    static const LucidRegister_##NAME _lucid_register_##NAME{};              \
+#define LUCID_REGISTER_OP(NAME)                                                       \
+    namespace {                                                                       \
+    struct LucidRegister_##NAME {                                                     \
+        LucidRegister_##NAME() { ::lucid::OpRegistry::register_op(NAME::schema_v1); } \
+    };                                                                                \
+    static const LucidRegister_##NAME _lucid_register_##NAME{};                       \
     }

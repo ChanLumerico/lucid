@@ -44,10 +44,9 @@ public:
     // expired weak_ptr (intermediate tensors freed) silently no-op.
     void validate_versions() override {
         for (std::size_t i = 0; i < N_IN; ++i) {
-            ::lucid::check_version_match(
-                input_tensors_[i],
-                saved_versions_.size() > i ? saved_versions_[i] : 0,
-                Derived::schema_v1.name, i);
+            ::lucid::check_version_match(input_tensors_[i],
+                                         saved_versions_.size() > i ? saved_versions_[i] : 0,
+                                         Derived::schema_v1.name, i);
         }
     }
 

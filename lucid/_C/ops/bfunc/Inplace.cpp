@@ -19,16 +19,19 @@ namespace {
 // Compute fwd_fn(a, b), then overwrite a's storage with the result,
 // bump version, and return a. Shape/dtype/device must match.
 template <typename Fn>
-TensorImplPtr inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b,
-                            Fn&& fwd_fn, const char* name) {
-    if (!a || !b) throw LucidError(std::string(name) + ": null input");
+TensorImplPtr inplace_apply(const TensorImplPtr& a,
+                            const TensorImplPtr& b,
+                            Fn&& fwd_fn,
+                            const char* name) {
+    if (!a || !b)
+        throw LucidError(std::string(name) + ": null input");
     auto out = fwd_fn(a, b);
     if (out->shape_ != a->shape_)
         throw ShapeMismatch(a->shape_, out->shape_,
                             std::string(name) + " (in-place: shape changed)");
     a->storage_ = std::move(out->storage_);
-    a->dtype_   = out->dtype_;
-    a->device_  = out->device_;
+    a->dtype_ = out->dtype_;
+    a->device_ = out->device_;
     a->version_ += 1;
     return a;
 }

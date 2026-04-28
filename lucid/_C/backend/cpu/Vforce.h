@@ -35,10 +35,8 @@ LUCID_INTERNAL void vcos_f64(const double* in, double* out, std::size_t n);
 LUCID_INTERNAL void vtan_f64(const double* in, double* out, std::size_t n);
 
 // element-wise power: out[i] = base[i] ^ expo[i] (both vectors)
-LUCID_INTERNAL void vpow_f32(const float* base, const float* expo, float* out,
-                             std::size_t n);
-LUCID_INTERNAL void vpow_f64(const double* base, const double* expo, double* out,
-                             std::size_t n);
+LUCID_INTERNAL void vpow_f32(const float* base, const float* expo, float* out, std::size_t n);
+LUCID_INTERNAL void vpow_f64(const double* base, const double* expo, double* out, std::size_t n);
 
 // inverse trig
 LUCID_INTERNAL void vasin_f32(const float* in, float* out, std::size_t n);

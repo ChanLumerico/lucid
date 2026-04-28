@@ -58,8 +58,10 @@ protected:
 class LUCID_API StepLR : public LRScheduler {
 public:
     StepLR(Optimizer& opt, std::int64_t step_size, double gamma = 0.1);
+
 protected:
     double compute_lr_at(std::int64_t epoch) const override;
+
 private:
     std::int64_t step_size_;
     double gamma_;
@@ -69,8 +71,10 @@ private:
 class LUCID_API ExponentialLR : public LRScheduler {
 public:
     ExponentialLR(Optimizer& opt, double gamma);
+
 protected:
     double compute_lr_at(std::int64_t epoch) const override;
+
 private:
     double gamma_;
 };
@@ -78,10 +82,11 @@ private:
 /// LR drops by `gamma` at each milestone.
 class LUCID_API MultiStepLR : public LRScheduler {
 public:
-    MultiStepLR(Optimizer& opt, std::vector<std::int64_t> milestones,
-                double gamma = 0.1);
+    MultiStepLR(Optimizer& opt, std::vector<std::int64_t> milestones, double gamma = 0.1);
+
 protected:
     double compute_lr_at(std::int64_t epoch) const override;
+
 private:
     std::vector<std::int64_t> milestones_;
     double gamma_;
@@ -91,8 +96,10 @@ private:
 class LUCID_API CosineAnnealingLR : public LRScheduler {
 public:
     CosineAnnealingLR(Optimizer& opt, std::int64_t T_max, double eta_min = 0.0);
+
 protected:
     double compute_lr_at(std::int64_t epoch) const override;
+
 private:
     std::int64_t T_max_;
     double eta_min_;
@@ -103,10 +110,11 @@ private:
 /// invoked once per `step()` with the new epoch index.
 class LUCID_API LambdaLR : public LRScheduler {
 public:
-    LambdaLR(Optimizer& opt,
-             std::function<double(std::int64_t)> lr_lambda);
+    LambdaLR(Optimizer& opt, std::function<double(std::int64_t)> lr_lambda);
+
 protected:
     double compute_lr_at(std::int64_t epoch) const override;
+
 private:
     std::function<double(std::int64_t)> lr_lambda_;
 };
@@ -162,7 +170,8 @@ public:
     enum class Mode { Triangular, Triangular2, ExpRange };
 
     CyclicLR(Optimizer& opt,
-             double base_lr, double max_lr,
+             double base_lr,
+             double max_lr,
              std::int64_t step_size_up,
              std::int64_t step_size_down = 0,
              Mode mode = Mode::Triangular,
@@ -173,7 +182,7 @@ protected:
 
 private:
     double base_lr_cyc_, max_lr_;
-    std::int64_t step_size_up_, step_size_down_, total_size_;
+    std::int64_t step_size_up_, total_size_;
     Mode mode_;
     double gamma_;
 };
@@ -184,7 +193,8 @@ private:
 class LUCID_API NoamScheduler : public LRScheduler {
 public:
     NoamScheduler(Optimizer& opt,
-                  std::int64_t model_size, std::int64_t warmup_steps,
+                  std::int64_t model_size,
+                  std::int64_t warmup_steps,
                   double factor = 1.0);
 
 protected:

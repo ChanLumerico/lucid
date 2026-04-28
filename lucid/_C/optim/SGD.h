@@ -53,15 +53,14 @@ protected:
     void update_one(std::size_t slot_idx,
                     std::shared_ptr<TensorImpl>& param,
                     const Storage& grad) override;
-    void init_state_slot(std::size_t slot_idx,
-                         const std::shared_ptr<TensorImpl>& param) override;
+    void init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) override;
 
 private:
     double lr_;
     double momentum_;
     double dampening_;
     double weight_decay_;
-    bool   nesterov_;
+    bool nesterov_;
     std::vector<Storage> moment_;
 };
 
@@ -79,18 +78,20 @@ private:
 class LUCID_API ASGD : public Optimizer {
 public:
     ASGD(std::vector<std::shared_ptr<TensorImpl>> params,
-         double lr = 1e-3, double momentum = 0.0, double weight_decay = 0.0,
-         double alpha = 0.75, double t0 = 1e6, double lambd = 1e-4);
+         double lr = 1e-3,
+         double momentum = 0.0,
+         double weight_decay = 0.0,
+         double alpha = 0.75,
+         double t0 = 1e6,
+         double lambd = 1e-4);
 
     void set_lr(double lr) override { lr_ = lr; }
     double lr() const override { return lr_; }
     std::string state_dict_id() const override { return "asgd_v1"; }
 
 protected:
-    void update_one(std::size_t i, std::shared_ptr<TensorImpl>& p,
-                    const Storage& g) override;
-    void init_state_slot(std::size_t i,
-                         const std::shared_ptr<TensorImpl>& p) override;
+    void update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& g) override;
+    void init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) override;
 
 private:
     double lr_, momentum_, weight_decay_, alpha_, t0_, lambd_;

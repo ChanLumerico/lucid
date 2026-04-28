@@ -8,7 +8,6 @@
 
 namespace lucid {
 
-LUCID_API std::pair<TensorImplPtr, TensorImplPtr>
-eig_op(const TensorImplPtr& a);
+LUCID_API std::pair<TensorImplPtr, TensorImplPtr> eig_op(const TensorImplPtr& a);
 
 }  // namespace lucid
