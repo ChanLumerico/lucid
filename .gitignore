@@ -27,3 +27,43 @@ out/
 build/
 *.egg-info/
 phase0_baseline.txt
+
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging
+dist/
+wheelhouse/
+.eggs/
+pip-wheel-metadata/
+
+# Coverage / profiling
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+*.gcov
+
+# CMake / native build artifacts
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+.ninja_deps
+.ninja_log
+
+# Debug artifacts
+*.dSYM/
+
+# Tool caches
+.ruff_cache/
+.pyre/
+.pytype/
