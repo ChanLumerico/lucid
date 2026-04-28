@@ -81,5 +81,10 @@ if [[ ! -f build/compile_commands.json ]]; then
 fi
 
 echo "==> Running clang-tidy"
-"$CLANG_TIDY" -p build --quiet --extra-arg=-Wno-error "${CPP_TUS[@]}"
+"$CLANG_TIDY" \
+    -p build \
+    --quiet \
+    --extra-arg=-Wno-error \
+    --extra-arg=-Wno-deprecated-declarations \
+    "${CPP_TUS[@]}"
 echo "format and clang-tidy checks passed."

@@ -10,6 +10,24 @@ be tagged `v3.1.0-rc1` after Phase 5.
 
 ## [Unreleased]
 
+### Added — Production refactor Phase 0.5 CMake build foundation
+- Added `lucid/_C/CMakeLists.txt` and migrated the engine extension build from
+  the 122-source setuptools `Extension` list to a CMake-driven build with
+  layer object libraries (`lucid_core`, backend CPU/GPU, autograd, ops,
+  random, optim, bindings) linked into `lucid_engine`.
+- Reworked `setup.py` into a thin setuptools adapter that invokes CMake,
+  forwards `LUCID_BUILD_MODE`, enforces macOS arm64, locates pybind11/MLX, and
+  writes the extension into `lucid/_C/`.
+- Added CMake build modes for release/debug/sanitizers and an opt-in
+  `LUCID_COVERAGE=ON` LLVM coverage path.
+- Added `tools/coverage.sh`, `tools/build_wheel.sh`, and a CMake-backed
+  `scripts/build_compile_commands.sh`.
+- Added `.github/workflows/ci.yml` for Apple Silicon-only Python
+  3.11-3.14 phase gates, wheel artifacts, coverage artifact upload, and a
+  nightly performance placeholder.
+- Added `tests/perf/` and `docs/perf/history.json` placeholders for Phase 8
+  benchmark work.
+
 ### Added — Production refactor Phase 0 tooling gate
 - Added strict C++ warning policy to `setup.py`: all engine build modes now add
   `-Wall -Wextra -Wpedantic -Werror`, with `-Wno-unused-parameter` for explicit

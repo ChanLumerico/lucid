@@ -13,11 +13,12 @@ tools/check_format.sh --tidy
 python tools/check_layers.py
 
 # 3. Build (release + UBSan)
+python3 -m pip install cmake ninja pybind11
 python3 -m pip install -e . --no-build-isolation
 LUCID_BUILD_MODE=debug-ubsan python3 -m pip install -e . --no-build-isolation
 
 # 4. Test
-pytest lucid/test/ -m "not slow" --tb=short -q
+pytest tests/parity/ --tb=short -q
 ./scripts/ci_sanitizer.sh ubsan
 
 # 5. CHANGELOG
@@ -92,7 +93,7 @@ issue templates and a contributor licensing agreement.
 
 A phase is "done" when:
 1. All exit-gate criteria in the plan file pass.
-2. `pytest lucid/test/ -m "not slow"` is green.
+2. `pytest tests/parity/` is green.
 3. UBSan build is green on the parity surface.
 4. `CHANGELOG.md` is updated.
 5. The plan file's todos for that phase are all `[completed]`.
