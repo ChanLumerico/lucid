@@ -5,16 +5,6 @@
   },
   "extensions": [
     {
-      "name": "lucid._C.tokenizers.core",
-      "sources": [
-        "lucid/_C/tokenizers/base.cpp",
-        "lucid/_C/tokenizers/util.cpp",
-        "lucid/_C/tokenizers/wordpiece.cpp",
-        "lucid/_C/tokenizers/bpe.cpp",
-        "lucid/_C/tokenizers/bindings.cpp"
-      ]
-    },
-    {
       "name": "lucid._C.engine",
       "sources": [
         "lucid/_C/version.cpp",
@@ -31,6 +21,7 @@
         "lucid/_C/core/TensorImpl.cpp",
 
         "lucid/_C/backend/cpu/Blas.cpp",
+        "lucid/_C/backend/cpu/Lapack.cpp",
         "lucid/_C/backend/cpu/Im2Col.cpp",
         "lucid/_C/backend/cpu/Norm.cpp",
         "lucid/_C/backend/cpu/Pool.cpp",
@@ -92,6 +83,11 @@
         "lucid/_C/ops/utils/Meshgrid.cpp",
         "lucid/_C/ops/utils/Histogram.cpp",
 
+        "lucid/_C/ops/einops/Rearrange.cpp",
+        "lucid/_C/ops/einops/Reduce.cpp",
+        "lucid/_C/ops/einops/Repeat.cpp",
+        "lucid/_C/ops/einops/Einsum.cpp",
+
         "lucid/_C/ops/linalg/Inv.cpp",
         "lucid/_C/ops/linalg/Det.cpp",
         "lucid/_C/ops/linalg/Solve.cpp",
@@ -144,6 +140,7 @@
         "lucid/_C/bindings/bind_ufunc.cpp",
         "lucid/_C/bindings/bind_utils.cpp",
         "lucid/_C/bindings/bind_linalg.cpp",
+        "lucid/_C/bindings/bind_einops.cpp",
         "lucid/_C/bindings/bind.cpp"
       ],
       "extra_compile_args": ["-std=c++20", "-O3", "-fvisibility=hidden", "-DLUCID_BUILDING_ENGINE=1"],
