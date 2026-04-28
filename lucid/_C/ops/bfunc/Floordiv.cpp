@@ -7,8 +7,8 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"

@@ -12,8 +12,8 @@
 
 #include "../../api.h"
 #include "../../core/Allocator.h"
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "../../core/Helpers.h"
 #include "../../core/Shape.h"
 #include "../../core/Storage.h"

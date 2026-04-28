@@ -11,7 +11,8 @@
 
 #include "../backend/gpu/MlxBridge.h"
 #include "Allocator.h"
-#include "Exceptions.h"
+#include "Error.h"
+#include "ErrorBuilder.h"
 
 namespace lucid {
 
@@ -96,7 +97,7 @@ py::dtype lucid_dtype_to_np(Dtype dt) {
         case Dtype::C64:
             return py::dtype("complex64");
     }
-    throw LucidError("lucid_dtype_to_np: unknown Dtype");
+    ErrorBuilder("lucid_dtype_to_np").fail("unknown Dtype");
 }
 
 py::object make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride& stride) {
@@ -131,7 +132,7 @@ std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
         py::array_t<std::byte, py::array::c_style | py::array::forcecast>::ensure(arr);
     // Ensure() may return null on failure.
     if (!arr) {
-        throw LucidError("from_numpy: input is not a numpy array");
+        ErrorBuilder("from_numpy").fail("input is not a numpy array");
     }
 
     Dtype dtype = np_dtype_to_lucid(arr.dtype());
@@ -153,7 +154,7 @@ std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
     // same dtype; ensure() above does the conversion if necessary.
     py::array contig = py::array::ensure(arr, py::array::c_style | py::array::forcecast);
     if (!contig) {
-        throw LucidError("from_numpy: failed to obtain C-contiguous view");
+        ErrorBuilder("from_numpy").fail("failed to obtain C-contiguous view");
     }
     if (total > 0) {
         std::memcpy(cpu.ptr.get(), contig.data(), total);
@@ -228,7 +229,7 @@ void TensorImpl::copy_from(const TensorImpl& other) {
     std::visit(overloaded{
                    [&](CpuStorage& dst, const CpuStorage& src) {
                        if (dst.nbytes != src.nbytes) {
-                           throw LucidError("copy_from: nbytes mismatch");
+                           ErrorBuilder("copy_from").fail("nbytes mismatch");
                        }
                        if (dst.nbytes > 0) {
                            std::memcpy(dst.ptr.get(), src.ptr.get(), dst.nbytes);
@@ -236,13 +237,13 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                    },
                    [&](GpuStorage& dst, const GpuStorage& src) {
                        if (dst.nbytes != src.nbytes) {
-                           throw LucidError("copy_from: nbytes mismatch (GPU)");
+                           ErrorBuilder("copy_from").fail("nbytes mismatch (GPU)");
                        }
                        // Re-point our shared_ptr at a new wrapper around a clone of
                        // the source array. We can't memcpy GPU buffers directly;
                        // MLX's `copy()` performs the device-side replication.
                        if (!src.arr) {
-                           throw LucidError("copy_from: src GPU array is null");
+                           ErrorBuilder("copy_from").fail("src GPU array is null");
                        }
                        auto cloned = ::mlx::core::copy(*src.arr);
                        dst.arr = gpu::wrap_mlx_array(std::move(cloned), dst.dtype).arr;

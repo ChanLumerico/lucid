@@ -4,8 +4,8 @@
 #include <cmath>
 #include <limits>
 
+#include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
-#include "../core/Exceptions.h"
 #include "Optimizer.h"
 
 namespace lucid {

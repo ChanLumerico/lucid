@@ -3,8 +3,8 @@
 #include <utility>
 
 #include "../autograd/Helpers.h"
+#include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
-#include "../core/Exceptions.h"
 #include "../core/Generator.h"
 #include "../core/Profiler.h"
 #include "../core/Scope.h"

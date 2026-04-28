@@ -11,7 +11,7 @@
 //
 // Adding a new exception:
 //   1. Subclass `LucidError` here, with structured payload as ctor params.
-//   2. Implement the message format in `Exceptions.cpp`.
+//   2. Implement the message format in `Error.cpp`.
 //   3. Register it in `bind_errors.cpp` (one new `make_subclass` line + one
 //      new `catch` arm in the translator).
 //   4. Document in `CHANGELOG.md`.

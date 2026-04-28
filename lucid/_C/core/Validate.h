@@ -23,14 +23,14 @@
 // failed check the function throws the matching typed exception (Shape /
 // Dtype / Device mismatch) and aborts — no silent skips.
 //
-// Layer: core/. Depends on core/Exceptions.h, core/TensorImpl.h.
+// Layer: core/. Depends on core/Error.h, core/TensorImpl.h.
 
 #include <initializer_list>
 #include <string>
 
 #include "../api.h"
 #include "Dtype.h"
-#include "Exceptions.h"
+#include "Error.h"
 #include "Shape.h"
 #include "TensorImpl.h"
 #include "fwd.h"

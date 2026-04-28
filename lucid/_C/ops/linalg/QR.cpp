@@ -8,8 +8,8 @@
 
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -32,8 +32,10 @@ std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a) {
         Shape qsh = mlx_shape_to_lucid(Q.shape());
         Shape rsh = mlx_shape_to_lucid(R.shape());
         std::vector<TensorImplPtr> result;
-        result.push_back(fresh(wrap_gpu_result(std::move(Q), a->dtype_), std::move(qsh), a->dtype_, a->device_));
-        result.push_back(fresh(wrap_gpu_result(std::move(R), a->dtype_), std::move(rsh), a->dtype_, a->device_));
+        result.push_back(
+            fresh(wrap_gpu_result(std::move(Q), a->dtype_), std::move(qsh), a->dtype_, a->device_));
+        result.push_back(
+            fresh(wrap_gpu_result(std::move(R), a->dtype_), std::move(rsh), a->dtype_, a->device_));
         return result;
     }
 

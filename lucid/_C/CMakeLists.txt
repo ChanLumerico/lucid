@@ -98,7 +98,7 @@ lucid_object_library(
     core/AmpPolicy.cpp
     core/Determinism.cpp
     core/ErrorBuilder.cpp
-    core/Exceptions.cpp
+    core/Error.cpp
     core/Generator.cpp
     core/GradMode.cpp
     core/MemoryStats.cpp

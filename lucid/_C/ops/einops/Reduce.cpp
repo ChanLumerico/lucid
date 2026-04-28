@@ -2,8 +2,8 @@
 #include <string>
 #include <vector>
 
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -23,29 +23,30 @@ using einops_detail::Token;
 
 namespace {
 
-TensorImplPtr dispatch_reduce(const TensorImplPtr& x,
-                              const std::vector<int>& axes,
-                              const std::string& reduction) {
+TensorImplPtr dispatch_reduce(const TensorImplPtr& x, const std::vector<int>& axes, int reduction) {
     if (axes.empty())
         return x;
-    if (reduction == "sum")
-        return sum_op(x, axes, /*keepdims=*/false);
-    if (reduction == "mean")
-        return mean_op(x, axes, /*keepdims=*/false);
-    if (reduction == "max")
-        return max_op(x, axes, /*keepdims=*/false);
-    if (reduction == "min")
-        return min_op(x, axes, /*keepdims=*/false);
-    if (reduction == "prod")
-        return prod_op(x, axes, /*keepdims=*/false);
-    ErrorBuilder("reduce").fail("unknown reduction '" + reduction + "'");
+    switch (reduction) {
+        case 1:
+            return mean_op(x, axes, /*keepdims=*/false);
+        case 2:
+            return sum_op(x, axes, /*keepdims=*/false);
+        case 3:
+            return max_op(x, axes, /*keepdims=*/false);
+        case 4:
+            return min_op(x, axes, /*keepdims=*/false);
+        case 5:
+            return prod_op(x, axes, /*keepdims=*/false);
+        default:
+            ErrorBuilder("reduce").fail("unknown reduction code " + std::to_string(reduction));
+    }
 }
 
 }  // namespace
 
 TensorImplPtr einops_reduce_op(const TensorImplPtr& a,
                                const std::string& pattern,
-                               const std::string& reduction,
+                               int reduction,
                                const std::map<std::string, std::int64_t>& axes_lengths) {
     Validator::input(a, "reduce.a").non_null();
     OpScopeFull scope{"einops_reduce", a->device_, a->dtype_, a->shape_};

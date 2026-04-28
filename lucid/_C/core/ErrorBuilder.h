@@ -5,7 +5,7 @@
 // =====================================================================
 //
 // Two complementary tools that sit on top of the typed exceptions in
-// `Exceptions.h`:
+// `Error.h`:
 //
 // 1. `ErrorBuilder`     — chainable convenience for the most common
 //                          throw patterns. Equivalent to constructing
@@ -18,10 +18,10 @@
 //                          `LucidError` automatically gains a stack
 //                          trace in `what()` showing the op nesting.
 //
-// Both are migrated incrementally — Phase 1 introduces them; the bulk
-// of `throw LucidError("...")` call sites move over phase by phase.
+// Phase 1 routes string-only failures through this builder. Structured
+// mismatch exceptions still throw their typed payload directly.
 //
-// Layer: core/. Depends on Exceptions.h, Shape.h, Dtype.h.
+// Layer: core/. Depends on Error.h, Shape.h, Dtype.h.
 
 #include <string>
 #include <string_view>
@@ -30,7 +30,7 @@
 #include "../api.h"
 #include "Device.h"
 #include "Dtype.h"
-#include "Exceptions.h"
+#include "Error.h"
 #include "Shape.h"
 
 namespace lucid {

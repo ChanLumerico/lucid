@@ -1,12 +1,31 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "../core/ErrorBuilder.h"
 #include "../core/TensorImpl.h"
 #include "../ops/einops/Einops.h"
 
 namespace py = pybind11;
 
 namespace lucid::bindings {
+
+namespace {
+
+int parse_einops_reduction(const std::string& reduction) {
+    if (reduction == "mean")
+        return 1;
+    if (reduction == "sum")
+        return 2;
+    if (reduction == "max")
+        return 3;
+    if (reduction == "min")
+        return 4;
+    if (reduction == "prod")
+        return 5;
+    ErrorBuilder("einops.reduce").fail("unknown reduction '" + reduction + "'");
+}
+
+}  // namespace
 
 void register_einops(py::module_& m) {
     // einops-style ops live in the same engine namespace as the rest;
@@ -25,7 +44,7 @@ void register_einops(py::module_& m) {
         "reduce",
         [](const TensorImplPtr& a, const std::string& pattern, const std::string& reduction,
            const std::map<std::string, std::int64_t>& axes_lengths) {
-            return einops_reduce_op(a, pattern, reduction, axes_lengths);
+            return einops_reduce_op(a, pattern, parse_einops_reduction(reduction), axes_lengths);
         },
         py::arg("a"), py::arg("pattern"), py::arg("reduction") = std::string("mean"),
         py::arg("axes_lengths") = std::map<std::string, std::int64_t>{},

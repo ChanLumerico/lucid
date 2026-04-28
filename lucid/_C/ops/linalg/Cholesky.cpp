@@ -7,7 +7,7 @@
 
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
-#include "../../core/Exceptions.h"
+#include "../../core/Error.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"

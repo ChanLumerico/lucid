@@ -1,4 +1,4 @@
-#include "Exceptions.h"
+#include "Error.h"
 
 #include <sstream>
 

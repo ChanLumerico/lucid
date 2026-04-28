@@ -3,7 +3,8 @@
 #include <set>
 
 #include "Dtype.h"
-#include "Exceptions.h"
+#include "Error.h"
+#include "ErrorBuilder.h"
 #include "TensorImpl.h"
 
 namespace lucid {
@@ -14,15 +15,15 @@ Validator Validator::input(const TensorImplPtr& t, std::string label) {
 
 Validator& Validator::non_null() {
     if (!t_)
-        throw LucidError(label_ + ": null input");
+        ErrorBuilder(label_).fail("null input");
     return *this;
 }
 
 Validator& Validator::float_only() {
     non_null();
     if (t_->dtype_ != Dtype::F32 && t_->dtype_ != Dtype::F64) {
-        throw NotImplementedError(label_ + ": only F32/F64 supported (got " +
-                                  std::string(dtype_name(t_->dtype_)) + ")");
+        ErrorBuilder(label_).not_implemented("only F32/F64 supported (got " +
+                                             std::string(dtype_name(t_->dtype_)) + ")");
     }
     return *this;
 }
@@ -55,8 +56,8 @@ Validator& Validator::dtype_in(std::initializer_list<Dtype> allowed) {
 Validator& Validator::ndim(int expected) {
     non_null();
     if (static_cast<int>(t_->shape_.size()) != expected) {
-        throw LucidError(label_ + ": expected ndim=" + std::to_string(expected) +
-                         ", got ndim=" + std::to_string(t_->shape_.size()));
+        ErrorBuilder(label_).fail("expected ndim=" + std::to_string(expected) +
+                                  ", got ndim=" + std::to_string(t_->shape_.size()));
     }
     return *this;
 }
@@ -64,8 +65,8 @@ Validator& Validator::ndim(int expected) {
 Validator& Validator::ndim_at_least(int min_n) {
     non_null();
     if (static_cast<int>(t_->shape_.size()) < min_n) {
-        throw LucidError(label_ + ": expected ndim>=" + std::to_string(min_n) +
-                         ", got ndim=" + std::to_string(t_->shape_.size()));
+        ErrorBuilder(label_).fail("expected ndim>=" + std::to_string(min_n) +
+                                  ", got ndim=" + std::to_string(t_->shape_.size()));
     }
     return *this;
 }
@@ -81,11 +82,11 @@ Validator& Validator::shape_eq(const Shape& expected) {
 Validator& Validator::square_2d() {
     non_null();
     if (t_->shape_.size() < 2) {
-        throw LucidError(label_ + ": expected >=2-D");
+        ErrorBuilder(label_).fail("expected >=2-D");
     }
     const auto n = t_->shape_.size();
     if (t_->shape_[n - 1] != t_->shape_[n - 2]) {
-        throw LucidError(label_ + ": last two dims must be equal (square)");
+        ErrorBuilder(label_).fail("last two dims must be equal (square)");
     }
     return *this;
 }
@@ -103,7 +104,7 @@ Validator::Pair Validator::pair(const TensorImplPtr& a,
 
 Validator::Pair& Validator::Pair::both_non_null() {
     if (!a_ || !b_)
-        throw LucidError(op_ + ": null input");
+        ErrorBuilder(op_).fail("null input");
     return *this;
 }
 

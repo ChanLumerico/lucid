@@ -1,0 +1,83 @@
+name: Publish Test PyPI Wheels
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-wheels:
+    name: Build wheel / Python ${{ matrix.python-version }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Enforce Apple Silicon runner
+        run: |
+          python - <<'PY'
+          import platform
+
+          system = platform.system()
+          machine = platform.machine()
+          if system != "Darwin" or machine != "arm64":
+              raise SystemExit(f"Lucid release supports macOS arm64 only, got {system}/{machine}")
+          print(f"runner={system}/{machine}")
+          PY
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cmake ninja pybind11
+          python -m pip install -e ".[test]"
+
+      - name: Build wheel
+        run: ./tools/build_wheel.sh
+
+      - name: Verify wheel in fresh venv
+        run: ./tools/verify_wheel.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lucid-testpypi-wheel-py${{ matrix.python-version }}
+          path: dist/*.whl
+
+  publish-testpypi:
+    name: Publish to Test PyPI
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/lucid-dl
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lucid-testpypi-wheel-*
+          path: dist
+          merge-multiple: true
+
+      - name: List release artifacts
+        run: ls -lh dist
+
+      - name: Publish wheels to Test PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist
+          skip-existing: true

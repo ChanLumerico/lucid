@@ -224,9 +224,9 @@ void register_nn(py::module_& m) {
         "scaled_dot_product_attention_with_weights",
         [](const TensorImplPtr& q, const TensorImplPtr& k, const TensorImplPtr& v,
            const TensorImplPtr& attn_mask, double scale, bool is_causal) {
-            auto r =
+            auto out =
                 scaled_dot_product_attention_with_weights_op(q, k, v, attn_mask, scale, is_causal);
-            return py::make_tuple(r.output, r.weights);
+            return py::make_tuple(out.at(0), out.at(1));
         },
         py::arg("query"), py::arg("key"), py::arg("value"), py::arg("attn_mask") = TensorImplPtr{},
         py::arg("scale"), py::arg("is_causal") = false,

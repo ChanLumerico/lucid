@@ -39,7 +39,7 @@ The vocabulary types — no logic, just data + tiny helpers.
 | `Determinism.h` | process-global `set_deterministic` flag |
 | `Device.h` | `enum Device { CPU, GPU }` |
 | `Dtype.h` | `enum Dtype` (9 values) + size/name helpers |
-| `Exceptions.h` | `LucidError` hierarchy |
+| `Error.h` | `LucidError` hierarchy |
 | `fwd.h` | forward declarations for all public types |
 | `Generator.h` | Philox-4x32-10 RNG |
 | `GradMode.h` | thread-local grad-enabled + `NoGradGuard` |

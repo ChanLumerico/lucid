@@ -13,7 +13,7 @@
 //     Pure shape rearrangement; equivalent to einops.rearrange.
 //
 //   einops_reduce_op(x, pattern, reduction, axes_lengths)
-//     reduction in {"sum","mean","max","min","prod"}.
+//     reduction codes: 1=mean, 2=sum, 3=max, 4=min, 5=prod.
 //
 //   einops_repeat_op(x, pattern, axes_lengths)
 //     Insert+expand new axes per pattern.
@@ -41,7 +41,7 @@ einops_rearrange_op(const TensorImplPtr& a,
 
 LUCID_API TensorImplPtr einops_reduce_op(const TensorImplPtr& a,
                                          const std::string& pattern,
-                                         const std::string& reduction,
+                                         int reduction,
                                          const std::map<std::string, std::int64_t>& axes_lengths);
 
 LUCID_API TensorImplPtr einops_repeat_op(const TensorImplPtr& a,

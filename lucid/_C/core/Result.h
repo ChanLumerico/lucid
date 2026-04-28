@@ -5,7 +5,7 @@
 // =====================================================================
 //
 // Most engine errors are thrown as `LucidError` subclasses (see
-// `Exceptions.h`) and translated to Python exceptions at the binding
+// `Error.h`) and translated to Python exceptions at the binding
 // layer. That's correct for the slow path: a malformed dtype, a
 // shape mismatch, an OOM — these are rare and the throw overhead is
 // invisible.
@@ -32,7 +32,8 @@
 #include <utility>
 #include <variant>
 
-#include "Exceptions.h"
+#include "Error.h"
+#include "ErrorBuilder.h"
 
 namespace lucid {
 
@@ -75,7 +76,7 @@ public:
     T value_or_throw() && {
         if (is_ok())
             return std::get<0>(std::move(data_));
-        throw LucidError(std::move(std::get<1>(data_).msg));
+        ErrorBuilder("Result").fail(std::move(std::get<1>(data_).msg));
     }
 
 private:

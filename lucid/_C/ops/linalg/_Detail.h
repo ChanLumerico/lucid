@@ -27,8 +27,8 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "../../core/Helpers.h"
 #include "../../core/Shape.h"
 #include "../../core/Storage.h"
@@ -38,15 +38,8 @@
 namespace lucid::linalg_detail {
 
 // Re-export of the canonical helper in `core/Helpers.h`.
+using ::lucid::gpu::mlx_shape_to_lucid;
 using ::lucid::helpers::fresh;
-
-inline Shape mlx_shape_to_lucid(const ::mlx::core::Shape& s) {
-    Shape out;
-    out.reserve(s.size());
-    for (auto d : s)
-        out.push_back(static_cast<std::int64_t>(d));
-    return out;
-}
 
 // ----- GPU-only helpers ------------------------------------------------ //
 // `as_mlx_array_gpu` / `wrap_gpu_result` are *only* used inside the GPU

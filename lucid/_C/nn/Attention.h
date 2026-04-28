@@ -55,14 +55,6 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-// (output, weights) pair returned when the caller wants the attention
-// probabilities. Weights are detached (no grad_fn) — they are an intermediate
-// of `output`'s backward chain, not an independent differentiable tensor.
-struct AttentionWithWeightsResult {
-    TensorImplPtr output;
-    TensorImplPtr weights;
-};
-
 LUCID_API TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
                                                         const TensorImplPtr& k,
                                                         const TensorImplPtr& v,
@@ -70,12 +62,15 @@ LUCID_API TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
                                                         double scale,
                                                         bool is_causal);
 
-LUCID_API AttentionWithWeightsResult
-scaled_dot_product_attention_with_weights_op(const TensorImplPtr& q,
-                                             const TensorImplPtr& k,
-                                             const TensorImplPtr& v,
-                                             const TensorImplPtr& attn_mask_or_null,
-                                             double scale,
-                                             bool is_causal);
+// Returns {output, weights}. Weights are detached (no grad_fn) — they are an
+// intermediate of `output`'s backward chain, not an independent differentiable
+// tensor.
+LUCID_API std::vector<TensorImplPtr> scaled_dot_product_attention_with_weights_op(
+    const TensorImplPtr& q,
+    const TensorImplPtr& k,
+    const TensorImplPtr& v,
+    const TensorImplPtr& attn_mask_or_null,
+    double scale,
+    bool is_causal);
 
 }  // namespace lucid

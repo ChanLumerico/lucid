@@ -20,6 +20,12 @@ echo "==> UBSan build + parity"
 echo "==> Layer check"
 "$PYTHON_BIN" tools/check_layers.py
 
+echo "==> Op API check"
+"$PYTHON_BIN" tools/check_op_api.py
+
+echo "==> Phase 1 foundation check"
+"$PYTHON_BIN" tools/check_phase1.py
+
 echo "==> Compile commands"
 ./scripts/build_compile_commands.sh
 

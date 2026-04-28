@@ -2,8 +2,8 @@
 
 #include <utility>
 
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "../../core/TensorImpl.h"
 #include "Add.h"
 #include "Div.h"

@@ -2,8 +2,8 @@
 
 #include <vector>
 
+#include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
-#include "../core/Exceptions.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "PoolNd.h"

@@ -10,7 +10,7 @@ Enforced by `.clang-format` (formatting), `.clang-tidy` (semantics), and
    class has a Doxygen-style block describing intent, contract, and failure
    modes. The body should be the smallest correct expansion of that contract.
 2. **Errors are typed, not stringly.** Throw `lucid::ShapeMismatch`, not
-   `std::runtime_error("shape mismatch")`. See `core/Exceptions.h`.
+   `std::runtime_error("shape mismatch")`. See `core/Error.h`.
 3. **No public `.data` mutation contracts.** Internal storage is owned by
    `TensorImpl`; mutation goes through named methods (`copy_from`,
    `_apply_step`, `zero_grad`, …). Never expose raw pointers from public APIs.
@@ -85,11 +85,22 @@ For every op landed in Phase 3+:
 /// Backward: dx = ...,  dy = ...
 ```
 
+## Public Op API Signatures
+
+Public C++ op entry points follow `docs/API_CONVENTIONS.md` and are checked by
+`tools/check_op_api.py` in the full local gate. Use `tools/audit_op_api.py` to
+dump the current signature inventory as CSV before and after broad API
+migrations.
+
 ## Errors
 
 - Throw the most specific `LucidError` subclass.
 - The exception message includes the *context* (op name, parameter name).
   No bare `"shape mismatch"` — always `"add_op: shape mismatch"`.
+- String-only failures go through `ErrorBuilder(op).fail(...)`,
+  `.not_implemented(...)`, or `.index_error(...)`. Direct
+  `LucidError` / `NotImplementedError` / `IndexError` construction is reserved
+  for `core/ErrorBuilder.cpp`.
 - Never throw across the C ABI boundary (Phase 7); convert to `LUCID_ERR_*`
   return codes there.
 

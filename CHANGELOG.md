@@ -10,6 +10,33 @@ be tagged `v3.1.0-rc1` after Phase 5.
 
 ## [Unreleased]
 
+### Changed — Production refactor Phase 1 foundation consolidation
+- Renamed the typed exception implementation from `core/Exceptions.{h,cpp}` to
+  `core/Error.{h,cpp}` and updated all engine includes.
+- Routed remaining string-only C++ throws through `ErrorBuilder`; direct
+  `LucidError` / `NotImplementedError` / `IndexError` throws now live only
+  inside `ErrorBuilder.cpp`, while structured mismatch exceptions keep their
+  typed payloads.
+- Centralized MLX shape conversion in `backend/gpu/MlxBridge.h` and removed
+  duplicate `mlx_shape_to_lucid` helper definitions from op-family detail
+  headers.
+- Added `tools/check_phase1.py` and wired it into `scripts/ci_full.sh` to
+  prevent regressions in the Phase 1 error/helper consolidation rules.
+
+### Changed — Production refactor Phase 1.6 API consistency gate
+- Standardized remaining multi-output C++ op signatures found by the API audit:
+  `histogram*` and `scaled_dot_product_attention_with_weights` now return
+  `std::vector<TensorImplPtr>` internally while preserving the Python tuple
+  binding surface.
+- Standardized `einops_reduce_op` on integer reduction encoding at the C++ API
+  boundary. The Python binding keeps string compatibility and maps to the C++
+  codes.
+- Added `tools/audit_op_api.py` for CSV signature inventories and wired
+  `tools/check_op_api.py` into `scripts/ci_full.sh`.
+- Removed the remaining ad-hoc `mlx_scalar` copies in `nn` kernels in favor of
+  `backend/gpu/MlxBridge.h`, and eliminated the extra `allocate_cpu` helper
+  duplicate outside `core/Helpers.h`.
+
 ### Added — Production refactor Phase 0.5 CMake build foundation
 - Added `lucid/_C/CMakeLists.txt` and migrated the engine extension build from
   the 122-source setuptools `Extension` list to a CMake-driven build with
@@ -22,11 +49,21 @@ be tagged `v3.1.0-rc1` after Phase 5.
   `LUCID_COVERAGE=ON` LLVM coverage path.
 - Added `tools/coverage.sh`, `tools/build_wheel.sh`, and a CMake-backed
   `scripts/build_compile_commands.sh`.
+- Added `tools/verify_wheel.sh` so every produced wheel is installed into a
+  fresh virtualenv and verified by importing `lucid._C.engine`.
 - Added `.github/workflows/ci.yml` for Apple Silicon-only Python
   3.11-3.14 phase gates, wheel artifacts, coverage artifact upload, and a
-  nightly performance placeholder.
+  nightly performance placeholder. The CI gate now verifies wheel artifacts in
+  a fresh virtualenv before upload.
+- Added `.github/workflows/release-testpypi.yml` for tag-triggered `v*`
+  Test PyPI wheel publishing after the same Apple Silicon build and fresh-venv
+  import check.
 - Added `tests/perf/` and `docs/perf/history.json` placeholders for Phase 8
   benchmark work.
+- Clarified the Phase 0.5 coverage policy: `tools/coverage.sh` reports the
+  planned hard thresholds by default, and only fails below target when
+  `LUCID_COVERAGE_ENFORCE=1` is set. The thresholds activate after the Phase 7
+  parity expansion and Phase 8 benchmark work.
 
 ### Added — Production refactor Phase 0 tooling gate
 - Added strict C++ warning policy to `setup.py`: all engine build modes now add

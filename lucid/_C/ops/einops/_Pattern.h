@@ -19,8 +19,8 @@
 #include <variant>
 #include <vector>
 
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 
 namespace lucid::einops_detail {
 

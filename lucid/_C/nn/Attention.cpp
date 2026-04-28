@@ -13,8 +13,8 @@
 #include "../backend/cpu/Blas.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
-#include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
@@ -587,7 +587,7 @@ TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
     return ScaledDotProductAttentionBackward::forward(q, k, v, attn_mask_or_null, scale, is_causal);
 }
 
-AttentionWithWeightsResult scaled_dot_product_attention_with_weights_op(
+std::vector<TensorImplPtr> scaled_dot_product_attention_with_weights_op(
     const TensorImplPtr& q,
     const TensorImplPtr& k,
     const TensorImplPtr& v,
@@ -610,9 +610,9 @@ AttentionWithWeightsResult scaled_dot_product_attention_with_weights_op(
         // `output`.
         auto with_grad = ScaledDotProductAttentionBackward::forward(q, k, v, attn_mask_or_null,
                                                                     scale, is_causal);
-        return AttentionWithWeightsResult{std::move(with_grad), std::move(weights)};
+        return {std::move(with_grad), std::move(weights)};
     }
-    return AttentionWithWeightsResult{std::move(core.output), std::move(weights)};
+    return {std::move(core.output), std::move(weights)};
 }
 
 LUCID_REGISTER_OP(ScaledDotProductAttentionBackward)

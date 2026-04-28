@@ -57,6 +57,15 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype);
 // dim exceeds INT32_MAX.
 ::mlx::core::Shape to_mlx_shape(const Shape& shape);
 
+// Convert an MLX shape back to Lucid's int64 shape representation.
+inline Shape mlx_shape_to_lucid(const ::mlx::core::Shape& shape) {
+    Shape out;
+    out.reserve(shape.size());
+    for (auto dim : shape)
+        out.push_back(static_cast<std::int64_t>(dim));
+    return out;
+}
+
 // Build a 0-dim `mlx::array` holding `v` cast to `dt`. Replaces ad-hoc
 // `mlx_scalar`/`mlx_scalar_dt` copies that used to live in nn / optim ops.
 inline ::mlx::core::array mlx_scalar(double v, ::mlx::core::Dtype dt) {

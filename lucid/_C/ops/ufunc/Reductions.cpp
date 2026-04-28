@@ -9,8 +9,8 @@
 #include "../../backend/cpu/Reduce.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "../../core/OpRegistry.h"
 
 namespace lucid {

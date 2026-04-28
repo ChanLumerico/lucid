@@ -7,8 +7,8 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/gpu/MlxBridge.h"
+#include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
-#include "../core/Exceptions.h"
 #include "../core/TensorImpl.h"
 #include "_OptimDetail.h"
 

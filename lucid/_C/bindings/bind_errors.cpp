@@ -3,7 +3,7 @@
 
 #include <stdexcept>
 
-#include "../core/Exceptions.h"
+#include "../core/Error.h"
 
 namespace py = pybind11;
 

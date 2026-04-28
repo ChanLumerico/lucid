@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <string>
 
-#include "Exceptions.h"
+#include "Error.h"
 #include "MemoryStats.h"
 
 namespace lucid {

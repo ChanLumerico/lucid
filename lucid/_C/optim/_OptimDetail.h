@@ -48,7 +48,7 @@ inline const GpuStorage& gpu_get(const Storage& s) {
 }
 
 inline ::mlx::core::array mlx_scalar(double x, Dtype dt) {
-    return ::mlx::core::array(x, gpu::to_mlx_dtype(dt));
+    return gpu::mlx_scalar(x, gpu::to_mlx_dtype(dt));
 }
 
 inline void gpu_replace(GpuStorage& dst, ::mlx::core::array&& arr, Dtype dt) {

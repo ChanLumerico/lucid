@@ -11,6 +11,8 @@ tools/check_format.sh --tidy
 
 # 2. Layer dependency check
 python tools/check_layers.py
+python tools/check_op_api.py
+python tools/check_phase1.py
 
 # 3. Build (release + UBSan)
 python3 -m pip install cmake ninja pybind11
@@ -27,6 +29,20 @@ pytest tests/parity/ --tb=short -q
 # Or run the full gate:
 ./scripts/ci_full.sh
 ```
+
+## Phase 0.5 build infrastructure policy
+
+Phase 0.5 installs the production build infrastructure: CMake-backed extension
+builds, Apple Silicon-only CI, wheel artifact generation, fresh-venv wheel
+import verification, coverage report generation, and placeholder perf jobs.
+
+Coverage thresholds and performance regression blocking are intentionally
+report-only at this point. `tools/coverage.sh` prints the planned gates
+(`lucid/_C/ops/**` and `lucid/_C/kernel/**` >= 80%, `backend/**` >= 70%,
+`core/**` >= 90%) but does not fail by default. Set
+`LUCID_COVERAGE_ENFORCE=1` to exercise the hard gate locally. CI should turn
+that flag on after Phase 7 expands parity coverage and Phase 8 replaces the
+perf placeholder with real benchmarks.
 
 ## Phase order
 

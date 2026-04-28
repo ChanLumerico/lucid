@@ -48,6 +48,9 @@ jobs:
       - name: Build wheel artifact
         run: ./tools/build_wheel.sh
 
+      - name: Verify wheel in fresh venv
+        run: ./tools/verify_wheel.sh
+
       - uses: actions/upload-artifact@v4
         with:
           name: lucid-wheel-py${{ matrix.python-version }}

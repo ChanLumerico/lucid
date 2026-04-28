@@ -13,8 +13,8 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
-#include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
@@ -26,15 +26,13 @@ namespace lucid {
 
 namespace {
 
+using gpu::mlx_scalar;
+
 // ---------------- GPU helpers (shared across loss kernels) ----------------
 //
 // Stable BCE-with-logits primitive on MLX:
 //   loss = max(x, 0) - x*y + log_weight * log1p(exp(-|x|))
 // where log_weight = (pos_weight - 1) * y + 1.
-
-inline ::mlx::core::array mlx_scalar(double v, ::mlx::core::Dtype dt) {
-    return ::mlx::core::astype(::mlx::core::array(static_cast<float>(v)), dt);
-}
 
 ::mlx::core::array mlx_apply_reduction(const ::mlx::core::array& l, Reduction red) {
     if (red == Reduction::None)

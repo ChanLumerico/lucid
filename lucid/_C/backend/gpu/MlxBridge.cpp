@@ -8,7 +8,8 @@
 #include <mlx/ops.h>
 
 #include "../../core/Allocator.h"
-#include "../../core/Exceptions.h"
+#include "../../core/Error.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/MemoryStats.h"
 
 namespace lucid::gpu {
@@ -33,13 +34,14 @@ namespace lucid::gpu {
             // MLX-Metal does not support float64 on the GPU. Reject early
             // with a clear, actionable message rather than letting MLX raise
             // a generic ValueError deep inside its eval() pipeline.
-            throw NotImplementedError(
-                "float64 is not supported on GPU (MLX-Metal limitation). "
-                "Cast to float32 first, or keep the tensor on CPU.");
+            ErrorBuilder("to_mlx_dtype")
+                .not_implemented(
+                    "float64 is not supported on GPU (MLX-Metal limitation). "
+                    "Cast to float32 first, or keep the tensor on CPU.");
         case Dtype::C64:
             return ::mlx::core::complex64;
     }
-    throw LucidError("to_mlx_dtype: unknown Dtype");
+    ErrorBuilder("to_mlx_dtype").fail("unknown Dtype");
 }
 
 Dtype from_mlx_dtype(::mlx::core::Dtype dt) {
@@ -64,9 +66,8 @@ Dtype from_mlx_dtype(::mlx::core::Dtype dt) {
         case V::complex64:
             return Dtype::C64;
         default:
-            throw NotImplementedError(
-                "from_mlx_dtype: unsupported MLX dtype "
-                "(uint*/bfloat16 not yet wired into Lucid)");
+            ErrorBuilder("from_mlx_dtype")
+                .not_implemented("unsupported MLX dtype (uint*/bfloat16 not yet wired into Lucid)");
     }
 }
 
@@ -75,9 +76,8 @@ Dtype from_mlx_dtype(::mlx::core::Dtype dt) {
     out.reserve(shape.size());
     for (auto d : shape) {
         if (d > std::numeric_limits<::mlx::core::ShapeElem>::max()) {
-            throw LucidError(
-                "to_mlx_shape: dimension exceeds int32 range (MLX requires "
-                "shape elements fit in int32_t)");
+            ErrorBuilder("to_mlx_shape")
+                .fail("dimension exceeds int32 range (MLX requires shape elements fit in int32_t)");
         }
         out.push_back(static_cast<::mlx::core::ShapeElem>(d));
     }
@@ -131,7 +131,7 @@ GpuStorage upload_cpu_to_gpu(const CpuStorage& cpu, const Shape& shape) {
 
 CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
     if (!gpu.arr) {
-        throw LucidError("download_gpu_to_cpu: null GPU array");
+        ErrorBuilder("download_gpu_to_cpu").fail("null GPU array");
     }
     // Force any pending compute graph to materialize before reading.
     gpu.arr->eval();

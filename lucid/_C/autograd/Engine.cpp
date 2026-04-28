@@ -8,7 +8,8 @@
 #include <variant>
 #include <vector>
 
-#include "../core/Exceptions.h"
+#include "../core/Error.h"
+#include "../core/ErrorBuilder.h"
 #include "Helpers.h"
 #include "Node.h"
 
@@ -66,7 +67,7 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
                       Storage grad_seed,
                       bool retain_graph) {
     if (!root) {
-        throw LucidError("Engine::backward: root is null");
+        ErrorBuilder("Engine::backward").fail("root is null");
     }
     if (!root->grad_fn_) {
         // Leaf root — no op history to traverse, but PyTorch semantics still
@@ -120,7 +121,7 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         if (input_grads.size() != edges.size()) {
             // AccumulateGrad returns {} (no edges to forward to).
             if (!edges.empty() && !input_grads.empty()) {
-                throw LucidError("Engine::backward: input_grads/next_edges size mismatch");
+                ErrorBuilder("Engine::backward").fail("input_grads/next_edges size mismatch");
             }
         }
 

@@ -46,6 +46,11 @@ and serve as a reference for all C++ development.
     -   `0`: `Reduction::None` (no reduction)
     -   `1`: `Reduction::Mean` (mean reduction)
     -   `2`: `Reduction::Sum` (sum reduction)
+-   Ops with additional reduction modes extend the same integer field with documented local codes. For `einops_reduce_op`, the extended values are:
+    -   `3`: max
+    -   `4`: min
+    -   `5`: prod
+-   Python bindings may still accept strings for compatibility, but must map them to the C++ integer code before calling the op implementation.
 
 ### 5. Return Types
 
@@ -69,4 +74,5 @@ and serve as a reference for all C++ development.
 
 ## Enforcement
 
-These conventions will be enforced by `tools/check_op_api.py` in CI and through code reviews.
+These conventions are enforced by `tools/check_op_api.py` in CI and through code reviews.
+Use `tools/audit_op_api.py` to dump the current signature inventory as CSV when reviewing API churn.

@@ -12,8 +12,8 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
-#include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
@@ -24,6 +24,8 @@
 namespace lucid {
 
 namespace {
+
+using gpu::mlx_scalar;
 
 CpuStorage allocate_size(std::size_t numel, Dtype dt) {
     CpuStorage s;
@@ -39,10 +41,6 @@ T x_norm(int w, int W, bool align_corners) {
         return W > 1 ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W - 1) : T{0};
     }
     return T{-1} + (T{2} * static_cast<T>(w) + T{1}) / static_cast<T>(W);
-}
-
-inline ::mlx::core::array mlx_scalar_dt(double v, ::mlx::core::Dtype dt) {
-    return ::mlx::core::astype(::mlx::core::array(static_cast<float>(v)), dt);
 }
 
 }  // namespace
@@ -864,13 +862,12 @@ std::vector<Storage> GridSampleBackward::apply(Storage grad_out) {
             auto dix_sum = ::mlx::core::sum(dix_per, std::vector<int>{1}, /*keepdims=*/false);
             auto diy_sum = ::mlx::core::sum(diy_per, std::vector<int>{1}, /*keepdims=*/false);
             auto sx =
-                mlx_scalar_dt(static_cast<double>(W_in - (align_corners_ ? 1 : 0)) / 2.0, mlx_dt);
+                mlx_scalar(static_cast<double>(W_in - (align_corners_ ? 1 : 0)) / 2.0, mlx_dt);
             // align: (in - 1) / 2;  not align: in / 2.
-            sx = align_corners_ ? mlx_scalar_dt(static_cast<double>(W_in - 1) / 2.0, mlx_dt)
-                                : mlx_scalar_dt(static_cast<double>(W_in) / 2.0, mlx_dt);
-            auto sy_arr = align_corners_
-                              ? mlx_scalar_dt(static_cast<double>(H_in - 1) / 2.0, mlx_dt)
-                              : mlx_scalar_dt(static_cast<double>(H_in) / 2.0, mlx_dt);
+            sx = align_corners_ ? mlx_scalar(static_cast<double>(W_in - 1) / 2.0, mlx_dt)
+                                : mlx_scalar(static_cast<double>(W_in) / 2.0, mlx_dt);
+            auto sy_arr = align_corners_ ? mlx_scalar(static_cast<double>(H_in - 1) / 2.0, mlx_dt)
+                                         : mlx_scalar(static_cast<double>(H_in) / 2.0, mlx_dt);
             dgrid_x = ::mlx::core::multiply(dix_sum, sx);
             dgrid_y = ::mlx::core::multiply(diy_sum, sy_arr);
             // border + clipped → zero out dgrid contribution.

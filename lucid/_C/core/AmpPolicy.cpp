@@ -2,7 +2,8 @@
 
 #include <stdexcept>
 
-#include "Exceptions.h"
+#include "Error.h"
+#include "ErrorBuilder.h"
 
 namespace lucid {
 
@@ -15,7 +16,7 @@ const char* amp_policy_name(AmpPolicy p) {
         case AmpPolicy::ForceFP32:
             return "ForceFP32";
     }
-    throw LucidError("amp_policy_name: unknown AmpPolicy");
+    ErrorBuilder("amp_policy_name").fail("unknown AmpPolicy");
 }
 
 namespace amp {

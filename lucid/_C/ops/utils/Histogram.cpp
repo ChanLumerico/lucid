@@ -7,8 +7,8 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -80,7 +80,7 @@ TensorImplPtr build_edges(double lo, double hi, std::int64_t bins) {
 
 }  // namespace
 
-std::pair<TensorImplPtr, TensorImplPtr> histogram_op(
+std::vector<TensorImplPtr> histogram_op(
     const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
     Validator::input(a, "histogram.a").non_null();
     if (bins <= 0)
@@ -126,15 +126,15 @@ std::pair<TensorImplPtr, TensorImplPtr> histogram_op(
     return {counts_t, edges};
 }
 
-std::pair<TensorImplPtr, TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
-                                                       const TensorImplPtr& b,
-                                                       std::int64_t bins_a,
-                                                       std::int64_t bins_b,
-                                                       double lo_a,
-                                                       double hi_a,
-                                                       double lo_b,
-                                                       double hi_b,
-                                                       bool density) {
+std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
+                                          const TensorImplPtr& b,
+                                          std::int64_t bins_a,
+                                          std::int64_t bins_b,
+                                          double lo_a,
+                                          double hi_a,
+                                          double lo_b,
+                                          double hi_b,
+                                          bool density) {
     if (!a || !b)
         ErrorBuilder("histogram2d").fail("null input");
     if (a->shape_ != b->shape_)
@@ -193,11 +193,10 @@ std::pair<TensorImplPtr, TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
     return {counts_t, edges_t};
 }
 
-std::pair<TensorImplPtr, TensorImplPtr> histogramdd_op(
-    const TensorImplPtr& a,
-    std::vector<std::int64_t> bins,
-    std::vector<std::pair<double, double>> ranges,
-    bool density) {
+std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
+                                          std::vector<std::int64_t> bins,
+                                          std::vector<std::pair<double, double>> ranges,
+                                          bool density) {
     Validator::input(a, "histogramdd.a").non_null();
     if (a->shape_.size() != 2)
         ErrorBuilder("histogramdd").fail("input must be 2-D (N, D)");

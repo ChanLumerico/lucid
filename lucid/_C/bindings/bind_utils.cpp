@@ -130,8 +130,8 @@ void register_utils(py::module_& m) {
     m.def(
         "histogram",
         [](const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
-            auto [c, e] = histogram_op(a, bins, lo, hi, density);
-            return py::make_tuple(c, e);
+            auto out = histogram_op(a, bins, lo, hi, density);
+            return py::make_tuple(out.at(0), out.at(1));
         },
         py::arg("a"), py::arg("bins") = 10, py::arg("lo"), py::arg("hi"),
         py::arg("density") = false);
@@ -140,8 +140,8 @@ void register_utils(py::module_& m) {
         "histogram2d",
         [](const TensorImplPtr& a, const TensorImplPtr& b, std::int64_t bins_a, std::int64_t bins_b,
            double lo_a, double hi_a, double lo_b, double hi_b, bool density) {
-            auto [c, e] = histogram2d_op(a, b, bins_a, bins_b, lo_a, hi_a, lo_b, hi_b, density);
-            return py::make_tuple(c, e);
+            auto out = histogram2d_op(a, b, bins_a, bins_b, lo_a, hi_a, lo_b, hi_b, density);
+            return py::make_tuple(out.at(0), out.at(1));
         },
         py::arg("a"), py::arg("b"), py::arg("bins_a"), py::arg("bins_b"), py::arg("lo_a"),
         py::arg("hi_a"), py::arg("lo_b"), py::arg("hi_b"), py::arg("density") = false);
@@ -150,8 +150,8 @@ void register_utils(py::module_& m) {
         "histogramdd",
         [](const TensorImplPtr& a, std::vector<std::int64_t> bins,
            std::vector<std::pair<double, double>> ranges, bool density) {
-            auto [c, e] = histogramdd_op(a, std::move(bins), std::move(ranges), density);
-            return py::make_tuple(c, e);
+            auto out = histogramdd_op(a, std::move(bins), std::move(ranges), density);
+            return py::make_tuple(out.at(0), out.at(1));
         },
         py::arg("a"), py::arg("bins"), py::arg("ranges"), py::arg("density") = false);
 }

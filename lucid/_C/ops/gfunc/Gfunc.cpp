@@ -11,8 +11,9 @@
 #include "../../autograd/Helpers.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
+#include "../../core/Helpers.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -22,16 +23,7 @@ namespace lucid {
 
 namespace {
 
-// Allocate a fresh CpuStorage of the given shape/dtype, zeroed.
-CpuStorage allocate_cpu(const Shape& shape, Dtype dt) {
-    CpuStorage s;
-    s.dtype = dt;
-    s.nbytes = shape_numel(shape) * dtype_size(dt);
-    s.ptr = allocate_aligned_bytes(s.nbytes);
-    if (s.nbytes > 0)
-        std::memset(s.ptr.get(), 0, s.nbytes);
-    return s;
-}
+using helpers::allocate_cpu;
 
 template <typename T>
 void fill_typed(std::byte* dst, std::size_t numel, T value) {

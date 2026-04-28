@@ -15,7 +15,8 @@
 #include "../backend/cpu/Vforce.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
-#include "../core/Exceptions.h"
+#include "../core/Error.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Generator.h"
 #include "../core/TensorImpl.h"
 
@@ -67,7 +68,7 @@ void fill_storage(CpuStorage& s, const Shape& shape, double value) {
         case Dtype::F16:
             // Phase 2 doesn't ship F16 ops; punt until Phase 3 brings in
             // a half-precision shim.
-            throw NotImplementedError("F16 fill not yet implemented");
+            ErrorBuilder("autograd.fill").not_implemented("F16 fill not yet implemented");
         case Dtype::C64: {
             std::complex<float> v(static_cast<float>(value), 0.0f);
             fill_typed<std::complex<float>>(s.ptr.get(), n, v);
@@ -76,7 +77,7 @@ void fill_storage(CpuStorage& s, const Shape& shape, double value) {
     }
 }
 
-CpuStorage allocate_cpu(const Shape& shape, Dtype dtype) {
+CpuStorage allocate_autograd_cpu(const Shape& shape, Dtype dtype) {
     const std::size_t total = shape_numel(shape) * dtype_size(dtype);
     CpuStorage s;
     s.ptr = allocate_aligned_bytes(total);
@@ -99,7 +100,7 @@ void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
                             "accumulate_into");
     }
     if (dst.nbytes != src.nbytes) {
-        throw LucidError("accumulate_into: nbytes mismatch");
+        ErrorBuilder("accumulate_into").fail("nbytes mismatch");
     }
     const std::size_t n = dst.nbytes / dtype_size(dst.dtype);
     switch (dst.dtype) {
@@ -116,7 +117,7 @@ void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
             add_typed<std::int64_t>(dst.ptr.get(), src.ptr.get(), n);
             break;
         default:
-            throw NotImplementedError("accumulate_into: dtype not yet supported in Phase 2");
+            ErrorBuilder("accumulate_into").not_implemented("dtype not yet supported in Phase 2");
     }
 }
 
@@ -215,7 +216,7 @@ Storage make_zero_storage(const Shape& shape, Dtype dtype, Device device) {
         auto out = ::mlx::core::zeros(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dtype));
         return Storage{gpu::wrap_mlx_array(std::move(out), dtype)};
     }
-    auto cpu = allocate_cpu(shape, dtype);
+    auto cpu = allocate_autograd_cpu(shape, dtype);
     fill_storage(cpu, shape, 0.0);
     return Storage{std::move(cpu)};
 }
@@ -225,7 +226,7 @@ Storage make_ones_storage(const Shape& shape, Dtype dtype, Device device) {
         auto out = ::mlx::core::ones(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dtype));
         return Storage{gpu::wrap_mlx_array(std::move(out), dtype)};
     }
-    auto cpu = allocate_cpu(shape, dtype);
+    auto cpu = allocate_autograd_cpu(shape, dtype);
     fill_storage(cpu, shape, 1.0);
     return Storage{std::move(cpu)};
 }
@@ -238,7 +239,7 @@ Storage reduce_grad_to_shape(const Storage& grad,
     if (device == Device::GPU) {
         const auto& src_gpu = std::get<GpuStorage>(grad);
         if (!src_gpu.arr) {
-            throw LucidError("reduce_grad_to_shape: null GPU array");
+            ErrorBuilder("reduce_grad_to_shape").fail("null GPU array");
         }
         if (grad_shape == target_shape) {
             auto cloned = ::mlx::core::copy(*src_gpu.arr);
@@ -263,7 +264,7 @@ Storage reduce_grad_to_shape(const Storage& grad,
         // Fast-path: no reduction needed; just clone (so the engine owns its
         // own buffer for further accumulation).
         const auto& src_cpu = std::get<CpuStorage>(grad);
-        CpuStorage out = allocate_cpu(grad_shape, dtype);
+        CpuStorage out = allocate_autograd_cpu(grad_shape, dtype);
         if (out.nbytes > 0) {
             std::memcpy(out.ptr.get(), src_cpu.ptr.get(), out.nbytes);
         }
@@ -272,7 +273,7 @@ Storage reduce_grad_to_shape(const Storage& grad,
 
     const auto reduce_axes = broadcast_reduce_axes(grad_shape, target_shape);
     const auto& src_cpu = std::get<CpuStorage>(grad);
-    CpuStorage out = allocate_cpu(target_shape, dtype);
+    CpuStorage out = allocate_autograd_cpu(target_shape, dtype);
 
     switch (dtype) {
         case Dtype::F32:
@@ -284,7 +285,8 @@ Storage reduce_grad_to_shape(const Storage& grad,
                                       reduce_axes);
             break;
         default:
-            throw NotImplementedError("reduce_grad_to_shape: dtype not yet supported in Phase 2");
+            ErrorBuilder("reduce_grad_to_shape")
+                .not_implemented("dtype not yet supported in Phase 2");
     }
     return Storage{std::move(out)};
 }
@@ -294,7 +296,7 @@ void accumulate_into(Storage& dst, const Storage& src) {
                    [&](CpuStorage& d, const CpuStorage& s) { cpu_add_inplace(d, s); },
                    [&](GpuStorage& d, const GpuStorage& s) {
                        if (!d.arr || !s.arr) {
-                           throw LucidError("accumulate_into: null GPU array");
+                           ErrorBuilder("accumulate_into").fail("null GPU array");
                        }
                        if (d.dtype != s.dtype) {
                            throw DtypeMismatch(std::string(dtype_name(d.dtype)),
@@ -335,7 +337,7 @@ template <class F>
 Storage gpu_unary(const Storage& s, Dtype dt, F&& f) {
     const auto& g = std::get<GpuStorage>(s);
     if (!g.arr)
-        throw LucidError("gpu_unary: null GPU array");
+        ErrorBuilder("gpu_unary").fail("null GPU array");
     auto out = f(*g.arr);
     return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
 }
@@ -345,7 +347,7 @@ Storage gpu_binary(const Storage& a, const Storage& b, Dtype dt, F&& f) {
     const auto& ga = std::get<GpuStorage>(a);
     const auto& gb = std::get<GpuStorage>(b);
     if (!ga.arr || !gb.arr) {
-        throw LucidError("gpu_binary: null GPU array");
+        ErrorBuilder("gpu_binary").fail("null GPU array");
     }
     auto out = f(*ga.arr, *gb.arr);
     return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
@@ -369,7 +371,7 @@ Storage negate_storage(const Storage& s, std::size_t numel, Dtype dt, Device dev
                                             reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("negate_storage: dtype not supported");
+            ErrorBuilder("negate_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -395,7 +397,7 @@ Storage multiply_storages(
                                             reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("multiply_storages: dtype not supported");
+            ErrorBuilder("multiply_storages").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -421,7 +423,7 @@ Storage divide_storages(
                                             reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("divide_storages: dtype not supported");
+            ErrorBuilder("divide_storages").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -447,7 +449,7 @@ Storage add_storages(
                                             reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("add_storages: dtype not supported");
+            ErrorBuilder("add_storages").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -473,7 +475,7 @@ Storage subtract_storages(
                                             reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("subtract_storages: dtype not supported");
+            ErrorBuilder("subtract_storages").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -494,7 +496,7 @@ Storage square_storage(const Storage& s, std::size_t numel, Dtype dt, Device dev
                                            reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("square_storage: dtype not supported");
+            ErrorBuilder("square_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -526,7 +528,7 @@ Storage log_storage(const Storage& s, std::size_t numel, Dtype dt, Device device
                                             reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("log_storage: dtype not supported");
+            ErrorBuilder("log_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -552,7 +554,7 @@ Storage pow_storage(
                                             reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("pow_storage: dtype not supported");
+            ErrorBuilder("pow_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -579,7 +581,7 @@ Storage ge_mask_storage(
                                                 reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("ge_mask_storage: dtype not supported");
+            ErrorBuilder("ge_mask_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -606,7 +608,7 @@ Storage lt_mask_storage(
                                                 reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("lt_mask_storage: dtype not supported");
+            ErrorBuilder("lt_mask_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -632,7 +634,7 @@ Storage add_scalar_storage(
                                              reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("add_scalar_storage: dtype not supported");
+            ErrorBuilder("add_scalar_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -658,7 +660,7 @@ Storage mul_scalar_storage(
                                              reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("mul_scalar_storage: dtype not supported");
+            ErrorBuilder("mul_scalar_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -682,7 +684,7 @@ Storage apply_unary_dispatch_cpu(
                 reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError(std::string(op_name) + ": dtype not supported");
+            ErrorBuilder(op_name).not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -744,7 +746,7 @@ Storage sign_storage(const Storage& s, std::size_t numel, Dtype dt, Device devic
             break;
         }
         default:
-            throw NotImplementedError("sign_storage: dtype not supported");
+            ErrorBuilder("sign_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -780,7 +782,7 @@ Storage in_range_mask_storage(
             break;
         }
         default:
-            throw NotImplementedError("in_range_mask_storage: dtype not supported");
+            ErrorBuilder("in_range_mask_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -814,7 +816,8 @@ std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
     for (int a : axes) {
         int wrapped = a < 0 ? a + ndim : a;
         if (wrapped < 0 || wrapped >= ndim) {
-            throw IndexError(std::string("axis out of range: ") + std::to_string(a) +
+            ErrorBuilder("normalize_axes")
+                .index_error(std::string("axis out of range: ") + std::to_string(a) +
                              " for ndim=" + std::to_string(ndim));
         }
         if (!seen[wrapped]) {
@@ -901,7 +904,7 @@ Storage broadcast_back_for_reduce(const Storage& grad,
     if (device == Device::GPU) {
         const auto& g = std::get<GpuStorage>(grad);
         if (!g.arr)
-            throw LucidError("broadcast_back_for_reduce: null GPU array");
+            ErrorBuilder("broadcast_back_for_reduce").fail("null GPU array");
         // Reshape to kept_shape (inserts the size-1 reduced axes back), then
         // broadcast_to back to input_shape. MLX's broadcast_to is a metadata
         // op, but the result of a reduce op feeding through here will be
@@ -934,7 +937,7 @@ Storage broadcast_back_for_reduce(const Storage& grad,
                                          input_shape);
             break;
         default:
-            throw NotImplementedError("broadcast_back_for_reduce: dtype not supported");
+            ErrorBuilder("broadcast_back_for_reduce").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -968,7 +971,7 @@ Storage leaky_mask_storage(
             break;
         }
         default:
-            throw NotImplementedError("leaky_mask_storage: dtype not supported");
+            ErrorBuilder("leaky_mask_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -1015,7 +1018,7 @@ Storage sigmoid_storage(const Storage& s, std::size_t numel, Dtype dt, Device de
             break;
         }
         default:
-            throw NotImplementedError("sigmoid_storage: dtype not supported");
+            ErrorBuilder("sigmoid_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -1023,7 +1026,7 @@ Storage sigmoid_storage(const Storage& s, std::size_t numel, Dtype dt, Device de
 Storage bernoulli_mask_storage_shape(
     double keep_prob, const Shape& shape, Dtype dt, Device device, Generator& gen) {
     if (keep_prob < 0.0 || keep_prob > 1.0) {
-        throw LucidError("bernoulli_mask: keep_prob must be in [0, 1]");
+        ErrorBuilder("bernoulli_mask").fail("keep_prob must be in [0, 1]");
     }
     std::size_t numel = 1;
     for (auto d : shape)
@@ -1046,7 +1049,7 @@ Storage bernoulli_mask_storage_shape(
             break;
         }
         default:
-            throw NotImplementedError("bernoulli_mask: dtype not supported (F32/F64)");
+            ErrorBuilder("bernoulli_mask").not_implemented("dtype not supported (F32/F64)");
     }
     if (device == Device::GPU) {
         return Storage{gpu::upload_cpu_to_gpu(out, shape)};
@@ -1086,7 +1089,7 @@ Storage positive_mask_storage(const Storage& s, std::size_t numel, Dtype dt, Dev
             break;
         }
         default:
-            throw NotImplementedError("positive_mask_storage: dtype not supported");
+            ErrorBuilder("positive_mask_storage").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -1188,7 +1191,7 @@ Storage random_uniform_storage(
             fill_uniform<double>(reinterpret_cast<double*>(cpu.ptr.get()), n, lo, hi, gen);
             break;
         default:
-            throw NotImplementedError("random_uniform: dtype not supported (F32/F64)");
+            ErrorBuilder("random_uniform").not_implemented("dtype not supported (F32/F64)");
     }
     if (device == Device::GPU) {
         return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
@@ -1208,7 +1211,7 @@ Storage random_normal_storage(
             fill_normal<double>(reinterpret_cast<double*>(cpu.ptr.get()), n, mean, std, gen);
             break;
         default:
-            throw NotImplementedError("random_normal: dtype not supported (F32/F64)");
+            ErrorBuilder("random_normal").not_implemented("dtype not supported (F32/F64)");
     }
     if (device == Device::GPU) {
         return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
@@ -1219,7 +1222,7 @@ Storage random_normal_storage(
 Storage random_bernoulli_storage(
     const Shape& shape, double p, Dtype dt, Device device, Generator& gen) {
     if (p < 0.0 || p > 1.0)
-        throw LucidError("random_bernoulli: p must be in [0, 1]");
+        ErrorBuilder("random_bernoulli").fail("p must be in [0, 1]");
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
@@ -1239,7 +1242,7 @@ Storage random_bernoulli_storage(
             break;
         }
         default:
-            throw NotImplementedError("random_bernoulli: dtype not supported (F32/F64)");
+            ErrorBuilder("random_bernoulli").not_implemented("dtype not supported (F32/F64)");
     }
     if (device == Device::GPU) {
         return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
@@ -1254,7 +1257,7 @@ Storage random_randint_storage(const Shape& shape,
                                Device device,
                                Generator& gen) {
     if (high <= low)
-        throw LucidError("random_randint: high must be > low");
+        ErrorBuilder("random_randint").fail("high must be > low");
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
@@ -1267,7 +1270,7 @@ Storage random_randint_storage(const Shape& shape,
                                        gen);
             break;
         default:
-            throw NotImplementedError("random_randint: dtype not supported (I32/I64)");
+            ErrorBuilder("random_randint").not_implemented("dtype not supported (I32/I64)");
     }
     if (device == Device::GPU) {
         return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};

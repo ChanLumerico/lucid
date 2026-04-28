@@ -11,8 +11,8 @@
 #include <mlx/ops.h>
 
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
-#include "../../core/Exceptions.h"
 #include "Activation.h"
 #include "Arith.h"
 #include "Discrete.h"

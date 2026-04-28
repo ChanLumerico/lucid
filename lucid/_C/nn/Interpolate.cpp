@@ -12,8 +12,8 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
-#include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
@@ -25,6 +25,8 @@
 namespace lucid {
 
 namespace {
+
+using gpu::mlx_scalar;
 
 CpuStorage allocate_size(std::size_t numel, Dtype dt) {
     CpuStorage s;
@@ -45,10 +47,6 @@ inline T src_coord(int out_idx, int in_dim, int out_dim, bool align_corners) {
         (static_cast<T>(out_idx) + T{0.5}) * static_cast<T>(in_dim) / static_cast<T>(out_dim) -
         T{0.5};
     return x;
-}
-
-inline ::mlx::core::array mlx_scalar(double v, ::mlx::core::Dtype dt) {
-    return ::mlx::core::astype(::mlx::core::array(static_cast<float>(v)), dt);
 }
 
 // Build a 1-D MLX array of source-coordinates of length out_dim.
