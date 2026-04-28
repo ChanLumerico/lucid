@@ -21,11 +21,13 @@ MULTI_OUTPUT_OPS = frozenset({
     "svd_op",
     "qr_op",
     "eig_op",
+    "topk_op",
     "scaled_dot_product_attention_with_weights_op",
     # Short names used by the checker when stripping `_op` suffix
     "svd",
     "qr",
     "eig",
+    "topk",
     "scaled_dot_product_attention_with_weights",
 })
 

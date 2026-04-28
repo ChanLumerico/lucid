@@ -20,6 +20,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "Contiguous.h"          // contiguous_op for non-contig inputs
 #include "View.h"                // reshape_op / ViewBackward
 #include "_Detail.h"
 
@@ -35,7 +36,7 @@ using utils_detail::numel;
 
 TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis) {
     Validator::input(a, "flatten.a").non_null();
-    const int ndim = static_cast<int>(a->shape_.size());
+    const int ndim = static_cast<int>(a->shape().size());
     int s = start_axis < 0 ? start_axis + ndim : start_axis;
     int e = end_axis < 0 ? end_axis + ndim : end_axis;
     if (s < 0 || e >= ndim || s > e)
@@ -44,13 +45,13 @@ TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis) {
     // Delegate to reshape_op so we inherit the ViewBackward autograd wiring.
     std::vector<std::int64_t> new_shape;
     for (int d = 0; d < s; ++d)
-        new_shape.push_back(a->shape_[d]);
+        new_shape.push_back(a->shape()[d]);
     std::int64_t flat = 1;
     for (int d = s; d <= e; ++d)
-        flat *= a->shape_[d];
+        flat *= a->shape()[d];
     new_shape.push_back(flat);
     for (int d = e + 1; d < ndim; ++d)
-        new_shape.push_back(a->shape_[d]);
+        new_shape.push_back(a->shape()[d]);
     return reshape_op(a, new_shape);
 }
 
@@ -155,52 +156,53 @@ LUCID_REGISTER_OP(BroadcastBackward)
 
 TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
     Validator::input(a, "broadcast_to.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
     OpScopeFull scope{"broadcast_to", device, dt, shape};
 
     auto build_with_grad = [&](Storage&& out_storage) {
         auto out = std::make_shared<TensorImpl>(std::move(out_storage), shape, dt, device,
                                                 /*requires_grad=*/false);
-        if (GradMode::is_enabled() && a->requires_grad_) {
+        if (GradMode::is_enabled() && a->requires_grad()) {
             auto a_edge = detail::ensure_grad_fn(a);
             auto bwd = std::make_shared<BroadcastBackward>();
-            bwd->input_shapes_ = {a->shape_};
+            bwd->input_shapes_ = {a->shape()};
             bwd->out_shape_ = shape;
             bwd->dtype_ = dt;
             bwd->device_ = device;
             bwd->input_tensors_ = {a};
-            bwd->input_shape_ = a->shape_;
+            bwd->input_shape_ = a->shape();
             bwd->output_shape_ = shape;
             bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-            bwd->set_saved_versions({a->version_});
-            out->grad_fn_ = std::move(bwd);
-            out->is_leaf_ = false;
-            out->requires_grad_ = true;
+            bwd->set_saved_versions({a->version()});
+            out->set_grad_fn(std::move(bwd));
+            out->set_leaf(false);
+            out->set_requires_grad(true);
         }
         return out;
     };
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto out = ::mlx::core::broadcast_to(*ga.arr, gpu::to_mlx_shape(shape));
         // broadcast_to returns a lazy view — materialize so downstream
         // download/copy sees the actual broadcast values.
         out = ::mlx::core::contiguous(out);
         return build_with_grad(Storage{gpu::wrap_mlx_array(std::move(out), dt)});
     }
-    const std::size_t nin = a->shape_.size();
+    const TensorImplPtr a_c = a->is_contiguous() ? a : contiguous_op(a);
+    const std::size_t nin = a_c->shape().size();
     const std::size_t nout = shape.size();
     if (nin > nout)
-        throw ShapeMismatch(shape, a->shape_, "broadcast_to");
+        throw ShapeMismatch(shape, a_c->shape(), "broadcast_to");
     Shape padded(nout, 1);
-    std::copy(a->shape_.begin(), a->shape_.end(), padded.begin() + (nout - nin));
+    std::copy(a_c->shape().begin(), a_c->shape().end(), padded.begin() + (nout - nin));
     for (std::size_t d = 0; d < nout; ++d) {
         if (padded[d] != shape[d] && padded[d] != 1)
-            throw ShapeMismatch(shape, a->shape_, "broadcast_to");
+            throw ShapeMismatch(shape, a_c->shape(), "broadcast_to");
     }
     auto out_cpu = allocate_cpu(shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a_c->storage());
 
     std::vector<std::size_t> in_str(nout, 0);
     std::size_t s = 1;

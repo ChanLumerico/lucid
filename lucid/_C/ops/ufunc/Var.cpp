@@ -55,16 +55,16 @@ public:
 
 TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, bool keepdims) {
     Validator::input(a, "var.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    const auto axes = normalize_axes(axes_user, static_cast<int>(a->shape_.size()));
-    const Shape out_shape = reduce_output_shape(a->shape_, axes, keepdims);
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    const auto axes = normalize_axes(axes_user, static_cast<int>(a->shape().size()));
+    const Shape out_shape = reduce_output_shape(a->shape(), axes, keepdims);
     OpScopeFull scope{"var", device, dt, out_shape};
 
     TensorImplPtr out;  // declared early so the grad block below can attach.
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         std::vector<int> ax(axes.begin(), axes.end());
         auto out_mlx = ::mlx::core::var(*ga.arr, ax, keepdims, /*ddof=*/0);
         out = fresh(Storage{gpu::wrap_mlx_array(std::move(out_mlx), dt)}, out_shape, dt, device);
@@ -72,51 +72,51 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
         // We still need `reduced` for the backward; compute it now.
         std::size_t reduced_gpu = 1;
         for (auto ax_i : axes)
-            reduced_gpu *= static_cast<std::size_t>(a->shape_[ax_i]);
+            reduced_gpu *= static_cast<std::size_t>(a->shape()[ax_i]);
         if (reduced_gpu == 0)
             reduced_gpu = 1;
-        if (GradMode::is_enabled() && a->requires_grad_) {
+        if (GradMode::is_enabled() && a->requires_grad()) {
             // Build saved_mean storage broadcast to a's shape on GPU.
             auto m = ::mlx::core::mean(*ga.arr, ax, /*keepdims=*/true);
-            auto m_b = ::mlx::core::broadcast_to(m, gpu::to_mlx_shape(a->shape_));
+            auto m_b = ::mlx::core::broadcast_to(m, gpu::to_mlx_shape(a->shape()));
             m_b = ::mlx::core::contiguous(m_b);
             Storage mean_storage{gpu::wrap_mlx_array(std::move(m_b), dt)};
             auto bwd = std::make_shared<VarBackward>();
-            bwd->input_shape_ = a->shape_;
+            bwd->input_shape_ = a->shape();
             bwd->out_shape_ = out_shape;
             bwd->dtype_ = dt;
             bwd->device_ = device;
             bwd->axes_ = axes;
             bwd->keepdims_ = keepdims;
             bwd->count_ = static_cast<std::int64_t>(reduced_gpu);
-            bwd->saved_input_ = a->storage_;
+            bwd->saved_input_ = a->storage();
             bwd->saved_mean_ = std::move(mean_storage);
             auto a_edge = detail::ensure_grad_fn(a);
             std::vector<Edge> edges;
             edges.emplace_back(a_edge, 0);
             bwd->set_next_edges(std::move(edges));
-            bwd->set_saved_versions({a->version_});
-            out->grad_fn_ = std::move(bwd);
-            out->is_leaf_ = false;
-            out->requires_grad_ = true;
+            bwd->set_saved_versions({a->version()});
+            out->set_grad_fn(std::move(bwd));
+            out->set_leaf(false);
+            out->set_requires_grad(true);
         }
         return out;
     }
 
-    const auto& ca = std::get<CpuStorage>(a->storage_);
-    const std::size_t in_numel = shape_numel(a->shape_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
+    const std::size_t in_numel = shape_numel(a->shape());
     const std::size_t out_numel = shape_numel(out_shape);
     std::size_t reduced = 1;
     for (auto ax : axes)
-        reduced *= static_cast<std::size_t>(a->shape_[ax]);
+        reduced *= static_cast<std::size_t>(a->shape()[ax]);
     if (reduced == 0)
         reduced = 1;
 
     auto compute = [&](auto* out_p, const auto* in_p) {
         using T = std::remove_pointer_t<decltype(out_p)>;
         std::vector<double> means(out_numel, 0.0);
-        std::vector<double> coords(a->shape_.size(), 0);
-        const auto& sh = a->shape_;
+        std::vector<double> coords(a->shape().size(), 0);
+        const auto& sh = a->shape();
 
         Shape kd_shape = sh;
         for (auto ax : axes)
@@ -185,23 +185,23 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
 
     out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
 
-    if (GradMode::is_enabled() && a->requires_grad_) {
+    if (GradMode::is_enabled() && a->requires_grad()) {
         Storage mean_storage;
         if (device == Device::GPU) {
-            const auto& ga = std::get<GpuStorage>(a->storage_);
+            const auto& ga = std::get<GpuStorage>(a->storage());
             std::vector<int> ax(axes.begin(), axes.end());
             auto m = ::mlx::core::mean(*ga.arr, ax, /*keepdims=*/true);
-            auto m_b = ::mlx::core::broadcast_to(m, gpu::to_mlx_shape(a->shape_));
+            auto m_b = ::mlx::core::broadcast_to(m, gpu::to_mlx_shape(a->shape()));
             mean_storage = Storage{gpu::wrap_mlx_array(std::move(m_b), dt)};
         } else {
             CpuStorage m;
             m.dtype = dt;
-            const std::size_t n_in = shape_numel(a->shape_);
+            const std::size_t n_in = shape_numel(a->shape());
             m.nbytes = n_in * dtype_size(dt);
             m.ptr = allocate_aligned_bytes(m.nbytes);
             std::vector<double> means(out_numel, 0.0);
-            std::vector<std::int64_t> coords(a->shape_.size(), 0);
-            const auto& sh = a->shape_;
+            std::vector<std::int64_t> coords(a->shape().size(), 0);
+            const auto& sh = a->shape();
             Shape kd_shape = sh;
             for (auto ax : axes)
                 kd_shape[ax] = 1;
@@ -259,24 +259,24 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
         }
 
         auto bwd = std::make_shared<VarBackward>();
-        bwd->input_shape_ = a->shape_;
+        bwd->input_shape_ = a->shape();
         bwd->out_shape_ = out_shape;
         bwd->dtype_ = dt;
         bwd->device_ = device;
         bwd->axes_ = axes;
         bwd->keepdims_ = keepdims;
         bwd->count_ = static_cast<std::int64_t>(reduced);
-        bwd->saved_input_ = a->storage_;
+        bwd->saved_input_ = a->storage();
         bwd->saved_mean_ = std::move(mean_storage);
 
         auto a_edge = detail::ensure_grad_fn(a);
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);
         bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
     }
     return out;
 }

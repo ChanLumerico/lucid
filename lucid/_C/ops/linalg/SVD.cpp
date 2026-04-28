@@ -21,26 +21,26 @@ namespace lucid {
 std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
     using namespace linalg_detail;
     Validator::input(a, "svd.a").non_null();
-    require_float(a->dtype_, "svd");
-    if (a->shape_.size() < 2)
+    require_float(a->dtype(), "svd");
+    if (a->shape().size() < 2)
         ErrorBuilder("svd").fail("input must be at least 2-D");
-    OpScopeFull scope{"svd", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"svd", a->device(), a->dtype(), a->shape()};
 
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         auto pieces = ::mlx::core::linalg::svd(in, compute_uv, kMlxLinalgStream);
         std::vector<TensorImplPtr> out;
         out.reserve(pieces.size());
         for (auto& p : pieces) {
             Shape sh = mlx_shape_to_lucid(p.shape());
-            out.push_back(fresh(wrap_gpu_result(std::move(p), a->dtype_), std::move(sh), a->dtype_,
-                                a->device_));
+            out.push_back(fresh(wrap_gpu_result(std::move(p), a->dtype()), std::move(sh),
+                                a->dtype(), a->device()));
         }
         return out;
     }
 
     // CPU path: reduced (or full) SVD per-batch via LAPACK gesdd.
-    const auto& sh = a->shape_;
+    const auto& sh = a->shape();
     const int m = static_cast<int>(sh[sh.size() - 2]);
     const int n = static_cast<int>(sh[sh.size() - 1]);
     const int k = std::min(m, n);
@@ -52,14 +52,14 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
         // Singular values only.
         Shape ssh(sh.begin(), sh.end() - 2);
         ssh.push_back(k);
-        auto Scpu = allocate_cpu(ssh, a->dtype_);
-        const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+        auto Scpu = allocate_cpu(ssh, a->dtype());
+        const auto& in_cpu = std::get<CpuStorage>(a->storage());
 
         // gesdd needs U/Vt buffers even when we discard them.
         const std::size_t u_per = static_cast<std::size_t>(m) * k;
         const std::size_t vt_per = static_cast<std::size_t>(k) * n;
         int info = 0;
-        if (a->dtype_ == Dtype::F32) {
+        if (a->dtype() == Dtype::F32) {
             std::vector<float> U(u_per), Vt(vt_per);
             const auto* in_p = reinterpret_cast<const float*>(in_cpu.ptr.get());
             auto* S_p = reinterpret_cast<float*>(Scpu.ptr.get());
@@ -81,7 +81,7 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
             }
         }
         std::vector<TensorImplPtr> out;
-        out.push_back(fresh(Storage{std::move(Scpu)}, ssh, a->dtype_, a->device_));
+        out.push_back(fresh(Storage{std::move(Scpu)}, ssh, a->dtype(), a->device()));
         return out;
     }
 
@@ -96,15 +96,15 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
     vsh.push_back(k);
     vsh.push_back(n);
 
-    auto Ucpu = allocate_cpu(ush, a->dtype_);
-    auto Scpu = allocate_cpu(ssh, a->dtype_);
-    auto Vcpu = allocate_cpu(vsh, a->dtype_);
-    const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+    auto Ucpu = allocate_cpu(ush, a->dtype());
+    auto Scpu = allocate_cpu(ssh, a->dtype());
+    auto Vcpu = allocate_cpu(vsh, a->dtype());
+    const auto& in_cpu = std::get<CpuStorage>(a->storage());
 
     const std::size_t u_per = static_cast<std::size_t>(m) * k;
     const std::size_t vt_per = static_cast<std::size_t>(k) * n;
     int info = 0;
-    if (a->dtype_ == Dtype::F32) {
+    if (a->dtype() == Dtype::F32) {
         const auto* in_p = reinterpret_cast<const float*>(in_cpu.ptr.get());
         auto* U_p = reinterpret_cast<float*>(Ucpu.ptr.get());
         auto* S_p = reinterpret_cast<float*>(Scpu.ptr.get());
@@ -128,9 +128,9 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
         }
     }
     std::vector<TensorImplPtr> out;
-    out.push_back(fresh(Storage{std::move(Ucpu)}, ush, a->dtype_, a->device_));
-    out.push_back(fresh(Storage{std::move(Scpu)}, ssh, a->dtype_, a->device_));
-    out.push_back(fresh(Storage{std::move(Vcpu)}, vsh, a->dtype_, a->device_));
+    out.push_back(fresh(Storage{std::move(Ucpu)}, ush, a->dtype(), a->device()));
+    out.push_back(fresh(Storage{std::move(Scpu)}, ssh, a->dtype(), a->device()));
+    out.push_back(fresh(Storage{std::move(Vcpu)}, vsh, a->dtype(), a->device()));
     return out;
 }
 

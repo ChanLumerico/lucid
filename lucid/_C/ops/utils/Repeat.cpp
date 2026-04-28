@@ -225,23 +225,23 @@ TensorImplPtr attach_repeat_grad(const TensorImplPtr& a,
                                  TensorImplPtr out,
                                  int axis,
                                  std::int64_t repeats) {
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto bwd = std::make_shared<RepeatBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->axis_ = axis;
     bwd->repeats_ = repeats;
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -249,23 +249,23 @@ TensorImplPtr attach_tile_grad(const TensorImplPtr& a,
                                TensorImplPtr out,
                                Shape padded_shape,
                                std::vector<std::int64_t> reps) {
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto bwd = std::make_shared<TileBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->padded_shape_ = std::move(padded_shape);
     bwd->reps_ = std::move(reps);
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -276,30 +276,30 @@ LUCID_REGISTER_OP(TileBackward)
 
 TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis) {
     Validator::input(a, "repeat.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"repeat", device, dt, a->shape_};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"repeat", device, dt, a->shape()};
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto out = ::mlx::core::repeat(*ga.arr, static_cast<int>(repeats), ax);
         Shape sh = mlx_shape_to_lucid(out.shape());
         auto result =
             fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
         return attach_repeat_grad(a, std::move(result), ax, repeats);
     }
-    Shape out_shape = a->shape_;
+    Shape out_shape = a->shape();
     out_shape[ax] *= repeats;
     auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
     const std::size_t elem = dtype_size(dt);
     std::size_t outer = 1;
     for (int d = 0; d < ax; ++d)
-        outer *= static_cast<std::size_t>(a->shape_[d]);
+        outer *= static_cast<std::size_t>(a->shape()[d]);
     std::size_t inner = elem;
-    for (std::size_t d = ax + 1; d < a->shape_.size(); ++d)
-        inner *= static_cast<std::size_t>(a->shape_[d]);
-    const std::size_t L = static_cast<std::size_t>(a->shape_[ax]);
+    for (std::size_t d = ax + 1; d < a->shape().size(); ++d)
+        inner *= static_cast<std::size_t>(a->shape()[d]);
+    const std::size_t L = static_cast<std::size_t>(a->shape()[ax]);
     auto* dst = out_cpu.ptr.get();
     for (std::size_t o = 0; o < outer; ++o) {
         for (std::size_t k = 0; k < L; ++k) {
@@ -316,36 +316,36 @@ TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis) 
 
 TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
     Validator::input(a, "tile.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"tile", device, dt, a->shape_};
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"tile", device, dt, a->shape()};
     const std::size_t nout = reps.size();
-    if (nout < a->shape_.size())
+    if (nout < a->shape().size())
         ErrorBuilder("tile").fail("reps must be at least as long as ndim");
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         std::vector<int> reps_int(reps.begin(), reps.end());
         auto out = ::mlx::core::tile(*ga.arr, std::move(reps_int));
         Shape sh = mlx_shape_to_lucid(out.shape());
         Shape padded(nout, 1);
-        const std::size_t lead = nout - a->shape_.size();
-        for (std::size_t d = 0; d < a->shape_.size(); ++d)
-            padded[lead + d] = a->shape_[d];
+        const std::size_t lead = nout - a->shape().size();
+        for (std::size_t d = 0; d < a->shape().size(); ++d)
+            padded[lead + d] = a->shape()[d];
         auto result =
             fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
         return attach_tile_grad(a, std::move(result), std::move(padded), std::move(reps));
     }
     Shape padded(nout, 1);
-    const std::size_t lead = nout - a->shape_.size();
-    for (std::size_t d = 0; d < a->shape_.size(); ++d)
-        padded[lead + d] = a->shape_[d];
+    const std::size_t lead = nout - a->shape().size();
+    for (std::size_t d = 0; d < a->shape().size(); ++d)
+        padded[lead + d] = a->shape()[d];
     Shape out_shape(nout);
     for (std::size_t d = 0; d < nout; ++d)
         out_shape[d] = padded[d] * reps[d];
 
     auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
     const std::size_t elem = dtype_size(dt);
     Stride in_stride(nout);
     if (nout > 0) {

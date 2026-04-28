@@ -35,16 +35,16 @@ inline std::size_t numel(const Shape& s) {
 inline void check_dtype_device_match(const std::vector<TensorImplPtr>& xs, const char* op) {
     if (xs.empty())
         ErrorBuilder(op).fail("empty input");
-    Dtype dt = xs[0]->dtype_;
-    Device device = xs[0]->device_;
+    Dtype dt = xs[0]->dtype();
+    Device device = xs[0]->device();
     for (auto& t : xs) {
         Validator::input(t, std::string(op) + ".t").non_null();
-        if (t->dtype_ != dt)
-            throw DtypeMismatch(std::string(dtype_name(dt)), std::string(dtype_name(t->dtype_)),
+        if (t->dtype() != dt)
+            throw DtypeMismatch(std::string(dtype_name(dt)), std::string(dtype_name(t->dtype())),
                                 std::string(op));
-        if (t->device_ != device)
+        if (t->device() != device)
             throw DeviceMismatch(std::string(device_name(device)),
-                                 std::string(device_name(t->device_)), std::string(op));
+                                 std::string(device_name(t->device())), std::string(op));
     }
 }
 

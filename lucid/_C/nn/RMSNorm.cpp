@@ -41,40 +41,38 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
                                        double eps) {
     if (!x || !gamma)
         ErrorBuilder("rms_norm").fail("null input");
-    if (x->dtype_ != gamma->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
-                            std::string(dtype_name(gamma->dtype_)), "rms_norm");
-    if (x->device_ != gamma->device_)
-        throw DeviceMismatch(std::string(device_name(x->device_)),
-                             std::string(device_name(gamma->device_)), "rms_norm");
-    if (x->device_ == Device::CPU && (!x->is_contiguous() || !gamma->is_contiguous()))
-        ErrorBuilder("rms_norm").not_implemented("non-contiguous input not supported");
+    if (x->dtype() != gamma->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
+                            std::string(dtype_name(gamma->dtype())), "rms_norm");
+    if (x->device() != gamma->device())
+        throw DeviceMismatch(std::string(device_name(x->device())),
+                             std::string(device_name(gamma->device())), "rms_norm");
 
     // γ shape must match trailing dims of x.
-    if (gamma->shape_.size() > x->shape_.size())
-        throw ShapeMismatch(x->shape_, gamma->shape_, "rms_norm: γ has more dims than x");
-    const std::size_t Dn = gamma->shape_.size();
-    const std::size_t lead = x->shape_.size() - Dn;
+    if (gamma->shape().size() > x->shape().size())
+        throw ShapeMismatch(x->shape(), gamma->shape(), "rms_norm: γ has more dims than x");
+    const std::size_t Dn = gamma->shape().size();
+    const std::size_t lead = x->shape().size() - Dn;
     for (std::size_t i = 0; i < Dn; ++i) {
-        if (x->shape_[lead + i] != gamma->shape_[i]) {
-            throw ShapeMismatch(x->shape_, gamma->shape_,
+        if (x->shape()[lead + i] != gamma->shape()[i]) {
+            throw ShapeMismatch(x->shape(), gamma->shape(),
                                 "rms_norm: γ must match trailing dims of x");
         }
     }
     std::size_t outer = 1, N = 1;
     for (std::size_t i = 0; i < lead; ++i)
-        outer *= static_cast<std::size_t>(x->shape_[i]);
+        outer *= static_cast<std::size_t>(x->shape()[i]);
     for (std::size_t i = 0; i < Dn; ++i)
-        N *= static_cast<std::size_t>(gamma->shape_[i]);
+        N *= static_cast<std::size_t>(gamma->shape()[i]);
 
-    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
 
     Storage out_storage;
     Storage saved_rstd;
 
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
-        const auto& gg = std::get<GpuStorage>(gamma->storage_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
+        const auto& gg = std::get<GpuStorage>(gamma->storage());
         if (!gx.arr || !gg.arr) {
             ErrorBuilder("rms_norm").fail("null GPU input");
         }
@@ -84,21 +82,21 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
         auto g_2d = ::mlx::core::reshape(*gg.arr, gpu::to_mlx_shape(flatG));
         auto sq = ::mlx::core::square(x_2d);
         auto ms = ::mlx::core::mean(sq, std::vector<int>{1}, /*keepdims=*/true);
-        ::mlx::core::array eps_arr(eps, gpu::to_mlx_dtype(x->dtype_));
+        ::mlx::core::array eps_arr(eps, gpu::to_mlx_dtype(x->dtype()));
         auto rstd = ::mlx::core::rsqrt(::mlx::core::add(ms, eps_arr));
         auto xnorm = ::mlx::core::multiply(x_2d, rstd);
         auto y_2d = ::mlx::core::multiply(xnorm, g_2d);
-        auto y = ::mlx::core::reshape(y_2d, gpu::to_mlx_shape(x->shape_));
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype_)};
-        saved_rstd = Storage{gpu::wrap_mlx_array(std::move(rstd), x->dtype_)};
+        auto y = ::mlx::core::reshape(y_2d, gpu::to_mlx_shape(x->shape()));
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype())};
+        saved_rstd = Storage{gpu::wrap_mlx_array(std::move(rstd), x->dtype())};
     } else {
-        auto y_cpu = allocate_size(outer * N, x->dtype_);
-        auto rstd_cpu = allocate_size(outer, x->dtype_);
+        auto y_cpu = allocate_size(outer * N, x->dtype());
+        auto rstd_cpu = allocate_size(outer, x->dtype());
 
         if (outer * N > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x->storage_);
-            const auto& g_cpu = std::get<CpuStorage>(gamma->storage_);
-            switch (x->dtype_) {
+            const auto& x_cpu = std::get<CpuStorage>(x->storage());
+            const auto& g_cpu = std::get<CpuStorage>(gamma->storage());
+            switch (x->dtype()) {
                 case Dtype::F32:
                     backend::cpu::rms_norm_forward_f32(
                         reinterpret_cast<const float*>(x_cpu.ptr.get()),
@@ -123,10 +121,11 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
     scope.set_flops(static_cast<std::int64_t>(outer * N) * 4);
 
     auto out =
-        std::make_shared<TensorImpl>(std::move(out_storage), x->shape_, x->dtype_, x->device_,
+        std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(), x->device(),
                                      /*requires_grad=*/false);
 
-    const bool needs_grad = GradMode::is_enabled() && (x->requires_grad_ || gamma->requires_grad_);
+    const bool needs_grad =
+        GradMode::is_enabled() && (x->requires_grad() || gamma->requires_grad());
     if (!needs_grad)
         return out;
 
@@ -134,21 +133,21 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
     auto g_edge = detail::ensure_grad_fn(gamma);
 
     auto bwd = std::make_shared<RMSNormBackward>();
-    bwd->input_shapes_ = {x->shape_, gamma->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape(), gamma->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x, gamma};
-    bwd->saved_inputs_ = {x->storage_, gamma->storage_};
+    bwd->saved_inputs_ = {x->storage(), gamma->storage()};
     bwd->saved_rstd_ = std::move(saved_rstd);
     bwd->outer_ = outer;
     bwd->N_ = N;
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0)});
-    bwd->set_saved_versions({x->version_, gamma->version_});
+    bwd->set_saved_versions({x->version(), gamma->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

@@ -54,14 +54,14 @@ inline float perm_index_sign(const std::uint32_t* p, std::size_t n) {
 TensorImplPtr det_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     Validator::input(a, "det.a").float_only().square_2d();
-    OpScopeFull scope{"det", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"det", a->device(), a->dtype(), a->shape()};
 
-    const auto& sh = a->shape_;
+    const auto& sh = a->shape();
     const int n = static_cast<int>(sh[sh.size() - 1]);
     const std::int64_t batch = leading_batch_count(sh, /*mat_dims=*/2);
     Shape out_shape(sh.begin(), sh.end() - 2);
 
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         // MLX has no det; compute via LU then sign × prod(diag(U)).
         auto in = as_mlx_array_gpu(a);
         auto factors = ::mlx::core::linalg::lu(in, kMlxLinalgStream);
@@ -84,20 +84,21 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
         for (auto d : out_shape)
             sign_shape.push_back(d);
         ::mlx::core::array sign_arr(signs.data(), sign_shape, ::mlx::core::float32);
-        if (a->dtype_ != Dtype::F32)
-            sign_arr = ::mlx::core::astype(sign_arr, gpu::to_mlx_dtype(a->dtype_));
+        if (a->dtype() != Dtype::F32)
+            sign_arr = ::mlx::core::astype(sign_arr, gpu::to_mlx_dtype(a->dtype()));
         auto detA = ::mlx::core::multiply(detU, sign_arr);
-        return fresh(wrap_gpu_result(std::move(detA), a->dtype_), out_shape, a->dtype_, a->device_);
+        return fresh(wrap_gpu_result(std::move(detA), a->dtype()), out_shape, a->dtype(),
+                     a->device());
     }
 
     // CPU path: per-batch LAPACK getrf, sign × diag product.
-    auto out_cpu = allocate_cpu(out_shape, a->dtype_);
-    const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+    auto out_cpu = allocate_cpu(out_shape, a->dtype());
+    const auto& in_cpu = std::get<CpuStorage>(a->storage());
     const std::size_t per_mat = static_cast<std::size_t>(n) * n;
     std::vector<int> ipiv(n);
     int info = 0;
 
-    if (a->dtype_ == Dtype::F32) {
+    if (a->dtype() == Dtype::F32) {
         std::vector<float> L(per_mat), U(per_mat);
         const auto* in_p = reinterpret_cast<const float*>(in_cpu.ptr.get());
         auto* out_p = reinterpret_cast<float*>(out_cpu.ptr.get());
@@ -134,7 +135,7 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
             out_p[b] = det;
         }
     }
-    return fresh(Storage{std::move(out_cpu)}, out_shape, a->dtype_, a->device_);
+    return fresh(Storage{std::move(out_cpu)}, out_shape, a->dtype(), a->device());
 }
 
 }  // namespace lucid

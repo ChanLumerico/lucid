@@ -99,22 +99,22 @@ const OpSchema MeshgridBackward::schema_v1{"meshgrid", 1, AmpPolicy::KeepInput, 
 TensorImplPtr attach_meshgrid_grad(const TensorImplPtr& input,
                                    TensorImplPtr output,
                                    int carry_axis) {
-    if (!GradMode::is_enabled() || !input->requires_grad_)
+    if (!GradMode::is_enabled() || !input->requires_grad())
         return output;
 
     auto bwd = std::make_shared<MeshgridBackward>();
-    bwd->input_shapes_ = {input->shape_};
-    bwd->out_shape_ = output->shape_;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->input_shapes_ = {input->shape()};
+    bwd->out_shape_ = output->shape();
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input};
     bwd->carry_axis_ = carry_axis;
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(input), 0)});
-    bwd->set_saved_versions({input->version_});
+    bwd->set_saved_versions({input->version()});
 
-    output->grad_fn_ = std::move(bwd);
-    output->is_leaf_ = false;
-    output->requires_grad_ = true;
+    output->set_grad_fn(std::move(bwd));
+    output->set_leaf(false);
+    output->set_requires_grad(true);
     return output;
 }
 
@@ -122,14 +122,14 @@ TensorImplPtr attach_meshgrid_grad(const TensorImplPtr& input,
 
 std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs, bool indexing_xy) {
     check_dtype_device_match(xs, "meshgrid");
-    const Dtype dt = xs[0]->dtype_;
-    const Device device = xs[0]->device_;
+    const Dtype dt = xs[0]->dtype();
+    const Device device = xs[0]->device();
     OpScopeFull scope{"meshgrid", device, dt, Shape{}};
     if (device == Device::GPU) {
         std::vector<::mlx::core::array> arrays;
         arrays.reserve(xs.size());
         for (auto& t : xs)
-            arrays.push_back(*std::get<GpuStorage>(t->storage_).arr);
+            arrays.push_back(*std::get<GpuStorage>(t->storage()).arr);
         auto out = ::mlx::core::meshgrid(arrays, false, indexing_xy ? "xy" : "ij");
         std::vector<TensorImplPtr> result;
         result.reserve(out.size());
@@ -150,9 +150,9 @@ std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs, boo
     const std::size_t N = xs.size();
     std::vector<std::int64_t> dims(N);
     for (std::size_t i = 0; i < N; ++i) {
-        if (xs[i]->shape_.size() != 1)
+        if (xs[i]->shape().size() != 1)
             ErrorBuilder("meshgrid").fail("each input must be 1-D");
-        dims[i] = xs[i]->shape_[0];
+        dims[i] = xs[i]->shape()[0];
     }
     std::vector<std::int64_t> out_dims = dims;
     if (indexing_xy && N >= 2)
@@ -172,7 +172,7 @@ std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs, boo
     result.reserve(N);
     for (std::size_t i = 0; i < N; ++i) {
         auto out_cpu = allocate_cpu(out_shape, dt);
-        const auto& cv = std::get<CpuStorage>(xs[i]->storage_);
+        const auto& cv = std::get<CpuStorage>(xs[i]->storage());
         std::size_t carry_axis = i;
         if (indexing_xy && N >= 2 && i < 2)
             carry_axis = 1 - i;

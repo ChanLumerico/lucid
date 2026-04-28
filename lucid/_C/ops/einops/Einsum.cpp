@@ -55,7 +55,7 @@ TensorImplPtr align_to_labels(const TensorImplPtr& t,
     // Insert trailing size-1 axes for any target label not in src.
     for (const auto& c : target_labels) {
         if (std::find(src_labels.begin(), src_labels.end(), c) == src_labels.end()) {
-            cur = unsqueeze_op(cur, static_cast<int>(cur->shape_.size()));
+            cur = unsqueeze_op(cur, static_cast<int>(cur->shape().size()));
             src_labels.push_back(c);
         }
     }
@@ -78,7 +78,7 @@ TensorImplPtr align_to_labels(const TensorImplPtr& t,
     Shape target_shape;
     for (const auto& c : target_labels)
         target_shape.push_back(sizes.at(c));
-    if (cur->shape_ != target_shape)
+    if (cur->shape() != target_shape)
         cur = broadcast_to_op(cur, target_shape);
     return cur;
 }
@@ -92,7 +92,7 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
         ErrorBuilder("einsum").not_implemented(
             "ellipsis (...) patterns not yet supported in C++ engine");
 
-    OpScopeFull scope{"einsum", operands[0]->device_, operands[0]->dtype_, operands[0]->shape_};
+    OpScopeFull scope{"einsum", operands[0]->device(), operands[0]->dtype(), operands[0]->shape()};
 
     auto eq = strip_ws(pattern);
     std::string lhs, rhs;
@@ -127,13 +127,13 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
     for (std::size_t k = 0; k < operands.size(); ++k) {
         const auto& spec = in_specs[k];
         const auto& t = operands[k];
-        if (spec.size() != t->shape_.size())
+        if (spec.size() != t->shape().size())
             ErrorBuilder("einsum").fail("operand" + std::to_string(k) + " has " +
-                                        std::to_string(t->shape_.size()) + " axes but spec '" +
+                                        std::to_string(t->shape().size()) + " axes but spec '" +
                                         spec + "' has " + std::to_string(spec.size()) + " labels");
         for (std::size_t i = 0; i < spec.size(); ++i) {
             std::string c(1, spec[i]);
-            std::int64_t n = t->shape_[i];
+            std::int64_t n = t->shape()[i];
             auto it = sizes.find(c);
             if (it == sizes.end())
                 sizes[c] = n;

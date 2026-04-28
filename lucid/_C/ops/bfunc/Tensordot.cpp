@@ -82,18 +82,18 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     // Autograd-tracked path: dispatch through einsum so primitive op
     // backwards stitch the gradient chain. Inference path keeps the native
     // gemm-based fast path below.
-    if (GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)) {
+    if (GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())) {
         return einsum_op(
-            tensordot_einsum_pattern(a->shape_.size(), b->shape_.size(), axes_a, axes_b), {a, b});
+            tensordot_einsum_pattern(a->shape().size(), b->shape().size(), axes_a, axes_b), {a, b});
     }
 
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
     OpScopeFull scope{"tensordot", device, dt, Shape{}};
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         auto out = ::mlx::core::tensordot(*ga.arr, *gb.arr, axes_a, axes_b);
         Shape out_shape;
         for (auto d : out.shape())
@@ -104,7 +104,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
 
     auto contract = [&](const TensorImplPtr& t, const std::vector<int>& axes_contract,
                         bool put_first) {
-        const std::size_t nd = t->shape_.size();
+        const std::size_t nd = t->shape().size();
         std::vector<bool> is_c(nd, false);
         for (auto ax : axes_contract) {
             int p = ax < 0 ? ax + (int)nd : ax;
@@ -119,30 +119,30 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
             for (auto ax : axes_contract) {
                 int p = ax < 0 ? ax + (int)nd : ax;
                 perm.push_back(p);
-                contract_size *= t->shape_[p];
+                contract_size *= t->shape()[p];
             }
             for (std::size_t d = 0; d < nd; ++d)
                 if (!is_c[d]) {
                     perm.push_back((int)d);
-                    kept.push_back(t->shape_[d]);
+                    kept.push_back(t->shape()[d]);
                 }
         } else {
             for (std::size_t d = 0; d < nd; ++d)
                 if (!is_c[d]) {
                     perm.push_back((int)d);
-                    kept.push_back(t->shape_[d]);
+                    kept.push_back(t->shape()[d]);
                 }
             for (auto ax : axes_contract) {
                 int p = ax < 0 ? ax + (int)nd : ax;
                 perm.push_back(p);
-                contract_size *= t->shape_[p];
+                contract_size *= t->shape()[p];
             }
         }
-        Shape src_shape = t->shape_;
+        Shape src_shape = t->shape();
         Shape dst_shape;
         for (auto p : perm)
             dst_shape.push_back(src_shape[p]);
-        const auto& cs = std::get<CpuStorage>(t->storage_);
+        const auto& cs = std::get<CpuStorage>(t->storage());
         auto dst = allocate_cpu(dst_shape, dt);
         const std::size_t elem = dtype_size(dt);
         Stride src_stride(nd);

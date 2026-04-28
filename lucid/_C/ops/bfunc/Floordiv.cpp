@@ -26,13 +26,13 @@ using bfunc_detail::validate_pair_eq_shape;
 
 TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     validate_pair_eq_shape(a, b, "floordiv");
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"floordiv", device, dt, a->shape_};
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"floordiv", device, dt, a->shape()};
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         // mlx::floor_divide on integer inputs truncates toward zero, which
         // disagrees with numpy/PyTorch (floor toward -∞) for negative
         // numerators. Cast to float32, take the true floor, then cast back
@@ -41,13 +41,13 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         auto b_f = ::mlx::core::astype(*gb.arr, ::mlx::core::float32);
         auto q = ::mlx::core::floor(::mlx::core::divide(a_f, b_f));
         auto out_i = ::mlx::core::astype(q, ::mlx::core::int64);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out_i), Dtype::I64)}, a->shape_,
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out_i), Dtype::I64)}, a->shape(),
                      Dtype::I64, device);
     }
 
-    const auto& ca = std::get<CpuStorage>(a->storage_);
-    const auto& cb = std::get<CpuStorage>(b->storage_);
-    const std::size_t n = shape_numel(a->shape_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
+    const auto& cb = std::get<CpuStorage>(b->storage());
+    const std::size_t n = shape_numel(a->shape());
     CpuStorage out;
     out.dtype = Dtype::I64;
     out.nbytes = n * sizeof(std::int64_t);
@@ -78,7 +78,7 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         default:
             ErrorBuilder("floordiv").not_implemented("dtype not supported");
     }
-    return fresh(Storage{std::move(out)}, a->shape_, Dtype::I64, device);
+    return fresh(Storage{std::move(out)}, a->shape(), Dtype::I64, device);
 }
 
 }  // namespace lucid

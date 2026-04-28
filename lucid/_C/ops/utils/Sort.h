@@ -6,6 +6,7 @@
 // =====================================================================
 
 #include <cstdint>
+#include <vector>
 
 #include "../../api.h"
 #include "../../core/Storage.h"
@@ -19,6 +20,7 @@ LUCID_API TensorImplPtr argmax_op(const TensorImplPtr& a, int axis, bool keepdim
 LUCID_API TensorImplPtr argmin_op(const TensorImplPtr& a, int axis, bool keepdims);
 LUCID_API TensorImplPtr nonzero_op(const TensorImplPtr& a);
 LUCID_API TensorImplPtr unique_op(const TensorImplPtr& a);
-LUCID_API TensorImplPtr topk_op(const TensorImplPtr& a, std::int64_t k, int axis);
+// Returns {values, indices} — consistent with svd/qr/eig multi-output convention.
+LUCID_API std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int axis);
 
 }  // namespace lucid

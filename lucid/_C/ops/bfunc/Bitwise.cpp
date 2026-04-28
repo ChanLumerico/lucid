@@ -81,19 +81,19 @@ template <typename MlxFn, typename Op>
 TensorImplPtr bit_dispatch(
     const TensorImplPtr& a, const TensorImplPtr& b, const char* name, MlxFn mlx_fn, Op op) {
     validate_pair_eq_shape(a, b, name);
-    if (!is_integer_or_bool(a->dtype_))
+    if (!is_integer_or_bool(a->dtype()))
         ErrorBuilder(name).fail("dtype must be integer or bool");
-    OpScopeFull scope{name, a->device_, a->dtype_, a->shape_};
-    if (a->device_ == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+    OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
+    if (a->device() == Device::GPU) {
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         auto out = mlx_fn(*ga.arr, *gb.arr);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)}, a->shape_, a->dtype_,
-                     a->device_);
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())}, a->shape(),
+                     a->dtype(), a->device());
     }
-    auto out = bit_kernel(std::get<CpuStorage>(a->storage_), std::get<CpuStorage>(b->storage_),
-                          shape_numel(a->shape_), a->dtype_, op);
-    return fresh(Storage{std::move(out)}, a->shape_, a->dtype_, a->device_);
+    auto out = bit_kernel(std::get<CpuStorage>(a->storage()), std::get<CpuStorage>(b->storage()),
+                          shape_numel(a->shape()), a->dtype(), op);
+    return fresh(Storage{std::move(out)}, a->shape(), a->dtype(), a->device());
 }
 
 }  // namespace

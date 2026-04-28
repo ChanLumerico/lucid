@@ -69,31 +69,30 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                                          double eps) {
     if (!x || !gamma || !beta)
         ErrorBuilder("layer_norm").fail("null input");
-    if (x->dtype_ != gamma->dtype_ || x->dtype_ != beta->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
-                            std::string(dtype_name(gamma->dtype_)), "layer_norm");
-    if (x->device_ != gamma->device_ || x->device_ != beta->device_)
-        throw DeviceMismatch(std::string(device_name(x->device_)),
-                             std::string(device_name(gamma->device_)), "layer_norm");
-    if (x->device_ == Device::CPU &&
+    if (x->dtype() != gamma->dtype() || x->dtype() != beta->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
+                            std::string(dtype_name(gamma->dtype())), "layer_norm");
+    if (x->device() != gamma->device() || x->device() != beta->device())
+        throw DeviceMismatch(std::string(device_name(x->device())),
+                             std::string(device_name(gamma->device())), "layer_norm");
+    if (x->device() == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-        ErrorBuilder("layer_norm").not_implemented("non-contiguous input not supported");
-    if (gamma->shape_ != beta->shape_)
-        throw ShapeMismatch(gamma->shape_, beta->shape_,
+    if (gamma->shape() != beta->shape())
+        throw ShapeMismatch(gamma->shape(), beta->shape(),
                             "layer_norm: γ and β must have the same shape");
 
-    const auto [outer, N] = resolve_shapes(x->shape_, gamma->shape_);
+    const auto [outer, N] = resolve_shapes(x->shape(), gamma->shape());
 
-    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
 
     Storage out_storage;
     Storage saved_mean;
     Storage saved_rstd;
 
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
-        const auto& gg = std::get<GpuStorage>(gamma->storage_);
-        const auto& gb = std::get<GpuStorage>(beta->storage_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
+        const auto& gg = std::get<GpuStorage>(gamma->storage());
+        const auto& gb = std::get<GpuStorage>(beta->storage());
         if (!gx.arr || !gg.arr || !gb.arr) {
             ErrorBuilder("layer_norm").fail("null GPU input");
         }
@@ -109,25 +108,25 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
         auto centered = ::mlx::core::subtract(x_2d, mean);
         auto var = ::mlx::core::mean(::mlx::core::square(centered), std::vector<int>{1},
                                      /*keepdims=*/true);
-        ::mlx::core::array eps_arr(eps, gpu::to_mlx_dtype(x->dtype_));
+        ::mlx::core::array eps_arr(eps, gpu::to_mlx_dtype(x->dtype()));
         auto rstd = ::mlx::core::rsqrt(::mlx::core::add(var, eps_arr));
         auto xnorm = ::mlx::core::multiply(centered, rstd);
         auto y_2d = ::mlx::core::add(::mlx::core::multiply(xnorm, g_2d), b_2d);
-        auto y = ::mlx::core::reshape(y_2d, gpu::to_mlx_shape(x->shape_));
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype_)};
+        auto y = ::mlx::core::reshape(y_2d, gpu::to_mlx_shape(x->shape()));
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype())};
         // Save mean and rstd at flat shape (outer, 1) — used by backward.
-        saved_mean = Storage{gpu::wrap_mlx_array(std::move(mean), x->dtype_)};
-        saved_rstd = Storage{gpu::wrap_mlx_array(std::move(rstd), x->dtype_)};
+        saved_mean = Storage{gpu::wrap_mlx_array(std::move(mean), x->dtype())};
+        saved_rstd = Storage{gpu::wrap_mlx_array(std::move(rstd), x->dtype())};
     } else {
-        auto y_cpu = allocate_size(outer * N, x->dtype_);
-        auto mean_cpu = allocate_size(outer, x->dtype_);
-        auto rstd_cpu = allocate_size(outer, x->dtype_);
+        auto y_cpu = allocate_size(outer * N, x->dtype());
+        auto mean_cpu = allocate_size(outer, x->dtype());
+        auto rstd_cpu = allocate_size(outer, x->dtype());
 
         if (outer * N > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x->storage_);
-            const auto& g_cpu = std::get<CpuStorage>(gamma->storage_);
-            const auto& b_cpu = std::get<CpuStorage>(beta->storage_);
-            switch (x->dtype_) {
+            const auto& x_cpu = std::get<CpuStorage>(x->storage());
+            const auto& g_cpu = std::get<CpuStorage>(gamma->storage());
+            const auto& b_cpu = std::get<CpuStorage>(beta->storage());
+            switch (x->dtype()) {
                 case Dtype::F32:
                     backend::cpu::layer_norm_forward_f32(
                         reinterpret_cast<const float*>(x_cpu.ptr.get()),
@@ -157,11 +156,11 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
     scope.set_flops(static_cast<std::int64_t>(outer * N) * 5);
 
     auto out =
-        std::make_shared<TensorImpl>(std::move(out_storage), x->shape_, x->dtype_, x->device_,
+        std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(), x->device(),
                                      /*requires_grad=*/false);
 
     const bool needs_grad = GradMode::is_enabled() &&
-                            (x->requires_grad_ || gamma->requires_grad_ || beta->requires_grad_);
+                            (x->requires_grad() || gamma->requires_grad() || beta->requires_grad());
     if (!needs_grad)
         return out;
 
@@ -170,22 +169,22 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
     auto b_edge = detail::ensure_grad_fn(beta);
 
     auto bwd = std::make_shared<LayerNormBackward>();
-    bwd->input_shapes_ = {x->shape_, gamma->shape_, beta->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape(), gamma->shape(), beta->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x, gamma, beta};
-    bwd->saved_inputs_ = {x->storage_, gamma->storage_, beta->storage_};
+    bwd->saved_inputs_ = {x->storage(), gamma->storage(), beta->storage()};
     bwd->saved_mean_ = std::move(saved_mean);
     bwd->saved_rstd_ = std::move(saved_rstd);
     bwd->outer_ = outer;
     bwd->N_ = N;
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0), Edge(b_edge, 0)});
-    bwd->set_saved_versions({x->version_, gamma->version_, beta->version_});
+    bwd->set_saved_versions({x->version(), gamma->version(), beta->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

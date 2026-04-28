@@ -45,11 +45,6 @@ Dtype np_dtype_to_lucid(const py::dtype& d) {
             }
             break;
         case 'u':
-            // Reject unsigned NumPy dtypes — Lucid's Dtype enum is signed-only,
-            // and silently reinterpreting `uint8`/`uint32` as `int8`/`int32`
-            // changes values above the signed range and breaks round-trips.
-            // Callers should explicitly cast their array to the matching
-            // signed dtype (or to a float dtype) before constructing a Tensor.
             throw DtypeMismatch("signed integer or float numpy dtype",
                                 std::string("uint") + std::to_string(sz * 8),
                                 "from_numpy: unsigned dtypes are not supported "
@@ -101,8 +96,6 @@ py::dtype lucid_dtype_to_np(Dtype dt) {
 }
 
 py::object make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride& stride) {
-    // Use the CpuStorage shared_ptr as the lifetime owner for the numpy array.
-    // numpy holds a base object with a custom destructor that releases our ref.
     auto* keepalive = new std::shared_ptr<std::byte[]>(s.ptr);
     py::capsule owner(keepalive,
                       [](void* p) { delete static_cast<std::shared_ptr<std::byte[]>*>(p); });
@@ -117,12 +110,15 @@ py::object make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride
 }  // namespace
 
 TensorImpl::TensorImpl(Storage storage, Shape shape, Dtype dtype, Device device, bool requires_grad)
-    : storage_(std::move(storage)),
-      shape_(std::move(shape)),
-      dtype_(dtype),
-      device_(device),
-      requires_grad_(requires_grad) {
-    stride_ = contiguous_stride(shape_, dtype_size(dtype_));
+    : storage_(std::move(storage)) {
+    meta_.shape = std::move(shape);
+    meta_.dtype = dtype;
+    meta_.device = device;
+    meta_.stride = contiguous_stride(meta_.shape, dtype_size(dtype));
+    if (requires_grad) {
+        autograd_.emplace();
+        autograd_->requires_grad = true;
+    }
 }
 
 std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
@@ -130,7 +126,6 @@ std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
                                                    bool requires_grad) {
     py::array_t<std::byte, py::array::c_style | py::array::forcecast> view =
         py::array_t<std::byte, py::array::c_style | py::array::forcecast>::ensure(arr);
-    // Ensure() may return null on failure.
     if (!arr) {
         ErrorBuilder("from_numpy").fail("input is not a numpy array");
     }
@@ -150,8 +145,6 @@ std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
     cpu.nbytes = total;
     cpu.dtype = dtype;
 
-    // Copy from numpy into aligned storage. Source must be C-contiguous of the
-    // same dtype; ensure() above does the conversion if necessary.
     py::array contig = py::array::ensure(arr, py::array::c_style | py::array::forcecast);
     if (!contig) {
         ErrorBuilder("from_numpy").fail("failed to obtain C-contiguous view");
@@ -161,9 +154,6 @@ std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
     }
 
     if (device == Device::GPU) {
-        // Upload from the staging CpuStorage into an mlx::core::array. The
-        // CpuStorage's shared_ptr is captured into the MLX array's deleter
-        // so the host buffer outlives any zero-copy use MLX makes of it.
         auto gpu = gpu::upload_cpu_to_gpu(cpu, shape);
         return std::make_shared<TensorImpl>(Storage{std::move(gpu)}, std::move(shape), dtype,
                                             device, requires_grad);
@@ -173,57 +163,59 @@ std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
 }
 
 std::size_t TensorImpl::numel() const {
-    return shape_numel(shape_);
+    return meta_.numel();
 }
 
 std::size_t TensorImpl::nbytes() const {
-    return numel() * dtype_size(dtype_);
+    return numel() * dtype_size(meta_.dtype);
 }
 
 bool TensorImpl::is_contiguous() const {
-    Stride expected = contiguous_stride(shape_, dtype_size(dtype_));
-    return expected == stride_;
+    // Strides are byte-strides; compare against the canonical byte-stride layout.
+    Stride expected = contiguous_stride(meta_.shape, dtype_size(meta_.dtype));
+    return expected == meta_.stride;
 }
 
 py::object TensorImpl::data_as_python() const {
-    return std::visit(
-        overloaded{
-            [&](const CpuStorage& s) -> py::object { return make_numpy_view(s, shape_, stride_); },
-            [&](const GpuStorage& g) -> py::object {
-                // Eval + copy back to CPU so numpy gets a stable buffer.
-                CpuStorage cpu = gpu::download_gpu_to_cpu(g, shape_);
-                return make_numpy_view(cpu, shape_, stride_);
-            },
-        },
-        storage_);
+    return std::visit(overloaded{
+                          [&](const CpuStorage& s) -> py::object {
+                              return make_numpy_view(s, meta_.shape, meta_.stride);
+                          },
+                          [&](const GpuStorage& g) -> py::object {
+                              CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+                              return make_numpy_view(cpu, meta_.shape, meta_.stride);
+                          },
+                      },
+                      storage_);
 }
 
 py::object TensorImpl::grad_as_python() const {
-    if (!grad_storage_.has_value()) {
+    if (!autograd_ || !autograd_->grad.has_value()) {
         return py::none();
     }
-    return std::visit(
-        overloaded{
-            [&](const CpuStorage& s) -> py::object { return make_numpy_view(s, shape_, stride_); },
-            [&](const GpuStorage& g) -> py::object {
-                CpuStorage cpu = gpu::download_gpu_to_cpu(g, shape_);
-                return make_numpy_view(cpu, shape_, stride_);
-            },
-        },
-        *grad_storage_);
+    return std::visit(overloaded{
+                          [&](const CpuStorage& s) -> py::object {
+                              return make_numpy_view(s, meta_.shape, meta_.stride);
+                          },
+                          [&](const GpuStorage& g) -> py::object {
+                              CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+                              return make_numpy_view(cpu, meta_.shape, meta_.stride);
+                          },
+                      },
+                      *autograd_->grad);
 }
 
 void TensorImpl::copy_from(const TensorImpl& other) {
     if (other.device() != device()) {
-        throw DeviceMismatch(std::string(device_name(device_)),
+        throw DeviceMismatch(std::string(device_name(meta_.device)),
                              std::string(device_name(other.device())), "copy_from");
     }
     if (other.dtype() != dtype()) {
-        throw DtypeMismatch(std::string(dtype_name(dtype_)), std::string(dtype_name(other.dtype())),
-                            "copy_from");
+        throw DtypeMismatch(std::string(dtype_name(meta_.dtype)),
+                            std::string(dtype_name(other.dtype())), "copy_from");
     }
     if (other.shape() != shape()) {
-        throw ShapeMismatch(shape_, other.shape(), "copy_from");
+        throw ShapeMismatch(meta_.shape, other.shape(), "copy_from");
     }
 
     std::visit(overloaded{
@@ -239,9 +231,6 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                        if (dst.nbytes != src.nbytes) {
                            ErrorBuilder("copy_from").fail("nbytes mismatch (GPU)");
                        }
-                       // Re-point our shared_ptr at a new wrapper around a clone of
-                       // the source array. We can't memcpy GPU buffers directly;
-                       // MLX's `copy()` performs the device-side replication.
                        if (!src.arr) {
                            ErrorBuilder("copy_from").fail("src GPU array is null");
                        }
@@ -249,7 +238,7 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                        dst.arr = gpu::wrap_mlx_array(std::move(cloned), dst.dtype).arr;
                    },
                    [&](auto&, auto&) {
-                       throw DeviceMismatch(std::string(device_name(device_)),
+                       throw DeviceMismatch(std::string(device_name(meta_.device)),
                                             std::string(device_name(other.device())),
                                             "copy_from (storage variant)");
                    },
@@ -260,7 +249,31 @@ void TensorImpl::copy_from(const TensorImpl& other) {
 }
 
 void TensorImpl::zero_grad() {
-    grad_storage_.reset();
+    if (autograd_)
+        autograd_->grad.reset();
+}
+
+bool TensorImpl::storage_is_shared() const noexcept {
+    if (const auto* cpu = std::get_if<CpuStorage>(&storage_))
+        return cpu->ptr.use_count() > 1;
+    return false;  // GPU storage shared via MLX CoW internally
+}
+
+std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorImpl>& base,
+                                                    Shape shape,
+                                                    Stride stride,
+                                                    std::size_t offset_bytes) {
+    auto view = std::make_shared<TensorImpl>(base->storage_, std::move(shape),
+                                              base->meta_.dtype, base->meta_.device,
+                                              false);
+    view->meta_.stride = std::move(stride);
+    view->offset_ = base->offset_ + offset_bytes;
+    // Propagate requires_grad if the base has it.
+    if (base->requires_grad()) {
+        view->set_requires_grad(true);
+        view->set_leaf(base->is_leaf());
+    }
+    return view;
 }
 
 }  // namespace lucid

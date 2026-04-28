@@ -74,23 +74,23 @@ public:
 
 TensorImplPtr trace_op(const TensorImplPtr& a) {
     Validator::input(a, "trace.a").non_null();
-    if (a->shape_.size() < 2)
+    if (a->shape().size() < 2)
         ErrorBuilder("trace").fail("input must have ndim >= 2");
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    const auto& sh = a->shape_;
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    const auto& sh = a->shape();
     OpScopeFull scope{"trace", device, dt, Shape{}};
 
     Shape out_shape(sh.begin() + 2, sh.end());
 
     TensorImplPtr out;
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto raw = ::mlx::core::trace(*ga.arr, /*offset=*/0,
                                       /*axis1=*/0, /*axis2=*/1);
         out = fresh(Storage{gpu::wrap_mlx_array(std::move(raw), dt)}, out_shape, dt, device);
     } else {
-        const auto& ca = std::get<CpuStorage>(a->storage_);
+        const auto& ca = std::get<CpuStorage>(a->storage());
         const std::int64_t M = sh[0], N = sh[1];
         const std::int64_t L = std::min(M, N);
         const std::size_t out_numel = shape_numel(out_shape);
@@ -117,19 +117,19 @@ TensorImplPtr trace_op(const TensorImplPtr& a) {
         out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
     }
 
-    if (GradMode::is_enabled() && a->requires_grad_ && a->shape_.size() == 2) {
+    if (GradMode::is_enabled() && a->requires_grad() && a->shape().size() == 2) {
         auto bwd = std::make_shared<TraceBackward>();
-        bwd->input_shape_ = a->shape_;
+        bwd->input_shape_ = a->shape();
         bwd->dtype_ = dt;
         bwd->device_ = device;
         auto a_edge = detail::ensure_grad_fn(a);
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);
         bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
     }
     return out;
 }

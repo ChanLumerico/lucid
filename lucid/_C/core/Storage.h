@@ -36,4 +36,21 @@ struct GpuStorage {
 
 using Storage = std::variant<CpuStorage, GpuStorage>;
 
+// --------------------------------------------------------------------------- //
+// Storage free-function helpers — avoid repeated std::visit boilerplate.
+// --------------------------------------------------------------------------- //
+
+inline bool storage_is_cpu(const Storage& s) noexcept {
+    return s.index() == 0;
+}
+inline bool storage_is_gpu(const Storage& s) noexcept {
+    return s.index() == 1;
+}
+inline std::size_t storage_nbytes(const Storage& s) noexcept {
+    return s.index() == 0 ? std::get<0>(s).nbytes : std::get<1>(s).nbytes;
+}
+inline Dtype storage_dtype(const Storage& s) noexcept {
+    return s.index() == 0 ? std::get<0>(s).dtype : std::get<1>(s).dtype;
+}
+
 }  // namespace lucid

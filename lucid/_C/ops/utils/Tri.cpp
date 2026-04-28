@@ -92,42 +92,42 @@ const OpSchema TriBackward::schema_v1{"tri", 1, AmpPolicy::KeepInput, true};
 
 TensorImplPtr attach_tri_grad(
     const TensorImplPtr& a, TensorImplPtr out, int k, bool upper, const char* name) {
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto bwd = std::make_shared<TriBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->k_ = k;
     bwd->upper_ = upper;
     bwd->name_ = name;
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
 TensorImplPtr tri_dispatch(const TensorImplPtr& a, int k, bool upper, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{name, device, dt, a->shape_};
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{name, device, dt, a->shape()};
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto raw = upper ? ::mlx::core::triu(*ga.arr, k) : ::mlx::core::tril(*ga.arr, k);
         Shape sh = mlx_shape_to_lucid(raw.shape());
         auto out =
             fresh(Storage{gpu::wrap_mlx_array(std::move(raw), dt)}, std::move(sh), dt, device);
         return attach_tri_grad(a, std::move(out), k, upper, name);
     }
-    Shape sh = a->shape_;
-    auto out_storage = tri_storage(a->storage_, sh, dt, device, k, upper, name);
+    Shape sh = a->shape();
+    auto out_storage = tri_storage(a->storage(), sh, dt, device, k, upper, name);
     auto out = fresh(std::move(out_storage), std::move(sh), dt, device);
     return attach_tri_grad(a, std::move(out), k, upper, name);
 }

@@ -202,60 +202,55 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
 TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (!a || !b)
         ErrorBuilder("matmul").fail("null input");
-    if (a->dtype_ != b->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(a->dtype_)), std::string(dtype_name(b->dtype_)),
-                            "matmul");
-    if (a->device_ != b->device_)
-        throw DeviceMismatch(std::string(device_name(a->device_)),
-                             std::string(device_name(b->device_)), "matmul");
-    if (a->shape_.size() < 2 || b->shape_.size() < 2) {
-        throw ShapeMismatch(a->shape_, b->shape_, "matmul: both operands must be ≥2-D");
-    }
-    // Item #8 — non-contiguous input guard. CPU only (GPU stride is internal).
-    if (a->device_ == Device::CPU && (!a->is_contiguous() || !b->is_contiguous())) {
-        ErrorBuilder("matmul").not_implemented(
-            "non-contiguous input not supported (call .contiguous() first)");
+    if (a->dtype() != b->dtype())
+        throw DtypeMismatch(std::string(dtype_name(a->dtype())),
+                            std::string(dtype_name(b->dtype())), "matmul");
+    if (a->device() != b->device())
+        throw DeviceMismatch(std::string(device_name(a->device())),
+                             std::string(device_name(b->device())), "matmul");
+    if (a->shape().size() < 2 || b->shape().size() < 2) {
+        throw ShapeMismatch(a->shape(), b->shape(), "matmul: both operands must be ≥2-D");
     }
 
-    const auto info = plan_nd_matmul(a->shape_, b->shape_);
+    const auto info = plan_nd_matmul(a->shape(), b->shape());
     const int M = info.M, N = info.N, K = info.K;
 
-    OpScopeFull scope{MatmulBackward::schema_v1.name, a->device_, a->dtype_, info.out_shape};
+    OpScopeFull scope{MatmulBackward::schema_v1.name, a->device(), a->dtype(), info.out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * info.batch * M * N * K);
 
     Storage out_storage;
-    if (a->device_ == Device::GPU) {
-        const auto& gA = std::get<GpuStorage>(a->storage_);
-        const auto& gB = std::get<GpuStorage>(b->storage_);
+    if (a->device() == Device::GPU) {
+        const auto& gA = std::get<GpuStorage>(a->storage());
+        const auto& gB = std::get<GpuStorage>(b->storage());
         // MLX matmul handles batched N-D inputs natively (with broadcasting
         // over leading axes). No manual reshape needed.
         auto out = ::mlx::core::matmul(*gA.arr, *gB.arr);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
     } else {
         // CPU: materialize broadcast for batch dims, then per-slice GEMM.
-        const CpuStorage& aRaw = std::get<CpuStorage>(a->storage_);
-        const CpuStorage& bRaw = std::get<CpuStorage>(b->storage_);
+        const CpuStorage& aRaw = std::get<CpuStorage>(a->storage());
+        const CpuStorage& bRaw = std::get<CpuStorage>(b->storage());
         CpuStorage aBuf, bBuf;
         const CpuStorage* aUse = &aRaw;
         const CpuStorage* bUse = &bRaw;
-        if (a->shape_ != info.a_bcast_shape) {
-            aBuf = detail::broadcast_cpu(aRaw, a->shape_, info.a_bcast_shape, a->dtype_);
+        if (a->shape() != info.a_bcast_shape) {
+            aBuf = detail::broadcast_cpu(aRaw, a->shape(), info.a_bcast_shape, a->dtype());
             aUse = &aBuf;
         }
-        if (b->shape_ != info.b_bcast_shape) {
-            bBuf = detail::broadcast_cpu(bRaw, b->shape_, info.b_bcast_shape, a->dtype_);
+        if (b->shape() != info.b_bcast_shape) {
+            bBuf = detail::broadcast_cpu(bRaw, b->shape(), info.b_bcast_shape, a->dtype());
             bUse = &bBuf;
         }
         out_storage = Storage{cpu_matmul_nd(*aUse, *bUse, info,
                                             /*transA=*/false,
-                                            /*transB=*/false, a->dtype_)};
+                                            /*transB=*/false, a->dtype())};
     }
 
-    auto out =
-        std::make_shared<TensorImpl>(std::move(out_storage), info.out_shape, a->dtype_, a->device_,
-                                     /*requires_grad=*/false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), info.out_shape, a->dtype(),
+                                            a->device(),
+                                            /*requires_grad=*/false);
 
-    const bool needs_grad = GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_);
+    const bool needs_grad = GradMode::is_enabled() && (a->requires_grad() || b->requires_grad());
     if (!needs_grad)
         return out;
 
@@ -263,22 +258,22 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
     auto b_edge = detail::ensure_grad_fn(b);
 
     auto bwd = std::make_shared<MatmulBackward>();
-    bwd->input_shapes_ = {a->shape_, b->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape(), b->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a, b};  // Item #9 — for version check
-    bwd->saved_inputs_ = {a->storage_, b->storage_};
+    bwd->saved_inputs_ = {a->storage(), b->storage()};
 
     std::vector<Edge> edges;
     edges.emplace_back(a_edge, /*input_nr=*/0);
     edges.emplace_back(b_edge, /*input_nr=*/0);
     bwd->set_next_edges(std::move(edges));
-    bwd->set_saved_versions({a->version_, b->version_});
+    bwd->set_saved_versions({a->version(), b->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

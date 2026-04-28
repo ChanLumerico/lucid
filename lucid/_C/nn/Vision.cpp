@@ -62,12 +62,12 @@ TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_
     Validator::input(input, "one_hot.input").non_null();
     if (num_classes <= 0)
         ErrorBuilder("one_hot").fail("num_classes must be > 0");
-    Shape out_shape = input->shape_;
+    Shape out_shape = input->shape();
     out_shape.push_back(num_classes);
-    OpScopeFull scope{"one_hot", input->device_, out_dtype, out_shape};
+    OpScopeFull scope{"one_hot", input->device(), out_dtype, out_shape};
 
-    if (input->device_ == Device::GPU) {
-        const auto& gi = std::get<GpuStorage>(input->storage_);
+    if (input->device() == Device::GPU) {
+        const auto& gi = std::get<GpuStorage>(input->storage());
         // arange [num_classes] vs broadcast input → equality.
         auto cls = ::mlx::core::astype(::mlx::core::arange(0, num_classes, 1), ::mlx::core::int64);
         auto idx = ::mlx::core::astype(*gi.arr, ::mlx::core::int64);
@@ -82,12 +82,12 @@ TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_
         auto mlx_dt = gpu::to_mlx_dtype(out_dtype);
         auto out = ::mlx::core::astype(eq, mlx_dt);
         return std::make_shared<TensorImpl>(Storage{gpu::wrap_mlx_array(std::move(out), out_dtype)},
-                                            out_shape, out_dtype, input->device_, false);
+                                            out_shape, out_dtype, input->device(), false);
     }
     const std::size_t M = input->numel();
     auto out_cpu = allocate_size(M * static_cast<std::size_t>(num_classes), out_dtype);
     std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
-    const auto& is_ = std::get<CpuStorage>(input->storage_);
+    const auto& is_ = std::get<CpuStorage>(input->storage());
     auto write_one = [&](std::size_t i, std::int64_t cls) {
         const std::size_t pos = i * static_cast<std::size_t>(num_classes) + cls;
         switch (out_dtype) {
@@ -121,7 +121,7 @@ TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_
         write_one(i, cls);
     }
     return std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, out_shape, out_dtype,
-                                        input->device_, false);
+                                        input->device(), false);
 }
 
 // =====================================================================
@@ -159,21 +159,21 @@ void rotate_cpu_kernel(
 
 TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy, double cx) {
     Validator::input(input, "rotate.input").non_null();
-    if (input->shape_.size() != 4)
-        throw ShapeMismatch(input->shape_, Shape{}, "rotate: input must be 4-D (N, C, H, W)");
-    const int N = static_cast<int>(input->shape_[0]);
-    const int C = static_cast<int>(input->shape_[1]);
-    const int H = static_cast<int>(input->shape_[2]);
-    const int W = static_cast<int>(input->shape_[3]);
-    OpScopeFull scope{"rotate", input->device_, input->dtype_, input->shape_};
+    if (input->shape().size() != 4)
+        throw ShapeMismatch(input->shape(), Shape{}, "rotate: input must be 4-D (N, C, H, W)");
+    const int N = static_cast<int>(input->shape()[0]);
+    const int C = static_cast<int>(input->shape()[1]);
+    const int H = static_cast<int>(input->shape()[2]);
+    const int W = static_cast<int>(input->shape()[3]);
+    OpScopeFull scope{"rotate", input->device(), input->dtype(), input->shape()};
     const double angle_rad_neg = -angle_deg * (M_PI / 180.0);
 
-    if (input->device_ == Device::GPU) {
+    if (input->device() == Device::GPU) {
         // Native MLX path: build the (xs, ys) source-coordinate maps via
         // mlx::core arithmetic, gather with `take` from a flattened input,
         // mask out-of-range positions to zero. Pure mlx — no host bridge.
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
 
         const float c = static_cast<float>(std::cos(angle_rad_neg));
         const float s = static_cast<float>(std::sin(angle_rad_neg));
@@ -235,23 +235,23 @@ TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy,
             mlx_dt);
         auto out = ::mlx::core::multiply(sampled, in_range_4d);
         return std::make_shared<TensorImpl>(
-            Storage{gpu::wrap_mlx_array(std::move(out), input->dtype_)}, input->shape_,
-            input->dtype_, input->device_, false);
+            Storage{gpu::wrap_mlx_array(std::move(out), input->dtype())}, input->shape(),
+            input->dtype(), input->device(), false);
     }
-    auto out_cpu = allocate_size(static_cast<std::size_t>(N) * C * H * W, input->dtype_);
-    const auto& xs = std::get<CpuStorage>(input->storage_);
-    if (input->dtype_ == Dtype::F32)
+    auto out_cpu = allocate_size(static_cast<std::size_t>(N) * C * H * W, input->dtype());
+    const auto& xs = std::get<CpuStorage>(input->storage());
+    if (input->dtype() == Dtype::F32)
         rotate_cpu_kernel<float>(reinterpret_cast<const float*>(xs.ptr.get()),
                                  reinterpret_cast<float*>(out_cpu.ptr.get()), N, C, H, W,
                                  angle_rad_neg, cx, cy);
-    else if (input->dtype_ == Dtype::F64)
+    else if (input->dtype() == Dtype::F64)
         rotate_cpu_kernel<double>(reinterpret_cast<const double*>(xs.ptr.get()),
                                   reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, H, W,
                                   angle_rad_neg, cx, cy);
     else
         ErrorBuilder("rotate").not_implemented("dtype must be F32/F64");
-    return std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, input->shape_, input->dtype_,
-                                        input->device_, false);
+    return std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, input->shape(), input->dtype(),
+                                        input->device(), false);
 }
 
 // =====================================================================
@@ -391,22 +391,22 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
                                              const TensorImplPtr& bias) {
     if (!x1 || !x2 || !weight)
         ErrorBuilder("bilinear_layer").fail("null input");
-    if (x1->dtype_ != x2->dtype_ || x1->dtype_ != weight->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x1->dtype_)),
-                            std::string(dtype_name(x2->dtype_)), "bilinear_layer");
-    if (x1->device_ != x2->device_ || x1->device_ != weight->device_)
-        throw DeviceMismatch(std::string(device_name(x1->device_)),
-                             std::string(device_name(x2->device_)), "bilinear_layer");
-    const auto bs = flatten_bilinear(x1->shape_, x2->shape_, weight->shape_);
-    Shape out_shape = x1->shape_;
+    if (x1->dtype() != x2->dtype() || x1->dtype() != weight->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x1->dtype())),
+                            std::string(dtype_name(x2->dtype())), "bilinear_layer");
+    if (x1->device() != x2->device() || x1->device() != weight->device())
+        throw DeviceMismatch(std::string(device_name(x1->device())),
+                             std::string(device_name(x2->device())), "bilinear_layer");
+    const auto bs = flatten_bilinear(x1->shape(), x2->shape(), weight->shape());
+    Shape out_shape = x1->shape();
     out_shape.back() = static_cast<std::int64_t>(bs.Dout);
-    OpScopeFull scope{schema_v1.name, x1->device_, x1->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, x1->device(), x1->dtype(), out_shape};
 
     Storage out_storage;
-    if (x1->device_ == Device::GPU) {
-        const auto& gx1 = std::get<GpuStorage>(x1->storage_);
-        const auto& gx2 = std::get<GpuStorage>(x2->storage_);
-        const auto& gw = std::get<GpuStorage>(weight->storage_);
+    if (x1->device() == Device::GPU) {
+        const auto& gx1 = std::get<GpuStorage>(x1->storage());
+        const auto& gx2 = std::get<GpuStorage>(x2->storage());
+        const auto& gw = std::get<GpuStorage>(weight->storage());
         // Reshape inputs: x1 → [B, D1], x2 → [B, D2], W → [Dout, D1, D2].
         auto x1_b =
             ::mlx::core::reshape(*gx1.arr, {static_cast<int>(bs.B), static_cast<int>(bs.D1)});
@@ -430,25 +430,25 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
         auto y_e = ::mlx::core::matmul(tmp_3d, x2_e);  // [B, Dout, 1]
         auto y_2d = ::mlx::core::reshape(y_e, {static_cast<int>(bs.B), static_cast<int>(bs.Dout)});
         if (bias) {
-            const auto& gb = std::get<GpuStorage>(bias->storage_);
+            const auto& gb = std::get<GpuStorage>(bias->storage());
             y_2d = ::mlx::core::add(y_2d, *gb.arr);
         }
         auto y_out = ::mlx::core::reshape(y_2d, gpu::to_mlx_shape(out_shape));
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y_out), x1->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y_out), x1->dtype())};
     } else {
-        auto out_cpu = allocate_size(bs.B * bs.Dout, x1->dtype_);
-        const auto& xs1 = std::get<CpuStorage>(x1->storage_);
-        const auto& xs2 = std::get<CpuStorage>(x2->storage_);
-        const auto& ws = std::get<CpuStorage>(weight->storage_);
-        const CpuStorage* bs_ptr = bias ? &std::get<CpuStorage>(bias->storage_) : nullptr;
-        if (x1->dtype_ == Dtype::F32)
+        auto out_cpu = allocate_size(bs.B * bs.Dout, x1->dtype());
+        const auto& xs1 = std::get<CpuStorage>(x1->storage());
+        const auto& xs2 = std::get<CpuStorage>(x2->storage());
+        const auto& ws = std::get<CpuStorage>(weight->storage());
+        const CpuStorage* bs_ptr = bias ? &std::get<CpuStorage>(bias->storage()) : nullptr;
+        if (x1->dtype() == Dtype::F32)
             bilinear_forward_cpu<float>(
                 reinterpret_cast<const float*>(xs1.ptr.get()),
                 reinterpret_cast<const float*>(xs2.ptr.get()),
                 reinterpret_cast<const float*>(ws.ptr.get()),
                 bs_ptr ? reinterpret_cast<const float*>(bs_ptr->ptr.get()) : nullptr,
                 reinterpret_cast<float*>(out_cpu.ptr.get()), bs.B, bs.D1, bs.D2, bs.Dout);
-        else if (x1->dtype_ == Dtype::F64)
+        else if (x1->dtype() == Dtype::F64)
             bilinear_forward_cpu<double>(
                 reinterpret_cast<const double*>(xs1.ptr.get()),
                 reinterpret_cast<const double*>(xs2.ptr.get()),
@@ -460,10 +460,10 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, x1->dtype_,
-                                            x1->device_, false);
-    const bool any_grad = x1->requires_grad_ || x2->requires_grad_ || weight->requires_grad_ ||
-                          (bias && bias->requires_grad_);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, x1->dtype(),
+                                            x1->device(), false);
+    const bool any_grad = x1->requires_grad() || x2->requires_grad() || weight->requires_grad() ||
+                          (bias && bias->requires_grad());
     if (!GradMode::is_enabled() || !any_grad)
         return out;
 
@@ -473,46 +473,46 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
     auto b_edge = bias ? detail::ensure_grad_fn(bias) : std::shared_ptr<Node>();
     auto bwd = std::make_shared<BilinearLayerBackward>();
     if (bias) {
-        bwd->input_shapes_ = {x1->shape_, x2->shape_, weight->shape_, bias->shape_};
+        bwd->input_shapes_ = {x1->shape(), x2->shape(), weight->shape(), bias->shape()};
         bwd->input_tensors_ = {x1, x2, weight, bias};
-        bwd->saved_inputs_ = {x1->storage_, x2->storage_, weight->storage_, bias->storage_};
+        bwd->saved_inputs_ = {x1->storage(), x2->storage(), weight->storage(), bias->storage()};
     } else {
         // Bias slot is required by FuncOp<4>; store an empty CpuStorage and
         // a null TensorImplPtr — apply() will detect the empty slot and skip
         // the db output.
-        bwd->input_shapes_ = {x1->shape_, x2->shape_, weight->shape_, Shape{}};
+        bwd->input_shapes_ = {x1->shape(), x2->shape(), weight->shape(), Shape{}};
         bwd->input_tensors_[0] = x1;
         bwd->input_tensors_[1] = x2;
         bwd->input_tensors_[2] = weight;
         // Slot 3 left default-constructed (empty weak_ptr).
         CpuStorage empty;
-        empty.dtype = x1->dtype_;
+        empty.dtype = x1->dtype();
         empty.nbytes = 0;
-        bwd->saved_inputs_ = {x1->storage_, x2->storage_, weight->storage_,
+        bwd->saved_inputs_ = {x1->storage(), x2->storage(), weight->storage(),
                               Storage{std::move(empty)}};
     }
     bwd->out_shape_ = out_shape;
-    bwd->dtype_ = x1->dtype_;
-    bwd->device_ = x1->device_;
-    bwd->orig_x1_shape_ = x1->shape_;
-    bwd->orig_x2_shape_ = x2->shape_;
+    bwd->dtype_ = x1->dtype();
+    bwd->device_ = x1->device();
+    bwd->orig_x1_shape_ = x1->shape();
+    bwd->orig_x2_shape_ = x2->shape();
     std::vector<Edge> edges{Edge(x1_edge, 0), Edge(x2_edge, 0), Edge(w_edge, 0)};
     if (bias)
         edges.emplace_back(b_edge, 0);
     else
         edges.emplace_back(std::shared_ptr<Node>(), 0);
     bwd->set_next_edges(std::move(edges));
-    std::vector<std::int64_t> versions{static_cast<std::int64_t>(x1->version_),
-                                       static_cast<std::int64_t>(x2->version_),
-                                       static_cast<std::int64_t>(weight->version_)};
+    std::vector<std::int64_t> versions{static_cast<std::int64_t>(x1->version()),
+                                       static_cast<std::int64_t>(x2->version()),
+                                       static_cast<std::int64_t>(weight->version())};
     if (bias)
-        versions.push_back(static_cast<std::int64_t>(bias->version_));
+        versions.push_back(static_cast<std::int64_t>(bias->version()));
     else
         versions.push_back(0);
     bwd->set_saved_versions(std::move(versions));
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

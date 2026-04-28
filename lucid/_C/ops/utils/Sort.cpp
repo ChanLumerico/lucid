@@ -165,25 +165,25 @@ TensorImplPtr attach_index_scatter_grad(const TensorImplPtr& a,
                                         TensorImplPtr out,
                                         Storage indices,
                                         int axis) {
-    if (!GradMode::is_enabled() || !a->requires_grad_ || !differentiable_dtype(a->dtype_)) {
+    if (!GradMode::is_enabled() || !a->requires_grad() || !differentiable_dtype(a->dtype())) {
         return out;
     }
 
     auto bwd = std::make_shared<IndexScatterBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->grad_shape_ = out->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->grad_shape_ = out->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->indices_ = std::move(indices);
     bwd->axis_ = axis;
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -208,35 +208,35 @@ TensorImplPtr attach_index_scatter_grad(const TensorImplPtr& a,
 
 TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
     Validator::input(a, "sort.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"sort", device, dt, a->shape_};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"sort", device, dt, a->shape()};
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto idx = ::mlx::core::argsort(*ga.arr, ax);
         auto out_raw = ::mlx::core::take_along_axis(*ga.arr, idx, ax);
         auto out =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out_raw), dt)}, a->shape_, dt, device);
+            fresh(Storage{gpu::wrap_mlx_array(std::move(out_raw), dt)}, a->shape(), dt, device);
         return attach_index_scatter_grad(
             a, std::move(out), Storage{gpu::wrap_mlx_array(std::move(idx), Dtype::I32)}, ax);
     }
-    Shape out_shape = a->shape_;
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    Shape out_shape = a->shape();
+    const auto& ca = std::get<CpuStorage>(a->storage());
     CpuStorage out_cpu;
     CpuStorage idx_cpu;
     if (dt == Dtype::F32)
         std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<float>(ca, a->shape_, out_shape, ax, dt, false);
+            sort_select_cpu<float>(ca, a->shape(), out_shape, ax, dt, false);
     else if (dt == Dtype::F64)
         std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<double>(ca, a->shape_, out_shape, ax, dt, false);
+            sort_select_cpu<double>(ca, a->shape(), out_shape, ax, dt, false);
     else if (dt == Dtype::I32)
         std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<std::int32_t>(ca, a->shape_, out_shape, ax, dt, false);
+            sort_select_cpu<std::int32_t>(ca, a->shape(), out_shape, ax, dt, false);
     else if (dt == Dtype::I64)
         std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<std::int64_t>(ca, a->shape_, out_shape, ax, dt, false);
+            sort_select_cpu<std::int64_t>(ca, a->shape(), out_shape, ax, dt, false);
     else
         ErrorBuilder("sort").not_implemented("dtype not supported");
     auto out = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
@@ -245,24 +245,24 @@ TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
 
 TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
     Validator::input(a, "argsort.a").non_null();
-    const Device device = a->device_;
-    OpScopeFull scope{"argsort", device, a->dtype_, a->shape_};
+    const Device device = a->device();
+    OpScopeFull scope{"argsort", device, a->dtype(), a->shape()};
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto out = ::mlx::core::argsort(*ga.arr, axis);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I32)}, a->shape_,
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I32)}, a->shape(),
                      Dtype::I32, device);
     }
-    int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
-    Shape out_shape = a->shape_;
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    Shape out_shape = a->shape();
     auto out_cpu = allocate_cpu(out_shape, Dtype::I32);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
     std::size_t outer = 1, inner = 1;
     for (int d = 0; d < ax; ++d)
-        outer *= static_cast<std::size_t>(a->shape_[d]);
-    for (std::size_t d = ax + 1; d < a->shape_.size(); ++d)
-        inner *= static_cast<std::size_t>(a->shape_[d]);
-    const std::size_t L = static_cast<std::size_t>(a->shape_[ax]);
+        outer *= static_cast<std::size_t>(a->shape()[d]);
+    for (std::size_t d = ax + 1; d < a->shape().size(); ++d)
+        inner *= static_cast<std::size_t>(a->shape()[d]);
+    const std::size_t L = static_cast<std::size_t>(a->shape()[ax]);
     auto* dst = reinterpret_cast<std::int32_t*>(out_cpu.ptr.get());
 
     auto run = [&](const auto* src) {
@@ -278,13 +278,13 @@ TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
                     dst[(o * L + k) * inner + j] = idx[k];
             }
     };
-    if (a->dtype_ == Dtype::F32)
+    if (a->dtype() == Dtype::F32)
         run(reinterpret_cast<const float*>(ca.ptr.get()));
-    else if (a->dtype_ == Dtype::F64)
+    else if (a->dtype() == Dtype::F64)
         run(reinterpret_cast<const double*>(ca.ptr.get()));
-    else if (a->dtype_ == Dtype::I32)
+    else if (a->dtype() == Dtype::I32)
         run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()));
-    else if (a->dtype_ == Dtype::I64)
+    else if (a->dtype() == Dtype::I64)
         run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
     else
         ErrorBuilder("argsort").not_implemented("dtype not supported");
@@ -295,31 +295,31 @@ namespace {
 TensorImplPtr argext_dispatch(
     const TensorImplPtr& a, int axis, bool keepdims, bool is_min, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
-    const Device device = a->device_;
-    OpScopeFull scope{name, device, a->dtype_, a->shape_};
+    const Device device = a->device();
+    OpScopeFull scope{name, device, a->dtype(), a->shape()};
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto out = is_min ? ::mlx::core::argmin(*ga.arr, axis, keepdims)
                           : ::mlx::core::argmax(*ga.arr, axis, keepdims);
         Shape sh = mlx_shape_to_lucid(out.shape());
         return fresh(Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I32)}, std::move(sh),
                      Dtype::I32, device);
     }
-    int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
-    Shape out_shape = a->shape_;
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    Shape out_shape = a->shape();
     if (keepdims)
         out_shape[ax] = 1;
     else
         out_shape.erase(out_shape.begin() + ax);
     auto out_cpu = allocate_cpu(out_shape, Dtype::I64);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
     std::size_t outer = 1;
     for (int d = 0; d < ax; ++d)
-        outer *= static_cast<std::size_t>(a->shape_[d]);
+        outer *= static_cast<std::size_t>(a->shape()[d]);
     std::size_t inner = 1;
-    for (std::size_t d = ax + 1; d < a->shape_.size(); ++d)
-        inner *= static_cast<std::size_t>(a->shape_[d]);
-    const std::size_t L = static_cast<std::size_t>(a->shape_[ax]);
+    for (std::size_t d = ax + 1; d < a->shape().size(); ++d)
+        inner *= static_cast<std::size_t>(a->shape()[d]);
+    const std::size_t L = static_cast<std::size_t>(a->shape()[ax]);
     auto run = [&](const auto* src) {
         auto* dst = reinterpret_cast<std::int64_t*>(out_cpu.ptr.get());
         for (std::size_t o = 0; o < outer; ++o)
@@ -336,13 +336,13 @@ TensorImplPtr argext_dispatch(
                 dst[o * inner + j] = best;
             }
     };
-    if (a->dtype_ == Dtype::F32)
+    if (a->dtype() == Dtype::F32)
         run(reinterpret_cast<const float*>(ca.ptr.get()));
-    else if (a->dtype_ == Dtype::F64)
+    else if (a->dtype() == Dtype::F64)
         run(reinterpret_cast<const double*>(ca.ptr.get()));
-    else if (a->dtype_ == Dtype::I32)
+    else if (a->dtype() == Dtype::I32)
         run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()));
-    else if (a->dtype_ == Dtype::I64)
+    else if (a->dtype() == Dtype::I64)
         run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
     else
         ErrorBuilder(name).not_implemented("dtype not supported");
@@ -366,20 +366,20 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
     // no equivalent primitive). Per convention, GPU input is accepted but
     // the result lives on CPU — caller must `.gpu()` if they need it back.
     Validator::input(a, "nonzero.a").non_null();
-    const std::size_t ndim = a->shape_.size();
-    OpScopeFull scope{"nonzero", a->device_, a->dtype_, a->shape_};
+    const std::size_t ndim = a->shape().size();
+    OpScopeFull scope{"nonzero", a->device(), a->dtype(), a->shape()};
 
-    CpuStorage cpu = (a->device_ == Device::GPU)
-                         ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage_), a->shape_)
-                         : std::get<CpuStorage>(a->storage_);
+    CpuStorage cpu = (a->device() == Device::GPU)
+                         ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage()), a->shape())
+                         : std::get<CpuStorage>(a->storage());
 
-    const std::size_t n = shape_numel(a->shape_);
+    const std::size_t n = shape_numel(a->shape());
     std::vector<bool> mask(n, false);
     auto check_nonzero = [&](const auto* p) {
         for (std::size_t i = 0; i < n; ++i)
             mask[i] = static_cast<double>(p[i]) != 0.0;
     };
-    switch (a->dtype_) {
+    switch (a->dtype()) {
         case Dtype::F32:
             check_nonzero(reinterpret_cast<const float*>(cpu.ptr.get()));
             break;
@@ -412,7 +412,7 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
     if (ndim > 0) {
         stride.back() = 1;
         for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d)
-            stride[d] = stride[d + 1] * a->shape_[d + 1];
+            stride[d] = stride[d + 1] * a->shape()[d + 1];
     }
     std::size_t row = 0;
     for (std::size_t flat = 0; flat < n; ++flat) {
@@ -435,13 +435,13 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
     // CPU-only op (variable-length output; MLX has no equivalent). Per
     // convention, GPU input is accepted but result lives on CPU.
     Validator::input(a, "unique.a").non_null();
-    const Dtype dt = a->dtype_;
-    OpScopeFull scope{"unique", a->device_, dt, a->shape_};
+    const Dtype dt = a->dtype();
+    OpScopeFull scope{"unique", a->device(), dt, a->shape()};
 
-    CpuStorage cpu = (a->device_ == Device::GPU)
-                         ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage_), a->shape_)
-                         : std::get<CpuStorage>(a->storage_);
-    const std::size_t n = shape_numel(a->shape_);
+    CpuStorage cpu = (a->device() == Device::GPU)
+                         ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage()), a->shape())
+                         : std::get<CpuStorage>(a->storage());
+    const std::size_t n = shape_numel(a->shape());
 
     auto run = [&](const auto* src) -> CpuStorage {
         using T = std::remove_cv_t<std::remove_pointer_t<decltype(src)>>;
@@ -475,46 +475,52 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
     return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, /*device=*/Device::CPU);
 }
 
-TensorImplPtr topk_op(const TensorImplPtr& a, std::int64_t k, int axis) {
+std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int axis) {
     Validator::input(a, "topk.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"topk", device, dt, a->shape_};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
-    if (k <= 0 || k > a->shape_[static_cast<std::size_t>(ax)])
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"topk", device, dt, a->shape()};
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    if (k <= 0 || k > a->shape()[static_cast<std::size_t>(ax)])
         ErrorBuilder("topk").fail("k must be in (0, axis_size]");
-    Shape out_shape = a->shape_;
+    Shape out_shape = a->shape();
     out_shape[static_cast<std::size_t>(ax)] = k;
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto full_idx = ::mlx::core::argsort(*ga.arr, ax);
-        auto idx = take_descending_top_indices(full_idx, ax, k);
-        auto values = ::mlx::core::take_along_axis(*ga.arr, idx, ax);
-        values = ::mlx::core::contiguous(values);
-        Shape sh = mlx_shape_to_lucid(values.shape());
-        auto out =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(values), dt)}, std::move(sh), dt, device);
-        return attach_index_scatter_grad(
-            a, std::move(out), Storage{gpu::wrap_mlx_array(std::move(idx), Dtype::I32)}, ax);
+        auto idx_mlx = take_descending_top_indices(full_idx, ax, k);
+        auto values_mlx = ::mlx::core::take_along_axis(*ga.arr, idx_mlx, ax);
+        values_mlx = ::mlx::core::contiguous(values_mlx);
+        Shape sh = mlx_shape_to_lucid(values_mlx.shape());
+        auto idx_storage = Storage{gpu::wrap_mlx_array(::mlx::core::array(idx_mlx), Dtype::I32)};
+        auto values_out =
+            fresh(Storage{gpu::wrap_mlx_array(std::move(values_mlx), dt)}, sh, dt, device);
+        auto indices_out = fresh(std::move(idx_storage), sh, Dtype::I32, device);
+        values_out =
+            attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);
+        return {std::move(values_out), std::move(indices_out)};
     }
-    const auto& ca = std::get<CpuStorage>(a->storage_);
-    CpuStorage out_cpu;
-    CpuStorage idx_cpu;
+    const auto& ca = std::get<CpuStorage>(a->storage());
+    CpuStorage out_cpu, idx_cpu;
     if (dt == Dtype::F32)
-        std::tie(out_cpu, idx_cpu) = sort_select_cpu<float>(ca, a->shape_, out_shape, ax, dt, true);
+        std::tie(out_cpu, idx_cpu) =
+            sort_select_cpu<float>(ca, a->shape(), out_shape, ax, dt, true);
     else if (dt == Dtype::F64)
         std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<double>(ca, a->shape_, out_shape, ax, dt, true);
+            sort_select_cpu<double>(ca, a->shape(), out_shape, ax, dt, true);
     else if (dt == Dtype::I32)
         std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<std::int32_t>(ca, a->shape_, out_shape, ax, dt, true);
+            sort_select_cpu<std::int32_t>(ca, a->shape(), out_shape, ax, dt, true);
     else if (dt == Dtype::I64)
         std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<std::int64_t>(ca, a->shape_, out_shape, ax, dt, true);
+            sort_select_cpu<std::int64_t>(ca, a->shape(), out_shape, ax, dt, true);
     else
         ErrorBuilder("topk").not_implemented("dtype not supported");
-    auto out = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
-    return attach_index_scatter_grad(a, std::move(out), Storage{std::move(idx_cpu)}, ax);
+    auto indices_out = fresh(Storage{idx_cpu}, out_shape, Dtype::I32, device);
+    auto values_out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
+    values_out =
+        attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);
+    return {std::move(values_out), std::move(indices_out)};
 }
 
 LUCID_REGISTER_OP(IndexScatterBackward)

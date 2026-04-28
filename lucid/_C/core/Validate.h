@@ -4,7 +4,7 @@
 // Lucid C++ engine — fluent input-validation primitives.
 // =====================================================================
 //
-// Replaces ~30 hand-rolled `if (!a) throw…; if (a->dtype_ != …) throw…;`
+// Replaces ~30 hand-rolled `if (!a) throw…; if (a->dtype() != …) throw…;`
 // chains across op forwards with a single chainable expression.
 //
 // Usage:

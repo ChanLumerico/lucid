@@ -155,8 +155,8 @@ void Adam::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImp
         m_.resize(params_.size());
     if (v_.size() < params_.size())
         v_.resize(params_.size());
-    m_[slot_idx] = make_zero_storage(param->shape_, param->dtype_, param->device_);
-    v_[slot_idx] = make_zero_storage(param->shape_, param->dtype_, param->device_);
+    m_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
+    v_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
 }
 
 void Adam::update_one(std::size_t slot_idx,
@@ -168,21 +168,21 @@ void Adam::update_one(std::size_t slot_idx,
     if (slot_idx == 0)
         ++step_count_;
 
-    if (param->device_ == Device::GPU) {
-        auto& pg = std::get<GpuStorage>(param->storage_);
+    if (param->device() == Device::GPU) {
+        auto& pg = std::get<GpuStorage>(param->mutable_storage());
         const auto& gg = std::get<GpuStorage>(grad);
         auto& mg = std::get<GpuStorage>(m_[slot_idx]);
         auto& vg = std::get<GpuStorage>(v_[slot_idx]);
-        adam_step_gpu(pg, gg, mg, vg, param->dtype_, lr_, beta1_, beta2_, eps_, weight_decay_,
+        adam_step_gpu(pg, gg, mg, vg, param->dtype(), lr_, beta1_, beta2_, eps_, weight_decay_,
                       /*decoupled_wd=*/false, step_count_);
         return;
     }
-    auto& pc = std::get<CpuStorage>(param->storage_);
+    auto& pc = std::get<CpuStorage>(param->mutable_storage());
     const auto& gc = std::get<CpuStorage>(grad);
     auto& mc = std::get<CpuStorage>(m_[slot_idx]);
     auto& vc = std::get<CpuStorage>(v_[slot_idx]);
-    const std::size_t numel = pc.nbytes / dtype_size(param->dtype_);
-    switch (param->dtype_) {
+    const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
+    switch (param->dtype()) {
         case Dtype::F32:
             adam_step_cpu<float>(reinterpret_cast<float*>(pc.ptr.get()),
                                  reinterpret_cast<const float*>(gc.ptr.get()),
@@ -238,8 +238,8 @@ void AdamW::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorIm
         m_.resize(params_.size());
     if (v_.size() < params_.size())
         v_.resize(params_.size());
-    m_[slot_idx] = make_zero_storage(param->shape_, param->dtype_, param->device_);
-    v_[slot_idx] = make_zero_storage(param->shape_, param->dtype_, param->device_);
+    m_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
+    v_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
 }
 
 void AdamW::update_one(std::size_t slot_idx,
@@ -247,21 +247,21 @@ void AdamW::update_one(std::size_t slot_idx,
                        const Storage& grad) {
     if (slot_idx == 0)
         ++step_count_;
-    if (param->device_ == Device::GPU) {
-        auto& pg = std::get<GpuStorage>(param->storage_);
+    if (param->device() == Device::GPU) {
+        auto& pg = std::get<GpuStorage>(param->mutable_storage());
         const auto& gg = std::get<GpuStorage>(grad);
         auto& mg = std::get<GpuStorage>(m_[slot_idx]);
         auto& vg = std::get<GpuStorage>(v_[slot_idx]);
-        adam_step_gpu(pg, gg, mg, vg, param->dtype_, lr_, beta1_, beta2_, eps_, weight_decay_,
+        adam_step_gpu(pg, gg, mg, vg, param->dtype(), lr_, beta1_, beta2_, eps_, weight_decay_,
                       /*decoupled_wd=*/true, step_count_);
         return;
     }
-    auto& pc = std::get<CpuStorage>(param->storage_);
+    auto& pc = std::get<CpuStorage>(param->mutable_storage());
     const auto& gc = std::get<CpuStorage>(grad);
     auto& mc = std::get<CpuStorage>(m_[slot_idx]);
     auto& vc = std::get<CpuStorage>(v_[slot_idx]);
-    const std::size_t numel = pc.nbytes / dtype_size(param->dtype_);
-    switch (param->dtype_) {
+    const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
+    switch (param->dtype()) {
         case Dtype::F32:
             adam_step_cpu<float>(reinterpret_cast<float*>(pc.ptr.get()),
                                  reinterpret_cast<const float*>(gc.ptr.get()),
@@ -310,15 +310,15 @@ void NAdam::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p)
         v_.resize(params_.size());
     if (mu_product_.size() < params_.size())
         mu_product_.resize(params_.size(), 1.0);
-    m_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
-    v_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+    m_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
+    v_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     mu_product_[i] = 1.0;
 }
 
 void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     if (i == 0)
         ++step_count_;
-    const auto dt = p->dtype_;
+    const auto dt = p->dtype();
     const std::int64_t step = step_count_;
     const double mu =
         beta1_ * (1.0 - 0.5 * std::pow(0.96, static_cast<double>(step) * momentum_decay_));
@@ -329,8 +329,8 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
     const double mu_prod_next = mu_prod * mu_next;
     const double bc2 = 1.0 - std::pow(beta2_, static_cast<double>(step));
 
-    if (p->device_ == Device::GPU) {
-        auto& pg = gpu_get(p->storage_);
+    if (p->device() == Device::GPU) {
+        auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
         auto& mg = gpu_get(m_[i]);
         auto& vg = gpu_get(v_[i]);
@@ -381,9 +381,9 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("NAdam").not_implemented("dtype not supported");
 }
@@ -411,14 +411,14 @@ void RAdam::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p)
         m_.resize(params_.size());
     if (v_.size() < params_.size())
         v_.resize(params_.size());
-    m_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
-    v_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+    m_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
+    v_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
 void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     if (i == 0)
         ++step_count_;
-    const auto dt = p->dtype_;
+    const auto dt = p->dtype();
     const std::int64_t step = step_count_;
     const double bc1 = 1.0 - std::pow(beta1_, static_cast<double>(step));
     const double bc2 = 1.0 - std::pow(beta2_, static_cast<double>(step));
@@ -432,8 +432,8 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
                         ((rho_inf - 4.0) * (rho_inf - 2.0) * rho_t));
     }
 
-    if (p->device_ == Device::GPU) {
-        auto& pg = gpu_get(p->storage_);
+    if (p->device() == Device::GPU) {
+        auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
         auto& mg = gpu_get(m_[i]);
         auto& vg = gpu_get(v_[i]);
@@ -495,9 +495,9 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("RAdam").not_implemented("dtype not supported");
 }

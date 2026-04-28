@@ -237,9 +237,9 @@ void scan_axis(const T* in, T* out, const Shape& shape, int axis) {
 
 TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    auto sh = a->shape_;
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    auto sh = a->shape();
     if (sh.empty())
         ErrorBuilder(name).fail("input is scalar");
     int ax = axis;
@@ -250,13 +250,13 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
     OpScopeFull scope{name, device, dt, sh};
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         auto out = is_prod ? ::mlx::core::cumprod(*ga.arr, ax) : ::mlx::core::cumsum(*ga.arr, ax);
         return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, sh, dt, device);
     }
 
     auto out_cpu = allocate_cpu(sh, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
     if (dt == Dtype::F32) {
         if (is_prod)
             scan_axis<float, true>(reinterpret_cast<const float*>(ca.ptr.get()),
@@ -300,44 +300,44 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
 
 TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis) {
     auto out = scan_dispatch(a, axis, /*is_prod=*/false, "cumsum");
-    if (GradMode::is_enabled() && a->requires_grad_) {
-        int ax = axis < 0 ? axis + (int)a->shape_.size() : axis;
+    if (GradMode::is_enabled() && a->requires_grad()) {
+        int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
         auto bwd = std::make_shared<CumsumBackward>();
-        bwd->input_shape_ = a->shape_;
-        bwd->dtype_ = a->dtype_;
-        bwd->device_ = a->device_;
+        bwd->input_shape_ = a->shape();
+        bwd->dtype_ = a->dtype();
+        bwd->device_ = a->device();
         bwd->axis_ = ax;
         auto a_edge = detail::ensure_grad_fn(a);
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);
         bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
     }
     return out;
 }
 
 TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis) {
     auto out = scan_dispatch(a, axis, /*is_prod=*/true, "cumprod");
-    if (GradMode::is_enabled() && a->requires_grad_) {
-        int ax = axis < 0 ? axis + (int)a->shape_.size() : axis;
+    if (GradMode::is_enabled() && a->requires_grad()) {
+        int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
         auto bwd = std::make_shared<CumprodBackward>();
-        bwd->input_shape_ = a->shape_;
-        bwd->dtype_ = a->dtype_;
-        bwd->device_ = a->device_;
+        bwd->input_shape_ = a->shape();
+        bwd->dtype_ = a->dtype();
+        bwd->device_ = a->device();
         bwd->axis_ = ax;
-        bwd->saved_x_ = a->storage_;
-        bwd->saved_y_ = out->storage_;
+        bwd->saved_x_ = a->storage();
+        bwd->saved_y_ = out->storage();
         auto a_edge = detail::ensure_grad_fn(a);
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);
         bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
     }
     return out;
 }

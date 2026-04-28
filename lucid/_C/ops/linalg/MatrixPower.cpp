@@ -46,19 +46,19 @@ inline void matmul_one_f64(const double* a, const double* b, double* out, int n)
 TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
     using namespace linalg_detail;
     Validator::input(a, "matrix_power.a").non_null();
-    require_float(a->dtype_, "matrix_power");
-    require_square_2d(a->shape_, "matrix_power");
-    OpScopeFull scope{"matrix_power", a->device_, a->dtype_, a->shape_};
+    require_float(a->dtype(), "matrix_power");
+    require_square_2d(a->shape(), "matrix_power");
+    OpScopeFull scope{"matrix_power", a->device(), a->dtype(), a->shape()};
 
-    const auto& sh = a->shape_;
+    const auto& sh = a->shape();
     const int n = static_cast<int>(sh[sh.size() - 1]);
     const std::int64_t batch = leading_batch_count(sh, /*mat_dims=*/2);
     const std::size_t per_mat = static_cast<std::size_t>(n) * n;
 
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         if (p == 0) {
-            auto eye = ::mlx::core::eye(n, n, 0, gpu::to_mlx_dtype(a->dtype_));
+            auto eye = ::mlx::core::eye(n, n, 0, gpu::to_mlx_dtype(a->dtype()));
             // Broadcast identity across batch dims (if any).
             if (sh.size() > 2) {
                 ::mlx::core::Shape target;
@@ -67,19 +67,19 @@ TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
                 eye = ::mlx::core::broadcast_to(eye, target);
                 eye = ::mlx::core::contiguous(eye);
             }
-            return fresh(wrap_gpu_result(std::move(eye), a->dtype_), sh, a->dtype_, a->device_);
+            return fresh(wrap_gpu_result(std::move(eye), a->dtype()), sh, a->dtype(), a->device());
         }
         const int reps = std::abs(p);
         auto base = (p < 0) ? ::mlx::core::linalg::inv(in, kMlxLinalgStream) : in;
         ::mlx::core::array result = base;
         for (int i = 1; i < reps; ++i)
             result = ::mlx::core::matmul(result, base);
-        return fresh(wrap_gpu_result(std::move(result), a->dtype_), sh, a->dtype_, a->device_);
+        return fresh(wrap_gpu_result(std::move(result), a->dtype()), sh, a->dtype(), a->device());
     }
 
     // CPU path: per-batch sgemm/dgemm chain. p=0 → identity. p<0 → inv first.
-    auto out_cpu = allocate_cpu(sh, a->dtype_);
-    const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+    auto out_cpu = allocate_cpu(sh, a->dtype());
+    const auto& in_cpu = std::get<CpuStorage>(a->storage());
     const int reps = std::abs(p);
 
     auto run = [&](auto type_tag) {
@@ -117,11 +117,11 @@ TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
         }
     };
 
-    if (a->dtype_ == Dtype::F32)
+    if (a->dtype() == Dtype::F32)
         run(float{});
     else
         run(double{});
-    return fresh(Storage{std::move(out_cpu)}, sh, a->dtype_, a->device_);
+    return fresh(Storage{std::move(out_cpu)}, sh, a->dtype(), a->device());
 }
 
 }  // namespace lucid

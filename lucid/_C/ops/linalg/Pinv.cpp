@@ -69,20 +69,20 @@ void pinv_one(const T* A, int m, int n, T* Aplus) {
 TensorImplPtr pinv_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     Validator::input(a, "pinv.a").non_null();
-    require_float(a->dtype_, "pinv");
-    if (a->shape_.size() < 2)
+    require_float(a->dtype(), "pinv");
+    if (a->shape().size() < 2)
         ErrorBuilder("pinv").fail("input must be at least 2-D");
-    OpScopeFull scope{"pinv", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"pinv", a->device(), a->dtype(), a->shape()};
 
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         auto out = ::mlx::core::linalg::pinv(in, kMlxLinalgStream);
         Shape sh = mlx_shape_to_lucid(out.shape());
-        return fresh(wrap_gpu_result(std::move(out), a->dtype_), std::move(sh), a->dtype_,
-                     a->device_);
+        return fresh(wrap_gpu_result(std::move(out), a->dtype()), std::move(sh), a->dtype(),
+                     a->device());
     }
 
-    const auto& sh = a->shape_;
+    const auto& sh = a->shape();
     const int m = static_cast<int>(sh[sh.size() - 2]);
     const int n = static_cast<int>(sh[sh.size() - 1]);
     const std::int64_t batch = leading_batch_count(sh, /*mat_dims=*/2);
@@ -91,12 +91,12 @@ TensorImplPtr pinv_op(const TensorImplPtr& a) {
     out_shape.push_back(n);
     out_shape.push_back(m);
 
-    auto out_cpu = allocate_cpu(out_shape, a->dtype_);
-    const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+    auto out_cpu = allocate_cpu(out_shape, a->dtype());
+    const auto& in_cpu = std::get<CpuStorage>(a->storage());
     const std::size_t in_per = static_cast<std::size_t>(m) * n;
     const std::size_t out_per = static_cast<std::size_t>(n) * m;
 
-    if (a->dtype_ == Dtype::F32) {
+    if (a->dtype() == Dtype::F32) {
         const auto* in_p = reinterpret_cast<const float*>(in_cpu.ptr.get());
         auto* out_p = reinterpret_cast<float*>(out_cpu.ptr.get());
         for (std::int64_t b = 0; b < batch; ++b)
@@ -107,7 +107,7 @@ TensorImplPtr pinv_op(const TensorImplPtr& a) {
         for (std::int64_t b = 0; b < batch; ++b)
             pinv_one(in_p + b * in_per, m, n, out_p + b * out_per);
     }
-    return fresh(Storage{std::move(out_cpu)}, out_shape, a->dtype_, a->device_);
+    return fresh(Storage{std::move(out_cpu)}, out_shape, a->dtype(), a->device());
 }
 
 }  // namespace lucid

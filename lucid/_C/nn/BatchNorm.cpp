@@ -148,41 +148,40 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
                                               double eps) {
     if (!x || !gamma || !beta)
         ErrorBuilder("batch_norm").fail("null input");
-    if (x->dtype_ != gamma->dtype_ || x->dtype_ != beta->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
-                            std::string(dtype_name(gamma->dtype_)), "batch_norm");
-    if (x->device_ != gamma->device_ || x->device_ != beta->device_)
-        throw DeviceMismatch(std::string(device_name(x->device_)),
-                             std::string(device_name(gamma->device_)), "batch_norm");
-    if (x->device_ == Device::CPU &&
+    if (x->dtype() != gamma->dtype() || x->dtype() != beta->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
+                            std::string(dtype_name(gamma->dtype())), "batch_norm");
+    if (x->device() != gamma->device() || x->device() != beta->device())
+        throw DeviceMismatch(std::string(device_name(x->device())),
+                             std::string(device_name(gamma->device())), "batch_norm");
+    if (x->device() == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-        ErrorBuilder("batch_norm").not_implemented("non-contiguous input not supported");
-    if (static_cast<int>(x->shape_.size()) != N + 2)
-        throw ShapeMismatch(x->shape_, Shape{}, "batch_norm: x rank mismatch");
-    if (gamma->shape_.size() != 1 || beta->shape_.size() != 1)
-        throw ShapeMismatch(gamma->shape_, beta->shape_, "batch_norm: γ, β must be 1-D");
+    if (static_cast<int>(x->shape().size()) != N + 2)
+        throw ShapeMismatch(x->shape(), Shape{}, "batch_norm: x rank mismatch");
+    if (gamma->shape().size() != 1 || beta->shape().size() != 1)
+        throw ShapeMismatch(gamma->shape(), beta->shape(), "batch_norm: γ, β must be 1-D");
 
-    const int B = static_cast<int>(x->shape_[0]);
-    const int C = static_cast<int>(x->shape_[1]);
+    const int B = static_cast<int>(x->shape()[0]);
+    const int C = static_cast<int>(x->shape()[1]);
     int S[N > 0 ? N : 1];
     int spatial_total = 1;
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape_[2 + i]);
+        S[i] = static_cast<int>(x->shape()[2 + i]);
         spatial_total *= S[i];
     }
-    if (gamma->shape_[0] != C || beta->shape_[0] != C)
-        throw ShapeMismatch(gamma->shape_, x->shape_, "batch_norm: γ/β must have length C");
+    if (gamma->shape()[0] != C || beta->shape()[0] != C)
+        throw ShapeMismatch(gamma->shape(), x->shape(), "batch_norm: γ/β must have length C");
 
-    OpScopeFull scope{BatchNormNdBackward<N>::schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{BatchNormNdBackward<N>::schema_v1.name, x->device(), x->dtype(), x->shape()};
 
     Storage out_storage;
     Storage saved_mean;
     Storage saved_rstd;
 
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
-        const auto& gg = std::get<GpuStorage>(gamma->storage_);
-        const auto& gb = std::get<GpuStorage>(beta->storage_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
+        const auto& gg = std::get<GpuStorage>(gamma->storage());
+        const auto& gb = std::get<GpuStorage>(beta->storage());
         if (!gx.arr || !gg.arr || !gb.arr) {
             ErrorBuilder("batch_norm").fail("null GPU input");
         }
@@ -203,22 +202,22 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         auto centered = ::mlx::core::subtract(*gx.arr, mean);
         auto var = ::mlx::core::mean(::mlx::core::square(centered), axes,
                                      /*keepdims=*/true);
-        ::mlx::core::array eps_arr(eps, gpu::to_mlx_dtype(x->dtype_));
+        ::mlx::core::array eps_arr(eps, gpu::to_mlx_dtype(x->dtype()));
         auto rstd = ::mlx::core::rsqrt(::mlx::core::add(var, eps_arr));
         auto xnorm = ::mlx::core::multiply(centered, rstd);
         auto y = ::mlx::core::add(::mlx::core::multiply(xnorm, g_view), b_view);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype_)};
-        saved_mean = Storage{gpu::wrap_mlx_array(std::move(mean), x->dtype_)};
-        saved_rstd = Storage{gpu::wrap_mlx_array(std::move(rstd), x->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype())};
+        saved_mean = Storage{gpu::wrap_mlx_array(std::move(mean), x->dtype())};
+        saved_rstd = Storage{gpu::wrap_mlx_array(std::move(rstd), x->dtype())};
     } else {
-        auto y_cpu = alloc_bytes(static_cast<std::size_t>(B) * C * spatial_total, x->dtype_);
-        auto mean_cpu = alloc_bytes(static_cast<std::size_t>(C), x->dtype_);
-        auto rstd_cpu = alloc_bytes(static_cast<std::size_t>(C), x->dtype_);
+        auto y_cpu = alloc_bytes(static_cast<std::size_t>(B) * C * spatial_total, x->dtype());
+        auto mean_cpu = alloc_bytes(static_cast<std::size_t>(C), x->dtype());
+        auto rstd_cpu = alloc_bytes(static_cast<std::size_t>(C), x->dtype());
         if (B * C * spatial_total > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x->storage_);
-            const auto& g_cpu = std::get<CpuStorage>(gamma->storage_);
-            const auto& b_cpu = std::get<CpuStorage>(beta->storage_);
-            switch (x->dtype_) {
+            const auto& x_cpu = std::get<CpuStorage>(x->storage());
+            const auto& g_cpu = std::get<CpuStorage>(gamma->storage());
+            const auto& b_cpu = std::get<CpuStorage>(beta->storage());
+            switch (x->dtype()) {
                 case Dtype::F32:
                     batch_norm_forward_typed<float>(reinterpret_cast<const float*>(x_cpu.ptr.get()),
                                                     reinterpret_cast<const float*>(g_cpu.ptr.get()),
@@ -246,10 +245,10 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         saved_rstd = Storage{std::move(rstd_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape_, x->dtype_,
-                                            x->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
+                                            x->device(), false);
     if (!GradMode::is_enabled() ||
-        !(x->requires_grad_ || gamma->requires_grad_ || beta->requires_grad_)) {
+        !(x->requires_grad() || gamma->requires_grad() || beta->requires_grad())) {
         return out;
     }
 
@@ -258,12 +257,12 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     auto b_edge = detail::ensure_grad_fn(beta);
 
     auto bwd = std::make_shared<BatchNormNdBackward<N>>();
-    bwd->input_shapes_ = {x->shape_, gamma->shape_, beta->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape(), gamma->shape(), beta->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x, gamma, beta};
-    bwd->saved_inputs_ = {x->storage_, gamma->storage_, beta->storage_};
+    bwd->saved_inputs_ = {x->storage(), gamma->storage(), beta->storage()};
     bwd->saved_mean_ = std::move(saved_mean);
     bwd->saved_rstd_ = std::move(saved_rstd);
     bwd->B_ = B;
@@ -271,11 +270,11 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         bwd->S_[i] = S[i];
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0), Edge(b_edge, 0)});
-    bwd->set_saved_versions({x->version_, gamma->version_, beta->version_});
+    bwd->set_saved_versions({x->version(), gamma->version(), beta->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

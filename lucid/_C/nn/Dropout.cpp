@@ -35,71 +35,69 @@ TensorImplPtr DropoutBackward::forward(const TensorImplPtr& a,
                                        bool training,
                                        Generator* gen) {
     Validator::input(a, "dropout.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous())
-        ErrorBuilder("dropout").not_implemented(
-            "non-contiguous input not supported (call .contiguous() first)");
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("dropout").fail("p must be in [0, 1)");
 
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
 
     // Inference mode (or zero drop) → pure pass-through clone (so engine
     // owns its own buffer; no graph wiring needed if !requires_grad).
     if (!training || p == 0.0) {
-        Storage clone = clone_storage(a->storage_, numel, a->dtype_, a->device_);
-        auto out =
-            std::make_shared<TensorImpl>(std::move(clone), a->shape_, a->dtype_, a->device_, false);
-        if (!GradMode::is_enabled() || !a->requires_grad_)
+        Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
+        auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
+                                                a->device(), false);
+        if (!GradMode::is_enabled() || !a->requires_grad())
             return out;
 
         auto a_edge = detail::ensure_grad_fn(a);
         auto bwd = std::make_shared<DropoutBackward>();
-        bwd->input_shapes_ = {a->shape_};
-        bwd->out_shape_ = a->shape_;
-        bwd->dtype_ = a->dtype_;
-        bwd->device_ = a->device_;
+        bwd->input_shapes_ = {a->shape()};
+        bwd->out_shape_ = a->shape();
+        bwd->dtype_ = a->dtype();
+        bwd->device_ = a->device();
         bwd->input_tensors_ = {a};
         bwd->p_ = 0.0;  // identity backward
         // mask_ is empty/uninitialized — apply() detects and short-circuits.
         bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-        bwd->set_saved_versions({a->version_});
+        bwd->set_saved_versions({a->version()});
 
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
     // Training: sample Bernoulli(1-p) mask, y = x * mask / (1-p).
     Generator& g = gen ? *gen : default_generator();
-    Storage mask = bernoulli_mask_storage_shape(1.0 - p, a->shape_, a->dtype_, a->device_, g);
+    Storage mask = bernoulli_mask_storage_shape(1.0 - p, a->shape(), a->dtype(), a->device(), g);
     const double scale = 1.0 / (1.0 - p);
 
-    Storage scaled_mask = mul_scalar_storage(mask, scale, numel, a->dtype_, a->device_);
-    Storage y = multiply_storages(a->storage_, scaled_mask, numel, a->dtype_, a->device_);
+    Storage scaled_mask = mul_scalar_storage(mask, scale, numel, a->dtype(), a->device());
+    Storage y = multiply_storages(a->storage(), scaled_mask, numel, a->dtype(), a->device());
 
-    auto out = std::make_shared<TensorImpl>(std::move(y), a->shape_, a->dtype_, a->device_, false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<DropoutBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = a->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = a->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->p_ = p;
     bwd->mask_ = std::move(scaled_mask);  // already scaled by 1/(1-p)
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -247,83 +245,82 @@ TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
                                          bool training,
                                          Generator* gen) {
     Validator::input(a, "dropoutnd.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous())
-        ErrorBuilder("dropoutnd")
-            .not_implemented("non-contiguous input not supported (call .contiguous())");
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("dropoutnd").fail("p must be in [0, 1)");
 
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
 
     if (!training || p == 0.0) {
-        Storage clone = clone_storage(a->storage_, numel, a->dtype_, a->device_);
-        auto out =
-            std::make_shared<TensorImpl>(std::move(clone), a->shape_, a->dtype_, a->device_, false);
-        if (!GradMode::is_enabled() || !a->requires_grad_)
+        Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
+        auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
+                                                a->device(), false);
+        if (!GradMode::is_enabled() || !a->requires_grad())
             return out;
         auto a_edge = detail::ensure_grad_fn(a);
         auto bwd = std::make_shared<DropoutNdBackward>();
-        bwd->input_shapes_ = {a->shape_};
-        bwd->out_shape_ = a->shape_;
-        bwd->dtype_ = a->dtype_;
-        bwd->device_ = a->device_;
+        bwd->input_shapes_ = {a->shape()};
+        bwd->out_shape_ = a->shape();
+        bwd->dtype_ = a->dtype();
+        bwd->device_ = a->device();
         bwd->input_tensors_ = {a};
         bwd->p_ = 0.0;
         bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-        bwd->set_saved_versions({a->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
     // Sample a (B, C, 1, 1, ...) Bernoulli mask (broadcast-shape).
-    Shape mask_shape = channel_mask_shape(a->shape_);
+    Shape mask_shape = channel_mask_shape(a->shape());
     const std::size_t mask_numel =
         static_cast<std::size_t>(mask_shape[0]) * static_cast<std::size_t>(mask_shape[1]);
     Generator& g = gen ? *gen : default_generator();
     Storage small_mask =
-        bernoulli_mask_storage_shape(1.0 - p, mask_shape, a->dtype_, a->device_, g);
+        bernoulli_mask_storage_shape(1.0 - p, mask_shape, a->dtype(), a->device(), g);
     const double scale = 1.0 / (1.0 - p);
-    Storage scaled_small = mul_scalar_storage(small_mask, scale, mask_numel, a->dtype_, a->device_);
+    Storage scaled_small =
+        mul_scalar_storage(small_mask, scale, mask_numel, a->dtype(), a->device());
     Storage exp_storage;
     Storage y;
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         // MLX broadcasts on multiply; expand the (B,C,1,...) mask to full shape so the
         // saved mask exactly matches grad_out shape during backward.
         const auto& gm = std::get<GpuStorage>(scaled_small);
-        auto full_mask = ::mlx::core::broadcast_to(*gm.arr, gpu::to_mlx_shape(a->shape_));
-        const auto& gx = std::get<GpuStorage>(a->storage_);
+        auto full_mask = ::mlx::core::broadcast_to(*gm.arr, gpu::to_mlx_shape(a->shape()));
+        const auto& gx = std::get<GpuStorage>(a->storage());
         auto out = ::mlx::core::multiply(*gx.arr, full_mask);
-        exp_storage = Storage{gpu::wrap_mlx_array(std::move(full_mask), a->dtype_)};
-        y = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
+        exp_storage = Storage{gpu::wrap_mlx_array(std::move(full_mask), a->dtype())};
+        y = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
     } else {
         // CPU: explicit expand to full shape.
         CpuStorage expanded =
-            expand_channel_mask(std::get<CpuStorage>(scaled_small), a->shape_, a->dtype_);
+            expand_channel_mask(std::get<CpuStorage>(scaled_small), a->shape(), a->dtype());
         exp_storage = Storage{std::move(expanded)};
-        y = multiply_storages(a->storage_, exp_storage, numel, a->dtype_, a->device_);
+        y = multiply_storages(a->storage(), exp_storage, numel, a->dtype(), a->device());
     }
-    auto out = std::make_shared<TensorImpl>(std::move(y), a->shape_, a->dtype_, a->device_, false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<DropoutNdBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = a->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = a->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->p_ = p;
     bwd->mask_ = std::move(exp_storage);  // full-shape, scaled
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({a->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -375,34 +372,32 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
                                             bool training,
                                             Generator* gen) {
     Validator::input(a, "alpha_dropout.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous())
-        ErrorBuilder("alpha_dropout").not_implemented("non-contiguous input not supported");
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("alpha_dropout").fail("p must be in [0, 1)");
 
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
 
     if (!training || p == 0.0) {
-        Storage clone = clone_storage(a->storage_, numel, a->dtype_, a->device_);
-        auto out =
-            std::make_shared<TensorImpl>(std::move(clone), a->shape_, a->dtype_, a->device_, false);
-        if (!GradMode::is_enabled() || !a->requires_grad_)
+        Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
+        auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
+                                                a->device(), false);
+        if (!GradMode::is_enabled() || !a->requires_grad())
             return out;
         auto a_edge = detail::ensure_grad_fn(a);
         auto bwd = std::make_shared<AlphaDropoutBackward>();
-        bwd->input_shapes_ = {a->shape_};
-        bwd->out_shape_ = a->shape_;
-        bwd->dtype_ = a->dtype_;
-        bwd->device_ = a->device_;
+        bwd->input_shapes_ = {a->shape()};
+        bwd->out_shape_ = a->shape();
+        bwd->dtype_ = a->dtype();
+        bwd->device_ = a->device();
         bwd->input_tensors_ = {a};
         bwd->p_ = 0.0;
         bwd->a_coef_ = 1.0;
         bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-        bwd->set_saved_versions({a->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
@@ -411,40 +406,41 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
     const double b_coef = -a_coef * p * kAlphaPrime;
 
     Generator& g = gen ? *gen : default_generator();
-    Storage mask = bernoulli_mask_storage_shape(keep, a->shape_, a->dtype_, a->device_, g);
+    Storage mask = bernoulli_mask_storage_shape(keep, a->shape(), a->dtype(), a->device(), g);
 
     // x·mask
-    Storage x_mask = multiply_storages(a->storage_, mask, numel, a->dtype_, a->device_);
+    Storage x_mask = multiply_storages(a->storage(), mask, numel, a->dtype(), a->device());
     // (1 - mask)·alpha' = alpha' - alpha'·mask
-    Storage alpha_mask = mul_scalar_storage(mask, kAlphaPrime, numel, a->dtype_, a->device_);
-    Storage neg_alpha_mask = mul_scalar_storage(alpha_mask, -1.0, numel, a->dtype_, a->device_);
+    Storage alpha_mask = mul_scalar_storage(mask, kAlphaPrime, numel, a->dtype(), a->device());
+    Storage neg_alpha_mask = mul_scalar_storage(alpha_mask, -1.0, numel, a->dtype(), a->device());
     Storage one_m_mask_ap =
-        add_scalar_storage(neg_alpha_mask, kAlphaPrime, numel, a->dtype_, a->device_);
+        add_scalar_storage(neg_alpha_mask, kAlphaPrime, numel, a->dtype(), a->device());
     // x·mask + (1 - mask)·alpha'
-    Storage inner = add_storages(x_mask, one_m_mask_ap, numel, a->dtype_, a->device_);
-    Storage scaled = mul_scalar_storage(inner, a_coef, numel, a->dtype_, a->device_);
-    Storage y = add_scalar_storage(scaled, b_coef, numel, a->dtype_, a->device_);
+    Storage inner = add_storages(x_mask, one_m_mask_ap, numel, a->dtype(), a->device());
+    Storage scaled = mul_scalar_storage(inner, a_coef, numel, a->dtype(), a->device());
+    Storage y = add_scalar_storage(scaled, b_coef, numel, a->dtype(), a->device());
 
-    auto out = std::make_shared<TensorImpl>(std::move(y), a->shape_, a->dtype_, a->device_, false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<AlphaDropoutBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = a->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = a->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->p_ = p;
     bwd->a_coef_ = a_coef;
     bwd->mask_ = std::move(mask);
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({a->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -574,19 +570,17 @@ CpuStorage build_drop_block_mask(
 TensorImplPtr DropBlockBackward::forward(
     const TensorImplPtr& a, std::int64_t block_size, double p, double eps, Generator* gen) {
     Validator::input(a, "drop_block.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous())
-        ErrorBuilder("drop_block").not_implemented("non-contiguous input not supported");
-    if (a->shape_.size() != 4)
+    if (a->shape().size() != 4)
         ErrorBuilder("drop_block").fail("input must be 4-D (N, C, H, W)");
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("drop_block").fail("p must be in [0, 1)");
     if (block_size <= 0)
         ErrorBuilder("drop_block").fail("block_size must be > 0");
 
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
-    const std::int64_t H = a->shape_[2];
-    const std::int64_t W = a->shape_[3];
+    const std::int64_t H = a->shape()[2];
+    const std::int64_t W = a->shape()[3];
 
     const double feat = static_cast<double>(H * W);
     const double valid = static_cast<double>((H - block_size + 1) * (W - block_size + 1));
@@ -594,22 +588,22 @@ TensorImplPtr DropBlockBackward::forward(
 
     Generator& g = gen ? *gen : default_generator();
     Storage keep_storage;
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         // Native GPU path: pure mlx::core ops only.
         // 1) bernoulli seed on GPU
         // 2) pad seed by K/2 on H, W axes
         // 3) dilation = max over K*K shifted (B, C, H, W) slices
         // 4) keep = scale * (1 - dilation)
-        Storage seed = bernoulli_mask_storage(gamma, numel, a->dtype_, Device::GPU, g);
+        Storage seed = bernoulli_mask_storage(gamma, numel, a->dtype(), Device::GPU, g);
         const auto& seed_g = std::get<GpuStorage>(seed);
-        auto mlx_dt = gpu::to_mlx_dtype(a->dtype_);
+        auto mlx_dt = gpu::to_mlx_dtype(a->dtype());
 
         const int K = static_cast<int>(block_size);
         const int pad = K / 2;
-        const int B = static_cast<int>(a->shape_[0]);
-        const int C = static_cast<int>(a->shape_[1]);
-        const int H = static_cast<int>(a->shape_[2]);
-        const int W = static_cast<int>(a->shape_[3]);
+        const int B = static_cast<int>(a->shape()[0]);
+        const int C = static_cast<int>(a->shape()[1]);
+        const int H = static_cast<int>(a->shape()[2]);
+        const int W = static_cast<int>(a->shape()[3]);
 
         // bernoulli_mask_storage returns a flat (numel,) mlx array; reshape.
         auto seed_4d = ::mlx::core::reshape(*seed_g.arr, ::mlx::core::Shape{B, C, H, W});
@@ -635,34 +629,35 @@ TensorImplPtr DropBlockBackward::forward(
         auto one = ::mlx::core::array(1.0f, mlx_dt);
         auto scale = ::mlx::core::array(static_cast<float>(1.0 / (1.0 - p)), mlx_dt);
         auto keep = ::mlx::core::multiply(scale, ::mlx::core::subtract(one, dilated));
-        keep_storage = Storage{gpu::wrap_mlx_array(std::move(keep), a->dtype_)};
+        keep_storage = Storage{gpu::wrap_mlx_array(std::move(keep), a->dtype())};
     } else {
-        Storage seed = bernoulli_mask_storage(gamma, numel, a->dtype_, Device::CPU, g);
-        CpuStorage keep_mask =
-            build_drop_block_mask(std::get<CpuStorage>(seed), a->shape_, block_size, p, a->dtype_);
+        Storage seed = bernoulli_mask_storage(gamma, numel, a->dtype(), Device::CPU, g);
+        CpuStorage keep_mask = build_drop_block_mask(std::get<CpuStorage>(seed), a->shape(),
+                                                     block_size, p, a->dtype());
         keep_storage = Storage{std::move(keep_mask)};
     }
-    Storage y = multiply_storages(a->storage_, keep_storage, numel, a->dtype_, a->device_);
+    Storage y = multiply_storages(a->storage(), keep_storage, numel, a->dtype(), a->device());
 
-    auto out = std::make_shared<TensorImpl>(std::move(y), a->shape_, a->dtype_, a->device_, false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<DropBlockBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = a->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = a->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->p_ = p;
     bwd->mask_ = std::move(keep_storage);
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({a->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -691,76 +686,76 @@ TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
                                         bool scale_by_keep,
                                         Generator* gen) {
     Validator::input(a, "drop_path.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous())
-        ErrorBuilder("drop_path").not_implemented("non-contiguous input not supported");
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("drop_path").fail("p must be in [0, 1)");
 
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
 
     if (p == 0.0) {
-        Storage clone = clone_storage(a->storage_, numel, a->dtype_, a->device_);
-        auto out =
-            std::make_shared<TensorImpl>(std::move(clone), a->shape_, a->dtype_, a->device_, false);
-        if (!GradMode::is_enabled() || !a->requires_grad_)
+        Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
+        auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
+                                                a->device(), false);
+        if (!GradMode::is_enabled() || !a->requires_grad())
             return out;
         auto a_edge = detail::ensure_grad_fn(a);
         auto bwd = std::make_shared<DropPathBackward>();
-        bwd->input_shapes_ = {a->shape_};
-        bwd->out_shape_ = a->shape_;
-        bwd->dtype_ = a->dtype_;
-        bwd->device_ = a->device_;
+        bwd->input_shapes_ = {a->shape()};
+        bwd->out_shape_ = a->shape();
+        bwd->dtype_ = a->dtype();
+        bwd->device_ = a->device();
         bwd->input_tensors_ = {a};
         bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-        bwd->set_saved_versions({a->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
     const double keep = 1.0 - p;
-    const std::size_t B = static_cast<std::size_t>(a->shape_[0]);
-    Shape sshape = sample_mask_shape(a->shape_);  // (B, 1, 1, ...)
+    const std::size_t B = static_cast<std::size_t>(a->shape()[0]);
+    Shape sshape = sample_mask_shape(a->shape());  // (B, 1, 1, ...)
     Generator& g = gen ? *gen : default_generator();
-    Storage small = bernoulli_mask_storage_shape(keep, sshape, a->dtype_, a->device_, g);
+    Storage small = bernoulli_mask_storage_shape(keep, sshape, a->dtype(), a->device(), g);
     if (scale_by_keep && keep > 0.0) {
-        small = mul_scalar_storage(small, 1.0 / keep, B, a->dtype_, a->device_);
+        small = mul_scalar_storage(small, 1.0 / keep, B, a->dtype(), a->device());
     }
     Storage exp_storage;
     Storage y;
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         const auto& gm = std::get<GpuStorage>(small);
-        auto full_mask = ::mlx::core::broadcast_to(*gm.arr, gpu::to_mlx_shape(a->shape_));
-        const auto& gx = std::get<GpuStorage>(a->storage_);
+        auto full_mask = ::mlx::core::broadcast_to(*gm.arr, gpu::to_mlx_shape(a->shape()));
+        const auto& gx = std::get<GpuStorage>(a->storage());
         auto out = ::mlx::core::multiply(*gx.arr, full_mask);
-        exp_storage = Storage{gpu::wrap_mlx_array(std::move(full_mask), a->dtype_)};
-        y = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
+        exp_storage = Storage{gpu::wrap_mlx_array(std::move(full_mask), a->dtype())};
+        y = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
     } else {
-        CpuStorage expanded = expand_sample_mask(std::get<CpuStorage>(small), a->shape_, a->dtype_);
+        CpuStorage expanded =
+            expand_sample_mask(std::get<CpuStorage>(small), a->shape(), a->dtype());
         exp_storage = Storage{std::move(expanded)};
-        y = multiply_storages(a->storage_, exp_storage, numel, a->dtype_, a->device_);
+        y = multiply_storages(a->storage(), exp_storage, numel, a->dtype(), a->device());
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(y), a->shape_, a->dtype_, a->device_, false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<DropPathBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = a->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = a->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->mask_ = std::move(exp_storage);
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({a->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

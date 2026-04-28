@@ -61,10 +61,8 @@ inline int compute_out(int S, int K, int stride, int pad) {
 template <int N>
 void validate_input(const TensorImplPtr& x, std::string_view op_name) {
     Validator::input(x, std::string(op_name) + ".x").non_null();
-    if (x->device_ == Device::CPU && !x->is_contiguous())
-        ErrorBuilder(op_name).not_implemented("non-contiguous input not supported");
-    if (static_cast<int>(x->shape_.size()) != N + 2)
-        throw ShapeMismatch(x->shape_, Shape{}, std::string(op_name) + ": x rank mismatch");
+    if (static_cast<int>(x->shape().size()) != N + 2)
+        throw ShapeMismatch(x->shape(), Shape{}, std::string(op_name) + ": x rank mismatch");
 }
 
 // CPU forward dispatch by N — picks the right backend kernel.
@@ -442,15 +440,15 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         stride[i] = (stride_in[i] == 0) ? K[i] : stride_in[i];
 
-    const int B = static_cast<int>(x->shape_[0]);
-    const int C = static_cast<int>(x->shape_[1]);
+    const int B = static_cast<int>(x->shape()[0]);
+    const int C = static_cast<int>(x->shape()[1]);
     int S[N], O[N];
     int O_total = 1, S_total = 1;
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape_[2 + i]);
+        S[i] = static_cast<int>(x->shape()[2 + i]);
         O[i] = compute_out(S[i], K[i], stride[i], pad[i]);
         if (O[i] <= 0)
-            throw ShapeMismatch(x->shape_, Shape{}, "max_pool: output non-positive");
+            throw ShapeMismatch(x->shape(), Shape{}, "max_pool: output non-positive");
         O_total *= O[i];
         S_total *= S[i];
     }
@@ -465,18 +463,18 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         out_shape.push_back(static_cast<std::int64_t>(O[i]));
 
-    OpScopeFull scope{MaxPoolNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{MaxPoolNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
 
     Storage out_storage;
     Storage saved_argmax;
 
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
         if (!gx.arr)
             ErrorBuilder("max_pool").fail("null GPU input");
 
         ::mlx::core::array neg_inf(-std::numeric_limits<double>::infinity(),
-                                   gpu::to_mlx_dtype(x->dtype_));
+                                   gpu::to_mlx_dtype(x->dtype()));
         std::vector<std::pair<int, int>> pad_widths;
         pad_widths.reserve(N + 2);
         pad_widths.emplace_back(0, 0);
@@ -508,13 +506,13 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         auto argmax = ::mlx::core::argmax(wins_flat, /*axis=*/2 + N,
                                           /*keepdims=*/false);
         argmax = ::mlx::core::astype(argmax, ::mlx::core::int32);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype())};
         saved_argmax = Storage{gpu::wrap_mlx_array(std::move(argmax), Dtype::I32)};
     } else {
-        auto y_cpu = alloc_bytes(static_cast<std::size_t>(B) * C * O_total, x->dtype_);
+        auto y_cpu = alloc_bytes(static_cast<std::size_t>(B) * C * O_total, x->dtype());
         auto am_cpu = alloc_i32(static_cast<std::size_t>(B) * C * O_total);
-        const auto& x_cpu = std::get<CpuStorage>(x->storage_);
-        switch (x->dtype_) {
+        const auto& x_cpu = std::get<CpuStorage>(x->storage());
+        switch (x->dtype()) {
             case Dtype::F32:
                 max_pool_forward_dispatch<N, float>(
                     reinterpret_cast<const float*>(x_cpu.ptr.get()),
@@ -534,17 +532,17 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         saved_argmax = Storage{std::move(am_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), x->dtype_,
-                                            x->device_, false);
-    if (!GradMode::is_enabled() || !x->requires_grad_)
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
+                                            x->dtype(), x->device(), false);
+    if (!GradMode::is_enabled() || !x->requires_grad())
         return out;
 
     auto x_edge = detail::ensure_grad_fn(x);
     auto bwd = std::make_shared<MaxPoolNdBackward<N>>();
-    bwd->input_shapes_ = {x->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x};
     bwd->saved_argmax_ = std::move(saved_argmax);
     for (int i = 0; i < N; ++i) {
@@ -553,11 +551,11 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->pad_[i] = pad[i];
     }
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({x->version_});
+    bwd->set_saved_versions({x->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -703,15 +701,15 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         stride[i] = (stride_in[i] == 0) ? K[i] : stride_in[i];
 
-    const int B = static_cast<int>(x->shape_[0]);
-    const int C = static_cast<int>(x->shape_[1]);
+    const int B = static_cast<int>(x->shape()[0]);
+    const int C = static_cast<int>(x->shape()[1]);
     int S[N], O[N];
     int O_total = 1, S_total = 1;
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape_[2 + i]);
+        S[i] = static_cast<int>(x->shape()[2 + i]);
         O[i] = compute_out(S[i], K[i], stride[i], pad[i]);
         if (O[i] <= 0)
-            throw ShapeMismatch(x->shape_, Shape{}, "avg_pool: output non-positive");
+            throw ShapeMismatch(x->shape(), Shape{}, "avg_pool: output non-positive");
         O_total *= O[i];
         S_total *= S[i];
     }
@@ -723,15 +721,15 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         out_shape.push_back(static_cast<std::int64_t>(O[i]));
 
-    OpScopeFull scope{AvgPoolNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{AvgPoolNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
 
     Storage out_storage;
 
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
         if (!gx.arr)
             ErrorBuilder("avg_pool").fail("null GPU input");
-        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(x->dtype_));
+        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(x->dtype()));
         std::vector<std::pair<int, int>> pad_widths;
         pad_widths.reserve(N + 2);
         pad_widths.emplace_back(0, 0);
@@ -748,11 +746,11 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         for (int i = 0; i < N; ++i)
             kernel_axes.push_back(2 + N + i);
         auto y = ::mlx::core::mean(wins, kernel_axes, /*keepdims=*/false);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype())};
     } else {
-        auto y_cpu = alloc_bytes(static_cast<std::size_t>(B) * C * O_total, x->dtype_);
-        const auto& x_cpu = std::get<CpuStorage>(x->storage_);
-        switch (x->dtype_) {
+        auto y_cpu = alloc_bytes(static_cast<std::size_t>(B) * C * O_total, x->dtype());
+        const auto& x_cpu = std::get<CpuStorage>(x->storage());
+        switch (x->dtype()) {
             case Dtype::F32:
                 avg_pool_forward_dispatch<N, float>(reinterpret_cast<const float*>(x_cpu.ptr.get()),
                                                     reinterpret_cast<float*>(y_cpu.ptr.get()), B, C,
@@ -769,17 +767,17 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         out_storage = Storage{std::move(y_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), x->dtype_,
-                                            x->device_, false);
-    if (!GradMode::is_enabled() || !x->requires_grad_)
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
+                                            x->dtype(), x->device(), false);
+    if (!GradMode::is_enabled() || !x->requires_grad())
         return out;
 
     auto x_edge = detail::ensure_grad_fn(x);
     auto bwd = std::make_shared<AvgPoolNdBackward<N>>();
-    bwd->input_shapes_ = {x->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x};
     for (int i = 0; i < N; ++i) {
         bwd->K_[i] = K[i];
@@ -787,11 +785,11 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->pad_[i] = pad[i];
     }
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({x->version_});
+    bwd->set_saved_versions({x->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

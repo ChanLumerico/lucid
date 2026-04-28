@@ -39,18 +39,18 @@ void Adamax::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p
         m_.resize(params_.size());
     if (u_.size() < params_.size())
         u_.resize(params_.size());
-    m_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
-    u_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+    m_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
+    u_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
 void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     if (i == 0)
         ++step_count_;
-    const auto dt = p->dtype_;
+    const auto dt = p->dtype();
     const std::int64_t step = step_count_;
     const double bc1 = 1.0 - std::pow(beta1_, static_cast<double>(step));
-    if (p->device_ == Device::GPU) {
-        auto& pg = gpu_get(p->storage_);
+    if (p->device() == Device::GPU) {
+        auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
         auto& mg = gpu_get(m_[i]);
         auto& ug = gpu_get(u_[i]);
@@ -93,9 +93,9 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("Adamax").not_implemented("dtype not supported");
 }
@@ -115,22 +115,22 @@ Adagrad::Adagrad(
 void Adagrad::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (sum_sq_grad_.size() < params_.size())
         sum_sq_grad_.resize(params_.size());
-    sum_sq_grad_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+    sum_sq_grad_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     if (initial_accumulator_value_ != 0.0) {
-        if (p->device_ == Device::GPU) {
+        if (p->device() == Device::GPU) {
             auto ones_arr =
-                ::mlx::core::ones(gpu::to_mlx_shape(p->shape_), gpu::to_mlx_dtype(p->dtype_));
+                ::mlx::core::ones(gpu::to_mlx_shape(p->shape()), gpu::to_mlx_dtype(p->dtype()));
             auto init =
-                ::mlx::core::multiply(mlx_scalar(initial_accumulator_value_, p->dtype_), ones_arr);
-            gpu_replace(gpu_get(sum_sq_grad_[i]), std::move(init), p->dtype_);
+                ::mlx::core::multiply(mlx_scalar(initial_accumulator_value_, p->dtype()), ones_arr);
+            gpu_replace(gpu_get(sum_sq_grad_[i]), std::move(init), p->dtype());
         } else {
             const std::size_t n = cpu_numel(*p);
-            if (p->dtype_ == Dtype::F32) {
+            if (p->dtype() == Dtype::F32) {
                 auto* q = cpu_ptr<float>(sum_sq_grad_[i]);
                 const auto v = static_cast<float>(initial_accumulator_value_);
                 for (std::size_t k = 0; k < n; ++k)
                     q[k] = v;
-            } else if (p->dtype_ == Dtype::F64) {
+            } else if (p->dtype() == Dtype::F64) {
                 auto* q = cpu_ptr<double>(sum_sq_grad_[i]);
                 for (std::size_t k = 0; k < n; ++k)
                     q[k] = initial_accumulator_value_;
@@ -140,9 +140,9 @@ void Adagrad::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& 
 }
 
 void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
-    const auto dt = p->dtype_;
-    if (p->device_ == Device::GPU) {
-        auto& pg = gpu_get(p->storage_);
+    const auto dt = p->dtype();
+    if (p->device() == Device::GPU) {
+        auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
         auto& ss = gpu_get(sum_sq_grad_[i]);
         ::mlx::core::array g = *gg.arr;
@@ -172,9 +172,9 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("Adagrad").not_implemented("dtype not supported");
 }
@@ -192,14 +192,14 @@ void Adadelta::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>&
         sq_avg_.resize(params_.size());
     if (accumulated_update_.size() < params_.size())
         accumulated_update_.resize(params_.size());
-    sq_avg_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
-    accumulated_update_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+    sq_avg_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
+    accumulated_update_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
 void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
-    const auto dt = p->dtype_;
-    if (p->device_ == Device::GPU) {
-        auto& pg = gpu_get(p->storage_);
+    const auto dt = p->dtype();
+    if (p->device() == Device::GPU) {
+        auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
         auto& sq = gpu_get(sq_avg_[i]);
         auto& acc = gpu_get(accumulated_update_[i]);
@@ -245,9 +245,9 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("Adadelta").not_implemented("dtype not supported");
 }

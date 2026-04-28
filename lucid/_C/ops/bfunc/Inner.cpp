@@ -51,17 +51,17 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     // Route autograd-tracked computations through einsum so the backward
     // chain is well-formed via the primitive ops einsum is built on.
     // Pure-inference calls keep the native fast path below.
-    if (GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)) {
-        return einsum_op(inner_einsum_pattern(a->shape_.size(), b->shape_.size()), {a, b});
+    if (GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())) {
+        return einsum_op(inner_einsum_pattern(a->shape().size(), b->shape().size()), {a, b});
     }
 
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
     OpScopeFull scope{"inner", device, dt, Shape{}};
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         auto out = ::mlx::core::inner(*ga.arr, *gb.arr);
         Shape out_shape;
         for (auto d : out.shape())
@@ -70,8 +70,8 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
                      device);
     }
 
-    const auto& sa = a->shape_;
-    const auto& sb = b->shape_;
+    const auto& sa = a->shape();
+    const auto& sb = b->shape();
     if (sa.empty() || sb.empty() || sa.back() != sb.back())
         throw ShapeMismatch(sa, sb, "inner");
     const std::int64_t K = sa.back();
@@ -80,8 +80,8 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     auto out_cpu = allocate_cpu(out_shape, dt);
     const std::size_t pa = shape_numel(Shape(sa.begin(), sa.end() - 1));
     const std::size_t pb = shape_numel(Shape(sb.begin(), sb.end() - 1));
-    const auto& ca = std::get<CpuStorage>(a->storage_);
-    const auto& cb = std::get<CpuStorage>(b->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
+    const auto& cb = std::get<CpuStorage>(b->storage());
     auto run = [&](auto* op, const auto* ap, const auto* bp) {
         using T = std::remove_pointer_t<decltype(op)>;
         for (std::size_t i = 0; i < pa; ++i)

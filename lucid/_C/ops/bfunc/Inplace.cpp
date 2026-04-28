@@ -19,6 +19,10 @@ namespace {
 
 // Compute fwd_fn(a, b), then overwrite a's storage with the result,
 // bump version, and return a. Shape/dtype/device must match.
+//
+// Copy-on-write: if a's CPU storage is shared with another view (use_count > 1),
+// the in-place op would silently mutate the shared buffer — which is wrong.
+// We fail fast here; users should call `.clone()` before in-place ops on views.
 template <typename Fn>
 TensorImplPtr inplace_apply(const TensorImplPtr& a,
                             const TensorImplPtr& b,
@@ -26,14 +30,18 @@ TensorImplPtr inplace_apply(const TensorImplPtr& a,
                             const char* name) {
     if (!a || !b)
         ErrorBuilder(name).fail("null input");
+    if (a->storage_is_shared())
+        ErrorBuilder(name).fail(
+            "in-place op on a tensor that shares storage with a view — "
+            "call .clone() first or operate on the base tensor");
     auto out = fwd_fn(a, b);
-    if (out->shape_ != a->shape_)
-        throw ShapeMismatch(a->shape_, out->shape_,
+    if (out->shape() != a->shape())
+        throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");
-    a->storage_ = std::move(out->storage_);
-    a->dtype_ = out->dtype_;
-    a->device_ = out->device_;
-    a->version_ += 1;
+    a->mutable_storage() = std::move(out->storage());
+    a->set_dtype(out->dtype());
+    a->set_device(out->device());
+    a->bump_version();
     return a;
 }
 

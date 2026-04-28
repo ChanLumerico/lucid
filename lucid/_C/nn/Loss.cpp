@@ -142,31 +142,32 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
                                        Reduction reduction) {
     if (!input || !target)
         ErrorBuilder("mse_loss").fail("null input");
-    if (input->shape_ != target->shape_)
-        throw ShapeMismatch(input->shape_, target->shape_, "mse_loss: input/target shape mismatch");
-    if (input->dtype_ != target->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(input->dtype_)),
-                            std::string(dtype_name(target->dtype_)), "mse_loss");
+    if (input->shape() != target->shape())
+        throw ShapeMismatch(input->shape(), target->shape(),
+                            "mse_loss: input/target shape mismatch");
+    if (input->dtype() != target->dtype())
+        throw DtypeMismatch(std::string(dtype_name(input->dtype())),
+                            std::string(dtype_name(target->dtype())), "mse_loss");
 
     const std::size_t numel = input->numel();
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
-                      reduced_shape(input->shape_, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
+                      reduced_shape(input->shape(), reduction)};
 
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto& gt = std::get<GpuStorage>(target->storage_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto& gt = std::get<GpuStorage>(target->storage());
         if (!gx.arr || !gt.arr)
             ErrorBuilder("mse_loss").fail("null GPU array");
         auto diff = ::mlx::core::subtract(*gx.arr, *gt.arr);
         auto sq = ::mlx::core::multiply(diff, diff);
         auto red = mlx_apply_reduction(sq, reduction);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype())};
     } else {
-        auto loss_buf = allocate_size(numel, input->dtype_);
-        const auto& xs = std::get<CpuStorage>(input->storage_);
-        const auto& ts = std::get<CpuStorage>(target->storage_);
-        switch (input->dtype_) {
+        auto loss_buf = allocate_size(numel, input->dtype());
+        const auto& xs = std::get<CpuStorage>(input->storage());
+        const auto& ts = std::get<CpuStorage>(target->storage());
+        switch (input->dtype()) {
             case Dtype::F32: {
                 auto* xp = reinterpret_cast<const float*>(xs.ptr.get());
                 auto* tp = reinterpret_cast<const float*>(ts.ptr.get());
@@ -175,7 +176,7 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
                     const float d = xp[i] - tp[i];
                     lp[i] = d * d;
                 }
-                out_storage = apply_reduction<float>(lp, numel, reduction, input->dtype_);
+                out_storage = apply_reduction<float>(lp, numel, reduction, input->dtype());
                 break;
             }
             case Dtype::F64: {
@@ -186,7 +187,7 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
                     const double d = xp[i] - tp[i];
                     lp[i] = d * d;
                 }
-                out_storage = apply_reduction<double>(lp, numel, reduction, input->dtype_);
+                out_storage = apply_reduction<double>(lp, numel, reduction, input->dtype());
                 break;
             }
             default:
@@ -195,29 +196,29 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
     }
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            reduced_shape(input->shape_, reduction), input->dtype_,
-                                            input->device_, false);
+                                            reduced_shape(input->shape(), reduction),
+                                            input->dtype(), input->device(), false);
 
-    if (!GradMode::is_enabled() || !(input->requires_grad_ || target->requires_grad_))
+    if (!GradMode::is_enabled() || !(input->requires_grad() || target->requires_grad()))
         return out;
 
     auto x_edge = detail::ensure_grad_fn(input);
     auto t_edge = detail::ensure_grad_fn(target);
     auto bwd = std::make_shared<MseLossBackward>();
-    bwd->input_shapes_ = {input->shape_, target->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->input_shapes_ = {input->shape(), target->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input, target};
-    bwd->saved_inputs_ = {input->storage_, target->storage_};
+    bwd->saved_inputs_ = {input->storage(), target->storage()};
     bwd->reduction_ = reduction;
-    bwd->orig_shape_ = input->shape_;
+    bwd->orig_shape_ = input->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(t_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_),
-                                                      static_cast<std::int64_t>(target->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{
+        static_cast<std::int64_t>(input->version()), static_cast<std::int64_t>(target->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -291,19 +292,20 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
     if (!input || !target || !weight)
         ErrorBuilder("bce_loss")
             .fail("input/target/weight required (pass ones for weight if not used)");
-    if (input->shape_ != target->shape_)
-        throw ShapeMismatch(input->shape_, target->shape_, "bce_loss: input/target shape mismatch");
+    if (input->shape() != target->shape())
+        throw ShapeMismatch(input->shape(), target->shape(),
+                            "bce_loss: input/target shape mismatch");
 
     const std::size_t numel = input->numel();
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
-                      reduced_shape(input->shape_, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
+                      reduced_shape(input->shape(), reduction)};
 
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto& gt = std::get<GpuStorage>(target->storage_);
-        const auto& gw = std::get<GpuStorage>(weight->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto& gt = std::get<GpuStorage>(target->storage());
+        const auto& gw = std::get<GpuStorage>(weight->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
         auto e_lo = mlx_scalar(eps, mlx_dt);
         auto one = mlx_scalar(1.0, mlx_dt);
         auto e_hi = ::mlx::core::subtract(one, e_lo);
@@ -316,12 +318,12 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
         auto l = ::mlx::core::negative(::mlx::core::add(term1, term2));
         auto wl = ::mlx::core::multiply(*gw.arr, l);
         auto red = mlx_apply_reduction(wl, reduction);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype())};
     } else {
-        auto loss_buf = allocate_size(numel, input->dtype_);
-        const auto& xs = std::get<CpuStorage>(input->storage_);
-        const auto& ts = std::get<CpuStorage>(target->storage_);
-        const auto& ws = std::get<CpuStorage>(weight->storage_);
+        auto loss_buf = allocate_size(numel, input->dtype());
+        const auto& xs = std::get<CpuStorage>(input->storage());
+        const auto& ts = std::get<CpuStorage>(target->storage());
+        const auto& ws = std::get<CpuStorage>(weight->storage());
 
         auto compute = [&](auto type_tag) {
             using T = decltype(type_tag);
@@ -337,27 +339,28 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
                 lp[i] = wp[i] * l;
             }
         };
-        if (input->dtype_ == Dtype::F32)
+        if (input->dtype() == Dtype::F32)
             compute(float{});
-        else if (input->dtype_ == Dtype::F64)
+        else if (input->dtype() == Dtype::F64)
             compute(double{});
         else
             ErrorBuilder("bce_loss").not_implemented("dtype not supported");
 
-        if (input->dtype_ == Dtype::F32) {
+        if (input->dtype() == Dtype::F32) {
             out_storage = apply_reduction<float>(reinterpret_cast<float*>(loss_buf.ptr.get()),
-                                                 numel, reduction, input->dtype_);
+                                                 numel, reduction, input->dtype());
         } else {
             out_storage = apply_reduction<double>(reinterpret_cast<double*>(loss_buf.ptr.get()),
-                                                  numel, reduction, input->dtype_);
+                                                  numel, reduction, input->dtype());
         }
     }
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            reduced_shape(input->shape_, reduction), input->dtype_,
-                                            input->device_, false);
+                                            reduced_shape(input->shape(), reduction),
+                                            input->dtype(), input->device(), false);
 
-    const bool any_grad = input->requires_grad_ || target->requires_grad_ || weight->requires_grad_;
+    const bool any_grad =
+        input->requires_grad() || target->requires_grad() || weight->requires_grad();
     if (!GradMode::is_enabled() || !any_grad)
         return out;
 
@@ -365,22 +368,22 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
     auto t_edge = detail::ensure_grad_fn(target);
     auto w_edge = detail::ensure_grad_fn(weight);
     auto bwd = std::make_shared<BCELossBackward>();
-    bwd->input_shapes_ = {input->shape_, target->shape_, weight->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->input_shapes_ = {input->shape(), target->shape(), weight->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input, target, weight};
-    bwd->saved_inputs_ = {input->storage_, target->storage_, weight->storage_};
+    bwd->saved_inputs_ = {input->storage(), target->storage(), weight->storage()};
     bwd->reduction_ = reduction;
     bwd->eps_ = eps;
-    bwd->orig_shape_ = input->shape_;
+    bwd->orig_shape_ = input->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(t_edge, 0), Edge(w_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_),
-                                                      static_cast<std::int64_t>(target->version_),
-                                                      static_cast<std::int64_t>(weight->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{
+        static_cast<std::int64_t>(input->version()), static_cast<std::int64_t>(target->version()),
+        static_cast<std::int64_t>(weight->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -491,21 +494,21 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
                                              Reduction reduction) {
     if (!input || !target || !weight || !pos_weight)
         ErrorBuilder("bce_with_logits").fail("input/target/weight/pos_weight required");
-    if (input->shape_ != target->shape_)
-        throw ShapeMismatch(input->shape_, target->shape_,
+    if (input->shape() != target->shape())
+        throw ShapeMismatch(input->shape(), target->shape(),
                             "bce_with_logits: input/target shape mismatch");
 
     const std::size_t numel = input->numel();
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
-                      reduced_shape(input->shape_, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
+                      reduced_shape(input->shape(), reduction)};
 
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto& gt = std::get<GpuStorage>(target->storage_);
-        const auto& gw = std::get<GpuStorage>(weight->storage_);
-        const auto& gpw = std::get<GpuStorage>(pos_weight->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto& gt = std::get<GpuStorage>(target->storage());
+        const auto& gw = std::get<GpuStorage>(weight->storage());
+        const auto& gpw = std::get<GpuStorage>(pos_weight->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
         auto one = mlx_scalar(1.0, mlx_dt);
         auto zero = mlx_scalar(0.0, mlx_dt);
         auto pw_m1 = ::mlx::core::subtract(*gpw.arr, one);
@@ -518,27 +521,27 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
         auto l = ::mlx::core::add(::mlx::core::subtract(max0, xy), term);
         auto wl = ::mlx::core::multiply(*gw.arr, l);
         auto red = mlx_apply_reduction(wl, reduction);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype())};
     } else {
-        auto loss_buf = allocate_size(numel, input->dtype_);
-        const auto& xs = std::get<CpuStorage>(input->storage_);
-        const auto& ts = std::get<CpuStorage>(target->storage_);
-        const auto& ws_raw = std::get<CpuStorage>(weight->storage_);
-        const auto& pws_raw = std::get<CpuStorage>(pos_weight->storage_);
+        auto loss_buf = allocate_size(numel, input->dtype());
+        const auto& xs = std::get<CpuStorage>(input->storage());
+        const auto& ts = std::get<CpuStorage>(target->storage());
+        const auto& ws_raw = std::get<CpuStorage>(weight->storage());
+        const auto& pws_raw = std::get<CpuStorage>(pos_weight->storage());
 
         // Broadcast weight and pos_weight to input shape so per-element
         // indexing in the loop is well-defined (PyTorch broadcasts both).
         CpuStorage ws_buf, pws_buf;
         const CpuStorage* ws_p = &ws_raw;
         const CpuStorage* pws_p = &pws_raw;
-        if (weight->shape_ != input->shape_) {
-            ws_buf = ::lucid::detail::broadcast_cpu(ws_raw, weight->shape_, input->shape_,
-                                                    input->dtype_);
+        if (weight->shape() != input->shape()) {
+            ws_buf = ::lucid::detail::broadcast_cpu(ws_raw, weight->shape(), input->shape(),
+                                                    input->dtype());
             ws_p = &ws_buf;
         }
-        if (pos_weight->shape_ != input->shape_) {
-            pws_buf = ::lucid::detail::broadcast_cpu(pws_raw, pos_weight->shape_, input->shape_,
-                                                     input->dtype_);
+        if (pos_weight->shape() != input->shape()) {
+            pws_buf = ::lucid::detail::broadcast_cpu(pws_raw, pos_weight->shape(), input->shape(),
+                                                     input->dtype());
             pws_p = &pws_buf;
         }
         // The broadcast_cpu helper lives in lucid::detail (defined in
@@ -562,28 +565,28 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
                 lp[i] = wp[i] * l;
             }
         };
-        if (input->dtype_ == Dtype::F32)
+        if (input->dtype() == Dtype::F32)
             compute(float{});
-        else if (input->dtype_ == Dtype::F64)
+        else if (input->dtype() == Dtype::F64)
             compute(double{});
         else
             ErrorBuilder("bce_with_logits").not_implemented("dtype not supported");
 
-        if (input->dtype_ == Dtype::F32) {
+        if (input->dtype() == Dtype::F32) {
             out_storage = apply_reduction<float>(reinterpret_cast<float*>(loss_buf.ptr.get()),
-                                                 numel, reduction, input->dtype_);
+                                                 numel, reduction, input->dtype());
         } else {
             out_storage = apply_reduction<double>(reinterpret_cast<double*>(loss_buf.ptr.get()),
-                                                  numel, reduction, input->dtype_);
+                                                  numel, reduction, input->dtype());
         }
     }
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            reduced_shape(input->shape_, reduction), input->dtype_,
-                                            input->device_, false);
+                                            reduced_shape(input->shape(), reduction),
+                                            input->dtype(), input->device(), false);
 
-    const bool any_grad = input->requires_grad_ || target->requires_grad_ ||
-                          weight->requires_grad_ || pos_weight->requires_grad_;
+    const bool any_grad = input->requires_grad() || target->requires_grad() ||
+                          weight->requires_grad() || pos_weight->requires_grad();
     if (!GradMode::is_enabled() || !any_grad)
         return out;
 
@@ -592,24 +595,24 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
     auto w_edge = detail::ensure_grad_fn(weight);
     auto pw_edge = detail::ensure_grad_fn(pos_weight);
     auto bwd = std::make_shared<BCEWithLogitsBackward>();
-    bwd->input_shapes_ = {input->shape_, target->shape_, weight->shape_, pos_weight->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->input_shapes_ = {input->shape(), target->shape(), weight->shape(), pos_weight->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input, target, weight, pos_weight};
-    bwd->saved_inputs_ = {input->storage_, target->storage_, weight->storage_,
-                          pos_weight->storage_};
+    bwd->saved_inputs_ = {input->storage(), target->storage(), weight->storage(),
+                          pos_weight->storage()};
     bwd->reduction_ = reduction;
-    bwd->orig_shape_ = input->shape_;
+    bwd->orig_shape_ = input->shape();
     bwd->set_next_edges(
         std::vector<Edge>{Edge(x_edge, 0), Edge(t_edge, 0), Edge(w_edge, 0), Edge(pw_edge, 0)});
     bwd->set_saved_versions(std::vector<std::int64_t>{
-        static_cast<std::int64_t>(input->version_), static_cast<std::int64_t>(target->version_),
-        static_cast<std::int64_t>(weight->version_),
-        static_cast<std::int64_t>(pos_weight->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+        static_cast<std::int64_t>(input->version()), static_cast<std::int64_t>(target->version()),
+        static_cast<std::int64_t>(weight->version()),
+        static_cast<std::int64_t>(pos_weight->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -730,40 +733,40 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
                                             int ignore_index) {
     if (!input || !target)
         ErrorBuilder("cross_entropy").fail("null input");
-    if (input->shape_.size() < 2)
-        throw ShapeMismatch(input->shape_, Shape{}, "cross_entropy: input must be (N, C, ...)");
-    if (input->device_ != target->device_)
-        throw DeviceMismatch(std::string(device_name(input->device_)),
-                             std::string(device_name(target->device_)),
+    if (input->shape().size() < 2)
+        throw ShapeMismatch(input->shape(), Shape{}, "cross_entropy: input must be (N, C, ...)");
+    if (input->device() != target->device())
+        throw DeviceMismatch(std::string(device_name(input->device())),
+                             std::string(device_name(target->device())),
                              "cross_entropy: input/target");
-    if (weight_or_null && weight_or_null->device_ != input->device_)
-        throw DeviceMismatch(std::string(device_name(input->device_)),
-                             std::string(device_name(weight_or_null->device_)),
+    if (weight_or_null && weight_or_null->device() != input->device())
+        throw DeviceMismatch(std::string(device_name(input->device())),
+                             std::string(device_name(weight_or_null->device())),
                              "cross_entropy: input/weight");
 
-    const int N = static_cast<int>(input->shape_[0]);
-    const int C = static_cast<int>(input->shape_[1]);
+    const int N = static_cast<int>(input->shape()[0]);
+    const int C = static_cast<int>(input->shape()[1]);
     int spatial = 1;
-    for (std::size_t i = 2; i < input->shape_.size(); ++i)
-        spatial *= static_cast<int>(input->shape_[i]);
+    for (std::size_t i = 2; i < input->shape().size(); ++i)
+        spatial *= static_cast<int>(input->shape()[i]);
     const std::size_t total_samples = static_cast<std::size_t>(N) * spatial;
 
     Shape per_sample_shape;
     per_sample_shape.push_back(static_cast<std::int64_t>(N));
-    if (input->shape_.size() > 2) {
-        for (std::size_t i = 2; i < input->shape_.size(); ++i)
-            per_sample_shape.push_back(input->shape_[i]);
+    if (input->shape().size() > 2) {
+        for (std::size_t i = 2; i < input->shape().size(); ++i)
+            per_sample_shape.push_back(input->shape()[i]);
     }
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(per_sample_shape, reduction)};
 
     // ------------------------------------------------------------------
     // GPU branch — fused log_softmax + NLL via MLX.
     // ------------------------------------------------------------------
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto& gt = std::get<GpuStorage>(target->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto& gt = std::get<GpuStorage>(target->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
 
         // softmax along axis=1 → use precise=true for stability.
         auto softmax = ::mlx::core::softmax(*gx.arr, std::vector<int>{1}, /*precise=*/true);
@@ -771,7 +774,7 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
         // Build target_idx of shape [N, 1, *spatial] and dtype int64 for take_along_axis.
         auto t_idx = ::mlx::core::astype(*gt.arr, ::mlx::core::int64);
         // target shape is [N, *spatial] (no C axis). Insert axis=1.
-        ::mlx::core::Shape t_shape_with_axis = gpu::to_mlx_shape(target->shape_);
+        ::mlx::core::Shape t_shape_with_axis = gpu::to_mlx_shape(target->shape());
         t_shape_with_axis.insert(t_shape_with_axis.begin() + 1, 1);
         t_idx = ::mlx::core::reshape(t_idx, t_shape_with_axis);
 
@@ -791,7 +794,7 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
         // weight[target] gather → [N, 1, *spatial].
         ::mlx::core::array w_gather = mlx_scalar(1.0, mlx_dt);
         if (weight_or_null) {
-            const auto& gw = std::get<GpuStorage>(weight_or_null->storage_);
+            const auto& gw = std::get<GpuStorage>(weight_or_null->storage());
             // mlx::core::take(weight[C], indices) → indices shape, here [N, 1, *spatial].
             w_gather = ::mlx::core::take(*gw.arr, safe_t);
         } else {
@@ -814,58 +817,58 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
         Storage out_storage;
         Shape out_shape_local = (reduction == Reduction::None) ? per_sample_shape : Shape{};
         if (reduction == Reduction::None) {
-            out_storage = Storage{gpu::wrap_mlx_array(std::move(loss_squeezed), input->dtype_)};
+            out_storage = Storage{gpu::wrap_mlx_array(std::move(loss_squeezed), input->dtype())};
         } else if (reduction == Reduction::Sum) {
             auto s = ::mlx::core::sum(loss_squeezed, /*keepdims=*/false);
-            out_storage = Storage{gpu::wrap_mlx_array(std::move(s), input->dtype_)};
+            out_storage = Storage{gpu::wrap_mlx_array(std::move(s), input->dtype())};
         } else {  // Mean
             auto s = ::mlx::core::sum(loss_squeezed, /*keepdims=*/false);
             auto m = ::mlx::core::divide(s, vc_safe);
-            out_storage = Storage{gpu::wrap_mlx_array(std::move(m), input->dtype_)};
+            out_storage = Storage{gpu::wrap_mlx_array(std::move(m), input->dtype())};
         }
 
         auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape_local,
-                                                input->dtype_, input->device_, false);
+                                                input->dtype(), input->device(), false);
 
-        if (!GradMode::is_enabled() || !input->requires_grad_)
+        if (!GradMode::is_enabled() || !input->requires_grad())
             return out;
 
         auto x_edge = detail::ensure_grad_fn(input);
         auto bwd = std::make_shared<CrossEntropyBackward>();
-        bwd->input_shapes_ = {input->shape_};
+        bwd->input_shapes_ = {input->shape()};
         bwd->out_shape_ = out_shape_local;
-        bwd->dtype_ = input->dtype_;
-        bwd->device_ = input->device_;
+        bwd->dtype_ = input->dtype();
+        bwd->device_ = input->device();
         bwd->input_tensors_ = {input};
-        bwd->saved_inputs_ = {input->storage_};
+        bwd->saved_inputs_ = {input->storage()};
         bwd->reduction_ = reduction;
         bwd->eps_ = eps;
         bwd->ignore_index_ = ignore_index;
-        bwd->orig_input_shape_ = input->shape_;
+        bwd->orig_input_shape_ = input->shape();
         bwd->has_weight_ = (weight_or_null != nullptr);
         // Save softmax (large but unavoidable for fused backward).
-        bwd->saved_softmax_ = Storage{gpu::wrap_mlx_array(std::move(softmax), input->dtype_)};
-        bwd->saved_target_ = target->storage_;
+        bwd->saved_softmax_ = Storage{gpu::wrap_mlx_array(std::move(softmax), input->dtype())};
+        bwd->saved_target_ = target->storage();
         if (weight_or_null)
-            bwd->saved_weight_ = weight_or_null->storage_;
+            bwd->saved_weight_ = weight_or_null->storage();
         // Save valid_count as a 1-elem GPU array.
-        bwd->saved_valid_count_ = Storage{gpu::wrap_mlx_array(std::move(vc_safe), input->dtype_)};
+        bwd->saved_valid_count_ = Storage{gpu::wrap_mlx_array(std::move(vc_safe), input->dtype())};
         bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
         bwd->set_saved_versions(
-            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_)});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
-    auto softmax_buf = allocate_size(static_cast<std::size_t>(N) * C * spatial, input->dtype_);
-    auto loss_buf = allocate_size(total_samples, input->dtype_);
+    auto softmax_buf = allocate_size(static_cast<std::size_t>(N) * C * spatial, input->dtype());
+    auto loss_buf = allocate_size(total_samples, input->dtype());
 
-    const auto& xs = std::get<CpuStorage>(input->storage_);
-    const auto& ts = std::get<CpuStorage>(target->storage_);
+    const auto& xs = std::get<CpuStorage>(input->storage());
+    const auto& ts = std::get<CpuStorage>(target->storage());
     const CpuStorage* ws =
-        weight_or_null ? &std::get<CpuStorage>(weight_or_null->storage_) : nullptr;
+        weight_or_null ? &std::get<CpuStorage>(weight_or_null->storage()) : nullptr;
 
     auto compute = [&](auto type_tag) {
         using T = decltype(type_tag);
@@ -902,9 +905,9 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
             }
         }
     };
-    if (input->dtype_ == Dtype::F32)
+    if (input->dtype() == Dtype::F32)
         compute(float{});
-    else if (input->dtype_ == Dtype::F64)
+    else if (input->dtype() == Dtype::F64)
         compute(double{});
     else
         ErrorBuilder("cross_entropy").not_implemented("dtype not supported");
@@ -919,61 +922,62 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
 
     Shape out_shape = (reduction == Reduction::None) ? per_sample_shape : Shape{};
     Storage out_storage;
-    if (input->dtype_ == Dtype::F32) {
+    if (input->dtype() == Dtype::F32) {
         auto* lp = reinterpret_cast<float*>(loss_buf.ptr.get());
         if (reduction == Reduction::None) {
-            auto out = allocate_size(total_samples, input->dtype_);
-            std::memcpy(out.ptr.get(), lp, total_samples * dtype_size(input->dtype_));
+            auto out = allocate_size(total_samples, input->dtype());
+            std::memcpy(out.ptr.get(), lp, total_samples * dtype_size(input->dtype()));
             out_storage = Storage{std::move(out)};
         } else {
             float s = accumulate(lp, total_samples);
             if (reduction == Reduction::Mean)
                 s /= static_cast<float>(valid_count);
-            out_storage = Storage{make_scalar(static_cast<double>(s), input->dtype_)};
+            out_storage = Storage{make_scalar(static_cast<double>(s), input->dtype())};
         }
     } else {
         auto* lp = reinterpret_cast<double*>(loss_buf.ptr.get());
         if (reduction == Reduction::None) {
-            auto out = allocate_size(total_samples, input->dtype_);
-            std::memcpy(out.ptr.get(), lp, total_samples * dtype_size(input->dtype_));
+            auto out = allocate_size(total_samples, input->dtype());
+            std::memcpy(out.ptr.get(), lp, total_samples * dtype_size(input->dtype()));
             out_storage = Storage{std::move(out)};
         } else {
             double s = accumulate(lp, total_samples);
             if (reduction == Reduction::Mean)
                 s /= static_cast<double>(valid_count);
-            out_storage = Storage{make_scalar(s, input->dtype_)};
+            out_storage = Storage{make_scalar(s, input->dtype())};
         }
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,
-                                            input->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                            input->device(), false);
 
-    if (!GradMode::is_enabled() || !input->requires_grad_)
+    if (!GradMode::is_enabled() || !input->requires_grad())
         return out;
 
     auto x_edge = detail::ensure_grad_fn(input);
     auto bwd = std::make_shared<CrossEntropyBackward>();
-    bwd->input_shapes_ = {input->shape_};
+    bwd->input_shapes_ = {input->shape()};
     bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input};
-    bwd->saved_inputs_ = {input->storage_};
+    bwd->saved_inputs_ = {input->storage()};
     bwd->reduction_ = reduction;
     bwd->eps_ = eps;
     bwd->ignore_index_ = ignore_index;
-    bwd->orig_input_shape_ = input->shape_;
+    bwd->orig_input_shape_ = input->shape();
     bwd->has_weight_ = (weight_or_null != nullptr);
     bwd->saved_softmax_ = Storage{std::move(softmax_buf)};
-    bwd->saved_target_ = target->storage_;
+    bwd->saved_target_ = target->storage();
     if (weight_or_null)
-        bwd->saved_weight_ = weight_or_null->storage_;
-    bwd->saved_valid_count_ = Storage{make_scalar(static_cast<double>(valid_count), input->dtype_)};
+        bwd->saved_weight_ = weight_or_null->storage();
+    bwd->saved_valid_count_ =
+        Storage{make_scalar(static_cast<double>(valid_count), input->dtype())};
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -1114,38 +1118,38 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
                                        int ignore_index) {
     if (!input || !target)
         ErrorBuilder("nll_loss").fail("null input");
-    if (input->shape_.size() < 2)
-        throw ShapeMismatch(input->shape_, Shape{}, "nll_loss: input must be (N, C, ...)");
-    if (input->device_ != target->device_)
-        throw DeviceMismatch(std::string(device_name(input->device_)),
-                             std::string(device_name(target->device_)), "nll_loss: input/target");
-    if (weight_or_null && weight_or_null->device_ != input->device_)
-        throw DeviceMismatch(std::string(device_name(input->device_)),
-                             std::string(device_name(weight_or_null->device_)),
+    if (input->shape().size() < 2)
+        throw ShapeMismatch(input->shape(), Shape{}, "nll_loss: input must be (N, C, ...)");
+    if (input->device() != target->device())
+        throw DeviceMismatch(std::string(device_name(input->device())),
+                             std::string(device_name(target->device())), "nll_loss: input/target");
+    if (weight_or_null && weight_or_null->device() != input->device())
+        throw DeviceMismatch(std::string(device_name(input->device())),
+                             std::string(device_name(weight_or_null->device())),
                              "nll_loss: input/weight");
 
-    const int N = static_cast<int>(input->shape_[0]);
-    const int C = static_cast<int>(input->shape_[1]);
+    const int N = static_cast<int>(input->shape()[0]);
+    const int C = static_cast<int>(input->shape()[1]);
     int spatial = 1;
-    for (std::size_t i = 2; i < input->shape_.size(); ++i)
-        spatial *= static_cast<int>(input->shape_[i]);
+    for (std::size_t i = 2; i < input->shape().size(); ++i)
+        spatial *= static_cast<int>(input->shape()[i]);
     const std::size_t total = static_cast<std::size_t>(N) * spatial;
 
     Shape per_sample_shape;
     per_sample_shape.push_back(static_cast<std::int64_t>(N));
-    if (input->shape_.size() > 2) {
-        for (std::size_t i = 2; i < input->shape_.size(); ++i)
-            per_sample_shape.push_back(input->shape_[i]);
+    if (input->shape().size() > 2) {
+        for (std::size_t i = 2; i < input->shape().size(); ++i)
+            per_sample_shape.push_back(input->shape()[i]);
     }
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(per_sample_shape, reduction)};
 
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto& gt = std::get<GpuStorage>(target->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto& gt = std::get<GpuStorage>(target->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
 
-        ::mlx::core::Shape t_shape_with_axis = gpu::to_mlx_shape(target->shape_);
+        ::mlx::core::Shape t_shape_with_axis = gpu::to_mlx_shape(target->shape());
         t_shape_with_axis.insert(t_shape_with_axis.begin() + 1, 1);
         auto t_idx = ::mlx::core::reshape(::mlx::core::astype(*gt.arr, ::mlx::core::int64),
                                           t_shape_with_axis);
@@ -1158,7 +1162,7 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
 
         ::mlx::core::array w_gather = mlx_scalar(1.0, mlx_dt);
         if (weight_or_null) {
-            const auto& gw = std::get<GpuStorage>(weight_or_null->storage_);
+            const auto& gw = std::get<GpuStorage>(weight_or_null->storage());
             w_gather = ::mlx::core::take(*gw.arr, safe_t);
         } else {
             w_gather = ::mlx::core::broadcast_to(w_gather, neg.shape());
@@ -1175,51 +1179,51 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
         Storage out_storage;
         Shape out_shape_local = (reduction == Reduction::None) ? per_sample_shape : Shape{};
         if (reduction == Reduction::None) {
-            out_storage = Storage{gpu::wrap_mlx_array(std::move(loss_squeezed), input->dtype_)};
+            out_storage = Storage{gpu::wrap_mlx_array(std::move(loss_squeezed), input->dtype())};
         } else if (reduction == Reduction::Sum) {
             auto s = ::mlx::core::sum(loss_squeezed, /*keepdims=*/false);
-            out_storage = Storage{gpu::wrap_mlx_array(std::move(s), input->dtype_)};
+            out_storage = Storage{gpu::wrap_mlx_array(std::move(s), input->dtype())};
         } else {
             auto s = ::mlx::core::sum(loss_squeezed, /*keepdims=*/false);
             auto m = ::mlx::core::divide(s, vc_safe);
-            out_storage = Storage{gpu::wrap_mlx_array(std::move(m), input->dtype_)};
+            out_storage = Storage{gpu::wrap_mlx_array(std::move(m), input->dtype())};
         }
         auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape_local,
-                                                input->dtype_, input->device_, false);
+                                                input->dtype(), input->device(), false);
 
-        if (!GradMode::is_enabled() || !input->requires_grad_)
+        if (!GradMode::is_enabled() || !input->requires_grad())
             return out;
 
         auto x_edge = detail::ensure_grad_fn(input);
         auto bwd = std::make_shared<NLLLossBackward>();
-        bwd->input_shapes_ = {input->shape_};
+        bwd->input_shapes_ = {input->shape()};
         bwd->out_shape_ = out_shape_local;
-        bwd->dtype_ = input->dtype_;
-        bwd->device_ = input->device_;
+        bwd->dtype_ = input->dtype();
+        bwd->device_ = input->device();
         bwd->input_tensors_ = {input};
-        bwd->saved_inputs_ = {input->storage_};
+        bwd->saved_inputs_ = {input->storage()};
         bwd->reduction_ = reduction;
         bwd->ignore_index_ = ignore_index;
-        bwd->orig_input_shape_ = input->shape_;
+        bwd->orig_input_shape_ = input->shape();
         bwd->has_weight_ = (weight_or_null != nullptr);
-        bwd->saved_target_ = target->storage_;
+        bwd->saved_target_ = target->storage();
         if (weight_or_null)
-            bwd->saved_weight_ = weight_or_null->storage_;
-        bwd->saved_valid_count_ = Storage{gpu::wrap_mlx_array(std::move(vc_safe), input->dtype_)};
+            bwd->saved_weight_ = weight_or_null->storage();
+        bwd->saved_valid_count_ = Storage{gpu::wrap_mlx_array(std::move(vc_safe), input->dtype())};
         bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
         bwd->set_saved_versions(
-            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_)});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
-    auto loss_buf = allocate_size(total, input->dtype_);
-    const auto& xs = std::get<CpuStorage>(input->storage_);
-    const auto& ts = std::get<CpuStorage>(target->storage_);
+    auto loss_buf = allocate_size(total, input->dtype());
+    const auto& xs = std::get<CpuStorage>(input->storage());
+    const auto& ts = std::get<CpuStorage>(target->storage());
     const CpuStorage* ws =
-        weight_or_null ? &std::get<CpuStorage>(weight_or_null->storage_) : nullptr;
+        weight_or_null ? &std::get<CpuStorage>(weight_or_null->storage()) : nullptr;
 
     std::size_t valid_count = 0;
     auto compute = [&](auto type_tag) {
@@ -1240,9 +1244,9 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
             }
         }
     };
-    if (input->dtype_ == Dtype::F32)
+    if (input->dtype() == Dtype::F32)
         compute(float{});
-    else if (input->dtype_ == Dtype::F64)
+    else if (input->dtype() == Dtype::F64)
         compute(double{});
     else
         ErrorBuilder("nll_loss").not_implemented("dtype not supported");
@@ -1251,59 +1255,60 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
 
     Shape out_shape = (reduction == Reduction::None) ? per_sample_shape : Shape{};
     Storage out_storage;
-    if (input->dtype_ == Dtype::F32) {
+    if (input->dtype() == Dtype::F32) {
         auto* lp = reinterpret_cast<float*>(loss_buf.ptr.get());
         if (reduction == Reduction::None) {
-            auto out = allocate_size(total, input->dtype_);
-            std::memcpy(out.ptr.get(), lp, total * dtype_size(input->dtype_));
+            auto out = allocate_size(total, input->dtype());
+            std::memcpy(out.ptr.get(), lp, total * dtype_size(input->dtype()));
             out_storage = Storage{std::move(out)};
         } else {
             float s = accumulate(lp, total);
             if (reduction == Reduction::Mean)
                 s /= static_cast<float>(valid_count);
-            out_storage = Storage{make_scalar(static_cast<double>(s), input->dtype_)};
+            out_storage = Storage{make_scalar(static_cast<double>(s), input->dtype())};
         }
     } else {
         auto* lp = reinterpret_cast<double*>(loss_buf.ptr.get());
         if (reduction == Reduction::None) {
-            auto out = allocate_size(total, input->dtype_);
-            std::memcpy(out.ptr.get(), lp, total * dtype_size(input->dtype_));
+            auto out = allocate_size(total, input->dtype());
+            std::memcpy(out.ptr.get(), lp, total * dtype_size(input->dtype()));
             out_storage = Storage{std::move(out)};
         } else {
             double s = accumulate(lp, total);
             if (reduction == Reduction::Mean)
                 s /= static_cast<double>(valid_count);
-            out_storage = Storage{make_scalar(s, input->dtype_)};
+            out_storage = Storage{make_scalar(s, input->dtype())};
         }
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,
-                                            input->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                            input->device(), false);
 
-    if (!GradMode::is_enabled() || !input->requires_grad_)
+    if (!GradMode::is_enabled() || !input->requires_grad())
         return out;
 
     auto x_edge = detail::ensure_grad_fn(input);
     auto bwd = std::make_shared<NLLLossBackward>();
-    bwd->input_shapes_ = {input->shape_};
+    bwd->input_shapes_ = {input->shape()};
     bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input};
-    bwd->saved_inputs_ = {input->storage_};
+    bwd->saved_inputs_ = {input->storage()};
     bwd->reduction_ = reduction;
     bwd->ignore_index_ = ignore_index;
-    bwd->orig_input_shape_ = input->shape_;
+    bwd->orig_input_shape_ = input->shape();
     bwd->has_weight_ = (weight_or_null != nullptr);
-    bwd->saved_target_ = target->storage_;
+    bwd->saved_target_ = target->storage();
     if (weight_or_null)
-        bwd->saved_weight_ = weight_or_null->storage_;
-    bwd->saved_valid_count_ = Storage{make_scalar(static_cast<double>(valid_count), input->dtype_)};
+        bwd->saved_weight_ = weight_or_null->storage();
+    bwd->saved_valid_count_ =
+        Storage{make_scalar(static_cast<double>(valid_count), input->dtype())};
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -1424,21 +1429,21 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
                                          Reduction reduction) {
     if (!input || !target)
         ErrorBuilder("huber_loss").fail("null input");
-    if (input->shape_ != target->shape_)
-        throw ShapeMismatch(input->shape_, target->shape_,
+    if (input->shape() != target->shape())
+        throw ShapeMismatch(input->shape(), target->shape(),
                             "huber_loss: input/target shape mismatch");
     if (delta <= 0.0)
         ErrorBuilder("huber_loss").fail("delta must be positive");
 
     const std::size_t numel = input->numel();
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
-                      reduced_shape(input->shape_, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
+                      reduced_shape(input->shape(), reduction)};
 
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto& gt = std::get<GpuStorage>(target->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto& gt = std::get<GpuStorage>(target->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
         auto d = mlx_scalar(delta, mlx_dt);
         auto half_d_sq = mlx_scalar(0.5 * delta * delta, mlx_dt);
         auto half = mlx_scalar(0.5, mlx_dt);
@@ -1452,11 +1457,11 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
         // we use less here for safety with NaN propagation.
         auto l = ::mlx::core::where(cond, sq_term, lin_term);
         auto red = mlx_apply_reduction(l, reduction);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype())};
     } else {
-        auto loss_buf = allocate_size(numel, input->dtype_);
-        const auto& xs = std::get<CpuStorage>(input->storage_);
-        const auto& ts = std::get<CpuStorage>(target->storage_);
+        auto loss_buf = allocate_size(numel, input->dtype());
+        const auto& xs = std::get<CpuStorage>(input->storage());
+        const auto& ts = std::get<CpuStorage>(target->storage());
 
         auto compute = [&](auto type_tag) {
             using T = decltype(type_tag);
@@ -1470,47 +1475,47 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
                 lp[i] = (ar <= d) ? T{0.5} * r * r : d * (ar - T{0.5} * d);
             }
         };
-        if (input->dtype_ == Dtype::F32)
+        if (input->dtype() == Dtype::F32)
             compute(float{});
-        else if (input->dtype_ == Dtype::F64)
+        else if (input->dtype() == Dtype::F64)
             compute(double{});
         else
             ErrorBuilder("huber_loss").not_implemented("dtype not supported");
 
-        if (input->dtype_ == Dtype::F32) {
+        if (input->dtype() == Dtype::F32) {
             out_storage = apply_reduction<float>(reinterpret_cast<float*>(loss_buf.ptr.get()),
-                                                 numel, reduction, input->dtype_);
+                                                 numel, reduction, input->dtype());
         } else {
             out_storage = apply_reduction<double>(reinterpret_cast<double*>(loss_buf.ptr.get()),
-                                                  numel, reduction, input->dtype_);
+                                                  numel, reduction, input->dtype());
         }
     }
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
-                                            reduced_shape(input->shape_, reduction), input->dtype_,
-                                            input->device_, false);
+                                            reduced_shape(input->shape(), reduction),
+                                            input->dtype(), input->device(), false);
 
-    if (!GradMode::is_enabled() || !(input->requires_grad_ || target->requires_grad_))
+    if (!GradMode::is_enabled() || !(input->requires_grad() || target->requires_grad()))
         return out;
 
     auto x_edge = detail::ensure_grad_fn(input);
     auto t_edge = detail::ensure_grad_fn(target);
     auto bwd = std::make_shared<HuberLossBackward>();
-    bwd->input_shapes_ = {input->shape_, target->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->input_shapes_ = {input->shape(), target->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input, target};
-    bwd->saved_inputs_ = {input->storage_, target->storage_};
+    bwd->saved_inputs_ = {input->storage(), target->storage()};
     bwd->reduction_ = reduction;
     bwd->delta_ = delta;
-    bwd->orig_shape_ = input->shape_;
+    bwd->orig_shape_ = input->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(t_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_),
-                                                      static_cast<std::int64_t>(target->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{
+        static_cast<std::int64_t>(input->version()), static_cast<std::int64_t>(target->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

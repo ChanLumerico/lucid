@@ -167,37 +167,37 @@ void norm_typed(const T* in,
 TensorImplPtr norm_op(const TensorImplPtr& a, double ord, std::vector<int> axis, bool keepdims) {
     using namespace linalg_detail;
     Validator::input(a, "norm.a").non_null();
-    require_float(a->dtype_, "norm");
-    OpScopeFull scope{"norm", a->device_, a->dtype_, a->shape_};
+    require_float(a->dtype(), "norm");
+    OpScopeFull scope{"norm", a->device(), a->dtype(), a->shape()};
 
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         std::optional<std::vector<int>> axis_opt;
         if (!axis.empty())
             axis_opt = std::move(axis);
         auto out = ::mlx::core::linalg::norm(in, ord, axis_opt, keepdims, kMlxLinalgStream);
         Shape sh = mlx_shape_to_lucid(out.shape());
-        return fresh(wrap_gpu_result(std::move(out), a->dtype_), std::move(sh), a->dtype_,
-                     a->device_);
+        return fresh(wrap_gpu_result(std::move(out), a->dtype()), std::move(sh), a->dtype(),
+                     a->device());
     }
 
     // CPU path: hand-rolled p-norm reductions in pure Accelerate-friendly
     // C++ (no LAPACK needed for p-norms). Matrix-induced norms (nuc, p=inf
     // matrix-style) would route through SVD; not supported here.
-    Shape out_shape = reduced_shape(a->shape_, axis, keepdims);
-    auto out_cpu = allocate_cpu(out_shape, a->dtype_);
-    const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+    Shape out_shape = reduced_shape(a->shape(), axis, keepdims);
+    auto out_cpu = allocate_cpu(out_shape, a->dtype());
+    const auto& in_cpu = std::get<CpuStorage>(a->storage());
 
-    if (a->dtype_ == Dtype::F32) {
+    if (a->dtype() == Dtype::F32) {
         norm_typed<float>(reinterpret_cast<const float*>(in_cpu.ptr.get()),
-                          reinterpret_cast<float*>(out_cpu.ptr.get()), a->shape_, axis, keepdims,
+                          reinterpret_cast<float*>(out_cpu.ptr.get()), a->shape(), axis, keepdims,
                           ord, out_shape);
     } else {
         norm_typed<double>(reinterpret_cast<const double*>(in_cpu.ptr.get()),
-                           reinterpret_cast<double*>(out_cpu.ptr.get()), a->shape_, axis, keepdims,
+                           reinterpret_cast<double*>(out_cpu.ptr.get()), a->shape(), axis, keepdims,
                            ord, out_shape);
     }
-    return fresh(Storage{std::move(out_cpu)}, out_shape, a->dtype_, a->device_);
+    return fresh(Storage{std::move(out_cpu)}, out_shape, a->dtype(), a->device());
 }
 
 }  // namespace lucid

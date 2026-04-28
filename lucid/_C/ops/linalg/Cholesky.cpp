@@ -18,26 +18,27 @@ namespace lucid {
 TensorImplPtr cholesky_op(const TensorImplPtr& a, bool upper) {
     using namespace linalg_detail;
     Validator::input(a, "cholesky.a").float_only().square_2d();
-    OpScopeFull scope{"cholesky", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"cholesky", a->device(), a->dtype(), a->shape()};
 
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         auto out = ::mlx::core::linalg::cholesky(in, upper, kMlxLinalgStream);
-        return fresh(wrap_gpu_result(std::move(out), a->dtype_), a->shape_, a->dtype_, a->device_);
+        return fresh(wrap_gpu_result(std::move(out), a->dtype()), a->shape(), a->dtype(),
+                     a->device());
     }
 
-    const auto& sh = a->shape_;
+    const auto& sh = a->shape();
     const int n = static_cast<int>(sh[sh.size() - 1]);
     const std::int64_t batch = leading_batch_count(sh, /*mat_dims=*/2);
     const std::size_t per_mat = static_cast<std::size_t>(n) * n;
 
-    auto out_cpu = allocate_cpu(sh, a->dtype_);
-    const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+    auto out_cpu = allocate_cpu(sh, a->dtype());
+    const auto& in_cpu = std::get<CpuStorage>(a->storage());
     std::memcpy(out_cpu.ptr.get(), in_cpu.ptr.get(), in_cpu.nbytes);
 
     const bool lower = !upper;
     int info = 0;
-    if (a->dtype_ == Dtype::F32) {
+    if (a->dtype() == Dtype::F32) {
         auto* p = reinterpret_cast<float*>(out_cpu.ptr.get());
         for (std::int64_t b = 0; b < batch; ++b) {
             backend::cpu::lapack_cholesky_f32(p + b * per_mat, n, lower, &info);
@@ -50,7 +51,7 @@ TensorImplPtr cholesky_op(const TensorImplPtr& a, bool upper) {
             check_lapack_info(info, "cholesky");
         }
     }
-    return fresh(Storage{std::move(out_cpu)}, sh, a->dtype_, a->device_);
+    return fresh(Storage{std::move(out_cpu)}, sh, a->dtype(), a->device());
 }
 
 }  // namespace lucid

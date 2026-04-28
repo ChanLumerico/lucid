@@ -111,55 +111,58 @@ std::vector<int> inverse_perm(const std::vector<int>& perm) {
 
 TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector<int>& perm_user) {
     Validator::input(a, "permute.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous()) {
-        ErrorBuilder("permute").not_implemented(
-            "non-contiguous input not supported (call .contiguous() first)");
-    }
-    const int ndim = static_cast<int>(a->shape_.size());
+    const int ndim = static_cast<int>(a->shape().size());
     const auto perm = validate_perm(perm_user, ndim);
 
-    // Output shape per perm.
+    // Compute output shape and adjusted strides (metadata-only view).
     Shape out_shape;
+    Stride out_stride;
     out_shape.reserve(ndim);
-    for (int p : perm)
-        out_shape.push_back(a->shape_[static_cast<std::size_t>(p)]);
-
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, out_shape};
-    Storage out_storage;
-    if (a->device_ == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        if (!ga.arr)
-            ErrorBuilder("permute").fail("null GPU array");
-        auto raw = ::mlx::core::transpose(*ga.arr, perm);
-        raw = ::mlx::core::contiguous(raw);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype_)};
-    } else {
-        out_storage =
-            Storage{permute_copy(std::get<CpuStorage>(a->storage_), a->shape_, perm, a->dtype_)};
+    out_stride.reserve(ndim);
+    for (int p : perm) {
+        out_shape.push_back(a->shape()[static_cast<std::size_t>(p)]);
+        out_stride.push_back(a->stride()[static_cast<std::size_t>(p)]);
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), a->dtype_,
-                                            a->device_, /*requires_grad=*/false);
-    scope.set_flops(static_cast<std::int64_t>(a->numel()));
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), out_shape};
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    // CPU path: metadata-only view — no copy, O(0) allocations.
+    // GPU path: MLX lazy transpose — also avoids materialisation.
+    TensorImplPtr out;
+    if (a->device() == Device::GPU) {
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        if (!ga.arr)
+            ErrorBuilder("permute").fail("null GPU array");
+        // MLX transpose: contiguous-materialize so downstream GPU kernels
+        // receive a layout-contiguous GpuStorage (MLX's own view semantics
+        // are internal; our GpuStorage wrapper always holds a contiguous array).
+        auto raw = ::mlx::core::transpose(*ga.arr, perm);
+        raw = ::mlx::core::contiguous(raw);
+        auto out_storage = Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype())};
+        out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape,
+                                           a->dtype(), a->device(), false);
+    } else {
+        out = TensorImpl::make_view(a, out_shape, out_stride, /*offset_bytes=*/0);
+    }
+
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto a_edge = detail::ensure_grad_fn(a);
 
     auto bwd = std::make_shared<PermuteBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->perm_ = perm;
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -189,7 +192,7 @@ TensorImplPtr permute_op(const TensorImplPtr& a, const std::vector<int>& perm) {
 // transpose(t) / _T(t) — reverse all axes.
 TensorImplPtr transpose_op(const TensorImplPtr& a) {
     Validator::input(a, "transpose.a").non_null();
-    const int ndim = static_cast<int>(a->shape_.size());
+    const int ndim = static_cast<int>(a->shape().size());
     std::vector<int> perm(ndim);
     for (int i = 0; i < ndim; ++i)
         perm[i] = ndim - 1 - i;
@@ -203,7 +206,7 @@ TensorImplPtr T_op(const TensorImplPtr& a) {
 // _mT(t) — swap last two axes. Requires ndim >= 2.
 TensorImplPtr mT_op(const TensorImplPtr& a) {
     Validator::input(a, "mT.a").non_null();
-    const int ndim = static_cast<int>(a->shape_.size());
+    const int ndim = static_cast<int>(a->shape().size());
     if (ndim < 2)
         ErrorBuilder("mT").fail("requires ndim >= 2");
     std::vector<int> perm(ndim);
@@ -216,7 +219,7 @@ TensorImplPtr mT_op(const TensorImplPtr& a) {
 // swapaxes(t, a1, a2) — swap two specific axes.
 TensorImplPtr swapaxes_op(const TensorImplPtr& a, int axis1, int axis2) {
     Validator::input(a, "swapaxes.a").non_null();
-    const int ndim = static_cast<int>(a->shape_.size());
+    const int ndim = static_cast<int>(a->shape().size());
     auto wrap = [&](int x) {
         const int w = x < 0 ? x + ndim : x;
         if (w < 0 || w >= ndim)

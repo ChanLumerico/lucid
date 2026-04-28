@@ -93,20 +93,20 @@ public:
 
 TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     validate_pair(a, b, "outer");
-    if (a->shape_.size() != 1 || b->shape_.size() != 1)
+    if (a->shape().size() != 1 || b->shape().size() != 1)
         ErrorBuilder("outer").fail("requires 1-D inputs");
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
     OpScopeFull scope{"outer", device, dt, Shape{}};
 
     auto wire_grad = [&](const TensorImplPtr& out) {
-        if (!(GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)))
+        if (!(GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())))
             return;
         auto bwd = std::make_shared<OuterBackward>();
-        bwd->saved_a_ = a->storage_;
-        bwd->saved_b_ = b->storage_;
-        bwd->M_ = a->shape_[0];
-        bwd->N_ = b->shape_[0];
+        bwd->saved_a_ = a->storage();
+        bwd->saved_b_ = b->storage();
+        bwd->M_ = a->shape()[0];
+        bwd->N_ = b->shape()[0];
         bwd->dtype_ = dt;
         bwd->device_ = device;
         auto a_edge = detail::ensure_grad_fn(a);
@@ -115,15 +115,15 @@ TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         edges.emplace_back(a_edge, 0);
         edges.emplace_back(b_edge, 0);
         bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version_, b->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version(), b->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
     };
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         auto out = ::mlx::core::outer(*ga.arr, *gb.arr);
         Shape out_shape;
         for (auto d : out.shape())
@@ -134,12 +134,12 @@ TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         return t;
     }
 
-    const std::int64_t M = a->shape_[0];
-    const std::int64_t N = b->shape_[0];
+    const std::int64_t M = a->shape()[0];
+    const std::int64_t N = b->shape()[0];
     Shape out_shape{M, N};
     auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
-    const auto& cb = std::get<CpuStorage>(b->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
+    const auto& cb = std::get<CpuStorage>(b->storage());
     auto run = [&](auto* op, const auto* ap, const auto* bp) {
         for (std::int64_t i = 0; i < M; ++i)
             for (std::int64_t j = 0; j < N; ++j)

@@ -20,6 +20,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "Contiguous.h"          // contiguous_op for non-contig fallback
 
 namespace lucid {
 
@@ -83,63 +84,39 @@ Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_
 
 TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const char* op_name) {
     Validator::input(a, std::string(op_name) + ".a").non_null();
-    if (a->device_ == Device::GPU) {
-        // GPU: reshape via MLX, materialize via contiguous to avoid lazy-view
-        // hazards downstream.
-        OpScopeFull scope{op_name, a->device_, a->dtype_, out_shape};
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        auto out = ::mlx::core::reshape(*ga.arr, gpu::to_mlx_shape(out_shape));
-        out = ::mlx::core::contiguous(out);
-        auto out_t =
-            std::make_shared<TensorImpl>(Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)},
-                                         out_shape, a->dtype_, a->device_, /*requires_grad=*/false);
+    OpScopeFull scope{op_name, a->device(), a->dtype(), out_shape};
 
-        if (GradMode::is_enabled() && a->requires_grad_) {
-            auto a_edge = detail::ensure_grad_fn(a);
-            auto bwd = std::make_shared<ViewBackward>();
-            bwd->input_shapes_ = {a->shape_};
-            bwd->out_shape_ = out_t->shape_;
-            bwd->dtype_ = a->dtype_;
-            bwd->device_ = a->device_;
-            bwd->input_tensors_ = {a};
-            bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-            bwd->set_saved_versions({a->version_});
-            out_t->grad_fn_ = std::move(bwd);
-            out_t->is_leaf_ = false;
-            out_t->requires_grad_ = true;
-        }
-        return out_t;
-    }
-    if (!a->is_contiguous()) {
-        ErrorBuilder(op_name).not_implemented(
-            "non-contiguous input not supported (call .contiguous() first)");
+    TensorImplPtr out;
+    if (a->device() == Device::GPU) {
+        // GPU: MLX reshape is lazy; it produces a view internally.
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        auto raw = ::mlx::core::reshape(*ga.arr, gpu::to_mlx_shape(out_shape));
+        out = std::make_shared<TensorImpl>(
+            Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype())}, out_shape, a->dtype(),
+            a->device(), /*requires_grad=*/false);
+    } else {
+        // CPU: metadata-only view when contiguous; materialise first if not.
+        const TensorImplPtr& base = a->is_contiguous() ? a : contiguous_op(a);
+        Stride new_stride = contiguous_stride(out_shape, dtype_size(a->dtype()));
+        out = TensorImpl::make_view(base, out_shape, std::move(new_stride), /*offset_bytes=*/0);
     }
 
-    OpScopeFull scope{op_name, a->device_, a->dtype_, out_shape};
-    auto out_cpu = clone_for_view(std::get<CpuStorage>(a->storage_), out_shape, a->dtype_);
-    Storage out_storage{std::move(out_cpu)};
-
-    auto out =
-        std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype_, a->device_,
-                                     /*requires_grad=*/false);
-    scope.set_flops(static_cast<std::int64_t>(a->numel()));
-
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<ViewBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -162,14 +139,14 @@ std::vector<Storage> ViewBackward::apply(Storage grad_out) {
 // ---------------- reshape ----------------
 TensorImplPtr reshape_op(const TensorImplPtr& a, const std::vector<std::int64_t>& new_shape) {
     Validator::input(a, "reshape.a").non_null();
-    Shape resolved = resolve_reshape_shape(a->shape_, new_shape);
+    Shape resolved = resolve_reshape_shape(a->shape(), new_shape);
     return build_view_output(a, std::move(resolved), "reshape");
 }
 
 // ---------------- squeeze ----------------
 TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
     Validator::input(a, "squeeze.a").non_null();
-    const int ndim = static_cast<int>(a->shape_.size());
+    const int ndim = static_cast<int>(a->shape().size());
     if (ndim == 0) {
         // Squeezing a 0-d tensor on an axis — error per PyTorch semantics.
         ErrorBuilder("squeeze").index_error("axis out of range for 0-d tensor");
@@ -178,14 +155,14 @@ TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
     if (wrapped < 0 || wrapped >= ndim) {
         ErrorBuilder("squeeze").index_error("axis out of range");
     }
-    if (a->shape_[static_cast<std::size_t>(wrapped)] != 1) {
+    if (a->shape()[static_cast<std::size_t>(wrapped)] != 1) {
         ErrorBuilder("squeeze").fail("target dim must be size 1");
     }
     Shape new_shape;
     new_shape.reserve(static_cast<std::size_t>(ndim) - 1);
     for (int i = 0; i < ndim; ++i) {
         if (i != wrapped)
-            new_shape.push_back(a->shape_[static_cast<std::size_t>(i)]);
+            new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
     }
     return build_view_output(a, std::move(new_shape), "squeeze");
 }
@@ -194,7 +171,7 @@ TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
 TensorImplPtr squeeze_all_op(const TensorImplPtr& a) {
     Validator::input(a, "squeeze.a").non_null();
     Shape new_shape;
-    for (auto d : a->shape_) {
+    for (auto d : a->shape()) {
         if (d != 1)
             new_shape.push_back(d);
     }
@@ -204,7 +181,7 @@ TensorImplPtr squeeze_all_op(const TensorImplPtr& a) {
 // ---------------- unsqueeze ----------------
 TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim) {
     Validator::input(a, "unsqueeze.a").non_null();
-    const int ndim = static_cast<int>(a->shape_.size());
+    const int ndim = static_cast<int>(a->shape().size());
     // unsqueeze allows dim in [-(ndim+1), ndim] — one beyond the end.
     const int wrapped = dim < 0 ? dim + ndim + 1 : dim;
     if (wrapped < 0 || wrapped > ndim) {
@@ -217,7 +194,7 @@ TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim) {
             new_shape.push_back(1);
         }
         if (i < ndim) {
-            new_shape.push_back(a->shape_[static_cast<std::size_t>(i)]);
+            new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
         }
     }
     return build_view_output(a, std::move(new_shape), "unsqueeze");

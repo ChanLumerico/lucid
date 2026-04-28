@@ -55,19 +55,19 @@ TensorImplPtr AffineGridBackward::forward(
     const TensorImplPtr& theta, int N, int H, int W, bool align_corners) {
     if (!theta)
         ErrorBuilder("affine_grid").fail("null theta");
-    if (theta->shape_.size() != 3 || theta->shape_[0] != N || theta->shape_[1] != 2 ||
-        theta->shape_[2] != 3)
-        throw ShapeMismatch(theta->shape_, Shape{static_cast<std::int64_t>(N), 2, 3},
+    if (theta->shape().size() != 3 || theta->shape()[0] != N || theta->shape()[1] != 2 ||
+        theta->shape()[2] != 3)
+        throw ShapeMismatch(theta->shape(), Shape{static_cast<std::int64_t>(N), 2, 3},
                             "affine_grid: theta must be (N, 2, 3)");
 
     Shape out_shape{static_cast<std::int64_t>(N), static_cast<std::int64_t>(H),
                     static_cast<std::int64_t>(W), 2};
-    OpScopeFull scope{schema_v1.name, theta->device_, theta->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, theta->device(), theta->dtype(), out_shape};
 
     Storage out_storage;
-    if (theta->device_ == Device::GPU) {
-        const auto& gt = std::get<GpuStorage>(theta->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(theta->dtype_);
+    if (theta->device() == Device::GPU) {
+        const auto& gt = std::get<GpuStorage>(theta->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(theta->dtype());
 
         // Build x_norm[W], y_norm[H] in input dtype.
         auto build_norm = [&](int dim) {
@@ -105,10 +105,10 @@ TensorImplPtr AffineGridBackward::forward(
         auto theta_T = ::mlx::core::transpose(*gt.arr, {0, 2, 1});  // [N, 3, 2]
         auto out_flat = ::mlx::core::matmul(grid_b, theta_T);       // [N, HW, 2]
         auto out_arr = ::mlx::core::reshape(out_flat, {N, H, W, 2});
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out_arr), theta->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out_arr), theta->dtype())};
     } else {
-        auto out_cpu = allocate_size(static_cast<std::size_t>(N) * H * W * 2, theta->dtype_);
-        const auto& th = std::get<CpuStorage>(theta->storage_);
+        auto out_cpu = allocate_size(static_cast<std::size_t>(N) * H * W * 2, theta->dtype());
+        const auto& th = std::get<CpuStorage>(theta->storage());
 
         auto run = [&](auto type_tag) {
             using T = decltype(type_tag);
@@ -129,39 +129,39 @@ TensorImplPtr AffineGridBackward::forward(
                 }
             }
         };
-        if (theta->dtype_ == Dtype::F32)
+        if (theta->dtype() == Dtype::F32)
             run(float{});
-        else if (theta->dtype_ == Dtype::F64)
+        else if (theta->dtype() == Dtype::F64)
             run(double{});
         else
             ErrorBuilder("affine_grid").not_implemented("dtype must be F32/F64");
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, theta->dtype_,
-                                            theta->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, theta->dtype(),
+                                            theta->device(), false);
 
-    if (!GradMode::is_enabled() || !theta->requires_grad_)
+    if (!GradMode::is_enabled() || !theta->requires_grad())
         return out;
 
     auto t_edge = detail::ensure_grad_fn(theta);
     auto bwd = std::make_shared<AffineGridBackward>();
-    bwd->input_shapes_ = {theta->shape_};
+    bwd->input_shapes_ = {theta->shape()};
     bwd->out_shape_ = out_shape;
-    bwd->dtype_ = theta->dtype_;
-    bwd->device_ = theta->device_;
+    bwd->dtype_ = theta->dtype();
+    bwd->device_ = theta->device();
     bwd->input_tensors_ = {theta};
-    bwd->saved_inputs_ = {theta->storage_};
+    bwd->saved_inputs_ = {theta->storage()};
     bwd->align_corners_ = align_corners;
     bwd->N_ = N;
     bwd->H_ = H;
     bwd->W_ = W;
-    bwd->orig_theta_shape_ = theta->shape_;
+    bwd->orig_theta_shape_ = theta->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(t_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(theta->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(theta->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -292,37 +292,37 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
                                           bool align_corners) {
     if (!input || !grid)
         ErrorBuilder("grid_sample").fail("null input");
-    if (input->device_ != grid->device_)
-        throw DeviceMismatch(std::string(device_name(input->device_)),
-                             std::string(device_name(grid->device_)), "grid_sample: input/grid");
-    if (input->shape_.size() != 4)
-        throw ShapeMismatch(input->shape_, Shape{},
+    if (input->device() != grid->device())
+        throw DeviceMismatch(std::string(device_name(input->device())),
+                             std::string(device_name(grid->device())), "grid_sample: input/grid");
+    if (input->shape().size() != 4)
+        throw ShapeMismatch(input->shape(), Shape{},
                             "grid_sample: input must be (N, C, H_in, W_in)");
-    if (grid->shape_.size() != 4 || grid->shape_[3] != 2)
-        throw ShapeMismatch(grid->shape_, Shape{},
+    if (grid->shape().size() != 4 || grid->shape()[3] != 2)
+        throw ShapeMismatch(grid->shape(), Shape{},
                             "grid_sample: grid must be (N, H_out, W_out, 2)");
-    if (input->dtype_ != grid->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(input->dtype_)),
-                            std::string(dtype_name(grid->dtype_)), "grid_sample");
-    if (input->shape_[0] != grid->shape_[0])
-        throw ShapeMismatch(input->shape_, grid->shape_, "grid_sample: batch size mismatch");
+    if (input->dtype() != grid->dtype())
+        throw DtypeMismatch(std::string(dtype_name(input->dtype())),
+                            std::string(dtype_name(grid->dtype())), "grid_sample");
+    if (input->shape()[0] != grid->shape()[0])
+        throw ShapeMismatch(input->shape(), grid->shape(), "grid_sample: batch size mismatch");
 
-    const int N = static_cast<int>(input->shape_[0]);
-    const int C = static_cast<int>(input->shape_[1]);
-    const int H_in = static_cast<int>(input->shape_[2]);
-    const int W_in = static_cast<int>(input->shape_[3]);
-    const int H_out = static_cast<int>(grid->shape_[1]);
-    const int W_out = static_cast<int>(grid->shape_[2]);
+    const int N = static_cast<int>(input->shape()[0]);
+    const int C = static_cast<int>(input->shape()[1]);
+    const int H_in = static_cast<int>(input->shape()[2]);
+    const int W_in = static_cast<int>(input->shape()[3]);
+    const int H_out = static_cast<int>(grid->shape()[1]);
+    const int W_out = static_cast<int>(grid->shape()[2]);
 
     Shape out_shape{static_cast<std::int64_t>(N), static_cast<std::int64_t>(C),
                     static_cast<std::int64_t>(H_out), static_cast<std::int64_t>(W_out)};
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
 
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto& gg = std::get<GpuStorage>(grid->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto& gg = std::get<GpuStorage>(grid->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
 
         // Slice grid into ix [N, H_out, W_out] and iy.
         auto idx0 = ::mlx::core::astype(::mlx::core::array(0), ::mlx::core::int64);
@@ -471,40 +471,41 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
                 ::mlx::core::add(::mlx::core::multiply(Ia, wa_b), ::mlx::core::multiply(Ib, wb_b)),
                 ::mlx::core::add(::mlx::core::multiply(Ic, wc_b), ::mlx::core::multiply(Id, wd_b)));
         }
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y_out), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y_out), input->dtype())};
         // GPU backward reuses the CPU analytic implementation after downloading
         // saved tensors and uploads the resulting gradients back to GPU.
-        auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,
-                                                input->device_, false);
-        if (!GradMode::is_enabled() || !(input->requires_grad_ || grid->requires_grad_))
+        auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                                input->device(), false);
+        if (!GradMode::is_enabled() || !(input->requires_grad() || grid->requires_grad()))
             return out;
 
         auto x_edge = detail::ensure_grad_fn(input);
         auto g_edge = detail::ensure_grad_fn(grid);
         auto bwd = std::make_shared<GridSampleBackward>();
-        bwd->input_shapes_ = {input->shape_, grid->shape_};
+        bwd->input_shapes_ = {input->shape(), grid->shape()};
         bwd->out_shape_ = out_shape;
-        bwd->dtype_ = input->dtype_;
-        bwd->device_ = input->device_;
+        bwd->dtype_ = input->dtype();
+        bwd->device_ = input->device();
         bwd->input_tensors_ = {input, grid};
-        bwd->saved_inputs_ = {input->storage_, grid->storage_};
+        bwd->saved_inputs_ = {input->storage(), grid->storage()};
         bwd->mode_ = mode;
         bwd->padding_mode_ = padding_mode;
         bwd->align_corners_ = align_corners;
-        bwd->input_shape_ = input->shape_;
-        bwd->grid_shape_ = grid->shape_;
+        bwd->input_shape_ = input->shape();
+        bwd->grid_shape_ = grid->shape();
         bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0)});
-        bwd->set_saved_versions(std::vector<std::int64_t>{
-            static_cast<std::int64_t>(input->version_), static_cast<std::int64_t>(grid->version_)});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions(
+            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version()),
+                                      static_cast<std::int64_t>(grid->version())});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
-    auto out_cpu = allocate_size(static_cast<std::size_t>(N) * C * H_out * W_out, input->dtype_);
-    const auto& xs = std::get<CpuStorage>(input->storage_);
-    const auto& gs = std::get<CpuStorage>(grid->storage_);
+    auto out_cpu = allocate_size(static_cast<std::size_t>(N) * C * H_out * W_out, input->dtype());
+    const auto& xs = std::get<CpuStorage>(input->storage());
+    const auto& gs = std::get<CpuStorage>(grid->storage());
 
     auto run = [&](auto type_tag) {
         using T = decltype(type_tag);
@@ -583,39 +584,39 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
             }
         }
     };
-    if (input->dtype_ == Dtype::F32)
+    if (input->dtype() == Dtype::F32)
         run(float{});
-    else if (input->dtype_ == Dtype::F64)
+    else if (input->dtype() == Dtype::F64)
         run(double{});
     else
         ErrorBuilder("grid_sample").not_implemented("dtype must be F32/F64");
 
-    auto out = std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, out_shape, input->dtype_,
-                                            input->device_, false);
+    auto out = std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, out_shape, input->dtype(),
+                                            input->device(), false);
 
-    if (!GradMode::is_enabled() || !(input->requires_grad_ || grid->requires_grad_))
+    if (!GradMode::is_enabled() || !(input->requires_grad() || grid->requires_grad()))
         return out;
 
     auto x_edge = detail::ensure_grad_fn(input);
     auto g_edge = detail::ensure_grad_fn(grid);
     auto bwd = std::make_shared<GridSampleBackward>();
-    bwd->input_shapes_ = {input->shape_, grid->shape_};
+    bwd->input_shapes_ = {input->shape(), grid->shape()};
     bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input, grid};
-    bwd->saved_inputs_ = {input->storage_, grid->storage_};
+    bwd->saved_inputs_ = {input->storage(), grid->storage()};
     bwd->mode_ = mode;
     bwd->padding_mode_ = padding_mode;
     bwd->align_corners_ = align_corners;
-    bwd->input_shape_ = input->shape_;
-    bwd->grid_shape_ = grid->shape_;
+    bwd->input_shape_ = input->shape();
+    bwd->grid_shape_ = grid->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_),
-                                                      static_cast<std::int64_t>(grid->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version()),
+                                                      static_cast<std::int64_t>(grid->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

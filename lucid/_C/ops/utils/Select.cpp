@@ -406,7 +406,7 @@ public:
         auto t =
             std::make_shared<TensorImpl>(std::move(grad_out), out_shape_, dtype_, device_, false);
         auto out = roll_op(t, std::move(inv_shifts), axes_);
-        return {out->storage_};
+        return {out->storage()};
     }
 };
 
@@ -461,60 +461,60 @@ TensorImplPtr attach_where_grad(const TensorImplPtr& cond,
                                 const TensorImplPtr& x,
                                 const TensorImplPtr& y,
                                 TensorImplPtr out) {
-    const bool needs_grad = GradMode::is_enabled() && (x->requires_grad_ || y->requires_grad_);
+    const bool needs_grad = GradMode::is_enabled() && (x->requires_grad() || y->requires_grad());
     if (!needs_grad)
         return out;
 
     auto bwd = std::make_shared<WhereBackward>();
-    bwd->cond_ = cond->storage_;
-    bwd->shape_ = out->shape_;
-    bwd->dtype_ = out->dtype_;
-    bwd->device_ = out->device_;
+    bwd->cond_ = cond->storage();
+    bwd->shape_ = out->shape();
+    bwd->dtype_ = out->dtype();
+    bwd->device_ = out->device();
     bwd->cond_tensor_ = cond;
     bwd->x_tensor_ = x;
     bwd->y_tensor_ = y;
     bwd->set_next_edges(
         std::vector<Edge>{Edge(detail::ensure_grad_fn(x), 0), Edge(detail::ensure_grad_fn(y), 0)});
-    bwd->set_saved_versions({cond->version_, x->version_, y->version_});
+    bwd->set_saved_versions({cond->version(), x->version(), y->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
 TensorImplPtr attach_masked_fill_grad(const TensorImplPtr& a,
                                       const TensorImplPtr& mask,
                                       TensorImplPtr out) {
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto bwd = std::make_shared<MaskedFillBackward>();
-    bwd->mask_ = mask->storage_;
-    bwd->shape_ = out->shape_;
-    bwd->dtype_ = out->dtype_;
-    bwd->device_ = out->device_;
+    bwd->mask_ = mask->storage();
+    bwd->shape_ = out->shape();
+    bwd->dtype_ = out->dtype();
+    bwd->device_ = out->device();
     bwd->input_tensor_ = a;
     bwd->mask_tensor_ = mask;
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version_, mask->version_});
+    bwd->set_saved_versions({a->version(), mask->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
 TensorImplPtr attach_unary_grad(const TensorImplPtr& a,
                                 TensorImplPtr out,
                                 std::shared_ptr<Node> bwd) {
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({a->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -529,70 +529,70 @@ LUCID_REGISTER_OP(DiagonalBackward)
 TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const TensorImplPtr& y) {
     if (!cond || !x || !y)
         ErrorBuilder("where").fail("null input");
-    if (x->dtype_ != y->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x->dtype_)), std::string(dtype_name(y->dtype_)),
-                            "where");
-    if (x->device_ != y->device_ || cond->device_ != x->device_)
-        throw DeviceMismatch(std::string(device_name(x->device_)),
-                             std::string(device_name(y->device_)), "where");
-    const Dtype dt = x->dtype_;
-    const Device device = x->device_;
-    OpScopeFull scope{"where", device, dt, x->shape_};
+    if (x->dtype() != y->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
+                            std::string(dtype_name(y->dtype())), "where");
+    if (x->device() != y->device() || cond->device() != x->device())
+        throw DeviceMismatch(std::string(device_name(x->device())),
+                             std::string(device_name(y->device())), "where");
+    const Dtype dt = x->dtype();
+    const Device device = x->device();
+    OpScopeFull scope{"where", device, dt, x->shape()};
     if (device == Device::GPU) {
-        const auto& gc = std::get<GpuStorage>(cond->storage_);
-        const auto& gx = std::get<GpuStorage>(x->storage_);
-        const auto& gy = std::get<GpuStorage>(y->storage_);
+        const auto& gc = std::get<GpuStorage>(cond->storage());
+        const auto& gx = std::get<GpuStorage>(x->storage());
+        const auto& gy = std::get<GpuStorage>(y->storage());
         auto out = ::mlx::core::where(*gc.arr, *gx.arr, *gy.arr);
         Shape sh = mlx_shape_to_lucid(out.shape());
         auto result =
             fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
         return attach_where_grad(cond, x, y, std::move(result));
     }
-    if (cond->shape_ != x->shape_ || x->shape_ != y->shape_)
-        throw ShapeMismatch(x->shape_, y->shape_, "where (CPU same-shape)");
-    auto out_cpu = allocate_cpu(x->shape_, dt);
-    const std::size_t n = numel(x->shape_);
+    if (cond->shape() != x->shape() || x->shape() != y->shape())
+        throw ShapeMismatch(x->shape(), y->shape(), "where (CPU same-shape)");
+    auto out_cpu = allocate_cpu(x->shape(), dt);
+    const std::size_t n = numel(x->shape());
     const auto* c =
-        reinterpret_cast<const std::uint8_t*>(std::get<CpuStorage>(cond->storage_).ptr.get());
+        reinterpret_cast<const std::uint8_t*>(std::get<CpuStorage>(cond->storage()).ptr.get());
     auto run = [&](auto* dst, const auto* xp, const auto* yp) {
         for (std::size_t i = 0; i < n; ++i)
             dst[i] = c[i] ? xp[i] : yp[i];
     };
     if (dt == Dtype::F32)
         run(reinterpret_cast<float*>(out_cpu.ptr.get()),
-            reinterpret_cast<const float*>(std::get<CpuStorage>(x->storage_).ptr.get()),
-            reinterpret_cast<const float*>(std::get<CpuStorage>(y->storage_).ptr.get()));
+            reinterpret_cast<const float*>(std::get<CpuStorage>(x->storage()).ptr.get()),
+            reinterpret_cast<const float*>(std::get<CpuStorage>(y->storage()).ptr.get()));
     else if (dt == Dtype::F64)
         run(reinterpret_cast<double*>(out_cpu.ptr.get()),
-            reinterpret_cast<const double*>(std::get<CpuStorage>(x->storage_).ptr.get()),
-            reinterpret_cast<const double*>(std::get<CpuStorage>(y->storage_).ptr.get()));
+            reinterpret_cast<const double*>(std::get<CpuStorage>(x->storage()).ptr.get()),
+            reinterpret_cast<const double*>(std::get<CpuStorage>(y->storage()).ptr.get()));
     else
         ErrorBuilder("where").not_implemented("dtype not supported");
-    auto result = fresh(Storage{std::move(out_cpu)}, x->shape_, dt, device);
+    auto result = fresh(Storage{std::move(out_cpu)}, x->shape(), dt, device);
     return attach_where_grad(cond, x, y, std::move(result));
 }
 
 TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, double value) {
     if (!a || !mask)
         ErrorBuilder("masked_fill").fail("null input");
-    if (a->shape_ != mask->shape_)
-        throw ShapeMismatch(a->shape_, mask->shape_, "masked_fill");
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"masked_fill", device, dt, a->shape_};
+    if (a->shape() != mask->shape())
+        throw ShapeMismatch(a->shape(), mask->shape(), "masked_fill");
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"masked_fill", device, dt, a->shape()};
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gm = std::get<GpuStorage>(mask->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gm = std::get<GpuStorage>(mask->storage());
         ::mlx::core::array v(static_cast<float>(value), gpu::to_mlx_dtype(dt));
         auto out = ::mlx::core::where(*gm.arr, v, *ga.arr);
         auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, a->shape_, dt, device);
+            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, a->shape(), dt, device);
         return attach_masked_fill_grad(a, mask, std::move(result));
     }
-    auto out_cpu = allocate_cpu(a->shape_, dt);
-    const std::size_t n = numel(a->shape_);
+    auto out_cpu = allocate_cpu(a->shape(), dt);
+    const std::size_t n = numel(a->shape());
     const auto* m =
-        reinterpret_cast<const std::uint8_t*>(std::get<CpuStorage>(mask->storage_).ptr.get());
+        reinterpret_cast<const std::uint8_t*>(std::get<CpuStorage>(mask->storage()).ptr.get());
     auto run = [&](auto* dst, const auto* src) {
         using T = std::remove_pointer_t<decltype(dst)>;
         for (std::size_t i = 0; i < n; ++i)
@@ -600,13 +600,13 @@ TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, 
     };
     if (dt == Dtype::F32)
         run(reinterpret_cast<float*>(out_cpu.ptr.get()),
-            reinterpret_cast<const float*>(std::get<CpuStorage>(a->storage_).ptr.get()));
+            reinterpret_cast<const float*>(std::get<CpuStorage>(a->storage()).ptr.get()));
     else if (dt == Dtype::F64)
         run(reinterpret_cast<double*>(out_cpu.ptr.get()),
-            reinterpret_cast<const double*>(std::get<CpuStorage>(a->storage_).ptr.get()));
+            reinterpret_cast<const double*>(std::get<CpuStorage>(a->storage()).ptr.get()));
     else
         ErrorBuilder("masked_fill").not_implemented("dtype not supported");
-    auto result = fresh(Storage{std::move(out_cpu)}, a->shape_, dt, device);
+    auto result = fresh(Storage{std::move(out_cpu)}, a->shape(), dt, device);
     return attach_masked_fill_grad(a, mask, std::move(result));
 }
 
@@ -614,20 +614,20 @@ TensorImplPtr roll_op(const TensorImplPtr& a,
                       std::vector<std::int64_t> shifts,
                       std::vector<int> axes) {
     Validator::input(a, "roll.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"roll", device, dt, a->shape_};
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"roll", device, dt, a->shape()};
     if (shifts.size() != axes.size())
         ErrorBuilder("roll").fail("shifts and axes must have equal length");
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         ::mlx::core::Shape mshifts(shifts.begin(), shifts.end());
         auto out = ::mlx::core::roll(*ga.arr, mshifts, axes);
         auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, a->shape_, dt, device);
+            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, a->shape(), dt, device);
         auto bwd = std::make_shared<RollBackward>();
-        bwd->input_shapes_ = {a->shape_};
-        bwd->out_shape_ = result->shape_;
+        bwd->input_shapes_ = {a->shape()};
+        bwd->out_shape_ = result->shape();
         bwd->dtype_ = dt;
         bwd->device_ = device;
         bwd->input_tensors_ = {a};
@@ -635,15 +635,15 @@ TensorImplPtr roll_op(const TensorImplPtr& a,
         bwd->axes_ = axes;
         return attach_unary_grad(a, std::move(result), std::move(bwd));
     }
-    const std::size_t ndim = a->shape_.size();
+    const std::size_t ndim = a->shape().size();
     std::vector<std::int64_t> shift_per_dim(ndim, 0);
     for (std::size_t i = 0; i < axes.size(); ++i) {
         const int ax = wrap_axis(axes[i], static_cast<int>(ndim));
         shift_per_dim[ax] += shifts[i];
     }
-    Shape out_shape = a->shape_;
+    Shape out_shape = a->shape();
     auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
     const std::size_t elem = dtype_size(dt);
     Stride stride(ndim);
     if (ndim > 0) {
@@ -670,8 +670,8 @@ TensorImplPtr roll_op(const TensorImplPtr& a,
     }
     auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
     auto bwd = std::make_shared<RollBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = result->shape_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = result->shape();
     bwd->dtype_ = dt;
     bwd->device_ = device;
     bwd->input_tensors_ = {a};
@@ -683,44 +683,44 @@ TensorImplPtr roll_op(const TensorImplPtr& a,
 TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, int axis) {
     if (!a || !indices)
         ErrorBuilder("gather").fail("null input");
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"gather", device, dt, indices->shape_};
-    if (a->shape_.size() != indices->shape_.size())
-        throw ShapeMismatch(a->shape_, indices->shape_,
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"gather", device, dt, indices->shape()};
+    if (a->shape().size() != indices->shape().size())
+        throw ShapeMismatch(a->shape(), indices->shape(),
                             "gather: a and indices must have same rank");
-    const std::size_t ndim = a->shape_.size();
+    const std::size_t ndim = a->shape().size();
     int ax = wrap_axis(axis, static_cast<int>(ndim));
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gi = std::get<GpuStorage>(indices->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gi = std::get<GpuStorage>(indices->storage());
         auto out = ::mlx::core::take_along_axis(*ga.arr, *gi.arr, ax);
         Shape sh = mlx_shape_to_lucid(out.shape());
         auto result =
             fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
-        if (GradMode::is_enabled() && a->requires_grad_) {
+        if (GradMode::is_enabled() && a->requires_grad()) {
             auto bwd = std::make_shared<GatherBackward>();
-            bwd->indices_ = indices->storage_;
-            bwd->input_shape_ = a->shape_;
-            bwd->output_shape_ = result->shape_;
+            bwd->indices_ = indices->storage();
+            bwd->input_shape_ = a->shape();
+            bwd->output_shape_ = result->shape();
             bwd->axis_ = ax;
             bwd->dtype_ = dt;
-            bwd->index_dtype_ = indices->dtype_;
+            bwd->index_dtype_ = indices->dtype();
             bwd->device_ = device;
             bwd->input_tensor_ = a;
             bwd->indices_tensor_ = indices;
             bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-            bwd->set_saved_versions({a->version_, indices->version_});
-            result->grad_fn_ = std::move(bwd);
-            result->is_leaf_ = false;
-            result->requires_grad_ = true;
+            bwd->set_saved_versions({a->version(), indices->version()});
+            result->set_grad_fn(std::move(bwd));
+            result->set_leaf(false);
+            result->set_requires_grad(true);
         }
         return result;
     }
-    Shape out_shape = indices->shape_;
+    Shape out_shape = indices->shape();
     auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
-    const auto& ci = std::get<CpuStorage>(indices->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
+    const auto& ci = std::get<CpuStorage>(indices->storage());
     const std::size_t elem = dtype_size(dt);
 
     Stride a_stride(ndim), out_stride(ndim);
@@ -728,16 +728,16 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
         a_stride.back() = 1;
         out_stride.back() = 1;
         for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d) {
-            a_stride[d] = a_stride[d + 1] * a->shape_[d + 1];
+            a_stride[d] = a_stride[d + 1] * a->shape()[d + 1];
             out_stride[d] = out_stride[d + 1] * out_shape[d + 1];
         }
     }
     const std::size_t total = numel(out_shape);
 
     auto load_idx = [&](std::size_t flat) -> std::int64_t {
-        if (indices->dtype_ == Dtype::I32)
+        if (indices->dtype() == Dtype::I32)
             return reinterpret_cast<const std::int32_t*>(ci.ptr.get())[flat];
-        if (indices->dtype_ == Dtype::I64)
+        if (indices->dtype() == Dtype::I64)
             return reinterpret_cast<const std::int64_t*>(ci.ptr.get())[flat];
         ErrorBuilder("gather").not_implemented("indices dtype must be I32 or I64");
     };
@@ -746,7 +746,7 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
     for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
         std::int64_t k = load_idx(out_flat);
         if (k < 0)
-            k += a->shape_[ax];
+            k += a->shape()[ax];
         std::size_t a_flat = 0;
         for (std::size_t d = 0; d < ndim; ++d) {
             std::int64_t c = (static_cast<int>(d) == ax) ? k : coord[d];
@@ -760,32 +760,32 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
         }
     }
     auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
-    if (GradMode::is_enabled() && a->requires_grad_) {
+    if (GradMode::is_enabled() && a->requires_grad()) {
         auto bwd = std::make_shared<GatherBackward>();
-        bwd->indices_ = indices->storage_;
-        bwd->input_shape_ = a->shape_;
-        bwd->output_shape_ = result->shape_;
+        bwd->indices_ = indices->storage();
+        bwd->input_shape_ = a->shape();
+        bwd->output_shape_ = result->shape();
         bwd->axis_ = ax;
         bwd->dtype_ = dt;
-        bwd->index_dtype_ = indices->dtype_;
+        bwd->index_dtype_ = indices->dtype();
         bwd->device_ = device;
         bwd->input_tensor_ = a;
         bwd->indices_tensor_ = indices;
         bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-        bwd->set_saved_versions({a->version_, indices->version_});
-        result->grad_fn_ = std::move(bwd);
-        result->is_leaf_ = false;
-        result->requires_grad_ = true;
+        bwd->set_saved_versions({a->version(), indices->version()});
+        result->set_grad_fn(std::move(bwd));
+        result->set_leaf(false);
+        result->set_requires_grad(true);
     }
     return result;
 }
 
 TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axis2) {
     Validator::input(a, "diagonal.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"diagonal", device, dt, a->shape_};
-    const std::size_t ndim = a->shape_.size();
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"diagonal", device, dt, a->shape()};
+    const std::size_t ndim = a->shape().size();
     if (ndim < 2)
         ErrorBuilder("diagonal").fail("input must be ≥2-D");
     int a1 = wrap_axis(axis1, static_cast<int>(ndim));
@@ -793,7 +793,7 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     if (a1 == a2)
         ErrorBuilder("diagonal").fail("axis1 and axis2 must differ");
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         // MLX diagonal returns a strided view; contiguous() materializes a
         // dense buffer matching lucid's row-major layout convention.
         auto out = ::mlx::core::contiguous(::mlx::core::diagonal(*ga.arr, offset, a1, a2));
@@ -801,8 +801,8 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
         auto result =
             fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
         auto bwd = std::make_shared<DiagonalBackward>();
-        bwd->input_shapes_ = {a->shape_};
-        bwd->out_shape_ = result->shape_;
+        bwd->input_shapes_ = {a->shape()};
+        bwd->out_shape_ = result->shape();
         bwd->dtype_ = dt;
         bwd->device_ = device;
         bwd->input_tensors_ = {a};
@@ -814,8 +814,8 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     if (a1 > a2)
         std::swap(a1, a2);
 
-    const std::int64_t M = a->shape_[a1];
-    const std::int64_t N = a->shape_[a2];
+    const std::int64_t M = a->shape()[a1];
+    const std::int64_t N = a->shape()[a2];
     const std::int64_t r0 = (offset >= 0) ? 0 : -offset;
     const std::int64_t c0 = (offset >= 0) ? offset : 0;
     const std::int64_t L = std::max<std::int64_t>(0, std::min(M - r0, N - c0));
@@ -824,18 +824,18 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     for (std::size_t d = 0; d < ndim; ++d) {
         if ((int)d == a1 || (int)d == a2)
             continue;
-        out_shape.push_back(a->shape_[d]);
+        out_shape.push_back(a->shape()[d]);
     }
     out_shape.push_back(L);
     auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
     const std::size_t elem = dtype_size(dt);
 
     Stride a_stride(ndim);
     if (ndim > 0) {
         a_stride.back() = 1;
         for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d)
-            a_stride[d] = a_stride[d + 1] * a->shape_[d + 1];
+            a_stride[d] = a_stride[d + 1] * a->shape()[d + 1];
     }
 
     std::vector<std::size_t> outer_dims;
@@ -845,7 +845,7 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
 
     std::size_t outer_numel = 1;
     for (auto d : outer_dims)
-        outer_numel *= static_cast<std::size_t>(a->shape_[d]);
+        outer_numel *= static_cast<std::size_t>(a->shape()[d]);
 
     std::vector<std::int64_t> coord(ndim, 0);
     for (std::size_t o = 0; o < outer_numel; ++o) {
@@ -854,7 +854,7 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
             std::size_t prod = 1;
             for (std::size_t e : outer_dims)
                 if (e > d)
-                    prod *= static_cast<std::size_t>(a->shape_[e]);
+                    prod *= static_cast<std::size_t>(a->shape()[e]);
             coord[d] = rem / prod;
             rem %= prod;
         }
@@ -872,8 +872,8 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     }
     auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
     auto bwd = std::make_shared<DiagonalBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = result->shape_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = result->shape();
     bwd->dtype_ = dt;
     bwd->device_ = device;
     bwd->input_tensors_ = {a};

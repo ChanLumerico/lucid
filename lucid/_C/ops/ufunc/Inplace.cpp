@@ -22,13 +22,13 @@ template <typename Fn>
 TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
     auto out = fwd_fn(a);
-    if (out->shape_ != a->shape_)
-        throw ShapeMismatch(a->shape_, out->shape_,
+    if (out->shape() != a->shape())
+        throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");
-    a->storage_ = std::move(out->storage_);
-    a->dtype_ = out->dtype_;
-    a->device_ = out->device_;
-    a->version_ += 1;
+    a->mutable_storage() = std::move(out->storage());
+    a->set_dtype(out->dtype());
+    a->set_device(out->device());
+    a->bump_version();
     return a;
 }
 
@@ -114,10 +114,10 @@ TensorImplPtr ceil_inplace_op(const TensorImplPtr& a) {
 TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     Validator::input(a, "clip_.a").non_null();
     auto out = clip_op(a, lo, hi);
-    a->storage_ = std::move(out->storage_);
-    a->dtype_ = out->dtype_;
-    a->device_ = out->device_;
-    a->version_ += 1;
+    a->mutable_storage() = std::move(out->storage());
+    a->set_dtype(out->dtype());
+    a->set_device(out->device());
+    a->bump_version();
     return a;
 }
 

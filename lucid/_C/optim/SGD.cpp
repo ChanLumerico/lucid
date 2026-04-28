@@ -44,7 +44,7 @@ void SGD::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl
         moment_.resize(params_.size());
     }
     if (momentum_ != 0.0) {
-        moment_[slot_idx] = make_zero_storage(param->shape_, param->dtype_, param->device_);
+        moment_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
     }
 }
 
@@ -133,8 +133,8 @@ void sgd_step_gpu(GpuStorage& param_g,
 void SGD::update_one(std::size_t slot_idx,
                      std::shared_ptr<TensorImpl>& param,
                      const Storage& grad) {
-    if (param->device_ == Device::GPU) {
-        auto& param_g = std::get<GpuStorage>(param->storage_);
+    if (param->device() == Device::GPU) {
+        auto& param_g = std::get<GpuStorage>(param->mutable_storage());
         const auto& grad_g = std::get<GpuStorage>(grad);
         GpuStorage* moment_g = nullptr;
         if (momentum_ != 0.0) {
@@ -143,20 +143,20 @@ void SGD::update_one(std::size_t slot_idx,
         // The function expects a non-null reference even when momentum=0;
         // gate at the kernel level instead.
         GpuStorage dummy_moment;
-        sgd_step_gpu(param_g, grad_g, moment_g ? *moment_g : dummy_moment, param->dtype_, lr_,
+        sgd_step_gpu(param_g, grad_g, moment_g ? *moment_g : dummy_moment, param->dtype(), lr_,
                      momentum_, dampening_, weight_decay_, nesterov_);
         return;
     }
 
-    auto& param_cpu = std::get<CpuStorage>(param->storage_);
+    auto& param_cpu = std::get<CpuStorage>(param->mutable_storage());
     const auto& grad_cpu = std::get<CpuStorage>(grad);
     CpuStorage* moment_cpu = nullptr;
     if (momentum_ != 0.0) {
         moment_cpu = &std::get<CpuStorage>(moment_[slot_idx]);
     }
-    const std::size_t numel = param_cpu.nbytes / dtype_size(param->dtype_);
+    const std::size_t numel = param_cpu.nbytes / dtype_size(param->dtype());
 
-    switch (param->dtype_) {
+    switch (param->dtype()) {
         case Dtype::F32:
             sgd_step_cpu<float>(
                 reinterpret_cast<float*>(param_cpu.ptr.get()),
@@ -206,15 +206,15 @@ void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) 
     if (step_.size() < params_.size())
         step_.resize(params_.size(), 0);
     if (momentum_ != 0.0) {
-        moment_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+        moment_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     }
     // ax_ initialized to a clone of param.
-    ax_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
-    if (p->device_ == Device::GPU) {
-        const auto& gp = gpu_get(p->storage_);
-        gpu_replace(gpu_get(ax_[i]), ::mlx::core::copy(*gp.arr), p->dtype_);
+    ax_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
+    if (p->device() == Device::GPU) {
+        const auto& gp = gpu_get(p->storage());
+        gpu_replace(gpu_get(ax_[i]), ::mlx::core::copy(*gp.arr), p->dtype());
     } else {
-        const auto& pc = std::get<CpuStorage>(p->storage_);
+        const auto& pc = std::get<CpuStorage>(p->mutable_storage());
         auto& ac = std::get<CpuStorage>(ax_[i]);
         std::memcpy(ac.ptr.get(), pc.ptr.get(), pc.nbytes);
     }
@@ -222,9 +222,9 @@ void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) 
 
 void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     step_[i] += 1;
-    const auto dt = p->dtype_;
-    if (p->device_ == Device::GPU) {
-        auto& pg = gpu_get(p->storage_);
+    const auto dt = p->dtype();
+    if (p->device() == Device::GPU) {
+        auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
         ::mlx::core::array g = *gg.arr;
         if (weight_decay_ != 0.0) {
@@ -278,9 +278,9 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("ASGD").not_implemented("dtype not supported");
 }

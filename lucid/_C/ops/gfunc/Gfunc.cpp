@@ -301,15 +301,15 @@ TensorImplPtr linspace_op(
 TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
     if (!v)
         ErrorBuilder("diag").fail("input is null");
-    const Dtype dt = v->dtype_;
-    const Device device = v->device_;
-    const auto& sh = v->shape_;
+    const Dtype dt = v->dtype();
+    const Device device = v->device();
+    const auto& sh = v->shape();
     if (sh.size() != 1 && sh.size() != 2) {
         ErrorBuilder("diag").fail("input must be 1-D or 2-D");
     }
 
     if (device == Device::GPU) {
-        const auto& gv = std::get<GpuStorage>(v->storage_);
+        const auto& gv = std::get<GpuStorage>(v->storage());
         if (!gv.arr)
             ErrorBuilder("diag").fail("null GPU input");
         auto out = ::mlx::core::diag(*gv.arr, static_cast<int>(k));
@@ -321,7 +321,7 @@ TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
                                             /*requires_grad=*/false);
     }
 
-    const auto& cv = std::get<CpuStorage>(v->storage_);
+    const auto& cv = std::get<CpuStorage>(v->storage());
 
     if (sh.size() == 1) {
         const std::int64_t L = sh[0];
@@ -403,22 +403,22 @@ TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
 // ----------------------------------------------------------------------------
 TensorImplPtr zeros_like_op(const TensorImplPtr& a, bool requires_grad) {
     Validator::input(a, "zeros_like.a").non_null();
-    return zeros_op(a->shape_, a->dtype_, a->device_, requires_grad);
+    return zeros_op(a->shape(), a->dtype(), a->device(), requires_grad);
 }
 
 TensorImplPtr ones_like_op(const TensorImplPtr& a, bool requires_grad) {
     Validator::input(a, "ones_like.a").non_null();
-    return ones_op(a->shape_, a->dtype_, a->device_, requires_grad);
+    return ones_op(a->shape(), a->dtype(), a->device(), requires_grad);
 }
 
 TensorImplPtr empty_like_op(const TensorImplPtr& a, bool requires_grad) {
     Validator::input(a, "empty_like.a").non_null();
-    return empty_op(a->shape_, a->dtype_, a->device_, requires_grad);
+    return empty_op(a->shape(), a->dtype(), a->device(), requires_grad);
 }
 
 TensorImplPtr full_like_op(const TensorImplPtr& a, double fill_value, bool requires_grad) {
     Validator::input(a, "full_like.a").non_null();
-    return full_op(a->shape_, fill_value, a->dtype_, a->device_, requires_grad);
+    return full_op(a->shape(), fill_value, a->dtype(), a->device(), requires_grad);
 }
 
 }  // namespace lucid

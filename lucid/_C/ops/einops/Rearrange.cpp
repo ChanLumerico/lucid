@@ -100,13 +100,13 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
                                   const std::string& pattern,
                                   const std::map<std::string, std::int64_t>& axes_lengths) {
     Validator::input(a, "rearrange.a").non_null();
-    OpScopeFull scope{"einops_rearrange", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"einops_rearrange", a->device(), a->dtype(), a->shape()};
 
     auto [lhs_str, rhs_str] = split_arrow(pattern);
     auto lhs = parse_side(lhs_str);
     auto rhs = parse_side(rhs_str);
 
-    auto sz = resolve_lhs_sizes(lhs, a->shape_, axes_lengths, "rearrange");
+    auto sz = resolve_lhs_sizes(lhs, a->shape(), axes_lengths, "rearrange");
     // Every name on rhs must resolve.
     for (const auto& n : flat_axes(rhs)) {
         if (sz.find(n) == sz.end()) {
@@ -125,7 +125,7 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
         flat_lhs_shape[i] = sz.at(flat_lhs[i]);
 
     auto cur = a;
-    if (Shape(flat_lhs_shape.begin(), flat_lhs_shape.end()) != a->shape_)
+    if (Shape(flat_lhs_shape.begin(), flat_lhs_shape.end()) != a->shape())
         cur = reshape_op(cur, flat_lhs_shape);
 
     // 2. permute to flat-rhs order.
@@ -150,7 +150,7 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
 
     // 3. reshape into rhs grouped/literal shape.
     auto rhs_shape = group_shape_merged(rhs, sz);
-    if (Shape(rhs_shape.begin(), rhs_shape.end()) != cur->shape_)
+    if (Shape(rhs_shape.begin(), rhs_shape.end()) != cur->shape())
         cur = reshape_op(cur, rhs_shape);
 
     return cur;

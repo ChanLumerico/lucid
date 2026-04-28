@@ -31,18 +31,18 @@ using ::lucid::helpers::fresh;
 inline void validate_pair(const TensorImplPtr& a, const TensorImplPtr& b, const char* op) {
     if (!a || !b)
         ErrorBuilder(op).fail("null input");
-    if (a->dtype_ != b->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(a->dtype_)), std::string(dtype_name(b->dtype_)),
-                            std::string(op));
-    if (a->device_ != b->device_)
-        throw DeviceMismatch(std::string(device_name(a->device_)),
-                             std::string(device_name(b->device_)), std::string(op));
+    if (a->dtype() != b->dtype())
+        throw DtypeMismatch(std::string(dtype_name(a->dtype())),
+                            std::string(dtype_name(b->dtype())), std::string(op));
+    if (a->device() != b->device())
+        throw DeviceMismatch(std::string(device_name(a->device())),
+                             std::string(device_name(b->device())), std::string(op));
 }
 
 inline void validate_pair_eq_shape(const TensorImplPtr& a, const TensorImplPtr& b, const char* op) {
     validate_pair(a, b, op);
-    if (a->shape_ != b->shape_)
-        throw ShapeMismatch(a->shape_, b->shape_, std::string(op));
+    if (a->shape() != b->shape())
+        throw ShapeMismatch(a->shape(), b->shape(), std::string(op));
 }
 
 }  // namespace lucid::bfunc_detail

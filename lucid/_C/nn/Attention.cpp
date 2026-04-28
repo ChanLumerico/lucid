@@ -261,15 +261,15 @@ void compute_attention_forward(const T* Qp,
 
     // Step 2: optional masks.
     if (attn_mask) {
-        const auto& ms = std::get<CpuStorage>(attn_mask->storage_);
+        const auto& ms = std::get<CpuStorage>(attn_mask->storage());
         const std::size_t mn = attn_mask->numel();
-        if (attn_mask->dtype_ == Dtype::Bool) {
+        if (attn_mask->dtype() == Dtype::Bool) {
             apply_bool_mask<T>(weights, reinterpret_cast<const std::uint8_t*>(ms.ptr.get()), ctx.B,
                                ctx.Lq, ctx.Lk, mn);
-        } else if (attn_mask->dtype_ == Dtype::F32 && std::is_same_v<T, float>) {
+        } else if (attn_mask->dtype() == Dtype::F32 && std::is_same_v<T, float>) {
             apply_additive_mask<T>(weights, reinterpret_cast<const T*>(ms.ptr.get()), ctx.B, ctx.Lq,
                                    ctx.Lk, mn);
-        } else if (attn_mask->dtype_ == Dtype::F64 && std::is_same_v<T, double>) {
+        } else if (attn_mask->dtype() == Dtype::F64 && std::is_same_v<T, double>) {
             apply_additive_mask<T>(weights, reinterpret_cast<const T*>(ms.ptr.get()), ctx.B, ctx.Lq,
                                    ctx.Lk, mn);
         } else {
@@ -318,45 +318,46 @@ ForwardCore run_forward(const TensorImplPtr& q,
                         bool is_causal) {
     if (!q || !k || !v)
         ErrorBuilder("attention").fail("null input");
-    if (q->device_ != k->device_ || q->device_ != v->device_)
-        throw DeviceMismatch(std::string(device_name(q->device_)),
-                             std::string(device_name(k->device_)),
+    if (q->device() != k->device() || q->device() != v->device())
+        throw DeviceMismatch(std::string(device_name(q->device())),
+                             std::string(device_name(k->device())),
                              "attention: Q/K/V device mismatch");
-    if (q->dtype_ != k->dtype_ || q->dtype_ != v->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(q->dtype_)), std::string(dtype_name(k->dtype_)),
-                            "attention: Q/K/V dtype mismatch");
-    if (q->shape_.size() < 2 || k->shape_.size() < 2 || v->shape_.size() < 2)
+    if (q->dtype() != k->dtype() || q->dtype() != v->dtype())
+        throw DtypeMismatch(std::string(dtype_name(q->dtype())),
+                            std::string(dtype_name(k->dtype())), "attention: Q/K/V dtype mismatch");
+    if (q->shape().size() < 2 || k->shape().size() < 2 || v->shape().size() < 2)
         ErrorBuilder("attention").fail("Q/K/V must be at least 2-D");
 
-    const auto fq = flatten_qkv(q->shape_, "Q");
-    const auto fk = flatten_qkv(k->shape_, "K");
-    const auto fv = flatten_qkv(v->shape_, "V");
+    const auto fq = flatten_qkv(q->shape(), "Q");
+    const auto fk = flatten_qkv(k->shape(), "K");
+    const auto fv = flatten_qkv(v->shape(), "V");
     if (fq.B != fk.B || fq.B != fv.B)
-        throw ShapeMismatch(q->shape_, k->shape_, "attention: leading dims of Q/K/V must be equal");
+        throw ShapeMismatch(q->shape(), k->shape(),
+                            "attention: leading dims of Q/K/V must be equal");
     if (fq.D != fk.D)
-        throw ShapeMismatch(q->shape_, k->shape_, "attention: Q.last_dim must equal K.last_dim");
+        throw ShapeMismatch(q->shape(), k->shape(), "attention: Q.last_dim must equal K.last_dim");
     if (fk.L != fv.L)
-        throw ShapeMismatch(k->shape_, v->shape_, "attention: K.L_k must equal V.L_k");
+        throw ShapeMismatch(k->shape(), v->shape(), "attention: K.L_k must equal V.L_k");
 
-    OpScopeFull scope{ScaledDotProductAttentionBackward::schema_v1.name, q->device_, q->dtype_,
-                      build_output_shape(q->shape_, v->shape_)};
+    OpScopeFull scope{ScaledDotProductAttentionBackward::schema_v1.name, q->device(), q->dtype(),
+                      build_output_shape(q->shape(), v->shape())};
 
-    Shape out_shape = build_output_shape(q->shape_, v->shape_);
+    Shape out_shape = build_output_shape(q->shape(), v->shape());
     Shape weights_shape;
-    weights_shape.reserve(q->shape_.size());
-    for (std::size_t i = 0; i + 2 < q->shape_.size(); ++i)
-        weights_shape.push_back(q->shape_[i]);
-    weights_shape.push_back(q->shape_[q->shape_.size() - 2]);  // L_q
-    weights_shape.push_back(k->shape_[k->shape_.size() - 2]);  // L_k
+    weights_shape.reserve(q->shape().size());
+    for (std::size_t i = 0; i + 2 < q->shape().size(); ++i)
+        weights_shape.push_back(q->shape()[i]);
+    weights_shape.push_back(q->shape()[q->shape().size() - 2]);  // L_q
+    weights_shape.push_back(k->shape()[k->shape().size() - 2]);  // L_k
 
     Storage weights_storage;
     Storage output_storage;
 
-    if (q->device_ == Device::GPU) {
-        const auto& gQ = std::get<GpuStorage>(q->storage_);
-        const auto& gK = std::get<GpuStorage>(k->storage_);
-        const auto& gV = std::get<GpuStorage>(v->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(q->dtype_);
+    if (q->device() == Device::GPU) {
+        const auto& gQ = std::get<GpuStorage>(q->storage());
+        const auto& gK = std::get<GpuStorage>(k->storage());
+        const auto& gV = std::get<GpuStorage>(v->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(q->dtype());
         // K^T along last 2 dims; mlx::matmul supports batched N-D.
         auto k_t = ::mlx::core::swapaxes(*gK.arr, -2, -1);
         auto scores = ::mlx::core::matmul(*gQ.arr, k_t);
@@ -366,8 +367,8 @@ ForwardCore run_forward(const TensorImplPtr& q,
         auto neg_inf = ::mlx::core::astype(
             ::mlx::core::array(-std::numeric_limits<float>::infinity()), mlx_dt);
         if (attn_mask) {
-            const auto& gM = std::get<GpuStorage>(attn_mask->storage_);
-            if (attn_mask->dtype_ == Dtype::Bool) {
+            const auto& gM = std::get<GpuStorage>(attn_mask->storage());
+            if (attn_mask->dtype() == Dtype::Bool) {
                 scores = ::mlx::core::where(*gM.arr, neg_inf, scores);
             } else {
                 scores = ::mlx::core::add(scores, *gM.arr);
@@ -383,29 +384,29 @@ ForwardCore run_forward(const TensorImplPtr& q,
         }
         auto weights = ::mlx::core::softmax(scores, std::vector<int>{-1}, /*precise=*/true);
         auto output = ::mlx::core::matmul(weights, *gV.arr);
-        weights_storage = Storage{gpu::wrap_mlx_array(std::move(weights), q->dtype_)};
-        output_storage = Storage{gpu::wrap_mlx_array(std::move(output), q->dtype_)};
+        weights_storage = Storage{gpu::wrap_mlx_array(std::move(weights), q->dtype())};
+        output_storage = Storage{gpu::wrap_mlx_array(std::move(output), q->dtype())};
     } else {
         const std::size_t weights_numel = fq.B * fq.L * fk.L;
         const std::size_t output_numel = fq.B * fq.L * fv.D;
-        auto weights_cpu = allocate_size(weights_numel, q->dtype_);
-        auto output_cpu = allocate_size(output_numel, q->dtype_);
+        auto weights_cpu = allocate_size(weights_numel, q->dtype());
+        auto output_cpu = allocate_size(output_numel, q->dtype());
 
         auto run = [&](auto type_tag) {
             using T = decltype(type_tag);
             AttentionForwardCtx<T> ctx{fq.B, fq.L, fk.L, fq.D, fv.D, static_cast<T>(scale)};
-            const auto& qs = std::get<CpuStorage>(q->storage_);
-            const auto& ks = std::get<CpuStorage>(k->storage_);
-            const auto& vs = std::get<CpuStorage>(v->storage_);
+            const auto& qs = std::get<CpuStorage>(q->storage());
+            const auto& ks = std::get<CpuStorage>(k->storage());
+            const auto& vs = std::get<CpuStorage>(v->storage());
             compute_attention_forward<T>(reinterpret_cast<const T*>(qs.ptr.get()),
                                          reinterpret_cast<const T*>(ks.ptr.get()),
                                          reinterpret_cast<const T*>(vs.ptr.get()), attn_mask,
                                          is_causal, reinterpret_cast<T*>(weights_cpu.ptr.get()),
                                          reinterpret_cast<T*>(output_cpu.ptr.get()), ctx);
         };
-        if (q->dtype_ == Dtype::F32)
+        if (q->dtype() == Dtype::F32)
             run(float{});
-        else if (q->dtype_ == Dtype::F64)
+        else if (q->dtype() == Dtype::F64)
             run(double{});
         else
             ErrorBuilder("attention").not_implemented("dtype not supported (F32/F64 only)");
@@ -414,8 +415,8 @@ ForwardCore run_forward(const TensorImplPtr& q,
         output_storage = Storage{std::move(output_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(output_storage), out_shape, q->dtype_,
-                                            q->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(output_storage), out_shape, q->dtype(),
+                                            q->device(), false);
 
     scope.set_flops(static_cast<std::int64_t>(2) * static_cast<std::int64_t>(fq.B) *
                     static_cast<std::int64_t>(fq.L) * static_cast<std::int64_t>(fk.L) *
@@ -436,31 +437,32 @@ TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
                                                          bool is_causal) {
     auto core = run_forward(q, k, v, attn_mask, scale, is_causal);
 
-    if (!GradMode::is_enabled() || !(q->requires_grad_ || k->requires_grad_ || v->requires_grad_))
+    if (!GradMode::is_enabled() ||
+        !(q->requires_grad() || k->requires_grad() || v->requires_grad()))
         return core.output;
 
     auto q_edge = detail::ensure_grad_fn(q);
     auto k_edge = detail::ensure_grad_fn(k);
     auto v_edge = detail::ensure_grad_fn(v);
     auto bwd = std::make_shared<ScaledDotProductAttentionBackward>();
-    bwd->input_shapes_ = {q->shape_, k->shape_, v->shape_};
+    bwd->input_shapes_ = {q->shape(), k->shape(), v->shape()};
     bwd->out_shape_ = core.out_shape;
-    bwd->dtype_ = q->dtype_;
-    bwd->device_ = q->device_;
+    bwd->dtype_ = q->dtype();
+    bwd->device_ = q->device();
     bwd->input_tensors_ = {q, k, v};
-    bwd->saved_inputs_ = {q->storage_, k->storage_, v->storage_};
+    bwd->saved_inputs_ = {q->storage(), k->storage(), v->storage()};
     bwd->saved_weights_ = std::move(core.weights_storage);
     bwd->scale_ = scale;
-    bwd->orig_q_shape_ = q->shape_;
-    bwd->orig_k_shape_ = k->shape_;
-    bwd->orig_v_shape_ = v->shape_;
+    bwd->orig_q_shape_ = q->shape();
+    bwd->orig_k_shape_ = k->shape();
+    bwd->orig_v_shape_ = v->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(q_edge, 0), Edge(k_edge, 0), Edge(v_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(q->version_),
-                                                      static_cast<std::int64_t>(k->version_),
-                                                      static_cast<std::int64_t>(v->version_)});
-    core.output->grad_fn_ = std::move(bwd);
-    core.output->is_leaf_ = false;
-    core.output->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(q->version()),
+                                                      static_cast<std::int64_t>(k->version()),
+                                                      static_cast<std::int64_t>(v->version())});
+    core.output->set_grad_fn(std::move(bwd));
+    core.output->set_leaf(false);
+    core.output->set_requires_grad(true);
     return core.output;
 }
 
@@ -601,9 +603,10 @@ std::vector<TensorImplPtr> scaled_dot_product_attention_with_weights_op(
 
     Shape weights_shape = core.weights_shape;
     auto weights = std::make_shared<TensorImpl>(
-        std::move(core.weights_storage), std::move(weights_shape), q->dtype_, q->device_, false);
+        std::move(core.weights_storage), std::move(weights_shape), q->dtype(), q->device(), false);
 
-    if (GradMode::is_enabled() && (q->requires_grad_ || k->requires_grad_ || v->requires_grad_)) {
+    if (GradMode::is_enabled() &&
+        (q->requires_grad() || k->requires_grad() || v->requires_grad())) {
         // Re-run forward to wire up the autograd path for `output` so the
         // primary gradient chain is preserved. The first run above only
         // produced detached weights; this second pass attaches grad_fn to

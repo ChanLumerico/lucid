@@ -287,52 +287,48 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
                                          int groups) {
     if (!x || !W || !b)
         ErrorBuilder("conv").fail("null input");
-    if (x->dtype_ != W->dtype_ || x->dtype_ != b->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x->dtype_)), std::string(dtype_name(W->dtype_)),
-                            "conv");
-    if (x->device_ != W->device_ || x->device_ != b->device_)
-        throw DeviceMismatch(std::string(device_name(x->device_)),
-                             std::string(device_name(W->device_)), "conv");
-    if (x->device_ == Device::CPU &&
-        (!x->is_contiguous() || !W->is_contiguous() || !b->is_contiguous()))
-        ErrorBuilder("conv").not_implemented(
-            "non-contiguous input not supported (call .contiguous() first)");
-    if (static_cast<int>(x->shape_.size()) != N + 2)
-        throw ShapeMismatch(x->shape_, Shape{}, "conv: x rank mismatch");
-    if (static_cast<int>(W->shape_.size()) != N + 2)
-        throw ShapeMismatch(W->shape_, Shape{}, "conv: W rank mismatch");
-    if (b->shape_.size() != 1)
-        throw ShapeMismatch(b->shape_, Shape{}, "conv: b must be 1-D (C_out,)");
+    if (x->dtype() != W->dtype() || x->dtype() != b->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
+                            std::string(dtype_name(W->dtype())), "conv");
+    if (x->device() != W->device() || x->device() != b->device())
+        throw DeviceMismatch(std::string(device_name(x->device())),
+                             std::string(device_name(W->device())), "conv");
+    if (static_cast<int>(x->shape().size()) != N + 2)
+        throw ShapeMismatch(x->shape(), Shape{}, "conv: x rank mismatch");
+    if (static_cast<int>(W->shape().size()) != N + 2)
+        throw ShapeMismatch(W->shape(), Shape{}, "conv: W rank mismatch");
+    if (b->shape().size() != 1)
+        throw ShapeMismatch(b->shape(), Shape{}, "conv: b must be 1-D (C_out,)");
     if (groups < 1)
         ErrorBuilder("conv").fail("groups must be >= 1");
 
-    const int B = static_cast<int>(x->shape_[0]);
-    const int Cin = static_cast<int>(x->shape_[1]);
-    const int Cout = static_cast<int>(W->shape_[0]);
-    const int Cw = static_cast<int>(W->shape_[1]);
+    const int B = static_cast<int>(x->shape()[0]);
+    const int Cin = static_cast<int>(x->shape()[1]);
+    const int Cout = static_cast<int>(W->shape()[0]);
+    const int Cw = static_cast<int>(W->shape()[1]);
 
     if (Cin % groups != 0)
-        throw ShapeMismatch(x->shape_, W->shape_, "conv: C_in must be divisible by groups");
+        throw ShapeMismatch(x->shape(), W->shape(), "conv: C_in must be divisible by groups");
     if (Cout % groups != 0)
-        throw ShapeMismatch(W->shape_, x->shape_, "conv: C_out must be divisible by groups");
+        throw ShapeMismatch(W->shape(), x->shape(), "conv: C_out must be divisible by groups");
     const int Cin_g = Cin / groups;
     const int Cout_g = Cout / groups;
     if (Cw != Cin_g)
-        throw ShapeMismatch(W->shape_, x->shape_, "conv: W.shape[1] must equal C_in / groups");
-    if (b->shape_[0] != Cout)
-        throw ShapeMismatch(b->shape_, W->shape_, "conv: bias C_out mismatch");
+        throw ShapeMismatch(W->shape(), x->shape(), "conv: W.shape[1] must equal C_in / groups");
+    if (b->shape()[0] != Cout)
+        throw ShapeMismatch(b->shape(), W->shape(), "conv: bias C_out mismatch");
 
     int S[N];
     int K[N];
     int O[N];
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape_[2 + i]);
-        K[i] = static_cast<int>(W->shape_[2 + i]);
+        S[i] = static_cast<int>(x->shape()[2 + i]);
+        K[i] = static_cast<int>(W->shape()[2 + i]);
         if (dilation[i] < 1)
             ErrorBuilder("conv").fail("dilation must be >= 1");
         O[i] = compute_out(S[i], K[i], stride[i], pad[i], dilation[i]);
         if (O[i] <= 0)
-            throw ShapeMismatch(x->shape_, W->shape_, "conv: output shape non-positive");
+            throw ShapeMismatch(x->shape(), W->shape(), "conv: output shape non-positive");
     }
 
     Shape out_shape;
@@ -352,15 +348,15 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         S_total *= S[i];
 
-    OpScopeFull scope{ConvNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{ConvNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin_g * K_total);
 
     Storage out_storage;
 
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
-        const auto& gW = std::get<GpuStorage>(W->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
+        const auto& gW = std::get<GpuStorage>(W->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         if (!gx.arr || !gW.arr || !gb.arr) {
             ErrorBuilder("conv").fail("null GPU input");
         }
@@ -378,22 +374,22 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         auto b_view = ::mlx::core::reshape(*gb.arr, b_brd);
         y_nhwc = ::mlx::core::add(y_nhwc, b_view);
         auto y = ::mlx::core::contiguous(::mlx::core::transpose(y_nhwc, nhwc_to_nchw_perm<N>()));
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype())};
     } else {
-        auto out_cpu = allocate_size(static_cast<std::size_t>(B) * Cout * O_total, x->dtype_);
+        auto out_cpu = allocate_size(static_cast<std::size_t>(B) * Cout * O_total, x->dtype());
         auto cols_cpu =
-            allocate_size(static_cast<std::size_t>(Cin_g) * K_total * O_total, x->dtype_);
+            allocate_size(static_cast<std::size_t>(Cin_g) * K_total * O_total, x->dtype());
 
-        const auto& x_cpu = std::get<CpuStorage>(x->storage_);
-        const auto& W_cpu = std::get<CpuStorage>(W->storage_);
-        const auto& b_cpu = std::get<CpuStorage>(b->storage_);
+        const auto& x_cpu = std::get<CpuStorage>(x->storage());
+        const auto& W_cpu = std::get<CpuStorage>(W->storage());
+        const auto& b_cpu = std::get<CpuStorage>(b->storage());
         const int K_flat = Cin_g * K_total;
         const int M_out = O_total;
         const int W_per_group = Cout_g * K_flat;
 
         for (int bi = 0; bi < B; ++bi) {
             for (int g = 0; g < groups; ++g) {
-                switch (x->dtype_) {
+                switch (x->dtype()) {
                     case Dtype::F32: {
                         auto* xp = reinterpret_cast<const float*>(x_cpu.ptr.get()) +
                                    (static_cast<std::size_t>(bi) * Cin +
@@ -432,7 +428,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
                         ErrorBuilder("conv").not_implemented("dtype not supported (F32/F64)");
                 }
             }
-            switch (x->dtype_) {
+            switch (x->dtype()) {
                 case Dtype::F32: {
                     auto* yp = reinterpret_cast<float*>(out_cpu.ptr.get()) +
                                static_cast<std::size_t>(bi) * Cout * O_total;
@@ -454,10 +450,11 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), x->dtype_,
-                                            x->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
+                                            x->dtype(), x->device(), false);
 
-    if (!GradMode::is_enabled() || !(x->requires_grad_ || W->requires_grad_ || b->requires_grad_)) {
+    if (!GradMode::is_enabled() ||
+        !(x->requires_grad() || W->requires_grad() || b->requires_grad())) {
         return out;
     }
 
@@ -466,12 +463,12 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     auto b_edge = detail::ensure_grad_fn(b);
 
     auto bwd = std::make_shared<ConvNdBackward<N>>();
-    bwd->input_shapes_ = {x->shape_, W->shape_, b->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape(), W->shape(), b->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x, W, b};
-    bwd->saved_inputs_ = {x->storage_, W->storage_, b->storage_};
+    bwd->saved_inputs_ = {x->storage(), W->storage(), b->storage()};
     for (int i = 0; i < N; ++i) {
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
@@ -479,11 +476,11 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     }
     bwd->groups_ = groups;
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(W_edge, 0), Edge(b_edge, 0)});
-    bwd->set_saved_versions({x->version_, W->version_, b->version_});
+    bwd->set_saved_versions({x->version(), W->version(), b->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -759,8 +756,6 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
                                       const std::vector<int>& pad,
                                       const std::vector<int>& dilation) {
     Validator::input(x, "unfold.x").non_null();
-    if (x->device_ == Device::CPU && !x->is_contiguous())
-        ErrorBuilder("unfold").not_implemented("non-contiguous input not supported");
 
     const int N = static_cast<int>(kernel.size());
     if (N < 1 || N > 3)
@@ -768,19 +763,19 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
     if (static_cast<int>(stride.size()) != N || static_cast<int>(pad.size()) != N ||
         static_cast<int>(dilation.size()) != N)
         ErrorBuilder("unfold").fail("stride/pad/dilation length must match kernel");
-    if (static_cast<int>(x->shape_.size()) != N + 2)
-        throw ShapeMismatch(x->shape_, Shape{}, "unfold: x rank mismatch");
+    if (static_cast<int>(x->shape().size()) != N + 2)
+        throw ShapeMismatch(x->shape(), Shape{}, "unfold: x rank mismatch");
 
-    const int B = static_cast<int>(x->shape_[0]);
-    const int C = static_cast<int>(x->shape_[1]);
+    const int B = static_cast<int>(x->shape()[0]);
+    const int C = static_cast<int>(x->shape()[1]);
     std::vector<int> S(N), O(N);
     const std::vector<int>& K = kernel;
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape_[2 + i]);
+        S[i] = static_cast<int>(x->shape()[2 + i]);
         const int eff = dilation[i] * (K[i] - 1) + 1;
         O[i] = (S[i] + 2 * pad[i] - eff) / stride[i] + 1;
         if (O[i] <= 0)
-            throw ShapeMismatch(x->shape_, Shape{}, "unfold: non-positive output dim");
+            throw ShapeMismatch(x->shape(), Shape{}, "unfold: non-positive output dim");
     }
     int O_total = 1;
     for (int i = 0; i < N; ++i)
@@ -795,13 +790,13 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
     Shape out_shape{static_cast<std::int64_t>(B), static_cast<std::int64_t>(C * K_total),
                     static_cast<std::int64_t>(O_total)};
 
-    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), out_shape};
 
     // Native MLX path for unfold: build N-D source-coordinate maps via
     // index arithmetic, mask out-of-bounds positions to zero, then take.
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(x->dtype_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(x->dtype());
         // Spatial-dim index arrays per axis: shape patterns
         //   k_d[d]: (1, 1, K_0, K_1, ..., O_0, O_1, ...) — 1 at non-d axes
         //   o_d[d]: similarly
@@ -877,36 +872,36 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
 
         // Reshape (B, C, K_0..K_{N-1}, O_0..O_{N-1}) → (B, C*K_total, O_total).
         auto reshaped = ::mlx::core::reshape(masked, ::mlx::core::Shape{B, C * K_total, O_total});
-        auto out_storage_gpu = Storage{gpu::wrap_mlx_array(std::move(reshaped), x->dtype_)};
-        auto out = std::make_shared<TensorImpl>(std::move(out_storage_gpu), out_shape, x->dtype_,
-                                                x->device_, false);
-        if (!GradMode::is_enabled() || !x->requires_grad_)
+        auto out_storage_gpu = Storage{gpu::wrap_mlx_array(std::move(reshaped), x->dtype())};
+        auto out = std::make_shared<TensorImpl>(std::move(out_storage_gpu), out_shape, x->dtype(),
+                                                x->device(), false);
+        if (!GradMode::is_enabled() || !x->requires_grad())
             return out;
         auto x_edge = detail::ensure_grad_fn(x);
         auto bwd = std::make_shared<UnfoldBackward>();
-        bwd->input_shapes_ = {x->shape_};
-        bwd->out_shape_ = out->shape_;
-        bwd->dtype_ = x->dtype_;
-        bwd->device_ = x->device_;
+        bwd->input_shapes_ = {x->shape()};
+        bwd->out_shape_ = out->shape();
+        bwd->dtype_ = x->dtype();
+        bwd->device_ = x->device();
         bwd->input_tensors_ = {x};
         bwd->kernel_ = kernel;
         bwd->stride_ = stride;
         bwd->pad_ = pad;
         bwd->dilation_ = dilation;
         bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-        bwd->set_saved_versions({x->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({x->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
     // CPU path — Apple Accelerate im2col helpers.
-    auto out_cpu = allocate_size(static_cast<std::size_t>(B) * C * K_total * O_total, x->dtype_);
-    const auto& x_cpu = std::get<CpuStorage>(x->storage_);
+    auto out_cpu = allocate_size(static_cast<std::size_t>(B) * C * K_total * O_total, x->dtype());
+    const auto& x_cpu = std::get<CpuStorage>(x->storage());
 
     for (int bi = 0; bi < B; ++bi) {
-        switch (x->dtype_) {
+        switch (x->dtype()) {
             case Dtype::F32: {
                 auto* xp = reinterpret_cast<const float*>(x_cpu.ptr.get()) +
                            static_cast<std::size_t>(bi) * C * S_total;
@@ -951,28 +946,28 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
     }
 
     Storage out_storage = Storage{std::move(out_cpu)};
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), x->dtype_,
-                                            x->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
+                                            x->dtype(), x->device(), false);
 
-    if (!GradMode::is_enabled() || !x->requires_grad_)
+    if (!GradMode::is_enabled() || !x->requires_grad())
         return out;
 
     auto x_edge = detail::ensure_grad_fn(x);
     auto bwd = std::make_shared<UnfoldBackward>();
-    bwd->input_shapes_ = {x->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x};
     bwd->kernel_ = kernel;
     bwd->stride_ = stride;
     bwd->pad_ = pad;
     bwd->dilation_ = dilation;
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({x->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({x->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

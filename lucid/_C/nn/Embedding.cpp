@@ -64,26 +64,26 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
                                          int padding_idx) {
     if (!weight || !indices)
         ErrorBuilder("embedding").fail("null input");
-    if (weight->device_ != indices->device_)
-        throw DeviceMismatch(std::string(device_name(weight->device_)),
-                             std::string(device_name(indices->device_)),
+    if (weight->device() != indices->device())
+        throw DeviceMismatch(std::string(device_name(weight->device())),
+                             std::string(device_name(indices->device())),
                              "embedding: weight/indices");
-    if (weight->shape_.size() != 2)
-        throw ShapeMismatch(weight->shape_, Shape{},
+    if (weight->shape().size() != 2)
+        throw ShapeMismatch(weight->shape(), Shape{},
                             "embedding: weight must be 2-D (num_embeddings, dim)");
 
-    const std::int64_t N = weight->shape_[0];
-    const std::int64_t D = weight->shape_[1];
+    const std::int64_t N = weight->shape()[0];
+    const std::int64_t D = weight->shape()[1];
     const std::size_t M = indices->numel();
 
-    Shape out_shape = indices->shape_;
+    Shape out_shape = indices->shape();
     out_shape.push_back(D);
-    OpScopeFull scope{schema_v1.name, weight->device_, weight->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, weight->device(), weight->dtype(), out_shape};
 
     Storage out_storage;
-    if (weight->device_ == Device::GPU) {
-        const auto& gw = std::get<GpuStorage>(weight->storage_);
-        const auto& gi = std::get<GpuStorage>(indices->storage_);
+    if (weight->device() == Device::GPU) {
+        const auto& gw = std::get<GpuStorage>(weight->storage());
+        const auto& gi = std::get<GpuStorage>(indices->storage());
         // mlx::take(weight[N, D], indices) — flatten then take, reshape back.
         auto idx = ::mlx::core::astype(*gi.arr, ::mlx::core::int64);
         auto out = ::mlx::core::take(*gw.arr, idx, /*axis=*/0);
@@ -91,19 +91,19 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
             // Zero rows where indices == padding_idx. Use broadcast multiply.
             auto pad = ::mlx::core::astype(::mlx::core::array(padding_idx), ::mlx::core::int64);
             auto mask = ::mlx::core::not_equal(idx, pad);  // shape: indices.shape
-            auto mask_dt = ::mlx::core::astype(mask, gpu::to_mlx_dtype(weight->dtype_));
+            auto mask_dt = ::mlx::core::astype(mask, gpu::to_mlx_dtype(weight->dtype()));
             // Insert trailing dim to broadcast over D.
             auto mask_shape = mask_dt.shape();
             mask_shape.push_back(1);
             mask_dt = ::mlx::core::reshape(mask_dt, mask_shape);
             out = ::mlx::core::multiply(out, mask_dt);
         }
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), weight->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), weight->dtype())};
     } else {
-        auto out_cpu = allocate_size(M * static_cast<std::size_t>(D), weight->dtype_);
-        const auto& ws = std::get<CpuStorage>(weight->storage_);
-        const auto& is = std::get<CpuStorage>(indices->storage_);
-        const std::size_t row_bytes = static_cast<std::size_t>(D) * dtype_size(weight->dtype_);
+        auto out_cpu = allocate_size(M * static_cast<std::size_t>(D), weight->dtype());
+        const auto& ws = std::get<CpuStorage>(weight->storage());
+        const auto& is = std::get<CpuStorage>(indices->storage());
+        const std::size_t row_bytes = static_cast<std::size_t>(D) * dtype_size(weight->dtype());
 
         for (std::size_t i = 0; i < M; ++i) {
             const std::int64_t id = read_index(is, i);
@@ -121,30 +121,31 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, weight->dtype_,
-                                            weight->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, weight->dtype(),
+                                            weight->device(), false);
 
-    if (!GradMode::is_enabled() || !weight->requires_grad_)
+    if (!GradMode::is_enabled() || !weight->requires_grad())
         return out;
 
     auto w_edge = detail::ensure_grad_fn(weight);
     auto bwd = std::make_shared<EmbeddingBackward>();
-    bwd->input_shapes_ = {weight->shape_};
+    bwd->input_shapes_ = {weight->shape()};
     bwd->out_shape_ = out_shape;
-    bwd->dtype_ = weight->dtype_;
-    bwd->device_ = weight->device_;
+    bwd->dtype_ = weight->dtype();
+    bwd->device_ = weight->device();
     bwd->input_tensors_ = {weight};
-    bwd->saved_inputs_ = {weight->storage_};
-    bwd->saved_indices_ = indices->storage_;
-    bwd->saved_indices_shape_ = indices->shape_;
-    bwd->saved_indices_dtype_ = indices->dtype_;
+    bwd->saved_inputs_ = {weight->storage()};
+    bwd->saved_indices_ = indices->storage();
+    bwd->saved_indices_shape_ = indices->shape();
+    bwd->saved_indices_dtype_ = indices->dtype();
     bwd->padding_idx_ = padding_idx;
-    bwd->weight_shape_ = weight->shape_;
+    bwd->weight_shape_ = weight->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(w_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(weight->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(
+        std::vector<std::int64_t>{static_cast<std::int64_t>(weight->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -418,38 +419,38 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
                                                   const TensorImplPtr& position_ids_or_null,
                                                   bool interleaved) {
     Validator::input(input, "rotary_pos_embedding.input").non_null();
-    if (position_ids_or_null && position_ids_or_null->device_ != input->device_)
-        throw DeviceMismatch(std::string(device_name(input->device_)),
-                             std::string(device_name(position_ids_or_null->device_)),
+    if (position_ids_or_null && position_ids_or_null->device() != input->device())
+        throw DeviceMismatch(std::string(device_name(input->device())),
+                             std::string(device_name(position_ids_or_null->device())),
                              "rotary_pos_embedding: input/position_ids");
-    if (input->shape_.size() < 2)
+    if (input->shape().size() < 2)
         ErrorBuilder("rotary_pos_embedding").fail("input must be at least 2-D ([..., L, D])");
 
-    const std::size_t ndim = input->shape_.size();
-    const std::size_t L = static_cast<std::size_t>(input->shape_[ndim - 2]);
-    const std::size_t D = static_cast<std::size_t>(input->shape_[ndim - 1]);
+    const std::size_t ndim = input->shape().size();
+    const std::size_t L = static_cast<std::size_t>(input->shape()[ndim - 2]);
+    const std::size_t D = static_cast<std::size_t>(input->shape()[ndim - 1]);
     if (D % 2 != 0)
         ErrorBuilder("rotary_pos_embedding").fail("embed_dim must be even");
     const std::size_t Dh = D / 2;
     std::size_t batch = 1;
     for (std::size_t i = 0; i + 2 < ndim; ++i)
-        batch *= static_cast<std::size_t>(input->shape_[i]);
+        batch *= static_cast<std::size_t>(input->shape()[i]);
 
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_, input->shape_};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), input->shape()};
 
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
 
         // pos: [L, 1] in input dtype.
         ::mlx::core::array pos_arr{0};
         if (position_ids_or_null) {
-            if (position_ids_or_null->shape_.size() != 1 ||
-                static_cast<std::size_t>(position_ids_or_null->shape_[0]) != L)
-                throw ShapeMismatch(position_ids_or_null->shape_,
+            if (position_ids_or_null->shape().size() != 1 ||
+                static_cast<std::size_t>(position_ids_or_null->shape()[0]) != L)
+                throw ShapeMismatch(position_ids_or_null->shape(),
                                     Shape{static_cast<std::int64_t>(L)},
                                     "rotary_pos_embedding: position_ids");
-            const auto& gp = std::get<GpuStorage>(position_ids_or_null->storage_);
+            const auto& gp = std::get<GpuStorage>(position_ids_or_null->storage());
             pos_arr = ::mlx::core::astype(*gp.arr, mlx_dt);
         } else {
             pos_arr = ::mlx::core::astype(::mlx::core::arange(0, static_cast<int>(L), 1), mlx_dt);
@@ -469,7 +470,7 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
 
         // Reshape input [..., L, D] → [..., L, Dh, 2] for interleaved or
         // [..., L, 2, Dh] for split.
-        auto in_shape = gpu::to_mlx_shape(input->shape_);
+        auto in_shape = gpu::to_mlx_shape(input->shape());
         ::mlx::core::Shape pair_shape = in_shape;
         // Replace last dim with [Dh, 2] (interleaved) or [2, Dh] (split).
         pair_shape.pop_back();
@@ -536,43 +537,43 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
         }
 
         auto out = std::make_shared<TensorImpl>(
-            Storage{gpu::wrap_mlx_array(std::move(out_arr), input->dtype_)}, input->shape_,
-            input->dtype_, input->device_, false);
+            Storage{gpu::wrap_mlx_array(std::move(out_arr), input->dtype())}, input->shape(),
+            input->dtype(), input->device(), false);
 
-        if (!GradMode::is_enabled() || !input->requires_grad_)
+        if (!GradMode::is_enabled() || !input->requires_grad())
             return out;
         auto x_edge = detail::ensure_grad_fn(input);
         auto bwd = std::make_shared<RotaryPosEmbeddingBackward>();
-        bwd->input_shapes_ = {input->shape_};
-        bwd->out_shape_ = input->shape_;
-        bwd->dtype_ = input->dtype_;
-        bwd->device_ = input->device_;
+        bwd->input_shapes_ = {input->shape()};
+        bwd->out_shape_ = input->shape();
+        bwd->dtype_ = input->dtype();
+        bwd->device_ = input->device();
         bwd->input_tensors_ = {input};
-        bwd->saved_inputs_ = {input->storage_};
-        bwd->saved_cos_ = Storage{gpu::wrap_mlx_array(std::move(cos_t), input->dtype_)};
-        bwd->saved_sin_ = Storage{gpu::wrap_mlx_array(std::move(sin_t), input->dtype_)};
+        bwd->saved_inputs_ = {input->storage()};
+        bwd->saved_cos_ = Storage{gpu::wrap_mlx_array(std::move(cos_t), input->dtype())};
+        bwd->saved_sin_ = Storage{gpu::wrap_mlx_array(std::move(sin_t), input->dtype())};
         bwd->interleaved_ = interleaved;
-        bwd->orig_shape_ = input->shape_;
+        bwd->orig_shape_ = input->shape();
         bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
         bwd->set_saved_versions(
-            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_)});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
         return out;
     }
 
     // Build pos[i] and theta[k] in double.
     std::vector<double> pos(L);
     if (position_ids_or_null) {
-        if (position_ids_or_null->shape_.size() != 1 ||
-            static_cast<std::size_t>(position_ids_or_null->shape_[0]) != L) {
-            throw ShapeMismatch(position_ids_or_null->shape_, Shape{static_cast<std::int64_t>(L)},
+        if (position_ids_or_null->shape().size() != 1 ||
+            static_cast<std::size_t>(position_ids_or_null->shape()[0]) != L) {
+            throw ShapeMismatch(position_ids_or_null->shape(), Shape{static_cast<std::int64_t>(L)},
                                 "rotary_pos_embedding: position_ids must be 1-D, length L");
         }
-        const auto& ps = std::get<CpuStorage>(position_ids_or_null->storage_);
+        const auto& ps = std::get<CpuStorage>(position_ids_or_null->storage());
         for (std::size_t i = 0; i < L; ++i) {
-            switch (position_ids_or_null->dtype_) {
+            switch (position_ids_or_null->dtype()) {
                 case Dtype::I8:
                     pos[i] = reinterpret_cast<const std::int8_t*>(ps.ptr.get())[i];
                     break;
@@ -606,51 +607,51 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
         theta[k] = std::exp(-2.0 * static_cast<double>(k) * base / static_cast<double>(D));
     }
 
-    auto cos_cpu = allocate_size(L * Dh, input->dtype_);
-    auto sin_cpu = allocate_size(L * Dh, input->dtype_);
-    auto out_cpu = allocate_size(batch * L * D, input->dtype_);
+    auto cos_cpu = allocate_size(L * Dh, input->dtype());
+    auto sin_cpu = allocate_size(L * Dh, input->dtype());
+    auto out_cpu = allocate_size(batch * L * D, input->dtype());
 
     auto run = [&](auto type_tag) {
         using T = decltype(type_tag);
         build_cos_sin_tables<T>(pos.data(), theta.data(), L, Dh,
                                 reinterpret_cast<T*>(cos_cpu.ptr.get()),
                                 reinterpret_cast<T*>(sin_cpu.ptr.get()));
-        const auto& xs = std::get<CpuStorage>(input->storage_);
+        const auto& xs = std::get<CpuStorage>(input->storage());
         rope_forward<T>(reinterpret_cast<const T*>(xs.ptr.get()),
                         reinterpret_cast<const T*>(cos_cpu.ptr.get()),
                         reinterpret_cast<const T*>(sin_cpu.ptr.get()),
                         reinterpret_cast<T*>(out_cpu.ptr.get()), batch, L, D, interleaved);
     };
-    if (input->dtype_ == Dtype::F32)
+    if (input->dtype() == Dtype::F32)
         run(float{});
-    else if (input->dtype_ == Dtype::F64)
+    else if (input->dtype() == Dtype::F64)
         run(double{});
     else
         ErrorBuilder("rotary_pos_embedding").not_implemented("dtype must be F32 or F64");
 
-    auto out = std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, input->shape_,
-                                            input->dtype_, input->device_, false);
+    auto out = std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, input->shape(),
+                                            input->dtype(), input->device(), false);
 
-    if (!GradMode::is_enabled() || !input->requires_grad_)
+    if (!GradMode::is_enabled() || !input->requires_grad())
         return out;
 
     auto x_edge = detail::ensure_grad_fn(input);
     auto bwd = std::make_shared<RotaryPosEmbeddingBackward>();
-    bwd->input_shapes_ = {input->shape_};
-    bwd->out_shape_ = input->shape_;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->input_shapes_ = {input->shape()};
+    bwd->out_shape_ = input->shape();
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input};
-    bwd->saved_inputs_ = {input->storage_};
+    bwd->saved_inputs_ = {input->storage()};
     bwd->saved_cos_ = Storage{std::move(cos_cpu)};
     bwd->saved_sin_ = Storage{std::move(sin_cpu)};
     bwd->interleaved_ = interleaved;
-    bwd->orig_shape_ = input->shape_;
+    bwd->orig_shape_ = input->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version_)});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

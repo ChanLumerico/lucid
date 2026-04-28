@@ -25,7 +25,7 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
                                const std::string& pattern,
                                const std::map<std::string, std::int64_t>& axes_lengths) {
     Validator::input(a, "repeat.a").non_null();
-    OpScopeFull scope{"einops_repeat", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"einops_repeat", a->device(), a->dtype(), a->shape()};
 
     auto [lhs_str, rhs_str] = split_arrow(pattern);
     auto lhs = parse_side(lhs_str);
@@ -47,7 +47,7 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
     // or already-known from lhs).
     std::map<std::string, std::int64_t> sz;
     for (std::size_t i = 0; i < flat_lhs.size(); ++i)
-        sz[flat_lhs[i]] = cur->shape_[i];
+        sz[flat_lhs[i]] = cur->shape()[i];
     for (auto& n : flat_rhs) {
         if (sz.find(n) == sz.end()) {
             auto it = axes_lengths.find(n);
@@ -62,7 +62,7 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
     std::set<std::string> lhs_set(flat_lhs.begin(), flat_lhs.end());
     for (auto& n : flat_rhs) {
         if (lhs_set.find(n) == lhs_set.end()) {
-            cur = unsqueeze_op(cur, static_cast<int>(cur->shape_.size()));
+            cur = unsqueeze_op(cur, static_cast<int>(cur->shape().size()));
             interim.push_back(n);
             lhs_set.insert(n);
         }
@@ -92,7 +92,7 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
     Shape target_shape;
     for (auto& n : flat_rhs)
         target_shape.push_back(sz.at(n));
-    if (cur->shape_ != target_shape)
+    if (cur->shape() != target_shape)
         cur = broadcast_to_op(cur, target_shape);
 
     // Step 6: reshape into rhs grouped/literal layout.
@@ -109,7 +109,7 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
             rhs_shape.push_back(tk.literal());
         }
     }
-    if (Shape(rhs_shape.begin(), rhs_shape.end()) != cur->shape_)
+    if (Shape(rhs_shape.begin(), rhs_shape.end()) != cur->shape())
         cur = reshape_op(cur, rhs_shape);
     return cur;
 }

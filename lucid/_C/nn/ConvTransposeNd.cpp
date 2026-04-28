@@ -326,39 +326,36 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
                                                   const int (&opad)[N]) {
     if (!x || !W || !b)
         ErrorBuilder("conv_transpose").fail("null input");
-    if (x->dtype_ != W->dtype_ || x->dtype_ != b->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x->dtype_)), std::string(dtype_name(W->dtype_)),
-                            "conv_transpose");
-    if (x->device_ != W->device_ || x->device_ != b->device_)
-        throw DeviceMismatch(std::string(device_name(x->device_)),
-                             std::string(device_name(W->device_)), "conv_transpose");
-    if (x->device_ == Device::CPU &&
-        (!x->is_contiguous() || !W->is_contiguous() || !b->is_contiguous()))
-        ErrorBuilder("conv_transpose")
-            .not_implemented("non-contiguous input not supported (call .contiguous() first)");
-    if (static_cast<int>(x->shape_.size()) != N + 2)
-        throw ShapeMismatch(x->shape_, Shape{}, "conv_transpose: x rank mismatch");
-    if (static_cast<int>(W->shape_.size()) != N + 2)
-        throw ShapeMismatch(W->shape_, Shape{}, "conv_transpose: W rank mismatch");
-    if (b->shape_.size() != 1)
-        throw ShapeMismatch(b->shape_, Shape{}, "conv_transpose: b must be 1-D");
+    if (x->dtype() != W->dtype() || x->dtype() != b->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
+                            std::string(dtype_name(W->dtype())), "conv_transpose");
+    if (x->device() != W->device() || x->device() != b->device())
+        throw DeviceMismatch(std::string(device_name(x->device())),
+                             std::string(device_name(W->device())), "conv_transpose");
+    if (static_cast<int>(x->shape().size()) != N + 2)
+        throw ShapeMismatch(x->shape(), Shape{}, "conv_transpose: x rank mismatch");
+    if (static_cast<int>(W->shape().size()) != N + 2)
+        throw ShapeMismatch(W->shape(), Shape{}, "conv_transpose: W rank mismatch");
+    if (b->shape().size() != 1)
+        throw ShapeMismatch(b->shape(), Shape{}, "conv_transpose: b must be 1-D");
 
-    const int B = static_cast<int>(x->shape_[0]);
-    const int Cin = static_cast<int>(x->shape_[1]);
-    const int Cw = static_cast<int>(W->shape_[0]);
-    const int Cout = static_cast<int>(W->shape_[1]);
+    const int B = static_cast<int>(x->shape()[0]);
+    const int Cin = static_cast<int>(x->shape()[1]);
+    const int Cw = static_cast<int>(W->shape()[0]);
+    const int Cout = static_cast<int>(W->shape()[1]);
     if (Cw != Cin)
-        throw ShapeMismatch(W->shape_, x->shape_, "conv_transpose: C_in mismatch");
-    if (b->shape_[0] != Cout)
-        throw ShapeMismatch(b->shape_, W->shape_, "conv_transpose: bias C_out mismatch");
+        throw ShapeMismatch(W->shape(), x->shape(), "conv_transpose: C_in mismatch");
+    if (b->shape()[0] != Cout)
+        throw ShapeMismatch(b->shape(), W->shape(), "conv_transpose: bias C_out mismatch");
 
     int S[N], K[N], O[N];
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape_[2 + i]);
-        K[i] = static_cast<int>(W->shape_[2 + i]);
+        S[i] = static_cast<int>(x->shape()[2 + i]);
+        K[i] = static_cast<int>(W->shape()[2 + i]);
         O[i] = (S[i] - 1) * stride[i] - 2 * pad[i] + K[i] + opad[i];
         if (O[i] <= 0)
-            throw ShapeMismatch(x->shape_, W->shape_, "conv_transpose: output shape non-positive");
+            throw ShapeMismatch(x->shape(), W->shape(),
+                                "conv_transpose: output shape non-positive");
     }
 
     Shape out_shape;
@@ -375,15 +372,16 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         K_total *= K[i];
     }
 
-    OpScopeFull scope{ConvTransposeNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{ConvTransposeNdBackward<N>::schema_v1.name, x->device(), x->dtype(),
+                      out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin * K_total);
 
     Storage out_storage;
 
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
-        const auto& gW = std::get<GpuStorage>(W->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
+        const auto& gW = std::get<GpuStorage>(W->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         if (!gx.arr || !gW.arr || !gb.arr) {
             ErrorBuilder("conv_transpose").fail("null GPU input");
         }
@@ -395,7 +393,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         auto b_view = ::mlx::core::reshape(*gb.arr, b_brd);
         y_nhwc = ::mlx::core::add(y_nhwc, b_view);
         auto y = ::mlx::core::contiguous(::mlx::core::transpose(y_nhwc, nhwc_to_nchw_perm<N>()));
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y), x->dtype())};
     } else {
         // CPU forward: per-batch (W^T @ x_2d) → cols; col2im → y[b]; add bias.
         // x_2d : (Cin, prod(S))
@@ -409,17 +407,17 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         //         and write y_b at o = s·stride + k − p).
         const int K_flat = Cout * K_total;
 
-        auto out_cpu = allocate_size(static_cast<std::size_t>(B) * Cout * O_total, x->dtype_);
+        auto out_cpu = allocate_size(static_cast<std::size_t>(B) * Cout * O_total, x->dtype());
         if (out_cpu.nbytes)
             std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
-        auto cols_cpu = allocate_size(static_cast<std::size_t>(K_flat) * S_total, x->dtype_);
+        auto cols_cpu = allocate_size(static_cast<std::size_t>(K_flat) * S_total, x->dtype());
 
-        const auto& x_cpu = std::get<CpuStorage>(x->storage_);
-        const auto& W_cpu = std::get<CpuStorage>(W->storage_);
-        const auto& b_cpu = std::get<CpuStorage>(b->storage_);
+        const auto& x_cpu = std::get<CpuStorage>(x->storage());
+        const auto& W_cpu = std::get<CpuStorage>(W->storage());
+        const auto& b_cpu = std::get<CpuStorage>(b->storage());
 
         for (int bi = 0; bi < B; ++bi) {
-            switch (x->dtype_) {
+            switch (x->dtype()) {
                 case Dtype::F32: {
                     auto* xp = reinterpret_cast<const float*>(x_cpu.ptr.get()) +
                                static_cast<std::size_t>(bi) * Cin * S_total;
@@ -457,10 +455,11 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), x->dtype_,
-                                            x->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
+                                            x->dtype(), x->device(), false);
 
-    if (!GradMode::is_enabled() || !(x->requires_grad_ || W->requires_grad_ || b->requires_grad_)) {
+    if (!GradMode::is_enabled() ||
+        !(x->requires_grad() || W->requires_grad() || b->requires_grad())) {
         return out;
     }
 
@@ -469,23 +468,23 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
     auto b_edge = detail::ensure_grad_fn(b);
 
     auto bwd = std::make_shared<ConvTransposeNdBackward<N>>();
-    bwd->input_shapes_ = {x->shape_, W->shape_, b->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape(), W->shape(), b->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x, W, b};
-    bwd->saved_inputs_ = {x->storage_, W->storage_, b->storage_};
+    bwd->saved_inputs_ = {x->storage(), W->storage(), b->storage()};
     for (int i = 0; i < N; ++i) {
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
         bwd->opad_[i] = opad[i];
     }
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(W_edge, 0), Edge(b_edge, 0)});
-    bwd->set_saved_versions({x->version_, W->version_, b->version_});
+    bwd->set_saved_versions({x->version(), W->version(), b->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

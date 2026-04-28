@@ -175,9 +175,16 @@ SPECS: list[OpSpec] = [
         skip_grad=True,
     ),
     OpSpec(
-        name="topk",
-        engine_fn=lambda ts: E.topk(ts[0], 3, -1),
+        name="topk_values",
+        engine_fn=lambda ts: E.topk(ts[0], 3, -1)[0],
         torch_fn=lambda ts: torch.topk(ts[0], 3, dim=-1).values,
+        input_shapes=[(4, 6)],
+        skip_grad=True,
+    ),
+    OpSpec(
+        name="topk_indices",
+        engine_fn=lambda ts: E.topk(ts[0], 3, -1)[1],
+        torch_fn=lambda ts: torch.topk(ts[0], 3, dim=-1).indices.to(torch.int32),
         input_shapes=[(4, 6)],
         skip_grad=True,
     ),

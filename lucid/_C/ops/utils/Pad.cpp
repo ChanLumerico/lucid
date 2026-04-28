@@ -111,22 +111,22 @@ const OpSchema PadBackward::schema_v1{"pad", 1, AmpPolicy::KeepInput, true};
 TensorImplPtr attach_pad_grad(const TensorImplPtr& a,
                               TensorImplPtr out,
                               std::vector<std::pair<std::int64_t, std::int64_t>> pad_width) {
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto bwd = std::make_shared<PadBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
     bwd->pad_width_ = std::move(pad_width);
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -138,13 +138,13 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
                      std::vector<std::pair<std::int64_t, std::int64_t>> pad_width,
                      double constant) {
     Validator::input(a, "pad.a").non_null();
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScopeFull scope{"pad", device, dt, a->shape_};
-    if (pad_width.size() != a->shape_.size())
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"pad", device, dt, a->shape()};
+    if (pad_width.size() != a->shape().size())
         ErrorBuilder("pad").fail("pad_width length must equal ndim");
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
+        const auto& ga = std::get<GpuStorage>(a->storage());
         std::vector<std::pair<int, int>> mlx_pad;
         mlx_pad.reserve(pad_width.size());
         for (auto& [lo, hi] : pad_width)
@@ -156,10 +156,10 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
             fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
         return attach_pad_grad(a, std::move(result), std::move(pad_width));
     }
-    const std::size_t ndim = a->shape_.size();
+    const std::size_t ndim = a->shape().size();
     Shape out_shape(ndim);
     for (std::size_t d = 0; d < ndim; ++d)
-        out_shape[d] = a->shape_[d] + pad_width[d].first + pad_width[d].second;
+        out_shape[d] = a->shape()[d] + pad_width[d].first + pad_width[d].second;
 
     auto out_cpu = allocate_cpu(out_shape, dt);
     auto fill = [&](auto* dst, std::size_t n, double value) {
@@ -188,20 +188,20 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
         }
     }
 
-    const auto& ca = std::get<CpuStorage>(a->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
     const std::size_t elem = dtype_size(dt);
     Stride in_stride(ndim), out_stride(ndim);
     if (ndim > 0) {
         in_stride.back() = 1;
         out_stride.back() = 1;
         for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d) {
-            in_stride[d] = in_stride[d + 1] * a->shape_[d + 1];
+            in_stride[d] = in_stride[d + 1] * a->shape()[d + 1];
             out_stride[d] = out_stride[d + 1] * out_shape[d + 1];
         }
     }
-    const std::size_t row_in = static_cast<std::size_t>(a->shape_.back());
+    const std::size_t row_in = static_cast<std::size_t>(a->shape().back());
     const std::size_t row_bytes = row_in * elem;
-    const std::size_t in_numel = numel(a->shape_);
+    const std::size_t in_numel = numel(a->shape());
     const std::size_t rows = in_numel / row_in;
 
     std::vector<std::int64_t> coord(ndim - 1, 0);
@@ -215,7 +215,7 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
             in_off += static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
         std::memcpy(out_cpu.ptr.get() + out_off * elem, ca.ptr.get() + in_off * elem, row_bytes);
         for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d) {
-            if (++coord[d] < a->shape_[d])
+            if (++coord[d] < a->shape()[d])
                 break;
             coord[d] = 0;
         }

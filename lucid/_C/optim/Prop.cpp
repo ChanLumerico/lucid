@@ -41,17 +41,17 @@ void RMSprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& 
         grad_avg_.resize(params_.size());
     if (moment_buf_.size() < params_.size())
         moment_buf_.resize(params_.size());
-    square_avg_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+    square_avg_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     if (centered_)
-        grad_avg_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+        grad_avg_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     if (momentum_ != 0.0)
-        moment_buf_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+        moment_buf_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
 void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
-    const auto dt = p->dtype_;
-    if (p->device_ == Device::GPU) {
-        auto& pg = gpu_get(p->storage_);
+    const auto dt = p->dtype();
+    if (p->device() == Device::GPU) {
+        auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
         auto& sq = gpu_get(square_avg_[i]);
         ::mlx::core::array g = *gg.arr;
@@ -118,9 +118,9 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("RMSprop").not_implemented("dtype not supported");
 }
@@ -147,21 +147,21 @@ void Rprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p)
         prev_grad_.resize(params_.size());
     if (step_size_.size() < params_.size())
         step_size_.resize(params_.size());
-    prev_grad_[i] = make_zero_storage(p->shape_, p->dtype_, p->device_);
+    prev_grad_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     // step_size starts at lr_ everywhere → ones · lr.
-    step_size_[i] = make_ones_storage(p->shape_, p->dtype_, p->device_);
-    if (p->device_ == Device::GPU) {
+    step_size_[i] = make_ones_storage(p->shape(), p->dtype(), p->device());
+    if (p->device() == Device::GPU) {
         auto& s = gpu_get(step_size_[i]);
-        auto scaled = ::mlx::core::multiply(mlx_scalar(lr_, p->dtype_), *s.arr);
-        gpu_replace(s, std::move(scaled), p->dtype_);
+        auto scaled = ::mlx::core::multiply(mlx_scalar(lr_, p->dtype()), *s.arr);
+        gpu_replace(s, std::move(scaled), p->dtype());
     } else {
         const std::size_t n = cpu_numel(*p);
-        if (p->dtype_ == Dtype::F32) {
+        if (p->dtype() == Dtype::F32) {
             auto* q = cpu_ptr<float>(step_size_[i]);
             const float lrf = static_cast<float>(lr_);
             for (std::size_t k = 0; k < n; ++k)
                 q[k] = lrf;
-        } else if (p->dtype_ == Dtype::F64) {
+        } else if (p->dtype() == Dtype::F64) {
             auto* q = cpu_ptr<double>(step_size_[i]);
             for (std::size_t k = 0; k < n; ++k)
                 q[k] = lr_;
@@ -170,9 +170,9 @@ void Rprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p)
 }
 
 void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
-    const auto dt = p->dtype_;
-    if (p->device_ == Device::GPU) {
-        auto& pg = gpu_get(p->storage_);
+    const auto dt = p->dtype();
+    if (p->device() == Device::GPU) {
+        auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
         auto& pv = gpu_get(prev_grad_[i]);
         auto& ss = gpu_get(step_size_[i]);
@@ -226,9 +226,9 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->storage_), cpu_cptr<float>(grad));
+        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
+        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("Rprop").not_implemented("dtype not supported");
 }

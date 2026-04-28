@@ -49,7 +49,7 @@ TensorImplPtr einops_reduce_op(const TensorImplPtr& a,
                                int reduction,
                                const std::map<std::string, std::int64_t>& axes_lengths) {
     Validator::input(a, "reduce.a").non_null();
-    OpScopeFull scope{"einops_reduce", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"einops_reduce", a->device(), a->dtype(), a->shape()};
 
     auto [lhs_str, rhs_str] = split_arrow(pattern);
     auto lhs = parse_side(lhs_str);
@@ -86,7 +86,7 @@ TensorImplPtr einops_reduce_op(const TensorImplPtr& a,
             surviving_str.push_back(' ');
         surviving_str += surviving[i];
     }
-    if (cur->shape_.size() != surviving.size())
+    if (cur->shape().size() != surviving.size())
         ErrorBuilder("reduce").fail("internal axis bookkeeping mismatch");
     return einops_rearrange_op(cur, surviving_str + " -> " + rhs_str, axes_lengths);
 }

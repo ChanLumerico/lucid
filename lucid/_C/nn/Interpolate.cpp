@@ -209,20 +209,20 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
                                                    int W_out,
                                                    bool align_corners) {
     Validator::input(input, "interpolate_bilinear.input").non_null();
-    if (input->shape_.size() != 4)
-        throw ShapeMismatch(input->shape_, Shape{},
+    if (input->shape().size() != 4)
+        throw ShapeMismatch(input->shape(), Shape{},
                             "interpolate_bilinear: input must be 4-D (N, C, H, W)");
-    const int N = static_cast<int>(input->shape_[0]);
-    const int C = static_cast<int>(input->shape_[1]);
-    const int H_in = static_cast<int>(input->shape_[2]);
-    const int W_in = static_cast<int>(input->shape_[3]);
+    const int N = static_cast<int>(input->shape()[0]);
+    const int C = static_cast<int>(input->shape()[1]);
+    const int H_in = static_cast<int>(input->shape()[2]);
+    const int W_in = static_cast<int>(input->shape()[3]);
     Shape out_shape{N, C, H_out, W_out};
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
 
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
         // Build float source coordinates [H_out] / [W_out], clip to bounds.
         auto ys = build_src_coords(H_in, H_out, align_corners, mlx_dt);
         auto xs = build_src_coords(W_in, W_out, align_corners, mlx_dt);
@@ -275,16 +275,16 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
         auto y_out = ::mlx::core::add(
             ::mlx::core::add(::mlx::core::multiply(I00, w00), ::mlx::core::multiply(I01, w01)),
             ::mlx::core::add(::mlx::core::multiply(I10, w10), ::mlx::core::multiply(I11, w11)));
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(y_out), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(y_out), input->dtype())};
     } else {
         auto out_cpu =
-            allocate_size(static_cast<std::size_t>(N) * C * H_out * W_out, input->dtype_);
-        const auto& xs = std::get<CpuStorage>(input->storage_);
-        if (input->dtype_ == Dtype::F32) {
+            allocate_size(static_cast<std::size_t>(N) * C * H_out * W_out, input->dtype());
+        const auto& xs = std::get<CpuStorage>(input->storage());
+        if (input->dtype() == Dtype::F32) {
             bilinear_forward_cpu<float>(reinterpret_cast<const float*>(xs.ptr.get()),
                                         reinterpret_cast<float*>(out_cpu.ptr.get()), N, C, H_in,
                                         W_in, H_out, W_out, align_corners);
-        } else if (input->dtype_ == Dtype::F64) {
+        } else if (input->dtype() == Dtype::F64) {
             bilinear_forward_cpu<double>(reinterpret_cast<const double*>(xs.ptr.get()),
                                          reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, H_in,
                                          W_in, H_out, W_out, align_corners);
@@ -294,28 +294,28 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,
-                                            input->device_, false);
-    if (!GradMode::is_enabled() || !input->requires_grad_)
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                            input->device(), false);
+    if (!GradMode::is_enabled() || !input->requires_grad())
         return out;
     auto x_edge = detail::ensure_grad_fn(input);
     auto bwd = std::make_shared<InterpolateBilinearBackward>();
-    bwd->input_shapes_ = {input->shape_};
+    bwd->input_shapes_ = {input->shape()};
     bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input};
     bwd->H_in_ = H_in;
     bwd->W_in_ = W_in;
     bwd->H_out_ = H_out;
     bwd->W_out_ = W_out;
     bwd->align_corners_ = align_corners;
-    bwd->orig_shape_ = input->shape_;
+    bwd->orig_shape_ = input->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({input->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({input->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -571,21 +571,21 @@ void trilinear_backward_cpu(const T* go_p,
 TensorImplPtr InterpolateTrilinearBackward::forward(
     const TensorImplPtr& input, int D_out, int H_out, int W_out, bool align_corners) {
     Validator::input(input, "interpolate_trilinear.input").non_null();
-    if (input->shape_.size() != 5)
-        throw ShapeMismatch(input->shape_, Shape{}, "interpolate_trilinear: input must be 5-D");
-    const int N = static_cast<int>(input->shape_[0]);
-    const int C = static_cast<int>(input->shape_[1]);
-    const int D_in = static_cast<int>(input->shape_[2]);
-    const int H_in = static_cast<int>(input->shape_[3]);
-    const int W_in = static_cast<int>(input->shape_[4]);
+    if (input->shape().size() != 5)
+        throw ShapeMismatch(input->shape(), Shape{}, "interpolate_trilinear: input must be 5-D");
+    const int N = static_cast<int>(input->shape()[0]);
+    const int C = static_cast<int>(input->shape()[1]);
+    const int D_in = static_cast<int>(input->shape()[2]);
+    const int H_in = static_cast<int>(input->shape()[3]);
+    const int W_in = static_cast<int>(input->shape()[4]);
     Shape out_shape{N, C, D_out, H_out, W_out};
-    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
 
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
+    if (input->device() == Device::GPU) {
         // Native MLX forward via 8-corner gather + weighted sum.
-        const auto& gx = std::get<GpuStorage>(input->storage_);
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype_);
+        const auto& gx = std::get<GpuStorage>(input->storage());
+        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
 
         auto zs = build_src_coords(D_in, D_out, align_corners, mlx_dt);
         auto ys = build_src_coords(H_in, H_out, align_corners, mlx_dt);
@@ -688,16 +688,16 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
         auto out = ::mlx::core::add(
             ::mlx::core::add(::mlx::core::add(c000, c001), ::mlx::core::add(c010, c011)),
             ::mlx::core::add(::mlx::core::add(c100, c101), ::mlx::core::add(c110, c111)));
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), input->dtype())};
     } else {
         auto out_cpu =
-            allocate_size(static_cast<std::size_t>(N) * C * D_out * H_out * W_out, input->dtype_);
-        const auto& xs = std::get<CpuStorage>(input->storage_);
-        if (input->dtype_ == Dtype::F32)
+            allocate_size(static_cast<std::size_t>(N) * C * D_out * H_out * W_out, input->dtype());
+        const auto& xs = std::get<CpuStorage>(input->storage());
+        if (input->dtype() == Dtype::F32)
             trilinear_forward_cpu<float>(reinterpret_cast<const float*>(xs.ptr.get()),
                                          reinterpret_cast<float*>(out_cpu.ptr.get()), N, C, D_in,
                                          H_in, W_in, D_out, H_out, W_out, align_corners);
-        else if (input->dtype_ == Dtype::F64)
+        else if (input->dtype() == Dtype::F64)
             trilinear_forward_cpu<double>(reinterpret_cast<const double*>(xs.ptr.get()),
                                           reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, D_in,
                                           H_in, W_in, D_out, H_out, W_out, align_corners);
@@ -706,16 +706,16 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,
-                                            input->device_, false);
-    if (!GradMode::is_enabled() || !input->requires_grad_)
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                            input->device(), false);
+    if (!GradMode::is_enabled() || !input->requires_grad())
         return out;
     auto x_edge = detail::ensure_grad_fn(input);
     auto bwd = std::make_shared<InterpolateTrilinearBackward>();
-    bwd->input_shapes_ = {input->shape_};
+    bwd->input_shapes_ = {input->shape()};
     bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype_;
-    bwd->device_ = input->device_;
+    bwd->dtype_ = input->dtype();
+    bwd->device_ = input->device();
     bwd->input_tensors_ = {input};
     bwd->D_in_ = D_in;
     bwd->H_in_ = H_in;
@@ -724,12 +724,12 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
     bwd->H_out_ = H_out;
     bwd->W_out_ = W_out;
     bwd->align_corners_ = align_corners;
-    bwd->orig_shape_ = input->shape_;
+    bwd->orig_shape_ = input->shape();
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({input->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({input->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -921,17 +921,17 @@ void nearest3d_cpu(const T* xp,
 
 TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, int W_out) {
     Validator::input(input, "interpolate_nearest.input").non_null();
-    if (input->shape_.size() != 4)
-        throw ShapeMismatch(input->shape_, Shape{}, "interpolate_nearest: 4-D input required");
-    const int N = static_cast<int>(input->shape_[0]);
-    const int C = static_cast<int>(input->shape_[1]);
-    const int H_in = static_cast<int>(input->shape_[2]);
-    const int W_in = static_cast<int>(input->shape_[3]);
+    if (input->shape().size() != 4)
+        throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest: 4-D input required");
+    const int N = static_cast<int>(input->shape()[0]);
+    const int C = static_cast<int>(input->shape()[1]);
+    const int H_in = static_cast<int>(input->shape()[2]);
+    const int W_in = static_cast<int>(input->shape()[3]);
     Shape out_shape{N, C, H_out, W_out};
-    OpScopeFull scope{"interpolate_nearest_2d", input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{"interpolate_nearest_2d", input->device(), input->dtype(), out_shape};
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage_);
+    if (input->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(input->storage());
         // Build int index arrays: yh[H_out], xw[W_out].
         ::mlx::core::array yh =
             ::mlx::core::astype(::mlx::core::arange(0, H_out, 1), ::mlx::core::float32);
@@ -959,16 +959,16 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
         auto x_2d =
             ::mlx::core::broadcast_to(::mlx::core::reshape(x_int, {1, W_out}), {H_out, W_out});
         auto out = gather_2d_corner(*gx.arr, y_2d, x_2d, N, C, H_in, W_in, H_out, W_out);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), input->dtype())};
     } else {
         auto out_cpu =
-            allocate_size(static_cast<std::size_t>(N) * C * H_out * W_out, input->dtype_);
-        const auto& xs = std::get<CpuStorage>(input->storage_);
-        if (input->dtype_ == Dtype::F32)
+            allocate_size(static_cast<std::size_t>(N) * C * H_out * W_out, input->dtype());
+        const auto& xs = std::get<CpuStorage>(input->storage());
+        if (input->dtype() == Dtype::F32)
             nearest2d_cpu<float>(reinterpret_cast<const float*>(xs.ptr.get()),
                                  reinterpret_cast<float*>(out_cpu.ptr.get()), N, C, H_in, W_in,
                                  H_out, W_out);
-        else if (input->dtype_ == Dtype::F64)
+        else if (input->dtype() == Dtype::F64)
             nearest2d_cpu<double>(reinterpret_cast<const double*>(xs.ptr.get()),
                                   reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, H_in, W_in,
                                   H_out, W_out);
@@ -976,8 +976,8 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
             ErrorBuilder("interpolate_nearest").not_implemented("dtype must be F32/F64");
         out_storage = Storage{std::move(out_cpu)};
     }
-    return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,
-                                        input->device_, false);
+    return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                        input->device(), false);
 }
 
 TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
@@ -985,20 +985,20 @@ TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
                                         int H_out,
                                         int W_out) {
     Validator::input(input, "interpolate_nearest_3d.input").non_null();
-    if (input->shape_.size() != 5)
-        throw ShapeMismatch(input->shape_, Shape{}, "interpolate_nearest_3d: 5-D input required");
-    const int N = static_cast<int>(input->shape_[0]);
-    const int C = static_cast<int>(input->shape_[1]);
-    const int D_in = static_cast<int>(input->shape_[2]);
-    const int H_in = static_cast<int>(input->shape_[3]);
-    const int W_in = static_cast<int>(input->shape_[4]);
+    if (input->shape().size() != 5)
+        throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest_3d: 5-D input required");
+    const int N = static_cast<int>(input->shape()[0]);
+    const int C = static_cast<int>(input->shape()[1]);
+    const int D_in = static_cast<int>(input->shape()[2]);
+    const int H_in = static_cast<int>(input->shape()[3]);
+    const int W_in = static_cast<int>(input->shape()[4]);
     Shape out_shape{N, C, D_out, H_out, W_out};
-    OpScopeFull scope{"interpolate_nearest_3d", input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{"interpolate_nearest_3d", input->device(), input->dtype(), out_shape};
     Storage out_storage;
-    if (input->device_ == Device::GPU) {
+    if (input->device() == Device::GPU) {
         // Native MLX 5-D gather: build per-axis index arrays, compute the
         // flat input offset, take from a flattened input buffer.
-        const auto& gx = std::get<GpuStorage>(input->storage_);
+        const auto& gx = std::get<GpuStorage>(input->storage());
         auto build_idx = [&](int in_dim, int out_dim) {
             auto idx =
                 ::mlx::core::astype(::mlx::core::arange(0, out_dim, 1), ::mlx::core::float32);
@@ -1038,16 +1038,16 @@ TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
         auto in_flat =
             ::mlx::core::reshape(*gx.arr, ::mlx::core::Shape{N * C * D_in * H_in * W_in});
         auto out = ::mlx::core::take(in_flat, flat_b);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), input->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), input->dtype())};
     } else {
         auto out_cpu =
-            allocate_size(static_cast<std::size_t>(N) * C * D_out * H_out * W_out, input->dtype_);
-        const auto& xs = std::get<CpuStorage>(input->storage_);
-        if (input->dtype_ == Dtype::F32)
+            allocate_size(static_cast<std::size_t>(N) * C * D_out * H_out * W_out, input->dtype());
+        const auto& xs = std::get<CpuStorage>(input->storage());
+        if (input->dtype() == Dtype::F32)
             nearest3d_cpu<float>(reinterpret_cast<const float*>(xs.ptr.get()),
                                  reinterpret_cast<float*>(out_cpu.ptr.get()), N, C, D_in, H_in,
                                  W_in, D_out, H_out, W_out);
-        else if (input->dtype_ == Dtype::F64)
+        else if (input->dtype() == Dtype::F64)
             nearest3d_cpu<double>(reinterpret_cast<const double*>(xs.ptr.get()),
                                   reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, D_in, H_in,
                                   W_in, D_out, H_out, W_out);
@@ -1055,8 +1055,8 @@ TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
             ErrorBuilder("interpolate_nearest_3d").not_implemented("dtype must be F32/F64");
         out_storage = Storage{std::move(out_cpu)};
     }
-    return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,
-                                        input->device_, false);
+    return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                        input->device(), false);
 }
 
 }  // namespace lucid

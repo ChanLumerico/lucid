@@ -70,17 +70,17 @@ template <typename MlxFn, typename Cmp>
 TensorImplPtr cmp_dispatch(
     const TensorImplPtr& a, const TensorImplPtr& b, const char* name, MlxFn mlx_fn, Cmp cmp) {
     validate_pair_eq_shape(a, b, name);
-    OpScopeFull scope{name, a->device_, a->dtype_, a->shape_};
-    if (a->device_ == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+    OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
+    if (a->device() == Device::GPU) {
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         auto out = mlx_fn(*ga.arr, *gb.arr);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), Dtype::Bool)}, a->shape_,
-                     Dtype::Bool, a->device_);
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), Dtype::Bool)}, a->shape(),
+                     Dtype::Bool, a->device());
     }
-    auto out = cmp_kernel(std::get<CpuStorage>(a->storage_), std::get<CpuStorage>(b->storage_),
-                          shape_numel(a->shape_), cmp);
-    return fresh(Storage{std::move(out)}, a->shape_, Dtype::Bool, a->device_);
+    auto out = cmp_kernel(std::get<CpuStorage>(a->storage()), std::get<CpuStorage>(b->storage()),
+                          shape_numel(a->shape()), cmp);
+    return fresh(Storage{std::move(out)}, a->shape(), Dtype::Bool, a->device());
 }
 
 }  // namespace

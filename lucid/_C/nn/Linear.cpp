@@ -100,62 +100,60 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
     Validator::input(b, "linear.b").non_null().ndim(1);
     Validator::pair(x, W, "linear").same_dtype().same_device();
     Validator::pair(x, b, "linear").same_dtype().same_device();
-    if (x->device_ == Device::CPU &&
-        (!x->is_contiguous() || !W->is_contiguous() || !b->is_contiguous()))
-        ErrorBuilder("linear").not_implemented(
-            "non-contiguous input not supported (call .contiguous() first)");
 
-    const auto fx = flatten_x(x->shape_);
-    const std::size_t M = fx.M;                                    // batch product
-    const std::size_t K = fx.K;                                    // in_features
-    const std::size_t N = static_cast<std::size_t>(W->shape_[0]);  // out_features
+    const auto fx = flatten_x(x->shape());
+    const std::size_t M = fx.M;                                     // batch product
+    const std::size_t K = fx.K;                                     // in_features
+    const std::size_t N = static_cast<std::size_t>(W->shape()[0]);  // out_features
 
-    if (W->shape_[1] != static_cast<std::int64_t>(K))
-        throw ShapeMismatch(W->shape_, x->shape_, "linear: W.shape[1] != x.last_dim");
-    if (b->shape_[0] != static_cast<std::int64_t>(N))
-        throw ShapeMismatch(b->shape_, W->shape_, "linear: b.shape[0] != W.shape[0]");
+    if (W->shape()[1] != static_cast<std::int64_t>(K))
+        throw ShapeMismatch(W->shape(), x->shape(), "linear: W.shape[1] != x.last_dim");
+    if (b->shape()[0] != static_cast<std::int64_t>(N))
+        throw ShapeMismatch(b->shape(), W->shape(), "linear: b.shape[0] != W.shape[0]");
 
-    Shape out_shape = x->shape_;
+    Shape out_shape = x->shape();
     out_shape.back() = static_cast<std::int64_t>(N);
 
-    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), out_shape};
     scope.set_flops(static_cast<std::int64_t>(2 * M * N * K));
 
     Storage out_storage;
-    if (x->device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(x->storage_);
-        const auto& gW = std::get<GpuStorage>(W->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
+    if (x->device() == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage());
+        const auto& gW = std::get<GpuStorage>(W->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
         if (!gx.arr || !gW.arr || !gb.arr) {
             ErrorBuilder("linear").fail("null GPU input");
         }
         ::mlx::core::array out_arr =
             (M == 0 || N == 0 || K == 0)
-                ? ::mlx::core::zeros(gpu::to_mlx_shape(out_shape), gpu::to_mlx_dtype(x->dtype_))
+                ? ::mlx::core::zeros(gpu::to_mlx_shape(out_shape), gpu::to_mlx_dtype(x->dtype()))
                 : ::mlx::core::add(::mlx::core::matmul(*gx.arr, ::mlx::core::transpose(*gW.arr)),
                                    *gb.arr);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out_arr), x->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out_arr), x->dtype())};
     } else {
-        auto out_cpu = allocate_2d_like(M * N, x->dtype_);
+        auto out_cpu = allocate_2d_like(M * N, x->dtype());
         // y = x @ W^T  (M,K) @ (K,N transposed-from-(N,K)) = (M,N)
         if (M > 0 && N > 0 && K > 0) {
-            switch (x->dtype_) {
+            switch (x->dtype()) {
                 case Dtype::F32:
                     backend::cpu::sgemm(
                         /*transA=*/false, /*transB=*/true, M, N, K, 1.0f,
-                        reinterpret_cast<const float*>(std::get<CpuStorage>(x->storage_).ptr.get()),
+                        reinterpret_cast<const float*>(
+                            std::get<CpuStorage>(x->storage()).ptr.get()),
                         K,
-                        reinterpret_cast<const float*>(std::get<CpuStorage>(W->storage_).ptr.get()),
+                        reinterpret_cast<const float*>(
+                            std::get<CpuStorage>(W->storage()).ptr.get()),
                         K, 0.0f, reinterpret_cast<float*>(out_cpu.ptr.get()), N);
                     break;
                 case Dtype::F64:
                     backend::cpu::dgemm(
                         /*transA=*/false, /*transB=*/true, M, N, K, 1.0,
                         reinterpret_cast<const double*>(
-                            std::get<CpuStorage>(x->storage_).ptr.get()),
+                            std::get<CpuStorage>(x->storage()).ptr.get()),
                         K,
                         reinterpret_cast<const double*>(
-                            std::get<CpuStorage>(W->storage_).ptr.get()),
+                            std::get<CpuStorage>(W->storage()).ptr.get()),
                         K, 0.0, reinterpret_cast<double*>(out_cpu.ptr.get()), N);
                     break;
                 default:
@@ -166,15 +164,16 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
         }
         // y += bias broadcast
         if (M > 0 && N > 0) {
-            add_bias(out_cpu, std::get<CpuStorage>(b->storage_), M, N, x->dtype_);
+            add_bias(out_cpu, std::get<CpuStorage>(b->storage()), M, N, x->dtype());
         }
         out_storage = Storage{std::move(out_cpu)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), x->dtype_,
-                                            x->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
+                                            x->dtype(), x->device(), false);
 
-    if (!GradMode::is_enabled() || !(x->requires_grad_ || W->requires_grad_ || b->requires_grad_)) {
+    if (!GradMode::is_enabled() ||
+        !(x->requires_grad() || W->requires_grad() || b->requires_grad())) {
         return out;
     }
 
@@ -183,18 +182,18 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
     auto b_edge = detail::ensure_grad_fn(b);
 
     auto bwd = std::make_shared<LinearBackward>();
-    bwd->input_shapes_ = {x->shape_, W->shape_, b->shape_};
-    bwd->out_shape_ = out->shape_;
-    bwd->dtype_ = x->dtype_;
-    bwd->device_ = x->device_;
+    bwd->input_shapes_ = {x->shape(), W->shape(), b->shape()};
+    bwd->out_shape_ = out->shape();
+    bwd->dtype_ = x->dtype();
+    bwd->device_ = x->device();
     bwd->input_tensors_ = {x, W, b};
-    bwd->saved_inputs_ = {x->storage_, W->storage_, b->storage_};
+    bwd->saved_inputs_ = {x->storage(), W->storage(), b->storage()};
     bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(W_edge, 0), Edge(b_edge, 0)});
-    bwd->set_saved_versions({x->version_, W->version_, b->version_});
+    bwd->set_saved_versions({x->version(), W->version(), b->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

@@ -287,49 +287,46 @@ Storage LeakyReluBackward::grad_formula(const Storage& g) {
 
 TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
     Validator::input(a, "leaky_relu.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous())
-        ErrorBuilder("leaky_relu")
-            .not_implemented("non-contiguous input not supported (call .contiguous() first)");
 
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     Storage out_storage;
-    if (a->device_ == Device::GPU) {
-        const auto& g = std::get<GpuStorage>(a->storage_);
+    if (a->device() == Device::GPU) {
+        const auto& g = std::get<GpuStorage>(a->storage());
         if (!g.arr)
             ErrorBuilder("leaky_relu").fail("null GPU input");
-        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype_));
-        ::mlx::core::array slope_arr(slope, gpu::to_mlx_dtype(a->dtype_));
+        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype()));
+        ::mlx::core::array slope_arr(slope, gpu::to_mlx_dtype(a->dtype()));
         // y = where(x >= 0, x, slope * x)
         auto pos_mask = ::mlx::core::greater_equal(*g.arr, zero);
         auto neg_branch = ::mlx::core::multiply(slope_arr, *g.arr);
         auto out = ::mlx::core::where(pos_mask, *g.arr, neg_branch);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
     } else {
         out_storage =
-            Storage{cpu_kernel(std::get<CpuStorage>(a->storage_), a->shape_, a->dtype_, slope)};
+            Storage{cpu_kernel(std::get<CpuStorage>(a->storage()), a->shape(), a->dtype(), slope)};
     }
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
-                                            a->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
+                                            a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<LeakyReluBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = a->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = a->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
-    bwd->saved_inputs_ = {a->storage_};
+    bwd->saved_inputs_ = {a->storage()};
     bwd->slope_ = slope;
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 
@@ -479,48 +476,45 @@ Storage EluBackward::grad_formula(const Storage& g) {
 
 TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
     Validator::input(a, "elu.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous())
-        ErrorBuilder("elu").not_implemented(
-            "non-contiguous input not supported (call .contiguous() first)");
 
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     Storage out_storage;
-    if (a->device_ == Device::GPU) {
-        const auto& g = std::get<GpuStorage>(a->storage_);
+    if (a->device() == Device::GPU) {
+        const auto& g = std::get<GpuStorage>(a->storage());
         if (!g.arr)
             ErrorBuilder("elu").fail("null GPU input");
-        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype_));
-        ::mlx::core::array one(1.0, gpu::to_mlx_dtype(a->dtype_));
-        ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(a->dtype_));
+        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype()));
+        ::mlx::core::array one(1.0, gpu::to_mlx_dtype(a->dtype()));
+        ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(a->dtype()));
         auto pos_mask = ::mlx::core::greater_equal(*g.arr, zero);
         auto neg =
             ::mlx::core::multiply(alpha_arr, ::mlx::core::subtract(::mlx::core::exp(*g.arr), one));
         auto out = ::mlx::core::where(pos_mask, *g.arr, neg);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
     } else {
         out_storage =
-            Storage{cpu_kernel(std::get<CpuStorage>(a->storage_), a->shape_, a->dtype_, alpha)};
+            Storage{cpu_kernel(std::get<CpuStorage>(a->storage()), a->shape(), a->dtype(), alpha)};
     }
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
-                                            a->device_, false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
+                                            a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<EluBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = a->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = a->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
-    bwd->saved_inputs_ = {a->storage_};
+    bwd->saved_inputs_ = {a->storage()};
     bwd->alpha_ = alpha;
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version_});
-    out->grad_fn_ = std::move(bwd);
-    out->is_leaf_ = false;
-    out->requires_grad_ = true;
+    bwd->set_saved_versions({a->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
     return out;
 }
 

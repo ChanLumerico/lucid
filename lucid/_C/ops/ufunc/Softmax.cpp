@@ -100,35 +100,32 @@ void softmax_backward_typed(
 
 TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     Validator::input(a, "softmax.a").non_null();
-    if (a->device_ == Device::CPU && !a->is_contiguous())
-        ErrorBuilder("softmax").not_implemented(
-            "non-contiguous input not supported (call .contiguous() first)");
 
-    const int ndim = static_cast<int>(a->shape_.size());
+    const int ndim = static_cast<int>(a->shape().size());
     const int wrapped = axis < 0 ? axis + ndim : axis;
     if (wrapped < 0 || wrapped >= ndim)
         ErrorBuilder("softmax").index_error("axis out of range");
 
-    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
 
     Storage out_storage;
-    if (a->device_ == Device::GPU) {
-        const auto& g = std::get<GpuStorage>(a->storage_);
+    if (a->device() == Device::GPU) {
+        const auto& g = std::get<GpuStorage>(a->storage());
         if (!g.arr)
             ErrorBuilder("softmax").fail("null GPU input");
         // MLX softmax(arr, axis, precise=true) — `precise=true` mirrors the
         // CPU path's two-pass max-subtract scheme (numerical stability).
         auto out = ::mlx::core::softmax(*g.arr, wrapped, /*precise=*/true);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
+        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
     } else {
-        const auto oir = oir_for_axis(a->shape_, wrapped);
-        const auto& a_cpu = std::get<CpuStorage>(a->storage_);
+        const auto oir = oir_for_axis(a->shape(), wrapped);
+        const auto& a_cpu = std::get<CpuStorage>(a->storage());
         CpuStorage out;
-        out.dtype = a->dtype_;
+        out.dtype = a->dtype();
         out.nbytes = a_cpu.nbytes;
         out.ptr = allocate_aligned_bytes(out.nbytes);
         if (a->numel() > 0) {
-            switch (a->dtype_) {
+            switch (a->dtype()) {
                 case Dtype::F32:
                     softmax_forward_typed<float>(reinterpret_cast<const float*>(a_cpu.ptr.get()),
                                                  reinterpret_cast<float*>(out.ptr.get()), oir.outer,
@@ -146,28 +143,28 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
         out_storage = Storage{std::move(out)};
     }
 
-    auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape_, a->dtype_,
-                                               a->device_, false);
+    auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
+                                               a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()) * 5);
 
-    if (!GradMode::is_enabled() || !a->requires_grad_)
+    if (!GradMode::is_enabled() || !a->requires_grad())
         return result;
 
     auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<SoftmaxBackward>();
-    bwd->input_shapes_ = {a->shape_};
-    bwd->out_shape_ = a->shape_;
-    bwd->dtype_ = a->dtype_;
-    bwd->device_ = a->device_;
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = a->shape();
+    bwd->dtype_ = a->dtype();
+    bwd->device_ = a->device();
     bwd->input_tensors_ = {a};
-    bwd->saved_output_ = result->storage_;
+    bwd->saved_output_ = result->storage();
     bwd->axis_ = wrapped;
     bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
-    bwd->set_saved_versions({a->version_});
+    bwd->set_saved_versions({a->version()});
 
-    result->grad_fn_ = std::move(bwd);
-    result->is_leaf_ = false;
-    result->requires_grad_ = true;
+    result->set_grad_fn(std::move(bwd));
+    result->set_leaf(false);
+    result->set_requires_grad(true);
     return result;
 }
 

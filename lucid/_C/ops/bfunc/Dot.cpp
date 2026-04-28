@@ -123,28 +123,28 @@ public:
 
 TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     validate_pair(a, b, "dot");
-    const Dtype dt = a->dtype_;
-    const Device device = a->device_;
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
     OpScopeFull scope{"dot", device, dt, Shape{}};
 
     auto wire_grad = [&](const TensorImplPtr& out) {
-        if (!(GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)))
+        if (!(GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())))
             return;
         std::shared_ptr<Node> bwd;
-        if (a->shape_.size() == 1 && b->shape_.size() == 1) {
+        if (a->shape().size() == 1 && b->shape().size() == 1) {
             auto n = std::make_shared<Dot1DBackward>();
-            n->saved_a_ = a->storage_;
-            n->saved_b_ = b->storage_;
-            n->numel_ = static_cast<std::size_t>(a->shape_[0]);
+            n->saved_a_ = a->storage();
+            n->saved_b_ = b->storage();
+            n->numel_ = static_cast<std::size_t>(a->shape()[0]);
             n->dtype_ = dt;
             n->device_ = device;
             bwd = std::move(n);
-        } else if (a->shape_.size() == 2 && b->shape_.size() == 2) {
+        } else if (a->shape().size() == 2 && b->shape().size() == 2) {
             auto n = std::make_shared<Dot2DBackward>();
-            n->saved_a_ = a->storage_;
-            n->saved_b_ = b->storage_;
-            n->a_shape_ = a->shape_;
-            n->b_shape_ = b->shape_;
+            n->saved_a_ = a->storage();
+            n->saved_b_ = b->storage();
+            n->a_shape_ = a->shape();
+            n->b_shape_ = b->shape();
             n->dtype_ = dt;
             n->device_ = device;
             bwd = std::move(n);
@@ -157,16 +157,16 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         edges.emplace_back(a_edge, 0);
         edges.emplace_back(b_edge, 0);
         bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version_, b->version_});
-        out->grad_fn_ = std::move(bwd);
-        out->is_leaf_ = false;
-        out->requires_grad_ = true;
+        bwd->set_saved_versions({a->version(), b->version()});
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
     };
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage_);
-        const auto& gb = std::get<GpuStorage>(b->storage_);
-        ::mlx::core::array out = (a->shape_.size() == 1 && b->shape_.size() == 1)
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        const auto& gb = std::get<GpuStorage>(b->storage());
+        ::mlx::core::array out = (a->shape().size() == 1 && b->shape().size() == 1)
                                      ? ::mlx::core::sum(::mlx::core::multiply(*ga.arr, *gb.arr))
                                      : ::mlx::core::matmul(*ga.arr, *gb.arr);
         Shape out_shape;
@@ -178,15 +178,15 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         return t;
     }
 
-    const auto& ca = std::get<CpuStorage>(a->storage_);
-    const auto& cb = std::get<CpuStorage>(b->storage_);
+    const auto& ca = std::get<CpuStorage>(a->storage());
+    const auto& cb = std::get<CpuStorage>(b->storage());
 
-    if (a->shape_.size() == 1 && b->shape_.size() == 1) {
-        if (a->shape_[0] != b->shape_[0])
-            throw ShapeMismatch(a->shape_, b->shape_, "dot");
+    if (a->shape().size() == 1 && b->shape().size() == 1) {
+        if (a->shape()[0] != b->shape()[0])
+            throw ShapeMismatch(a->shape(), b->shape(), "dot");
         Shape out_shape{};
         auto out_cpu = allocate_cpu(out_shape, dt);
-        const std::size_t n = static_cast<std::size_t>(a->shape_[0]);
+        const std::size_t n = static_cast<std::size_t>(a->shape()[0]);
         if (dt == Dtype::F32) {
             const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
             const auto* q = reinterpret_cast<const float*>(cb.ptr.get());
@@ -209,11 +209,11 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         return t;
     }
 
-    if (a->shape_.size() == 2 && b->shape_.size() == 2) {
-        const std::int64_t M = a->shape_[0], K = a->shape_[1];
-        const std::int64_t Kb = b->shape_[0], N = b->shape_[1];
+    if (a->shape().size() == 2 && b->shape().size() == 2) {
+        const std::int64_t M = a->shape()[0], K = a->shape()[1];
+        const std::int64_t Kb = b->shape()[0], N = b->shape()[1];
         if (K != Kb)
-            throw ShapeMismatch(a->shape_, b->shape_, "dot");
+            throw ShapeMismatch(a->shape(), b->shape(), "dot");
         Shape out_shape{M, N};
         auto out_cpu = allocate_cpu(out_shape, dt);
         auto run = [&](auto* op, const auto* ap, const auto* bp) {

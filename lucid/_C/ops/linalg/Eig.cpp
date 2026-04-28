@@ -21,20 +21,20 @@ namespace lucid {
 std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     Validator::input(a, "eig.a").non_null();
-    require_float(a->dtype_, "eig");
-    require_square_2d(a->shape_, "eig");
-    OpScopeFull scope{"eig", a->device_, a->dtype_, a->shape_};
+    require_float(a->dtype(), "eig");
+    require_square_2d(a->shape(), "eig");
+    OpScopeFull scope{"eig", a->device(), a->dtype(), a->shape()};
 
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         auto [w, v] = ::mlx::core::linalg::eig(in, kMlxLinalgStream);
         Shape wsh = mlx_shape_to_lucid(w.shape());
         Shape vsh = mlx_shape_to_lucid(v.shape());
         std::vector<TensorImplPtr> result;
-        result.push_back(
-            fresh(wrap_gpu_result(std::move(w), a->dtype_), std::move(wsh), a->dtype_, a->device_));
-        result.push_back(
-            fresh(wrap_gpu_result(std::move(v), a->dtype_), std::move(vsh), a->dtype_, a->device_));
+        result.push_back(fresh(wrap_gpu_result(std::move(w), a->dtype()), std::move(wsh),
+                               a->dtype(), a->device()));
+        result.push_back(fresh(wrap_gpu_result(std::move(v), a->dtype()), std::move(vsh),
+                               a->dtype(), a->device()));
         return result;
     }
 
@@ -44,7 +44,7 @@ std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a) {
     // discard the imaginary part to keep the F32/F64 surface clean. Users
     // who need complex eigenpairs should call svd or pair this with their
     // own complex post-processing.
-    const auto& sh = a->shape_;
+    const auto& sh = a->shape();
     const int n = static_cast<int>(sh[sh.size() - 1]);
     const std::int64_t batch = leading_batch_count(sh, /*mat_dims=*/2);
     const std::size_t per_mat = static_cast<std::size_t>(n) * n;
@@ -52,12 +52,12 @@ std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a) {
 
     Shape wsh(sh.begin(), sh.end() - 1);  // (..., n)
     Shape vsh = sh;                       // (..., n, n)
-    auto Wcpu = allocate_cpu(wsh, a->dtype_);
-    auto Vcpu = allocate_cpu(vsh, a->dtype_);
-    const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+    auto Wcpu = allocate_cpu(wsh, a->dtype());
+    auto Vcpu = allocate_cpu(vsh, a->dtype());
+    const auto& in_cpu = std::get<CpuStorage>(a->storage());
 
     int info = 0;
-    if (a->dtype_ == Dtype::F32) {
+    if (a->dtype() == Dtype::F32) {
         const auto* in_p = reinterpret_cast<const float*>(in_cpu.ptr.get());
         auto* w_p = reinterpret_cast<float*>(Wcpu.ptr.get());
         auto* v_p = reinterpret_cast<float*>(Vcpu.ptr.get());
@@ -82,8 +82,8 @@ std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a) {
         }
     }
     std::vector<TensorImplPtr> result;
-    result.push_back(fresh(Storage{std::move(Wcpu)}, wsh, a->dtype_, a->device_));
-    result.push_back(fresh(Storage{std::move(Vcpu)}, vsh, a->dtype_, a->device_));
+    result.push_back(fresh(Storage{std::move(Wcpu)}, wsh, a->dtype(), a->device()));
+    result.push_back(fresh(Storage{std::move(Vcpu)}, vsh, a->dtype(), a->device()));
     return result;
 }
 

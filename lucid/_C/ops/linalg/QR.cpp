@@ -21,26 +21,26 @@ namespace lucid {
 std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     Validator::input(a, "qr.a").non_null();
-    require_float(a->dtype_, "qr");
-    if (a->shape_.size() < 2)
+    require_float(a->dtype(), "qr");
+    if (a->shape().size() < 2)
         ErrorBuilder("qr").fail("input must be at least 2-D");
-    OpScopeFull scope{"qr", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"qr", a->device(), a->dtype(), a->shape()};
 
-    if (a->device_ == Device::GPU) {
+    if (a->device() == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         auto [Q, R] = ::mlx::core::linalg::qr(in, kMlxLinalgStream);
         Shape qsh = mlx_shape_to_lucid(Q.shape());
         Shape rsh = mlx_shape_to_lucid(R.shape());
         std::vector<TensorImplPtr> result;
-        result.push_back(
-            fresh(wrap_gpu_result(std::move(Q), a->dtype_), std::move(qsh), a->dtype_, a->device_));
-        result.push_back(
-            fresh(wrap_gpu_result(std::move(R), a->dtype_), std::move(rsh), a->dtype_, a->device_));
+        result.push_back(fresh(wrap_gpu_result(std::move(Q), a->dtype()), std::move(qsh),
+                               a->dtype(), a->device()));
+        result.push_back(fresh(wrap_gpu_result(std::move(R), a->dtype()), std::move(rsh),
+                               a->dtype(), a->device()));
         return result;
     }
 
     // CPU path: reduced QR per-batch via LAPACK geqrf + orgqr.
-    const auto& sh = a->shape_;
+    const auto& sh = a->shape();
     const int m = static_cast<int>(sh[sh.size() - 2]);
     const int n = static_cast<int>(sh[sh.size() - 1]);
     const int k = std::min(m, n);
@@ -56,12 +56,12 @@ std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a) {
     rsh.push_back(k);
     rsh.push_back(n);
 
-    auto Qcpu = allocate_cpu(qsh, a->dtype_);
-    auto Rcpu = allocate_cpu(rsh, a->dtype_);
-    const auto& in_cpu = std::get<CpuStorage>(a->storage_);
+    auto Qcpu = allocate_cpu(qsh, a->dtype());
+    auto Rcpu = allocate_cpu(rsh, a->dtype());
+    const auto& in_cpu = std::get<CpuStorage>(a->storage());
 
     int info = 0;
-    if (a->dtype_ == Dtype::F32) {
+    if (a->dtype() == Dtype::F32) {
         const auto* in_p = reinterpret_cast<const float*>(in_cpu.ptr.get());
         auto* Q_p = reinterpret_cast<float*>(Qcpu.ptr.get());
         auto* R_p = reinterpret_cast<float*>(Rcpu.ptr.get());
@@ -81,8 +81,8 @@ std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a) {
         }
     }
     std::vector<TensorImplPtr> result;
-    result.push_back(fresh(Storage{std::move(Qcpu)}, qsh, a->dtype_, a->device_));
-    result.push_back(fresh(Storage{std::move(Rcpu)}, rsh, a->dtype_, a->device_));
+    result.push_back(fresh(Storage{std::move(Qcpu)}, qsh, a->dtype(), a->device()));
+    result.push_back(fresh(Storage{std::move(Rcpu)}, rsh, a->dtype(), a->device()));
     return result;
 }
 
