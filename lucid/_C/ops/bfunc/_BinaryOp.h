@@ -155,6 +155,25 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 
     static constexpr bool kSavesInputs = true;
+
+protected:
+    /// Materialize a saved input at `out_shape_` (broadcasting if needed).
+    /// Used by grad_formula in derivatives that consume the inputs (e.g.
+    /// Mul/Div/Pow), which need them aligned with grad_out's broadcast shape.
+    Storage saved_input_broadcasted(std::size_t k) const {
+        const Shape& src = this->input_shapes_[k];
+        if (src == this->out_shape_) return this->saved_inputs_[k];
+        if (this->device_ == Device::GPU) {
+            const auto& g = std::get<GpuStorage>(this->saved_inputs_[k]);
+            auto bcast = ::mlx::core::contiguous(::mlx::core::broadcast_to(
+                *g.arr, gpu::to_mlx_shape(this->out_shape_)));
+            return Storage{gpu::wrap_mlx_array(std::move(bcast),
+                                                this->dtype_)};
+        }
+        const auto& c = std::get<CpuStorage>(this->saved_inputs_[k]);
+        return Storage{detail::broadcast_cpu(c, src, this->out_shape_,
+                                              this->dtype_)};
+    }
 };
 
 // ---------------- implementation ----------------
@@ -258,7 +277,7 @@ std::shared_ptr<TensorImpl> BinaryOp<Derived>::forward(
 
     auto bwd = std::make_shared<Derived>();
     bwd->input_shapes_ = {a->shape_, b->shape_};
-    bwd->out_shape_ = a->shape_;
+    bwd->out_shape_ = out->shape_;  // broadcasted output shape, not a->shape_
     bwd->dtype_ = a->dtype_;
     bwd->device_ = a->device_;
     bwd->input_tensors_ = {a, b};  // Item #9 — for version check at backward

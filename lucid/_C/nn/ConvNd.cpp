@@ -450,16 +450,22 @@ std::vector<Storage> ConvNdBackward<N>::apply(Storage grad_out) {
         std::vector<int> pv(this->pad_, this->pad_ + N);
         std::vector<int> dv(this->dilation_, this->dilation_ + N);
 
+        // Transposed-conv pad_hi for dx: derived from forward
+        //   O = (I + 2P - K')/S + 1, K' = (K-1)*D + 1
+        // so the TC inverse needs pad_lo + pad_hi = I + (K-1)*D - 1 - (O-1)*S.
+        // Setting pad_lo = forward pad gives the asymmetric pad_hi below.
         std::vector<int> opad(N);
         for (int i = 0; i < N; ++i) {
-            const int eff_k = dv[i] * (K[i] - 1) + 1;
-            opad[i] = S[i] + 2 * pv[i] - eff_k - (O[i] - 1) * sv[i];
+            opad[i] = S[i] + (K[i] - 1) * dv[i] - 1
+                      - (O[i] - 1) * sv[i] - pv[i];
         }
         auto grad_nhwc = ::mlx::core::transpose(*gG.arr, nchw_to_nhwc_perm<N>());
         auto W_t_nhwc = ::mlx::core::transpose(*gW.arr, w_to_transpose_perm<N>());
         std::vector<int> ones_n(N, 1);
+        // kernel_dilation must be the forward dilation `dv` so the dilated
+        // kernel pattern is reproduced; input_dilation = forward stride `sv`.
         auto dx_nhwc = ::mlx::core::conv_general(
-            grad_nhwc, W_t_nhwc, ones_n, pv, opad, ones_n, sv,
+            grad_nhwc, W_t_nhwc, ones_n, pv, opad, dv, sv,
             /*groups=*/G, /*flip=*/true);
         auto dx = ::mlx::core::contiguous(::mlx::core::transpose(
             dx_nhwc, nhwc_to_nchw_perm<N>()));
@@ -686,19 +692,121 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
                      static_cast<std::int64_t>(O_total)};
 
     OpScope scope{schema_v1.name, x->device_, x->dtype_, out_shape};
+
+    // Native MLX path for unfold: build N-D source-coordinate maps via
+    // index arithmetic, mask out-of-bounds positions to zero, then take.
+    if (x->device_ == Device::GPU) {
+        const auto& gx = std::get<GpuStorage>(x->storage_);
+        const auto mlx_dt = gpu::to_mlx_dtype(x->dtype_);
+        // Spatial-dim index arrays per axis: shape patterns
+        //   k_d[d]: (1, 1, K_0, K_1, ..., O_0, O_1, ...) — 1 at non-d axes
+        //   o_d[d]: similarly
+        // Final composite index has shape (B, C, K_0..K_{N-1}, O_0..O_{N-1}).
+        ::mlx::core::Shape composite_shape;
+        composite_shape.push_back(B);
+        composite_shape.push_back(C);
+        for (int d = 0; d < N; ++d) composite_shape.push_back(K[d]);
+        for (int d = 0; d < N; ++d) composite_shape.push_back(O[d]);
+
+        auto i32 = ::mlx::core::int32;
+        ::mlx::core::Shape b_shape(composite_shape.size(), 1);
+        b_shape[0] = B;
+        auto b_idx = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, B, 1), i32), b_shape);
+
+        ::mlx::core::Shape c_shape(composite_shape.size(), 1);
+        c_shape[1] = C;
+        auto c_idx = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, C, 1), i32), c_shape);
+
+        // For each spatial dim d:
+        //   in_d = stride[d] * o + dilation[d] * k - pad[d]
+        // valid_d = (in_d >= 0) & (in_d < S[d])
+        std::optional<::mlx::core::array> valid_opt;
+        std::vector<::mlx::core::array> in_d_clipped;
+        for (int d = 0; d < N; ++d) {
+            auto k_arr = ::mlx::core::astype(::mlx::core::arange(0, K[d], 1), i32);
+            auto o_arr = ::mlx::core::astype(::mlx::core::arange(0, O[d], 1), i32);
+            ::mlx::core::Shape k_shape(composite_shape.size(), 1);
+            k_shape[2 + d] = K[d];
+            ::mlx::core::Shape o_shape(composite_shape.size(), 1);
+            o_shape[2 + N + d] = O[d];
+            k_arr = ::mlx::core::reshape(k_arr, k_shape);
+            o_arr = ::mlx::core::reshape(o_arr, o_shape);
+            auto sd = ::mlx::core::array(stride[d], i32);
+            auto dd = ::mlx::core::array(dilation[d], i32);
+            auto pd = ::mlx::core::array(pad[d], i32);
+            auto in_d = ::mlx::core::subtract(
+                ::mlx::core::add(::mlx::core::multiply(sd, o_arr),
+                                  ::mlx::core::multiply(dd, k_arr)),
+                pd);
+            auto zero_i = ::mlx::core::array(0, i32);
+            auto cap_i = ::mlx::core::array(S[d] - 1, i32);
+            auto v = ::mlx::core::logical_and(
+                ::mlx::core::greater_equal(in_d, zero_i),
+                ::mlx::core::less_equal(in_d, cap_i));
+            valid_opt = valid_opt.has_value()
+                ? ::mlx::core::logical_and(*valid_opt, v) : v;
+            in_d_clipped.push_back(::mlx::core::clip(in_d,
+                std::optional<::mlx::core::array>(zero_i),
+                std::optional<::mlx::core::array>(cap_i)));
+        }
+        auto valid = *valid_opt;
+
+        // flat = b * C*S_total + c * S_total + sum_d in_d_clipped * (prod of trailing S[k>d])
+        auto flat = ::mlx::core::add(
+            ::mlx::core::multiply(b_idx,
+                ::mlx::core::array(C * S_total, i32)),
+            ::mlx::core::multiply(c_idx,
+                ::mlx::core::array(S_total, i32)));
+        for (int d = 0; d < N; ++d) {
+            int trailing = 1;
+            for (int e = d + 1; e < N; ++e) trailing *= S[e];
+            flat = ::mlx::core::add(flat,
+                ::mlx::core::multiply(in_d_clipped[d],
+                    ::mlx::core::array(trailing, i32)));
+        }
+        flat = ::mlx::core::broadcast_to(flat, composite_shape);
+
+        auto x_flat = ::mlx::core::reshape(*gx.arr,
+            ::mlx::core::Shape{B * C * S_total});
+        auto sampled = ::mlx::core::take(x_flat, flat);
+        auto valid_b = ::mlx::core::astype(
+            ::mlx::core::broadcast_to(valid, composite_shape), mlx_dt);
+        auto masked = ::mlx::core::multiply(sampled, valid_b);
+
+        // Reshape (B, C, K_0..K_{N-1}, O_0..O_{N-1}) → (B, C*K_total, O_total).
+        auto reshaped = ::mlx::core::reshape(masked,
+            ::mlx::core::Shape{B, C * K_total, O_total});
+        auto out_storage_gpu = Storage{gpu::wrap_mlx_array(std::move(reshaped),
+                                                            x->dtype_)};
+        auto out = std::make_shared<TensorImpl>(std::move(out_storage_gpu),
+                                                 out_shape, x->dtype_,
+                                                 x->device_, false);
+        if (!GradMode::is_enabled() || !x->requires_grad_) return out;
+        auto x_edge = detail::ensure_grad_fn(x);
+        auto bwd = std::make_shared<UnfoldBackward>();
+        bwd->input_shapes_ = {x->shape_};
+        bwd->out_shape_    = out->shape_;
+        bwd->dtype_        = x->dtype_;
+        bwd->device_       = x->device_;
+        bwd->input_tensors_ = {x};
+        bwd->kernel_   = kernel;
+        bwd->stride_   = stride;
+        bwd->pad_      = pad;
+        bwd->dilation_ = dilation;
+        bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
+        bwd->set_saved_versions({x->version_});
+        out->grad_fn_       = std::move(bwd);
+        out->is_leaf_       = false;
+        out->requires_grad_ = true;
+        return out;
+    }
+
+    // CPU path — Apple Accelerate im2col helpers.
     auto out_cpu = allocate_size(static_cast<std::size_t>(B) * C * K_total * O_total,
                                   x->dtype_);
-    CpuStorage x_gpu_download;
-    const CpuStorage* x_cpu_ptr = nullptr;
-    if (x->device_ == Device::GPU) {
-        x_gpu_download =
-            gpu::download_gpu_to_cpu(std::get<GpuStorage>(x->storage_),
-                                     x->shape_);
-        x_cpu_ptr = &x_gpu_download;
-    } else {
-        x_cpu_ptr = &std::get<CpuStorage>(x->storage_);
-    }
-    const auto& x_cpu = *x_cpu_ptr;
+    const auto& x_cpu = std::get<CpuStorage>(x->storage_);
 
     for (int bi = 0; bi < B; ++bi) {
         switch (x->dtype_) {
@@ -747,12 +855,7 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
         }
     }
 
-    Storage out_storage;
-    if (x->device_ == Device::GPU)
-        out_storage = Storage{gpu::upload_cpu_to_gpu(out_cpu, out_shape)};
-    else
-        out_storage = Storage{std::move(out_cpu)};
-
+    Storage out_storage = Storage{std::move(out_cpu)};
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
                                              std::move(out_shape), x->dtype_,
                                              x->device_, false);
@@ -792,19 +895,95 @@ std::vector<Storage> UnfoldBackward::apply(Storage grad_out) {
         K_total *= K[i];
         O_total *= O[i];
     }
+    if (this->device_ == Device::GPU) {
+        // Native MLX path — scatter_add into dx, mirroring the unfold forward
+        // index arithmetic. Build the same N-D index arrays and add grad_out
+        // values into the corresponding positions of a zero base.
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        const auto mlx_dt = gpu::to_mlx_dtype(this->dtype_);
+        auto i32 = ::mlx::core::int32;
+
+        ::mlx::core::Shape composite_shape;
+        composite_shape.push_back(B);
+        composite_shape.push_back(C);
+        for (int d = 0; d < N; ++d) composite_shape.push_back(K[d]);
+        for (int d = 0; d < N; ++d) composite_shape.push_back(O[d]);
+
+        // batch / channel index arrays
+        ::mlx::core::Shape b_shape(composite_shape.size(), 1);
+        b_shape[0] = B;
+        auto b_idx = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, B, 1), i32), b_shape);
+        ::mlx::core::Shape c_shape(composite_shape.size(), 1);
+        c_shape[1] = C;
+        auto c_idx = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, C, 1), i32), c_shape);
+
+        std::optional<::mlx::core::array> valid_opt;
+        std::vector<::mlx::core::array> in_d_clipped;
+        for (int d = 0; d < N; ++d) {
+            ::mlx::core::Shape k_shape(composite_shape.size(), 1);
+            k_shape[2 + d] = K[d];
+            ::mlx::core::Shape o_shape(composite_shape.size(), 1);
+            o_shape[2 + N + d] = O[d];
+            auto k_arr = ::mlx::core::reshape(
+                ::mlx::core::astype(::mlx::core::arange(0, K[d], 1), i32), k_shape);
+            auto o_arr = ::mlx::core::reshape(
+                ::mlx::core::astype(::mlx::core::arange(0, O[d], 1), i32), o_shape);
+            auto in_d = ::mlx::core::subtract(
+                ::mlx::core::add(
+                    ::mlx::core::multiply(::mlx::core::array(stride_[d], i32), o_arr),
+                    ::mlx::core::multiply(::mlx::core::array(dilation_[d], i32), k_arr)),
+                ::mlx::core::array(pad_[d], i32));
+            auto zero_i = ::mlx::core::array(0, i32);
+            auto cap_i = ::mlx::core::array(S[d] - 1, i32);
+            auto v = ::mlx::core::logical_and(
+                ::mlx::core::greater_equal(in_d, zero_i),
+                ::mlx::core::less_equal(in_d, cap_i));
+            valid_opt = valid_opt.has_value()
+                ? ::mlx::core::logical_and(*valid_opt, v) : v;
+            in_d_clipped.push_back(::mlx::core::clip(in_d,
+                std::optional<::mlx::core::array>(zero_i),
+                std::optional<::mlx::core::array>(cap_i)));
+        }
+        auto valid = *valid_opt;
+
+        // Broadcast all index arrays to composite_shape and zero out
+        // contributions where valid==false (by multiplying grad with valid mask).
+        std::vector<::mlx::core::array> idxs;
+        idxs.push_back(::mlx::core::broadcast_to(b_idx, composite_shape));
+        idxs.push_back(::mlx::core::broadcast_to(c_idx, composite_shape));
+        for (int d = 0; d < N; ++d)
+            idxs.push_back(::mlx::core::broadcast_to(in_d_clipped[d],
+                                                       composite_shape));
+
+        // Reshape grad_out (B, C*K_total, O_total) → composite_shape, mask invalids.
+        auto grad_comp = ::mlx::core::reshape(*gg.arr, composite_shape);
+        auto valid_b = ::mlx::core::astype(
+            ::mlx::core::broadcast_to(valid, composite_shape), mlx_dt);
+        auto grad_masked = ::mlx::core::multiply(grad_comp, valid_b);
+
+        // updates.shape = composite_shape + (1,)*input_ndim because we cover
+        // all input axes (input_ndim = 2 + N: B, C, S_0..S_{N-1}).
+        const int input_ndim = 2 + N;
+        ::mlx::core::Shape upd_shape = composite_shape;
+        for (int i = 0; i < input_ndim; ++i) upd_shape.push_back(1);
+        auto updates = ::mlx::core::reshape(grad_masked, upd_shape);
+
+        ::mlx::core::Shape base_shape;
+        base_shape.push_back(B);
+        base_shape.push_back(C);
+        for (int d = 0; d < N; ++d) base_shape.push_back(S[d]);
+        auto base = ::mlx::core::zeros(base_shape, mlx_dt);
+        std::vector<int> axes_v;
+        for (int i = 0; i < input_ndim; ++i) axes_v.push_back(i);
+        auto out = ::mlx::core::scatter_add(base, idxs, updates, axes_v);
+        return {Storage{gpu::wrap_mlx_array(std::move(out), this->dtype_)}};
+    }
+
     auto dx_cpu = allocate_size(static_cast<std::size_t>(B) * C * S_total, this->dtype_);
     if (dx_cpu.nbytes) std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-    CpuStorage grad_gpu_download;
-    const CpuStorage* g_cpu_ptr = nullptr;
-    if (this->device_ == Device::GPU) {
-        grad_gpu_download =
-            gpu::download_gpu_to_cpu(std::get<GpuStorage>(grad_out),
-                                     this->out_shape_);
-        g_cpu_ptr = &grad_gpu_download;
-    } else {
-        g_cpu_ptr = &std::get<CpuStorage>(grad_out);
-    }
-    const auto& g_cpu = *g_cpu_ptr;
+    const auto& g_cpu = std::get<CpuStorage>(grad_out);
 
     for (int bi = 0; bi < B; ++bi) {
         switch (this->dtype_) {
@@ -853,9 +1032,6 @@ std::vector<Storage> UnfoldBackward::apply(Storage grad_out) {
             default:
                 throw NotImplementedError("unfold backward: dtype not supported");
         }
-    }
-    if (this->device_ == Device::GPU) {
-        return {Storage{gpu::upload_cpu_to_gpu(dx_cpu, this->input_shapes_[0])}};
     }
     return {Storage{std::move(dx_cpu)}};
 }

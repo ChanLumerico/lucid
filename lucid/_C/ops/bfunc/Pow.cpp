@@ -54,8 +54,11 @@ GpuStorage PowBackward::gpu_kernel(const GpuStorage& a,
 
 std::pair<Storage, Storage> PowBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
-    const auto& a = saved_inputs_[0];
-    const auto& b = saved_inputs_[1];
+    // Broadcast saved inputs so a/b are aligned with grad_out's shape.
+    Storage a_buf = saved_input_broadcasted(0);
+    Storage b_buf = saved_input_broadcasted(1);
+    const auto& a = a_buf;
+    const auto& b = b_buf;
 
     // dx = b * a^(b-1) * grad_out
     Storage b_minus_one = add_scalar_storage(b, -1.0, n, dtype_, device_);

@@ -1051,10 +1051,8 @@ std::vector<Storage> GridSampleBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64) run(double{});
     else throw NotImplementedError("grid_sample backward: dtype not supported");
 
-    if (device_ == Device::GPU) {
-        return {Storage{gpu::upload_cpu_to_gpu(dx, input_shape_)},
-                Storage{gpu::upload_cpu_to_gpu(dg, grid_shape_)}};
-    }
+    // GPU branch returns earlier via the native MLX path; this code only runs
+    // for CPU input.
     return {Storage{std::move(dx)}, Storage{std::move(dg)}};
 }
 

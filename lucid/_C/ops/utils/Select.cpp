@@ -227,29 +227,89 @@ Storage diagonal_backward_storage(const Storage& grad, const Shape& input_shape,
                                   const Shape& output_shape, int offset,
                                   int axis1, int axis2, Dtype dt,
                                   Device device) {
-    CpuStorage grad_cpu;
     if (device == Device::GPU) {
-        grad_cpu = gpu::download_gpu_to_cpu(std::get<GpuStorage>(grad),
-                                            output_shape);
-    } else {
-        grad_cpu = std::get<CpuStorage>(grad);
+        // Native MLX path: scatter_add along all axes simultaneously.
+        // Construct one index array per input dim sized to grad's shape,
+        // selecting the diagonal positions for axis1/axis2 and pass-through
+        // positions for batch axes.
+        const auto& gg = std::get<GpuStorage>(grad);
+        const std::size_t ndim = input_shape.size();
+        const int a1n = axis1 < 0 ? axis1 + static_cast<int>(ndim) : axis1;
+        const int a2n = axis2 < 0 ? axis2 + static_cast<int>(ndim) : axis2;
+        const std::int64_t r0 = (offset >= 0) ? 0 : -offset;
+        const std::int64_t c0 = (offset >= 0) ? offset : 0;
+        const std::int64_t L = output_shape.empty()
+            ? 0
+            : output_shape.back();
+
+        ::mlx::core::Shape mlx_in_shape = gpu::to_mlx_shape(input_shape);
+        ::mlx::core::Shape mlx_out_shape = gpu::to_mlx_shape(output_shape);
+
+        auto base = ::mlx::core::zeros(mlx_in_shape, gpu::to_mlx_dtype(dt));
+
+        // Helper: construct an int32 index array of shape `mlx_out_shape`
+        // whose values along the index_axis equal `arange(start, start+L)`,
+        // and along all other axes are broadcast from a singleton.
+        auto build_index = [&](int axis_in_input, std::int64_t start) {
+            // Position of this axis within output_shape:
+            //   batch axes (excluding axis1, axis2) keep their original
+            //   relative order in output_shape; axis1/axis2 collapse into
+            //   the trailing L axis.
+            int out_axis;
+            if (axis_in_input == a1n || axis_in_input == a2n) {
+                out_axis = static_cast<int>(output_shape.size()) - 1;
+            } else {
+                int rel = 0;
+                for (int d = 0; d < axis_in_input; ++d)
+                    if (d != a1n && d != a2n) ++rel;
+                out_axis = rel;
+            }
+            const std::int64_t span = (axis_in_input == a1n || axis_in_input == a2n)
+                ? L
+                : input_shape[static_cast<std::size_t>(axis_in_input)];
+            auto arr = ::mlx::core::arange(static_cast<int>(start),
+                                            static_cast<int>(start + span),
+                                            ::mlx::core::int32);
+            // Reshape to broadcast along out_axis.
+            ::mlx::core::Shape bc(output_shape.size(), 1);
+            bc[static_cast<std::size_t>(out_axis)] = static_cast<int>(span);
+            arr = ::mlx::core::reshape(arr, bc);
+            return ::mlx::core::broadcast_to(arr, mlx_out_shape);
+        };
+
+        std::vector<::mlx::core::array> indices;
+        std::vector<int> axes_v;
+        for (std::size_t d = 0; d < ndim; ++d) {
+            std::int64_t start = 0;
+            if (static_cast<int>(d) == a1n) start = r0;
+            else if (static_cast<int>(d) == a2n) start = c0;
+            indices.push_back(build_index(static_cast<int>(d), start));
+            axes_v.push_back(static_cast<int>(d));
+        }
+        // MLX scatter contract: updates.shape = indices.shape + (1,)*ndim_a
+        // when axes covers every dim of `a` (each scatter-position writes a
+        // single element). Reshape grad so each entry sits in its own
+        // (1,...,1) trailing slice.
+        ::mlx::core::Shape upd_shape = mlx_out_shape;
+        for (std::size_t d = 0; d < ndim; ++d) upd_shape.push_back(1);
+        auto updates = ::mlx::core::reshape(*gg.arr, upd_shape);
+        auto out = ::mlx::core::scatter_add(base, indices, updates, axes_v);
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
+    const auto& g = std::get<CpuStorage>(grad);
     CpuStorage out;
     switch (dt) {
         case Dtype::F32:
             out = diagonal_backward_cpu_typed<float>(
-                grad_cpu, input_shape, output_shape, offset, axis1, axis2, dt);
+                g, input_shape, output_shape, offset, axis1, axis2, dt);
             break;
         case Dtype::F64:
             out = diagonal_backward_cpu_typed<double>(
-                grad_cpu, input_shape, output_shape, offset, axis1, axis2, dt);
+                g, input_shape, output_shape, offset, axis1, axis2, dt);
             break;
         default:
             throw NotImplementedError("diagonal backward: dtype not supported");
-    }
-    if (device == Device::GPU) {
-        return Storage{gpu::upload_cpu_to_gpu(out, input_shape)};
     }
     return Storage{std::move(out)};
 }
@@ -733,7 +793,10 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1,
     if (a1 == a2) throw LucidError("diagonal: axis1 and axis2 must differ");
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
-        auto out = ::mlx::core::diagonal(*ga.arr, offset, a1, a2);
+        // MLX diagonal returns a strided view; contiguous() materializes a
+        // dense buffer matching lucid's row-major layout convention.
+        auto out = ::mlx::core::contiguous(
+            ::mlx::core::diagonal(*ga.arr, offset, a1, a2));
         Shape sh = mlx_shape_to_lucid(out.shape());
         auto result = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
                             std::move(sh), dt, device);

@@ -81,43 +81,41 @@ TensorImplPtr trace_op(const TensorImplPtr& a) {
 
     Shape out_shape(sh.begin() + 2, sh.end());
 
+    TensorImplPtr out;
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
-        auto out = ::mlx::core::trace(*ga.arr, /*offset=*/0,
-                                      /*axis1=*/0, /*axis2=*/1);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                     out_shape, dt, device);
-    }
-
-    const auto& ca = std::get<CpuStorage>(a->storage_);
-    const std::int64_t M = sh[0], N = sh[1];
-    const std::int64_t L = std::min(M, N);
-    const std::size_t out_numel = shape_numel(out_shape);
-    auto out_cpu = allocate_cpu(out_shape, dt);
-
-    auto run = [&](auto* out_p, const auto* in_p) {
-        using T = std::remove_pointer_t<decltype(out_p)>;
-        for (std::size_t k = 0; k < out_numel; ++k) {
-            T sum{};
-            for (std::int64_t i = 0; i < L; ++i) {
-                const std::size_t idx = (i * N + i) * out_numel + k;
-                sum = static_cast<T>(static_cast<double>(sum) +
-                                     static_cast<double>(in_p[idx]));
+        auto raw = ::mlx::core::trace(*ga.arr, /*offset=*/0,
+                                       /*axis1=*/0, /*axis2=*/1);
+        out = fresh(Storage{gpu::wrap_mlx_array(std::move(raw), dt)},
+                    out_shape, dt, device);
+    } else {
+        const auto& ca = std::get<CpuStorage>(a->storage_);
+        const std::int64_t M = sh[0], N = sh[1];
+        const std::int64_t L = std::min(M, N);
+        const std::size_t out_numel = shape_numel(out_shape);
+        auto out_cpu = allocate_cpu(out_shape, dt);
+        auto run = [&](auto* out_p, const auto* in_p) {
+            using T = std::remove_pointer_t<decltype(out_p)>;
+            for (std::size_t k = 0; k < out_numel; ++k) {
+                T sum{};
+                for (std::int64_t i = 0; i < L; ++i) {
+                    const std::size_t idx = (i * N + i) * out_numel + k;
+                    sum = static_cast<T>(static_cast<double>(sum) +
+                                         static_cast<double>(in_p[idx]));
+                }
+                out_p[k] = sum;
             }
-            out_p[k] = sum;
-        }
-    };
-
-    if (dt == Dtype::F32)
-        run(reinterpret_cast<float*>(out_cpu.ptr.get()),
-            reinterpret_cast<const float*>(ca.ptr.get()));
-    else if (dt == Dtype::F64)
-        run(reinterpret_cast<double*>(out_cpu.ptr.get()),
-            reinterpret_cast<const double*>(ca.ptr.get()));
-    else
-        throw NotImplementedError("trace: dtype not supported");
-
-    auto out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
+        };
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(out_cpu.ptr.get()),
+                reinterpret_cast<const float*>(ca.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(out_cpu.ptr.get()),
+                reinterpret_cast<const double*>(ca.ptr.get()));
+        else
+            throw NotImplementedError("trace: dtype not supported");
+        out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
+    }
 
     if (GradMode::is_enabled() && a->requires_grad_ && a->shape_.size() == 2) {
         auto bwd = std::make_shared<TraceBackward>();

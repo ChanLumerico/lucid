@@ -373,13 +373,15 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
     // Returns a 2-D tensor of shape (N, ndim) where N = number of non-zero
     // elements. Each row is a multi-index into `a`. Matches numpy
     // `np.nonzero` flattened-into-2D semantics.
+    //
+    // CPU-only op (data-dependent output length forces GPU sync; MLX has
+    // no equivalent primitive). Per convention, GPU input is accepted but
+    // the result lives on CPU — caller must `.gpu()` if they need it back.
     if (!a) throw LucidError("nonzero: null input");
-    const Device device = a->device_;
     const std::size_t ndim = a->shape_.size();
-    OpScope scope{"nonzero", device, a->dtype_, a->shape_};
+    OpScope scope{"nonzero", a->device_, a->dtype_, a->shape_};
 
-    // For GPU input, download to CPU (variable-length output forces sync).
-    CpuStorage cpu = (device == Device::GPU)
+    CpuStorage cpu = (a->device_ == Device::GPU)
         ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage_), a->shape_)
         : std::get<CpuStorage>(a->storage_);
 
@@ -429,21 +431,20 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
         }
         ++row;
     }
-    Storage out_storage = (device == Device::GPU)
-        ? Storage{gpu::upload_cpu_to_gpu(out, out_shape)}
-        : Storage{std::move(out)};
-    return fresh(std::move(out_storage), std::move(out_shape),
-                 Dtype::I64, device);
+    return fresh(Storage{std::move(out)}, std::move(out_shape),
+                 Dtype::I64, /*device=*/Device::CPU);
 }
 
 TensorImplPtr unique_op(const TensorImplPtr& a) {
-    // Sorted unique values across the flattened input. CPU-only.
+    // Sorted unique values across the flattened input.
+    //
+    // CPU-only op (variable-length output; MLX has no equivalent). Per
+    // convention, GPU input is accepted but result lives on CPU.
     if (!a) throw LucidError("unique: null input");
     const Dtype dt = a->dtype_;
-    const Device device = a->device_;
-    OpScope scope{"unique", device, dt, a->shape_};
+    OpScope scope{"unique", a->device_, dt, a->shape_};
 
-    CpuStorage cpu = (device == Device::GPU)
+    CpuStorage cpu = (a->device_ == Device::GPU)
         ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage_), a->shape_)
         : std::get<CpuStorage>(a->storage_);
     const std::size_t n = shape_numel(a->shape_);
@@ -477,10 +478,8 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
         wrap(run(reinterpret_cast<const std::int64_t*>(cpu.ptr.get())));
     else
         throw NotImplementedError("unique: dtype not supported");
-    Storage out_storage = (device == Device::GPU)
-        ? Storage{gpu::upload_cpu_to_gpu(out_cpu, out_shape)}
-        : Storage{std::move(out_cpu)};
-    return fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    return fresh(Storage{std::move(out_cpu)}, std::move(out_shape),
+                 dt, /*device=*/Device::CPU);
 }
 
 TensorImplPtr topk_op(const TensorImplPtr& a, std::int64_t k, int axis) {
