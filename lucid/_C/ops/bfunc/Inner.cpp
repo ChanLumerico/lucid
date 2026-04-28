@@ -1,5 +1,6 @@
 #include "Inner.h"
 
+#include <string>
 #include <variant>
 
 #include <mlx/ops.h>
@@ -7,8 +8,10 @@
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Exceptions.h"
+#include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
 #include "../../core/TensorImpl.h"
+#include "../einops/Einops.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -19,10 +22,39 @@ using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
+// Build an einsum pattern equivalent to inner: contract last axis of a and b.
+// `a`'s leading axes use 'a','b',... and `b`'s use 'p','q',... ; contraction
+// uses 'z'. Each side may have up to 16 leading axes.
+std::string inner_einsum_pattern(std::size_t na, std::size_t nb) {
+    std::string a_lhs, b_lhs, rhs;
+    for (std::size_t i = 0; i + 1 < na; ++i) {
+        char c = static_cast<char>('a' + i);
+        a_lhs.push_back(c);
+        rhs.push_back(c);
+    }
+    a_lhs.push_back('z');
+    for (std::size_t i = 0; i + 1 < nb; ++i) {
+        char c = static_cast<char>('p' + i);
+        b_lhs.push_back(c);
+        rhs.push_back(c);
+    }
+    b_lhs.push_back('z');
+    return a_lhs + "," + b_lhs + "->" + rhs;
+}
+
 }  // namespace
 
 TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     validate_pair(a, b, "inner");
+    // Route autograd-tracked computations through einsum so the backward
+    // chain is well-formed via the primitive ops einsum is built on.
+    // Pure-inference calls keep the native fast path below.
+    if (GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)) {
+        return einsum_op(inner_einsum_pattern(a->shape_.size(),
+                                               b->shape_.size()),
+                         {a, b});
+    }
+
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     OpScope scope{"inner", device, dt, Shape{}};

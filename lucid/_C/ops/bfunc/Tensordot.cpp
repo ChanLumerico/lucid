@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include <numeric>
+#include <set>
+#include <string>
 #include <variant>
 
 #include <mlx/ops.h>
@@ -9,8 +11,10 @@
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Exceptions.h"
+#include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
 #include "../../core/TensorImpl.h"
+#include "../einops/Einops.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -21,6 +25,47 @@ using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
+// Build an einsum pattern equivalent to tensordot(a, b, axes_a, axes_b).
+// Contracted axes share a label; non-contracted axes get distinct labels.
+std::string tensordot_einsum_pattern(std::size_t na, std::size_t nb,
+                                      const std::vector<int>& axes_a,
+                                      const std::vector<int>& axes_b) {
+    auto norm = [](int ax, std::size_t n) {
+        return ax < 0 ? ax + static_cast<int>(n) : ax;
+    };
+    std::set<int> ca_set, cb_set;
+    for (auto a : axes_a) ca_set.insert(norm(a, na));
+    for (auto b : axes_b) cb_set.insert(norm(b, nb));
+
+    std::string a_lhs(na, '?'), b_lhs(nb, '?'), rhs;
+    char free = 'a';
+    char shared = 'A';  // contracted labels go in the upper-case alphabet
+    // First assign shared labels to contraction pairs, in axes_{a,b} order.
+    for (std::size_t i = 0; i < axes_a.size(); ++i) {
+        int pa = norm(axes_a[i], na);
+        int pb = norm(axes_b[i], nb);
+        a_lhs[pa] = shared;
+        b_lhs[pb] = shared;
+        ++shared;
+    }
+    // Then assign free labels to non-contracted axes (in original order).
+    for (std::size_t i = 0; i < na; ++i) {
+        if (a_lhs[i] == '?') {
+            a_lhs[i] = free;
+            rhs.push_back(free);
+            ++free;
+        }
+    }
+    for (std::size_t i = 0; i < nb; ++i) {
+        if (b_lhs[i] == '?') {
+            b_lhs[i] = free;
+            rhs.push_back(free);
+            ++free;
+        }
+    }
+    return a_lhs + "," + b_lhs + "->" + rhs;
+}
+
 }  // namespace
 
 TensorImplPtr tensordot_op(const TensorImplPtr& a, const TensorImplPtr& b,
@@ -28,6 +73,17 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a, const TensorImplPtr& b,
     validate_pair(a, b, "tensordot");
     if (axes_a.size() != axes_b.size())
         throw LucidError("tensordot: axes_a and axes_b must have equal length");
+
+    // Autograd-tracked path: dispatch through einsum so primitive op
+    // backwards stitch the gradient chain. Inference path keeps the native
+    // gemm-based fast path below.
+    if (GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)) {
+        return einsum_op(tensordot_einsum_pattern(a->shape_.size(),
+                                                   b->shape_.size(),
+                                                   axes_a, axes_b),
+                         {a, b});
+    }
+
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     OpScope scope{"tensordot", device, dt, Shape{}};

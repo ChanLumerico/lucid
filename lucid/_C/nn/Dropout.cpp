@@ -601,15 +601,61 @@ TensorImplPtr DropBlockBackward::forward(const TensorImplPtr& a,
     const double gamma = p * feat / (block_size * block_size) / (valid + eps);
 
     Generator& g = gen ? *gen : default_generator();
-    // Force CPU-side mask generation + dilation (sliding-max is much simpler
-    // on CPU; one h2d copy is cheap relative to the input).
-    Storage seed = bernoulli_mask_storage(gamma, numel, a->dtype_, Device::CPU, g);
-    CpuStorage keep_mask = build_drop_block_mask(
-        std::get<CpuStorage>(seed), a->shape_, block_size, p, a->dtype_);
     Storage keep_storage;
     if (a->device_ == Device::GPU) {
-        keep_storage = Storage{gpu::upload_cpu_to_gpu(keep_mask, a->shape_)};
+        // Native GPU path: pure mlx::core ops only.
+        // 1) bernoulli seed on GPU
+        // 2) pad seed by K/2 on H, W axes
+        // 3) dilation = max over K*K shifted (B, C, H, W) slices
+        // 4) keep = scale * (1 - dilation)
+        Storage seed = bernoulli_mask_storage(gamma, numel, a->dtype_,
+                                                Device::GPU, g);
+        const auto& seed_g = std::get<GpuStorage>(seed);
+        auto mlx_dt = gpu::to_mlx_dtype(a->dtype_);
+
+        const int K = static_cast<int>(block_size);
+        const int pad = K / 2;
+        const int B = static_cast<int>(a->shape_[0]);
+        const int C = static_cast<int>(a->shape_[1]);
+        const int H = static_cast<int>(a->shape_[2]);
+        const int W = static_cast<int>(a->shape_[3]);
+
+        // bernoulli_mask_storage returns a flat (numel,) mlx array; reshape.
+        auto seed_4d = ::mlx::core::reshape(*seed_g.arr,
+            ::mlx::core::Shape{B, C, H, W});
+
+        // Pad H and W axes by `pad` on both sides (zero fill).
+        auto seed_pad = ::mlx::core::pad(seed_4d,
+            std::vector<std::pair<int, int>>{
+                {0, 0}, {0, 0}, {pad, pad}, {pad, pad}},
+            ::mlx::core::array(0.0f, mlx_dt));
+
+        // Dilation: max over all (dy, dx) in [0, K) × [0, K) shifted slices.
+        ::mlx::core::array dilated = ::mlx::core::zeros(
+            ::mlx::core::Shape{B, C, H, W}, mlx_dt);
+        for (int dy = 0; dy < K; ++dy) {
+            for (int dx = 0; dx < K; ++dx) {
+                auto s = ::mlx::core::slice(
+                    seed_pad,
+                    ::mlx::core::Shape{0, 0, dy, dx},
+                    ::mlx::core::Shape{B, C, dy + H, dx + W});
+                if (dy == 0 && dx == 0) dilated = s;
+                else dilated = ::mlx::core::maximum(dilated, s);
+            }
+        }
+
+        auto one = ::mlx::core::array(1.0f, mlx_dt);
+        auto scale = ::mlx::core::array(
+            static_cast<float>(1.0 / (1.0 - p)), mlx_dt);
+        auto keep = ::mlx::core::multiply(
+            scale, ::mlx::core::subtract(one, dilated));
+        keep_storage = Storage{gpu::wrap_mlx_array(std::move(keep),
+                                                    a->dtype_)};
     } else {
+        Storage seed = bernoulli_mask_storage(gamma, numel, a->dtype_,
+                                                Device::CPU, g);
+        CpuStorage keep_mask = build_drop_block_mask(
+            std::get<CpuStorage>(seed), a->shape_, block_size, p, a->dtype_);
         keep_storage = Storage{std::move(keep_mask)};
     }
     Storage y = multiply_storages(a->storage_, keep_storage, numel,

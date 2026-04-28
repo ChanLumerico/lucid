@@ -33,21 +33,22 @@ public:
     Device device_;
 
     std::vector<Storage> apply(Storage grad_out) override {
-        double g = 0.0;
-        if (device_ == Device::CPU) {
-            const auto& cg = std::get<CpuStorage>(grad_out);
-            if (dtype_ == Dtype::F32)
-                g = *reinterpret_cast<const float*>(cg.ptr.get());
-            else
-                g = *reinterpret_cast<const double*>(cg.ptr.get());
-        } else {
+        if (device_ == Device::GPU) {
+            // Pure-MLX path: scalar grad broadcasts over saved vectors.
             const auto& gg = std::get<GpuStorage>(grad_out);
-            auto cpu = gpu::download_gpu_to_cpu(gg, Shape{});
-            if (dtype_ == Dtype::F32)
-                g = *reinterpret_cast<const float*>(cpu.ptr.get());
-            else
-                g = *reinterpret_cast<const double*>(cpu.ptr.get());
+            const auto& ga = std::get<GpuStorage>(saved_a_);
+            const auto& gb = std::get<GpuStorage>(saved_b_);
+            auto da = ::mlx::core::multiply(*gb.arr, *gg.arr);
+            auto db = ::mlx::core::multiply(*ga.arr, *gg.arr);
+            return {Storage{gpu::wrap_mlx_array(std::move(da), dtype_)},
+                    Storage{gpu::wrap_mlx_array(std::move(db), dtype_)}};
         }
+        // CPU path: read scalar grad and dispatch through Accelerate-backed
+        // mul_scalar_storage helper.
+        const auto& cg = std::get<CpuStorage>(grad_out);
+        double g = (dtype_ == Dtype::F32)
+            ? *reinterpret_cast<const float*>(cg.ptr.get())
+            : *reinterpret_cast<const double*>(cg.ptr.get());
         Storage da = mul_scalar_storage(saved_b_, g, numel_, dtype_, device_);
         Storage db = mul_scalar_storage(saved_a_, g, numel_, dtype_, device_);
         return {std::move(da), std::move(db)};

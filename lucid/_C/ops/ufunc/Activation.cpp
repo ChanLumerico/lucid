@@ -164,6 +164,35 @@ CpuStorage GeluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
 }
 
 Storage GeluBackward::grad_formula(const Storage& g) {
+    if (device_ == Device::GPU) {
+        // dx = 0.5*(1+tanh(inner)) + 0.5*x*(1-tanh(inner)^2) * dinner
+        // where inner  = c1*(x + c2*x^3),  dinner = c1*(1 + 3*c2*x^2)
+        const auto& x_arr = *std::get<GpuStorage>(saved_inputs_[0]).arr;
+        const auto& g_arr = *std::get<GpuStorage>(g).arr;
+        auto mlx_dt = gpu::to_mlx_dtype(dtype_);
+        ::mlx::core::array c1{static_cast<float>(kGeluC1), mlx_dt};
+        ::mlx::core::array c2{static_cast<float>(kGeluC2), mlx_dt};
+        ::mlx::core::array three{3.0f, mlx_dt};
+        ::mlx::core::array half{0.5f, mlx_dt};
+        ::mlx::core::array one{1.0f, mlx_dt};
+
+        auto x2 = ::mlx::core::multiply(x_arr, x_arr);
+        auto x3 = ::mlx::core::multiply(x2, x_arr);
+        auto inner = ::mlx::core::multiply(
+            c1, ::mlx::core::add(x_arr, ::mlx::core::multiply(c2, x3)));
+        auto t = ::mlx::core::tanh(inner);
+        auto dinner = ::mlx::core::multiply(
+            c1, ::mlx::core::add(one,
+                ::mlx::core::multiply(three, ::mlx::core::multiply(c2, x2))));
+        auto t2 = ::mlx::core::multiply(t, t);
+        auto term1 = ::mlx::core::multiply(half, ::mlx::core::add(one, t));
+        auto term2 = ::mlx::core::multiply(half,
+            ::mlx::core::multiply(x_arr,
+                ::mlx::core::multiply(::mlx::core::subtract(one, t2), dinner)));
+        auto dx = ::mlx::core::add(term1, term2);
+        auto out = ::mlx::core::multiply(dx, g_arr);
+        return Storage{gpu::wrap_mlx_array(std::move(out), dtype_)};
+    }
     const std::size_t n = shape_numel(out_shape_);
     const auto& x_cpu = std::get<CpuStorage>(saved_inputs_[0]);
     const auto& g_cpu = std::get<CpuStorage>(g);
