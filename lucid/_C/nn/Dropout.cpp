@@ -12,12 +12,15 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/Generator.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -31,15 +34,14 @@ TensorImplPtr DropoutBackward::forward(const TensorImplPtr& a,
                                        double p,
                                        bool training,
                                        Generator* gen) {
-    if (!a)
-        throw LucidError("dropout: null input");
+    Validator::input(a, "dropout.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError(
-            "dropout: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("dropout").not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
     if (p < 0.0 || p >= 1.0)
-        throw LucidError("dropout: p must be in [0, 1)");
+        ErrorBuilder("dropout").fail("p must be in [0, 1)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     const std::size_t numel = a->numel();
 
     // Inference mode (or zero drop) → pure pass-through clone (so engine
@@ -133,7 +135,7 @@ namespace {
 // Build a (B, C, 1, ..., 1) shape from an input shape.
 Shape channel_mask_shape(const Shape& in) {
     if (in.size() < 2) {
-        throw LucidError("dropoutnd: expected ndim >= 2, got " + std::to_string(in.size()));
+        ErrorBuilder("dropoutnd").fail("expected ndim >= 2, got" + std::to_string(in.size()));
     }
     Shape m(in.size(), 1);
     m[0] = in[0];
@@ -144,7 +146,7 @@ Shape channel_mask_shape(const Shape& in) {
 // (B, 1, 1, ..., 1) shape from input.
 Shape sample_mask_shape(const Shape& in) {
     if (in.empty())
-        throw LucidError("drop_path: input must have ≥1 dim");
+        ErrorBuilder("drop_path").fail("input must have ≥1 dim");
     Shape m(in.size(), 1);
     m[0] = in[0];
     return m;
@@ -190,7 +192,7 @@ CpuStorage expand_channel_mask(const CpuStorage& mask, const Shape& full, Dtype 
                                               spatial);
             break;
         default:
-            throw NotImplementedError("dropoutnd: dtype not supported");
+            ErrorBuilder("dropoutnd").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -225,7 +227,7 @@ CpuStorage expand_sample_mask(const CpuStorage& mask, const Shape& full, Dtype d
                                              reinterpret_cast<double*>(out.ptr.get()), B, per);
             break;
         default:
-            throw NotImplementedError("drop_path: dtype not supported");
+            ErrorBuilder("drop_path").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -244,15 +246,14 @@ TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
                                          double p,
                                          bool training,
                                          Generator* gen) {
-    if (!a)
-        throw LucidError("dropoutnd: null input");
+    Validator::input(a, "dropoutnd.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError(
-            "dropoutnd: non-contiguous input not supported (call .contiguous())");
+        ErrorBuilder("dropoutnd")
+            .not_implemented("non-contiguous input not supported (call .contiguous())");
     if (p < 0.0 || p >= 1.0)
-        throw LucidError("dropoutnd: p must be in [0, 1)");
+        ErrorBuilder("dropoutnd").fail("p must be in [0, 1)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     const std::size_t numel = a->numel();
 
     if (!training || p == 0.0) {
@@ -373,14 +374,13 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
                                             double p,
                                             bool training,
                                             Generator* gen) {
-    if (!a)
-        throw LucidError("alpha_dropout: null input");
+    Validator::input(a, "alpha_dropout.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError("alpha_dropout: non-contiguous input not supported");
+        ErrorBuilder("alpha_dropout").not_implemented("non-contiguous input not supported");
     if (p < 0.0 || p >= 1.0)
-        throw LucidError("alpha_dropout: p must be in [0, 1)");
+        ErrorBuilder("alpha_dropout").fail("p must be in [0, 1)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     const std::size_t numel = a->numel();
 
     if (!training || p == 0.0) {
@@ -545,7 +545,7 @@ CpuStorage build_drop_block_mask(
                                            W, block_size);
             break;
         default:
-            throw NotImplementedError("drop_block: dtype not supported");
+            ErrorBuilder("drop_block").not_implemented("dtype not supported");
     }
     // Convert to keep mask: keep = (1 - block_mask) / (1 - p)
     const double scale = 1.0 / (1.0 - p);
@@ -573,18 +573,17 @@ CpuStorage build_drop_block_mask(
 
 TensorImplPtr DropBlockBackward::forward(
     const TensorImplPtr& a, std::int64_t block_size, double p, double eps, Generator* gen) {
-    if (!a)
-        throw LucidError("drop_block: null input");
+    Validator::input(a, "drop_block.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError("drop_block: non-contiguous input not supported");
+        ErrorBuilder("drop_block").not_implemented("non-contiguous input not supported");
     if (a->shape_.size() != 4)
-        throw LucidError("drop_block: input must be 4-D (N, C, H, W)");
+        ErrorBuilder("drop_block").fail("input must be 4-D (N, C, H, W)");
     if (p < 0.0 || p >= 1.0)
-        throw LucidError("drop_block: p must be in [0, 1)");
+        ErrorBuilder("drop_block").fail("p must be in [0, 1)");
     if (block_size <= 0)
-        throw LucidError("drop_block: block_size must be > 0");
+        ErrorBuilder("drop_block").fail("block_size must be > 0");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     const std::size_t numel = a->numel();
     const std::int64_t H = a->shape_[2];
     const std::int64_t W = a->shape_[3];
@@ -691,14 +690,13 @@ TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
                                         double p,
                                         bool scale_by_keep,
                                         Generator* gen) {
-    if (!a)
-        throw LucidError("drop_path: null input");
+    Validator::input(a, "drop_path.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError("drop_path: non-contiguous input not supported");
+        ErrorBuilder("drop_path").not_implemented("non-contiguous input not supported");
     if (p < 0.0 || p >= 1.0)
-        throw LucidError("drop_path: p must be in [0, 1)");
+        ErrorBuilder("drop_path").fail("p must be in [0, 1)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     const std::size_t numel = a->numel();
 
     if (p == 0.0) {

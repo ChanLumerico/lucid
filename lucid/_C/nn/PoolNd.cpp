@@ -12,11 +12,14 @@
 #include "../backend/cpu/Pool.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -57,10 +60,9 @@ inline int compute_out(int S, int K, int stride, int pad) {
 
 template <int N>
 void validate_input(const TensorImplPtr& x, std::string_view op_name) {
-    if (!x)
-        throw LucidError(std::string(op_name) + ": null input");
+    Validator::input(x, std::string(op_name) + ".x").non_null();
     if (x->device_ == Device::CPU && !x->is_contiguous())
-        throw NotImplementedError(std::string(op_name) + ": non-contiguous input not supported");
+        ErrorBuilder(op_name).not_implemented("non-contiguous input not supported");
     if (static_cast<int>(x->shape_.size()) != N + 2)
         throw ShapeMismatch(x->shape_, Shape{}, std::string(op_name) + ": x rank mismatch");
 }
@@ -463,7 +465,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         out_shape.push_back(static_cast<std::int64_t>(O[i]));
 
-    OpScope scope{MaxPoolNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{MaxPoolNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
 
     Storage out_storage;
     Storage saved_argmax;
@@ -471,7 +473,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     if (x->device_ == Device::GPU) {
         const auto& gx = std::get<GpuStorage>(x->storage_);
         if (!gx.arr)
-            throw LucidError("max_pool: null GPU input");
+            ErrorBuilder("max_pool").fail("null GPU input");
 
         ::mlx::core::array neg_inf(-std::numeric_limits<double>::infinity(),
                                    gpu::to_mlx_dtype(x->dtype_));
@@ -526,7 +528,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
                     reinterpret_cast<std::int32_t*>(am_cpu.ptr.get()), B, C, S, K, O, stride, pad);
                 break;
             default:
-                throw NotImplementedError("max_pool: dtype not supported (F32/F64)");
+                ErrorBuilder("max_pool").not_implemented("dtype not supported (F32/F64)");
         }
         out_storage = Storage{std::move(y_cpu)};
         saved_argmax = Storage{std::move(am_cpu)};
@@ -575,7 +577,7 @@ std::vector<Storage> MaxPoolNdBackward<N>::apply(Storage grad_out) {
         const auto& gG = std::get<GpuStorage>(grad_out);
         const auto& gA = std::get<GpuStorage>(this->saved_argmax_);
         if (!gG.arr || !gA.arr) {
-            throw LucidError("max_pool backward: null GPU array");
+            ErrorBuilder("max_pool backward").fail("null GPU array");
         }
         using SE = ::mlx::core::ShapeElem;
         const auto idt = ::mlx::core::int32;
@@ -682,7 +684,7 @@ std::vector<Storage> MaxPoolNdBackward<N>::apply(Storage grad_out) {
                 reinterpret_cast<double*>(dx_cpu.ptr.get()), B, C, S, O);
             break;
         default:
-            throw NotImplementedError("max_pool backward: dtype not supported");
+            ErrorBuilder("max_pool backward").not_implemented("dtype not supported");
     }
     return {Storage{std::move(dx_cpu)}};
 }
@@ -721,14 +723,14 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         out_shape.push_back(static_cast<std::int64_t>(O[i]));
 
-    OpScope scope{AvgPoolNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{AvgPoolNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
 
     Storage out_storage;
 
     if (x->device_ == Device::GPU) {
         const auto& gx = std::get<GpuStorage>(x->storage_);
         if (!gx.arr)
-            throw LucidError("avg_pool: null GPU input");
+            ErrorBuilder("avg_pool").fail("null GPU input");
         ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(x->dtype_));
         std::vector<std::pair<int, int>> pad_widths;
         pad_widths.reserve(N + 2);
@@ -762,7 +764,7 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
                     reinterpret_cast<double*>(y_cpu.ptr.get()), B, C, S, K, O, stride, pad);
                 break;
             default:
-                throw NotImplementedError("avg_pool: dtype not supported (F32/F64)");
+                ErrorBuilder("avg_pool").not_implemented("dtype not supported (F32/F64)");
         }
         out_storage = Storage{std::move(y_cpu)};
     }
@@ -810,7 +812,7 @@ std::vector<Storage> AvgPoolNdBackward<N>::apply(Storage grad_out) {
     if (this->device_ == Device::GPU) {
         const auto& gG = std::get<GpuStorage>(grad_out);
         if (!gG.arr)
-            throw LucidError("avg_pool backward: null GPU array");
+            ErrorBuilder("avg_pool backward").fail("null GPU array");
         using SE = ::mlx::core::ShapeElem;
         const auto idt = ::mlx::core::int32;
         const int K = K_total;
@@ -911,7 +913,7 @@ std::vector<Storage> AvgPoolNdBackward<N>::apply(Storage grad_out) {
                                                   S, this->K_, O, this->stride_, this->pad_);
             break;
         default:
-            throw NotImplementedError("avg_pool backward: dtype not supported");
+            ErrorBuilder("avg_pool backward").not_implemented("dtype not supported");
     }
     return {Storage{std::move(dx_cpu)}};
 }

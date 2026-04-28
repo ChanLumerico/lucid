@@ -24,6 +24,7 @@
 
 #include <mlx/array.h>
 #include <mlx/dtype.h>
+#include <mlx/ops.h>  // for ::mlx::core::astype used by mlx_scalar()
 
 #include "../../api.h"
 #include "../../core/Dtype.h"
@@ -55,5 +56,11 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype);
 // Convert a Lucid Shape (int64) to an MLX shape (int32). Throws if any
 // dim exceeds INT32_MAX.
 ::mlx::core::Shape to_mlx_shape(const Shape& shape);
+
+// Build a 0-dim `mlx::array` holding `v` cast to `dt`. Replaces ad-hoc
+// `mlx_scalar`/`mlx_scalar_dt` copies that used to live in nn / optim ops.
+inline ::mlx::core::array mlx_scalar(double v, ::mlx::core::Dtype dt) {
+    return ::mlx::core::astype(::mlx::core::array(static_cast<float>(v)), dt);
+}
 
 }  // namespace lucid::gpu

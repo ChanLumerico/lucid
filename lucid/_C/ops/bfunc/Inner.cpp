@@ -7,9 +7,11 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../einops/Einops.h"
 #include "_Detail.h"
@@ -55,7 +57,7 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"inner", device, dt, Shape{}};
+    OpScopeFull scope{"inner", device, dt, Shape{}};
 
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
@@ -99,7 +101,7 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
             reinterpret_cast<const double*>(ca.ptr.get()),
             reinterpret_cast<const double*>(cb.ptr.get()));
     else
-        throw NotImplementedError("inner: dtype not supported");
+        ErrorBuilder("inner").not_implemented("dtype not supported");
     return fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
 }
 

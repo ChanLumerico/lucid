@@ -6,7 +6,9 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "_Detail.h"
 
@@ -59,7 +61,7 @@ CpuStorage cmp_kernel(const CpuStorage& a, const CpuStorage& b, std::size_t nume
                 reinterpret_cast<const std::uint8_t*>(b.ptr.get()));
             break;
         default:
-            throw NotImplementedError("compare: dtype not supported");
+            ErrorBuilder("compare").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -68,7 +70,7 @@ template <typename MlxFn, typename Cmp>
 TensorImplPtr cmp_dispatch(
     const TensorImplPtr& a, const TensorImplPtr& b, const char* name, MlxFn mlx_fn, Cmp cmp) {
     validate_pair_eq_shape(a, b, name);
-    OpScope scope{name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{name, a->device_, a->dtype_, a->shape_};
     if (a->device_ == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         const auto& gb = std::get<GpuStorage>(b->storage_);

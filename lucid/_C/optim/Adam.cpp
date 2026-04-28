@@ -7,6 +7,7 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/gpu/MlxBridge.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/TensorImpl.h"
 #include "_OptimDetail.h"
@@ -73,7 +74,7 @@ void adam_step_gpu(GpuStorage& param_g,
                    bool decoupled_wd,
                    std::int64_t step) {
     if (!param_g.arr || !grad_g.arr || !m_g.arr || !v_g.arr) {
-        throw LucidError("Adam GPU: null array");
+        ErrorBuilder("Adam GPU").fail("null array");
     }
     const auto mdt = gpu::to_mlx_dtype(dt);
     const double bc1 = 1.0 - std::pow(beta1, static_cast<double>(step));
@@ -136,17 +137,17 @@ Adam::Adam(std::vector<std::shared_ptr<TensorImpl>> params,
       amsgrad_(amsgrad),
       step_count_(0) {
     if (lr_ < 0.0)
-        throw LucidError("Adam: lr must be >= 0");
+        ErrorBuilder("Adam").fail("lr must be >= 0");
     if (beta1_ < 0.0 || beta1_ >= 1.0)
-        throw LucidError("Adam: beta1 must be in [0, 1)");
+        ErrorBuilder("Adam").fail("beta1 must be in [0, 1)");
     if (beta2_ < 0.0 || beta2_ >= 1.0)
-        throw LucidError("Adam: beta2 must be in [0, 1)");
+        ErrorBuilder("Adam").fail("beta2 must be in [0, 1)");
     if (eps_ < 0.0)
-        throw LucidError("Adam: eps must be >= 0");
+        ErrorBuilder("Adam").fail("eps must be >= 0");
     if (weight_decay_ < 0.0)
-        throw LucidError("Adam: weight_decay must be >= 0");
+        ErrorBuilder("Adam").fail("weight_decay must be >= 0");
     if (amsgrad_)
-        throw NotImplementedError("Adam: amsgrad not yet supported");
+        ErrorBuilder("Adam").not_implemented("amsgrad not yet supported");
 }
 
 void Adam::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) {
@@ -199,7 +200,7 @@ void Adam::update_one(std::size_t slot_idx,
                                   /*decoupled_wd=*/false, step_count_);
             break;
         default:
-            throw NotImplementedError("Adam: dtype not supported (F32/F64)");
+            ErrorBuilder("Adam").not_implemented("dtype not supported (F32/F64)");
     }
 }
 
@@ -221,15 +222,15 @@ AdamW::AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
       weight_decay_(weight_decay),
       step_count_(0) {
     if (lr_ < 0.0)
-        throw LucidError("AdamW: lr must be >= 0");
+        ErrorBuilder("AdamW").fail("lr must be >= 0");
     if (beta1_ < 0.0 || beta1_ >= 1.0)
-        throw LucidError("AdamW: beta1 must be in [0, 1)");
+        ErrorBuilder("AdamW").fail("beta1 must be in [0, 1)");
     if (beta2_ < 0.0 || beta2_ >= 1.0)
-        throw LucidError("AdamW: beta2 must be in [0, 1)");
+        ErrorBuilder("AdamW").fail("beta2 must be in [0, 1)");
     if (eps_ < 0.0)
-        throw LucidError("AdamW: eps must be >= 0");
+        ErrorBuilder("AdamW").fail("eps must be >= 0");
     if (weight_decay_ < 0.0)
-        throw LucidError("AdamW: weight_decay must be >= 0");
+        ErrorBuilder("AdamW").fail("weight_decay must be >= 0");
 }
 
 void AdamW::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) {
@@ -278,7 +279,7 @@ void AdamW::update_one(std::size_t slot_idx,
                                   /*decoupled_wd=*/true, step_count_);
             break;
         default:
-            throw NotImplementedError("AdamW: dtype not supported (F32/F64)");
+            ErrorBuilder("AdamW").not_implemented("dtype not supported (F32/F64)");
     }
 }
 
@@ -384,7 +385,7 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
     else if (dt == Dtype::F64)
         step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
     else
-        throw NotImplementedError("NAdam: dtype not supported");
+        ErrorBuilder("NAdam").not_implemented("dtype not supported");
 }
 
 // =====================================================================
@@ -498,7 +499,7 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
     else if (dt == Dtype::F64)
         step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
     else
-        throw NotImplementedError("RAdam: dtype not supported");
+        ErrorBuilder("RAdam").not_implemented("dtype not supported");
 }
 
 }  // namespace lucid

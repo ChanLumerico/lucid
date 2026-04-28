@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "Optimizer.h"
 
@@ -26,7 +27,7 @@ void LRScheduler::set_epoch(std::int64_t epoch) {
 StepLR::StepLR(Optimizer& opt, std::int64_t step_size, double gamma)
     : LRScheduler(opt), step_size_(step_size), gamma_(gamma) {
     if (step_size_ <= 0)
-        throw LucidError("StepLR: step_size must be > 0");
+        ErrorBuilder("StepLR").fail("step_size must be > 0");
 }
 double StepLR::compute_lr_at(std::int64_t epoch) const {
     const std::int64_t k = epoch / step_size_;
@@ -62,7 +63,7 @@ double MultiStepLR::compute_lr_at(std::int64_t epoch) const {
 CosineAnnealingLR::CosineAnnealingLR(Optimizer& opt, std::int64_t T_max, double eta_min)
     : LRScheduler(opt), T_max_(T_max), eta_min_(eta_min) {
     if (T_max_ <= 0)
-        throw LucidError("CosineAnnealingLR: T_max must be > 0");
+        ErrorBuilder("CosineAnnealingLR").fail("T_max must be > 0");
 }
 double CosineAnnealingLR::compute_lr_at(std::int64_t epoch) const {
     // Match PyTorch: the cosine continues past T_max (no clamp). User code
@@ -108,7 +109,7 @@ ReduceLROnPlateau::ReduceLROnPlateau(Optimizer& opt,
       cooldown_counter_(0),
       last_lr_(opt.lr()) {
     if (factor_ >= 1.0)
-        throw LucidError("ReduceLROnPlateau: factor must be < 1.0");
+        ErrorBuilder("ReduceLROnPlateau").fail("factor must be < 1.0");
 }
 
 bool ReduceLROnPlateau::is_better(double metric) const {
@@ -161,9 +162,9 @@ CyclicLR::CyclicLR(Optimizer& opt,
       mode_(mode),
       gamma_(gamma) {
     if (base_lr >= max_lr)
-        throw LucidError("CyclicLR: base_lr must be < max_lr");
+        ErrorBuilder("CyclicLR").fail("base_lr must be < max_lr");
     if (step_size_up <= 0)
-        throw LucidError("CyclicLR: step_size_up must be > 0");
+        ErrorBuilder("CyclicLR").fail("step_size_up must be > 0");
 }
 
 double CyclicLR::compute_lr_at(std::int64_t epoch) const {
@@ -193,11 +194,11 @@ NoamScheduler::NoamScheduler(Optimizer& opt,
                              double factor)
     : LRScheduler(opt), model_size_(model_size), warmup_steps_(warmup_steps), factor_(factor) {
     if (model_size <= 0)
-        throw LucidError("NoamScheduler: model_size must be > 0");
+        ErrorBuilder("NoamScheduler").fail("model_size must be > 0");
     if (warmup_steps <= 0)
-        throw LucidError("NoamScheduler: warmup_steps must be > 0");
+        ErrorBuilder("NoamScheduler").fail("warmup_steps must be > 0");
     if (factor <= 0)
-        throw LucidError("NoamScheduler: factor must be > 0");
+        ErrorBuilder("NoamScheduler").fail("factor must be > 0");
 }
 
 double NoamScheduler::compute_lr_at(std::int64_t epoch) const {

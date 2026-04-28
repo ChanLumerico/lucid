@@ -12,10 +12,12 @@
 #include "../backend/cpu/Im2Col.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
@@ -323,7 +325,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
                                                   const int (&pad)[N],
                                                   const int (&opad)[N]) {
     if (!x || !W || !b)
-        throw LucidError("conv_transpose: null input");
+        ErrorBuilder("conv_transpose").fail("null input");
     if (x->dtype_ != W->dtype_ || x->dtype_ != b->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)), std::string(dtype_name(W->dtype_)),
                             "conv_transpose");
@@ -332,8 +334,8 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
                              std::string(device_name(W->device_)), "conv_transpose");
     if (x->device_ == Device::CPU &&
         (!x->is_contiguous() || !W->is_contiguous() || !b->is_contiguous()))
-        throw NotImplementedError(
-            "conv_transpose: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("conv_transpose")
+            .not_implemented("non-contiguous input not supported (call .contiguous() first)");
     if (static_cast<int>(x->shape_.size()) != N + 2)
         throw ShapeMismatch(x->shape_, Shape{}, "conv_transpose: x rank mismatch");
     if (static_cast<int>(W->shape_.size()) != N + 2)
@@ -373,7 +375,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         K_total *= K[i];
     }
 
-    OpScope scope{ConvTransposeNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{ConvTransposeNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin * K_total);
 
     Storage out_storage;
@@ -383,7 +385,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         const auto& gW = std::get<GpuStorage>(W->storage_);
         const auto& gb = std::get<GpuStorage>(b->storage_);
         if (!gx.arr || !gW.arr || !gb.arr) {
-            throw LucidError("conv_transpose: null GPU input");
+            ErrorBuilder("conv_transpose").fail("null GPU input");
         }
         auto x_nhwc = ::mlx::core::transpose(*gx.arr, nchw_to_nhwc_perm<N>());
         auto W_nhwc = ::mlx::core::transpose(*gW.arr, w_to_mlx_transpose_perm<N>());
@@ -449,7 +451,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
                     break;
                 }
                 default:
-                    throw NotImplementedError("conv_transpose: dtype not supported (F32/F64)");
+                    ErrorBuilder("conv_transpose").not_implemented("dtype not supported (F32/F64)");
             }
         }
         out_storage = Storage{std::move(out_cpu)};
@@ -508,7 +510,7 @@ std::vector<Storage> ConvTransposeNdBackward<N>::apply(Storage grad_out) {
         const auto& gW = std::get<GpuStorage>(this->saved_inputs_[1]);
         const auto& gG = std::get<GpuStorage>(grad_out);
         if (!gx.arr || !gW.arr || !gG.arr) {
-            throw LucidError("conv_transpose backward: null GPU array");
+            ErrorBuilder("conv_transpose backward").fail("null GPU array");
         }
 
         // db = sum(grad, axes={0, 2..N+1})
@@ -670,7 +672,7 @@ std::vector<Storage> ConvTransposeNdBackward<N>::apply(Storage grad_out) {
                 break;
             }
             default:
-                throw NotImplementedError("conv_transpose backward: dtype not supported");
+                ErrorBuilder("conv_transpose backward").not_implemented("dtype not supported");
         }
     }
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dW_cpu)}, Storage{std::move(db_cpu)}};

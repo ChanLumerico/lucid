@@ -13,11 +13,14 @@
 #include "../backend/cpu/Im2Col.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -283,7 +286,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
                                          const int (&dilation)[N],
                                          int groups) {
     if (!x || !W || !b)
-        throw LucidError("conv: null input");
+        ErrorBuilder("conv").fail("null input");
     if (x->dtype_ != W->dtype_ || x->dtype_ != b->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)), std::string(dtype_name(W->dtype_)),
                             "conv");
@@ -292,8 +295,8 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
                              std::string(device_name(W->device_)), "conv");
     if (x->device_ == Device::CPU &&
         (!x->is_contiguous() || !W->is_contiguous() || !b->is_contiguous()))
-        throw NotImplementedError(
-            "conv: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("conv").not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
     if (static_cast<int>(x->shape_.size()) != N + 2)
         throw ShapeMismatch(x->shape_, Shape{}, "conv: x rank mismatch");
     if (static_cast<int>(W->shape_.size()) != N + 2)
@@ -301,7 +304,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     if (b->shape_.size() != 1)
         throw ShapeMismatch(b->shape_, Shape{}, "conv: b must be 1-D (C_out,)");
     if (groups < 1)
-        throw LucidError("conv: groups must be >= 1");
+        ErrorBuilder("conv").fail("groups must be >= 1");
 
     const int B = static_cast<int>(x->shape_[0]);
     const int Cin = static_cast<int>(x->shape_[1]);
@@ -326,7 +329,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         S[i] = static_cast<int>(x->shape_[2 + i]);
         K[i] = static_cast<int>(W->shape_[2 + i]);
         if (dilation[i] < 1)
-            throw LucidError("conv: dilation must be >= 1");
+            ErrorBuilder("conv").fail("dilation must be >= 1");
         O[i] = compute_out(S[i], K[i], stride[i], pad[i], dilation[i]);
         if (O[i] <= 0)
             throw ShapeMismatch(x->shape_, W->shape_, "conv: output shape non-positive");
@@ -349,7 +352,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         S_total *= S[i];
 
-    OpScope scope{ConvNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{ConvNdBackward<N>::schema_v1.name, x->device_, x->dtype_, out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin_g * K_total);
 
     Storage out_storage;
@@ -359,7 +362,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         const auto& gW = std::get<GpuStorage>(W->storage_);
         const auto& gb = std::get<GpuStorage>(b->storage_);
         if (!gx.arr || !gW.arr || !gb.arr) {
-            throw LucidError("conv: null GPU input");
+            ErrorBuilder("conv").fail("null GPU input");
         }
         auto x_nhwc = ::mlx::core::transpose(*gx.arr, nchw_to_nhwc_perm<N>());
         auto W_nhwc = ::mlx::core::transpose(*gW.arr, w_nchw_to_nhwc_perm<N>());
@@ -426,7 +429,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
                         break;
                     }
                     default:
-                        throw NotImplementedError("conv: dtype not supported (F32/F64)");
+                        ErrorBuilder("conv").not_implemented("dtype not supported (F32/F64)");
                 }
             }
             switch (x->dtype_) {
@@ -513,7 +516,7 @@ std::vector<Storage> ConvNdBackward<N>::apply(Storage grad_out) {
         const auto& gW = std::get<GpuStorage>(this->saved_inputs_[1]);
         const auto& gG = std::get<GpuStorage>(grad_out);
         if (!gx.arr || !gW.arr || !gG.arr) {
-            throw LucidError("conv backward: null GPU array");
+            ErrorBuilder("conv backward").fail("null GPU array");
         }
         std::vector<int> db_axes;
         db_axes.reserve(N + 1);
@@ -683,7 +686,7 @@ std::vector<Storage> ConvNdBackward<N>::apply(Storage grad_out) {
                     break;
                 }
                 default:
-                    throw NotImplementedError("conv backward: dtype not supported");
+                    ErrorBuilder("conv backward").not_implemented("dtype not supported");
             }
         }
     }
@@ -755,17 +758,16 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
                                       const std::vector<int>& stride,
                                       const std::vector<int>& pad,
                                       const std::vector<int>& dilation) {
-    if (!x)
-        throw LucidError("unfold: null input");
+    Validator::input(x, "unfold.x").non_null();
     if (x->device_ == Device::CPU && !x->is_contiguous())
-        throw NotImplementedError("unfold: non-contiguous input not supported");
+        ErrorBuilder("unfold").not_implemented("non-contiguous input not supported");
 
     const int N = static_cast<int>(kernel.size());
     if (N < 1 || N > 3)
-        throw LucidError("unfold: only 1D / 2D / 3D supported");
+        ErrorBuilder("unfold").fail("only 1D / 2D / 3D supported");
     if (static_cast<int>(stride.size()) != N || static_cast<int>(pad.size()) != N ||
         static_cast<int>(dilation.size()) != N)
-        throw LucidError("unfold: stride/pad/dilation length must match kernel");
+        ErrorBuilder("unfold").fail("stride/pad/dilation length must match kernel");
     if (static_cast<int>(x->shape_.size()) != N + 2)
         throw ShapeMismatch(x->shape_, Shape{}, "unfold: x rank mismatch");
 
@@ -793,7 +795,7 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
     Shape out_shape{static_cast<std::int64_t>(B), static_cast<std::int64_t>(C * K_total),
                     static_cast<std::int64_t>(O_total)};
 
-    OpScope scope{schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, out_shape};
 
     // Native MLX path for unfold: build N-D source-coordinate maps via
     // index arithmetic, mask out-of-bounds positions to zero, then take.
@@ -944,7 +946,7 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
                 break;
             }
             default:
-                throw NotImplementedError("unfold: dtype not supported");
+                ErrorBuilder("unfold").not_implemented("dtype not supported");
         }
     }
 
@@ -1122,7 +1124,7 @@ std::vector<Storage> UnfoldBackward::apply(Storage grad_out) {
                 break;
             }
             default:
-                throw NotImplementedError("unfold backward: dtype not supported");
+                ErrorBuilder("unfold backward").not_implemented("dtype not supported");
         }
     }
     return {Storage{std::move(dx_cpu)}};

@@ -3,6 +3,7 @@
 #include "../../backend/cpu/Vdsp.h"
 #include "../../backend/cpu/Vforce.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/OpRegistry.h"
 
@@ -37,7 +38,7 @@ CpuStorage dispatch_unary(const CpuStorage& a,
                 reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError(std::string(op_name) + ": dtype not supported in Phase 3.2");
+            ErrorBuilder(op_name).not_implemented("dtype not supported in Phase 3.2");
     }
     return out;
 }
@@ -100,7 +101,7 @@ CpuStorage SignBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
             break;
         }
         default:
-            throw NotImplementedError("sign: dtype not supported");
+            ErrorBuilder("sign").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -133,7 +134,7 @@ CpuStorage ReciprocalBackward::cpu_kernel(const CpuStorage& a, const Shape& out_
                                    reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("reciprocal: dtype not supported");
+            ErrorBuilder("reciprocal").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -193,7 +194,7 @@ CpuStorage CubeBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
             break;
         }
         default:
-            throw NotImplementedError("cube: dtype not supported");
+            ErrorBuilder("cube").not_implemented("dtype not supported");
     }
     return out;
 }

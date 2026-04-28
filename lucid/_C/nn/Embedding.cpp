@@ -11,11 +11,14 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -44,7 +47,7 @@ inline std::int64_t read_index(const CpuStorage& ts, std::size_t i) {
         case Dtype::Bool:
             return reinterpret_cast<const std::uint8_t*>(ts.ptr.get())[i];
         default:
-            throw NotImplementedError("embedding: index dtype must be integer");
+            ErrorBuilder("embedding").not_implemented("index dtype must be integer");
     }
 }
 
@@ -60,7 +63,7 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
                                          const TensorImplPtr& indices,
                                          int padding_idx) {
     if (!weight || !indices)
-        throw LucidError("embedding: null input");
+        ErrorBuilder("embedding").fail("null input");
     if (weight->device_ != indices->device_)
         throw DeviceMismatch(std::string(device_name(weight->device_)),
                              std::string(device_name(indices->device_)),
@@ -75,7 +78,7 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
 
     Shape out_shape = indices->shape_;
     out_shape.push_back(D);
-    OpScope scope{schema_v1.name, weight->device_, weight->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, weight->device_, weight->dtype_, out_shape};
 
     Storage out_storage;
     if (weight->device_ == Device::GPU) {
@@ -105,7 +108,7 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
         for (std::size_t i = 0; i < M; ++i) {
             const std::int64_t id = read_index(is, i);
             if (id < 0 || id >= N) {
-                throw IndexError("embedding: index out of range");
+                ErrorBuilder("embedding").index_error("index out of range");
             }
             std::byte* dst = out_cpu.ptr.get() + i * row_bytes;
             if (padding_idx >= 0 && id == padding_idx) {
@@ -205,7 +208,7 @@ std::vector<Storage> EmbeddingBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("embedding backward: dtype not supported");
+        ErrorBuilder("embedding backward").not_implemented("dtype not supported");
 
     return {Storage{std::move(dW)}};
 }
@@ -226,16 +229,16 @@ TensorImplPtr sinusoidal_pos_embedding_op(std::int64_t seq_len,
                                           Dtype dtype,
                                           Device device) {
     if (seq_len < 0)
-        throw LucidError("sinusoidal_pos_embedding: seq_len < 0");
+        ErrorBuilder("sinusoidal_pos_embedding").fail("seq_len < 0");
     if (embed_dim <= 0)
-        throw LucidError("sinusoidal_pos_embedding: embed_dim must be > 0");
+        ErrorBuilder("sinusoidal_pos_embedding").fail("embed_dim must be > 0");
 
     const std::size_t L = static_cast<std::size_t>(seq_len);
     const std::size_t D = static_cast<std::size_t>(embed_dim);
     const std::size_t Dh = D / 2;
 
     Shape out_shape{seq_len, embed_dim};
-    OpScope scope{"sinusoidal_pos_embedding", device, dtype, out_shape};
+    OpScopeFull scope{"sinusoidal_pos_embedding", device, dtype, out_shape};
 
     if (device == Device::GPU) {
         if (L * D == 0) {
@@ -298,7 +301,7 @@ TensorImplPtr sinusoidal_pos_embedding_op(std::int64_t seq_len,
     else if (dtype == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("sinusoidal_pos_embedding: dtype must be F32 or F64");
+        ErrorBuilder("sinusoidal_pos_embedding").not_implemented("dtype must be F32 or F64");
 
     return std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, out_shape, dtype, device,
                                         false);
@@ -414,26 +417,25 @@ void rope_backward(const T* gp,
 TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
                                                   const TensorImplPtr& position_ids_or_null,
                                                   bool interleaved) {
-    if (!input)
-        throw LucidError("rotary_pos_embedding: null input");
+    Validator::input(input, "rotary_pos_embedding.input").non_null();
     if (position_ids_or_null && position_ids_or_null->device_ != input->device_)
         throw DeviceMismatch(std::string(device_name(input->device_)),
                              std::string(device_name(position_ids_or_null->device_)),
                              "rotary_pos_embedding: input/position_ids");
     if (input->shape_.size() < 2)
-        throw LucidError("rotary_pos_embedding: input must be at least 2-D ([..., L, D])");
+        ErrorBuilder("rotary_pos_embedding").fail("input must be at least 2-D ([..., L, D])");
 
     const std::size_t ndim = input->shape_.size();
     const std::size_t L = static_cast<std::size_t>(input->shape_[ndim - 2]);
     const std::size_t D = static_cast<std::size_t>(input->shape_[ndim - 1]);
     if (D % 2 != 0)
-        throw LucidError("rotary_pos_embedding: embed_dim must be even");
+        ErrorBuilder("rotary_pos_embedding").fail("embed_dim must be even");
     const std::size_t Dh = D / 2;
     std::size_t batch = 1;
     for (std::size_t i = 0; i + 2 < ndim; ++i)
         batch *= static_cast<std::size_t>(input->shape_[i]);
 
-    OpScope scope{schema_v1.name, input->device_, input->dtype_, input->shape_};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_, input->shape_};
 
     if (input->device_ == Device::GPU) {
         const auto& gx = std::get<GpuStorage>(input->storage_);
@@ -590,8 +592,8 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
                     pos[i] = reinterpret_cast<const double*>(ps.ptr.get())[i];
                     break;
                 default:
-                    throw NotImplementedError(
-                        "rotary_pos_embedding: position_ids dtype not supported");
+                    ErrorBuilder("rotary_pos_embedding")
+                        .not_implemented("position_ids dtype not supported");
             }
         }
     } else {
@@ -624,7 +626,7 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
     else if (input->dtype_ == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("rotary_pos_embedding: dtype must be F32 or F64");
+        ErrorBuilder("rotary_pos_embedding").not_implemented("dtype must be F32 or F64");
 
     auto out = std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, input->shape_,
                                             input->dtype_, input->device_, false);
@@ -730,7 +732,7 @@ std::vector<Storage> RotaryPosEmbeddingBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("rotary_pos_embedding backward: dtype not supported");
+        ErrorBuilder("rotary_pos_embedding backward").not_implemented("dtype not supported");
     return {Storage{std::move(dx)}};
 }
 

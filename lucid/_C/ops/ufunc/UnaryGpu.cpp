@@ -11,6 +11,7 @@
 #include <mlx/ops.h>
 
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "Activation.h"
 #include "Arith.h"
@@ -28,7 +29,7 @@ namespace {
 template <class F>
 GpuStorage gpu_apply(const GpuStorage& a, Dtype dt, F&& f, const char* op) {
     if (!a.arr) {
-        throw LucidError(std::string(op) + ": null GPU input");
+        ErrorBuilder(op).fail("null GPU input");
     }
     auto out = f(*a.arr);
     return gpu::wrap_mlx_array(std::move(out), dt);

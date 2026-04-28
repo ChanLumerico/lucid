@@ -11,11 +11,14 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -51,12 +54,12 @@ Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_
     for (std::size_t i = 0; i < new_shape.size(); ++i) {
         if (new_shape[i] == -1) {
             if (wildcard_pos != -1) {
-                throw LucidError("reshape: only one -1 is allowed");
+                ErrorBuilder("reshape").fail("only one -1 is allowed");
             }
             wildcard_pos = static_cast<int>(i);
             resolved.push_back(0);  // placeholder
         } else if (new_shape[i] < 0) {
-            throw LucidError("reshape: negative dim other than -1 is invalid");
+            ErrorBuilder("reshape").fail("negative dim other than -1 is invalid");
         } else {
             known_product *= new_shape[i];
             resolved.push_back(new_shape[i]);
@@ -64,7 +67,7 @@ Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_
     }
     if (wildcard_pos != -1) {
         if (known_product == 0) {
-            throw LucidError("reshape: cannot infer -1 from a product of zero");
+            ErrorBuilder("reshape").fail("cannot infer -1 from a product of zero");
         }
         if (in_numel % static_cast<std::size_t>(known_product) != 0) {
             throw ShapeMismatch(in_shape, resolved,
@@ -79,12 +82,11 @@ Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_
 }
 
 TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const char* op_name) {
-    if (!a)
-        throw LucidError(std::string(op_name) + ": null input");
+    Validator::input(a, std::string(op_name) + ".a").non_null();
     if (a->device_ == Device::GPU) {
         // GPU: reshape via MLX, materialize via contiguous to avoid lazy-view
         // hazards downstream.
-        OpScope scope{op_name, a->device_, a->dtype_, out_shape};
+        OpScopeFull scope{op_name, a->device_, a->dtype_, out_shape};
         const auto& ga = std::get<GpuStorage>(a->storage_);
         auto out = ::mlx::core::reshape(*ga.arr, gpu::to_mlx_shape(out_shape));
         out = ::mlx::core::contiguous(out);
@@ -109,12 +111,11 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
         return out_t;
     }
     if (!a->is_contiguous()) {
-        throw NotImplementedError(
-            std::string(op_name) +
-            ": non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder(op_name).not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
     }
 
-    OpScope scope{op_name, a->device_, a->dtype_, out_shape};
+    OpScopeFull scope{op_name, a->device_, a->dtype_, out_shape};
     auto out_cpu = clone_for_view(std::get<CpuStorage>(a->storage_), out_shape, a->dtype_);
     Storage out_storage{std::move(out_cpu)};
 
@@ -160,27 +161,25 @@ std::vector<Storage> ViewBackward::apply(Storage grad_out) {
 
 // ---------------- reshape ----------------
 TensorImplPtr reshape_op(const TensorImplPtr& a, const std::vector<std::int64_t>& new_shape) {
-    if (!a)
-        throw LucidError("reshape: null input");
+    Validator::input(a, "reshape.a").non_null();
     Shape resolved = resolve_reshape_shape(a->shape_, new_shape);
     return build_view_output(a, std::move(resolved), "reshape");
 }
 
 // ---------------- squeeze ----------------
 TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
-    if (!a)
-        throw LucidError("squeeze: null input");
+    Validator::input(a, "squeeze.a").non_null();
     const int ndim = static_cast<int>(a->shape_.size());
     if (ndim == 0) {
         // Squeezing a 0-d tensor on an axis — error per PyTorch semantics.
-        throw IndexError("squeeze: axis out of range for 0-d tensor");
+        ErrorBuilder("squeeze").index_error("axis out of range for 0-d tensor");
     }
     const int wrapped = dim < 0 ? dim + ndim : dim;
     if (wrapped < 0 || wrapped >= ndim) {
-        throw IndexError("squeeze: axis out of range");
+        ErrorBuilder("squeeze").index_error("axis out of range");
     }
     if (a->shape_[static_cast<std::size_t>(wrapped)] != 1) {
-        throw LucidError("squeeze: target dim must be size 1");
+        ErrorBuilder("squeeze").fail("target dim must be size 1");
     }
     Shape new_shape;
     new_shape.reserve(static_cast<std::size_t>(ndim) - 1);
@@ -193,8 +192,7 @@ TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
 
 // ---------------- squeeze_all ----------------
 TensorImplPtr squeeze_all_op(const TensorImplPtr& a) {
-    if (!a)
-        throw LucidError("squeeze: null input");
+    Validator::input(a, "squeeze.a").non_null();
     Shape new_shape;
     for (auto d : a->shape_) {
         if (d != 1)
@@ -205,13 +203,12 @@ TensorImplPtr squeeze_all_op(const TensorImplPtr& a) {
 
 // ---------------- unsqueeze ----------------
 TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim) {
-    if (!a)
-        throw LucidError("unsqueeze: null input");
+    Validator::input(a, "unsqueeze.a").non_null();
     const int ndim = static_cast<int>(a->shape_.size());
     // unsqueeze allows dim in [-(ndim+1), ndim] — one beyond the end.
     const int wrapped = dim < 0 ? dim + ndim + 1 : dim;
     if (wrapped < 0 || wrapped > ndim) {
-        throw IndexError("unsqueeze: axis out of range");
+        ErrorBuilder("unsqueeze").index_error("axis out of range");
     }
     Shape new_shape;
     new_shape.reserve(static_cast<std::size_t>(ndim) + 1);

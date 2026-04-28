@@ -11,11 +11,14 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -69,7 +72,7 @@ Storage where_branch_storage(const Storage& grad,
         case Dtype::F64:
             return Storage{where_branch_cpu<double>(g, c, shape, dt, true_branch)};
         default:
-            throw NotImplementedError("where backward: dtype not supported");
+            ErrorBuilder("where backward").not_implemented("dtype not supported");
     }
 }
 
@@ -101,7 +104,7 @@ CpuStorage gather_backward_cpu_typed(const CpuStorage& grad,
             return reinterpret_cast<const std::int32_t*>(indices.ptr.get())[flat];
         if (index_dtype == Dtype::I64)
             return reinterpret_cast<const std::int64_t*>(indices.ptr.get())[flat];
-        throw NotImplementedError("gather backward: indices dtype must be I32 or I64");
+        ErrorBuilder("gather backward").not_implemented("indices dtype must be I32 or I64");
     };
 
     const auto* g = reinterpret_cast<const T*>(grad.ptr.get());
@@ -159,7 +162,7 @@ Storage gather_backward_storage(const Storage& grad,
             return Storage{gather_backward_cpu_typed<double>(g, idx, input_shape, output_shape,
                                                              axis, index_dtype, dt)};
         default:
-            throw NotImplementedError("gather backward: dtype not supported");
+            ErrorBuilder("gather backward").not_implemented("dtype not supported");
     }
 }
 
@@ -323,7 +326,7 @@ Storage diagonal_backward_storage(const Storage& grad,
                                                       axis2, dt);
             break;
         default:
-            throw NotImplementedError("diagonal backward: dtype not supported");
+            ErrorBuilder("diagonal backward").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -525,7 +528,7 @@ LUCID_REGISTER_OP(DiagonalBackward)
 
 TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const TensorImplPtr& y) {
     if (!cond || !x || !y)
-        throw LucidError("where: null input");
+        ErrorBuilder("where").fail("null input");
     if (x->dtype_ != y->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)), std::string(dtype_name(y->dtype_)),
                             "where");
@@ -534,7 +537,7 @@ TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const 
                              std::string(device_name(y->device_)), "where");
     const Dtype dt = x->dtype_;
     const Device device = x->device_;
-    OpScope scope{"where", device, dt, x->shape_};
+    OpScopeFull scope{"where", device, dt, x->shape_};
     if (device == Device::GPU) {
         const auto& gc = std::get<GpuStorage>(cond->storage_);
         const auto& gx = std::get<GpuStorage>(x->storage_);
@@ -564,19 +567,19 @@ TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const 
             reinterpret_cast<const double*>(std::get<CpuStorage>(x->storage_).ptr.get()),
             reinterpret_cast<const double*>(std::get<CpuStorage>(y->storage_).ptr.get()));
     else
-        throw NotImplementedError("where: dtype not supported");
+        ErrorBuilder("where").not_implemented("dtype not supported");
     auto result = fresh(Storage{std::move(out_cpu)}, x->shape_, dt, device);
     return attach_where_grad(cond, x, y, std::move(result));
 }
 
 TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, double value) {
     if (!a || !mask)
-        throw LucidError("masked_fill: null input");
+        ErrorBuilder("masked_fill").fail("null input");
     if (a->shape_ != mask->shape_)
         throw ShapeMismatch(a->shape_, mask->shape_, "masked_fill");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"masked_fill", device, dt, a->shape_};
+    OpScopeFull scope{"masked_fill", device, dt, a->shape_};
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         const auto& gm = std::get<GpuStorage>(mask->storage_);
@@ -602,7 +605,7 @@ TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, 
         run(reinterpret_cast<double*>(out_cpu.ptr.get()),
             reinterpret_cast<const double*>(std::get<CpuStorage>(a->storage_).ptr.get()));
     else
-        throw NotImplementedError("masked_fill: dtype not supported");
+        ErrorBuilder("masked_fill").not_implemented("dtype not supported");
     auto result = fresh(Storage{std::move(out_cpu)}, a->shape_, dt, device);
     return attach_masked_fill_grad(a, mask, std::move(result));
 }
@@ -610,13 +613,12 @@ TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, 
 TensorImplPtr roll_op(const TensorImplPtr& a,
                       std::vector<std::int64_t> shifts,
                       std::vector<int> axes) {
-    if (!a)
-        throw LucidError("roll: null input");
+    Validator::input(a, "roll.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"roll", device, dt, a->shape_};
+    OpScopeFull scope{"roll", device, dt, a->shape_};
     if (shifts.size() != axes.size())
-        throw LucidError("roll: shifts and axes must have equal length");
+        ErrorBuilder("roll").fail("shifts and axes must have equal length");
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         ::mlx::core::Shape mshifts(shifts.begin(), shifts.end());
@@ -680,10 +682,10 @@ TensorImplPtr roll_op(const TensorImplPtr& a,
 
 TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, int axis) {
     if (!a || !indices)
-        throw LucidError("gather: null input");
+        ErrorBuilder("gather").fail("null input");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"gather", device, dt, indices->shape_};
+    OpScopeFull scope{"gather", device, dt, indices->shape_};
     if (a->shape_.size() != indices->shape_.size())
         throw ShapeMismatch(a->shape_, indices->shape_,
                             "gather: a and indices must have same rank");
@@ -737,7 +739,7 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
             return reinterpret_cast<const std::int32_t*>(ci.ptr.get())[flat];
         if (indices->dtype_ == Dtype::I64)
             return reinterpret_cast<const std::int64_t*>(ci.ptr.get())[flat];
-        throw NotImplementedError("gather: indices dtype must be I32 or I64");
+        ErrorBuilder("gather").not_implemented("indices dtype must be I32 or I64");
     };
 
     std::vector<std::int64_t> coord(ndim, 0);
@@ -779,18 +781,17 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
 }
 
 TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axis2) {
-    if (!a)
-        throw LucidError("diagonal: null input");
+    Validator::input(a, "diagonal.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"diagonal", device, dt, a->shape_};
+    OpScopeFull scope{"diagonal", device, dt, a->shape_};
     const std::size_t ndim = a->shape_.size();
     if (ndim < 2)
-        throw LucidError("diagonal: input must be ≥2-D");
+        ErrorBuilder("diagonal").fail("input must be ≥2-D");
     int a1 = wrap_axis(axis1, static_cast<int>(ndim));
     int a2 = wrap_axis(axis2, static_cast<int>(ndim));
     if (a1 == a2)
-        throw LucidError("diagonal: axis1 and axis2 must differ");
+        ErrorBuilder("diagonal").fail("axis1 and axis2 must differ");
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         // MLX diagonal returns a strided view; contiguous() materializes a

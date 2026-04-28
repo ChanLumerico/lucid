@@ -7,6 +7,7 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/gpu/MlxBridge.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/TensorImpl.h"
 #include "_OptimDetail.h"
@@ -96,7 +97,7 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
     else if (dt == Dtype::F64)
         step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
     else
-        throw NotImplementedError("Adamax: dtype not supported");
+        ErrorBuilder("Adamax").not_implemented("dtype not supported");
 }
 
 // =====================================================================
@@ -175,7 +176,7 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
     else if (dt == Dtype::F64)
         step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
     else
-        throw NotImplementedError("Adagrad: dtype not supported");
+        ErrorBuilder("Adagrad").not_implemented("dtype not supported");
 }
 
 // =====================================================================
@@ -248,7 +249,7 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
     else if (dt == Dtype::F64)
         step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
     else
-        throw NotImplementedError("Adadelta: dtype not supported");
+        ErrorBuilder("Adadelta").not_implemented("dtype not supported");
 }
 
 }  // namespace lucid

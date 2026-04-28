@@ -12,9 +12,12 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -163,10 +166,9 @@ void norm_typed(const T* in,
 
 TensorImplPtr norm_op(const TensorImplPtr& a, double ord, std::vector<int> axis, bool keepdims) {
     using namespace linalg_detail;
-    if (!a)
-        throw LucidError("norm: null input");
+    Validator::input(a, "norm.a").non_null();
     require_float(a->dtype_, "norm");
-    OpScope scope{"norm", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"norm", a->device_, a->dtype_, a->shape_};
 
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);

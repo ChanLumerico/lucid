@@ -9,11 +9,14 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -21,17 +24,16 @@ namespace lucid {
 const OpSchema ContiguousBackward::schema_v1{"contiguous", 1, AmpPolicy::KeepInput, true};
 
 TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
-    if (!a)
-        throw LucidError("contiguous: null input");
+    Validator::input(a, "contiguous.a").non_null();
     // No contiguous guard here — that's the whole point of this op.
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
 
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& src = std::get<GpuStorage>(a->storage_);
         if (!src.arr)
-            throw LucidError("contiguous: null GPU array");
+            ErrorBuilder("contiguous").fail("null GPU array");
         auto out = ::mlx::core::contiguous(*src.arr);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
     } else {

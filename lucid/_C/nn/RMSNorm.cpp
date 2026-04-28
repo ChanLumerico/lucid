@@ -11,10 +11,12 @@
 #include "../backend/cpu/Norm.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
@@ -38,7 +40,7 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
                                        const TensorImplPtr& gamma,
                                        double eps) {
     if (!x || !gamma)
-        throw LucidError("rms_norm: null input");
+        ErrorBuilder("rms_norm").fail("null input");
     if (x->dtype_ != gamma->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
                             std::string(dtype_name(gamma->dtype_)), "rms_norm");
@@ -46,7 +48,7 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
         throw DeviceMismatch(std::string(device_name(x->device_)),
                              std::string(device_name(gamma->device_)), "rms_norm");
     if (x->device_ == Device::CPU && (!x->is_contiguous() || !gamma->is_contiguous()))
-        throw NotImplementedError("rms_norm: non-contiguous input not supported");
+        ErrorBuilder("rms_norm").not_implemented("non-contiguous input not supported");
 
     // γ shape must match trailing dims of x.
     if (gamma->shape_.size() > x->shape_.size())
@@ -65,7 +67,7 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
     for (std::size_t i = 0; i < Dn; ++i)
         N *= static_cast<std::size_t>(gamma->shape_[i]);
 
-    OpScope scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
 
     Storage out_storage;
     Storage saved_rstd;
@@ -74,7 +76,7 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
         const auto& gx = std::get<GpuStorage>(x->storage_);
         const auto& gg = std::get<GpuStorage>(gamma->storage_);
         if (!gx.arr || !gg.arr) {
-            throw LucidError("rms_norm: null GPU input");
+            ErrorBuilder("rms_norm").fail("null GPU input");
         }
         Shape flatX{static_cast<std::int64_t>(outer), static_cast<std::int64_t>(N)};
         Shape flatG{1, static_cast<std::int64_t>(N)};
@@ -112,7 +114,7 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
                         reinterpret_cast<double*>(rstd_cpu.ptr.get()), outer, N, eps);
                     break;
                 default:
-                    throw NotImplementedError("rms_norm: dtype not supported (F32/F64)");
+                    ErrorBuilder("rms_norm").not_implemented("dtype not supported (F32/F64)");
             }
         }
         out_storage = Storage{std::move(y_cpu)};
@@ -162,7 +164,7 @@ std::vector<Storage> RMSNormBackward::apply(Storage grad_out) {
         const auto& gR = std::get<GpuStorage>(saved_rstd_);
         const auto& gG = std::get<GpuStorage>(grad_out);
         if (!gx.arr || !gg.arr || !gR.arr || !gG.arr) {
-            throw LucidError("rms_norm backward: null GPU array");
+            ErrorBuilder("rms_norm backward").fail("null GPU array");
         }
         Shape flatX{static_cast<std::int64_t>(outer_), static_cast<std::int64_t>(N_)};
         Shape flatG{1, static_cast<std::int64_t>(N_)};
@@ -212,7 +214,7 @@ std::vector<Storage> RMSNormBackward::apply(Storage grad_out) {
                     reinterpret_cast<double*>(dgamma_cpu.ptr.get()), outer_, N_);
                 break;
             default:
-                throw NotImplementedError("rms_norm backward: dtype not supported");
+                ErrorBuilder("rms_norm backward").not_implemented("dtype not supported");
         }
     } else {
         if (dx_cpu.nbytes)

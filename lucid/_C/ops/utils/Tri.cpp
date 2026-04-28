@@ -7,11 +7,14 @@
 #include "../../autograd/FuncOp.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -27,7 +30,7 @@ template <typename T>
 CpuStorage tri_cpu(
     const CpuStorage& input, const Shape& shape, Dtype dt, int k, bool upper, const char* name) {
     if (shape.size() < 2)
-        throw LucidError(std::string(name) + ": input must have ndim >= 2");
+        ErrorBuilder(name).fail("input must have ndim >= 2");
     auto out = allocate_cpu(shape, dt);
     const auto* src = reinterpret_cast<const T*>(input.ptr.get());
     auto* dst = reinterpret_cast<T*>(out.ptr.get());
@@ -68,7 +71,7 @@ Storage tri_storage(const Storage& input,
         case Dtype::F64:
             return Storage{tri_cpu<double>(ca, shape, dt, k, upper, name)};
         default:
-            throw NotImplementedError(std::string(name) + ": dtype not supported");
+            ErrorBuilder(name).not_implemented("dtype not supported");
     }
 }
 
@@ -111,11 +114,10 @@ TensorImplPtr attach_tri_grad(
 }
 
 TensorImplPtr tri_dispatch(const TensorImplPtr& a, int k, bool upper, const char* name) {
-    if (!a)
-        throw LucidError(std::string(name) + ": null input");
+    Validator::input(a, std::string(name) + ".a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{name, device, dt, a->shape_};
+    OpScopeFull scope{name, device, dt, a->shape_};
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         auto raw = upper ? ::mlx::core::triu(*ga.arr, k) : ::mlx::core::tril(*ga.arr, k);

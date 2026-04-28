@@ -7,9 +7,12 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -59,7 +62,7 @@ double read_double(const CpuStorage& s, std::size_t i, Dtype dt) {
         case Dtype::I64:
             return reinterpret_cast<const std::int64_t*>(s.ptr.get())[i];
         default:
-            throw NotImplementedError("histogram: dtype not supported");
+            ErrorBuilder("histogram").not_implemented("dtype not supported");
     }
 }
 
@@ -79,13 +82,12 @@ TensorImplPtr build_edges(double lo, double hi, std::int64_t bins) {
 
 std::pair<TensorImplPtr, TensorImplPtr> histogram_op(
     const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
-    if (!a)
-        throw LucidError("histogram: null input");
+    Validator::input(a, "histogram.a").non_null();
     if (bins <= 0)
-        throw LucidError("histogram: bins must be > 0");
+        ErrorBuilder("histogram").fail("bins must be > 0");
     if (hi <= lo)
-        throw LucidError("histogram: hi must be > lo");
-    OpScope scope{"histogram", a->device_, a->dtype_, a->shape_};
+        ErrorBuilder("histogram").fail("hi must be > lo");
+    OpScopeFull scope{"histogram", a->device_, a->dtype_, a->shape_};
 
     const auto cpu = to_cpu(a);
     const std::size_t n = shape_numel(a->shape_);
@@ -134,12 +136,12 @@ std::pair<TensorImplPtr, TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
                                                        double hi_b,
                                                        bool density) {
     if (!a || !b)
-        throw LucidError("histogram2d: null input");
+        ErrorBuilder("histogram2d").fail("null input");
     if (a->shape_ != b->shape_)
         throw ShapeMismatch(a->shape_, b->shape_, "histogram2d");
     if (bins_a <= 0 || bins_b <= 0)
-        throw LucidError("histogram2d: bins must be > 0");
-    OpScope scope{"histogram2d", a->device_, a->dtype_, a->shape_};
+        ErrorBuilder("histogram2d").fail("bins must be > 0");
+    OpScopeFull scope{"histogram2d", a->device_, a->dtype_, a->shape_};
 
     const auto ca = to_cpu(a);
     const auto cb = to_cpu(b);
@@ -196,22 +198,21 @@ std::pair<TensorImplPtr, TensorImplPtr> histogramdd_op(
     std::vector<std::int64_t> bins,
     std::vector<std::pair<double, double>> ranges,
     bool density) {
-    if (!a)
-        throw LucidError("histogramdd: null input");
+    Validator::input(a, "histogramdd.a").non_null();
     if (a->shape_.size() != 2)
-        throw LucidError("histogramdd: input must be 2-D (N, D)");
+        ErrorBuilder("histogramdd").fail("input must be 2-D (N, D)");
     const std::int64_t N = a->shape_[0];
     const std::int64_t D = a->shape_[1];
     if ((std::int64_t)bins.size() != D || (std::int64_t)ranges.size() != D)
-        throw LucidError("histogramdd: bins/ranges length must equal D");
-    OpScope scope{"histogramdd", a->device_, a->dtype_, a->shape_};
+        ErrorBuilder("histogramdd").fail("bins/ranges length must equal D");
+    OpScopeFull scope{"histogramdd", a->device_, a->dtype_, a->shape_};
 
     const auto ca = to_cpu(a);
 
     std::vector<double> step(D);
     for (std::int64_t d = 0; d < D; ++d) {
         if (ranges[d].second <= ranges[d].first)
-            throw LucidError("histogramdd: each range hi must be > lo");
+            ErrorBuilder("histogramdd").fail("each range hi must be > lo");
         step[d] = (ranges[d].second - ranges[d].first) / static_cast<double>(bins[d]);
     }
 

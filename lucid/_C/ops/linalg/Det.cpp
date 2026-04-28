@@ -11,9 +11,11 @@
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
-#include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -51,11 +53,8 @@ inline float perm_index_sign(const std::uint32_t* p, std::size_t n) {
 
 TensorImplPtr det_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    if (!a)
-        throw LucidError("det: null input");
-    require_float(a->dtype_, "det");
-    require_square_2d(a->shape_, "det");
-    OpScope scope{"det", a->device_, a->dtype_, a->shape_};
+    Validator::input(a, "det.a").float_only().square_2d();
+    OpScopeFull scope{"det", a->device_, a->dtype_, a->shape_};
 
     const auto& sh = a->shape_;
     const int n = static_cast<int>(sh[sh.size() - 1]);
@@ -67,7 +66,7 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
         auto in = as_mlx_array_gpu(a);
         auto factors = ::mlx::core::linalg::lu(in, kMlxLinalgStream);
         if (factors.size() < 3)
-            throw LucidError("det: lu returned fewer than 3 factors");
+            ErrorBuilder("det").fail("lu returned fewer than 3 factors");
         const auto& P = factors[0];
         const auto& U = factors[2];
         auto diag = ::mlx::core::diagonal(U, 0, -2, -1);

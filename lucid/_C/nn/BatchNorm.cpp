@@ -11,10 +11,12 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
@@ -145,7 +147,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
                                               const TensorImplPtr& beta,
                                               double eps) {
     if (!x || !gamma || !beta)
-        throw LucidError("batch_norm: null input");
+        ErrorBuilder("batch_norm").fail("null input");
     if (x->dtype_ != gamma->dtype_ || x->dtype_ != beta->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
                             std::string(dtype_name(gamma->dtype_)), "batch_norm");
@@ -154,7 +156,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
                              std::string(device_name(gamma->device_)), "batch_norm");
     if (x->device_ == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-        throw NotImplementedError("batch_norm: non-contiguous input not supported");
+        ErrorBuilder("batch_norm").not_implemented("non-contiguous input not supported");
     if (static_cast<int>(x->shape_.size()) != N + 2)
         throw ShapeMismatch(x->shape_, Shape{}, "batch_norm: x rank mismatch");
     if (gamma->shape_.size() != 1 || beta->shape_.size() != 1)
@@ -171,7 +173,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     if (gamma->shape_[0] != C || beta->shape_[0] != C)
         throw ShapeMismatch(gamma->shape_, x->shape_, "batch_norm: γ/β must have length C");
 
-    OpScope scope{BatchNormNdBackward<N>::schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{BatchNormNdBackward<N>::schema_v1.name, x->device_, x->dtype_, x->shape_};
 
     Storage out_storage;
     Storage saved_mean;
@@ -182,7 +184,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         const auto& gg = std::get<GpuStorage>(gamma->storage_);
         const auto& gb = std::get<GpuStorage>(beta->storage_);
         if (!gx.arr || !gg.arr || !gb.arr) {
-            throw LucidError("batch_norm: null GPU input");
+            ErrorBuilder("batch_norm").fail("null GPU input");
         }
         // Broadcast shape for γ/β/mean/rstd: (1, C, 1, ..., 1).
         ::mlx::core::Shape brC(N + 2, 1);
@@ -236,7 +238,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
                         reinterpret_cast<double*>(rstd_cpu.ptr.get()), B, C, spatial_total, eps);
                     break;
                 default:
-                    throw NotImplementedError("batch_norm: dtype not supported (F32/F64)");
+                    ErrorBuilder("batch_norm").not_implemented("dtype not supported (F32/F64)");
             }
         }
         out_storage = Storage{std::move(y_cpu)};
@@ -290,7 +292,7 @@ std::vector<Storage> BatchNormNdBackward<N>::apply(Storage grad_out) {
         const auto& gR = std::get<GpuStorage>(this->saved_rstd_);
         const auto& gG = std::get<GpuStorage>(grad_out);
         if (!gx.arr || !gg.arr || !gM.arr || !gR.arr || !gG.arr) {
-            throw LucidError("batch_norm backward: null GPU array");
+            ErrorBuilder("batch_norm backward").fail("null GPU array");
         }
         ::mlx::core::Shape brC(N + 2, 1);
         brC[1] = static_cast<::mlx::core::ShapeElem>(this->C_);
@@ -355,7 +357,7 @@ std::vector<Storage> BatchNormNdBackward<N>::apply(Storage grad_out) {
                     spatial_total);
                 break;
             default:
-                throw NotImplementedError("batch_norm backward: dtype not supported");
+                ErrorBuilder("batch_norm backward").not_implemented("dtype not supported");
         }
     } else {
         if (dgamma_cpu.nbytes)

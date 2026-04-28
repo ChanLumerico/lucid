@@ -9,9 +9,11 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "_BinaryOp.h"
 #include "_Detail.h"
@@ -82,7 +84,7 @@ public:
                 reinterpret_cast<const double*>(ca.ptr.get()),
                 reinterpret_cast<const double*>(cb.ptr.get()));
         else
-            throw NotImplementedError("outer backward: dtype not supported");
+            ErrorBuilder("outer backward").not_implemented("dtype not supported");
         return {Storage{std::move(da)}, Storage{std::move(db)}};
     }
 };
@@ -92,10 +94,10 @@ public:
 TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     validate_pair(a, b, "outer");
     if (a->shape_.size() != 1 || b->shape_.size() != 1)
-        throw LucidError("outer: requires 1-D inputs");
+        ErrorBuilder("outer").fail("requires 1-D inputs");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"outer", device, dt, Shape{}};
+    OpScopeFull scope{"outer", device, dt, Shape{}};
 
     auto wire_grad = [&](const TensorImplPtr& out) {
         if (!(GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)))
@@ -152,7 +154,7 @@ TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b) {
             reinterpret_cast<const double*>(ca.ptr.get()),
             reinterpret_cast<const double*>(cb.ptr.get()));
     else
-        throw NotImplementedError("outer: dtype not supported");
+        ErrorBuilder("outer").not_implemented("dtype not supported");
     auto t = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
     wire_grad(t);
     return t;

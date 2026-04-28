@@ -11,11 +11,14 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "View.h"                // reshape_op / ViewBackward
 #include "_Detail.h"
@@ -31,13 +34,12 @@ using utils_detail::numel;
 }  // namespace
 
 TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis) {
-    if (!a)
-        throw LucidError("flatten: null input");
+    Validator::input(a, "flatten.a").non_null();
     const int ndim = static_cast<int>(a->shape_.size());
     int s = start_axis < 0 ? start_axis + ndim : start_axis;
     int e = end_axis < 0 ? end_axis + ndim : end_axis;
     if (s < 0 || e >= ndim || s > e)
-        throw LucidError("flatten: invalid axis range");
+        ErrorBuilder("flatten").fail("invalid axis range");
 
     // Delegate to reshape_op so we inherit the ViewBackward autograd wiring.
     std::vector<std::int64_t> new_shape;
@@ -138,7 +140,7 @@ Storage reduce_broadcast(const Storage& grad,
             run(std::int64_t{});
             break;
         default:
-            throw NotImplementedError("broadcast backward: dtype not supported");
+            ErrorBuilder("broadcast backward").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -152,11 +154,10 @@ std::vector<Storage> BroadcastBackward::apply(Storage grad_out) {
 LUCID_REGISTER_OP(BroadcastBackward)
 
 TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
-    if (!a)
-        throw LucidError("broadcast_to: null input");
+    Validator::input(a, "broadcast_to.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"broadcast_to", device, dt, shape};
+    OpScopeFull scope{"broadcast_to", device, dt, shape};
 
     auto build_with_grad = [&](Storage&& out_storage) {
         auto out = std::make_shared<TensorImpl>(std::move(out_storage), shape, dt, device,
@@ -245,7 +246,7 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
                 reinterpret_cast<const std::uint8_t*>(ca.ptr.get()));
             break;
         default:
-            throw NotImplementedError("broadcast_to: dtype not supported");
+            ErrorBuilder("broadcast_to").not_implemented("dtype not supported");
     }
     return build_with_grad(Storage{std::move(out_cpu)});
 }

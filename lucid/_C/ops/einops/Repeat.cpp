@@ -3,9 +3,12 @@
 #include <string>
 #include <vector>
 
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../ufunc/Transpose.h"
 #include "../utils/Layout.h"
 #include "../utils/View.h"
@@ -21,9 +24,8 @@ using einops_detail::split_arrow;
 TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
                                const std::string& pattern,
                                const std::map<std::string, std::int64_t>& axes_lengths) {
-    if (!a)
-        throw LucidError("repeat: null input");
-    OpScope scope{"einops_repeat", a->device_, a->dtype_, a->shape_};
+    Validator::input(a, "repeat.a").non_null();
+    OpScopeFull scope{"einops_repeat", a->device_, a->dtype_, a->shape_};
 
     auto [lhs_str, rhs_str] = split_arrow(pattern);
     auto lhs = parse_side(lhs_str);
@@ -50,7 +52,7 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
         if (sz.find(n) == sz.end()) {
             auto it = axes_lengths.find(n);
             if (it == axes_lengths.end())
-                throw LucidError("repeat: new axis '" + n + "' requires kwargs size");
+                ErrorBuilder("repeat").fail("new axis '" + n + "' requires kwargs size");
             sz[n] = it->second;
         }
     }
@@ -72,7 +74,8 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
         for (std::size_t i = 0; i < flat_rhs.size(); ++i) {
             auto it = std::find(interim.begin(), interim.end(), flat_rhs[i]);
             if (it == interim.end())
-                throw LucidError("repeat: rhs axis '" + flat_rhs[i] + "' missing after insertion");
+                ErrorBuilder("repeat").fail("rhs axis '" + flat_rhs[i] +
+                                            "' missing after insertion");
             perm[i] = static_cast<int>(it - interim.begin());
         }
         bool identity = true;

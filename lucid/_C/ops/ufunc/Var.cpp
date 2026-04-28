@@ -10,10 +10,13 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -51,13 +54,12 @@ public:
 }  // namespace
 
 TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, bool keepdims) {
-    if (!a)
-        throw LucidError("var: null input");
+    Validator::input(a, "var.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     const auto axes = normalize_axes(axes_user, static_cast<int>(a->shape_.size()));
     const Shape out_shape = reduce_output_shape(a->shape_, axes, keepdims);
-    OpScope scope{"var", device, dt, out_shape};
+    OpScopeFull scope{"var", device, dt, out_shape};
 
     TensorImplPtr out;  // declared early so the grad block below can attach.
 
@@ -179,7 +181,7 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
         compute(reinterpret_cast<double*>(out_cpu.ptr.get()),
                 reinterpret_cast<const double*>(ca.ptr.get()));
     else
-        throw NotImplementedError("var: dtype not supported");
+        ErrorBuilder("var").not_implemented("dtype not supported");
 
     out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
 

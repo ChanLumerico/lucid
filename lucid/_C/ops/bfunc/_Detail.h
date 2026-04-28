@@ -12,7 +12,9 @@
 
 #include "../../api.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
+#include "../../core/Helpers.h"
 #include "../../core/Shape.h"
 #include "../../core/Storage.h"
 #include "../../core/TensorImpl.h"
@@ -20,24 +22,15 @@
 
 namespace lucid::bfunc_detail {
 
-inline CpuStorage allocate_cpu(const Shape& shape, Dtype dt) {
-    CpuStorage s;
-    s.dtype = dt;
-    s.nbytes = shape_numel(shape) * dtype_size(dt);
-    s.ptr = allocate_aligned_bytes(s.nbytes);
-    if (s.nbytes > 0)
-        std::memset(s.ptr.get(), 0, s.nbytes);
-    return s;
-}
-
-inline TensorImplPtr fresh(Storage&& s, Shape shape, Dtype dt, Device device) {
-    return std::make_shared<TensorImpl>(std::move(s), std::move(shape), dt, device,
-                                        /*requires_grad=*/false);
-}
+// Re-exports of the canonical helpers in `core/Helpers.h`. The aliases
+// keep existing call sites (`bfunc_detail::allocate_cpu(...)`) working
+// while migration to the unqualified `lucid::helpers::` form proceeds.
+using ::lucid::helpers::allocate_cpu;
+using ::lucid::helpers::fresh;
 
 inline void validate_pair(const TensorImplPtr& a, const TensorImplPtr& b, const char* op) {
     if (!a || !b)
-        throw LucidError(std::string(op) + ": null input");
+        ErrorBuilder(op).fail("null input");
     if (a->dtype_ != b->dtype_)
         throw DtypeMismatch(std::string(dtype_name(a->dtype_)), std::string(dtype_name(b->dtype_)),
                             std::string(op));

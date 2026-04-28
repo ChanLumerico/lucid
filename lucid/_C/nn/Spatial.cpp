@@ -12,10 +12,12 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
@@ -54,7 +56,7 @@ const OpSchema AffineGridBackward::schema_v1{"affine_grid", 1, AmpPolicy::Promot
 TensorImplPtr AffineGridBackward::forward(
     const TensorImplPtr& theta, int N, int H, int W, bool align_corners) {
     if (!theta)
-        throw LucidError("affine_grid: null theta");
+        ErrorBuilder("affine_grid").fail("null theta");
     if (theta->shape_.size() != 3 || theta->shape_[0] != N || theta->shape_[1] != 2 ||
         theta->shape_[2] != 3)
         throw ShapeMismatch(theta->shape_, Shape{static_cast<std::int64_t>(N), 2, 3},
@@ -62,7 +64,7 @@ TensorImplPtr AffineGridBackward::forward(
 
     Shape out_shape{static_cast<std::int64_t>(N), static_cast<std::int64_t>(H),
                     static_cast<std::int64_t>(W), 2};
-    OpScope scope{schema_v1.name, theta->device_, theta->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, theta->device_, theta->dtype_, out_shape};
 
     Storage out_storage;
     if (theta->device_ == Device::GPU) {
@@ -134,7 +136,7 @@ TensorImplPtr AffineGridBackward::forward(
         else if (theta->dtype_ == Dtype::F64)
             run(double{});
         else
-            throw NotImplementedError("affine_grid: dtype must be F32/F64");
+            ErrorBuilder("affine_grid").not_implemented("dtype must be F32/F64");
         out_storage = Storage{std::move(out_cpu)};
     }
 
@@ -253,7 +255,7 @@ std::vector<Storage> AffineGridBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("affine_grid backward: dtype not supported");
+        ErrorBuilder("affine_grid backward").not_implemented("dtype not supported");
     return {Storage{std::move(dtheta)}};
 }
 
@@ -291,7 +293,7 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
                                           int padding_mode,
                                           bool align_corners) {
     if (!input || !grid)
-        throw LucidError("grid_sample: null input");
+        ErrorBuilder("grid_sample").fail("null input");
     if (input->device_ != grid->device_)
         throw DeviceMismatch(std::string(device_name(input->device_)),
                              std::string(device_name(grid->device_)), "grid_sample: input/grid");
@@ -316,7 +318,7 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
 
     Shape out_shape{static_cast<std::int64_t>(N), static_cast<std::int64_t>(C),
                     static_cast<std::int64_t>(H_out), static_cast<std::int64_t>(W_out)};
-    OpScope scope{schema_v1.name, input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_, out_shape};
 
     Storage out_storage;
     if (input->device_ == Device::GPU) {
@@ -588,7 +590,7 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
     else if (input->dtype_ == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("grid_sample: dtype must be F32/F64");
+        ErrorBuilder("grid_sample").not_implemented("dtype must be F32/F64");
 
     auto out = std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, out_shape, input->dtype_,
                                             input->device_, false);
@@ -1045,7 +1047,7 @@ std::vector<Storage> GridSampleBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("grid_sample backward: dtype not supported");
+        ErrorBuilder("grid_sample backward").not_implemented("dtype not supported");
 
     // GPU branch returns earlier via the native MLX path; this code only runs
     // for CPU input.

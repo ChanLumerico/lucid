@@ -11,11 +11,14 @@
 #include "../backend/cpu/Blas.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../ops/bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -33,7 +36,7 @@ struct FlatX {
 
 FlatX flatten_x(const Shape& x_shape) {
     if (x_shape.empty()) {
-        throw LucidError("linear: x must be at least 1-D");
+        ErrorBuilder("linear").fail("x must be at least 1-D");
     }
     std::size_t m = 1;
     for (std::size_t d = 0; d + 1 < x_shape.size(); ++d) {
@@ -71,7 +74,7 @@ void add_bias(CpuStorage& y, const CpuStorage& b, std::size_t M, std::size_t N, 
                                    reinterpret_cast<const double*>(b.ptr.get()), M, N);
             break;
         default:
-            throw NotImplementedError("linear: bias dtype not supported");
+            ErrorBuilder("linear").not_implemented("bias dtype not supported");
     }
 }
 
@@ -92,22 +95,15 @@ void sum_rows_typed(const T* g, T* db, std::size_t M, std::size_t N) {
 TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
                                       const TensorImplPtr& W,
                                       const TensorImplPtr& b) {
-    if (!x || !W || !b)
-        throw LucidError("linear: null input");
-    if (x->dtype_ != W->dtype_ || x->dtype_ != b->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(x->dtype_)), std::string(dtype_name(W->dtype_)),
-                            "linear");
-    if (x->device_ != W->device_ || x->device_ != b->device_)
-        throw DeviceMismatch(std::string(device_name(x->device_)),
-                             std::string(device_name(W->device_)), "linear");
+    Validator::input(x, "linear.x").non_null();
+    Validator::input(W, "linear.W").non_null().ndim(2);
+    Validator::input(b, "linear.b").non_null().ndim(1);
+    Validator::pair(x, W, "linear").same_dtype().same_device();
+    Validator::pair(x, b, "linear").same_dtype().same_device();
     if (x->device_ == Device::CPU &&
         (!x->is_contiguous() || !W->is_contiguous() || !b->is_contiguous()))
-        throw NotImplementedError(
-            "linear: non-contiguous input not supported (call .contiguous() first)");
-    if (W->shape_.size() != 2)
-        throw ShapeMismatch(W->shape_, Shape{}, "linear: W must be 2-D");
-    if (b->shape_.size() != 1)
-        throw ShapeMismatch(b->shape_, Shape{}, "linear: b must be 1-D");
+        ErrorBuilder("linear").not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
 
     const auto fx = flatten_x(x->shape_);
     const std::size_t M = fx.M;                                    // batch product
@@ -122,7 +118,7 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
     Shape out_shape = x->shape_;
     out_shape.back() = static_cast<std::int64_t>(N);
 
-    OpScope scope{schema_v1.name, x->device_, x->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, out_shape};
     scope.set_flops(static_cast<std::int64_t>(2 * M * N * K));
 
     Storage out_storage;
@@ -131,7 +127,7 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
         const auto& gW = std::get<GpuStorage>(W->storage_);
         const auto& gb = std::get<GpuStorage>(b->storage_);
         if (!gx.arr || !gW.arr || !gb.arr) {
-            throw LucidError("linear: null GPU input");
+            ErrorBuilder("linear").fail("null GPU input");
         }
         ::mlx::core::array out_arr =
             (M == 0 || N == 0 || K == 0)
@@ -163,7 +159,7 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
                         K, 0.0, reinterpret_cast<double*>(out_cpu.ptr.get()), N);
                     break;
                 default:
-                    throw NotImplementedError("linear: dtype not supported (F32/F64)");
+                    ErrorBuilder("linear").not_implemented("dtype not supported (F32/F64)");
             }
         } else if (M * N > 0) {
             std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
@@ -213,7 +209,7 @@ std::vector<Storage> LinearBackward::apply(Storage grad_out) {
         const auto& gX = std::get<GpuStorage>(saved_inputs_[0]);
         const auto& gW = std::get<GpuStorage>(saved_inputs_[1]);
         if (!gG.arr || !gX.arr || !gW.arr) {
-            throw LucidError("linear backward: null GPU array");
+            ErrorBuilder("linear backward").fail("null GPU array");
         }
         // Reshape g and x to 2-D (M,N) / (M,K) so the matmul has the right
         // rank; reshape result back to original shapes for dx.
@@ -281,7 +277,7 @@ std::vector<Storage> LinearBackward::apply(Storage grad_out) {
                 break;
             }
             default:
-                throw NotImplementedError("linear backward: dtype not supported");
+                ErrorBuilder("linear backward").not_implemented("dtype not supported");
         }
     } else {
         // Empty case — zero-fill all grads.

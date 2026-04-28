@@ -2,9 +2,12 @@
 #include <string>
 #include <vector>
 
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../ufunc/Reductions.h"
 #include "../ufunc/Transpose.h"
 #include "../utils/View.h"
@@ -35,7 +38,7 @@ TensorImplPtr dispatch_reduce(const TensorImplPtr& x,
         return min_op(x, axes, /*keepdims=*/false);
     if (reduction == "prod")
         return prod_op(x, axes, /*keepdims=*/false);
-    throw LucidError("reduce: unknown reduction '" + reduction + "'");
+    ErrorBuilder("reduce").fail("unknown reduction '" + reduction + "'");
 }
 
 }  // namespace
@@ -44,9 +47,8 @@ TensorImplPtr einops_reduce_op(const TensorImplPtr& a,
                                const std::string& pattern,
                                const std::string& reduction,
                                const std::map<std::string, std::int64_t>& axes_lengths) {
-    if (!a)
-        throw LucidError("reduce: null input");
-    OpScope scope{"einops_reduce", a->device_, a->dtype_, a->shape_};
+    Validator::input(a, "reduce.a").non_null();
+    OpScopeFull scope{"einops_reduce", a->device_, a->dtype_, a->shape_};
 
     auto [lhs_str, rhs_str] = split_arrow(pattern);
     auto lhs = parse_side(lhs_str);
@@ -84,7 +86,7 @@ TensorImplPtr einops_reduce_op(const TensorImplPtr& a,
         surviving_str += surviving[i];
     }
     if (cur->shape_.size() != surviving.size())
-        throw LucidError("reduce: internal axis bookkeeping mismatch");
+        ErrorBuilder("reduce").fail("internal axis bookkeeping mismatch");
     return einops_rearrange_op(cur, surviving_str + " -> " + rhs_str, axes_lengths);
 }
 

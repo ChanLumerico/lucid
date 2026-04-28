@@ -3,9 +3,12 @@
 #include <string>
 #include <vector>
 
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../ufunc/Transpose.h"
 #include "../utils/View.h"
 #include "Einops.h"
@@ -28,7 +31,7 @@ std::map<std::string, std::int64_t> resolve_lhs_sizes(
     const std::map<std::string, std::int64_t>& kwargs,
     const char* op_name) {
     if (lhs.size() != in_shape.size())
-        throw LucidError(std::string(op_name) + ": lhs token count != input ndim");
+        ErrorBuilder(op_name).fail("lhs token count != input ndim");
     std::map<std::string, std::int64_t> sz;
     for (auto& [k, v] : kwargs)
         sz[k] = v;
@@ -44,7 +47,7 @@ std::map<std::string, std::int64_t> resolve_lhs_sizes(
             std::int64_t known_prod = 1;
             for (auto& sub : inner) {
                 if (!sub.is_name())
-                    throw LucidError(std::string(op_name) + ": nested groups/literals not allowed");
+                    ErrorBuilder(op_name).fail("nested groups/literals not allowed");
                 const auto& nm = sub.name();
                 auto it = sz.find(nm);
                 if (it == sz.end())
@@ -54,21 +57,19 @@ std::map<std::string, std::int64_t> resolve_lhs_sizes(
             }
             if (unknown.size() == 1) {
                 if (known_prod == 0)
-                    throw LucidError(std::string(op_name) +
-                                     ": cannot infer axis from zero-product group");
+                    ErrorBuilder(op_name).fail("cannot infer axis from zero-product group");
                 if (dim % known_prod != 0)
-                    throw LucidError(std::string(op_name) + ": group does not divide input dim");
+                    ErrorBuilder(op_name).fail("group does not divide input dim");
                 sz[unknown[0]] = dim / known_prod;
             } else if (unknown.size() > 1) {
-                throw LucidError(std::string(op_name) +
-                                 ": multiple unknown axes in group; pass via kwargs");
+                ErrorBuilder(op_name).fail("multiple unknown axes in group; pass via kwargs");
             } else if (known_prod != dim) {
-                throw LucidError(std::string(op_name) + ": group product mismatches input dim");
+                ErrorBuilder(op_name).fail("group product mismatches input dim");
             }
         } else {
             // literal
             if (tk.literal() != dim)
-                throw LucidError(std::string(op_name) + ": literal mismatches input dim");
+                ErrorBuilder(op_name).fail("literal mismatches input dim");
         }
     }
     return sz;
@@ -98,9 +99,8 @@ std::vector<std::int64_t> group_shape_merged(const std::vector<Token>& tokens,
 TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
                                   const std::string& pattern,
                                   const std::map<std::string, std::int64_t>& axes_lengths) {
-    if (!a)
-        throw LucidError("rearrange: null input");
-    OpScope scope{"einops_rearrange", a->device_, a->dtype_, a->shape_};
+    Validator::input(a, "rearrange.a").non_null();
+    OpScopeFull scope{"einops_rearrange", a->device_, a->dtype_, a->shape_};
 
     auto [lhs_str, rhs_str] = split_arrow(pattern);
     auto lhs = parse_side(lhs_str);
@@ -114,7 +114,7 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
             if (it != axes_lengths.end())
                 sz[n] = it->second;
             else
-                throw LucidError("rearrange: unknown axis '" + n + "' on rhs");
+                ErrorBuilder("rearrange").fail("unknown axis '" + n + "' on rhs");
         }
     }
 
@@ -135,7 +135,7 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
         for (std::size_t i = 0; i < flat_rhs.size(); ++i) {
             auto it = std::find(flat_lhs.begin(), flat_lhs.end(), flat_rhs[i]);
             if (it == flat_lhs.end())
-                throw LucidError("rearrange: rhs axis '" + flat_rhs[i] + "' not in lhs");
+                ErrorBuilder("rearrange").fail("rhs axis '" + flat_rhs[i] + "' not in lhs");
             perm[i] = static_cast<int>(it - flat_lhs.begin());
         }
         bool identity = true;

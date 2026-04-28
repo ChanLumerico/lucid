@@ -10,9 +10,12 @@
 #include "../../backend/cpu/Blas.h"
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -34,7 +37,7 @@ void pinv_one(const T* A, int m, int n, T* Aplus) {
     else
         lapack_svd_f64(A, m, n, false, U.data(), S.data(), Vt.data(), &info);
     if (info != 0)
-        throw LucidError("pinv: SVD did not converge");
+        ErrorBuilder("pinv").fail("SVD did not converge");
 
     // rcond = eps * max(m, n).
     const T smax = (k > 0) ? *std::max_element(S.begin(), S.end()) : T{0};
@@ -65,12 +68,11 @@ void pinv_one(const T* A, int m, int n, T* Aplus) {
 
 TensorImplPtr pinv_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    if (!a)
-        throw LucidError("pinv: null input");
+    Validator::input(a, "pinv.a").non_null();
     require_float(a->dtype_, "pinv");
     if (a->shape_.size() < 2)
-        throw LucidError("pinv: input must be at least 2-D");
-    OpScope scope{"pinv", a->device_, a->dtype_, a->shape_};
+        ErrorBuilder("pinv").fail("input must be at least 2-D");
+    OpScopeFull scope{"pinv", a->device_, a->dtype_, a->shape_};
 
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);

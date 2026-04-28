@@ -13,10 +13,12 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
@@ -75,7 +77,7 @@ CpuStorage make_scalar(double val, Dtype dt) {
             *reinterpret_cast<double*>(s.ptr.get()) = val;
             break;
         default:
-            throw NotImplementedError("loss: dtype not supported");
+            ErrorBuilder("loss").not_implemented("dtype not supported");
     }
     return s;
 }
@@ -125,7 +127,7 @@ inline std::int64_t read_target(const CpuStorage& ts, std::size_t i) {
         case Dtype::F64:
             return static_cast<std::int64_t>(reinterpret_cast<const double*>(ts.ptr.get())[i]);
         default:
-            throw NotImplementedError("loss target: dtype not supported");
+            ErrorBuilder("loss target").not_implemented("dtype not supported");
     }
 }
 
@@ -141,7 +143,7 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
                                        const TensorImplPtr& target,
                                        Reduction reduction) {
     if (!input || !target)
-        throw LucidError("mse_loss: null input");
+        ErrorBuilder("mse_loss").fail("null input");
     if (input->shape_ != target->shape_)
         throw ShapeMismatch(input->shape_, target->shape_, "mse_loss: input/target shape mismatch");
     if (input->dtype_ != target->dtype_)
@@ -149,15 +151,15 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
                             std::string(dtype_name(target->dtype_)), "mse_loss");
 
     const std::size_t numel = input->numel();
-    OpScope scope{schema_v1.name, input->device_, input->dtype_,
-                  reduced_shape(input->shape_, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
+                      reduced_shape(input->shape_, reduction)};
 
     Storage out_storage;
     if (input->device_ == Device::GPU) {
         const auto& gx = std::get<GpuStorage>(input->storage_);
         const auto& gt = std::get<GpuStorage>(target->storage_);
         if (!gx.arr || !gt.arr)
-            throw LucidError("mse_loss: null GPU array");
+            ErrorBuilder("mse_loss").fail("null GPU array");
         auto diff = ::mlx::core::subtract(*gx.arr, *gt.arr);
         auto sq = ::mlx::core::multiply(diff, diff);
         auto red = mlx_apply_reduction(sq, reduction);
@@ -190,7 +192,7 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
                 break;
             }
             default:
-                throw NotImplementedError("mse_loss: dtype not supported");
+                ErrorBuilder("mse_loss").not_implemented("dtype not supported");
         }
     }
 
@@ -268,7 +270,7 @@ std::vector<Storage> MseLossBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         compute(double{});
     else
-        throw NotImplementedError("mse_loss backward: dtype not supported");
+        ErrorBuilder("mse_loss backward").not_implemented("dtype not supported");
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dt_cpu)}};
 }
 
@@ -289,14 +291,14 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
                                        Reduction reduction,
                                        double eps) {
     if (!input || !target || !weight)
-        throw LucidError(
-            "bce_loss: input/target/weight required (pass ones for weight if not used)");
+        ErrorBuilder("bce_loss")
+            .fail("input/target/weight required (pass ones for weight if not used)");
     if (input->shape_ != target->shape_)
         throw ShapeMismatch(input->shape_, target->shape_, "bce_loss: input/target shape mismatch");
 
     const std::size_t numel = input->numel();
-    OpScope scope{schema_v1.name, input->device_, input->dtype_,
-                  reduced_shape(input->shape_, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
+                      reduced_shape(input->shape_, reduction)};
 
     Storage out_storage;
     if (input->device_ == Device::GPU) {
@@ -342,7 +344,7 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
         else if (input->dtype_ == Dtype::F64)
             compute(double{});
         else
-            throw NotImplementedError("bce_loss: dtype not supported");
+            ErrorBuilder("bce_loss").not_implemented("dtype not supported");
 
         if (input->dtype_ == Dtype::F32) {
             out_storage = apply_reduction<float>(reinterpret_cast<float*>(loss_buf.ptr.get()),
@@ -459,7 +461,7 @@ std::vector<Storage> BCELossBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         compute(double{});
     else
-        throw NotImplementedError("bce_loss backward: dtype not supported");
+        ErrorBuilder("bce_loss backward").not_implemented("dtype not supported");
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dt_cpu)}, Storage{std::move(dw_cpu)}};
 }
 
@@ -490,14 +492,14 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
                                              const TensorImplPtr& pos_weight,
                                              Reduction reduction) {
     if (!input || !target || !weight || !pos_weight)
-        throw LucidError("bce_with_logits: input/target/weight/pos_weight required");
+        ErrorBuilder("bce_with_logits").fail("input/target/weight/pos_weight required");
     if (input->shape_ != target->shape_)
         throw ShapeMismatch(input->shape_, target->shape_,
                             "bce_with_logits: input/target shape mismatch");
 
     const std::size_t numel = input->numel();
-    OpScope scope{schema_v1.name, input->device_, input->dtype_,
-                  reduced_shape(input->shape_, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
+                      reduced_shape(input->shape_, reduction)};
 
     Storage out_storage;
     if (input->device_ == Device::GPU) {
@@ -567,7 +569,7 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
         else if (input->dtype_ == Dtype::F64)
             compute(double{});
         else
-            throw NotImplementedError("bce_with_logits: dtype not supported");
+            ErrorBuilder("bce_with_logits").not_implemented("dtype not supported");
 
         if (input->dtype_ == Dtype::F32) {
             out_storage = apply_reduction<float>(reinterpret_cast<float*>(loss_buf.ptr.get()),
@@ -701,7 +703,7 @@ std::vector<Storage> BCEWithLogitsBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         compute(double{});
     else
-        throw NotImplementedError("bce_with_logits backward: dtype not supported");
+        ErrorBuilder("bce_with_logits backward").not_implemented("dtype not supported");
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dt_cpu)}, Storage{std::move(dw_cpu)},
             Storage{std::move(dpw_cpu)}};
 }
@@ -729,7 +731,7 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
                                             double eps,
                                             int ignore_index) {
     if (!input || !target)
-        throw LucidError("cross_entropy: null input");
+        ErrorBuilder("cross_entropy").fail("null input");
     if (input->shape_.size() < 2)
         throw ShapeMismatch(input->shape_, Shape{}, "cross_entropy: input must be (N, C, ...)");
     if (input->device_ != target->device_)
@@ -754,8 +756,8 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
         for (std::size_t i = 2; i < input->shape_.size(); ++i)
             per_sample_shape.push_back(input->shape_[i]);
     }
-    OpScope scope{schema_v1.name, input->device_, input->dtype_,
-                  reduced_shape(per_sample_shape, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
+                      reduced_shape(per_sample_shape, reduction)};
 
     // ------------------------------------------------------------------
     // GPU branch — fused log_softmax + NLL via MLX.
@@ -907,7 +909,7 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
     else if (input->dtype_ == Dtype::F64)
         compute(double{});
     else
-        throw NotImplementedError("cross_entropy: dtype not supported");
+        ErrorBuilder("cross_entropy").not_implemented("dtype not supported");
 
     std::size_t valid_count = 0;
     for (std::size_t i = 0; i < total_samples; ++i) {
@@ -1086,7 +1088,7 @@ std::vector<Storage> CrossEntropyBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         compute(double{});
     else
-        throw NotImplementedError("cross_entropy backward: dtype not supported");
+        ErrorBuilder("cross_entropy backward").not_implemented("dtype not supported");
     return {Storage{std::move(dx_cpu)}};
 }
 
@@ -1113,7 +1115,7 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
                                        Reduction reduction,
                                        int ignore_index) {
     if (!input || !target)
-        throw LucidError("nll_loss: null input");
+        ErrorBuilder("nll_loss").fail("null input");
     if (input->shape_.size() < 2)
         throw ShapeMismatch(input->shape_, Shape{}, "nll_loss: input must be (N, C, ...)");
     if (input->device_ != target->device_)
@@ -1137,8 +1139,8 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
         for (std::size_t i = 2; i < input->shape_.size(); ++i)
             per_sample_shape.push_back(input->shape_[i]);
     }
-    OpScope scope{schema_v1.name, input->device_, input->dtype_,
-                  reduced_shape(per_sample_shape, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
+                      reduced_shape(per_sample_shape, reduction)};
 
     if (input->device_ == Device::GPU) {
         const auto& gx = std::get<GpuStorage>(input->storage_);
@@ -1245,7 +1247,7 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
     else if (input->dtype_ == Dtype::F64)
         compute(double{});
     else
-        throw NotImplementedError("nll_loss: dtype not supported");
+        ErrorBuilder("nll_loss").not_implemented("dtype not supported");
     if (valid_count == 0)
         valid_count = 1;
 
@@ -1398,7 +1400,7 @@ std::vector<Storage> NLLLossBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         compute(double{});
     else
-        throw NotImplementedError("nll_loss backward: dtype not supported");
+        ErrorBuilder("nll_loss backward").not_implemented("dtype not supported");
     return {Storage{std::move(dx_cpu)}};
 }
 
@@ -1423,16 +1425,16 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
                                          double delta,
                                          Reduction reduction) {
     if (!input || !target)
-        throw LucidError("huber_loss: null input");
+        ErrorBuilder("huber_loss").fail("null input");
     if (input->shape_ != target->shape_)
         throw ShapeMismatch(input->shape_, target->shape_,
                             "huber_loss: input/target shape mismatch");
     if (delta <= 0.0)
-        throw LucidError("huber_loss: delta must be positive");
+        ErrorBuilder("huber_loss").fail("delta must be positive");
 
     const std::size_t numel = input->numel();
-    OpScope scope{schema_v1.name, input->device_, input->dtype_,
-                  reduced_shape(input->shape_, reduction)};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_,
+                      reduced_shape(input->shape_, reduction)};
 
     Storage out_storage;
     if (input->device_ == Device::GPU) {
@@ -1475,7 +1477,7 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
         else if (input->dtype_ == Dtype::F64)
             compute(double{});
         else
-            throw NotImplementedError("huber_loss: dtype not supported");
+            ErrorBuilder("huber_loss").not_implemented("dtype not supported");
 
         if (input->dtype_ == Dtype::F32) {
             out_storage = apply_reduction<float>(reinterpret_cast<float*>(loss_buf.ptr.get()),
@@ -1573,7 +1575,7 @@ std::vector<Storage> HuberLossBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         compute(double{});
     else
-        throw NotImplementedError("huber_loss backward: dtype not supported");
+        ErrorBuilder("huber_loss backward").not_implemented("dtype not supported");
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dt_cpu)}};
 }
 

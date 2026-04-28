@@ -2,8 +2,10 @@
 
 #include <vector>
 
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "PoolNd.h"
 
 namespace lucid {
@@ -12,18 +14,17 @@ namespace {
 
 inline void check_uniform(int S, int O, int axis, const char* op) {
     if (O <= 0)
-        throw LucidError(std::string(op) + ": output_size must be > 0");
+        ErrorBuilder(op).fail("output_size must be > 0");
     if (S % O != 0) {
-        throw NotImplementedError(
-            std::string(op) + ": non-uniform adaptive pooling not supported (axis " +
-            std::to_string(axis) + ": input " + std::to_string(S) + " not divisible by output " +
-            std::to_string(O) + "). Pad input to a divisible size or use a regular pool.");
+        ErrorBuilder(op).not_implemented("non-uniform adaptive pooling not supported (axis" +
+                                         std::to_string(axis) + ": input " + std::to_string(S) +
+                                         " not divisible by output " + std::to_string(O) +
+                                         "). Pad input to a divisible size or use a regular pool.");
     }
 }
 
 inline void check_rank(const TensorImplPtr& x, int expected_rank, const char* op) {
-    if (!x)
-        throw LucidError(std::string(op) + ": null input");
+    Validator::input(x, std::string(op) + ".x").non_null();
     if (static_cast<int>(x->shape_.size()) != expected_rank)
         throw ShapeMismatch(x->shape_, Shape{}, std::string(op) + ": x rank mismatch");
 }

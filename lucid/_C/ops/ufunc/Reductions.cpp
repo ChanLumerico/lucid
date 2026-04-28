@@ -9,6 +9,7 @@
 #include "../../backend/cpu/Reduce.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/OpRegistry.h"
 
@@ -68,8 +69,7 @@ AxisResult reduce_one_axis(const CpuStorage& in,
                 reinterpret_cast<double*>(r.data.ptr.get()), oir.outer, oir.reduce_dim, oir.inner);
             break;
         default:
-            throw NotImplementedError(std::string(op_name) +
-                                      ": dtype not supported (F32/F64 only)");
+            ErrorBuilder(op_name).not_implemented("dtype not supported (F32/F64 only)");
     }
     return r;
 }
@@ -173,7 +173,7 @@ CpuStorage MeanBackward::cpu_kernel(const CpuStorage& a,
             break;
         }
         default:
-            throw NotImplementedError("mean: dtype not supported");
+            ErrorBuilder("mean").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -318,7 +318,7 @@ namespace {
 template <class F>
 GpuStorage gpu_reduce_apply(const GpuStorage& a, Dtype dt, F&& f, const char* op) {
     if (!a.arr) {
-        throw LucidError(std::string(op) + ": null GPU input");
+        ErrorBuilder(op).fail("null GPU input");
     }
     auto out = f(*a.arr);
     return gpu::wrap_mlx_array(std::move(out), dt);

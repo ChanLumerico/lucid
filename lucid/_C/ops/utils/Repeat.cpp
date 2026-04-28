@@ -11,11 +11,14 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -155,7 +158,7 @@ public:
                                                     out_shape_, axis_, repeats_);
                 break;
             default:
-                throw NotImplementedError("repeat backward: dtype not supported");
+                ErrorBuilder("repeat backward").not_implemented("dtype not supported");
         }
         return {Storage{std::move(out)}};
     }
@@ -210,7 +213,7 @@ public:
                                                   padded_shape_, out_shape_);
                 break;
             default:
-                throw NotImplementedError("tile backward: dtype not supported");
+                ErrorBuilder("tile backward").not_implemented("dtype not supported");
         }
         return {Storage{std::move(out)}};
     }
@@ -272,11 +275,10 @@ LUCID_REGISTER_OP(TileBackward)
 }  // namespace
 
 TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis) {
-    if (!a)
-        throw LucidError("repeat: null input");
+    Validator::input(a, "repeat.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"repeat", device, dt, a->shape_};
+    OpScopeFull scope{"repeat", device, dt, a->shape_};
     int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
@@ -313,14 +315,13 @@ TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis) 
 }
 
 TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
-    if (!a)
-        throw LucidError("tile: null input");
+    Validator::input(a, "tile.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"tile", device, dt, a->shape_};
+    OpScopeFull scope{"tile", device, dt, a->shape_};
     const std::size_t nout = reps.size();
     if (nout < a->shape_.size())
-        throw LucidError("tile: reps must be at least as long as ndim");
+        ErrorBuilder("tile").fail("reps must be at least as long as ndim");
 
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);

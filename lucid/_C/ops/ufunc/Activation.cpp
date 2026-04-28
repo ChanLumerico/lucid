@@ -12,11 +12,14 @@
 #include "../../backend/cpu/Vdsp.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -49,7 +52,7 @@ CpuStorage ReluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
                                     reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("relu: dtype not supported");
+            ErrorBuilder("relu").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -161,7 +164,7 @@ CpuStorage GeluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
             break;
         }
         default:
-            throw NotImplementedError("gelu: dtype not supported");
+            ErrorBuilder("gelu").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -235,7 +238,7 @@ Storage GeluBackward::grad_formula(const Storage& g) {
             break;
         }
         default:
-            throw NotImplementedError("gelu backward: dtype not supported");
+            ErrorBuilder("gelu backward").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -271,7 +274,7 @@ CpuStorage LeakyReluBackward::cpu_kernel(const CpuStorage& a,
             break;
         }
         default:
-            throw NotImplementedError("leaky_relu: dtype not supported");
+            ErrorBuilder("leaky_relu").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -283,18 +286,17 @@ Storage LeakyReluBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
-    if (!a)
-        throw LucidError("leaky_relu: null input");
+    Validator::input(a, "leaky_relu.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError(
-            "leaky_relu: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("leaky_relu")
+            .not_implemented("non-contiguous input not supported (call .contiguous() first)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
         if (!g.arr)
-            throw LucidError("leaky_relu: null GPU input");
+            ErrorBuilder("leaky_relu").fail("null GPU input");
         ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype_));
         ::mlx::core::array slope_arr(slope, gpu::to_mlx_dtype(a->dtype_));
         // y = where(x >= 0, x, slope * x)
@@ -367,7 +369,7 @@ CpuStorage SoftplusBackward::cpu_kernel(const CpuStorage& a, const Shape& out_sh
             break;
         }
         default:
-            throw NotImplementedError("softplus: dtype not supported");
+            ErrorBuilder("softplus").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -420,7 +422,7 @@ CpuStorage EluBackward::cpu_kernel(const CpuStorage& a,
             break;
         }
         default:
-            throw NotImplementedError("elu: dtype not supported");
+            ErrorBuilder("elu").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -470,24 +472,23 @@ Storage EluBackward::grad_formula(const Storage& g) {
             break;
         }
         default:
-            throw NotImplementedError("elu backward: dtype not supported");
+            ErrorBuilder("elu backward").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
 
 TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
-    if (!a)
-        throw LucidError("elu: null input");
+    Validator::input(a, "elu.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError(
-            "elu: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("elu").not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
         if (!g.arr)
-            throw LucidError("elu: null GPU input");
+            ErrorBuilder("elu").fail("null GPU input");
         ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype_));
         ::mlx::core::array one(1.0, gpu::to_mlx_dtype(a->dtype_));
         ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(a->dtype_));
@@ -561,7 +562,7 @@ CpuStorage SeluBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
             break;
         }
         default:
-            throw NotImplementedError("selu: dtype not supported");
+            ErrorBuilder("selu").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -613,7 +614,7 @@ Storage SeluBackward::grad_formula(const Storage& g) {
             break;
         }
         default:
-            throw NotImplementedError("selu backward: dtype not supported");
+            ErrorBuilder("selu backward").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -666,7 +667,7 @@ CpuStorage MishBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape,
             break;
         }
         default:
-            throw NotImplementedError("mish: dtype not supported");
+            ErrorBuilder("mish").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -724,7 +725,7 @@ Storage MishBackward::grad_formula(const Storage& g) {
             break;
         }
         default:
-            throw NotImplementedError("mish backward: dtype not supported");
+            ErrorBuilder("mish backward").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -763,7 +764,7 @@ CpuStorage HardSigmoidBackward::cpu_kernel(const CpuStorage& a, const Shape& out
             break;
         }
         default:
-            throw NotImplementedError("hard_sigmoid: dtype not supported");
+            ErrorBuilder("hard_sigmoid").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -813,7 +814,7 @@ Storage HardSigmoidBackward::grad_formula(const Storage& g) {
             break;
         }
         default:
-            throw NotImplementedError("hard_sigmoid backward: dtype not supported");
+            ErrorBuilder("hard_sigmoid backward").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -856,7 +857,7 @@ CpuStorage HardSwishBackward::cpu_kernel(const CpuStorage& a, const Shape& out_s
             break;
         }
         default:
-            throw NotImplementedError("hard_swish: dtype not supported");
+            ErrorBuilder("hard_swish").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -924,7 +925,7 @@ Storage HardSwishBackward::grad_formula(const Storage& g) {
             break;
         }
         default:
-            throw NotImplementedError("hard_swish backward: dtype not supported");
+            ErrorBuilder("hard_swish backward").not_implemented("dtype not supported");
     }
     return Storage{std::move(out)};
 }
@@ -959,7 +960,7 @@ CpuStorage Relu6Backward::cpu_kernel(const CpuStorage& a, const Shape& out_shape
             break;
         }
         default:
-            throw NotImplementedError("relu6: dtype not supported");
+            ErrorBuilder("relu6").not_implemented("dtype not supported");
     }
     return out;
 }

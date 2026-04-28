@@ -7,8 +7,10 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "_Detail.h"
 
@@ -26,7 +28,7 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     validate_pair_eq_shape(a, b, "floordiv");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"floordiv", device, dt, a->shape_};
+    OpScopeFull scope{"floordiv", device, dt, a->shape_};
 
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
@@ -74,7 +76,7 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
                 reinterpret_cast<const std::int64_t*>(cb.ptr.get()));
             break;
         default:
-            throw NotImplementedError("floordiv: dtype not supported");
+            ErrorBuilder("floordiv").not_implemented("dtype not supported");
     }
     return fresh(Storage{std::move(out)}, a->shape_, Dtype::I64, device);
 }

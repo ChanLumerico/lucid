@@ -11,10 +11,13 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
@@ -62,7 +65,7 @@ public:
             fill(reinterpret_cast<double*>(dx.ptr.get()),
                  reinterpret_cast<const double*>(cg.ptr.get()));
         else
-            throw NotImplementedError("trace backward: dtype not supported");
+            ErrorBuilder("trace backward").not_implemented("dtype not supported");
         return {Storage{std::move(dx)}};
     }
 };
@@ -70,14 +73,13 @@ public:
 }  // namespace
 
 TensorImplPtr trace_op(const TensorImplPtr& a) {
-    if (!a)
-        throw LucidError("trace: null input");
+    Validator::input(a, "trace.a").non_null();
     if (a->shape_.size() < 2)
-        throw LucidError("trace: input must have ndim >= 2");
+        ErrorBuilder("trace").fail("input must have ndim >= 2");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     const auto& sh = a->shape_;
-    OpScope scope{"trace", device, dt, Shape{}};
+    OpScopeFull scope{"trace", device, dt, Shape{}};
 
     Shape out_shape(sh.begin() + 2, sh.end());
 
@@ -111,7 +113,7 @@ TensorImplPtr trace_op(const TensorImplPtr& a) {
             run(reinterpret_cast<double*>(out_cpu.ptr.get()),
                 reinterpret_cast<const double*>(ca.ptr.get()));
         else
-            throw NotImplementedError("trace: dtype not supported");
+            ErrorBuilder("trace").not_implemented("dtype not supported");
         out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
     }
 

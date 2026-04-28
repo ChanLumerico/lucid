@@ -19,6 +19,7 @@
 #include <variant>
 #include <vector>
 
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 
 namespace lucid::einops_detail {
@@ -66,7 +67,7 @@ inline std::vector<Token> parse_side(const std::string& s) {
                     ++j;
             }
             if (depth != 0)
-                throw LucidError("einops pattern: unmatched '('");
+                ErrorBuilder("einops pattern").fail("unmatched '('");
             std::string inner = s.substr(i + 1, j - i - 1);
             Token tk;
             tk.v = parse_side(inner);
@@ -89,7 +90,7 @@ inline std::vector<Token> parse_side(const std::string& s) {
             out.push_back(std::move(tk));
             i = j;
         } else {
-            throw LucidError(std::string("einops pattern: unexpected char '") + c + "'");
+            ErrorBuilder("einops pattern").fail(std::string("unexpected char '") + c + "'");
         }
     }
     return out;
@@ -114,7 +115,7 @@ inline std::vector<std::string> flat_axes(const std::vector<Token>& tokens) {
 inline std::pair<std::string, std::string> split_arrow(const std::string& pat) {
     auto pos = pat.find("->");
     if (pos == std::string::npos)
-        throw LucidError("einops pattern must contain '->'");
+        ErrorBuilder("einops pattern").fail("must contain '->'");
     auto trim = [](std::string x) {
         while (!x.empty() && (x.front() == ' ' || x.front() == '\t'))
             x.erase(x.begin());

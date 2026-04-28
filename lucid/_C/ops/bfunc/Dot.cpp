@@ -9,9 +9,11 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
@@ -112,7 +114,7 @@ public:
                 reinterpret_cast<const double*>(ca.ptr.get()),
                 reinterpret_cast<const double*>(cb.ptr.get()));
         else
-            throw NotImplementedError("dot backward: dtype not supported");
+            ErrorBuilder("dot backward").not_implemented("dtype not supported");
         return {Storage{std::move(da)}, Storage{std::move(db)}};
     }
 };
@@ -123,7 +125,7 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     validate_pair(a, b, "dot");
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"dot", device, dt, Shape{}};
+    OpScopeFull scope{"dot", device, dt, Shape{}};
 
     auto wire_grad = [&](const TensorImplPtr& out) {
         if (!(GradMode::is_enabled() && (a->requires_grad_ || b->requires_grad_)))
@@ -200,7 +202,7 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
                 s += p[i] * q[i];
             *reinterpret_cast<double*>(out_cpu.ptr.get()) = s;
         } else {
-            throw NotImplementedError("dot: dtype not supported (CPU)");
+            ErrorBuilder("dot").not_implemented("dtype not supported (CPU)");
         }
         auto t = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
         wire_grad(t);
@@ -233,13 +235,13 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
                 reinterpret_cast<const double*>(ca.ptr.get()),
                 reinterpret_cast<const double*>(cb.ptr.get()));
         else
-            throw NotImplementedError("dot: dtype not supported (CPU)");
+            ErrorBuilder("dot").not_implemented("dtype not supported (CPU)");
         auto t = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
         wire_grad(t);
         return t;
     }
 
-    throw NotImplementedError("dot: CPU supports only 1-D × 1-D and 2-D × 2-D");
+    ErrorBuilder("dot").not_implemented("CPU supports only 1-D × 1-D and 2-D × 2-D");
 }
 
 }  // namespace lucid

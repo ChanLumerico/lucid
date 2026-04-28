@@ -38,10 +38,13 @@
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/AmpPolicy.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
+#include "../../core/Result.h"
+#include "../../core/Scope.h"
 #include "../../core/Storage.h"
 #include "../../core/TensorImpl.h"
 
@@ -54,11 +57,22 @@ concept HasGpuKernel = requires(GpuStorage a, GpuStorage b, Shape s, Dtype d) {
     { T::gpu_kernel(a, b, s, d) } -> std::same_as<GpuStorage>;
 };
 
-// NumPy-style broadcast shape resolution.  Returns the broadcast result
-// shape; throws ShapeMismatch when shapes are incompatible.  Right-aligned:
-// missing leading axes are treated as size 1, and any axis pair (1, n) or
-// (n, 1) is allowed.
-inline Shape broadcast_shapes(const Shape& a, const Shape& b) {
+// NumPy-style broadcast shape resolution. Right-aligned: missing leading
+// axes are treated as size 1, and any axis pair (1, n) or (n, 1) is
+// allowed.
+//
+// Two flavors:
+//   - `try_broadcast_shapes(a, b)` returns `Result<Shape>`. Internal
+//     callers in fallible fast-paths (e.g. dispatch fall-through, AMP
+//     promotion try-cast) use this so the failure path stays branch-y
+//     instead of paying exception unwind cost on every miss.
+//   - `broadcast_shapes(a, b)` is the public/forward-time variant that
+//     throws `ShapeMismatch` on incompatible shapes — same behavior the
+//     bfunc forwards have always had.
+//
+// `broadcast_shapes` is implemented in terms of `try_broadcast_shapes`
+// so the inference logic lives in one place.
+inline Result<Shape> try_broadcast_shapes(const Shape& a, const Shape& b) {
     const std::size_t ra = a.size();
     const std::size_t rb = b.size();
     const std::size_t r = ra > rb ? ra : rb;
@@ -71,10 +85,20 @@ inline Shape broadcast_shapes(const Shape& a, const Shape& b) {
         if (da == db || da == 1 || db == 1) {
             out[i] = da == 1 ? db : da;
         } else {
-            throw ShapeMismatch(a, b, "broadcast: incompatible shapes");
+            return Err(ErrorCode::ShapeMismatch, "broadcast: incompatible shapes");
         }
     }
-    return out;
+    return Ok(std::move(out));
+}
+
+inline Shape broadcast_shapes(const Shape& a, const Shape& b) {
+    auto r = try_broadcast_shapes(a, b);
+    if (r.is_ok())
+        return std::move(r).value();
+    // Throw the typed exception with full shape payload — `try_*` only
+    // knows the message; the throwing form preserves the structured
+    // ShapeMismatch fields for the pybind11 translator.
+    throw ShapeMismatch(a, b, "broadcast: incompatible shapes");
 }
 
 // CPU broadcast-materialize: read input contiguously per output element.
@@ -139,7 +163,7 @@ inline CpuStorage broadcast_cpu(const CpuStorage& src,
             run(std::uint8_t{});
             break;
         default:
-            throw NotImplementedError("broadcast: dtype not supported");
+            ErrorBuilder("broadcast").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -198,7 +222,7 @@ template <class Derived>
 std::shared_ptr<TensorImpl> BinaryOp<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
                                                        const std::shared_ptr<TensorImpl>& b) {
     if (!a || !b) {
-        throw LucidError(std::string(Derived::schema_v1.name) + ": null input tensor");
+        ErrorBuilder(Derived::schema_v1.name).fail("null input tensor");
     }
     if (a->dtype_ != b->dtype_) {
         throw DtypeMismatch(std::string(dtype_name(a->dtype_)), std::string(dtype_name(b->dtype_)),
@@ -213,9 +237,8 @@ std::shared_ptr<TensorImpl> BinaryOp<Derived>::forward(const std::shared_ptr<Ten
     // non-contiguous tensors; user must call .contiguous() before compute.
     // CPU only — GPU contiguity is internal to MLX, not exposed via stride_.
     if (a->device_ == Device::CPU && (!a->is_contiguous() || !b->is_contiguous())) {
-        throw NotImplementedError(
-            std::string(Derived::schema_v1.name) +
-            ": non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder(Derived::schema_v1.name)
+            .not_implemented("non-contiguous input not supported (call .contiguous() first)");
     }
 
     // Resolve broadcast output shape (NumPy semantics). Backward already
@@ -225,7 +248,7 @@ std::shared_ptr<TensorImpl> BinaryOp<Derived>::forward(const std::shared_ptr<Ten
     Shape out_shape =
         (a->shape_ == b->shape_) ? a->shape_ : detail::broadcast_shapes(a->shape_, b->shape_);
 
-    OpScope scope{Derived::schema_v1.name, a->device_, a->dtype_, out_shape};
+    OpScopeFull scope{Derived::schema_v1.name, a->device_, a->dtype_, out_shape};
 
     Storage out_storage;
     if (a->device_ == Device::GPU) {
@@ -247,8 +270,8 @@ std::shared_ptr<TensorImpl> BinaryOp<Derived>::forward(const std::shared_ptr<Ten
             b_g.arr = std::make_shared<::mlx::core::array>(std::move(b_arr));
             out_storage = Storage{Derived::gpu_kernel(a_g, b_g, out_shape, a->dtype_)};
         } else {
-            throw NotImplementedError(std::string(Derived::schema_v1.name) +
-                                      ": GPU kernel not yet implemented (Phase 3.7.x in progress)");
+            ErrorBuilder(Derived::schema_v1.name)
+                .not_implemented("GPU kernel not yet implemented (Phase 3.7.x in progress)");
         }
     } else {
         // Materialize broadcast on CPU when shapes differ.

@@ -35,8 +35,8 @@ void register_linalg(py::module_& m) {
     m.def(
         "qr",
         [](const TensorImplPtr& a) {
-            auto [Q, R] = qr_op(a);
-            return py::make_tuple(Q, R);
+            auto r = qr_op(a);
+            return py::make_tuple(r[0], r[1]);
         },
         py::arg("a"));
 
@@ -46,8 +46,8 @@ void register_linalg(py::module_& m) {
     m.def(
         "eig",
         [](const TensorImplPtr& a) {
-            auto [w, v] = eig_op(a);
-            return py::make_tuple(w, v);
+            auto r = eig_op(a);
+            return py::make_tuple(r[0], r[1]);
         },
         py::arg("a"));
 }

@@ -6,6 +6,7 @@
 #include "../../backend/cpu/Vdsp.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/OpRegistry.h"
 
@@ -36,7 +37,7 @@ CpuStorage MulBackward::cpu_kernel(const CpuStorage& a,
                                    reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("mul: dtype not supported");
+            ErrorBuilder("mul").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -46,7 +47,7 @@ GpuStorage MulBackward::gpu_kernel(const GpuStorage& a,
                                    const Shape& /*out_shape*/,
                                    Dtype dt) {
     if (!a.arr || !b.arr) {
-        throw LucidError("mul: null GPU input");
+        ErrorBuilder("mul").fail("null GPU input");
     }
     auto out = ::mlx::core::multiply(*a.arr, *b.arr);
     return gpu::wrap_mlx_array(std::move(out), dt);

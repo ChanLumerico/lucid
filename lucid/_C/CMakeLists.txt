@@ -97,13 +97,15 @@ lucid_object_library(
     core/Allocator.cpp
     core/AmpPolicy.cpp
     core/Determinism.cpp
+    core/ErrorBuilder.cpp
     core/Exceptions.cpp
     core/Generator.cpp
     core/GradMode.cpp
     core/MemoryStats.cpp
     core/OpRegistry.cpp
     core/Profiler.cpp
-    core/TensorImpl.cpp)
+    core/TensorImpl.cpp
+    core/Validate.cpp)
 
 lucid_object_library(
     lucid_backend_cpu

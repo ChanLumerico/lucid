@@ -11,11 +11,14 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -45,9 +48,9 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
                                              const TensorImplPtr& beta,
                                              double eps) {
     if (!x || !mean || !var || !gamma || !beta)
-        throw LucidError("batch_norm_eval: null input");
+        ErrorBuilder("batch_norm_eval").fail("null input");
     if (x->device_ == Device::CPU && !x->is_contiguous())
-        throw NotImplementedError("batch_norm_eval: non-contiguous input not supported");
+        ErrorBuilder("batch_norm_eval").not_implemented("non-contiguous input not supported");
     if (x->shape_.size() < 2)
         throw ShapeMismatch(x->shape_, Shape{}, "batch_norm_eval: expected >=2-D x");
 
@@ -62,7 +65,7 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
     for (std::size_t i = 2; i < x->shape_.size(); ++i)
         spatial *= static_cast<int>(x->shape_[i]);
 
-    OpScope scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
 
     Storage out_storage;
     Storage rstd_storage;
@@ -149,7 +152,7 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
                 break;
             }
             default:
-                throw NotImplementedError("batch_norm_eval: dtype not supported");
+                ErrorBuilder("batch_norm_eval").not_implemented("dtype not supported");
         }
         out_storage = Storage{std::move(out_cpu)};
         rstd_storage = Storage{std::move(rstd_cpu)};
@@ -324,7 +327,7 @@ std::vector<Storage> BatchNormEvalBackward::apply(Storage grad_out) {
             break;
         }
         default:
-            throw NotImplementedError("batch_norm_eval backward: dtype not supported");
+            ErrorBuilder("batch_norm_eval backward").not_implemented("dtype not supported");
     }
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dm_cpu)}, Storage{std::move(dv_cpu)},
             Storage{std::move(dg_cpu)}, Storage{std::move(db_cpu)}};
@@ -386,17 +389,16 @@ TensorImplPtr LpNormalizeBackward::forward(const TensorImplPtr& x,
                                            double ord,
                                            int axis,
                                            double eps) {
-    if (!x)
-        throw LucidError("lp_normalize: null input");
+    Validator::input(x, "lp_normalize.x").non_null();
     if (x->device_ == Device::CPU && !x->is_contiguous())
-        throw NotImplementedError("lp_normalize: non-contiguous input not supported");
+        ErrorBuilder("lp_normalize").not_implemented("non-contiguous input not supported");
     const int rank = static_cast<int>(x->shape_.size());
     if (axis < 0)
         axis += rank;
     if (axis < 0 || axis >= rank)
-        throw LucidError("lp_normalize: axis out of range");
+        ErrorBuilder("lp_normalize").fail("axis out of range");
 
-    OpScope scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
     const std::size_t numel = x->numel();
     int outer = 1, inner = 1;
     for (int i = 0; i < axis; ++i)
@@ -441,7 +443,7 @@ TensorImplPtr LpNormalizeBackward::forward(const TensorImplPtr& x,
                                            axis, ord, eps);
                 break;
             default:
-                throw NotImplementedError("lp_normalize: dtype not supported");
+                ErrorBuilder("lp_normalize").not_implemented("dtype not supported");
         }
         y_storage = Storage{std::move(y_cpu)};
         norm_storage = Storage{std::move(norm_cpu)};
@@ -561,7 +563,7 @@ std::vector<Storage> LpNormalizeBackward::apply(Storage grad_out) {
                                             this->out_shape_, axis_, ord_);
             break;
         default:
-            throw NotImplementedError("lp_normalize backward: dtype not supported");
+            ErrorBuilder("lp_normalize backward").not_implemented("dtype not supported");
     }
     return {Storage{std::move(dx_cpu)}};
 }
@@ -635,9 +637,9 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
                                                   const TensorImplPtr& beta,
                                                   double eps) {
     if (!x || !gamma || !beta)
-        throw LucidError("global_response_norm: null input");
+        ErrorBuilder("global_response_norm").fail("null input");
     if (x->device_ == Device::CPU && !x->is_contiguous())
-        throw NotImplementedError("global_response_norm: non-contiguous input");
+        ErrorBuilder("global_response_norm").not_implemented("non-contiguous input");
     if (x->shape_.size() != 4)
         throw ShapeMismatch(x->shape_, Shape{}, "global_response_norm: x must be 4-D");
 
@@ -650,7 +652,7 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
         throw ShapeMismatch(gamma->shape_, x->shape_,
                             "global_response_norm: gamma/beta must have C elements");
 
-    OpScope scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
     const std::size_t numel = x->numel();
 
     Storage out_storage;
@@ -702,7 +704,7 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
                                           reinterpret_cast<const double*>(bs.ptr.get()), eps);
                 break;
             default:
-                throw NotImplementedError("global_response_norm: dtype not supported");
+                ErrorBuilder("global_response_norm").not_implemented("dtype not supported");
         }
         out_storage = Storage{std::move(y_cpu)};
         nx_storage = Storage{std::move(nx_cpu)};
@@ -945,7 +947,7 @@ std::vector<Storage> GlobalResponseNormBackward::apply(Storage grad_out) {
                                        eps_);
             break;
         default:
-            throw NotImplementedError("global_response_norm backward: dtype not supported");
+            ErrorBuilder("global_response_norm backward").not_implemented("dtype not supported");
     }
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dg_cpu)}, Storage{std::move(db_cpu)}};
 }

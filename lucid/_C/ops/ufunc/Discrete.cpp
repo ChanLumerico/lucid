@@ -2,6 +2,7 @@
 
 #include "../../backend/cpu/Vforce.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/OpRegistry.h"
 
@@ -31,7 +32,7 @@ CpuStorage dispatch_float(
                 reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError(std::string(op) + ": dtype not supported (float-only)");
+            ErrorBuilder(op).not_implemented("dtype not supported (float-only)");
     }
     return out;
 }
@@ -125,7 +126,7 @@ CpuStorage InvertBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shap
             break;
         }
         default:
-            throw NotImplementedError("invert: integer / bool dtype only");
+            ErrorBuilder("invert").not_implemented("integer / bool dtype only");
     }
     return out;
 }

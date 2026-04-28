@@ -5,8 +5,10 @@
 #include <string>
 #include <vector>
 
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../bfunc/Mul.h"
 #include "../ufunc/Reductions.h"
@@ -85,12 +87,12 @@ TensorImplPtr align_to_labels(const TensorImplPtr& t,
 
 TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImplPtr>& operands) {
     if (operands.empty())
-        throw LucidError("einsum: at least one operand required");
+        ErrorBuilder("einsum").fail("at least one operand required");
     if (pattern.find("...") != std::string::npos)
-        throw NotImplementedError(
-            "einsum: ellipsis (...) patterns not yet supported in C++ engine");
+        ErrorBuilder("einsum").not_implemented(
+            "ellipsis (...) patterns not yet supported in C++ engine");
 
-    OpScope scope{"einsum", operands[0]->device_, operands[0]->dtype_, operands[0]->shape_};
+    OpScopeFull scope{"einsum", operands[0]->device_, operands[0]->dtype_, operands[0]->shape_};
 
     auto eq = strip_ws(pattern);
     std::string lhs, rhs;
@@ -118,7 +120,7 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
 
     auto in_specs = split_commas(lhs);
     if (in_specs.size() != operands.size())
-        throw LucidError("einsum: pattern operand count != operands.size()");
+        ErrorBuilder("einsum").fail("pattern operand count != operands.size()");
 
     // Build label → size map.
     std::map<std::string, std::int64_t> sizes;
@@ -126,9 +128,9 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
         const auto& spec = in_specs[k];
         const auto& t = operands[k];
         if (spec.size() != t->shape_.size())
-            throw LucidError("einsum: operand " + std::to_string(k) + " has " +
-                             std::to_string(t->shape_.size()) + " axes but spec '" + spec +
-                             "' has " + std::to_string(spec.size()) + " labels");
+            ErrorBuilder("einsum").fail("operand" + std::to_string(k) + " has " +
+                                        std::to_string(t->shape_.size()) + " axes but spec '" +
+                                        spec + "' has " + std::to_string(spec.size()) + " labels");
         for (std::size_t i = 0; i < spec.size(); ++i) {
             std::string c(1, spec[i]);
             std::int64_t n = t->shape_[i];
@@ -136,14 +138,15 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
             if (it == sizes.end())
                 sizes[c] = n;
             else if (it->second != n)
-                throw LucidError("einsum: label '" + c + "' has conflicting sizes " +
-                                 std::to_string(it->second) + " vs " + std::to_string(n));
+                ErrorBuilder("einsum").fail("label '" + c + "' has conflicting sizes " +
+                                            std::to_string(it->second) + " vs " +
+                                            std::to_string(n));
         }
     }
     for (char c : rhs) {
         std::string s(1, c);
         if (sizes.find(s) == sizes.end())
-            throw LucidError("einsum: output label '" + s + "' not in inputs");
+            ErrorBuilder("einsum").fail("output label '" + s + "' not in inputs");
     }
 
     // Single-operand case: drop labels not in rhs (sum), then permute.
@@ -302,8 +305,8 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
         for (std::size_t i = 0; i < rhs_labels.size(); ++i) {
             auto it = std::find(cur_labels.begin(), cur_labels.end(), rhs_labels[i]);
             if (it == cur_labels.end())
-                throw LucidError("einsum: rhs label '" + rhs_labels[i] +
-                                 "' missing from cur_labels");
+                ErrorBuilder("einsum").fail("rhs label '" + rhs_labels[i] +
+                                            "' missing from cur_labels");
             perm[i] = static_cast<int>(it - cur_labels.begin());
         }
         bool identity = true;

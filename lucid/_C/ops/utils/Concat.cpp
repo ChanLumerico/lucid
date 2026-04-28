@@ -10,11 +10,14 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -365,7 +368,7 @@ TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int axis) {
     check_dtype_device_match(xs, "concatenate");
     const Dtype dt = xs[0]->dtype_;
     const Device device = xs[0]->device_;
-    OpScope scope{"concatenate", device, dt, Shape{}};
+    OpScopeFull scope{"concatenate", device, dt, Shape{}};
     const auto ndim = xs[0]->shape_.size();
     int ax = wrap_axis(axis, static_cast<int>(ndim));
 
@@ -422,11 +425,11 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
     check_dtype_device_match(xs, "stack");
     const Dtype dt = xs[0]->dtype_;
     const Device device = xs[0]->device_;
-    OpScope scope{"stack", device, dt, Shape{}};
+    OpScopeFull scope{"stack", device, dt, Shape{}};
     const auto ndim = xs[0]->shape_.size();
     int ax = axis < 0 ? axis + static_cast<int>(ndim) + 1 : axis;
     if (ax < 0 || ax > static_cast<int>(ndim)) {
-        throw IndexError("stack: axis out of range");
+        ErrorBuilder("stack").index_error("axis out of range");
     }
     for (const auto& t : xs) {
         if (t->shape_ != xs[0]->shape_) {
@@ -471,13 +474,13 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
 
 TensorImplPtr hstack_op(const std::vector<TensorImplPtr>& xs) {
     if (xs.empty())
-        throw LucidError("hstack: empty input");
+        ErrorBuilder("hstack").fail("empty input");
     return concatenate_op(xs, xs[0]->shape_.size() <= 1 ? 0 : 1);
 }
 
 TensorImplPtr vstack_op(const std::vector<TensorImplPtr>& xs) {
     if (xs.empty())
-        throw LucidError("vstack: empty input");
+        ErrorBuilder("vstack").fail("empty input");
     if (xs[0]->shape_.size() == 1) {
         return stack_op(xs, 0);
     }
@@ -485,16 +488,15 @@ TensorImplPtr vstack_op(const std::vector<TensorImplPtr>& xs) {
 }
 
 std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_splits, int axis) {
-    if (!a)
-        throw LucidError("split: null input");
+    Validator::input(a, "split.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"split", device, dt, a->shape_};
+    OpScopeFull scope{"split", device, dt, a->shape_};
     int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
     if (num_splits <= 0)
-        throw LucidError("split: num_splits must be positive");
+        ErrorBuilder("split").fail("num_splits must be positive");
     if (a->shape_[ax] % num_splits != 0)
-        throw LucidError("split: dimension not divisible by num_splits");
+        ErrorBuilder("split").fail("dimension not divisible by num_splits");
     const std::int64_t piece = a->shape_[ax] / num_splits;
 
     if (device == Device::GPU) {
@@ -550,11 +552,10 @@ std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_spl
 std::vector<TensorImplPtr> split_at_op(const TensorImplPtr& a,
                                        std::vector<std::int64_t> indices,
                                        int axis) {
-    if (!a)
-        throw LucidError("split_at: null input");
+    Validator::input(a, "split_at.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"split_at", device, dt, a->shape_};
+    OpScopeFull scope{"split_at", device, dt, a->shape_};
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         ::mlx::core::Shape mlx_idx(indices.begin(), indices.end());
@@ -618,8 +619,7 @@ std::vector<TensorImplPtr> chunk_op(const TensorImplPtr& a, std::int64_t chunks,
 }
 
 std::vector<TensorImplPtr> unbind_op(const TensorImplPtr& a, int axis) {
-    if (!a)
-        throw LucidError("unbind: null input");
+    Validator::input(a, "unbind.a").non_null();
     int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
     std::vector<TensorImplPtr> out;
     out.reserve(static_cast<std::size_t>(a->shape_[ax]));

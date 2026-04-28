@@ -12,9 +12,12 @@
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -42,11 +45,10 @@ inline void matmul_one_f64(const double* a, const double* b, double* out, int n)
 
 TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
     using namespace linalg_detail;
-    if (!a)
-        throw LucidError("matrix_power: null input");
+    Validator::input(a, "matrix_power.a").non_null();
     require_float(a->dtype_, "matrix_power");
     require_square_2d(a->shape_, "matrix_power");
-    OpScope scope{"matrix_power", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"matrix_power", a->device_, a->dtype_, a->shape_};
 
     const auto& sh = a->shape_;
     const int n = static_cast<int>(sh[sh.size() - 1]);

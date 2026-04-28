@@ -8,31 +8,33 @@
 
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
 
-std::pair<TensorImplPtr, TensorImplPtr> qr_op(const TensorImplPtr& a) {
+std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    if (!a)
-        throw LucidError("qr: null input");
+    Validator::input(a, "qr.a").non_null();
     require_float(a->dtype_, "qr");
     if (a->shape_.size() < 2)
-        throw LucidError("qr: input must be at least 2-D");
-    OpScope scope{"qr", a->device_, a->dtype_, a->shape_};
+        ErrorBuilder("qr").fail("input must be at least 2-D");
+    OpScopeFull scope{"qr", a->device_, a->dtype_, a->shape_};
 
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
         auto [Q, R] = ::mlx::core::linalg::qr(in, kMlxLinalgStream);
         Shape qsh = mlx_shape_to_lucid(Q.shape());
         Shape rsh = mlx_shape_to_lucid(R.shape());
-        return {
-            fresh(wrap_gpu_result(std::move(Q), a->dtype_), std::move(qsh), a->dtype_, a->device_),
-            fresh(wrap_gpu_result(std::move(R), a->dtype_), std::move(rsh), a->dtype_, a->device_),
-        };
+        std::vector<TensorImplPtr> result;
+        result.push_back(fresh(wrap_gpu_result(std::move(Q), a->dtype_), std::move(qsh), a->dtype_, a->device_));
+        result.push_back(fresh(wrap_gpu_result(std::move(R), a->dtype_), std::move(rsh), a->dtype_, a->device_));
+        return result;
     }
 
     // CPU path: reduced QR per-batch via LAPACK geqrf + orgqr.
@@ -76,10 +78,10 @@ std::pair<TensorImplPtr, TensorImplPtr> qr_op(const TensorImplPtr& a) {
             check_lapack_info(info, "qr");
         }
     }
-    return {
-        fresh(Storage{std::move(Qcpu)}, qsh, a->dtype_, a->device_),
-        fresh(Storage{std::move(Rcpu)}, rsh, a->dtype_, a->device_),
-    };
+    std::vector<TensorImplPtr> result;
+    result.push_back(fresh(Storage{std::move(Qcpu)}, qsh, a->dtype_, a->device_));
+    result.push_back(fresh(Storage{std::move(Rcpu)}, rsh, a->dtype_, a->device_));
+    return result;
 }
 
 }  // namespace lucid

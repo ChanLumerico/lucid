@@ -11,10 +11,12 @@
 #include "../backend/cpu/Norm.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
@@ -66,7 +68,7 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                                          const TensorImplPtr& beta,
                                          double eps) {
     if (!x || !gamma || !beta)
-        throw LucidError("layer_norm: null input");
+        ErrorBuilder("layer_norm").fail("null input");
     if (x->dtype_ != gamma->dtype_ || x->dtype_ != beta->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
                             std::string(dtype_name(gamma->dtype_)), "layer_norm");
@@ -75,14 +77,14 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                              std::string(device_name(gamma->device_)), "layer_norm");
     if (x->device_ == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-        throw NotImplementedError("layer_norm: non-contiguous input not supported");
+        ErrorBuilder("layer_norm").not_implemented("non-contiguous input not supported");
     if (gamma->shape_ != beta->shape_)
         throw ShapeMismatch(gamma->shape_, beta->shape_,
                             "layer_norm: γ and β must have the same shape");
 
     const auto [outer, N] = resolve_shapes(x->shape_, gamma->shape_);
 
-    OpScope scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
 
     Storage out_storage;
     Storage saved_mean;
@@ -93,7 +95,7 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
         const auto& gg = std::get<GpuStorage>(gamma->storage_);
         const auto& gb = std::get<GpuStorage>(beta->storage_);
         if (!gx.arr || !gg.arr || !gb.arr) {
-            throw LucidError("layer_norm: null GPU input");
+            ErrorBuilder("layer_norm").fail("null GPU input");
         }
         // Flatten to (outer, N) then reshape γ/β to (1, N) so broadcast works.
         Shape flatX{static_cast<std::int64_t>(outer), static_cast<std::int64_t>(N)};
@@ -145,7 +147,7 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                         reinterpret_cast<double*>(rstd_cpu.ptr.get()), outer, N, eps);
                     break;
                 default:
-                    throw NotImplementedError("layer_norm: dtype not supported (F32/F64)");
+                    ErrorBuilder("layer_norm").not_implemented("dtype not supported (F32/F64)");
             }
         }
         out_storage = Storage{std::move(y_cpu)};
@@ -197,7 +199,7 @@ std::vector<Storage> LayerNormBackward::apply(Storage grad_out) {
         const auto& gR = std::get<GpuStorage>(saved_rstd_);
         const auto& gG = std::get<GpuStorage>(grad_out);
         if (!gx.arr || !gg.arr || !gM.arr || !gR.arr || !gG.arr) {
-            throw LucidError("layer_norm backward: null GPU array");
+            ErrorBuilder("layer_norm backward").fail("null GPU array");
         }
         Shape flatX{static_cast<std::int64_t>(outer_), static_cast<std::int64_t>(N_)};
         Shape flatG{1, static_cast<std::int64_t>(N_)};
@@ -266,7 +268,7 @@ std::vector<Storage> LayerNormBackward::apply(Storage grad_out) {
                     reinterpret_cast<double*>(dbeta_cpu.ptr.get()), outer_, N_);
                 break;
             default:
-                throw NotImplementedError("layer_norm backward: dtype not supported");
+                ErrorBuilder("layer_norm backward").not_implemented("dtype not supported");
         }
     } else {
         if (dx_cpu.nbytes)

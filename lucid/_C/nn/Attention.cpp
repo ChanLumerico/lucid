@@ -13,10 +13,12 @@
 #include "../backend/cpu/Blas.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
@@ -45,7 +47,7 @@ struct Flat3 {
 
 Flat3 flatten_qkv(const Shape& s, const char* name) {
     if (s.size() < 2) {
-        throw LucidError(std::string("attention: ") + name + " must be at least 2-D ([..., L, d])");
+        ErrorBuilder("attention").fail(std::string(name) + " must be at least 2-D ([..., L, d])");
     }
     std::size_t b = 1;
     for (std::size_t i = 0; i + 2 < s.size(); ++i) {
@@ -271,7 +273,8 @@ void compute_attention_forward(const T* Qp,
             apply_additive_mask<T>(weights, reinterpret_cast<const T*>(ms.ptr.get()), ctx.B, ctx.Lq,
                                    ctx.Lk, mn);
         } else {
-            throw NotImplementedError("attention: attn_mask must be Bool or match input dtype");
+            ErrorBuilder("attention")
+                .not_implemented("attn_mask must be Bool or match input dtype");
         }
     }
     if (is_causal)
@@ -314,7 +317,7 @@ ForwardCore run_forward(const TensorImplPtr& q,
                         double scale,
                         bool is_causal) {
     if (!q || !k || !v)
-        throw LucidError("attention: null input");
+        ErrorBuilder("attention").fail("null input");
     if (q->device_ != k->device_ || q->device_ != v->device_)
         throw DeviceMismatch(std::string(device_name(q->device_)),
                              std::string(device_name(k->device_)),
@@ -323,7 +326,7 @@ ForwardCore run_forward(const TensorImplPtr& q,
         throw DtypeMismatch(std::string(dtype_name(q->dtype_)), std::string(dtype_name(k->dtype_)),
                             "attention: Q/K/V dtype mismatch");
     if (q->shape_.size() < 2 || k->shape_.size() < 2 || v->shape_.size() < 2)
-        throw LucidError("attention: Q/K/V must be at least 2-D");
+        ErrorBuilder("attention").fail("Q/K/V must be at least 2-D");
 
     const auto fq = flatten_qkv(q->shape_, "Q");
     const auto fk = flatten_qkv(k->shape_, "K");
@@ -335,8 +338,8 @@ ForwardCore run_forward(const TensorImplPtr& q,
     if (fk.L != fv.L)
         throw ShapeMismatch(k->shape_, v->shape_, "attention: K.L_k must equal V.L_k");
 
-    OpScope scope{ScaledDotProductAttentionBackward::schema_v1.name, q->device_, q->dtype_,
-                  build_output_shape(q->shape_, v->shape_)};
+    OpScopeFull scope{ScaledDotProductAttentionBackward::schema_v1.name, q->device_, q->dtype_,
+                      build_output_shape(q->shape_, v->shape_)};
 
     Shape out_shape = build_output_shape(q->shape_, v->shape_);
     Shape weights_shape;
@@ -405,7 +408,7 @@ ForwardCore run_forward(const TensorImplPtr& q,
         else if (q->dtype_ == Dtype::F64)
             run(double{});
         else
-            throw NotImplementedError("attention: dtype not supported (F32/F64 only)");
+            ErrorBuilder("attention").not_implemented("dtype not supported (F32/F64 only)");
 
         weights_storage = Storage{std::move(weights_cpu)};
         output_storage = Storage{std::move(output_cpu)};
@@ -570,7 +573,7 @@ std::vector<Storage> ScaledDotProductAttentionBackward::apply(Storage grad_out) 
     else if (dtype_ == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("attention backward: dtype not supported");
+        ErrorBuilder("attention backward").not_implemented("dtype not supported");
 
     return {Storage{std::move(dQ)}, Storage{std::move(dK)}, Storage{std::move(dV)}};
 }

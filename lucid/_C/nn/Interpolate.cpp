@@ -12,11 +12,14 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -207,8 +210,7 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
                                                    int H_out,
                                                    int W_out,
                                                    bool align_corners) {
-    if (!input)
-        throw LucidError("interpolate_bilinear: null input");
+    Validator::input(input, "interpolate_bilinear.input").non_null();
     if (input->shape_.size() != 4)
         throw ShapeMismatch(input->shape_, Shape{},
                             "interpolate_bilinear: input must be 4-D (N, C, H, W)");
@@ -217,7 +219,7 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
     const int H_in = static_cast<int>(input->shape_[2]);
     const int W_in = static_cast<int>(input->shape_[3]);
     Shape out_shape{N, C, H_out, W_out};
-    OpScope scope{schema_v1.name, input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_, out_shape};
 
     Storage out_storage;
     if (input->device_ == Device::GPU) {
@@ -289,7 +291,7 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
                                          reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, H_in,
                                          W_in, H_out, W_out, align_corners);
         } else {
-            throw NotImplementedError("interpolate_bilinear: dtype must be F32/F64");
+            ErrorBuilder("interpolate_bilinear").not_implemented("dtype must be F32/F64");
         }
         out_storage = Storage{std::move(out_cpu)};
     }
@@ -416,7 +418,7 @@ std::vector<Storage> InterpolateBilinearBackward::apply(Storage grad_out) {
                                       reinterpret_cast<double*>(dx_cpu.ptr.get()), N, C, H_in_,
                                       W_in_, H_out_, W_out_, align_corners_);
     } else {
-        throw NotImplementedError("interpolate_bilinear backward: dtype not supported");
+        ErrorBuilder("interpolate_bilinear backward").not_implemented("dtype not supported");
     }
     return {Storage{std::move(dx_cpu)}};
 }
@@ -570,8 +572,7 @@ void trilinear_backward_cpu(const T* go_p,
 
 TensorImplPtr InterpolateTrilinearBackward::forward(
     const TensorImplPtr& input, int D_out, int H_out, int W_out, bool align_corners) {
-    if (!input)
-        throw LucidError("interpolate_trilinear: null input");
+    Validator::input(input, "interpolate_trilinear.input").non_null();
     if (input->shape_.size() != 5)
         throw ShapeMismatch(input->shape_, Shape{}, "interpolate_trilinear: input must be 5-D");
     const int N = static_cast<int>(input->shape_[0]);
@@ -580,7 +581,7 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
     const int H_in = static_cast<int>(input->shape_[3]);
     const int W_in = static_cast<int>(input->shape_[4]);
     Shape out_shape{N, C, D_out, H_out, W_out};
-    OpScope scope{schema_v1.name, input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, input->device_, input->dtype_, out_shape};
 
     Storage out_storage;
     if (input->device_ == Device::GPU) {
@@ -703,7 +704,7 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
                                           reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, D_in,
                                           H_in, W_in, D_out, H_out, W_out, align_corners);
         else
-            throw NotImplementedError("interpolate_trilinear: dtype must be F32/F64");
+            ErrorBuilder("interpolate_trilinear").not_implemented("dtype must be F32/F64");
         out_storage = Storage{std::move(out_cpu)};
     }
 
@@ -850,7 +851,7 @@ std::vector<Storage> InterpolateTrilinearBackward::apply(Storage grad_out) {
                                        reinterpret_cast<double*>(dx_cpu.ptr.get()), N, C, D_in_,
                                        H_in_, W_in_, D_out_, H_out_, W_out_, align_corners_);
     else
-        throw NotImplementedError("interpolate_trilinear backward: dtype not supported");
+        ErrorBuilder("interpolate_trilinear backward").not_implemented("dtype not supported");
     return {Storage{std::move(dx_cpu)}};
 }
 
@@ -921,8 +922,7 @@ void nearest3d_cpu(const T* xp,
 }  // namespace
 
 TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, int W_out) {
-    if (!input)
-        throw LucidError("interpolate_nearest: null input");
+    Validator::input(input, "interpolate_nearest.input").non_null();
     if (input->shape_.size() != 4)
         throw ShapeMismatch(input->shape_, Shape{}, "interpolate_nearest: 4-D input required");
     const int N = static_cast<int>(input->shape_[0]);
@@ -930,7 +930,7 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
     const int H_in = static_cast<int>(input->shape_[2]);
     const int W_in = static_cast<int>(input->shape_[3]);
     Shape out_shape{N, C, H_out, W_out};
-    OpScope scope{"interpolate_nearest_2d", input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{"interpolate_nearest_2d", input->device_, input->dtype_, out_shape};
     Storage out_storage;
     if (input->device_ == Device::GPU) {
         const auto& gx = std::get<GpuStorage>(input->storage_);
@@ -975,7 +975,7 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
                                   reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, H_in, W_in,
                                   H_out, W_out);
         else
-            throw NotImplementedError("interpolate_nearest: dtype must be F32/F64");
+            ErrorBuilder("interpolate_nearest").not_implemented("dtype must be F32/F64");
         out_storage = Storage{std::move(out_cpu)};
     }
     return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,
@@ -986,8 +986,7 @@ TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
                                         int D_out,
                                         int H_out,
                                         int W_out) {
-    if (!input)
-        throw LucidError("interpolate_nearest_3d: null input");
+    Validator::input(input, "interpolate_nearest_3d.input").non_null();
     if (input->shape_.size() != 5)
         throw ShapeMismatch(input->shape_, Shape{}, "interpolate_nearest_3d: 5-D input required");
     const int N = static_cast<int>(input->shape_[0]);
@@ -996,7 +995,7 @@ TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
     const int H_in = static_cast<int>(input->shape_[3]);
     const int W_in = static_cast<int>(input->shape_[4]);
     Shape out_shape{N, C, D_out, H_out, W_out};
-    OpScope scope{"interpolate_nearest_3d", input->device_, input->dtype_, out_shape};
+    OpScopeFull scope{"interpolate_nearest_3d", input->device_, input->dtype_, out_shape};
     Storage out_storage;
     if (input->device_ == Device::GPU) {
         // Native MLX 5-D gather: build per-axis index arrays, compute the
@@ -1055,7 +1054,7 @@ TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
                                   reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, D_in, H_in,
                                   W_in, D_out, H_out, W_out);
         else
-            throw NotImplementedError("interpolate_nearest_3d: dtype must be F32/F64");
+            ErrorBuilder("interpolate_nearest_3d").not_implemented("dtype must be F32/F64");
         out_storage = Storage{std::move(out_cpu)};
     }
     return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype_,

@@ -10,11 +10,14 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -134,13 +137,12 @@ LUCID_REGISTER_OP(PadBackward)
 TensorImplPtr pad_op(const TensorImplPtr& a,
                      std::vector<std::pair<std::int64_t, std::int64_t>> pad_width,
                      double constant) {
-    if (!a)
-        throw LucidError("pad: null input");
+    Validator::input(a, "pad.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"pad", device, dt, a->shape_};
+    OpScopeFull scope{"pad", device, dt, a->shape_};
     if (pad_width.size() != a->shape_.size())
-        throw LucidError("pad: pad_width length must equal ndim");
+        ErrorBuilder("pad").fail("pad_width length must equal ndim");
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         std::vector<std::pair<int, int>> mlx_pad;
@@ -182,7 +184,7 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
                 fill(reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), out_numel, constant);
                 break;
             default:
-                throw NotImplementedError("pad: dtype not supported");
+                ErrorBuilder("pad").not_implemented("dtype not supported");
         }
     }
 

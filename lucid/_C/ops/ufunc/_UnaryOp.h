@@ -28,10 +28,12 @@
 #include "../../autograd/FuncOp.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/Storage.h"
 #include "../../core/TensorImpl.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
@@ -64,16 +66,15 @@ public:
 template <class Derived>
 std::shared_ptr<TensorImpl> UnaryOp<Derived>::forward(const std::shared_ptr<TensorImpl>& a) {
     if (!a) {
-        throw LucidError(std::string(Derived::schema_v1.name) + ": null input tensor");
+        ErrorBuilder(Derived::schema_v1.name).fail("null input tensor");
     }
     // Item #8 — non-contiguous input guard. CPU only; GPU stride is internal.
     if (a->device_ == Device::CPU && !a->is_contiguous()) {
-        throw NotImplementedError(
-            std::string(Derived::schema_v1.name) +
-            ": non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder(Derived::schema_v1.name)
+            .not_implemented("non-contiguous input not supported (call .contiguous() first)");
     }
 
-    OpScope scope{Derived::schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{Derived::schema_v1.name, a->device_, a->dtype_, a->shape_};
 
     Storage out_storage;
     if (a->device_ == Device::GPU) {
@@ -81,8 +82,8 @@ std::shared_ptr<TensorImpl> UnaryOp<Derived>::forward(const std::shared_ptr<Tens
             out_storage = Storage{
                 Derived::gpu_kernel(std::get<GpuStorage>(a->storage_), a->shape_, a->dtype_)};
         } else {
-            throw NotImplementedError(std::string(Derived::schema_v1.name) +
-                                      ": GPU kernel not yet implemented (Phase 3.7.x in progress)");
+            ErrorBuilder(Derived::schema_v1.name)
+                .not_implemented("GPU kernel not yet implemented (Phase 3.7.x in progress)");
         }
     } else {
         out_storage =

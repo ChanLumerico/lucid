@@ -7,6 +7,7 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/gpu/MlxBridge.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/TensorImpl.h"
 #include "_OptimDetail.h"
@@ -28,13 +29,13 @@ SGD::SGD(std::vector<std::shared_ptr<TensorImpl>> params,
       weight_decay_(weight_decay),
       nesterov_(nesterov) {
     if (lr_ < 0.0)
-        throw LucidError("SGD: lr must be >= 0");
+        ErrorBuilder("SGD").fail("lr must be >= 0");
     if (momentum_ < 0.0)
-        throw LucidError("SGD: momentum must be >= 0");
+        ErrorBuilder("SGD").fail("momentum must be >= 0");
     if (weight_decay_ < 0.0)
-        throw LucidError("SGD: weight_decay must be >= 0");
+        ErrorBuilder("SGD").fail("weight_decay must be >= 0");
     if (nesterov_ && (momentum_ <= 0.0 || dampening_ != 0.0)) {
-        throw LucidError("SGD: nesterov requires momentum > 0 and dampening = 0");
+        ErrorBuilder("SGD").fail("nesterov requires momentum > 0 and dampening = 0");
     }
 }
 
@@ -96,7 +97,7 @@ void sgd_step_gpu(GpuStorage& param_g,
                   double weight_decay,
                   bool nesterov) {
     if (!param_g.arr || !grad_g.arr) {
-        throw LucidError("SGD GPU: null array");
+        ErrorBuilder("SGD GPU").fail("null array");
     }
     const auto mdt = gpu::to_mlx_dtype(dt);
     auto g = *grad_g.arr;
@@ -107,7 +108,7 @@ void sgd_step_gpu(GpuStorage& param_g,
     ::mlx::core::array lr_arr(lr, mdt);
     if (momentum != 0.0) {
         if (!moment_g.arr) {
-            throw LucidError("SGD GPU: null momentum array");
+            ErrorBuilder("SGD GPU").fail("null momentum array");
         }
         ::mlx::core::array m_arr(momentum, mdt);
         ::mlx::core::array dampening_arr(1.0 - dampening, mdt);
@@ -171,7 +172,7 @@ void SGD::update_one(std::size_t slot_idx,
                 momentum_, dampening_, weight_decay_, nesterov_);
             break;
         default:
-            throw NotImplementedError("SGD: dtype not supported (F32/F64)");
+            ErrorBuilder("SGD").not_implemented("dtype not supported (F32/F64)");
     }
 }
 
@@ -194,7 +195,7 @@ ASGD::ASGD(std::vector<std::shared_ptr<TensorImpl>> p,
       t0_(t0),
       lambd_(lambd) {
     if (lr_ < 0.0)
-        throw LucidError("ASGD: lr must be >= 0");
+        ErrorBuilder("ASGD").fail("lr must be >= 0");
 }
 
 void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
@@ -281,7 +282,7 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
     else if (dt == Dtype::F64)
         step_cpu(cpu_ptr<double>(p->storage_), cpu_cptr<double>(grad));
     else
-        throw NotImplementedError("ASGD: dtype not supported");
+        ErrorBuilder("ASGD").not_implemented("dtype not supported");
 }
 
 }  // namespace lucid

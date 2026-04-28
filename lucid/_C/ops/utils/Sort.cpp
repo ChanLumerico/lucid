@@ -13,11 +13,14 @@
 #include "../../autograd/FuncOp.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -138,7 +141,7 @@ Storage scatter_axis_add_storage(const Storage& grad,
         case Dtype::F64:
             return Storage{scatter_axis_add_cpu<double>(g, idx, input_shape, grad_shape, axis, dt)};
         default:
-            throw NotImplementedError("sort/topk backward: dtype not supported");
+            ErrorBuilder("sort/topk backward").not_implemented("dtype not supported");
     }
 }
 
@@ -204,11 +207,10 @@ TensorImplPtr attach_index_scatter_grad(const TensorImplPtr& a,
 }  // namespace
 
 TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
-    if (!a)
-        throw LucidError("sort: null input");
+    Validator::input(a, "sort.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"sort", device, dt, a->shape_};
+    OpScopeFull scope{"sort", device, dt, a->shape_};
     int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
@@ -236,16 +238,15 @@ TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
         std::tie(out_cpu, idx_cpu) =
             sort_select_cpu<std::int64_t>(ca, a->shape_, out_shape, ax, dt, false);
     else
-        throw NotImplementedError("sort: dtype not supported");
+        ErrorBuilder("sort").not_implemented("dtype not supported");
     auto out = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
     return attach_index_scatter_grad(a, std::move(out), Storage{std::move(idx_cpu)}, ax);
 }
 
 TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
-    if (!a)
-        throw LucidError("argsort: null input");
+    Validator::input(a, "argsort.a").non_null();
     const Device device = a->device_;
-    OpScope scope{"argsort", device, a->dtype_, a->shape_};
+    OpScopeFull scope{"argsort", device, a->dtype_, a->shape_};
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         auto out = ::mlx::core::argsort(*ga.arr, axis);
@@ -286,17 +287,16 @@ TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
     else if (a->dtype_ == Dtype::I64)
         run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
     else
-        throw NotImplementedError("argsort: dtype not supported");
+        ErrorBuilder("argsort").not_implemented("dtype not supported");
     return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), Dtype::I32, device);
 }
 
 namespace {
 TensorImplPtr argext_dispatch(
     const TensorImplPtr& a, int axis, bool keepdims, bool is_min, const char* name) {
-    if (!a)
-        throw LucidError(std::string(name) + ": null input");
+    Validator::input(a, std::string(name) + ".a").non_null();
     const Device device = a->device_;
-    OpScope scope{name, device, a->dtype_, a->shape_};
+    OpScopeFull scope{name, device, a->dtype_, a->shape_};
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         auto out = is_min ? ::mlx::core::argmin(*ga.arr, axis, keepdims)
@@ -345,7 +345,7 @@ TensorImplPtr argext_dispatch(
     else if (a->dtype_ == Dtype::I64)
         run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
     else
-        throw NotImplementedError(std::string(name) + ": dtype not supported");
+        ErrorBuilder(name).not_implemented("dtype not supported");
     return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), Dtype::I64, device);
 }
 }  // namespace
@@ -365,10 +365,9 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
     // CPU-only op (data-dependent output length forces GPU sync; MLX has
     // no equivalent primitive). Per convention, GPU input is accepted but
     // the result lives on CPU — caller must `.gpu()` if they need it back.
-    if (!a)
-        throw LucidError("nonzero: null input");
+    Validator::input(a, "nonzero.a").non_null();
     const std::size_t ndim = a->shape_.size();
-    OpScope scope{"nonzero", a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{"nonzero", a->device_, a->dtype_, a->shape_};
 
     CpuStorage cpu = (a->device_ == Device::GPU)
                          ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage_), a->shape_)
@@ -397,7 +396,7 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
             check_nonzero(reinterpret_cast<const std::uint8_t*>(cpu.ptr.get()));
             break;
         default:
-            throw NotImplementedError("nonzero: dtype not supported");
+            ErrorBuilder("nonzero").not_implemented("dtype not supported");
     }
     // Count non-zeros and allocate (N, ndim) output.
     std::size_t count = 0;
@@ -435,10 +434,9 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
     //
     // CPU-only op (variable-length output; MLX has no equivalent). Per
     // convention, GPU input is accepted but result lives on CPU.
-    if (!a)
-        throw LucidError("unique: null input");
+    Validator::input(a, "unique.a").non_null();
     const Dtype dt = a->dtype_;
-    OpScope scope{"unique", a->device_, dt, a->shape_};
+    OpScopeFull scope{"unique", a->device_, dt, a->shape_};
 
     CpuStorage cpu = (a->device_ == Device::GPU)
                          ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage_), a->shape_)
@@ -473,19 +471,18 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
     else if (dt == Dtype::I64)
         wrap(run(reinterpret_cast<const std::int64_t*>(cpu.ptr.get())));
     else
-        throw NotImplementedError("unique: dtype not supported");
+        ErrorBuilder("unique").not_implemented("dtype not supported");
     return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, /*device=*/Device::CPU);
 }
 
 TensorImplPtr topk_op(const TensorImplPtr& a, std::int64_t k, int axis) {
-    if (!a)
-        throw LucidError("topk: null input");
+    Validator::input(a, "topk.a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"topk", device, dt, a->shape_};
+    OpScopeFull scope{"topk", device, dt, a->shape_};
     int ax = wrap_axis(axis, static_cast<int>(a->shape_.size()));
     if (k <= 0 || k > a->shape_[static_cast<std::size_t>(ax)])
-        throw LucidError("topk: k must be in (0, axis_size]");
+        ErrorBuilder("topk").fail("k must be in (0, axis_size]");
     Shape out_shape = a->shape_;
     out_shape[static_cast<std::size_t>(ax)] = k;
     if (device == Device::GPU) {
@@ -515,7 +512,7 @@ TensorImplPtr topk_op(const TensorImplPtr& a, std::int64_t k, int axis) {
         std::tie(out_cpu, idx_cpu) =
             sort_select_cpu<std::int64_t>(ca, a->shape_, out_shape, ax, dt, true);
     else
-        throw NotImplementedError("topk: dtype not supported");
+        ErrorBuilder("topk").not_implemented("dtype not supported");
     auto out = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
     return attach_index_scatter_grad(a, std::move(out), Storage{std::move(idx_cpu)}, ax);
 }

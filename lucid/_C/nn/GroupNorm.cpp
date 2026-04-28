@@ -11,10 +11,12 @@
 #include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
@@ -153,7 +155,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
                                          int G,
                                          double eps) {
     if (!x || !gamma || !beta)
-        throw LucidError("group_norm: null input");
+        ErrorBuilder("group_norm").fail("null input");
     if (x->dtype_ != gamma->dtype_ || x->dtype_ != beta->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x->dtype_)),
                             std::string(dtype_name(gamma->dtype_)), "group_norm");
@@ -162,7 +164,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
                              std::string(device_name(gamma->device_)), "group_norm");
     if (x->device_ == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-        throw NotImplementedError("group_norm: non-contiguous input not supported");
+        ErrorBuilder("group_norm").not_implemented("non-contiguous input not supported");
     if (x->shape_.size() < 2)
         throw ShapeMismatch(x->shape_, Shape{}, "group_norm: x must be at least (B, C, ...)");
     if (gamma->shape_.size() != 1 || beta->shape_.size() != 1)
@@ -171,7 +173,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     const int B = static_cast<int>(x->shape_[0]);
     const int C = static_cast<int>(x->shape_[1]);
     if (C % G != 0)
-        throw LucidError("group_norm: C must be divisible by num_groups");
+        ErrorBuilder("group_norm").fail("C must be divisible by num_groups");
     if (gamma->shape_[0] != C || beta->shape_[0] != C)
         throw ShapeMismatch(gamma->shape_, x->shape_, "group_norm: γ/β must have length C");
 
@@ -184,7 +186,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     }
     const int Cg = C / G;
 
-    OpScope scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
+    OpScopeFull scope{schema_v1.name, x->device_, x->dtype_, x->shape_};
 
     Storage out_storage;
     Storage saved_mean;
@@ -195,7 +197,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
         const auto& gg = std::get<GpuStorage>(gamma->storage_);
         const auto& gb = std::get<GpuStorage>(beta->storage_);
         if (!gx.arr || !gg.arr || !gb.arr) {
-            throw LucidError("group_norm: null GPU input");
+            ErrorBuilder("group_norm").fail("null GPU input");
         }
         // Reshape x to (B, G, C/G, *S).
         ::mlx::core::Shape grouped;
@@ -261,7 +263,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
                         reinterpret_cast<double*>(rstd_cpu.ptr.get()), B, C, spatial_total, G, eps);
                     break;
                 default:
-                    throw NotImplementedError("group_norm: dtype not supported (F32/F64)");
+                    ErrorBuilder("group_norm").not_implemented("dtype not supported (F32/F64)");
             }
         }
         out_storage = Storage{std::move(y_cpu)};
@@ -316,7 +318,7 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
         const auto& gR = std::get<GpuStorage>(saved_rstd_);
         const auto& gG = std::get<GpuStorage>(grad_out);
         if (!gx.arr || !gg.arr || !gM.arr || !gR.arr || !gG.arr) {
-            throw LucidError("group_norm backward: null GPU array");
+            ErrorBuilder("group_norm backward").fail("null GPU array");
         }
         using SE = ::mlx::core::ShapeElem;
         // Grouped shape: (B, G, C/G, *S)
@@ -415,7 +417,7 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
                     reinterpret_cast<double*>(dbeta_cpu.ptr.get()), B_, C_, spatial_total, G_);
                 break;
             default:
-                throw NotImplementedError("group_norm backward: dtype not supported");
+                ErrorBuilder("group_norm backward").not_implemented("dtype not supported");
         }
     } else {
         if (dgamma_cpu.nbytes)

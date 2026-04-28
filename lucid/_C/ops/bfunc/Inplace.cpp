@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/TensorImpl.h"
 #include "Add.h"
@@ -24,7 +25,7 @@ TensorImplPtr inplace_apply(const TensorImplPtr& a,
                             Fn&& fwd_fn,
                             const char* name) {
     if (!a || !b)
-        throw LucidError(std::string(name) + ": null input");
+        ErrorBuilder(name).fail("null input");
     auto out = fwd_fn(a, b);
     if (out->shape_ != a->shape_)
         throw ShapeMismatch(a->shape_, out->shape_,

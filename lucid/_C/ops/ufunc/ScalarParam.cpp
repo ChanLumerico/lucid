@@ -9,11 +9,14 @@
 #include "../../backend/cpu/Vforce.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -70,7 +73,7 @@ CpuStorage PowScalarBackward::cpu_kernel(const CpuStorage& a,
             break;
         }
         default:
-            throw NotImplementedError("pow_scalar: dtype not supported");
+            ErrorBuilder("pow_scalar").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -99,7 +102,7 @@ Storage PowScalarBackward::grad_formula(const Storage& g) {
                 break;
             }
             default:
-                throw NotImplementedError("pow_scalar grad: dtype not supported");
+                ErrorBuilder("pow_scalar grad").not_implemented("dtype not supported");
         }
         return Storage{std::move(out)};
     };
@@ -110,18 +113,17 @@ Storage PowScalarBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a, double exp) {
-    if (!a)
-        throw LucidError("pow_scalar: null input");
+    Validator::input(a, "pow_scalar.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError(
-            "pow_scalar: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("pow_scalar")
+            .not_implemented("non-contiguous input not supported (call .contiguous() first)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
         if (!g.arr)
-            throw LucidError("pow_scalar: null GPU input");
+            ErrorBuilder("pow_scalar").fail("null GPU input");
         ::mlx::core::array c(exp, gpu::to_mlx_dtype(a->dtype_));
         auto out = ::mlx::core::power(*g.arr, c);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
@@ -177,7 +179,7 @@ CpuStorage RPowScalarBackward::cpu_kernel(const CpuStorage& a,
             break;
         }
         default:
-            throw NotImplementedError("rpow_scalar: dtype not supported");
+            ErrorBuilder("rpow_scalar").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -191,18 +193,17 @@ Storage RPowScalarBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
-    if (!a)
-        throw LucidError("rpow_scalar: null input");
+    Validator::input(a, "rpow_scalar.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError(
-            "rpow_scalar: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("rpow_scalar")
+            .not_implemented("non-contiguous input not supported (call .contiguous() first)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
         if (!g.arr)
-            throw LucidError("rpow_scalar: null GPU input");
+            ErrorBuilder("rpow_scalar").fail("null GPU input");
         ::mlx::core::array c(base, gpu::to_mlx_dtype(a->dtype_));
         auto out = ::mlx::core::power(c, *g.arr);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype_)};
@@ -272,7 +273,7 @@ CpuStorage ClipBackward::cpu_kernel(
             break;
         }
         default:
-            throw NotImplementedError("clip: dtype not supported");
+            ErrorBuilder("clip").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -284,18 +285,17 @@ Storage ClipBackward::grad_formula(const Storage& g) {
 }
 
 TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double max_v) {
-    if (!a)
-        throw LucidError("clip: null input");
+    Validator::input(a, "clip.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError(
-            "clip: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("clip").not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
         if (!g.arr)
-            throw LucidError("clip: null GPU input");
+            ErrorBuilder("clip").fail("null GPU input");
         ::mlx::core::array lo(min_v, gpu::to_mlx_dtype(a->dtype_));
         ::mlx::core::array hi(max_v, gpu::to_mlx_dtype(a->dtype_));
         auto out = ::mlx::core::clip(*g.arr, lo, hi);

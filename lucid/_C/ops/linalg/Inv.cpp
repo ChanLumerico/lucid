@@ -8,19 +8,17 @@
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Exceptions.h"
-#include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
 
 TensorImplPtr inv_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
-    if (!a)
-        throw LucidError("inv: null input");
-    require_float(a->dtype_, "inv");
-    require_square_2d(a->shape_, "inv");
-    OpScope scope{"inv", a->device_, a->dtype_, a->shape_};
+    Validator::input(a, "inv.a").float_only().square_2d();
+    OpScopeFull scope{"inv", a->device_, a->dtype_, a->shape_};
 
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);

@@ -11,10 +11,12 @@
 #include "../../backend/cpu/Blas.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
@@ -48,24 +50,19 @@ NdMatmulInfo plan_nd_matmul(const Shape& a, const Shape& b) {
     Shape ba(a.begin(), a.end() - 2);
     Shape bb(b.begin(), b.end() - 2);
     Shape out_b;
-    if (ba.empty())
+    if (ba.empty()) {
         out_b = bb;
-    else if (bb.empty())
+    } else if (bb.empty()) {
         out_b = ba;
-    else {
-        // Broadcast leading batch dims.
-        const std::size_t r = std::max(ba.size(), bb.size());
-        out_b.assign(r, 1);
-        for (std::size_t i = 0; i < r; ++i) {
-            const std::size_t ai = (ba.size() >= r - i) ? ba.size() - (r - i) : SIZE_MAX;
-            const std::size_t bi = (bb.size() >= r - i) ? bb.size() - (r - i) : SIZE_MAX;
-            const std::int64_t da = (ai != SIZE_MAX) ? ba[ai] : 1;
-            const std::int64_t db = (bi != SIZE_MAX) ? bb[bi] : 1;
-            if (da == db || da == 1 || db == 1)
-                out_b[i] = da == 1 ? db : da;
-            else
-                throw ShapeMismatch(a, b, "matmul: incompatible batch dims");
-        }
+    } else {
+        // Reuse the canonical broadcast inference. The Result-based
+        // variant lets us recover the failure without paying exception
+        // unwind cost in this hot path; on miss we re-throw with the
+        // matmul-specific message and the full operand shapes.
+        auto r = detail::try_broadcast_shapes(ba, bb);
+        if (r.is_err())
+            throw ShapeMismatch(a, b, "matmul: incompatible batch dims");
+        out_b = std::move(r).value();
     }
     NdMatmulInfo info;
     info.out_shape = out_b;
@@ -129,7 +126,7 @@ CpuStorage cpu_matmul_nd(const CpuStorage& a,
     else if (dt == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("matmul: dtype not supported (F32/F64)");
+        ErrorBuilder("matmul").not_implemented("dtype not supported (F32/F64)");
     return out;
 }
 
@@ -147,7 +144,7 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
         const auto& gB = std::get<GpuStorage>(saved_inputs_[1]);
         const auto& gG = std::get<GpuStorage>(grad_out);
         if (!gA.arr || !gB.arr || !gG.arr)
-            throw LucidError("matmul backward: null GPU array");
+            ErrorBuilder("matmul backward").fail("null GPU array");
         // dA = grad @ B^T  (B^T = swapaxes(B, -2, -1))
         // dB = A^T @ grad
         auto bT = ::mlx::core::swapaxes(*gB.arr, -2, -1);
@@ -204,7 +201,7 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
 
 TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (!a || !b)
-        throw LucidError("matmul: null input");
+        ErrorBuilder("matmul").fail("null input");
     if (a->dtype_ != b->dtype_)
         throw DtypeMismatch(std::string(dtype_name(a->dtype_)), std::string(dtype_name(b->dtype_)),
                             "matmul");
@@ -216,15 +213,14 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
     }
     // Item #8 — non-contiguous input guard. CPU only (GPU stride is internal).
     if (a->device_ == Device::CPU && (!a->is_contiguous() || !b->is_contiguous())) {
-        throw NotImplementedError(
-            "matmul: non-contiguous input not supported "
-            "(call .contiguous() first)");
+        ErrorBuilder("matmul").not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
     }
 
     const auto info = plan_nd_matmul(a->shape_, b->shape_);
     const int M = info.M, N = info.N, K = info.K;
 
-    OpScope scope{MatmulBackward::schema_v1.name, a->device_, a->dtype_, info.out_shape};
+    OpScopeFull scope{MatmulBackward::schema_v1.name, a->device_, a->dtype_, info.out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * info.batch * M * N * K);
 
     Storage out_storage;

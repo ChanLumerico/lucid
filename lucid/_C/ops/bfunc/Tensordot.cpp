@@ -10,9 +10,11 @@
 
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../einops/Einops.h"
 #include "_Detail.h"
@@ -75,7 +77,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
                            std::vector<int> axes_b) {
     validate_pair(a, b, "tensordot");
     if (axes_a.size() != axes_b.size())
-        throw LucidError("tensordot: axes_a and axes_b must have equal length");
+        ErrorBuilder("tensordot").fail("axes_a and axes_b must have equal length");
 
     // Autograd-tracked path: dispatch through einsum so primitive op
     // backwards stitch the gradient chain. Inference path keeps the native
@@ -87,7 +89,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
 
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
-    OpScope scope{"tensordot", device, dt, Shape{}};
+    OpScopeFull scope{"tensordot", device, dt, Shape{}};
 
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
@@ -107,7 +109,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
         for (auto ax : axes_contract) {
             int p = ax < 0 ? ax + (int)nd : ax;
             if (p < 0 || p >= (int)nd)
-                throw LucidError("tensordot: axis out of range");
+                ErrorBuilder("tensordot").fail("axis out of range");
             is_c[p] = true;
         }
         std::vector<int> perm;
@@ -170,7 +172,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     auto [a_cpu, a_kept, a_contract] = contract(a, axes_a, /*put_first=*/false);
     auto [b_cpu, b_kept, b_contract] = contract(b, axes_b, /*put_first=*/true);
     if (a_contract != b_contract)
-        throw LucidError("tensordot: contracted dim sizes don't match");
+        ErrorBuilder("tensordot").fail("contracted dim sizes don't match");
 
     const std::int64_t M =
         std::accumulate(a_kept.begin(), a_kept.end(), (std::int64_t)1, std::multiplies<>());
@@ -201,7 +203,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
              reinterpret_cast<const double*>(a_cpu.ptr.get()),
              reinterpret_cast<const double*>(b_cpu.ptr.get()));
     else
-        throw NotImplementedError("tensordot: dtype not supported");
+        ErrorBuilder("tensordot").not_implemented("dtype not supported");
 
     return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
 }

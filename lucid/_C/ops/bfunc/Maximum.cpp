@@ -6,6 +6,7 @@
 #include "../../backend/cpu/Vdsp.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/OpRegistry.h"
 
@@ -36,7 +37,7 @@ CpuStorage MaximumBackward::cpu_kernel(const CpuStorage& a,
                                    reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError("maximum: dtype not supported");
+            ErrorBuilder("maximum").not_implemented("dtype not supported");
     }
     return out;
 }
@@ -46,7 +47,7 @@ GpuStorage MaximumBackward::gpu_kernel(const GpuStorage& a,
                                        const Shape& /*out_shape*/,
                                        Dtype dt) {
     if (!a.arr || !b.arr) {
-        throw LucidError("maximum: null GPU input");
+        ErrorBuilder("maximum").fail("null GPU input");
     }
     auto out = ::mlx::core::maximum(*a.arr, *b.arr);
     return gpu::wrap_mlx_array(std::move(out), dt);

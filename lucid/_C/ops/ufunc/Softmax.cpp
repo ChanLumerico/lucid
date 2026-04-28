@@ -11,11 +11,14 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -96,24 +99,23 @@ void softmax_backward_typed(
 }  // namespace
 
 TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
-    if (!a)
-        throw LucidError("softmax: null input");
+    Validator::input(a, "softmax.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous())
-        throw NotImplementedError(
-            "softmax: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("softmax").not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
 
     const int ndim = static_cast<int>(a->shape_.size());
     const int wrapped = axis < 0 ? axis + ndim : axis;
     if (wrapped < 0 || wrapped >= ndim)
-        throw IndexError("softmax: axis out of range");
+        ErrorBuilder("softmax").index_error("axis out of range");
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, a->shape_};
 
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& g = std::get<GpuStorage>(a->storage_);
         if (!g.arr)
-            throw LucidError("softmax: null GPU input");
+            ErrorBuilder("softmax").fail("null GPU input");
         // MLX softmax(arr, axis, precise=true) — `precise=true` mirrors the
         // CPU path's two-pass max-subtract scheme (numerical stability).
         auto out = ::mlx::core::softmax(*g.arr, wrapped, /*precise=*/true);
@@ -138,7 +140,7 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
                                                   oir.outer, oir.axis_dim, oir.inner);
                     break;
                 default:
-                    throw NotImplementedError("softmax: dtype not supported");
+                    ErrorBuilder("softmax").not_implemented("dtype not supported");
             }
         }
         out_storage = Storage{std::move(out)};
@@ -174,7 +176,7 @@ std::vector<Storage> SoftmaxBackward::apply(Storage grad_out) {
         const auto& z = std::get<GpuStorage>(saved_output_);
         const auto& g = std::get<GpuStorage>(grad_out);
         if (!z.arr || !g.arr) {
-            throw LucidError("softmax backward: null GPU array");
+            ErrorBuilder("softmax backward").fail("null GPU array");
         }
         // dx = z · (g − sum(g·z, axis, keepdims))
         auto gz = ::mlx::core::multiply(*g.arr, *z.arr);
@@ -208,7 +210,7 @@ std::vector<Storage> SoftmaxBackward::apply(Storage grad_out) {
                                                oir.axis_dim, oir.inner);
                 break;
             default:
-                throw NotImplementedError("softmax backward: dtype not supported");
+                ErrorBuilder("softmax backward").not_implemented("dtype not supported");
         }
     }
     return {Storage{std::move(dx)}};

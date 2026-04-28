@@ -12,11 +12,14 @@
 #include "../../backend/cpu/Shape.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -28,14 +31,14 @@ namespace {
 // Validate / normalize a permutation. Returns sorted-ascending check vector.
 std::vector<int> validate_perm(const std::vector<int>& perm, int ndim) {
     if (static_cast<int>(perm.size()) != ndim) {
-        throw LucidError("permute: perm length must equal tensor ndim");
+        ErrorBuilder("permute").fail("perm length must equal tensor ndim");
     }
     std::vector<int> normalized;
     normalized.reserve(ndim);
     for (int p : perm) {
         const int wrapped = p < 0 ? p + ndim : p;
         if (wrapped < 0 || wrapped >= ndim) {
-            throw IndexError("permute: axis out of range");
+            ErrorBuilder("permute").index_error("axis out of range");
         }
         normalized.push_back(wrapped);
     }
@@ -43,7 +46,7 @@ std::vector<int> validate_perm(const std::vector<int>& perm, int ndim) {
     std::sort(sorted.begin(), sorted.end());
     for (int i = 0; i < ndim; ++i) {
         if (sorted[i] != i) {
-            throw LucidError("permute: perm must be a permutation of 0..ndim-1");
+            ErrorBuilder("permute").fail("perm must be a permutation of 0..ndim-1");
         }
     }
     return normalized;
@@ -91,7 +94,7 @@ CpuStorage permute_copy(const CpuStorage& in,
                                            perm);
             break;
         default:
-            throw NotImplementedError("permute: dtype not supported (F32/F64/I32/I64)");
+            ErrorBuilder("permute").not_implemented("dtype not supported (F32/F64/I32/I64)");
     }
     return out;
 }
@@ -107,11 +110,10 @@ std::vector<int> inverse_perm(const std::vector<int>& perm) {
 }  // namespace
 
 TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector<int>& perm_user) {
-    if (!a)
-        throw LucidError("permute: null input");
+    Validator::input(a, "permute.a").non_null();
     if (a->device_ == Device::CPU && !a->is_contiguous()) {
-        throw NotImplementedError(
-            "permute: non-contiguous input not supported (call .contiguous() first)");
+        ErrorBuilder("permute").not_implemented(
+            "non-contiguous input not supported (call .contiguous() first)");
     }
     const int ndim = static_cast<int>(a->shape_.size());
     const auto perm = validate_perm(perm_user, ndim);
@@ -122,12 +124,12 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
     for (int p : perm)
         out_shape.push_back(a->shape_[static_cast<std::size_t>(p)]);
 
-    OpScope scope{schema_v1.name, a->device_, a->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, a->device_, a->dtype_, out_shape};
     Storage out_storage;
     if (a->device_ == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         if (!ga.arr)
-            throw LucidError("permute: null GPU array");
+            ErrorBuilder("permute").fail("null GPU array");
         auto raw = ::mlx::core::transpose(*ga.arr, perm);
         raw = ::mlx::core::contiguous(raw);
         out_storage = Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype_)};
@@ -169,7 +171,7 @@ std::vector<Storage> PermuteBackward::apply(Storage grad_out) {
     if (device_ == Device::GPU) {
         const auto& gg = std::get<GpuStorage>(grad_out);
         if (!gg.arr)
-            throw LucidError("permute backward: null GPU array");
+            ErrorBuilder("permute backward").fail("null GPU array");
         auto raw = ::mlx::core::transpose(*gg.arr, inv);
         raw = ::mlx::core::contiguous(raw);
         dx = Storage{gpu::wrap_mlx_array(std::move(raw), dtype_)};
@@ -186,8 +188,7 @@ TensorImplPtr permute_op(const TensorImplPtr& a, const std::vector<int>& perm) {
 
 // transpose(t) / _T(t) — reverse all axes.
 TensorImplPtr transpose_op(const TensorImplPtr& a) {
-    if (!a)
-        throw LucidError("transpose: null input");
+    Validator::input(a, "transpose.a").non_null();
     const int ndim = static_cast<int>(a->shape_.size());
     std::vector<int> perm(ndim);
     for (int i = 0; i < ndim; ++i)
@@ -201,11 +202,10 @@ TensorImplPtr T_op(const TensorImplPtr& a) {
 
 // _mT(t) — swap last two axes. Requires ndim >= 2.
 TensorImplPtr mT_op(const TensorImplPtr& a) {
-    if (!a)
-        throw LucidError("mT: null input");
+    Validator::input(a, "mT.a").non_null();
     const int ndim = static_cast<int>(a->shape_.size());
     if (ndim < 2)
-        throw LucidError("mT: requires ndim >= 2");
+        ErrorBuilder("mT").fail("requires ndim >= 2");
     std::vector<int> perm(ndim);
     for (int i = 0; i < ndim; ++i)
         perm[i] = i;
@@ -215,13 +215,12 @@ TensorImplPtr mT_op(const TensorImplPtr& a) {
 
 // swapaxes(t, a1, a2) — swap two specific axes.
 TensorImplPtr swapaxes_op(const TensorImplPtr& a, int axis1, int axis2) {
-    if (!a)
-        throw LucidError("swapaxes: null input");
+    Validator::input(a, "swapaxes.a").non_null();
     const int ndim = static_cast<int>(a->shape_.size());
     auto wrap = [&](int x) {
         const int w = x < 0 ? x + ndim : x;
         if (w < 0 || w >= ndim)
-            throw IndexError("swapaxes: axis out of range");
+            ErrorBuilder("swapaxes").index_error("axis out of range");
         return w;
     };
     const int w1 = wrap(axis1);

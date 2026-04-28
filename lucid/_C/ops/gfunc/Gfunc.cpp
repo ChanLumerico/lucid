@@ -11,9 +11,12 @@
 #include "../../autograd/Helpers.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 
 namespace lucid {
 
@@ -61,7 +64,7 @@ void fill_cpu(CpuStorage& s, std::size_t numel, double value) {
             fill_typed<double>(s.ptr.get(), numel, value);
             break;
         default:
-            throw NotImplementedError("creation: dtype not supported for fill");
+            ErrorBuilder("creation").not_implemented("dtype not supported for fill");
     }
 }
 
@@ -77,7 +80,7 @@ inline TensorImplPtr finalize(
 // zeros
 // ----------------------------------------------------------------------------
 TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
-    OpScope scope{"zeros", device, dt, shape};
+    OpScopeFull scope{"zeros", device, dt, shape};
     auto s = make_zero_storage(shape, dt, device);
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
@@ -86,7 +89,7 @@ TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool require
 // ones
 // ----------------------------------------------------------------------------
 TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
-    OpScope scope{"ones", device, dt, shape};
+    OpScopeFull scope{"ones", device, dt, shape};
     auto s = make_ones_storage(shape, dt, device);
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
@@ -96,7 +99,7 @@ TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires
 // ----------------------------------------------------------------------------
 TensorImplPtr full_op(
     const Shape& shape, double fill_value, Dtype dt, Device device, bool requires_grad) {
-    OpScope scope{"full", device, dt, shape};
+    OpScopeFull scope{"full", device, dt, shape};
     if (device == Device::GPU) {
         auto ones = ::mlx::core::ones(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
         ::mlx::core::array scalar = [&]() {
@@ -112,7 +115,7 @@ TensorImplPtr full_op(
                 case Dtype::Bool:
                     return ::mlx::core::array(fill_value != 0.0);
                 default:
-                    throw NotImplementedError("full: GPU dtype not supported");
+                    ErrorBuilder("full").not_implemented("GPU dtype not supported");
             }
         }();
         auto out = ::mlx::core::multiply(ones, scalar);
@@ -129,7 +132,7 @@ TensorImplPtr full_op(
 //        callers shouldn't rely on garbage values)
 // ----------------------------------------------------------------------------
 TensorImplPtr empty_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
-    OpScope scope{"empty", device, dt, shape};
+    OpScopeFull scope{"empty", device, dt, shape};
     auto s = make_zero_storage(shape, dt, device);
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
@@ -143,9 +146,9 @@ TensorImplPtr eye_op(
     if (M <= 0)
         M = N;
     if (N < 0 || M < 0)
-        throw LucidError("eye: N and M must be >= 0");
+        ErrorBuilder("eye").fail("N and M must be >= 0");
     Shape shape{N, M};
-    OpScope scope{"eye", device, dt, shape};
+    OpScopeFull scope{"eye", device, dt, shape};
     if (device == Device::GPU) {
         auto out = ::mlx::core::eye(static_cast<int>(N), static_cast<int>(M), static_cast<int>(k),
                                     gpu::to_mlx_dtype(dt));
@@ -185,7 +188,7 @@ TensorImplPtr eye_op(
             set_one(reinterpret_cast<double*>(cpu.ptr.get()));
             break;
         default:
-            throw NotImplementedError("eye: dtype not supported");
+            ErrorBuilder("eye").not_implemented("dtype not supported");
     }
     return finalize(Storage{std::move(cpu)}, shape, dt, device, requires_grad);
 }
@@ -196,12 +199,12 @@ TensorImplPtr eye_op(
 TensorImplPtr arange_op(
     double start, double stop, double step, Dtype dt, Device device, bool requires_grad) {
     if (step == 0.0)
-        throw LucidError("arange: step must be non-zero");
+        ErrorBuilder("arange").fail("step must be non-zero");
     const double diff = stop - start;
     const std::int64_t n =
         (diff * step <= 0) ? 0 : static_cast<std::int64_t>(std::ceil(diff / step));
     Shape shape{n};
-    OpScope scope{"arange", device, dt, shape};
+    OpScopeFull scope{"arange", device, dt, shape};
 
     auto compute_cpu = [&](auto* p) {
         using T = std::remove_pointer_t<decltype(p)>;
@@ -226,7 +229,7 @@ TensorImplPtr arange_op(
                 compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
                 break;
             default:
-                throw NotImplementedError("arange: dtype not supported");
+                ErrorBuilder("arange").not_implemented("dtype not supported");
         }
         auto gpu = gpu::upload_cpu_to_gpu(cpu, shape);
         return finalize(Storage{std::move(gpu)}, shape, dt, device, requires_grad);
@@ -246,7 +249,7 @@ TensorImplPtr arange_op(
             compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
             break;
         default:
-            throw NotImplementedError("arange: dtype not supported");
+            ErrorBuilder("arange").not_implemented("dtype not supported");
     }
     return finalize(Storage{std::move(cpu)}, shape, dt, device, requires_grad);
 }
@@ -258,9 +261,9 @@ TensorImplPtr arange_op(
 TensorImplPtr linspace_op(
     double start, double stop, std::int64_t num, Dtype dt, Device device, bool requires_grad) {
     if (num < 0)
-        throw LucidError("linspace: num must be >= 0");
+        ErrorBuilder("linspace").fail("num must be >= 0");
     Shape shape{num};
-    OpScope scope{"linspace", device, dt, shape};
+    OpScopeFull scope{"linspace", device, dt, shape};
     const double step = (num > 1) ? (stop - start) / static_cast<double>(num - 1) : 0.0;
 
     auto compute_cpu = [&](auto* p) {
@@ -289,7 +292,7 @@ TensorImplPtr linspace_op(
             compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
             break;
         default:
-            throw NotImplementedError("linspace: dtype not supported");
+            ErrorBuilder("linspace").not_implemented("dtype not supported");
     }
     if (device == Device::GPU) {
         auto gpu = gpu::upload_cpu_to_gpu(cpu, shape);
@@ -305,18 +308,18 @@ TensorImplPtr linspace_op(
 // ----------------------------------------------------------------------------
 TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
     if (!v)
-        throw LucidError("diag: input is null");
+        ErrorBuilder("diag").fail("input is null");
     const Dtype dt = v->dtype_;
     const Device device = v->device_;
     const auto& sh = v->shape_;
     if (sh.size() != 1 && sh.size() != 2) {
-        throw LucidError("diag: input must be 1-D or 2-D");
+        ErrorBuilder("diag").fail("input must be 1-D or 2-D");
     }
 
     if (device == Device::GPU) {
         const auto& gv = std::get<GpuStorage>(v->storage_);
         if (!gv.arr)
-            throw LucidError("diag: null GPU input");
+            ErrorBuilder("diag").fail("null GPU input");
         auto out = ::mlx::core::diag(*gv.arr, static_cast<int>(k));
         Shape out_shape;
         for (auto d : out.shape())
@@ -359,7 +362,7 @@ TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
                           reinterpret_cast<const std::int64_t*>(cv.ptr.get()));
                 break;
             default:
-                throw NotImplementedError("diag: dtype not supported");
+                ErrorBuilder("diag").not_implemented("dtype not supported");
         }
         return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, std::move(out_shape), dt,
                                             device, false);
@@ -397,7 +400,7 @@ TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
                     reinterpret_cast<const std::int64_t*>(cv.ptr.get()));
             break;
         default:
-            throw NotImplementedError("diag: dtype not supported");
+            ErrorBuilder("diag").not_implemented("dtype not supported");
     }
     return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, std::move(out_shape), dt, device,
                                         false);
@@ -407,26 +410,22 @@ TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
 // `_like` family — shape/dtype/device-matched creation
 // ----------------------------------------------------------------------------
 TensorImplPtr zeros_like_op(const TensorImplPtr& a, bool requires_grad) {
-    if (!a)
-        throw LucidError("zeros_like: null input");
+    Validator::input(a, "zeros_like.a").non_null();
     return zeros_op(a->shape_, a->dtype_, a->device_, requires_grad);
 }
 
 TensorImplPtr ones_like_op(const TensorImplPtr& a, bool requires_grad) {
-    if (!a)
-        throw LucidError("ones_like: null input");
+    Validator::input(a, "ones_like.a").non_null();
     return ones_op(a->shape_, a->dtype_, a->device_, requires_grad);
 }
 
 TensorImplPtr empty_like_op(const TensorImplPtr& a, bool requires_grad) {
-    if (!a)
-        throw LucidError("empty_like: null input");
+    Validator::input(a, "empty_like.a").non_null();
     return empty_op(a->shape_, a->dtype_, a->device_, requires_grad);
 }
 
 TensorImplPtr full_like_op(const TensorImplPtr& a, double fill_value, bool requires_grad) {
-    if (!a)
-        throw LucidError("full_like: null input");
+    Validator::input(a, "full_like.a").non_null();
     return full_op(a->shape_, fill_value, a->dtype_, a->device_, requires_grad);
 }
 

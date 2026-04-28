@@ -8,19 +8,17 @@
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Exceptions.h"
-#include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
 
 TensorImplPtr cholesky_op(const TensorImplPtr& a, bool upper) {
     using namespace linalg_detail;
-    if (!a)
-        throw LucidError("cholesky: null input");
-    require_float(a->dtype_, "cholesky");
-    require_square_2d(a->shape_, "cholesky");
-    OpScope scope{"cholesky", a->device_, a->dtype_, a->shape_};
+    Validator::input(a, "cholesky.a").float_only().square_2d();
+    OpScopeFull scope{"cholesky", a->device_, a->dtype_, a->shape_};
 
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);

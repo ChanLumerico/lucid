@@ -12,6 +12,7 @@
         "lucid/_C/core/Allocator.cpp",
         "lucid/_C/core/AmpPolicy.cpp",
         "lucid/_C/core/Determinism.cpp",
+        "lucid/_C/core/ErrorBuilder.cpp",
         "lucid/_C/core/Exceptions.cpp",
         "lucid/_C/core/Generator.cpp",
         "lucid/_C/core/GradMode.cpp",
@@ -19,6 +20,7 @@
         "lucid/_C/core/OpRegistry.cpp",
         "lucid/_C/core/Profiler.cpp",
         "lucid/_C/core/TensorImpl.cpp",
+        "lucid/_C/core/Validate.cpp",
 
         "lucid/_C/backend/cpu/Blas.cpp",
         "lucid/_C/backend/cpu/Lapack.cpp",

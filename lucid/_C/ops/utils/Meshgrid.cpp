@@ -9,10 +9,12 @@
 #include "../../autograd/Helpers.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
@@ -76,7 +78,7 @@ Storage meshgrid_backward_storage(const Storage& grad,
         case Dtype::F64:
             return Storage{meshgrid_backward_cpu<double>(g, output_shape, carry_axis, dt)};
         default:
-            throw NotImplementedError("meshgrid backward: dtype not supported");
+            ErrorBuilder("meshgrid backward").not_implemented("dtype not supported");
     }
 }
 
@@ -122,7 +124,7 @@ std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs, boo
     check_dtype_device_match(xs, "meshgrid");
     const Dtype dt = xs[0]->dtype_;
     const Device device = xs[0]->device_;
-    OpScope scope{"meshgrid", device, dt, Shape{}};
+    OpScopeFull scope{"meshgrid", device, dt, Shape{}};
     if (device == Device::GPU) {
         std::vector<::mlx::core::array> arrays;
         arrays.reserve(xs.size());
@@ -149,7 +151,7 @@ std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs, boo
     std::vector<std::int64_t> dims(N);
     for (std::size_t i = 0; i < N; ++i) {
         if (xs[i]->shape_.size() != 1)
-            throw LucidError("meshgrid: each input must be 1-D");
+            ErrorBuilder("meshgrid").fail("each input must be 1-D");
         dims[i] = xs[i]->shape_[0];
     }
     std::vector<std::int64_t> out_dims = dims;

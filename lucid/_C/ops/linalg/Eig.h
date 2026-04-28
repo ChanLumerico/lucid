@@ -1,6 +1,6 @@
 #pragma once
 
-#include <utility>
+#include <vector>
 
 #include "../../api.h"
 #include "../../core/Storage.h"
@@ -8,6 +8,7 @@
 
 namespace lucid {
 
-LUCID_API std::pair<TensorImplPtr, TensorImplPtr> eig_op(const TensorImplPtr& a);
+/// Eigendecomposition. Returns [eigenvalues, eigenvectors].
+LUCID_API std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a);
 
 }  // namespace lucid

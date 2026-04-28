@@ -9,6 +9,7 @@
 #include "../../backend/cpu/Vdsp.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Shape.h"
@@ -50,8 +51,9 @@ CpuStorage AddBackward::cpu_kernel(const CpuStorage& a,
                                    reinterpret_cast<std::int64_t*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError(std::string("add: dtype ") + std::string(dtype_name(dt)) +
-                                      " not supported in Phase 3.0");
+            ErrorBuilder("add").not_implemented(std::string("dtype ") +
+                                                std::string(dtype_name(dt)) +
+                                                " not supported in Phase 3.0");
     }
     return out;
 }
@@ -61,7 +63,7 @@ GpuStorage AddBackward::gpu_kernel(const GpuStorage& a,
                                    const Shape& /*out_shape*/,
                                    Dtype dt) {
     if (!a.arr || !b.arr) {
-        throw LucidError("add: null GPU input");
+        ErrorBuilder("add").fail("null GPU input");
     }
     auto out = ::mlx::core::add(*a.arr, *b.arr);
     return gpu::wrap_mlx_array(std::move(out), dt);

@@ -2,6 +2,7 @@
 
 #include "../../backend/cpu/Vforce.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/OpRegistry.h"
 
@@ -32,7 +33,7 @@ CpuStorage dispatch(
                 reinterpret_cast<double*>(out.ptr.get()), numel);
             break;
         default:
-            throw NotImplementedError(std::string(op) + ": dtype not supported");
+            ErrorBuilder(op).not_implemented("dtype not supported");
     }
     return out;
 }

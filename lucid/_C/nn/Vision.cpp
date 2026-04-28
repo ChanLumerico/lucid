@@ -13,11 +13,14 @@
 #include "../backend/cpu/Blas.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Exceptions.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -45,7 +48,7 @@ inline std::int64_t read_index(const CpuStorage& ts, std::size_t i) {
         case Dtype::Bool:
             return reinterpret_cast<const std::uint8_t*>(ts.ptr.get())[i];
         default:
-            throw NotImplementedError("one_hot/rotate: index dtype must be integer");
+            ErrorBuilder("one_hot/rotate").not_implemented("index dtype must be integer");
     }
 }
 
@@ -56,13 +59,12 @@ inline std::int64_t read_index(const CpuStorage& ts, std::size_t i) {
 // =====================================================================
 
 TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_dtype) {
-    if (!input)
-        throw LucidError("one_hot: null input");
+    Validator::input(input, "one_hot.input").non_null();
     if (num_classes <= 0)
-        throw LucidError("one_hot: num_classes must be > 0");
+        ErrorBuilder("one_hot").fail("num_classes must be > 0");
     Shape out_shape = input->shape_;
     out_shape.push_back(num_classes);
-    OpScope scope{"one_hot", input->device_, out_dtype, out_shape};
+    OpScopeFull scope{"one_hot", input->device_, out_dtype, out_shape};
 
     if (input->device_ == Device::GPU) {
         const auto& gi = std::get<GpuStorage>(input->storage_);
@@ -109,7 +111,7 @@ TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_
                 reinterpret_cast<std::int64_t*>(out_cpu.ptr.get())[pos] = 1;
                 break;
             default:
-                throw NotImplementedError("one_hot: output dtype not supported");
+                ErrorBuilder("one_hot").not_implemented("output dtype not supported");
         }
     };
     for (std::size_t i = 0; i < M; ++i) {
@@ -156,15 +158,14 @@ void rotate_cpu_kernel(
 }  // namespace
 
 TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy, double cx) {
-    if (!input)
-        throw LucidError("rotate: null input");
+    Validator::input(input, "rotate.input").non_null();
     if (input->shape_.size() != 4)
         throw ShapeMismatch(input->shape_, Shape{}, "rotate: input must be 4-D (N, C, H, W)");
     const int N = static_cast<int>(input->shape_[0]);
     const int C = static_cast<int>(input->shape_[1]);
     const int H = static_cast<int>(input->shape_[2]);
     const int W = static_cast<int>(input->shape_[3]);
-    OpScope scope{"rotate", input->device_, input->dtype_, input->shape_};
+    OpScopeFull scope{"rotate", input->device_, input->dtype_, input->shape_};
     const double angle_rad_neg = -angle_deg * (M_PI / 180.0);
 
     if (input->device_ == Device::GPU) {
@@ -248,7 +249,7 @@ TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy,
                                   reinterpret_cast<double*>(out_cpu.ptr.get()), N, C, H, W,
                                   angle_rad_neg, cx, cy);
     else
-        throw NotImplementedError("rotate: dtype must be F32/F64");
+        ErrorBuilder("rotate").not_implemented("dtype must be F32/F64");
     return std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, input->shape_, input->dtype_,
                                         input->device_, false);
 }
@@ -280,7 +281,7 @@ struct BilinearShape {
 
 BilinearShape flatten_bilinear(const Shape& s1, const Shape& s2, const Shape& sw) {
     if (s1.empty() || s2.empty()) {
-        throw LucidError("bilinear: input must have ≥1 dim");
+        ErrorBuilder("bilinear").fail("input must have ≥1 dim");
     }
     if (sw.size() != 3) {
         throw ShapeMismatch(sw, Shape{}, "bilinear: weight must be 3-D");
@@ -389,7 +390,7 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
                                              const TensorImplPtr& weight,
                                              const TensorImplPtr& bias) {
     if (!x1 || !x2 || !weight)
-        throw LucidError("bilinear_layer: null input");
+        ErrorBuilder("bilinear_layer").fail("null input");
     if (x1->dtype_ != x2->dtype_ || x1->dtype_ != weight->dtype_)
         throw DtypeMismatch(std::string(dtype_name(x1->dtype_)),
                             std::string(dtype_name(x2->dtype_)), "bilinear_layer");
@@ -399,7 +400,7 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
     const auto bs = flatten_bilinear(x1->shape_, x2->shape_, weight->shape_);
     Shape out_shape = x1->shape_;
     out_shape.back() = static_cast<std::int64_t>(bs.Dout);
-    OpScope scope{schema_v1.name, x1->device_, x1->dtype_, out_shape};
+    OpScopeFull scope{schema_v1.name, x1->device_, x1->dtype_, out_shape};
 
     Storage out_storage;
     if (x1->device_ == Device::GPU) {
@@ -455,7 +456,7 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
                 bs_ptr ? reinterpret_cast<const double*>(bs_ptr->ptr.get()) : nullptr,
                 reinterpret_cast<double*>(out_cpu.ptr.get()), bs.B, bs.D1, bs.D2, bs.Dout);
         else
-            throw NotImplementedError("bilinear_layer: dtype must be F32/F64");
+            ErrorBuilder("bilinear_layer").not_implemented("dtype must be F32/F64");
         out_storage = Storage{std::move(out_cpu)};
     }
 
@@ -626,7 +627,7 @@ std::vector<Storage> BilinearLayerBackward::apply(Storage grad_out) {
     else if (dtype_ == Dtype::F64)
         run(double{});
     else
-        throw NotImplementedError("bilinear_layer backward: dtype not supported");
+        ErrorBuilder("bilinear_layer backward").not_implemented("dtype not supported");
 
     std::vector<Storage> out_grads;
     out_grads.push_back(Storage{std::move(dx1_cpu)});

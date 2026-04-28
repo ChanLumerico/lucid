@@ -8,25 +8,18 @@
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Exceptions.h"
-#include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
 
 TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     using namespace linalg_detail;
-    if (!a || !b)
-        throw LucidError("solve: null input");
-    if (a->device_ != b->device_)
-        throw DeviceMismatch(std::string(device_name(a->device_)),
-                             std::string(device_name(b->device_)), "solve");
-    if (a->dtype_ != b->dtype_)
-        throw DtypeMismatch(std::string(dtype_name(a->dtype_)), std::string(dtype_name(b->dtype_)),
-                            "solve");
-    require_float(a->dtype_, "solve");
-    require_square_2d(a->shape_, "solve");
-    OpScope scope{"solve", a->device_, a->dtype_, a->shape_};
+    Validator::input(a, "solve.a").float_only().square_2d();
+    Validator::pair(a, b, "solve").same_dtype().same_device();
+    OpScopeFull scope{"solve", a->device_, a->dtype_, a->shape_};
 
     if (a->device_ == Device::GPU) {
         auto in_a = as_mlx_array_gpu(a);

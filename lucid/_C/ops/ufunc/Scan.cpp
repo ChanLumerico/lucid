@@ -10,10 +10,13 @@
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/GradMode.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
@@ -96,7 +99,7 @@ Storage cumsum_storage_along(
         run(reinterpret_cast<double*>(out.ptr.get()),
             reinterpret_cast<const double*>(cs.ptr.get()));
     else
-        throw NotImplementedError("cumsum: dtype not supported");
+        ErrorBuilder("cumsum").not_implemented("dtype not supported");
     return Storage{std::move(out)};
 }
 
@@ -177,7 +180,7 @@ public:
         else if (dtype_ == Dtype::F64)
             mul_kernel(double{});
         else
-            throw NotImplementedError("cumprod backward: dtype not supported");
+            ErrorBuilder("cumprod backward").not_implemented("dtype not supported");
 
         Storage p_s{std::move(p)};
         Storage rev = reverse_along_axis_storage(p_s, input_shape_, axis_, dtype_, device_);
@@ -233,19 +236,18 @@ void scan_axis(const T* in, T* out, const Shape& shape, int axis) {
 }
 
 TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, const char* name) {
-    if (!a)
-        throw LucidError(std::string(name) + ": null input");
+    Validator::input(a, std::string(name) + ".a").non_null();
     const Dtype dt = a->dtype_;
     const Device device = a->device_;
     auto sh = a->shape_;
     if (sh.empty())
-        throw LucidError(std::string(name) + ": input is scalar");
+        ErrorBuilder(name).fail("input is scalar");
     int ax = axis;
     if (ax < 0)
         ax += static_cast<int>(sh.size());
     if (ax < 0 || ax >= (int)sh.size())
-        throw LucidError(std::string(name) + ": axis out of range");
-    OpScope scope{name, device, dt, sh};
+        ErrorBuilder(name).fail("axis out of range");
+    OpScopeFull scope{name, device, dt, sh};
 
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
@@ -288,7 +290,7 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
                                            reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), sh,
                                            ax);
     } else {
-        throw NotImplementedError(std::string(name) + ": dtype not supported");
+        ErrorBuilder(name).not_implemented("dtype not supported");
     }
 
     return fresh(Storage{std::move(out_cpu)}, sh, dt, device);

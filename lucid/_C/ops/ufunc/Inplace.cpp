@@ -2,8 +2,10 @@
 
 #include <utility>
 
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "Activation.h"
 #include "Arith.h"
 #include "Discrete.h"
@@ -18,8 +20,7 @@ namespace {
 
 template <typename Fn>
 TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* name) {
-    if (!a)
-        throw LucidError(std::string(name) + ": null input");
+    Validator::input(a, std::string(name) + ".a").non_null();
     auto out = fwd_fn(a);
     if (out->shape_ != a->shape_)
         throw ShapeMismatch(a->shape_, out->shape_,
@@ -111,8 +112,7 @@ TensorImplPtr ceil_inplace_op(const TensorImplPtr& a) {
 
 // -- Scalar-parameterized --
 TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
-    if (!a)
-        throw LucidError("clip_: null input");
+    Validator::input(a, "clip_.a").non_null();
     auto out = clip_op(a, lo, hi);
     a->storage_ = std::move(out->storage_);
     a->dtype_ = out->dtype_;

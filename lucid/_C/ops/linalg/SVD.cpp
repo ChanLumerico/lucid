@@ -8,21 +8,23 @@
 
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Exceptions.h"
 #include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "_Detail.h"
 
 namespace lucid {
 
 std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
     using namespace linalg_detail;
-    if (!a)
-        throw LucidError("svd: null input");
+    Validator::input(a, "svd.a").non_null();
     require_float(a->dtype_, "svd");
     if (a->shape_.size() < 2)
-        throw LucidError("svd: input must be at least 2-D");
-    OpScope scope{"svd", a->device_, a->dtype_, a->shape_};
+        ErrorBuilder("svd").fail("input must be at least 2-D");
+    OpScopeFull scope{"svd", a->device_, a->dtype_, a->shape_};
 
     if (a->device_ == Device::GPU) {
         auto in = as_mlx_array_gpu(a);
