@@ -65,14 +65,14 @@ void register_tensor_impl(py::module_& m) {
                  return TensorImpl::from_numpy(std::move(arr), device, requires_grad);
              }),
              py::arg("data"), py::arg("device") = Device::CPU, py::arg("requires_grad") = false)
-        .def_property_readonly("shape", [](const TensorImpl& t) { return py::cast(t.shape_); })
-        .def_property_readonly("stride", [](const TensorImpl& t) { return py::cast(t.stride_); })
-        .def_property_readonly("dtype", [](const TensorImpl& t) { return t.dtype_; })
-        .def_property_readonly("device", [](const TensorImpl& t) { return t.device_; })
+        .def_property_readonly("shape", [](const TensorImpl& t) { return py::cast(t.shape()); })
+        .def_property_readonly("stride", [](const TensorImpl& t) { return py::cast(t.stride()); })
+        .def_property_readonly("dtype", [](const TensorImpl& t) { return t.dtype(); })
+        .def_property_readonly("device", [](const TensorImpl& t) { return t.device(); })
         .def_property_readonly("requires_grad",
-                               [](const TensorImpl& t) { return t.requires_grad_; })
-        .def_property_readonly("is_leaf", [](const TensorImpl& t) { return t.is_leaf_; })
-        .def_property_readonly("version", [](const TensorImpl& t) { return t.version_; })
+                               [](const TensorImpl& t) { return t.requires_grad(); })
+        .def_property_readonly("is_leaf", [](const TensorImpl& t) { return t.is_leaf(); })
+        .def_property_readonly("version", [](const TensorImpl& t) { return t.version(); })
         .def("numel", &TensorImpl::numel)
         .def("nbytes", &TensorImpl::nbytes)
         .def("is_contiguous", &TensorImpl::is_contiguous)

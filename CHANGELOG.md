@@ -10,6 +10,19 @@ be tagged `v3.1.0-rc1` after Phase 5.
 
 ## [Unreleased]
 
+### Added — Production refactor Phase 2.0 TensorImpl encapsulation audit
+- Added `tensor/TensorMeta.h` and `tensor/AutogradMeta.h` as the target
+  value-semantics metadata containers for the Phase 2 TensorImpl extraction.
+- Added read accessors and narrow mutators to `core/TensorImpl.h` so call sites
+  can migrate away from direct public field access before fields are made
+  private.
+- Updated the TensorImpl Python binding to read metadata through accessors.
+- Migrated core validation, autograd accumulation/backward/version checks, and
+  the optimizer base loop to use TensorImpl accessors and narrow mutators.
+- Added `tools/audit_tensorimpl_access.py` and
+  `docs/PHASE2_TENSOR_AUDIT.md` to track the remaining candidate direct-field
+  surface during the Phase 2 migration.
+
 ### Changed — Production refactor Phase 1 foundation consolidation
 - Renamed the typed exception implementation from `core/Exceptions.{h,cpp}` to
   `core/Error.{h,cpp}` and updated all engine includes.

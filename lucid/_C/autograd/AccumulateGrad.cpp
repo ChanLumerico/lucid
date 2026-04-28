@@ -14,14 +14,15 @@ std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
         // Leaf was freed before backward finished. Silently drop.
         return {};
     }
-    if (!t->requires_grad_) {
+    if (!t->requires_grad()) {
         return {};
     }
 
-    if (!t->grad_storage_.has_value()) {
-        t->grad_storage_ = std::move(grad_out);
+    auto& grad = t->mutable_grad_storage();
+    if (!grad.has_value()) {
+        grad = std::move(grad_out);
     } else {
-        accumulate_into(*t->grad_storage_, grad_out);
+        accumulate_into(*grad, grad_out);
     }
     return {};
 }

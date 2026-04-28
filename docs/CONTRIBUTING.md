@@ -13,6 +13,7 @@ tools/check_format.sh --tidy
 python tools/check_layers.py
 python tools/check_op_api.py
 python tools/check_phase1.py
+python tools/audit_tensorimpl_access.py
 
 # 3. Build (release + UBSan)
 python3 -m pip install cmake ninja pybind11

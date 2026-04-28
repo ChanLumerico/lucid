@@ -796,8 +796,8 @@ void check_version_match(const std::weak_ptr<TensorImpl>& live,
     auto t = live.lock();
     if (!t)
         return;  // tensor freed; nothing to compare against
-    if (t->version_ != saved_version) {
-        throw VersionMismatch(saved_version, t->version_,
+    if (t->version() != saved_version) {
+        throw VersionMismatch(saved_version, t->version(),
                               std::string(op_name) + " input " + std::to_string(input_idx));
     }
 }

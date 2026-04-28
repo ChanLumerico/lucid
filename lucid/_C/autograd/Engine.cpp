@@ -69,20 +69,21 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     if (!root) {
         ErrorBuilder("Engine::backward").fail("root is null");
     }
-    if (!root->grad_fn_) {
+    if (!root->grad_fn()) {
         // Leaf root — no op history to traverse, but PyTorch semantics still
         // require accumulating the seed into the leaf's `grad_storage_` when
         // `requires_grad` is set. Without this branch `backward()` on a leaf
         // tensor is a silent no-op.
-        if (root->requires_grad_) {
+        if (root->requires_grad()) {
             Storage seed = std::move(grad_seed);
             if (storage_is_empty(seed)) {
-                seed = make_ones_storage(root->shape_, root->dtype_, root->device_);
+                seed = make_ones_storage(root->shape(), root->dtype(), root->device());
             }
-            if (!root->grad_storage_.has_value()) {
-                root->grad_storage_ = std::move(seed);
+            auto& grad = root->mutable_grad_storage();
+            if (!grad.has_value()) {
+                grad = std::move(seed);
             } else {
-                accumulate_into(*root->grad_storage_, seed);
+                accumulate_into(*grad, seed);
             }
         }
         return;
@@ -91,15 +92,15 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     // Provide an implicit ones_like(root) seed if caller passed an empty one.
     Storage seed = std::move(grad_seed);
     if (storage_is_empty(seed)) {
-        seed = make_ones_storage(root->shape_, root->dtype_, root->device_);
+        seed = make_ones_storage(root->shape(), root->dtype(), root->device());
     }
 
     // Topological order, root first.
-    auto order = topo_order(root->grad_fn_);
+    auto order = topo_order(root->grad_fn());
 
     // Pending gradient per node. The root receives the seed.
     std::unordered_map<Node*, Storage> pending;
-    pending.emplace(root->grad_fn_.get(), std::move(seed));
+    pending.emplace(root->grad_fn().get(), std::move(seed));
 
     for (const auto& node : order) {
         auto it = pending.find(node.get());
@@ -146,7 +147,7 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
             (void)node;  // Phase 2: nothing extra to free; future ops save
                          // tensors that should be released here.
         }
-        root->grad_fn_.reset();
+        root->clear_grad_fn();
     }
 }
 

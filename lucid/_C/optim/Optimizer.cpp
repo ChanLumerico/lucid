@@ -12,16 +12,17 @@ void Optimizer::step() {
         auto& p = params_[i];
         if (!p)
             continue;
-        if (!p->grad_storage_.has_value())
+        const auto& grad = p->grad_storage();
+        if (!grad.has_value())
             continue;  // no grad: skip
         if (!state_initialized_[i]) {
             init_state_slot(i, p);
             state_initialized_[i] = true;
         }
-        update_one(i, p, *p->grad_storage_);
+        update_one(i, p, *grad);
         // Item #9 — version bump invalidates any saved_inputs that
         // captured this parameter, so a stale backward will fail loudly.
-        p->version_ += 1;
+        p->bump_version();
     }
 }
 

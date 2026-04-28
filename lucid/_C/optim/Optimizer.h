@@ -20,11 +20,11 @@
 // Threading:
 //   Not thread-safe across threads. Optimizers are designed to be called
 //   from a single training loop. To shard gradient computation across
-//   workers, accumulate grads into per-tensor `grad_storage_` (already
+//   workers, accumulate grads into per-tensor gradient storage (already
 //   thread-safe via accumulate_into) then call step() from the main thread.
 //
 // In-place semantics:
-//   step() modifies `param->storage_` directly and bumps `param->version_`
+//   step() modifies parameter storage directly and bumps the parameter version
 //   to invalidate any saved_inputs that referenced it. A backward pass
 //   that re-runs after step() and was holding a saved_input snapshot will
 //   correctly throw VersionMismatch (Item #9 retrofit).
@@ -59,7 +59,7 @@ public:
     /// dispatching to the subclass's `update_one()` per parameter.
     void step();
 
-    /// Clear `grad_storage_` on every managed parameter.
+    /// Clear gradient storage on every managed parameter.
     void zero_grad();
 
     /// Number of parameters under management.
@@ -73,7 +73,7 @@ public:
     virtual std::string state_dict_id() const = 0;
 
 protected:
-    /// Subclass implements the per-parameter update. `param->storage_` is
+    /// Subclass implements the per-parameter update. Parameter storage is
     /// modified in place; `grad` is the read-only gradient storage. The
     /// `slot_idx` identifies which parameter this is — used to look up
     /// per-parameter state buffers (e.g. moments[slot_idx]).

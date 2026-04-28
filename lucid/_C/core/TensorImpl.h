@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <utility>
 
 #include "../api.h"
 #include "Device.h"
@@ -55,6 +56,35 @@ public:
     TensorImpl(Storage storage, Shape shape, Dtype dtype, Device device, bool requires_grad);
 
     static std::shared_ptr<TensorImpl> from_numpy(py::array arr, Device device, bool requires_grad);
+
+    const Storage& storage() const noexcept { return storage_; }
+    Storage& mutable_storage() noexcept { return storage_; }
+
+    const Shape& shape() const noexcept { return shape_; }
+    const Stride& stride() const noexcept { return stride_; }
+
+    Dtype dtype() const noexcept { return dtype_; }
+    Device device() const noexcept { return device_; }
+
+    bool requires_grad() const noexcept { return requires_grad_; }
+    bool is_leaf() const noexcept { return is_leaf_; }
+
+    std::int64_t version() const noexcept { return version_; }
+
+    const std::shared_ptr<Node>& grad_fn() const noexcept { return grad_fn_; }
+    const std::optional<Storage>& grad_storage() const noexcept { return grad_storage_; }
+
+    std::optional<Storage>& mutable_grad_storage() noexcept { return grad_storage_; }
+
+
+    void set_requires_grad(bool requires_grad) noexcept { requires_grad_ = requires_grad; }
+    void set_leaf(bool is_leaf) noexcept { is_leaf_ = is_leaf; }
+
+    void set_grad_fn(std::shared_ptr<Node> grad_fn) noexcept { grad_fn_ = std::move(grad_fn); }
+    void clear_grad_fn() noexcept { grad_fn_.reset(); }
+
+    void set_grad_storage(Storage grad) { grad_storage_ = std::move(grad); }
+    void bump_version() noexcept { version_ += 1; }
 
     std::size_t numel() const;
     std::size_t nbytes() const;

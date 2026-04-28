@@ -214,16 +214,16 @@ py::object TensorImpl::grad_as_python() const {
 }
 
 void TensorImpl::copy_from(const TensorImpl& other) {
-    if (other.device_ != device_) {
+    if (other.device() != device()) {
         throw DeviceMismatch(std::string(device_name(device_)),
-                             std::string(device_name(other.device_)), "copy_from");
+                             std::string(device_name(other.device())), "copy_from");
     }
-    if (other.dtype_ != dtype_) {
-        throw DtypeMismatch(std::string(dtype_name(dtype_)), std::string(dtype_name(other.dtype_)),
+    if (other.dtype() != dtype()) {
+        throw DtypeMismatch(std::string(dtype_name(dtype_)), std::string(dtype_name(other.dtype())),
                             "copy_from");
     }
-    if (other.shape_ != shape_) {
-        throw ShapeMismatch(shape_, other.shape_, "copy_from");
+    if (other.shape() != shape()) {
+        throw ShapeMismatch(shape_, other.shape(), "copy_from");
     }
 
     std::visit(overloaded{
@@ -250,13 +250,13 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                    },
                    [&](auto&, auto&) {
                        throw DeviceMismatch(std::string(device_name(device_)),
-                                            std::string(device_name(other.device_)),
+                                            std::string(device_name(other.device())),
                                             "copy_from (storage variant)");
                    },
                },
-               storage_, other.storage_);
+               storage_, other.storage());
 
-    version_ += 1;
+    bump_version();
 }
 
 void TensorImpl::zero_grad() {

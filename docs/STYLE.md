@@ -112,6 +112,10 @@ migrations.
 - Use `std::weak_ptr` for autograd `Edge` and `AccumulateGrad::leaf_` to break
   cycles.
 - Never store raw `T*` from a `shared_ptr` past the call where it's borrowed.
+- New TensorImpl call sites should use named accessors/mutators (`shape()`,
+  `dtype()`, `set_grad_fn(...)`, `bump_version()`) instead of direct public
+  field access. Phase 2 will make those fields private once the existing call
+  surface is migrated.
 
 ## Threading
 
