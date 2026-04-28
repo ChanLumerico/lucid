@@ -31,9 +31,14 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (device == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage_);
         const auto& gb = std::get<GpuStorage>(b->storage_);
-        auto out = ::mlx::core::floor_divide(*ga.arr, *gb.arr);
-        // Cast to Int64 to match numpy/PyTorch semantics.
-        auto out_i = ::mlx::core::astype(out, ::mlx::core::int64);
+        // mlx::floor_divide on integer inputs truncates toward zero, which
+        // disagrees with numpy/PyTorch (floor toward -∞) for negative
+        // numerators. Cast to float32, take the true floor, then cast back
+        // to int64 — matches the CPU branch's std::floor semantics.
+        auto a_f = ::mlx::core::astype(*ga.arr, ::mlx::core::float32);
+        auto b_f = ::mlx::core::astype(*gb.arr, ::mlx::core::float32);
+        auto q   = ::mlx::core::floor(::mlx::core::divide(a_f, b_f));
+        auto out_i = ::mlx::core::astype(q, ::mlx::core::int64);
         return fresh(Storage{gpu::wrap_mlx_array(std::move(out_i), Dtype::I64)},
                      a->shape_, Dtype::I64, device);
     }

@@ -522,15 +522,35 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
         auto loss_buf = allocate_size(numel, input->dtype_);
         const auto& xs  = std::get<CpuStorage>(input->storage_);
         const auto& ts  = std::get<CpuStorage>(target->storage_);
-        const auto& ws  = std::get<CpuStorage>(weight->storage_);
-        const auto& pws = std::get<CpuStorage>(pos_weight->storage_);
+        const auto& ws_raw  = std::get<CpuStorage>(weight->storage_);
+        const auto& pws_raw = std::get<CpuStorage>(pos_weight->storage_);
+
+        // Broadcast weight and pos_weight to input shape so per-element
+        // indexing in the loop is well-defined (PyTorch broadcasts both).
+        CpuStorage ws_buf, pws_buf;
+        const CpuStorage* ws_p  = &ws_raw;
+        const CpuStorage* pws_p = &pws_raw;
+        if (weight->shape_ != input->shape_) {
+            ws_buf = ::lucid::detail::broadcast_cpu(
+                ws_raw, weight->shape_, input->shape_, input->dtype_);
+            ws_p = &ws_buf;
+        }
+        if (pos_weight->shape_ != input->shape_) {
+            pws_buf = ::lucid::detail::broadcast_cpu(
+                pws_raw, pos_weight->shape_, input->shape_,
+                input->dtype_);
+            pws_p = &pws_buf;
+        }
+        // The broadcast_cpu helper lives in lucid::detail (defined in
+        // ops/bfunc/_BinaryOp.h) so the explicit `::lucid::detail::` qualifier
+        // suffices given the include above.
 
         auto compute = [&](auto type_tag) {
             using T = decltype(type_tag);
             auto* xp  = reinterpret_cast<const T*>(xs.ptr.get());
             auto* tp  = reinterpret_cast<const T*>(ts.ptr.get());
-            auto* wp  = reinterpret_cast<const T*>(ws.ptr.get());
-            auto* pwp = reinterpret_cast<const T*>(pws.ptr.get());
+            auto* wp  = reinterpret_cast<const T*>(ws_p->ptr.get());
+            auto* pwp = reinterpret_cast<const T*>(pws_p->ptr.get());
             auto* lp  = reinterpret_cast<T*>(loss_buf.ptr.get());
             for (std::size_t i = 0; i < numel; ++i) {
                 const T x = xp[i];
