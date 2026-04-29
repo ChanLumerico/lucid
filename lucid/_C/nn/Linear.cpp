@@ -20,6 +20,7 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../kernel/primitives/BatchedMatmul.h"
 #include "../ops/bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -224,49 +225,62 @@ std::vector<Storage> LinearBackward::apply(Storage grad_out) {
     const auto& x_cpu = std::get<CpuStorage>(saved_inputs_[0]);
     const auto& W_cpu = std::get<CpuStorage>(saved_inputs_[1]);
 
-    // dx = grad @ W : (M,N) @ (N,K) -> (M,K)
-    CpuStorage dx_cpu = allocate_2d_like(M * K, dtype_);
-    // dW = grad^T @ x : (N,M) @ (M,K) -> (N,K)
-    CpuStorage dW_cpu = allocate_2d_like(N * K, dtype_);
-    // db = sum(grad, axis=0..M-1) : (N,)
+    // db = sum(grad, axis=0..M-1) : (N,)  — always done directly.
     CpuStorage db_cpu = allocate_2d_like(N, dtype_);
 
     if (M > 0 && N > 0 && K > 0) {
+        // Use cpu_matmul_nd for dx and dW via the BatchedMatmul primitive.
+        // Linear always presents a 2-D (M, K)/(M, N) layout (batch=1).
+        // cpu_matmul_nd handles the general case cleanly and is the canonical
+        // path for any future N-D batched extension.
+
+        // dx = grad @ W  : (M, N) @ (N, K) -> (M, K)
+        //   a = grad [M, N], b = W [N, K], no transpose needed
+        kernel::primitives::NdMatmulInfo dx_info;
+        dx_info.M = static_cast<int>(M);
+        dx_info.K = static_cast<int>(N);
+        dx_info.N = static_cast<int>(K);
+        dx_info.batch = 1;
+        dx_info.out_shape = {static_cast<std::int64_t>(M), static_cast<std::int64_t>(K)};
+        CpuStorage dx_cpu =
+            kernel::primitives::cpu_matmul_nd(g_cpu, W_cpu, dx_info, false, false, dtype_);
+
+        // dW = grad^T @ x : (N, M) @ (M, K) -> (N, K)
+        //   a = grad [M, N] transposed (transA=true), b = x [M, K]
+        kernel::primitives::NdMatmulInfo dW_info;
+        dW_info.M = static_cast<int>(N);
+        dW_info.K = static_cast<int>(M);
+        dW_info.N = static_cast<int>(K);
+        dW_info.batch = 1;
+        dW_info.out_shape = {static_cast<std::int64_t>(N), static_cast<std::int64_t>(K)};
+        CpuStorage dW_cpu =
+            kernel::primitives::cpu_matmul_nd(g_cpu, x_cpu, dW_info, true, false, dtype_);
+
         switch (dtype_) {
-            case Dtype::F32: {
-                const auto* gp = reinterpret_cast<const float*>(g_cpu.ptr.get());
-                const auto* xp = reinterpret_cast<const float*>(x_cpu.ptr.get());
-                const auto* wp = reinterpret_cast<const float*>(W_cpu.ptr.get());
-                backend::cpu::sgemm(false, false, M, K, N, 1.0f, gp, N, wp, K, 0.0f,
-                                    reinterpret_cast<float*>(dx_cpu.ptr.get()), K);
-                backend::cpu::sgemm(true, false, N, K, M, 1.0f, gp, N, xp, K, 0.0f,
-                                    reinterpret_cast<float*>(dW_cpu.ptr.get()), K);
-                sum_rows_typed<float>(gp, reinterpret_cast<float*>(db_cpu.ptr.get()), M, N);
+            case Dtype::F32:
+                sum_rows_typed<float>(reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                                      reinterpret_cast<float*>(db_cpu.ptr.get()), M, N);
                 break;
-            }
-            case Dtype::F64: {
-                const auto* gp = reinterpret_cast<const double*>(g_cpu.ptr.get());
-                const auto* xp = reinterpret_cast<const double*>(x_cpu.ptr.get());
-                const auto* wp = reinterpret_cast<const double*>(W_cpu.ptr.get());
-                backend::cpu::dgemm(false, false, M, K, N, 1.0, gp, N, wp, K, 0.0,
-                                    reinterpret_cast<double*>(dx_cpu.ptr.get()), K);
-                backend::cpu::dgemm(true, false, N, K, M, 1.0, gp, N, xp, K, 0.0,
-                                    reinterpret_cast<double*>(dW_cpu.ptr.get()), K);
-                sum_rows_typed<double>(gp, reinterpret_cast<double*>(db_cpu.ptr.get()), M, N);
+            case Dtype::F64:
+                sum_rows_typed<double>(reinterpret_cast<const double*>(g_cpu.ptr.get()),
+                                       reinterpret_cast<double*>(db_cpu.ptr.get()), M, N);
                 break;
-            }
             default:
                 ErrorBuilder("linear backward").not_implemented("dtype not supported");
         }
-    } else {
-        // Empty case — zero-fill all grads.
-        if (dx_cpu.nbytes)
-            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        if (dW_cpu.nbytes)
-            std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
-        if (db_cpu.nbytes)
-            std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
+
+        return {Storage{std::move(dx_cpu)}, Storage{std::move(dW_cpu)}, Storage{std::move(db_cpu)}};
     }
+
+    // Empty case — zero-fill all grads.
+    CpuStorage dx_cpu = allocate_2d_like(M * K, dtype_);
+    CpuStorage dW_cpu = allocate_2d_like(N * K, dtype_);
+    if (dx_cpu.nbytes)
+        std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+    if (dW_cpu.nbytes)
+        std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
+    if (db_cpu.nbytes)
+        std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
 
     return {Storage{std::move(dx_cpu)}, Storage{std::move(dW_cpu)}, Storage{std::move(db_cpu)}};
 }
