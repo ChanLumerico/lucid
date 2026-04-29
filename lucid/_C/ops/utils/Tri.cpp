@@ -89,7 +89,7 @@ public:
     }
 };
 
-const OpSchema TriBackward::schema_v1{"tri", 1, AmpPolicy::KeepInput, true};
+const OpSchema TriBackward::schema_v1{"tri", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, /*internal=*/true};
 
 TensorImplPtr attach_tri_grad(
     const TensorImplPtr& a, TensorImplPtr out, int k, bool upper, const char* name) {

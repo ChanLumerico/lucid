@@ -18,6 +18,7 @@
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
@@ -38,6 +39,10 @@ TensorImplPtr DropoutBackward::forward(const TensorImplPtr& a,
     Validator::input(a, "dropout.a").non_null();
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("dropout").fail("p must be in [0, 1)");
+
+    // Phase 5: throw if called without a seed under set_deterministic(True).
+    if (training && p > 0.0 && gen == nullptr)
+        check_schema_determinism(schema_v1);
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
@@ -225,6 +230,9 @@ TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("dropoutnd").fail("p must be in [0, 1)");
 
+    if (training && p > 0.0 && gen == nullptr)
+        check_schema_determinism(schema_v1);
+
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
 
@@ -331,6 +339,9 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
     Validator::input(a, "alpha_dropout.a").non_null();
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("alpha_dropout").fail("p must be in [0, 1)");
+
+    if (training && p > 0.0 && gen == nullptr)
+        check_schema_determinism(schema_v1);
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
@@ -514,6 +525,9 @@ TensorImplPtr DropBlockBackward::forward(
     if (block_size <= 0)
         ErrorBuilder("drop_block").fail("block_size must be > 0");
 
+    if (p > 0.0 && gen == nullptr)
+        check_schema_determinism(schema_v1);
+
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
     const std::int64_t H = a->shape()[2];
@@ -616,6 +630,9 @@ TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
     Validator::input(a, "drop_path.a").non_null();
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("drop_path").fail("p must be in [0, 1)");
+
+    if (p > 0.0 && gen == nullptr)
+        check_schema_determinism(schema_v1);
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();

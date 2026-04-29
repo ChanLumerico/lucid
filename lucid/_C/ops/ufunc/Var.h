@@ -13,6 +13,7 @@
 
 namespace lucid {
 
+/// Var.
 LUCID_API TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims);
 
 }  // namespace lucid

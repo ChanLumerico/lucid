@@ -12,6 +12,7 @@
 
 namespace lucid {
 
+/// Tensordot.
 LUCID_API TensorImplPtr tensordot_op(const TensorImplPtr& a,
                                      const TensorImplPtr& b,
                                      std::vector<int> axes_a,

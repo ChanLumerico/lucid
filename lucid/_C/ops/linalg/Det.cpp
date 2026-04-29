@@ -8,17 +8,49 @@
 #include <mlx/linalg.h>
 #include <mlx/ops.h>
 
+#include "Inv.h"
 #include "../../backend/cpu/Lapack.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/GradMode.h"
+#include "../../core/Helpers.h"
+#include "../../core/OpRegistry.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
+#include "../../ops/bfunc/Mul.h"
+#include "../../ops/utils/Layout.h"
+#include "../../ops/ufunc/Transpose.h"
 #include "_Detail.h"
 
 namespace lucid {
+
+// ---------- Schema & backward ----------
+
+const OpSchema DetBackward::schema_v1{"det", 1, AmpPolicy::KeepInput};
+
+std::vector<Storage> DetBackward::apply(Storage grad_out) {
+    NoGradGuard ng;
+    using ::lucid::helpers::fresh;
+    // saved_inputs_[0]  = A (square input matrix)
+    // saved_output_     = det(A) scalar
+    auto A      = fresh(Storage{saved_inputs_[0]}, input_shapes_[0], dtype_, device_);
+    auto ddet   = fresh(std::move(grad_out),        out_shape_,       dtype_, device_);
+    auto det_v  = fresh(Storage{saved_output_},     out_shape_,       dtype_, device_);
+    // dA = det(A) * ddet * A^{-T}
+    auto inv_A  = inv_op(A);
+    auto inv_AT = mT_op(inv_A);
+    auto scale  = mul_op(det_v, ddet);  // scalar * scalar = scalar
+    auto dA     = mul_op(broadcast_to_op(scale, input_shapes_[0]), inv_AT);
+    return {dA->storage()};
+}
+
+LUCID_REGISTER_OP(DetBackward)
+
+// ---------- Forward ----------
 
 namespace {
 
@@ -87,8 +119,12 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
         if (a->dtype() != Dtype::F32)
             sign_arr = ::mlx::core::astype(sign_arr, gpu::to_mlx_dtype(a->dtype()));
         auto detA = ::mlx::core::multiply(detU, sign_arr);
-        return fresh(wrap_gpu_result(std::move(detA), a->dtype()), out_shape, a->dtype(),
-                     a->device());
+        auto out = fresh(wrap_gpu_result(std::move(detA), a->dtype()), out_shape, a->dtype(),
+                         a->device());
+        auto bwd = std::make_shared<DetBackward>();
+        bwd->saved_output_ = out->storage();
+        kernel::NaryKernel<DetBackward, 1>::wire_autograd(std::move(bwd), {a}, out, true);
+        return out;
     }
 
     // CPU path: per-batch LAPACK getrf, sign × diag product.
@@ -135,7 +171,11 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
             out_p[b] = det;
         }
     }
-    return fresh(Storage{std::move(out_cpu)}, out_shape, a->dtype(), a->device());
+    auto out = fresh(Storage{std::move(out_cpu)}, out_shape, a->dtype(), a->device());
+    auto bwd = std::make_shared<DetBackward>();
+    bwd->saved_output_ = out->storage();
+    kernel::NaryKernel<DetBackward, 1>::wire_autograd(std::move(bwd), {a}, out, true);
+    return out;
 }
 
 }  // namespace lucid

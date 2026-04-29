@@ -34,6 +34,7 @@
 namespace lucid {
 
 template <int N>
+/// Autograd backward node for ConvTransposeNd.
 class LUCID_API ConvTransposeNdBackward : public FuncOp<ConvTransposeNdBackward<N>, 3> {
 public:
     static const OpSchema schema_v1;
@@ -54,12 +55,14 @@ using ConvTranspose1dBackward = ConvTransposeNdBackward<1>;
 using ConvTranspose2dBackward = ConvTransposeNdBackward<2>;
 using ConvTranspose3dBackward = ConvTransposeNdBackward<3>;
 
+/// Conv transpose1d.
 LUCID_API TensorImplPtr conv_transpose1d_op(const TensorImplPtr& x,
                                             const TensorImplPtr& W,
                                             const TensorImplPtr& b,
                                             int stride_l = 1,
                                             int pad_l = 0,
                                             int opad_l = 0);
+/// Conv transpose2d.
 LUCID_API TensorImplPtr conv_transpose2d_op(const TensorImplPtr& x,
                                             const TensorImplPtr& W,
                                             const TensorImplPtr& b,
@@ -69,6 +72,7 @@ LUCID_API TensorImplPtr conv_transpose2d_op(const TensorImplPtr& x,
                                             int pad_w = 0,
                                             int opad_h = 0,
                                             int opad_w = 0);
+/// Conv transpose3d.
 LUCID_API TensorImplPtr conv_transpose3d_op(const TensorImplPtr& x,
                                             const TensorImplPtr& W,
                                             const TensorImplPtr& b,

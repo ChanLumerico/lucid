@@ -30,6 +30,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for AffineGrid.
 class LUCID_API AffineGridBackward : public FuncOp<AffineGridBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -41,6 +42,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Autograd backward node for GridSample.
 class LUCID_API GridSampleBackward : public FuncOp<GridSampleBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -57,9 +59,11 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Public API.
 LUCID_API TensorImplPtr
 affine_grid_op(const TensorImplPtr& theta, int N, int H, int W, bool align_corners);
 
+/// Grid sample.
 LUCID_API TensorImplPtr grid_sample_op(const TensorImplPtr& input,
                                        const TensorImplPtr& grid,
                                        int mode,

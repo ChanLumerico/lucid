@@ -26,6 +26,12 @@ echo "==> Op API check"
 echo "==> Phase 1 foundation check"
 "$PYTHON_BIN" tools/check_phase1.py
 
+echo "==> Doxygen coverage"
+"$PYTHON_BIN" tools/check_doxygen.py --threshold 70
+
+echo "==> Op template conformance"
+"$PYTHON_BIN" tools/check_op_template.py
+
 echo "==> Compile commands"
 ./scripts/build_compile_commands.sh
 

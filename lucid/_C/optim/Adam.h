@@ -35,6 +35,7 @@ namespace lucid {
 
 class TensorImpl;
 
+/// Adam.
 class LUCID_API Adam : public Optimizer {
 public:
     Adam(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -71,6 +72,7 @@ private:
     std::vector<Storage> v_;
 };
 
+/// AdamW.
 class LUCID_API AdamW : public Optimizer {
 public:
     AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -104,6 +106,7 @@ private:
 // =====================================================================
 // NAdam — Nesterov-accelerated Adam (PyTorch parameterization)
 // =====================================================================
+/// NAdam.
 class LUCID_API NAdam : public Optimizer {
 public:
     NAdam(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -133,6 +136,7 @@ private:
 // RAdam — Rectified Adam (Liu et al. 2020). Falls back to plain SGD-with-
 // momentum when the variance estimator is unstable (rho_t ≤ 5).
 // =====================================================================
+/// RAdam.
 class LUCID_API RAdam : public Optimizer {
 public:
     RAdam(std::vector<std::shared_ptr<TensorImpl>> params,

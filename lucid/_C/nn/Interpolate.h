@@ -24,6 +24,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for InterpolateBilinear.
 class LUCID_API InterpolateBilinearBackward : public FuncOp<InterpolateBilinearBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -37,6 +38,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Autograd backward node for InterpolateTrilinear.
 class LUCID_API InterpolateTrilinearBackward : public FuncOp<InterpolateTrilinearBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -49,14 +51,18 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Interpolate bilinear.
 LUCID_API TensorImplPtr interpolate_bilinear_op(const TensorImplPtr& input,
                                                 int H_out,
                                                 int W_out,
                                                 bool align_corners);
+/// Interpolate trilinear.
 LUCID_API TensorImplPtr interpolate_trilinear_op(
     const TensorImplPtr& input, int D_out, int H_out, int W_out, bool align_corners);
 // Nearest-neighbor variants (no autograd — round is non-differentiable).
+/// Interpolate nearest 2d.
 LUCID_API TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, int W_out);
+/// Interpolate nearest 3d.
 LUCID_API TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
                                                   int D_out,
                                                   int H_out,

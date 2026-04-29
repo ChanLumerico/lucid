@@ -41,6 +41,7 @@
 #include "../core/OpSchema.h"
 #include "../core/Profiler.h"
 #include "../core/Result.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
@@ -54,6 +55,14 @@ template <class T>
 concept HasGpuKernel = requires(GpuStorage a, GpuStorage b, Shape s, Dtype d) {
     { T::gpu_kernel(a, b, s, d) } -> std::same_as<GpuStorage>;
 };
+
+/// Phase 4.5: ops with this static method use Dispatcher instead of
+/// cpu_kernel/gpu_kernel — no device check in the call site.
+template <class T>
+concept HasBinaryDispatch =
+    requires(backend::IBackend& be, Storage a, Storage b, Shape s, Dtype d) {
+        { T::dispatch(be, a, b, s, d) } -> std::same_as<Storage>;
+    };
 
 /// NumPy-style broadcast shape resolution. Returns Result<Shape> — no throw.
 inline Result<Shape> try_broadcast_shapes(const Shape& a, const Shape& b) {
@@ -207,19 +216,67 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
                              std::string(device_name(b->device())),
                              std::string(Derived::schema_v1.name));
 
-    const TensorImplPtr a_ptr =
+    // Phase 5: determinism gate + AMP dtype resolution.
+    SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+
+    const TensorImplPtr a_contig =
         (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
-    const TensorImplPtr b_ptr =
+    const TensorImplPtr b_contig =
         (b->device() == Device::CPU && !b->is_contiguous()) ? contiguous_op(b) : b;
+    const TensorImplPtr a_ptr = sg.maybe_cast(a_contig);
+    const TensorImplPtr b_ptr = sg.maybe_cast(b_contig);
 
     Shape out_shape = (a_ptr->shape() == b_ptr->shape())
                           ? a_ptr->shape()
                           : detail::broadcast_shapes(a_ptr->shape(), b_ptr->shape());
 
-    OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), a_ptr->dtype(), out_shape};
+    OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, out_shape};
 
     Storage out_storage;
-    if (a_ptr->device() == Device::GPU) {
+    // Phase 4.5: prefer Dispatcher if Derived provides dispatch().
+    if constexpr (detail::HasBinaryDispatch<Derived>) {
+        // Materialize broadcast inputs first (same as legacy CPU path).
+        if (a_ptr->device() == Device::CPU) {
+            const CpuStorage& a_raw = std::get<CpuStorage>(a_ptr->storage());
+            const CpuStorage& b_raw = std::get<CpuStorage>(b_ptr->storage());
+            CpuStorage a_buf, b_buf;
+            const CpuStorage* a_use = &a_raw;
+            const CpuStorage* b_use = &b_raw;
+            if (a_ptr->shape() != out_shape) {
+                a_buf = detail::broadcast_cpu(a_raw, a_ptr->shape(), out_shape, a_ptr->dtype());
+                a_use = &a_buf;
+            }
+            if (b_ptr->shape() != out_shape) {
+                b_buf =
+                    detail::broadcast_cpu(b_raw, b_ptr->shape(), out_shape, a_ptr->dtype());
+                b_use = &b_buf;
+            }
+            out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::CPU),
+                                            Storage{*a_use}, Storage{*b_use}, out_shape,
+                                            eff_dt);
+        } else {
+            // GPU: broadcast via MLX then dispatch.
+            const auto& ga = std::get<GpuStorage>(a_ptr->storage());
+            const auto& gb = std::get<GpuStorage>(b_ptr->storage());
+            ::mlx::core::array a_arr =
+                (a_ptr->shape() == out_shape)
+                    ? *ga.arr
+                    : ::mlx::core::contiguous(
+                          ::mlx::core::broadcast_to(*ga.arr, gpu::to_mlx_shape(out_shape)));
+            ::mlx::core::array b_arr =
+                (b_ptr->shape() == out_shape)
+                    ? *gb.arr
+                    : ::mlx::core::contiguous(
+                          ::mlx::core::broadcast_to(*gb.arr, gpu::to_mlx_shape(out_shape)));
+            GpuStorage a_g, b_g;
+            a_g.arr = std::make_shared<::mlx::core::array>(std::move(a_arr));
+            b_g.arr = std::make_shared<::mlx::core::array>(std::move(b_arr));
+            out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::GPU),
+                                            Storage{a_g}, Storage{b_g}, out_shape,
+                                            eff_dt);
+        }
+    } else if (a_ptr->device() == Device::GPU) {
         if constexpr (detail::HasGpuKernel<Derived>) {
             const auto& ga = std::get<GpuStorage>(a_ptr->storage());
             const auto& gb = std::get<GpuStorage>(b_ptr->storage());
@@ -234,7 +291,7 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
             GpuStorage a_g, b_g;
             a_g.arr = std::make_shared<::mlx::core::array>(std::move(a_arr));
             b_g.arr = std::make_shared<::mlx::core::array>(std::move(b_arr));
-            out_storage = Storage{Derived::gpu_kernel(a_g, b_g, out_shape, a_ptr->dtype())};
+            out_storage = Storage{Derived::gpu_kernel(a_g, b_g, out_shape, eff_dt)};
         } else {
             ErrorBuilder(Derived::schema_v1.name).not_implemented("GPU kernel not yet implemented");
         }
@@ -245,17 +302,17 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
         const CpuStorage* a_use = &a_raw;
         const CpuStorage* b_use = &b_raw;
         if (a_ptr->shape() != out_shape) {
-            a_buf = detail::broadcast_cpu(a_raw, a_ptr->shape(), out_shape, a_ptr->dtype());
+            a_buf = detail::broadcast_cpu(a_raw, a_ptr->shape(), out_shape, eff_dt);
             a_use = &a_buf;
         }
         if (b_ptr->shape() != out_shape) {
-            b_buf = detail::broadcast_cpu(b_raw, b_ptr->shape(), out_shape, a_ptr->dtype());
+            b_buf = detail::broadcast_cpu(b_raw, b_ptr->shape(), out_shape, eff_dt);
             b_use = &b_buf;
         }
-        out_storage = Storage{Derived::cpu_kernel(*a_use, *b_use, out_shape, a_ptr->dtype())};
+        out_storage = Storage{Derived::cpu_kernel(*a_use, *b_use, out_shape, eff_dt)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt,
                                             a->device(), /*requires_grad=*/false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
@@ -269,11 +326,11 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     auto bwd = std::make_shared<Derived>();
     bwd->input_shapes_ = {a->shape(), b->shape()};
     bwd->out_shape_ = out->shape();
-    bwd->dtype_ = a->dtype();
+    bwd->dtype_ = eff_dt;
     bwd->device_ = a->device();
     bwd->input_tensors_ = {a, b};
     if constexpr (Derived::kSavesInputs)
-        bwd->saved_inputs_ = {a->storage(), b->storage()};
+        bwd->saved_inputs_ = {a_ptr->storage(), b_ptr->storage()};  // cast storage
 
     std::vector<Edge> edges;
     edges.emplace_back(a_edge, /*input_nr=*/0);

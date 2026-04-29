@@ -37,6 +37,7 @@
 
 namespace lucid {
 
+/// OpEvent.
 struct LUCID_API OpEvent {
     std::string name;
     Device device;
@@ -47,6 +48,7 @@ struct LUCID_API OpEvent {
     std::int64_t flops = 0;
 };
 
+/// Profiler.
 class LUCID_API Profiler {
 public:
     void start();
@@ -64,9 +66,12 @@ private:
     mutable std::mutex mu_;
 };
 
+/// Current profiler.
 LUCID_API Profiler* current_profiler();
+/// Set current profiler.
 LUCID_API void set_current_profiler(Profiler* p);
 
+/// OpScope.
 class LUCID_API OpScope {
 public:
     OpScope(std::string_view name, Device device, Dtype dtype, Shape shape);

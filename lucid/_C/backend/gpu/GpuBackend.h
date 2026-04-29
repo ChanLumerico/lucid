@@ -151,6 +151,145 @@ public:
         });
     }
 
+    // ---- Additional unary (Phase 4.5) ---------------------------------
+
+    Storage log2(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::log2(x); });
+    }
+
+    Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::reciprocal(x); });
+    }
+
+    Storage square(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::square(x); });
+    }
+
+    Storage cube(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt,
+                         [](auto& x) { return ::mlx::core::multiply(::mlx::core::square(x), x); });
+    }
+
+    Storage tan(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::tan(x); });
+    }
+
+    Storage asin(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::arcsin(x); });
+    }
+
+    Storage acos(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::arccos(x); });
+    }
+
+    Storage atan(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::arctan(x); });
+    }
+
+    Storage sinh(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::sinh(x); });
+    }
+
+    Storage cosh(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::cosh(x); });
+    }
+
+    Storage invert(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) -> ::mlx::core::array {
+            if (dt == Dtype::Bool)
+                return ::mlx::core::logical_not(x);
+            return ::mlx::core::bitwise_invert(x);
+        });
+    }
+
+    Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt,
+                         [](auto& x) { return ::mlx::core::multiply(x, ::mlx::core::sigmoid(x)); });
+    }
+
+    Storage gelu(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            const double k0 = std::sqrt(2.0 / M_PI);
+            ::mlx::core::array half(0.5, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array a044(0.044715, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array kk(k0, gpu::to_mlx_dtype(dt));
+            auto x3 = ::mlx::core::multiply(::mlx::core::square(x), x);
+            auto inner = ::mlx::core::multiply(
+                kk, ::mlx::core::add(x, ::mlx::core::multiply(a044, x3)));
+            auto t = ::mlx::core::tanh(inner);
+            return ::mlx::core::multiply(::mlx::core::multiply(half, x),
+                                         ::mlx::core::add(one, t));
+        });
+    }
+
+    Storage softplus(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            auto pos = ::mlx::core::maximum(x, zero);
+            auto neg_abs = ::mlx::core::negative(::mlx::core::abs(x));
+            auto log1p = ::mlx::core::log1p(::mlx::core::exp(neg_abs));
+            return ::mlx::core::add(pos, log1p);
+        });
+    }
+
+    Storage selu(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            constexpr double kS = 1.0507009873554805;
+            constexpr double kA = 1.6732632423543772;
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array s(kS, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array sa(kS * kA, gpu::to_mlx_dtype(dt));
+            auto pos_branch = ::mlx::core::multiply(s, x);
+            auto neg_branch = ::mlx::core::multiply(
+                sa, ::mlx::core::subtract(::mlx::core::exp(x), one));
+            auto pos_mask = ::mlx::core::greater_equal(x, zero);
+            return ::mlx::core::where(pos_mask, pos_branch, neg_branch);
+        });
+    }
+
+    Storage mish(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            auto pos = ::mlx::core::maximum(x, zero);
+            auto neg_abs = ::mlx::core::negative(::mlx::core::abs(x));
+            auto sp = ::mlx::core::add(pos, ::mlx::core::log1p(::mlx::core::exp(neg_abs)));
+            return ::mlx::core::multiply(x, ::mlx::core::tanh(sp));
+        });
+    }
+
+    Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            ::mlx::core::array three(3.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array six(6.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
+            auto v = ::mlx::core::divide(::mlx::core::add(x, three), six);
+            return ::mlx::core::minimum(::mlx::core::maximum(v, zero), one);
+        });
+    }
+
+    Storage hard_swish(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            ::mlx::core::array three(3.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array six(6.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
+            auto v = ::mlx::core::divide(::mlx::core::add(x, three), six);
+            auto h = ::mlx::core::minimum(::mlx::core::maximum(v, zero), one);
+            return ::mlx::core::multiply(x, h);
+        });
+    }
+
+    Storage relu6(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array six(6.0, gpu::to_mlx_dtype(dt));
+            return ::mlx::core::minimum(::mlx::core::maximum(x, zero), six);
+        });
+    }
+
     // ---- Reduction ----------------------------------------------------
 
     Storage reduce_sum(const Storage& a,

@@ -3,6 +3,22 @@ Pytest config for parity harness.
 
 Exposes ``spec`` fixture parameterized over every registered OpSpec.
 Skips GPU axes when MLX/Metal isn't usable on the host.
+
+# ---- Phase 7.1 — C.1 Carve-outs (5 ops, data-dependent output) ----
+#
+# The following ops are intentionally excluded from the OpSpec harness.
+# They produce variable-size or non-tensor outputs that the harness
+# cannot parametrize generically.  Each has ad-hoc smoke coverage in
+# test_errors.py or test_determinism.py.
+#
+#   nonzero     — output shape depends on input values; dtype=Int64 index
+#   unique      — output length depends on input; no deterministic reference
+#   histogram   — returns (counts, bin_edges) tuple; not a tensor-to-tensor op
+#   histogram2d — same
+#   histogramdd — same
+#
+# These are NOT coverage gaps — they are legitimate architectural carve-outs
+# (documented in docs/PARITY_COVERAGE_AUDIT.md § C.1).
 """
 
 from __future__ import annotations

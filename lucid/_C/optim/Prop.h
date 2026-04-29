@@ -37,6 +37,7 @@ class TensorImpl;
 //     param ← param − lr · buf
 //   else:
 //     param ← param − lr · (g / denom)
+/// RMSprop.
 class LUCID_API RMSprop : public Optimizer {
 public:
     RMSprop(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -74,6 +75,7 @@ private:
 //                    step_min, step_max)
 //   grad ← 0 where sign_change < 0
 //   param ← param − sign(grad) · step_size
+/// Rprop.
 class LUCID_API Rprop : public Optimizer {
 public:
     Rprop(std::vector<std::shared_ptr<TensorImpl>> params,

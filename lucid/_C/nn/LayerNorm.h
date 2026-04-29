@@ -27,6 +27,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for LayerNorm.
 class LUCID_API LayerNormBackward : public FuncOp<LayerNormBackward, 3> {
 public:
     static const OpSchema schema_v1;
@@ -42,6 +43,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Layer norm.
 LUCID_API TensorImplPtr layer_norm_op(const TensorImplPtr& x,
                                       const TensorImplPtr& gamma,
                                       const TensorImplPtr& beta,

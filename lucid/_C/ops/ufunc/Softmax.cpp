@@ -6,6 +6,9 @@
 
 #include <mlx/ops.h>
 
+#include "../../backend/cpu/Vdsp.h"
+#include "../../backend/cpu/Vforce.h"
+
 #include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
@@ -45,20 +48,37 @@ OIR oir_for_axis(const Shape& shape, int axis) {
     return r;
 }
 
+// Fast path: axis is last dim (inner=1), contiguous rows — uses vForce/vDSP.
+void softmax_forward_f32_fast(
+    const float* in, float* out, std::size_t outer, std::size_t N) {
+    using namespace lucid::backend::cpu;
+    for (std::size_t o = 0; o < outer; ++o) {
+        const float* row = in  + o * N;
+        float*       dst = out + o * N;
+        // 1. max for numerical stability
+        const float m = vmaxval_f32(row, N);
+        // 2. subtract max → dst
+        const float neg_m = -m;
+        vsadd_f32(row, neg_m, dst, N);
+        // 3. batch exp in-place
+        vexp_f32(dst, dst, N);
+        // 4. sum and scale
+        const float inv_s = 1.0f / vsum_f32(dst, N);
+        vsmul_f32(dst, inv_s, dst, N);
+    }
+}
+
 template <typename T>
 void softmax_forward_typed(
     const T* in, T* out, std::size_t outer, std::size_t axis_dim, std::size_t inner) {
     for (std::size_t o = 0; o < outer; ++o) {
         for (std::size_t i = 0; i < inner; ++i) {
-            // Pass 1: find max.
             const T* base = in + o * axis_dim * inner + i;
             T m = base[0];
             for (std::size_t r = 1; r < axis_dim; ++r) {
                 const T v = base[r * inner];
-                if (v > m)
-                    m = v;
+                if (v > m) m = v;
             }
-            // Pass 2: exp(x - m), accumulate sum.
             T* obase = out + o * axis_dim * inner + i;
             T s = T{};
             for (std::size_t r = 0; r < axis_dim; ++r) {
@@ -66,11 +86,9 @@ void softmax_forward_typed(
                 obase[r * inner] = e;
                 s += e;
             }
-            // Pass 3: divide.
             const T inv = T{1} / s;
-            for (std::size_t r = 0; r < axis_dim; ++r) {
+            for (std::size_t r = 0; r < axis_dim; ++r)
                 obase[r * inner] *= inv;
-            }
         }
     }
 }
@@ -126,16 +144,21 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
         out.nbytes = a_cpu.nbytes;
         out.ptr = allocate_aligned_bytes(out.nbytes);
         if (a->numel() > 0) {
+            const float*  in_f32 = reinterpret_cast<const float*>(a_cpu.ptr.get());
+            float*        ou_f32 = reinterpret_cast<float*>(out.ptr.get());
             switch (a->dtype()) {
                 case Dtype::F32:
-                    softmax_forward_typed<float>(reinterpret_cast<const float*>(a_cpu.ptr.get()),
-                                                 reinterpret_cast<float*>(out.ptr.get()), oir.outer,
-                                                 oir.axis_dim, oir.inner);
+                    if (oir.inner == 1)
+                        softmax_forward_f32_fast(in_f32, ou_f32, oir.outer, oir.axis_dim);
+                    else
+                        softmax_forward_typed<float>(in_f32, ou_f32,
+                                                     oir.outer, oir.axis_dim, oir.inner);
                     break;
                 case Dtype::F64:
-                    softmax_forward_typed<double>(reinterpret_cast<const double*>(a_cpu.ptr.get()),
-                                                  reinterpret_cast<double*>(out.ptr.get()),
-                                                  oir.outer, oir.axis_dim, oir.inner);
+                    softmax_forward_typed<double>(
+                        reinterpret_cast<const double*>(a_cpu.ptr.get()),
+                        reinterpret_cast<double*>(out.ptr.get()),
+                        oir.outer, oir.axis_dim, oir.inner);
                     break;
                 default:
                     ErrorBuilder("softmax").not_implemented("dtype not supported");

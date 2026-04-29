@@ -29,16 +29,21 @@ namespace lucid {
 
 // One backward node serves all three ops since the implementation is a
 // straight memcpy: backward = reshape grad to input_shape (memcpy back).
+/// Autograd backward node for View.
 class LUCID_API ViewBackward : public FuncOp<ViewBackward, 1> {
 public:
     static const OpSchema schema_v1;
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Reshape.
 LUCID_API TensorImplPtr reshape_op(const TensorImplPtr& a,
                                    const std::vector<std::int64_t>& new_shape);
+/// Squeeze.
 LUCID_API TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim);
+/// Squeeze all.
 LUCID_API TensorImplPtr squeeze_all_op(const TensorImplPtr& a);
+/// Unsqueeze.
 LUCID_API TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim);
 
 }  // namespace lucid

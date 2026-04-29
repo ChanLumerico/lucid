@@ -34,6 +34,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for Linear.
 class LUCID_API LinearBackward : public FuncOp<LinearBackward, 3> {
 public:
     static const OpSchema schema_v1;
@@ -43,6 +44,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Linear.
 LUCID_API TensorImplPtr linear_op(const TensorImplPtr& x,
                                   const TensorImplPtr& W,
                                   const TensorImplPtr& b);

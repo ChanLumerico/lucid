@@ -40,6 +40,7 @@
 
 namespace lucid {
 
+/// OpScopeFull.
 class LUCID_API OpScopeFull {
 public:
     OpScopeFull(std::string_view name, Device device, Dtype dtype, Shape shape)

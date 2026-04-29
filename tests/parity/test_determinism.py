@@ -119,3 +119,83 @@ def test_matmul_backward_repeatable(device):
     r1 = run()
     r2 = run()
     assert r1 == r2, "matmul backward not bit-exact under deterministic mode"
+
+
+# --------------------------------------------------------------------------- #
+# Non-deterministic ops must throw under set_deterministic(True) when no seed
+# --------------------------------------------------------------------------- #
+
+def test_dropout_without_seed_throws_under_deterministic():
+    """dropout with training=True and gen=None must throw."""
+    x = np.ones((4, 8), dtype="float32")
+    t = E.TensorImpl(x, E.Device.CPU, False)
+    with pytest.raises(Exception, match="non-deterministic"):
+        E.nn.dropout(t, 0.3, True, None)
+
+
+def test_dropout_with_seed_ok_under_deterministic():
+    """dropout with an explicit Generator must NOT throw."""
+    x = np.ones((4, 8), dtype="float32")
+    t = E.TensorImpl(x, E.Device.CPU, False)
+    gen = E.Generator(42)
+    out = E.nn.dropout(t, 0.3, True, gen)
+    assert out is not None
+
+
+def test_dropout_inference_mode_ok_under_deterministic():
+    """dropout in inference mode (training=False) is deterministic — no throw."""
+    x = np.ones((4, 8), dtype="float32")
+    t = E.TensorImpl(x, E.Device.CPU, False)
+    out = E.nn.dropout(t, 0.3, False, None)
+    assert out is not None
+
+
+# --------------------------------------------------------------------------- #
+# Deterministic elementwise ops (UnaryKernel) — bit-exact under same inputs
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize("device", [E.Device.CPU, E.Device.GPU])
+@pytest.mark.parametrize("op,args", [
+    ("relu",  []),
+    ("exp",   []),
+    ("log",   []),
+    ("sqrt",  []),
+    ("neg",   []),
+    ("abs",   []),
+    ("sin",   []),
+    ("cos",   []),
+    ("tanh",  []),
+    ("sigmoid", []),
+])
+def test_unary_deterministic(device, op, args):
+    rng = np.random.default_rng(0)
+    x = np.abs(rng.standard_normal((4, 5)).astype("float32")) + 0.1
+    t = E.TensorImpl(x, device, False)
+    fn = getattr(E, op)
+    o1 = fn(t, *args)
+    o2 = fn(t, *args)
+    assert _to_bytes(o1) == _to_bytes(o2), f"{op} not bit-exact under deterministic mode"
+
+
+@pytest.mark.parametrize("device", [E.Device.CPU, E.Device.GPU])
+@pytest.mark.parametrize("op", ["add", "sub", "mul", "div"])
+def test_binary_deterministic(device, op):
+    rng = np.random.default_rng(1)
+    x = rng.standard_normal((4, 5)).astype("float32")
+    y = rng.standard_normal((4, 5)).astype("float32") + 0.5
+    ta = E.TensorImpl(x, device, False)
+    tb = E.TensorImpl(y, device, False)
+    fn = getattr(E, op)
+    o1 = fn(ta, tb)
+    o2 = fn(ta, tb)
+    assert _to_bytes(o1) == _to_bytes(o2), f"{op} not bit-exact under deterministic mode"
+
+
+@pytest.mark.parametrize("device", [E.Device.CPU, E.Device.GPU])
+def test_reduce_sum_deterministic(device):
+    rng = np.random.default_rng(2)
+    x = rng.standard_normal((8, 6)).astype("float32")
+    t = E.TensorImpl(x, device, False)
+    o1 = E.sum(t, [0], True)
+    o2 = E.sum(t, [0], True)
+    assert _to_bytes(o1) == _to_bytes(o2)

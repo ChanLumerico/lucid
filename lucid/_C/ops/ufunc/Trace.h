@@ -11,6 +11,7 @@
 
 namespace lucid {
 
+/// Trace.
 LUCID_API TensorImplPtr trace_op(const TensorImplPtr& a);
 
 }  // namespace lucid

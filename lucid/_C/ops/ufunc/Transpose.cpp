@@ -127,23 +127,25 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), out_shape};
 
-    // CPU path: metadata-only view — no copy, O(0) allocations.
-    // GPU path: MLX lazy transpose — also avoids materialisation.
+    // Both paths physically materialise the permuted data so that downstream
+    // ops (matmul, conv, ...) can always assume contiguous row-major layout.
+    // GPU: MLX contiguous() materialises the lazy transpose in-place.
+    // CPU: permute_copy_<dtype> produces a fresh contiguous CpuStorage.
     TensorImplPtr out;
     if (a->device() == Device::GPU) {
         const auto& ga = std::get<GpuStorage>(a->storage());
         if (!ga.arr)
             ErrorBuilder("permute").fail("null GPU array");
-        // MLX transpose: contiguous-materialize so downstream GPU kernels
-        // receive a layout-contiguous GpuStorage (MLX's own view semantics
-        // are internal; our GpuStorage wrapper always holds a contiguous array).
         auto raw = ::mlx::core::transpose(*ga.arr, perm);
         raw = ::mlx::core::contiguous(raw);
         auto out_storage = Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype())};
         out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
                                            a->device(), false);
     } else {
-        out = TensorImpl::make_view(a, out_shape, out_stride, /*offset_bytes=*/0);
+        const auto& src = std::get<CpuStorage>(a->storage());
+        auto phys = permute_copy(src, a->shape(), perm, a->dtype());
+        out = std::make_shared<TensorImpl>(Storage{std::move(phys)}, out_shape, a->dtype(),
+                                           a->device(), false);
     }
 
     auto bwd = std::make_shared<PermuteBackward>();

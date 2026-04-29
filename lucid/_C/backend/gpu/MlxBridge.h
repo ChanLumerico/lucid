@@ -43,10 +43,12 @@ Dtype from_mlx_dtype(::mlx::core::Dtype dt);
 // constructed via `mlx::core::array(data_ptr, shape, dtype, deleter)` —
 // MLX may attempt to use the buffer without a copy, so we keep the
 // CpuStorage shared_ptr alive via a deleter closure. Shape is copied.
+/// Upload cpu to gpu.
 LUCID_API GpuStorage upload_cpu_to_gpu(const CpuStorage& cpu, const Shape& shape);
 
 // Download a GPU array back to a freshly-allocated CpuStorage. Calls
 // `arr.eval()` first so subsequent reads are safe. Result is C-contiguous.
+/// Download gpu to cpu.
 LUCID_API CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape);
 
 // Wrap an existing mlx::core::array as a GpuStorage. Used by GPU op

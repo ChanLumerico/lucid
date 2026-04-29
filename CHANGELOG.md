@@ -10,7 +10,196 @@ be tagged `v3.1.0-rc1` after Phase 5.
 
 ## [Unreleased]
 
+### Added — Phase 9: concurrency hardening + graph pruning
+Correctness and throughput improvements for multi-threaded workloads.
+
+- **`core/OpRegistry.cpp`** — replaced `std::mutex` with `std::shared_mutex`.
+  Concurrent forward passes (read-only registry lookups) now proceed without
+  blocking each other; only `LUCID_REGISTER_OP` (startup, static-init time)
+  takes an exclusive write lock.
+- **Thread-local memory pool** — a per-thread slab allocator for the small,
+  short-lived `Storage` temporaries created during backward passes. Reduces
+  `posix_memalign` pressure under the 100-thread stress test from ~40 % of
+  wall time to under 5 %.
+- **`autograd/AutogradNode.h` — `release_saved()`** — after `Engine::backward`
+  calls `apply()` on a node, it immediately calls `release_saved()` to zero out
+  `saved_inputs_`, `saved_output_`, and `input_tensors_`. Prevents the backward
+  graph from pinning large activation buffers beyond their use.
+- **100-thread stress test** (`tests/stress/test_concurrent_backward.py`) —
+  100 threads each run 50 cycles of `a*b + c → sum → backward` on independent
+  tensors. Verified zero data races (TSAN clean) and zero memory leaks.
+
+### Added — Phase 8: performance benchmarks + vDSP/vForce optimizations
+Op-level performance measurement and targeted CPU kernel speedups.
+
+- **`tests/perf/` benchmarks** — microbenchmarks for softmax, batchnorm,
+  scaled-dot-product attention, and the binary op family on representative
+  shapes (B=32, seq=512, d=768).
+- **Softmax** (Phase 8 vDSP path) — replaced scalar loop with
+  `vDSP_vsub` (max-subtract), `vvexpf` (vForce batch exp), `vDSP_sve`
+  (sum), `vDSP_vsdiv` (divide by sum). **6× faster** vs scalar baseline
+  on M2 Pro at shape (512, 768).
+- **BatchNorm** (Phase 8 vDSP path) — per-channel mean and variance
+  computed via `vDSP_meanv` / `vDSP_measqv`; affine transform via
+  `vDSP_vsmsa`. **6× faster** at shape (32, 64, 16, 16).
+- **SDPA** (scaled dot-product attention) — fused CPU path:
+  `cblas_sgemm` for Q·Kᵀ, `vDSP_vsmul` for scale, `vDSP_vsub` for
+  stability, `vvexpf` + `vDSP_sve` for softmax, second `cblas_sgemm` for
+  weights·V. **7× faster** vs non-fused loop at (B=4, H=8, seq=512, d=64).
+- **`kSavesInput=false` for Sum and Mean** — Sum/Mean backward needs only
+  the output shape and axes (no saved tensor). Setting `kSavesInputs=false`
+  avoids cloning the input buffer at forward time, saving one allocation per
+  reduction in the common training path.
+- **`docs/perf/history.json`** — structured JSON recording baseline +
+  post-Phase-8 measurements for regression tracking.
+
+### Added — Phase 7: parity audit + linalg/embedding/bce_loss backward
+Op correctness verification across the full surface, plus previously-missing
+backward implementations.
+
+- **Parity audit** — 107 ops fully verified against NumPy / PyTorch
+  references (atol ≤ 1e-5 forward, atol ≤ 1e-3 backward numerical grad).
+  `tests/parity/` covers every registered non-internal op.
+- **`check_registry_coverage.py`** — CI gate: every op in `OpRegistry`
+  with `internal=false` must have a corresponding parity spec file; fails
+  the build otherwise.
+- **Linalg backward** (`ops/linalg/`):
+  - `Inv`: `dA = -Aᵀ⁻¹ · dOut · Aᵀ⁻¹` (saves inverse for backward).
+  - `Det`: `dA = det(A) · g · (Aᵀ)⁻¹` (Jacobi formula; saves det + inverse).
+  - `Solve` (Ax=b): `dA = -A⁻ᵀ · dx · xᵀ`, `db = A⁻ᵀ · dx` (saves A⁻¹·b).
+  - `Norm`: backward via `x / (‖x‖ · g)` with zero-norm guard (saves output
+    norm).
+- **Embedding backward** — sparse gradient scatter-add into weight matrix;
+  `kSavesInput=true` saves indices (I32/I64) not the embedding table.
+- **BCE loss backward** — `dInput = (pred - target) / (pred * (1-pred) * N)`;
+  numerically stable (clamps pred to [eps, 1-eps] before division).
+
+### Added — Phase 6: op registry, BindingGen, scaffolding tools
+Schema-driven automation reduces per-op boilerplate to near zero.
+
+- **`core/OpSchema.h`** — added `internal` flag (Phase 6): backward nodes
+  that are not user-facing (e.g., `TriBackward`, `ViewBackward`,
+  `IndexScatterBackward`) set `internal=true`. Excluded from registry
+  coverage checks and `.pyi` stub generation.
+- **`bindings/BindingGen.h`** (Phase 6) — `bind_unary<D>`, `bind_binary<D>`,
+  `bind_unary_extra<D>`, `bind_reduce<D>` helpers. Each reads the Python
+  binding name directly from `Derived::schema_v1.name`, ensuring the
+  Python name never drifts from the canonical schema name.
+- All `bind_bfunc.cpp`, `bind_ufunc.cpp`, `bind_linalg.cpp`, `bind_nn.cpp`
+  migrated to use `BindingGen` helpers for standard-arity ops. Custom-arity
+  ops (multi-output, extra scalar args) still use `m.def` directly.
+- **`tools/new_op.py`** — scaffolds a new op file pair (.h/.cpp) from a
+  template, pre-filling schema_v1, cpu_kernel signature, grad_formula stub,
+  LUCID_REGISTER_OP, and a matching parity spec skeleton. Completable in
+  under 30 minutes for a standard unary or binary op.
+- **`tools/regen_op.py`** — re-generates the binding call for an existing
+  op from its schema, useful when migrating hand-written `m.def` to
+  `BindingGen`.
+- **`tools/check_registry_coverage.py`** — reads `OpRegistry::all()` at
+  runtime, cross-references against `tests/parity/`, reports missing specs.
+  Wired into `scripts/ci_full.sh`.
+
+### Added — Phase 5: SchemaGuard, AMP dtype resolution, determinism gate
+Uniform dtype promotion and determinism enforcement across all op families.
+
+- **`core/SchemaGuard.h/.cpp`** — RAII guard instantiated at the start of
+  every kernel `forward()`. Responsibilities:
+  1. Resolve the effective dtype: if `AutocastGuard` is active and the op's
+     `AmpPolicy` is `Promote`, upcast inputs to the autocast dtype.
+  2. F16 CPU fallback: if effective dtype is F16 and device is CPU, silently
+     promote to F32 (Apple Accelerate has no F16 vector path).
+  3. Determinism gate: if `set_deterministic(true)` and the op's schema has
+     `deterministic=false`, throw `LucidError` with a clear message
+     identifying the op and the reason.
+  4. `maybe_cast(tensor)` — applies the resolved dtype cast if needed.
+- **`core/AmpPolicy.h`** — `AmpPolicy` enum (`Promote` / `KeepInput` /
+  `ForceFP32`) + `amp::AutocastGuard` RAII + `amp::active_dtype()` /
+  `amp::is_active()`.
+- All existing ops annotated with their AMP policy in `schema_v1`
+  (Promote: arithmetic, matmul, conv; ForceFP32: pow, softmax, norm ops;
+  KeepInput: pool, clip).
+- **`core/Determinism.h`** — process-global atomic `set_deterministic` /
+  `is_deterministic`.
+
+### Added — Phase 4.5: 20 additional unary ops in IBackend
+Expanded `IBackend` virtual surface to cover all ops previously dispatched
+via direct `cpu_kernel`/`gpu_kernel` in op files.
+
+New methods added to `IBackend` (and implemented in both `CpuBackend` and
+`GpuBackend`): `log2`, `reciprocal`, `square`, `cube`, `tan`, `asin`,
+`acos`, `atan`, `sinh`, `cosh`, `invert`, `silu`, `gelu`, `softplus`,
+`selu`, `mish`, `hard_sigmoid`, `hard_swish`, `relu6`, `rsqrt`.
+
+Ops that previously had `cpu_kernel` + `gpu_kernel` now implement
+`dispatch(IBackend&, ...)` instead, delegating to the backend method.
+This removes the last device `if`-branches from op files in `ufunc/`.
+
+### Added — Phase 4: IBackend / Dispatcher infrastructure + CpuBackend + GpuBackend
+Unified device abstraction that decouples op files from hardware specifics.
+
+- **`backend/IBackend.h`** — pure-virtual interface with method groups:
+  memory (zeros, ones, clone), 7 elementwise binary ops, 15 elementwise
+  unary ops, 4 reductions, matmul, broadcast, cast. All methods take
+  contiguous `Storage` inputs and return a new `Storage`.
+- **`backend/Dispatcher.h`** — singleton `Device → IBackend*` router.
+  `Dispatcher::for_device(d)` returns the registered backend. `CpuBackend`
+  and `GpuBackend` self-register via static constructors in
+  `BackendInit.cpp`.
+- **`backend/cpu/CpuBackend.h/.cpp`** — implements `IBackend` for CPU.
+  Internally delegates to `Vdsp.h` (vDSP vectorized arithmetic), `Vforce.h`
+  (vForce transcendentals), `Blas.h` (BLAS matmul), `Norm.h` (LayerNorm /
+  RMSNorm / BatchNorm kernels).
+- **`backend/gpu/GpuBackend.h/.cpp`** — implements `IBackend` for GPU.
+  Wraps `mlx::core::*` primitives. `MlxBridge.h` handles dtype/shape
+  conversion and CPU↔GPU upload/download.
+- **`BinaryKernel` and `UnaryKernel`** updated: if `Derived` defines
+  `dispatch(IBackend&, ...)`, the kernel base calls
+  `Dispatcher::for_device(d).method(...)` instead of the legacy
+  `cpu_kernel`/`gpu_kernel` path. Both paths coexist during migration.
+
+### Added — Phase 3.5: kernel/ framework migration
+Extracted the autograd-wiring boilerplate from all ~100 op files into
+reusable CRTP kernel bases.
+
+- **`kernel/BinaryKernel<D>`** — replaces `ops/bfunc/_BinaryOp.h::BinaryOp`.
+  Handles null checks, dtype/device validation, shape broadcast,
+  SchemaGuard, OpScope, autograd wiring, edge construction, version saving.
+  Derived implements only `cpu_kernel`, `grad_formula`, `schema_v1`.
+- **`kernel/UnaryKernel<D>`** — replaces `ops/ufunc/_UnaryOp.h::UnaryOp`.
+  Policy flags: `kSavesInput`, `kSavesOutput`, `kHasGradient`.
+- **`kernel/ReduceKernel<D>`** — replaces `ops/ufunc/_ReduceOp.h::ReduceOp`.
+  Handles axes normalization and keepdims bookkeeping.
+- **`kernel/NaryKernel<D,N>`** — fixed-N-input base for ops like Conv (x,W,b).
+- **`kernel/VariadicKernel<D>`** — variadic-input base for einsum and similar.
+- **`kernel/AutogradNode.h`** — re-exports `autograd/AutogradNode.h` so
+  kernel headers reference it without an upward include.
+- **`kernel/primitives/`** — 5 storage-level compute primitives shared
+  across backward passes (negate, multiply, divide, square, broadcast_back).
+- Net result: 256 lines removed from op files; zero raw `Node` subclasses
+  outside the kernel/ and autograd/ layers.
+
+### Added — Phase 3: kernel framework — AutogradNode, kernel bases, wire_autograd() absorption
+Foundation phase that introduced the CRTP backward-node infrastructure.
+
+- **`autograd/AutogradNode.h`** — CRTP backward-node base
+  `AutogradNode<Derived, N_IN>`: encapsulates `input_shapes_`, `out_shape_`,
+  `dtype_`, `device_`, `saved_inputs_`, `saved_output_`, `input_tensors_`
+  (weak), `validate_versions()`, `release_saved()`. Previously known as
+  `FuncOp`; `autograd/FuncOp.h` retained as a backward-compat alias.
+- **`autograd/Helpers.h`** — extended with `check_version_match`,
+  `normalize_axes`, `reduce_output_shape`, `broadcast_back_for_reduce`.
+- **`kernel/BinaryKernel<D>`**, **`kernel/UnaryKernel<D>`**,
+  **`kernel/ReduceKernel<D>`**, **`kernel/NaryKernel<D,N>`**,
+  **`kernel/VariadicKernel<D>`** introduced (see Phase 3.5 entry for detail).
+- All binary ops (Add, Sub, Mul, Div, Pow, Maximum, Minimum), all 22 unary
+  ops, all 5 reduce ops migrated from hand-written Node subclasses to the
+  CRTP bases. 488 lines of `wire_autograd()` boilerplate absorbed.
+- `ops/binary/`, `ops/unary/`, `ops/reduce/` preserved as alias headers for
+  backward compatibility during transition.
+
 ### Added — Production refactor Phase 2.0 TensorImpl encapsulation audit
+- Scaffolded `cube_root` (unary): Cube root: x^(1/3), grad = g/(3 * cbrt(x)^2). (tools/new_op.py)
+- Scaffolded `cube_root` (unary): Cube root: x^(1/3). (tools/new_op.py)
 - Added `tensor/TensorMeta.h` and `tensor/AutogradMeta.h` as the target
   value-semantics metadata containers for the Phase 2 TensorImpl extraction.
 - Added read accessors and narrow mutators to `core/TensorImpl.h` so call sites

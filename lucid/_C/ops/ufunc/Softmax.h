@@ -23,6 +23,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for Softmax.
 class LUCID_API SoftmaxBackward : public FuncOp<SoftmaxBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -31,6 +32,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Softmax.
 LUCID_API TensorImplPtr softmax_op(const TensorImplPtr& a, int axis);
 
 }  // namespace lucid

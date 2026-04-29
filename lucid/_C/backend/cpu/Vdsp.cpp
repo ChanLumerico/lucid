@@ -139,6 +139,53 @@ void vle_mask_f64(const double* a, const double* b, double* out, std::size_t n) 
         out[i] = (a[i] < b[i]) ? 1.0 : 0.0;
 }
 
+float vsum_f32(const float* in, std::size_t n) {
+    float s = 0.f;
+    vDSP_sve(in, 1, &s, L(n));
+    return s;
+}
+double vsum_f64(const double* in, std::size_t n) {
+    double s = 0.0;
+    vDSP_sveD(in, 1, &s, L(n));
+    return s;
+}
+float vmean_f32(const float* in, std::size_t n) {
+    float m = 0.f;
+    vDSP_meanv(in, 1, &m, L(n));
+    return m;
+}
+double vmean_f64(const double* in, std::size_t n) {
+    double m = 0.0;
+    vDSP_meanvD(in, 1, &m, L(n));
+    return m;
+}
+float vmaxval_f32(const float* in, std::size_t n) {
+    float m = 0.f;
+    vDSP_maxv(in, 1, &m, L(n));
+    return m;
+}
+double vmaxval_f64(const double* in, std::size_t n) {
+    double m = 0.0;
+    vDSP_maxvD(in, 1, &m, L(n));
+    return m;
+}
+float vdotpr_f32(const float* a, const float* b, std::size_t n) {
+    float s = 0.f;
+    vDSP_dotpr(a, 1, b, 1, &s, L(n));
+    return s;
+}
+double vdotpr_f64(const double* a, const double* b, std::size_t n) {
+    double s = 0.0;
+    vDSP_dotprD(a, 1, b, 1, &s, L(n));
+    return s;
+}
+void vmadd_f32(const float* a, const float* b, const float* c, float* out, std::size_t n) {
+    vDSP_vma(a, 1, b, 1, c, 1, out, 1, L(n));
+}
+void vmadd_f64(const double* a, const double* b, const double* c, double* out, std::size_t n) {
+    vDSP_vmaD(a, 1, b, 1, c, 1, out, 1, L(n));
+}
+
 void vadd_i32(const std::int32_t* a, const std::int32_t* b, std::int32_t* out, std::size_t n) {
     for (std::size_t i = 0; i < n; ++i)
         out[i] = a[i] + b[i];

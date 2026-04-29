@@ -24,6 +24,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for RMSNorm.
 class LUCID_API RMSNormBackward : public FuncOp<RMSNormBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -35,6 +36,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Rms norm.
 LUCID_API TensorImplPtr rms_norm_op(const TensorImplPtr& x, const TensorImplPtr& gamma, double eps);
 
 }  // namespace lucid

@@ -32,6 +32,7 @@ namespace lucid {
 // concrete subclasses to matching Python classes (lucid.LucidError,
 // lucid.OutOfMemory, ...), so user code can `except lucid.ShapeMismatch:`
 // instead of catching opaque RuntimeError.
+/// Base class for all engine exceptions.
 class LUCID_API LucidError : public std::exception {
 public:
     explicit LucidError(std::string msg) : msg_(std::move(msg)) {}

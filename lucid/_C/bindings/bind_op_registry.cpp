@@ -16,9 +16,14 @@ void register_op_registry(py::module_& m) {
         .def_readonly("deterministic", &OpSchema::deterministic)
         .def_property_readonly("determinism_note",
                                [](const OpSchema& s) { return std::string(s.determinism_note); })
+        .def_readonly("input_arity", &OpSchema::input_arity)
+        .def_readonly("output_arity", &OpSchema::output_arity)
+        .def_readonly("stable_input_indices", &OpSchema::stable_input_indices)
+        .def_readonly("internal", &OpSchema::internal)
         .def("__repr__", [](const OpSchema& s) {
             return "OpSchema(name='" + std::string(s.name) +
-                   "', version=" + std::to_string(s.version) + ")";
+                   "', version=" + std::to_string(s.version) +
+                   ", input_arity=" + std::to_string(s.input_arity) + ")";
         });
 
     m.def("schema_hash", &schema_hash, py::arg("schema"));

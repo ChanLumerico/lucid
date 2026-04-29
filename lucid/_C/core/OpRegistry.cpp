@@ -1,41 +1,56 @@
 #include "OpRegistry.h"
 
 #include <map>
+#include <mutex>
+#include <shared_mutex>
 
 namespace lucid {
 
 namespace {
 
-// Construct-on-first-use to dodge the static-init-order fiasco. Multiple
-// translation units can register before main() in any order.
-std::map<std::string_view, const OpSchema*>& storage() {
-    static std::map<std::string_view, const OpSchema*> m;
-    return m;
+// Construct-on-first-use pattern — safe against static-init-order fiasco.
+// Guarded by a shared_mutex so concurrent readers (lookup/all) don't block
+// each other, while writers (register_op, called at static init) hold an
+// exclusive lock.
+struct Registry {
+    std::map<std::string_view, const OpSchema*> map;
+    mutable std::shared_mutex mu;
+};
+
+Registry& storage() {
+    static Registry r;
+    return r;
 }
 
 }  // namespace
 
 void OpRegistry::register_op(const OpSchema& schema) {
-    storage()[schema.name] = &schema;
+    auto& r = storage();
+    std::unique_lock lock(r.mu);
+    r.map[schema.name] = &schema;
 }
 
 const OpSchema* OpRegistry::lookup(std::string_view name) {
-    auto& m = storage();
-    auto it = m.find(name);
-    return it == m.end() ? nullptr : it->second;
+    auto& r = storage();
+    std::shared_lock lock(r.mu);
+    auto it = r.map.find(name);
+    return it == r.map.end() ? nullptr : it->second;
 }
 
 std::vector<const OpSchema*> OpRegistry::all() {
-    auto& m = storage();
+    auto& r = storage();
+    std::shared_lock lock(r.mu);
     std::vector<const OpSchema*> out;
-    out.reserve(m.size());
-    for (const auto& [_, schema] : m)
+    out.reserve(r.map.size());
+    for (const auto& [_, schema] : r.map)
         out.push_back(schema);
     return out;
 }
 
 std::size_t OpRegistry::size() {
-    return storage().size();
+    auto& r = storage();
+    std::shared_lock lock(r.mu);
+    return r.map.size();
 }
 
 // Schema hash: FNV-1a over (name, version, amp_policy, deterministic). Stable

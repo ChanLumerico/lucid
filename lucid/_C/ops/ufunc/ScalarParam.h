@@ -23,6 +23,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for PowScalar.
 class LUCID_API PowScalarBackward : public UnaryOp<PowScalarBackward> {
 public:
     double exp_ = 0.0;
@@ -32,6 +33,7 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
+/// Autograd backward node for RPowScalar.
 class LUCID_API RPowScalarBackward : public UnaryOp<RPowScalarBackward> {
 public:
     double base_ = 0.0;
@@ -47,6 +49,7 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
+/// Autograd backward node for Clip.
 class LUCID_API ClipBackward : public UnaryOp<ClipBackward> {
 public:
     double min_ = 0.0;
@@ -58,8 +61,11 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
+/// Pow scalar.
 LUCID_API TensorImplPtr pow_scalar_op(const TensorImplPtr& a, double exp);
+/// Rpow scalar.
 LUCID_API TensorImplPtr rpow_scalar_op(double base, const TensorImplPtr& a);
+/// Clip.
 LUCID_API TensorImplPtr clip_op(const TensorImplPtr& a, double min_v, double max_v);
 
 }  // namespace lucid

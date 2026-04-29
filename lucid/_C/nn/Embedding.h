@@ -32,6 +32,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for Embedding.
 class LUCID_API EmbeddingBackward : public FuncOp<EmbeddingBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -46,6 +47,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Autograd backward node for RotaryPosEmbedding.
 class LUCID_API RotaryPosEmbeddingBackward : public FuncOp<RotaryPosEmbeddingBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -60,15 +62,18 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Embedding.
 LUCID_API TensorImplPtr embedding_op(const TensorImplPtr& weight,
                                      const TensorImplPtr& indices,
                                      int padding_idx);
 
+/// Sinusoidal pos embedding.
 LUCID_API TensorImplPtr sinusoidal_pos_embedding_op(std::int64_t seq_len,
                                                     std::int64_t embed_dim,
                                                     Dtype dtype,
                                                     Device device);
 
+/// Rotary pos embedding.
 LUCID_API TensorImplPtr rotary_pos_embedding_op(const TensorImplPtr& input,
                                                 const TensorImplPtr& position_ids_or_null,
                                                 bool interleaved);

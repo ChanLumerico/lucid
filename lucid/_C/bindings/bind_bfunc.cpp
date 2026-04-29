@@ -1,7 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-// Mirrors `lucid/_func/bfunc.py` — one header per op family.
+#include "BindingGen.h"
+
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/Add.h"
 #include "../ops/bfunc/Bitwise.h"
@@ -25,18 +26,16 @@ namespace py = pybind11;
 namespace lucid::bindings {
 
 void register_bfunc(py::module_& m) {
-    // ----- Element-wise arithmetic -----
-    m.def("add", &add_op, py::arg("a"), py::arg("b"), "Element-wise a + b (vDSP_vadd).");
-    m.def("sub", &sub_op, py::arg("a"), py::arg("b"), "Element-wise a - b (vDSP_vsub).");
-    m.def("mul", &mul_op, py::arg("a"), py::arg("b"), "Element-wise a * b (vDSP_vmul).");
-    m.def("div", &div_op, py::arg("a"), py::arg("b"), "Element-wise a / b (vDSP_vdiv).");
-    m.def("pow", &pow_op, py::arg("a"), py::arg("b"), "Element-wise a ** b (vForce vvpowf).");
-    m.def("maximum", &maximum_op, py::arg("a"), py::arg("b"),
-          "Element-wise max(a, b) (vDSP_vmax).");
-    m.def("minimum", &minimum_op, py::arg("a"), py::arg("b"),
-          "Element-wise min(a, b) (vDSP_vmin).");
+    // ----- Element-wise arithmetic (BindingGen binary) -----
+    bind_binary<AddBackward>(m, &add_op, "Element-wise a + b (vDSP_vadd).");
+    bind_binary<SubBackward>(m, &sub_op, "Element-wise a - b (vDSP_vsub).");
+    bind_binary<MulBackward>(m, &mul_op, "Element-wise a * b (vDSP_vmul).");
+    bind_binary<DivBackward>(m, &div_op, "Element-wise a / b (vDSP_vdiv).");
+    bind_binary<PowBackward>(m, &pow_op, "Element-wise a ** b (vForce vvpowf).");
+    bind_binary<MaximumBackward>(m, &maximum_op, "Element-wise max(a, b) (vDSP_vmax).");
+    bind_binary<MinimumBackward>(m, &minimum_op, "Element-wise min(a, b) (vDSP_vmin).");
 
-    // ----- Matmul -----
+    // ----- Matmul (custom signature) -----
     m.def("matmul", &matmul_op, py::arg("a"), py::arg("b"),
           "2-D matrix multiply a @ b (cblas_sgemm/dgemm via Apple AMX).");
 
@@ -64,7 +63,7 @@ void register_bfunc(py::module_& m) {
     m.def("floordiv", &floordiv_op, py::arg("a"), py::arg("b"),
           "Element-wise floor(a / b). Output dtype is Int64.");
 
-    // ----- In-place variants (mutates `a`, bumps version) -----
+    // ----- In-place variants -----
     m.def("add_", &add_inplace_op, py::arg("a"), py::arg("b"));
     m.def("sub_", &sub_inplace_op, py::arg("a"), py::arg("b"));
     m.def("mul_", &mul_inplace_op, py::arg("a"), py::arg("b"));
@@ -73,7 +72,6 @@ void register_bfunc(py::module_& m) {
     m.def("maximum_", &maximum_inplace_op, py::arg("a"), py::arg("b"));
     m.def("minimum_", &minimum_inplace_op, py::arg("a"), py::arg("b"));
 
-    // Phase 2 alias.
     m.def("test_add", &add_op, py::arg("a"), py::arg("b"),
           "Alias for `add`; kept for Phase 2 test scripts.");
 }

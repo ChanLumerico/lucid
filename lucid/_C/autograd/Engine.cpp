@@ -118,6 +118,13 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         node->validate_versions();
 
         const auto input_grads = node->apply(std::move(grad_in));
+
+        // Phase 9.4: release saved tensors immediately after apply() when
+        // retain_graph=false. Prevents activation buffers from being held
+        // alive until the output TensorImpl destructor runs.
+        if (!retain_graph)
+            node->release_saved();
+
         const auto& edges = node->next_edges();
         if (input_grads.size() != edges.size()) {
             // AccumulateGrad returns {} (no edges to forward to).
@@ -140,13 +147,8 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     }
 
     if (!retain_graph) {
-        // Drop grad_fn refs along the traversed graph. With weak Edges this
-        // already breaks the cycle, but matching PyTorch's eager release
-        // protects against repeated `.backward()` without retain_graph=True.
-        for (const auto& node : order) {
-            (void)node;  // Phase 2: nothing extra to free; future ops save
-                         // tensors that should be released here.
-        }
+        // Break the forward reference from the output tensor back into the
+        // graph so repeated backward() without retain_graph=True fails early.
         root->clear_grad_fn();
     }
 }

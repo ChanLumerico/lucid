@@ -8,6 +8,7 @@
 
 namespace lucid {
 
+/// Svd.
 LUCID_API std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv = true);
 
 }  // namespace lucid

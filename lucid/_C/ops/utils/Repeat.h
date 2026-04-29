@@ -15,7 +15,9 @@
 
 namespace lucid {
 
+/// Repeat.
 LUCID_API TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis);
+/// Tile.
 LUCID_API TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps);
 
 }  // namespace lucid

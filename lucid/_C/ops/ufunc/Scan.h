@@ -14,7 +14,9 @@
 
 namespace lucid {
 
+/// Cumsum.
 LUCID_API TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis);
+/// Cumprod.
 LUCID_API TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis);
 
 }  // namespace lucid

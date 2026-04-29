@@ -381,6 +381,335 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    // ---- Additional unary (Phase 4.5) ---------------------------------
+
+    Storage log2(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::vlog2_f32, cpu::vlog2_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = static_cast<std::int32_t>(
+                                    std::log2(static_cast<float>(ip[i])));
+                        });
+    }
+
+    Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32)
+            cpu::vrec_f32(reinterpret_cast<const float*>(cs.ptr.get()),
+                          reinterpret_cast<float*>(ptr.get()), n);
+        else if (dt == Dtype::F64)
+            cpu::vrec_f64(reinterpret_cast<const double*>(cs.ptr.get()),
+                          reinterpret_cast<double*>(ptr.get()), n);
+        else
+            ErrorBuilder("cpu_backend::reciprocal").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage square(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::vsq_f32, cpu::vsq_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = ip[i] * ip[i];
+                        });
+    }
+
+    Storage cube(const Storage& a, const Shape& shape, Dtype dt) override {
+        // x^3 = x * x^2 via two passes
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            auto* p = reinterpret_cast<const float*>(cs.ptr.get());
+            auto* q = reinterpret_cast<float*>(ptr.get());
+            cpu::vsq_f32(p, q, n);
+            cpu::vmul_f32(p, q, q, n);
+        } else if (dt == Dtype::F64) {
+            auto* p = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* q = reinterpret_cast<double*>(ptr.get());
+            cpu::vsq_f64(p, q, n);
+            cpu::vmul_f64(p, q, q, n);
+        } else {
+            ErrorBuilder("cpu_backend::cube").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage tan(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::vtan_f32, cpu::vtan_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = static_cast<std::int32_t>(
+                                    std::tan(static_cast<float>(ip[i])));
+                        });
+    }
+
+    Storage asin(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::vasin_f32, cpu::vasin_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = static_cast<std::int32_t>(
+                                    std::asin(static_cast<float>(ip[i])));
+                        });
+    }
+
+    Storage acos(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::vacos_f32, cpu::vacos_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = static_cast<std::int32_t>(
+                                    std::acos(static_cast<float>(ip[i])));
+                        });
+    }
+
+    Storage atan(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::vatan_f32, cpu::vatan_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = static_cast<std::int32_t>(
+                                    std::atan(static_cast<float>(ip[i])));
+                        });
+    }
+
+    Storage sinh(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::vsinh_f32, cpu::vsinh_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = static_cast<std::int32_t>(
+                                    std::sinh(static_cast<float>(ip[i])));
+                        });
+    }
+
+    Storage cosh(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::vcosh_f32, cpu::vcosh_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = static_cast<std::int32_t>(
+                                    std::cosh(static_cast<float>(ip[i])));
+                        });
+    }
+
+    Storage invert(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::Bool) {
+            const std::uint8_t* ip = reinterpret_cast<const std::uint8_t*>(cs.ptr.get());
+            std::uint8_t* op = reinterpret_cast<std::uint8_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = ip[i] ? 0 : 1;
+        } else if (dt == Dtype::I8) {
+            const std::int8_t* ip = reinterpret_cast<const std::int8_t*>(cs.ptr.get());
+            std::int8_t* op = reinterpret_cast<std::int8_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = ~ip[i];
+        } else if (dt == Dtype::I16) {
+            const std::int16_t* ip = reinterpret_cast<const std::int16_t*>(cs.ptr.get());
+            std::int16_t* op = reinterpret_cast<std::int16_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = ~ip[i];
+        } else if (dt == Dtype::I32) {
+            const std::int32_t* ip = reinterpret_cast<const std::int32_t*>(cs.ptr.get());
+            std::int32_t* op = reinterpret_cast<std::int32_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = ~ip[i];
+        } else if (dt == Dtype::I64) {
+            const std::int64_t* ip = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
+            std::int64_t* op = reinterpret_cast<std::int64_t*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = ~ip[i];
+        } else {
+            ErrorBuilder("cpu_backend::invert").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
+        // y = x * sigmoid(x)
+        auto sig = sigmoid(a, shape, dt);
+        return mul(a, sig, shape, dt);
+    }
+
+    Storage gelu(const Storage& a, const Shape& shape, Dtype dt) override {
+        // gelu(x) = 0.5 * x * (1 + tanh(c1 * (x + c2 * x^3)))
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        constexpr double kC1 = 0.7978845608028654;  // sqrt(2/pi)
+        constexpr double kC2 = 0.044715;
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            const float c1 = static_cast<float>(kC1);
+            const float c2 = static_cast<float>(kC2);
+            for (std::size_t i = 0; i < n; ++i) {
+                const float x = p[i];
+                q[i] = 0.5f * x * (1.f + std::tanh(c1 * (x + c2 * x * x * x)));
+            }
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double x = p[i];
+                q[i] = 0.5 * x * (1.0 + std::tanh(kC1 * (x + kC2 * x * x * x)));
+            }
+        } else {
+            ErrorBuilder("cpu_backend::gelu").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage softplus(const Storage& a, const Shape& shape, Dtype dt) override {
+        // softplus(x) = log(1 + exp(x)) — numerically stable: max(x,0) + log1p(exp(-|x|))
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const float x = p[i];
+                q[i] = std::max(x, 0.f) + std::log1p(std::exp(-std::abs(x)));
+            }
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double x = p[i];
+                q[i] = std::max(x, 0.0) + std::log1p(std::exp(-std::abs(x)));
+            }
+        } else {
+            ErrorBuilder("cpu_backend::softplus").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage selu(const Storage& a, const Shape& shape, Dtype dt) override {
+        // SELU(x) = scale * (x if x >= 0 else alpha * (exp(x) - 1))
+        constexpr double kScale = 1.0507009873554805;
+        constexpr double kAlpha = 1.6732632423543772;
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            const float s = static_cast<float>(kScale);
+            const float al = static_cast<float>(kAlpha);
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = s * (p[i] >= 0.f ? p[i] : al * (std::exp(p[i]) - 1.f));
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = kScale * (p[i] >= 0.0 ? p[i] : kAlpha * (std::exp(p[i]) - 1.0));
+        } else {
+            ErrorBuilder("cpu_backend::selu").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage mish(const Storage& a, const Shape& shape, Dtype dt) override {
+        // y = x * tanh(softplus(x)) = x * tanh(log(1 + exp(x)))
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const float x = p[i];
+                const float sp = std::max(x, 0.f) + std::log1p(std::exp(-std::abs(x)));
+                q[i] = x * std::tanh(sp);
+            }
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double x = p[i];
+                const double sp = std::max(x, 0.0) + std::log1p(std::exp(-std::abs(x)));
+                q[i] = x * std::tanh(sp);
+            }
+        } else {
+            ErrorBuilder("cpu_backend::mish").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) override {
+        // clip((x + 3) / 6, 0, 1)
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = std::min(std::max((p[i] + 3.f) / 6.f, 0.f), 1.f);
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = std::min(std::max((p[i] + 3.0) / 6.0, 0.0), 1.0);
+        } else {
+            ErrorBuilder("cpu_backend::hard_sigmoid").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage hard_swish(const Storage& a, const Shape& shape, Dtype dt) override {
+        // x * clip((x + 3) / 6, 0, 1)
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = p[i] * std::min(std::max((p[i] + 3.f) / 6.f, 0.f), 1.f);
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = p[i] * std::min(std::max((p[i] + 3.0) / 6.0, 0.0), 1.0);
+        } else {
+            ErrorBuilder("cpu_backend::hard_swish").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage relu6(const Storage& a, const Shape& shape, Dtype dt) override {
+        // clip(x, 0, 6)
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = std::min(std::max(p[i], 0.f), 6.f);
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = std::min(std::max(p[i], 0.0), 6.0);
+        } else {
+            ErrorBuilder("cpu_backend::relu6").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     // ---- Reduction ----------------------------------------------------
 
     Storage reduce_sum(const Storage& a,

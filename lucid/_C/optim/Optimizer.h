@@ -44,6 +44,7 @@ namespace lucid {
 
 class TensorImpl;
 
+/// Optimizer.
 class LUCID_API Optimizer {
 public:
     explicit Optimizer(std::vector<std::shared_ptr<TensorImpl>> params)

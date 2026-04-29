@@ -26,6 +26,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for BilinearLayer.
 class LUCID_API BilinearLayerBackward : public FuncOp<BilinearLayerBackward, 4> {
 public:
     static const OpSchema schema_v1;
@@ -38,11 +39,14 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// One hot.
 LUCID_API TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_dtype);
+/// Rotate.
 LUCID_API TensorImplPtr rotate_op(const TensorImplPtr& input,
                                   double angle_deg,
                                   double cy,
                                   double cx);
+/// Bilinear layer.
 LUCID_API TensorImplPtr bilinear_layer_op(const TensorImplPtr& x1,
                                           const TensorImplPtr& x2,
                                           const TensorImplPtr& weight,

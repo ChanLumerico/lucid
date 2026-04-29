@@ -33,6 +33,7 @@ namespace lucid {
 enum class Reduction : int { None = 0, Mean = 1, Sum = 2 };
 
 // MSE loss — autograd flows to (input, target).
+/// Autograd backward node for MseLoss.
 class LUCID_API MseLossBackward : public FuncOp<MseLossBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -45,6 +46,7 @@ public:
 };
 
 // BCE — input must be in [0, 1]. Slots: 0=input, 1=target, 2=weight.
+/// Autograd backward node for BCELoss.
 class LUCID_API BCELossBackward : public FuncOp<BCELossBackward, 3> {
 public:
     static const OpSchema schema_v1;
@@ -60,6 +62,7 @@ public:
 };
 
 // BCE with logits — slots: 0=input, 1=target, 2=weight, 3=pos_weight.
+/// Autograd backward node for BCEWithLogits.
 class LUCID_API BCEWithLogitsBackward : public FuncOp<BCEWithLogitsBackward, 4> {
 public:
     static const OpSchema schema_v1;
@@ -75,6 +78,7 @@ public:
 
 // Cross-entropy = LogSoftmax + NLL fused. Only `input` participates in
 // autograd (target is integer, weight typically not differentiable).
+/// Autograd backward node for CrossEntropy.
 class LUCID_API CrossEntropyBackward : public FuncOp<CrossEntropyBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -97,6 +101,7 @@ public:
 };
 
 // NLL — input is log-probabilities. Only `input` differentiable.
+/// Autograd backward node for NLLLoss.
 class LUCID_API NLLLossBackward : public FuncOp<NLLLossBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -116,6 +121,7 @@ public:
 };
 
 // Huber — slots: 0=input, 1=target.
+/// Autograd backward node for HuberLoss.
 class LUCID_API HuberLossBackward : public FuncOp<HuberLossBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -129,30 +135,36 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Mse loss.
 LUCID_API TensorImplPtr mse_loss_op(const TensorImplPtr& input,
                                     const TensorImplPtr& target,
                                     int reduction);
+/// Bce loss.
 LUCID_API TensorImplPtr bce_loss_op(const TensorImplPtr& input,
                                     const TensorImplPtr& target,
                                     const TensorImplPtr& weight,
                                     int reduction,
                                     double eps);
+/// Bce with logits.
 LUCID_API TensorImplPtr bce_with_logits_op(const TensorImplPtr& input,
                                            const TensorImplPtr& target,
                                            const TensorImplPtr& weight,
                                            const TensorImplPtr& pos_weight,
                                            int reduction);
+/// Cross entropy.
 LUCID_API TensorImplPtr cross_entropy_op(const TensorImplPtr& input,
                                          const TensorImplPtr& target,
                                          const TensorImplPtr& weight_or_null,
                                          int reduction,
                                          double eps,
                                          int ignore_index);
+/// Nll loss.
 LUCID_API TensorImplPtr nll_loss_op(const TensorImplPtr& input,
                                     const TensorImplPtr& target,
                                     const TensorImplPtr& weight_or_null,
                                     int reduction,
                                     int ignore_index);
+/// Huber loss.
 LUCID_API TensorImplPtr huber_loss_op(const TensorImplPtr& input,
                                       const TensorImplPtr& target,
                                       double delta,

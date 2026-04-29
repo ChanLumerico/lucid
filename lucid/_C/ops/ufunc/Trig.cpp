@@ -1,51 +1,11 @@
 #include "Trig.h"
 
-#include "../../backend/cpu/Vforce.h"
-#include "../../core/Allocator.h"
-#include "../../core/Error.h"
-#include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
 
 namespace lucid {
 
-namespace {
-
-CpuStorage allocate_unary(const Shape& out_shape, Dtype dt) {
-    CpuStorage out;
-    out.dtype = dt;
-    out.nbytes = shape_numel(out_shape) * dtype_size(dt);
-    out.ptr = allocate_aligned_bytes(out.nbytes);
-    return out;
-}
-
-template <class F32Fn, class F64Fn>
-CpuStorage dispatch(
-    const CpuStorage& a, const Shape& out_shape, Dtype dt, F32Fn f32, F64Fn f64, const char* op) {
-    const std::size_t numel = shape_numel(out_shape);
-    auto out = allocate_unary(out_shape, dt);
-    switch (dt) {
-        case Dtype::F32:
-            f32(reinterpret_cast<const float*>(a.ptr.get()),
-                reinterpret_cast<float*>(out.ptr.get()), numel);
-            break;
-        case Dtype::F64:
-            f64(reinterpret_cast<const double*>(a.ptr.get()),
-                reinterpret_cast<double*>(out.ptr.get()), numel);
-            break;
-        default:
-            ErrorBuilder(op).not_implemented("dtype not supported");
-    }
-    return out;
-}
-
-}  // namespace
-
 // --------------- Sin ---------------
 const OpSchema SinBackward::schema_v1{"sin", 1, AmpPolicy::Promote, true};
-
-CpuStorage SinBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
-    return dispatch(a, out_shape, dt, backend::cpu::vsin_f32, backend::cpu::vsin_f64, "sin");
-}
 
 Storage SinBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
@@ -60,10 +20,6 @@ LUCID_REGISTER_OP(SinBackward)
 
 // --------------- Cos ---------------
 const OpSchema CosBackward::schema_v1{"cos", 1, AmpPolicy::Promote, true};
-
-CpuStorage CosBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
-    return dispatch(a, out_shape, dt, backend::cpu::vcos_f32, backend::cpu::vcos_f64, "cos");
-}
 
 Storage CosBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
@@ -80,10 +36,6 @@ LUCID_REGISTER_OP(CosBackward)
 // --------------- Tan ---------------
 const OpSchema TanBackward::schema_v1{"tan", 1, AmpPolicy::Promote, true};
 
-CpuStorage TanBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
-    return dispatch(a, out_shape, dt, backend::cpu::vtan_f32, backend::cpu::vtan_f64, "tan");
-}
-
 Storage TanBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     // dx = g / cos²(x)
@@ -99,10 +51,6 @@ LUCID_REGISTER_OP(TanBackward)
 
 // --------------- Asin ---------------
 const OpSchema AsinBackward::schema_v1{"arcsin", 1, AmpPolicy::Promote, true};
-
-CpuStorage AsinBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
-    return dispatch(a, out_shape, dt, backend::cpu::vasin_f32, backend::cpu::vasin_f64, "arcsin");
-}
 
 Storage AsinBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
@@ -122,10 +70,6 @@ LUCID_REGISTER_OP(AsinBackward)
 // --------------- Acos ---------------
 const OpSchema AcosBackward::schema_v1{"arccos", 1, AmpPolicy::Promote, true};
 
-CpuStorage AcosBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
-    return dispatch(a, out_shape, dt, backend::cpu::vacos_f32, backend::cpu::vacos_f64, "arccos");
-}
-
 Storage AcosBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage x_sq = square_storage(saved_inputs_[0], n, dtype_, device_);
@@ -143,10 +87,6 @@ LUCID_REGISTER_OP(AcosBackward)
 
 // --------------- Atan ---------------
 const OpSchema AtanBackward::schema_v1{"arctan", 1, AmpPolicy::Promote, true};
-
-CpuStorage AtanBackward::cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt) {
-    return dispatch(a, out_shape, dt, backend::cpu::vatan_f32, backend::cpu::vatan_f64, "arctan");
-}
 
 Storage AtanBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);

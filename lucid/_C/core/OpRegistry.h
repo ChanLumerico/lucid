@@ -21,6 +21,7 @@
 
 namespace lucid {
 
+/// Process-wide thread-safe op registry: name → OpSchema*.
 class LUCID_API OpRegistry {
 public:
     static void register_op(const OpSchema& schema);

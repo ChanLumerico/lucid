@@ -28,6 +28,7 @@ class TensorImpl;
 //   m ← β1 · m + (1 − β1) · g
 //   u ← max(β2 · u, |g|)
 //   param ← param − (lr / (1 − β1^t)) · m / (u + ε)
+/// Adamax.
 class LUCID_API Adamax : public Optimizer {
 public:
     Adamax(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -58,6 +59,7 @@ private:
 //
 //   sum_sq ← sum_sq + g²
 //   param ← param − lr · g / (√sum_sq + ε)
+/// Adagrad.
 class LUCID_API Adagrad : public Optimizer {
 public:
     Adagrad(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -87,6 +89,7 @@ private:
 //   update = (√(acc + ε) / √(sq_avg + ε)) · g
 //   acc ← ρ · acc + (1 − ρ) · update²
 //   param ← param − lr · update
+/// Adadelta.
 class LUCID_API Adadelta : public Optimizer {
 public:
     Adadelta(std::vector<std::shared_ptr<TensorImpl>> params,

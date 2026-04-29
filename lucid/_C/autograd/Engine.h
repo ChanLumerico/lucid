@@ -21,11 +21,13 @@
 
 namespace lucid {
 
+/// Autograd backward engine — single-threaded DFS graph traversal.
 class LUCID_API Engine {
 public:
     // Run backward starting from `root`. If `grad_seed` is empty, an
     // ones_like(root) seed is generated automatically — matching the implicit
     // `loss.backward()` behavior. retain_graph mirrors PyTorch semantics.
+    /// Run backward from root; accumulate gradients into leaf tensors.
     static void backward(const std::shared_ptr<TensorImpl>& root,
                          Storage grad_seed = Storage{CpuStorage{}},
                          bool retain_graph = false);

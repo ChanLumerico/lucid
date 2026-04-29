@@ -112,6 +112,28 @@ public:
     virtual Storage sigmoid(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage relu(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
+    // ---- Additional unary (Phase 4.5) ---------------------------------
+
+    virtual Storage log2(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage square(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage cube(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage tan(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage asin(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage acos(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage atan(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage sinh(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage cosh(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage invert(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage silu(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage gelu(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage softplus(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage selu(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage mish(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage hard_swish(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage relu6(const Storage& a, const Shape& shape, Dtype dt) = 0;
+
     // ---- Reduction ----------------------------------------------------
 
     virtual Storage reduce_sum(const Storage& a,

@@ -12,6 +12,7 @@
 
 namespace lucid {
 
+/// Dot.
 LUCID_API TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

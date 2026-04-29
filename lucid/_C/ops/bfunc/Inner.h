@@ -12,6 +12,7 @@
 
 namespace lucid {
 
+/// Inner.
 LUCID_API TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

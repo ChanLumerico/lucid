@@ -14,6 +14,7 @@
 
 namespace lucid {
 
+/// Pad.
 LUCID_API TensorImplPtr pad_op(const TensorImplPtr& a,
                                std::vector<std::pair<std::int64_t, std::int64_t>> pad_width,
                                double constant);

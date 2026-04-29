@@ -11,6 +11,7 @@
 
 namespace lucid {
 
+/// Floordiv.
 LUCID_API TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

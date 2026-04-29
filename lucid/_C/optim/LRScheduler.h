@@ -30,6 +30,7 @@ namespace lucid {
 
 class Optimizer;
 
+/// LRScheduler.
 class LUCID_API LRScheduler {
 public:
     explicit LRScheduler(Optimizer& opt);

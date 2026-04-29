@@ -26,6 +26,7 @@ namespace lucid {
 
 class Node;
 
+/// Directed edge in the autograd graph: strong ref to the next Node.
 struct LUCID_API Edge {
     // Strong ref. The autograd graph keeps grad_fns alive even if the
     // intermediate TensorImpls that produced them are released — required
@@ -46,6 +47,7 @@ struct LUCID_API Edge {
     bool is_valid() const { return node != nullptr; }
 };
 
+/// Abstract base for all backward nodes in the autograd graph.
 class LUCID_API Node : public std::enable_shared_from_this<Node> {
 public:
     Node();
@@ -54,13 +56,21 @@ public:
     // Backward step: takes the gradient flowing into this node's output and
     // produces gradients to send to each input (one Storage per next_edge,
     // in order).
+    /// Compute input gradients from grad_out; one Storage per next_edge.
     virtual std::vector<Storage> apply(Storage grad_out) = 0;
 
     // Hook called by Engine::backward right before `apply`. Default no-op;
     // FuncOp<Derived, N_IN> overrides to verify that saved input version_
     // counters still match the live tensors. Throws lucid::VersionMismatch
     // if an in-place op mutated an input between forward and backward.
+    /// Verify saved tensor versions match live tensors; throws VersionMismatch.
     virtual void validate_versions() {}
+
+    // Release saved tensors/outputs after apply() when retain_graph=false.
+    // Prevents the backward graph from holding large activation buffers
+    // alive indefinitely in long training loops (Phase 9.4).
+    /// Drop saved inputs/outputs after apply() to free activation memory.
+    virtual void release_saved() {}
 
     // Topological identifier. Higher = later in forward = earlier in backward.
     std::uint64_t sequence_nr() const { return sequence_nr_; }
@@ -80,6 +90,7 @@ protected:
     std::vector<std::int64_t> saved_versions_;
 };
 
+/// Monotonically increasing counter used to topologically order nodes.
 LUCID_API std::uint64_t next_sequence_nr();
 
 }  // namespace lucid

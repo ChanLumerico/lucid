@@ -21,6 +21,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for Contiguous.
 class LUCID_API ContiguousBackward : public FuncOp<ContiguousBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -28,6 +29,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Contiguous.
 LUCID_API TensorImplPtr contiguous_op(const TensorImplPtr& a);
 
 }  // namespace lucid

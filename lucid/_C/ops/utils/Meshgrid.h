@@ -14,6 +14,7 @@
 
 namespace lucid {
 
+/// Meshgrid.
 LUCID_API std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs,
                                                  bool indexing_xy);
 

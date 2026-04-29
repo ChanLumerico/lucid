@@ -35,6 +35,7 @@
 namespace lucid {
 
 template <int N>
+/// Autograd backward node for ConvNd.
 class LUCID_API ConvNdBackward : public FuncOp<ConvNdBackward<N>, 3> {
 public:
     static const OpSchema schema_v1;
@@ -57,6 +58,7 @@ using Conv1dBackward = ConvNdBackward<1>;
 using Conv2dBackward = ConvNdBackward<2>;
 using Conv3dBackward = ConvNdBackward<3>;
 
+/// Conv1d.
 LUCID_API TensorImplPtr conv1d_op(const TensorImplPtr& x,
                                   const TensorImplPtr& W,
                                   const TensorImplPtr& b,
@@ -64,6 +66,7 @@ LUCID_API TensorImplPtr conv1d_op(const TensorImplPtr& x,
                                   int pad_l = 0,
                                   int dilation_l = 1,
                                   int groups = 1);
+/// Conv2d.
 LUCID_API TensorImplPtr conv2d_op(const TensorImplPtr& x,
                                   const TensorImplPtr& W,
                                   const TensorImplPtr& b,
@@ -74,6 +77,7 @@ LUCID_API TensorImplPtr conv2d_op(const TensorImplPtr& x,
                                   int dilation_h = 1,
                                   int dilation_w = 1,
                                   int groups = 1);
+/// Conv3d.
 LUCID_API TensorImplPtr conv3d_op(const TensorImplPtr& x,
                                   const TensorImplPtr& W,
                                   const TensorImplPtr& b,
@@ -92,6 +96,7 @@ LUCID_API TensorImplPtr conv3d_op(const TensorImplPtr& x,
 //   unfold(x, kernel_size, stride, padding, dilation)
 //     x : (B, C, *S)
 //     y : (B, C·prod(K), prod(O))   — the column buffer used by conv.
+/// Autograd backward node for Unfold.
 class LUCID_API UnfoldBackward : public FuncOp<UnfoldBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -108,6 +113,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Unfold.
 LUCID_API TensorImplPtr unfold_op(const TensorImplPtr& x,
                                   const std::vector<int>& kernel,
                                   const std::vector<int>& stride,

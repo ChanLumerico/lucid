@@ -28,25 +28,23 @@
 
 namespace lucid {
 
+/// Autograd backward node for Sub.
 class LUCID_API SubBackward : public BinaryOp<SubBackward> {
 public:
     static constexpr bool kSavesInputs = false;  // grad doesn't depend on inputs
 
     static const OpSchema schema_v1;
 
-    static CpuStorage cpu_kernel(const CpuStorage& a,
-                                 const CpuStorage& b,
-                                 const Shape& out_shape,
-                                 Dtype dt);
-
-    static GpuStorage gpu_kernel(const GpuStorage& a,
-                                 const GpuStorage& b,
-                                 const Shape& out_shape,
-                                 Dtype dt);
+    // Phase 4.5: dispatch through IBackend — no device check in call site.
+    static Storage dispatch(backend::IBackend& be, const Storage& a,
+                            const Storage& b, const Shape& shape, Dtype dt) {
+        return be.sub(a, b, shape, dt);
+    }
 
     std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
 };
 
+/// Sub.
 LUCID_API TensorImplPtr sub_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

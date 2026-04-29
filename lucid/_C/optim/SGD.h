@@ -33,6 +33,7 @@ class TensorImpl;
 //     if nesterov:  g ← g + momentum · buf
 //     else:         g ← buf
 //   param ← param − lr · g
+/// SGD.
 class LUCID_API SGD : public Optimizer {
 public:
     SGD(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -75,6 +76,7 @@ private:
 //   if step >= t0:
 //     coef = 1 / (alpha · step + 1)
 //     ax ← (1 − coef) · ax + coef · param − lambd · ax
+/// ASGD.
 class LUCID_API ASGD : public Optimizer {
 public:
     ASGD(std::vector<std::shared_ptr<TensorImpl>> params,

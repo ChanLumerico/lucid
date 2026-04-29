@@ -31,6 +31,7 @@ namespace lucid {
 
 class Generator;
 
+/// Autograd backward node for Dropout.
 class LUCID_API DropoutBackward : public FuncOp<DropoutBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -43,6 +44,7 @@ public:
 
 // Channel-wise dropout (dropout1d/2d/3d). Input shape (B, C, *spatial).
 // Mask shape (B, C, 1, 1, ..., 1) so an entire feature map is dropped together.
+/// Autograd backward node for DropoutNd.
 class LUCID_API DropoutNdBackward : public FuncOp<DropoutNdBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -57,6 +59,7 @@ public:
 // negative SELU constant rescaled so input mean/var are preserved.
 //   y = a · (x · mask + α' · (1 - mask)) + b
 // where α' = −λα, a = ((1−p)(1 + p·α'²))⁻¹ᐟ², b = −a·p·α'
+/// Autograd backward node for AlphaDropout.
 class LUCID_API AlphaDropoutBackward : public FuncOp<AlphaDropoutBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -72,6 +75,7 @@ public:
 // Samples a Bernoulli mask at gamma rate, dilates each "1" into a
 // block_size × block_size square, then drops the union. Output is
 // rescaled by the kept fraction.
+/// Autograd backward node for DropBlock.
 class LUCID_API DropBlockBackward : public FuncOp<DropBlockBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -85,6 +89,7 @@ public:
 
 // DropPath (stochastic depth). Per-sample dropout: mask shape
 // (B, 1, 1, ..., 1). If scale_by_keep, divide by keep_prob.
+/// Autograd backward node for DropPath.
 class LUCID_API DropPathBackward : public FuncOp<DropPathBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -99,16 +104,20 @@ public:
 
 /// Public API. `gen=nullptr` falls back to `default_generator()`.
 LUCID_API TensorImplPtr dropout_op(const TensorImplPtr& a, double p, bool training, Generator* gen);
+/// Dropoutnd.
 LUCID_API TensorImplPtr dropoutnd_op(const TensorImplPtr& a,
                                      double p,
                                      bool training,
                                      Generator* gen);
+/// Alpha dropout.
 LUCID_API TensorImplPtr alpha_dropout_op(const TensorImplPtr& a,
                                          double p,
                                          bool training,
                                          Generator* gen);
+/// Drop block.
 LUCID_API TensorImplPtr drop_block_op(
     const TensorImplPtr& a, std::int64_t block_size, double p, double eps, Generator* gen);
+/// Drop path.
 LUCID_API TensorImplPtr drop_path_op(const TensorImplPtr& a,
                                      double p,
                                      bool scale_by_keep,

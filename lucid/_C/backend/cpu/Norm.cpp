@@ -1,10 +1,49 @@
 #include "Norm.h"
 
 #include <cmath>
+#include <vector>
+
+#include <Accelerate/Accelerate.h>
+
+#include "Vdsp.h"
+#include "Vforce.h"
 
 namespace lucid::backend::cpu {
 
 namespace {
+
+// F32 fast path using vDSP primitives.
+void layer_norm_forward_f32_fast(const float* x,
+                                  const float* gamma,
+                                  const float* beta,
+                                  float* y,
+                                  float* saved_mean,
+                                  float* saved_rstd,
+                                  std::size_t outer,
+                                  std::size_t N,
+                                  double eps) {
+    const float inv_N = 1.0f / static_cast<float>(N);
+    // Reuse a per-row scratch buffer for the centered values.
+    std::vector<float> centered(N);
+    for (std::size_t o = 0; o < outer; ++o) {
+        const float* xb = x + o * N;
+        float* yb = y + o * N;
+        // 1. mean via vDSP_meanv
+        const float mean = vmean_f32(xb, N);
+        saved_mean[o] = mean;
+        // 2. centered = x - mean
+        const float neg_mean = -mean;
+        vsadd_f32(xb, neg_mean, centered.data(), N);
+        // 3. variance = dot(centered, centered) / N
+        const float var = vdotpr_f32(centered.data(), centered.data(), N) * inv_N;
+        const float rstd = 1.0f / std::sqrt(var + static_cast<float>(eps));
+        saved_rstd[o] = rstd;
+        // 4. xnorm = centered * rstd  (in-place on yb as scratch)
+        vsmul_f32(centered.data(), rstd, yb, N);
+        // 5. y = gamma * xnorm + beta  (vDSP_vma: A*B + C)
+        vmadd_f32(yb, gamma, beta, yb, N);
+    }
+}
 
 template <typename T>
 void layer_norm_forward(const T* x,
@@ -169,7 +208,7 @@ void layer_norm_forward_f32(const float* x,
                             std::size_t outer,
                             std::size_t N,
                             double eps) {
-    layer_norm_forward<float>(x, gamma, beta, y, saved_mean, saved_rstd, outer, N, eps);
+    layer_norm_forward_f32_fast(x, gamma, beta, y, saved_mean, saved_rstd, outer, N, eps);
 }
 
 void layer_norm_forward_f64(const double* x,

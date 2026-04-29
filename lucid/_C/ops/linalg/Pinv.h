@@ -6,6 +6,7 @@
 
 namespace lucid {
 
+/// Pinv.
 LUCID_API TensorImplPtr pinv_op(const TensorImplPtr& a);
 
 }  // namespace lucid

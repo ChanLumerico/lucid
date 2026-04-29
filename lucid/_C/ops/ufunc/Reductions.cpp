@@ -114,15 +114,6 @@ CpuStorage multi_axis_reduce(const CpuStorage& a,
 // =================== Sum ===================
 const OpSchema SumBackward::schema_v1{"sum", 1, AmpPolicy::Promote, true};
 
-CpuStorage SumBackward::cpu_kernel(const CpuStorage& a,
-                                   const Shape& in_shape,
-                                   const std::vector<int>& axes,
-                                   bool keepdims,
-                                   Dtype dt) {
-    return multi_axis_reduce(a, in_shape, axes, keepdims, dt, backend::cpu::sum_axis_f32,
-                             backend::cpu::sum_axis_f64, "sum");
-}
-
 Storage SumBackward::grad_formula(const Storage& grad_out) {
     return broadcast_back_for_reduce(grad_out, this->out_shape_, this->full_input_shape_,
                                      this->reduce_axes_, this->keepdims_, this->dtype_,
@@ -146,38 +137,6 @@ double reduced_count(const Shape& in_shape, const std::vector<int>& axes) {
 }
 }  // namespace
 
-CpuStorage MeanBackward::cpu_kernel(const CpuStorage& a,
-                                    const Shape& in_shape,
-                                    const std::vector<int>& axes,
-                                    bool keepdims,
-                                    Dtype dt) {
-    auto out = multi_axis_reduce(a, in_shape, axes, keepdims, dt, backend::cpu::sum_axis_f32,
-                                 backend::cpu::sum_axis_f64, "mean");
-    const double n = reduced_count(in_shape, axes);
-    if (n == 0.0)
-        return out;
-    const double inv = 1.0 / n;
-    const std::size_t numel = out.nbytes / dtype_size(dt);
-    switch (dt) {
-        case Dtype::F32: {
-            auto* p = reinterpret_cast<float*>(out.ptr.get());
-            const auto inv_f = static_cast<float>(inv);
-            for (std::size_t i = 0; i < numel; ++i)
-                p[i] *= inv_f;
-            break;
-        }
-        case Dtype::F64: {
-            auto* p = reinterpret_cast<double*>(out.ptr.get());
-            for (std::size_t i = 0; i < numel; ++i)
-                p[i] *= inv;
-            break;
-        }
-        default:
-            ErrorBuilder("mean").not_implemented("dtype not supported");
-    }
-    return out;
-}
-
 Storage MeanBackward::grad_formula(const Storage& grad_out) {
     Storage broadcasted =
         broadcast_back_for_reduce(grad_out, this->out_shape_, this->full_input_shape_,
@@ -195,11 +154,8 @@ LUCID_REGISTER_OP(MeanBackward)
 // =================== Prod ===================
 const OpSchema ProdBackward::schema_v1{"prod", 1, AmpPolicy::Promote, true};
 
-CpuStorage ProdBackward::cpu_kernel(const CpuStorage& a,
-                                    const Shape& in_shape,
-                                    const std::vector<int>& axes,
-                                    bool keepdims,
-                                    Dtype dt) {
+CpuStorage ProdBackward::cpu_kernel(const CpuStorage& a, const Shape& in_shape,
+                                    const std::vector<int>& axes, bool keepdims, Dtype dt) {
     return multi_axis_reduce(a, in_shape, axes, keepdims, dt, backend::cpu::prod_axis_f32,
                              backend::cpu::prod_axis_f64, "prod");
 }
@@ -226,15 +182,6 @@ LUCID_REGISTER_OP(ProdBackward)
 
 // =================== Max ===================
 const OpSchema MaxBackward::schema_v1{"max", 1, AmpPolicy::KeepInput, true};
-
-CpuStorage MaxBackward::cpu_kernel(const CpuStorage& a,
-                                   const Shape& in_shape,
-                                   const std::vector<int>& axes,
-                                   bool keepdims,
-                                   Dtype dt) {
-    return multi_axis_reduce(a, in_shape, axes, keepdims, dt, backend::cpu::max_axis_f32,
-                             backend::cpu::max_axis_f64, "max");
-}
 
 Storage MaxBackward::grad_formula(const Storage& grad_out) {
     // 1. Broadcast saved output back to input shape (so each input position
@@ -272,15 +219,6 @@ LUCID_REGISTER_OP(MaxBackward)
 
 // =================== Min ===================
 const OpSchema MinBackward::schema_v1{"min", 1, AmpPolicy::KeepInput, true};
-
-CpuStorage MinBackward::cpu_kernel(const CpuStorage& a,
-                                   const Shape& in_shape,
-                                   const std::vector<int>& axes,
-                                   bool keepdims,
-                                   Dtype dt) {
-    return multi_axis_reduce(a, in_shape, axes, keepdims, dt, backend::cpu::min_axis_f32,
-                             backend::cpu::min_axis_f64, "min");
-}
 
 Storage MinBackward::grad_formula(const Storage& grad_out) {
     const std::size_t in_numel = shape_numel(this->full_input_shape_);
@@ -325,39 +263,11 @@ GpuStorage gpu_reduce_apply(const GpuStorage& a, Dtype dt, F&& f, const char* op
 }
 }  // namespace
 
-GpuStorage SumBackward::gpu_kernel(
-    const GpuStorage& a, const Shape&, const std::vector<int>& axes, bool keepdims, Dtype dt) {
-    return gpu_reduce_apply(
-        a, dt, [&axes, keepdims](const auto& x) { return ::mlx::core::sum(x, axes, keepdims); },
-        "sum");
-}
-
-GpuStorage MeanBackward::gpu_kernel(
-    const GpuStorage& a, const Shape&, const std::vector<int>& axes, bool keepdims, Dtype dt) {
-    return gpu_reduce_apply(
-        a, dt, [&axes, keepdims](const auto& x) { return ::mlx::core::mean(x, axes, keepdims); },
-        "mean");
-}
-
 GpuStorage ProdBackward::gpu_kernel(
     const GpuStorage& a, const Shape&, const std::vector<int>& axes, bool keepdims, Dtype dt) {
     return gpu_reduce_apply(
         a, dt, [&axes, keepdims](const auto& x) { return ::mlx::core::prod(x, axes, keepdims); },
         "prod");
-}
-
-GpuStorage MaxBackward::gpu_kernel(
-    const GpuStorage& a, const Shape&, const std::vector<int>& axes, bool keepdims, Dtype dt) {
-    return gpu_reduce_apply(
-        a, dt, [&axes, keepdims](const auto& x) { return ::mlx::core::max(x, axes, keepdims); },
-        "max");
-}
-
-GpuStorage MinBackward::gpu_kernel(
-    const GpuStorage& a, const Shape&, const std::vector<int>& axes, bool keepdims, Dtype dt) {
-    return gpu_reduce_apply(
-        a, dt, [&axes, keepdims](const auto& x) { return ::mlx::core::min(x, axes, keepdims); },
-        "min");
 }
 
 }  // namespace lucid

@@ -33,6 +33,7 @@
 #include "../core/GradMode.h"
 #include "../core/OpSchema.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
@@ -47,6 +48,12 @@ template <class T>
 concept HasUnaryGpuKernel = requires(GpuStorage a, Shape s, Dtype d) {
     { T::gpu_kernel(a, s, d) } -> std::same_as<GpuStorage>;
 };
+
+template <class T>
+concept HasUnaryDispatch =
+    requires(backend::IBackend& be, Storage a, Shape s, Dtype d) {
+        { T::dispatch(be, a, s, d) } -> std::same_as<Storage>;
+    };
 
 }  // namespace detail
 
@@ -69,25 +76,33 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
     if (!a)
         ErrorBuilder(Derived::schema_v1.name).fail("null input tensor");
 
-    const TensorImplPtr a_ptr =
-        (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
+    // Phase 5: determinism gate + AMP dtype resolution.
+    SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
+    const Dtype eff_dt = sg.effective_dtype();
 
-    OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), a_ptr->dtype(), a_ptr->shape()};
+    const TensorImplPtr a_contig =
+        (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
+    const TensorImplPtr a_ptr = sg.maybe_cast(a_contig);
+
+    OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, a_ptr->shape()};
 
     Storage out_storage;
-    if (a_ptr->device() == Device::GPU) {
+    if constexpr (detail::HasUnaryDispatch<Derived>) {
+        out_storage = Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()),
+                                        a_ptr->storage(), a_ptr->shape(), eff_dt);
+    } else if (a_ptr->device() == Device::GPU) {
         if constexpr (detail::HasUnaryGpuKernel<Derived>) {
             out_storage = Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()),
-                                                      a_ptr->shape(), a_ptr->dtype())};
+                                                      a_ptr->shape(), eff_dt)};
         } else {
             ErrorBuilder(Derived::schema_v1.name).not_implemented("GPU kernel not yet implemented");
         }
     } else {
         out_storage = Storage{Derived::cpu_kernel(std::get<CpuStorage>(a_ptr->storage()),
-                                                  a_ptr->shape(), a_ptr->dtype())};
+                                                  a_ptr->shape(), eff_dt)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a_ptr->shape(), a_ptr->dtype(),
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a_ptr->shape(), eff_dt,
                                             a_ptr->device(), /*requires_grad=*/false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
@@ -103,11 +118,11 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
         auto bwd = std::make_shared<Derived>();
         bwd->input_shapes_ = {a->shape()};
         bwd->out_shape_ = a->shape();
-        bwd->dtype_ = a->dtype();
+        bwd->dtype_ = eff_dt;
         bwd->device_ = a->device();
         bwd->input_tensors_ = {a};
         if constexpr (Derived::kSavesInput)
-            bwd->saved_inputs_ = {a->storage()};
+            bwd->saved_inputs_ = {a_ptr->storage()};  // cast storage
         if constexpr (Derived::kSavesOutput)
             bwd->saved_output_ = out->storage();
 

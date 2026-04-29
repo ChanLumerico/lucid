@@ -57,6 +57,19 @@ public:
     }
 
     // ----------------------------------------------------------------
+    // Saved state release (Phase 9.4)
+    // ----------------------------------------------------------------
+
+    /// Drop all saved tensors and outputs after apply() so the backward
+    /// graph doesn't pin large activation buffers beyond their use.
+    void release_saved() override {
+        for (auto& s : saved_inputs_)
+            s = Storage{CpuStorage{}};
+        saved_output_ = Storage{CpuStorage{}};
+        input_tensors_ = {};
+    }
+
+    // ----------------------------------------------------------------
     // Saved state — populated by forward(), consumed by apply().
     // ----------------------------------------------------------------
 

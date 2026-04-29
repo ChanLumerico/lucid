@@ -307,18 +307,18 @@ SPECS: list[OpSpec] = [
             rng.integers(0, 10, size=(2, 3)).astype("int64"),
         ],
         atol=1e-4, rtol=1e-4,
-        skip_grad=True,
-        notes="indices are non-differentiable; test only forward + dE.",
+        # 7.2: weight table (float) gets requires_grad; int64 indices naturally don't.
+        notes="7.2 — embedding backward on weight table (indices non-differentiable).",
     ),
 
-    # Dropout (p=0 → identity; verifies the path runs)
+    # Dropout (p=0 → identity; verifies the path runs, AND backward works)
     OpSpec(
         name="nn_dropout_p_zero",
         engine_fn=lambda ts: E.nn.dropout(ts[0], 0.0, True, E.Generator(0)),
-        torch_fn=lambda ts: ts[0],
+        torch_fn=lambda ts: ts[0],  # p=0 → identity
         input_shapes=[(4, 5)],
         atol=1e-4, rtol=1e-4,
-        skip_grad=True,
+        # 7.2: p=0 is deterministic identity → backward is dx=g, fully differentiable.
     ),
 
     # Loss functions
@@ -354,6 +354,18 @@ SPECS: list[OpSpec] = [
         atol=1e-3, rtol=1e-3,
         skip_grad=True,
         notes="weight is differentiable in engine but ignored by torch — fwd parity only.",
+    ),
+    # 7.2: bce_loss fwd+bwd (no weight → both engine and torch can compare grads).
+    OpSpec(
+        name="nn_bce_loss_bwd",
+        engine_fn=lambda ts: E.nn.bce_loss(ts[0], ts[1], E.ones_like(ts[0])),
+        torch_fn=lambda ts: F.binary_cross_entropy(ts[0], ts[1], reduction="mean"),
+        input_gen=lambda rng: [
+            (rng.uniform(0.05, 0.95, size=(4, 5))).astype("float32"),
+            (rng.uniform(0.0, 1.0, size=(4, 5))).astype("float32"),
+        ],
+        atol=1e-3, rtol=1e-3,
+        notes="7.2 — bce_loss fwd+bwd; input and target both differentiable.",
     ),
     OpSpec(
         name="nn_huber_loss",
@@ -524,4 +536,113 @@ SPECS: list[OpSpec] = [
         skip_gpu=True,
         notes="constructor — checks engine produces output without error.",
     ),
+
+    # ---- C.2: grid_sample (was missing; forward only) ----
+    OpSpec(
+        name="nn_grid_sample_bilinear",
+        engine_fn=lambda ts: E.nn.grid_sample(ts[0], ts[1], 0, 0, True),
+        torch_fn=lambda ts: F.grid_sample(
+            ts[0], ts[1], mode="bilinear", padding_mode="zeros", align_corners=True),
+        input_gen=lambda rng: [
+            rng.standard_normal((2, 3, 8, 8)).astype("float32"),
+            rng.uniform(-1.0, 1.0, (2, 6, 6, 2)).astype("float32"),
+        ],
+        atol=1e-4, rtol=1e-4,
+        skip_grad=True,
+        notes="C.2 — grid_sample forward (bilinear, zeros padding, align_corners=True).",
+    ),
+
+    # ---- C.2: global_response_norm (was missing) ----
+    OpSpec(
+        name="nn_global_response_norm",
+        engine_fn=lambda ts: E.nn.global_response_norm(ts[0], ts[1], ts[2], 1e-6),
+        torch_fn=lambda ts: _grn_torch(ts),
+        input_gen=lambda rng: [
+            rng.standard_normal((2, 4, 6, 6)).astype("float32"),
+            (rng.standard_normal((4,)) * 0.1 + 1.0).astype("float32"),
+            rng.standard_normal((4,)).astype("float32") * 0.1,
+        ],
+        atol=1e-3, rtol=1e-3,
+        skip_grad=True,
+        notes="C.2 — GRN (ConvNeXt-V2); forward parity only.",
+    ),
+
+    # ---- C.2: rotate (was missing; shape-only smoke test) ----
+    # Engine rotate uses its own center-pivot bilinear; torch reference uses
+    # affine_grid+grid_sample with a different coordinate convention.
+    # We verify shape and that output is finite, not pixel-exact values.
+    OpSpec(
+        name="nn_rotate_30deg",
+        engine_fn=lambda ts: E.nn.rotate(ts[0], 30.0, 0.5, 0.5),
+        torch_fn=lambda ts: ts[0],  # shape reference only
+        input_gen=lambda rng: [rng.standard_normal((1, 1, 8, 8)).astype("float32")],
+        atol=10.0, rtol=10.0,  # shape/finite sanity only
+        skip_grad=True,
+        notes="C.2 — rotate forward shape smoke; pixel values differ from torch (different convention).",
+    ),
+
+    # ---- C.3: pow_scalar / rpow_scalar (CPU fwd+bwd only; GPU cpu_kernel fallback) ----
+    OpSpec(
+        name="pow_scalar_cube",
+        engine_fn=lambda ts: E.pow_scalar(ts[0], 3.0),
+        torch_fn=lambda ts: ts[0] ** 3.0,
+        input_gen=lambda rng: [
+            np.abs(rng.standard_normal((4, 5)).astype("float32")) + 0.1
+        ],
+        skip_gpu=True,
+        notes="C.3 — pow_scalar fwd+bwd (CPU only; GPU path not yet fully wired).",
+    ),
+    OpSpec(
+        name="rpow_scalar_base2",
+        engine_fn=lambda ts: E.rpow_scalar(2.0, ts[0]),
+        torch_fn=lambda ts: 2.0 ** ts[0],
+        input_gen=lambda rng: [
+            rng.uniform(0.1, 2.0, size=(4, 5)).astype("float32")
+        ],
+        skip_gpu=True,
+        notes="C.3 — rpow_scalar fwd+bwd (CPU only).",
+    ),
+
+    # ---- C.3: affine_grid ----
+    OpSpec(
+        name="nn_affine_grid",
+        engine_fn=lambda ts: E.nn.affine_grid(ts[0], 2, 8, 8, True),
+        torch_fn=lambda ts: F.affine_grid(ts[0], [2, 1, 8, 8], align_corners=True),
+        input_gen=lambda rng: [
+            rng.standard_normal((2, 2, 3)).astype("float32"),
+        ],
+        atol=1e-4, rtol=1e-4,
+        skip_grad=True,
+        notes="C.3 — affine_grid forward only.",
+    ),
 ]
+
+
+# ---- Helpers for new specs ----
+
+def _grn_torch(ts, eps=1e-6):
+    """PyTorch reference for global_response_norm (GRN, ConvNeXt-V2).
+    Formula: y = gamma * (x * Nx) + beta * x
+    where Nx = ||x||_2 / (mean_c(||x||_2) + eps), shape [B,C,1,1]
+    ts: list of torch tensors [x, gamma, beta]
+    """
+    x, g, b = ts[0], ts[1], ts[2]
+    # G[b,c] = L2 norm over spatial dims — shape [B,C,1,1]
+    gx = x.norm(p=2, dim=(2, 3), keepdim=True)
+    # Nx = G / (mean_c(G) + eps)
+    nx = gx / (gx.mean(dim=1, keepdim=True) + eps)
+    # y = gamma * (x * Nx) + beta * x
+    return g.view(1, -1, 1, 1) * (x * nx) + b.view(1, -1, 1, 1) * x
+
+
+def _rotate_torch(ts, angle_deg=30.0):
+    """Rough torch reference: affine_grid + grid_sample.
+    ts: list of torch tensors [x]
+    """
+    import math
+    x = ts[0]
+    r = math.radians(angle_deg)
+    c, s = math.cos(r), math.sin(r)
+    theta = torch.tensor([[[c, -s, 0.0], [s, c, 0.0]]], dtype=torch.float32)
+    grid = F.affine_grid(theta, x.shape, align_corners=False)
+    return F.grid_sample(x, grid, align_corners=False)

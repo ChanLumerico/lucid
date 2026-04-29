@@ -27,6 +27,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for Permute.
 class LUCID_API PermuteBackward : public FuncOp<PermuteBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -38,10 +39,15 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Permute.
 LUCID_API TensorImplPtr permute_op(const TensorImplPtr& a, const std::vector<int>& perm);
+/// Transpose.
 LUCID_API TensorImplPtr transpose_op(const TensorImplPtr& a);
+/// T.
 LUCID_API TensorImplPtr T_op(const TensorImplPtr& a);
+/// Mt.
 LUCID_API TensorImplPtr mT_op(const TensorImplPtr& a);
+/// Swapaxes.
 LUCID_API TensorImplPtr swapaxes_op(const TensorImplPtr& a, int axis1, int axis2);
 
 }  // namespace lucid

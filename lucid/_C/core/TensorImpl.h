@@ -40,6 +40,7 @@ namespace py = pybind11;
 
 namespace lucid {
 
+/// Reference-counted tensor: owns storage, shape, dtype, device, and autograd metadata.
 class LUCID_API TensorImpl : public std::enable_shared_from_this<TensorImpl> {
 public:
     // ------------------------------------------------------------------ //

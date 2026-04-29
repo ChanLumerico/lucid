@@ -160,7 +160,7 @@ public:
     }
 };
 
-const OpSchema IndexScatterBackward::schema_v1{"index_scatter", 1, AmpPolicy::KeepInput, true};
+const OpSchema IndexScatterBackward::schema_v1{"index_scatter", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, /*internal=*/true};
 
 TensorImplPtr attach_index_scatter_grad(const TensorImplPtr& a,
                                         TensorImplPtr out,

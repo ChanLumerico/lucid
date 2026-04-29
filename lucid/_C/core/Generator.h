@@ -30,6 +30,7 @@ namespace lucid {
 // thread, or hold the embedded mutex via `lock()`. The Phase 3 op layer
 // expects each op call to take its own Generator& and the caller is
 // responsible for not sharing across threads without locking.
+/// Seedable random-number generator (wraps std::mt19937_64).
 class LUCID_API Generator {
 public:
     explicit Generator(std::uint64_t seed = 0);
@@ -60,6 +61,7 @@ private:
 // Process-default generator. Provided so `lucid.random.seed(n)` has somewhere
 // to write to. Phase 3 op forwards take an explicit Generator& parameter that
 // defaults to this one.
+/// Default generator.
 LUCID_API Generator& default_generator();
 
 }  // namespace lucid

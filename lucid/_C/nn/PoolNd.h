@@ -26,6 +26,7 @@
 namespace lucid {
 
 template <int N>
+/// Autograd backward node for MaxPoolNd.
 class LUCID_API MaxPoolNdBackward : public FuncOp<MaxPoolNdBackward<N>, 1> {
 public:
     static const OpSchema schema_v1;
@@ -42,6 +43,7 @@ public:
 };
 
 template <int N>
+/// Autograd backward node for AvgPoolNd.
 class LUCID_API AvgPoolNdBackward : public FuncOp<AvgPoolNdBackward<N>, 1> {
 public:
     static const OpSchema schema_v1;
@@ -63,10 +65,12 @@ using AvgPool1dBackward = AvgPoolNdBackward<1>;
 using AvgPool2dBackward = AvgPoolNdBackward<2>;
 using AvgPool3dBackward = AvgPoolNdBackward<3>;
 
+/// Max pool1d.
 LUCID_API TensorImplPtr max_pool1d_op(const TensorImplPtr& x,
                                       int KL,
                                       int stride_l = 0,
                                       int pad_l = 0);
+/// Max pool2d.
 LUCID_API TensorImplPtr max_pool2d_op(const TensorImplPtr& x,
                                       int KH,
                                       int KW,
@@ -74,6 +78,7 @@ LUCID_API TensorImplPtr max_pool2d_op(const TensorImplPtr& x,
                                       int stride_w = 0,
                                       int pad_h = 0,
                                       int pad_w = 0);
+/// Max pool3d.
 LUCID_API TensorImplPtr max_pool3d_op(const TensorImplPtr& x,
                                       int KD,
                                       int KH,
@@ -84,10 +89,12 @@ LUCID_API TensorImplPtr max_pool3d_op(const TensorImplPtr& x,
                                       int pad_d = 0,
                                       int pad_h = 0,
                                       int pad_w = 0);
+/// Avg pool1d.
 LUCID_API TensorImplPtr avg_pool1d_op(const TensorImplPtr& x,
                                       int KL,
                                       int stride_l = 0,
                                       int pad_l = 0);
+/// Avg pool2d.
 LUCID_API TensorImplPtr avg_pool2d_op(const TensorImplPtr& x,
                                       int KH,
                                       int KW,
@@ -95,6 +102,7 @@ LUCID_API TensorImplPtr avg_pool2d_op(const TensorImplPtr& x,
                                       int stride_w = 0,
                                       int pad_h = 0,
                                       int pad_w = 0);
+/// Avg pool3d.
 LUCID_API TensorImplPtr avg_pool3d_op(const TensorImplPtr& x,
                                       int KD,
                                       int KH,

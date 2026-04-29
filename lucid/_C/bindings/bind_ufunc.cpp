@@ -1,6 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "BindingGen.h"
+
 // Element-wise unary
 #include "../ops/ufunc/Activation.h"
 #include "../ops/ufunc/Arith.h"
@@ -12,7 +14,7 @@
 #include "../ops/ufunc/Trig.h"
 // Reductions
 #include "../ops/ufunc/Reductions.h"
-// Transpose / swapaxes (axis-permutation forms in ufunc.py)
+// Transpose / swapaxes
 #include "../ops/ufunc/Transpose.h"
 // Variance / trace / scans
 #include "../ops/ufunc/Scan.h"
@@ -27,72 +29,69 @@ namespace py = pybind11;
 namespace lucid::bindings {
 
 void register_ufunc(py::module_& m) {
-    // ----- Arithmetic -----
-    m.def("neg", &neg_op, py::arg("a"));
-    m.def("abs", &abs_op, py::arg("a"));
-    m.def("sign", &sign_op, py::arg("a"));
-    m.def("reciprocal", &reciprocal_op, py::arg("a"));
-    m.def("square", &square_op, py::arg("a"));
-    m.def("cube", &cube_op, py::arg("a"));
+    // ----- Arithmetic (BindingGen unary) -----
+    bind_unary<NegBackward>(m, &neg_op);
+    bind_unary<AbsBackward>(m, &abs_op);
+    bind_unary<SignBackward>(m, &sign_op);
+    bind_unary<ReciprocalBackward>(m, &reciprocal_op);
+    bind_unary<SquareBackward>(m, &square_op);
+    bind_unary<CubeBackward>(m, &cube_op);
 
     // ----- Exponential / log -----
-    m.def("exp", &exp_op, py::arg("a"));
-    m.def("log", &log_op, py::arg("a"));
-    m.def("log2", &log2_op, py::arg("a"));
-    m.def("sqrt", &sqrt_op, py::arg("a"));
+    bind_unary<ExpBackward>(m, &exp_op);
+    bind_unary<LogBackward>(m, &log_op);
+    bind_unary<Log2Backward>(m, &log2_op);
+    bind_unary<SqrtBackward>(m, &sqrt_op);
 
     // ----- Trig -----
-    m.def("sin", &sin_op, py::arg("a"));
-    m.def("cos", &cos_op, py::arg("a"));
-    m.def("tan", &tan_op, py::arg("a"));
-    m.def("arcsin", &arcsin_op, py::arg("a"));
-    m.def("arccos", &arccos_op, py::arg("a"));
-    m.def("arctan", &arctan_op, py::arg("a"));
+    bind_unary<SinBackward>(m, &sin_op);
+    bind_unary<CosBackward>(m, &cos_op);
+    bind_unary<TanBackward>(m, &tan_op);
+    bind_unary<AsinBackward>(m, &arcsin_op);
+    bind_unary<AcosBackward>(m, &arccos_op);
+    bind_unary<AtanBackward>(m, &arctan_op);
 
     // ----- Hyperbolic -----
-    m.def("sinh", &sinh_op, py::arg("a"));
-    m.def("cosh", &cosh_op, py::arg("a"));
-    m.def("tanh", &tanh_op, py::arg("a"));
+    bind_unary<SinhBackward>(m, &sinh_op);
+    bind_unary<CoshBackward>(m, &cosh_op);
+    bind_unary<TanhBackward>(m, &tanh_op);
 
     // ----- Activation -----
-    m.def("relu", &relu_op, py::arg("a"));
-    m.def("sigmoid", &sigmoid_op, py::arg("a"));
-    m.def("silu", &silu_op, py::arg("a"));
-    m.def("gelu", &gelu_op, py::arg("a"));
-    m.def("leaky_relu", &leaky_relu_op, py::arg("a"), py::arg("slope") = 0.01);
-    m.def("softplus", &softplus_op, py::arg("a"));
-    m.def("softmax", &softmax_op, py::arg("a"), py::arg("axis") = -1);
-    m.def("elu", &elu_op, py::arg("a"), py::arg("alpha") = 1.0);
-    m.def("selu", &selu_op, py::arg("a"));
-    m.def("mish", &mish_op, py::arg("a"));
-    m.def("hard_sigmoid", &hard_sigmoid_op, py::arg("a"));
-    m.def("hard_swish", &hard_swish_op, py::arg("a"));
-    m.def("relu6", &relu6_op, py::arg("a"));
+    bind_unary<ReluBackward>(m, &relu_op);
+    bind_unary<SigmoidBackward>(m, &sigmoid_op);
+    bind_unary<SiluBackward>(m, &silu_op);
+    bind_unary<GeluBackward>(m, &gelu_op);
+    bind_unary_extra<LeakyReluBackward>(m, &leaky_relu_op, py::arg("slope") = 0.01);
+    bind_unary<SoftplusBackward>(m, &softplus_op);
+    bind_unary_extra<EluBackward>(m, &elu_op, py::arg("alpha") = 1.0);
+    bind_unary<SeluBackward>(m, &selu_op);
+    bind_unary<MishBackward>(m, &mish_op);
+    bind_unary<HardSigmoidBackward>(m, &hard_sigmoid_op);
+    bind_unary<HardSwishBackward>(m, &hard_swish_op);
+    bind_unary<Relu6Backward>(m, &relu6_op);
 
-    // ----- Scalar-parameterized -----
+    // ----- Softmax (has axis arg) -----
+    m.def("softmax", &softmax_op, py::arg("a"), py::arg("axis") = -1);
+
+    // ----- Scalar-parameterized (non-standard signatures) -----
     m.def("pow_scalar", &pow_scalar_op, py::arg("a"), py::arg("exp"));
     m.def("rpow_scalar", &rpow_scalar_op, py::arg("base"), py::arg("a"));
     m.def("clip", &clip_op, py::arg("a"), py::arg("min"), py::arg("max"));
 
-    // ----- Discrete (no grad) -----
-    m.def("round", &round_op, py::arg("a"));
-    m.def("floor", &floor_op, py::arg("a"));
-    m.def("ceil", &ceil_op, py::arg("a"));
-    m.def("invert", &invert_op, py::arg("a"));
+    // ----- Discrete (BindingGen unary) -----
+    bind_unary<RoundBackward>(m, &round_op);
+    bind_unary<FloorBackward>(m, &floor_op);
+    bind_unary<CeilBackward>(m, &ceil_op);
+    bind_unary<InvertBackward>(m, &invert_op);
 
-    // ----- Reductions (collapse axes) -----
-    m.def("sum", &sum_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
-          py::arg("keepdims") = false, "Reduce-sum along given axes (empty = all).");
-    m.def("mean", &mean_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
-          py::arg("keepdims") = false, "Reduce-mean.");
-    m.def("prod", &prod_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
-          py::arg("keepdims") = false, "Reduce-product.");
-    m.def("max", &max_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
-          py::arg("keepdims") = false, "Reduce-max.");
-    m.def("min", &min_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
-          py::arg("keepdims") = false, "Reduce-min.");
+    // ----- Reductions (BindingGen reduce) -----
+    bind_reduce<SumBackward>(m, &sum_op, "Reduce-sum along given axes (empty = all).");
+    bind_reduce<MeanBackward>(m, &mean_op, "Reduce-mean.");
+    bind_reduce<ProdBackward>(m, &prod_op, "Reduce-product.");
+    bind_reduce<MaxBackward>(m, &max_op, "Reduce-max.");
+    bind_reduce<MinBackward>(m, &min_op, "Reduce-min.");
 
-    // ----- Axis-permutation forms (transpose / T / mT / swapaxes) -----
+    // ----- Axis-permutation forms -----
     m.def("permute", &permute_op, py::arg("a"), py::arg("perm"), "General axis permutation.");
     m.def("transpose", &transpose_op, py::arg("a"), "Reverse all axes (alias for `T`).");
     m.def("T", &T_op, py::arg("a"), "Reverse all axes.");
@@ -100,7 +99,7 @@ void register_ufunc(py::module_& m) {
     m.def("swapaxes", &swapaxes_op, py::arg("a"), py::arg("axis1"), py::arg("axis2"),
           "Swap two axes.");
 
-    // ----- Phase 4c: var / trace / cumsum / cumprod -----
+    // ----- Var / trace / cumsum / cumprod -----
     m.def("var", &var_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
           py::arg("keepdims") = false, "Variance reduction (sample variance, ddof=0).");
     m.def("trace", &trace_op, py::arg("a"), "Sum of the main diagonal (last 2 axes).");

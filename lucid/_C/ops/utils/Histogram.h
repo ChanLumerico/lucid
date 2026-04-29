@@ -21,9 +21,11 @@
 
 namespace lucid {
 
+/// Histogram.
 LUCID_API std::vector<TensorImplPtr> histogram_op(
     const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density);
 
+/// Histogram2d.
 LUCID_API std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
                                                     const TensorImplPtr& b,
                                                     std::int64_t bins_a,
@@ -34,6 +36,7 @@ LUCID_API std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
                                                     double hi_b,
                                                     bool density);
 
+/// Histogramdd.
 LUCID_API std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
                                                     std::vector<std::int64_t> bins,
                                                     std::vector<std::pair<double, double>> ranges,

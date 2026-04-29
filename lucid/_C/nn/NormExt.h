@@ -39,6 +39,7 @@
 namespace lucid {
 
 // ----- BatchNorm inference (no statistics computed) -----
+/// Autograd backward node for BatchNormEval.
 class LUCID_API BatchNormEvalBackward : public FuncOp<BatchNormEvalBackward, 5> {
 public:
     static const OpSchema schema_v1;
@@ -54,6 +55,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Batch norm eval.
 LUCID_API TensorImplPtr batch_norm_eval_op(const TensorImplPtr& x,
                                            const TensorImplPtr& mean,
                                            const TensorImplPtr& var,
@@ -62,6 +64,7 @@ LUCID_API TensorImplPtr batch_norm_eval_op(const TensorImplPtr& x,
                                            double eps);
 
 // ----- Lp Normalize -----
+/// Autograd backward node for LpNormalize.
 class LUCID_API LpNormalizeBackward : public FuncOp<LpNormalizeBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -74,9 +77,11 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Lp normalize.
 LUCID_API TensorImplPtr lp_normalize_op(const TensorImplPtr& x, double ord, int axis, double eps);
 
 // ----- Global Response Norm -----
+/// Autograd backward node for GlobalResponseNorm.
 class LUCID_API GlobalResponseNormBackward : public FuncOp<GlobalResponseNormBackward, 3> {
 public:
     static const OpSchema schema_v1;
@@ -92,6 +97,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Global response norm.
 LUCID_API TensorImplPtr global_response_norm_op(const TensorImplPtr& x,
                                                 const TensorImplPtr& gamma,
                                                 const TensorImplPtr& beta,

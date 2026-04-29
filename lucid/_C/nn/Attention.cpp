@@ -9,6 +9,8 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/cpu/Blas.h"
+#include "../backend/cpu/Vdsp.h"
+#include "../backend/cpu/Vforce.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
 #include "../core/Error.h"
@@ -174,8 +176,26 @@ void apply_causal_mask(T* scores, std::size_t B, std::size_t Lq, std::size_t Lk)
     }
 }
 
-// In-place row-wise softmax over the last axis. When an entire row is -inf
-// (e.g., a fully-masked query), define the output as 0 (rather than NaN).
+// In-place row-wise softmax — F32 fast path via vForce/vDSP.
+void softmax_rows_f32(float* x, std::size_t rows, std::size_t cols) {
+    using namespace lucid::backend::cpu;
+    for (std::size_t r = 0; r < rows; ++r) {
+        float* row = x + r * cols;
+        const float m = vmaxval_f32(row, cols);
+        if (!std::isfinite(m)) {
+            std::memset(row, 0, cols * sizeof(float));
+            continue;
+        }
+        const float neg_m = -m;
+        vsadd_f32(row, neg_m, row, cols);
+        vexp_f32(row, row, cols);
+        const float s = vsum_f32(row, cols);
+        const float inv = (s > 0.f) ? 1.0f / s : 0.f;
+        vsmul_f32(row, inv, row, cols);
+    }
+}
+
+// Scalar fallback for F64.
 template <typename T>
 void softmax_rows(T* x, std::size_t rows, std::size_t cols) {
     for (std::size_t r = 0; r < rows; ++r) {
@@ -280,7 +300,10 @@ void compute_attention_forward(const T* Qp,
         apply_causal_mask<T>(weights, ctx.B, ctx.Lq, ctx.Lk);
 
     // Step 3: row-wise softmax over the L_k axis (in-place on `weights`).
-    softmax_rows<T>(weights, ctx.B * ctx.Lq, ctx.Lk);
+    if constexpr (std::is_same_v<T, float>)
+        softmax_rows_f32(weights, ctx.B * ctx.Lq, ctx.Lk);
+    else
+        softmax_rows<T>(weights, ctx.B * ctx.Lq, ctx.Lk);
 
     // Step 4: output[b] = weights[b] @ V[b].
     for (std::size_t b = 0; b < ctx.B; ++b) {

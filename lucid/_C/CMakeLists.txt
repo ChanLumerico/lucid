@@ -94,6 +94,7 @@ endfunction()
 lucid_object_library(
     lucid_core
     version.cpp
+    backend/BackendInit.cpp
     core/Allocator.cpp
     core/AmpPolicy.cpp
     core/Determinism.cpp
@@ -104,6 +105,7 @@ lucid_object_library(
     core/MemoryStats.cpp
     core/OpRegistry.cpp
     core/Profiler.cpp
+    core/SchemaGuard.cpp
     core/TensorImpl.cpp
     core/Validate.cpp)
 
@@ -162,6 +164,7 @@ lucid_object_library(
     ops/ufunc/Trace.cpp
     ops/ufunc/Scan.cpp
     ops/ufunc/Inplace.cpp
+    ops/ufunc/CubeRoot.cpp
     ops/gfunc/Gfunc.cpp
     ops/utils/View.cpp
     ops/utils/Contiguous.cpp

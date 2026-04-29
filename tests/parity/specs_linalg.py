@@ -32,7 +32,6 @@ SPECS: list[OpSpec] = [
         torch_fn=lambda ts: torch.linalg.inv(ts[0]),
         input_gen=_general,
         atol=1e-2, rtol=1e-2,  # f32 inv is lossy
-        skip_grad=True,
     ),
     OpSpec(
         name="linalg_det",
@@ -40,7 +39,6 @@ SPECS: list[OpSpec] = [
         torch_fn=lambda ts: torch.linalg.det(ts[0]),
         input_gen=_general,
         atol=1e-2, rtol=1e-2,
-        skip_grad=True,
     ),
     OpSpec(
         name="linalg_cholesky",
@@ -56,7 +54,6 @@ SPECS: list[OpSpec] = [
         torch_fn=lambda ts: torch.linalg.norm(ts[0], ord=2),
         input_shapes=[(20,)],
         atol=1e-3, rtol=1e-3,
-        skip_grad=True,
         notes="ord=2 on a vector = L2; matrix induced 2-norm needs SVD.",
     ),
     OpSpec(
@@ -65,7 +62,6 @@ SPECS: list[OpSpec] = [
         torch_fn=lambda ts: torch.linalg.norm(ts[0], ord=1),
         input_shapes=[(20,)],
         atol=1e-3, rtol=1e-3,
-        skip_grad=True,
     ),
     OpSpec(
         name="linalg_norm_l2_axis",
@@ -73,7 +69,6 @@ SPECS: list[OpSpec] = [
         torch_fn=lambda ts: torch.linalg.norm(ts[0], ord=2, dim=-1),
         input_shapes=[(4, 5)],
         atol=1e-3, rtol=1e-3,
-        skip_grad=True,
     ),
     OpSpec(
         name="linalg_qr",
@@ -102,7 +97,6 @@ SPECS: list[OpSpec] = [
             rng.standard_normal((4, 3)).astype("float32"),
         ],
         atol=1e-3, rtol=1e-3,
-        skip_grad=True,
     ),
     OpSpec(
         name="linalg_pinv",

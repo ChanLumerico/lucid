@@ -39,6 +39,7 @@ namespace lucid {
 // ErrorContext — thread-local op-name stack threaded through every throw.
 // --------------------------------------------------------------------------- //
 
+/// ErrorContext.
 class LUCID_API ErrorContext {
 public:
     /// Push an op name onto the calling thread's context stack.
@@ -66,6 +67,7 @@ public:
 // ErrorBuilder — chainable convenience for the common throw patterns.
 // --------------------------------------------------------------------------- //
 
+/// ErrorBuilder.
 class LUCID_API ErrorBuilder {
 public:
     explicit ErrorBuilder(std::string op_name) : op_(std::move(op_name)) {}

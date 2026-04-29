@@ -6,6 +6,8 @@
 
 #include <mlx/ops.h>
 
+#include "../backend/cpu/Vdsp.h"
+
 #include "../autograd/Helpers.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
@@ -37,6 +39,55 @@ CpuStorage alloc_bytes(std::size_t numel, Dtype dt) {
     s.nbytes = numel * dtype_size(dt);
     s.ptr = allocate_aligned_bytes(s.nbytes);
     return s;
+}
+
+// F32 fast path: uses vDSP for per-channel reductions over contiguous spatial slices.
+void batch_norm_forward_f32_fast(const float* x,
+                                  const float* gamma,
+                                  const float* beta,
+                                  float* y,
+                                  float* mean_per_c,
+                                  float* rstd_per_c,
+                                  int B,
+                                  int C,
+                                  int spatial,
+                                  double eps) {
+    using namespace lucid::backend::cpu;
+    const std::size_t S = static_cast<std::size_t>(spatial);
+    const float inv_M = 1.0f / static_cast<float>(B * spatial);
+
+    for (int c = 0; c < C; ++c) {
+        // 1. Mean: sum across all B slices then divide.
+        float sum = 0.f;
+        for (int b = 0; b < B; ++b)
+            sum += vsum_f32(x + (static_cast<std::size_t>(b) * C + c) * S, S);
+        const float mean = sum * inv_M;
+        mean_per_c[c] = mean;
+
+        // 2. Variance: sum of squared deviations using dot product trick.
+        //    var = (1/M) * sum((x - mean)^2)
+        //        = (1/M) * [dot(x,x) - 2*mean*sum(x) + M*mean^2]
+        //        = (1/M) * dot(x,x) - mean^2
+        float sumsq = 0.f;
+        for (int b = 0; b < B; ++b) {
+            const float* xb = x + (static_cast<std::size_t>(b) * C + c) * S;
+            sumsq += vdotpr_f32(xb, xb, S);
+        }
+        const float var = sumsq * inv_M - mean * mean;
+        const float rstd = 1.0f / std::sqrt(var + static_cast<float>(eps));
+        rstd_per_c[c] = rstd;
+
+        // 3. Normalize and affine: y = gamma * (x - mean) * rstd + beta
+        const float scale = gamma[c] * rstd;
+        const float bias  = beta[c] - mean * scale;
+        for (int b = 0; b < B; ++b) {
+            const float* xb = x + (static_cast<std::size_t>(b) * C + c) * S;
+            float* yb        = y + (static_cast<std::size_t>(b) * C + c) * S;
+            // y = scale * x + bias
+            vsmul_f32(xb, scale, yb, S);
+            vsadd_f32(yb, bias, yb, S);
+        }
+    }
 }
 
 template <typename T>
@@ -77,9 +128,8 @@ void batch_norm_forward_typed(const T* x,
         for (int b = 0; b < B; ++b) {
             const T* xb = x + (static_cast<std::size_t>(b) * C + c) * spatial;
             T* yb = y + (static_cast<std::size_t>(b) * C + c) * spatial;
-            for (int i = 0; i < spatial; ++i) {
+            for (int i = 0; i < spatial; ++i)
                 yb[i] = g * (xb[i] - mean) * rstd + be;
-            }
         }
         mean_per_c[c] = mean;
         rstd_per_c[c] = rstd;
@@ -218,13 +268,13 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
             const auto& b_cpu = std::get<CpuStorage>(beta->storage());
             switch (x->dtype()) {
                 case Dtype::F32:
-                    batch_norm_forward_typed<float>(reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                                                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                                                    reinterpret_cast<const float*>(b_cpu.ptr.get()),
-                                                    reinterpret_cast<float*>(y_cpu.ptr.get()),
-                                                    reinterpret_cast<float*>(mean_cpu.ptr.get()),
-                                                    reinterpret_cast<float*>(rstd_cpu.ptr.get()), B,
-                                                    C, spatial_total, eps);
+                    batch_norm_forward_f32_fast(
+                        reinterpret_cast<const float*>(x_cpu.ptr.get()),
+                        reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                        reinterpret_cast<const float*>(b_cpu.ptr.get()),
+                        reinterpret_cast<float*>(y_cpu.ptr.get()),
+                        reinterpret_cast<float*>(mean_cpu.ptr.get()),
+                        reinterpret_cast<float*>(rstd_cpu.ptr.get()), B, C, spatial_total, eps);
                     break;
                 case Dtype::F64:
                     batch_norm_forward_typed<double>(

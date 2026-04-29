@@ -21,6 +21,7 @@
 
 namespace lucid {
 
+/// Snapshot of per-device allocation counters (current, peak, alloc count).
 struct LUCID_API MemoryStats {
     std::size_t current_bytes = 0;
     std::size_t peak_bytes = 0;
@@ -29,6 +30,7 @@ struct LUCID_API MemoryStats {
 };
 
 // Per-device counters; thread-safe. Updated by the Allocator on alloc/free.
+/// Thread-safe per-device memory accounting; updated by the allocator.
 class LUCID_API MemoryTracker {
 public:
     struct Counters {

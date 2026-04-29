@@ -10,7 +10,9 @@
 
 namespace lucid {
 
+/// Tril.
 LUCID_API TensorImplPtr tril_op(const TensorImplPtr& a, int k);
+/// Triu.
 LUCID_API TensorImplPtr triu_op(const TensorImplPtr& a, int k);
 
 }  // namespace lucid

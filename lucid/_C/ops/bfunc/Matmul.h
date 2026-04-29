@@ -32,6 +32,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for Matmul.
 class LUCID_API MatmulBackward : public FuncOp<MatmulBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -41,6 +42,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Matmul.
 LUCID_API TensorImplPtr matmul_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

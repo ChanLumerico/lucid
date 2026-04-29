@@ -37,6 +37,7 @@ enum class AmpPolicy : std::uint8_t {
     ForceFP32,
 };
 
+/// Amp policy name.
 LUCID_API const char* amp_policy_name(AmpPolicy p);
 
 namespace amp {

@@ -32,6 +32,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for Add.
 class LUCID_API AddBackward : public BinaryOp<AddBackward> {
 public:
     // Add doesn't need input *values* for backward — d(a+b)/da = 1, irrespective
@@ -40,15 +41,11 @@ public:
 
     static const OpSchema schema_v1;
 
-    static CpuStorage cpu_kernel(const CpuStorage& a,
-                                 const CpuStorage& b,
-                                 const Shape& out_shape,
-                                 Dtype dt);
-
-    static GpuStorage gpu_kernel(const GpuStorage& a,
-                                 const GpuStorage& b,
-                                 const Shape& out_shape,
-                                 Dtype dt);
+    // Phase 4.5: dispatch through IBackend — no device check in call site.
+    static Storage dispatch(backend::IBackend& be, const Storage& a,
+                            const Storage& b, const Shape& shape, Dtype dt) {
+        return be.add(a, b, shape, dt);
+    }
 
     std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
 };

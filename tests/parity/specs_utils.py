@@ -331,4 +331,41 @@ SPECS: list[OpSpec] = [
         ],
         skip_grad=True,
     ),
+
+    # ---- C.2: bitwise_xor (was missing, trivial) ----
+    OpSpec(
+        name="bitwise_xor_i32",
+        engine_fn=lambda ts: E.bitwise_xor(ts[0], ts[1]),
+        torch_fn=lambda ts: torch.bitwise_xor(ts[0], ts[1]),
+        input_gen=lambda rng: [
+            rng.integers(0, 16, size=(4, 5)).astype("int32"),
+            rng.integers(0, 16, size=(4, 5)).astype("int32"),
+        ],
+        skip_grad=True,
+    ),
+
+    # ---- C.4: split (was missing) ----
+    OpSpec(
+        name="split_uniform",
+        engine_fn=lambda ts: E.split(ts[0], 3, 0)[1],
+        torch_fn=lambda ts: ts[0].split(3, dim=0)[1],
+        input_shapes=[(9, 4)],
+        skip_grad=True,
+    ),
+
+    # ---- C.4: squeeze_all (was missing) ----
+    OpSpec(
+        name="squeeze_all",
+        engine_fn=lambda ts: E.squeeze_all(ts[0]),
+        torch_fn=lambda ts: ts[0].squeeze(),
+        input_shapes=[(1, 4, 1, 5, 1)],
+    ),
+
+    # ---- C.4: unbind (was missing) ----
+    OpSpec(
+        name="unbind_axis0",
+        engine_fn=lambda ts: E.unbind(ts[0], 0)[2],
+        torch_fn=lambda ts: ts[0].unbind(0)[2],
+        input_shapes=[(4, 5)],
+    ),
 ]

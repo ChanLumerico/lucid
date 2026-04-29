@@ -27,23 +27,21 @@
 
 namespace lucid {
 
+/// Autograd backward node for Pow.
 class LUCID_API PowBackward : public BinaryOp<PowBackward> {
 public:
     static const OpSchema schema_v1;
 
-    static CpuStorage cpu_kernel(const CpuStorage& a,
-                                 const CpuStorage& b,
-                                 const Shape& out_shape,
-                                 Dtype dt);
-
-    static GpuStorage gpu_kernel(const GpuStorage& a,
-                                 const GpuStorage& b,
-                                 const Shape& out_shape,
-                                 Dtype dt);
+    // Phase 4.5: dispatch through IBackend — no device check in call site.
+    static Storage dispatch(backend::IBackend& be, const Storage& a,
+                            const Storage& b, const Shape& shape, Dtype dt) {
+        return be.pow(a, b, shape, dt);
+    }
 
     std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
 };
 
+/// Pow.
 LUCID_API TensorImplPtr pow_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

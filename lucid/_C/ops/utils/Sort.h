@@ -14,13 +14,20 @@
 
 namespace lucid {
 
+/// Sort.
 LUCID_API TensorImplPtr sort_op(const TensorImplPtr& a, int axis);
+/// Argsort.
 LUCID_API TensorImplPtr argsort_op(const TensorImplPtr& a, int axis);
+/// Argmax.
 LUCID_API TensorImplPtr argmax_op(const TensorImplPtr& a, int axis, bool keepdims);
+/// Argmin.
 LUCID_API TensorImplPtr argmin_op(const TensorImplPtr& a, int axis, bool keepdims);
+/// Nonzero.
 LUCID_API TensorImplPtr nonzero_op(const TensorImplPtr& a);
+/// Unique.
 LUCID_API TensorImplPtr unique_op(const TensorImplPtr& a);
 // Returns {values, indices} — consistent with svd/qr/eig multi-output convention.
+/// Topk.
 LUCID_API std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int axis);
 
 }  // namespace lucid

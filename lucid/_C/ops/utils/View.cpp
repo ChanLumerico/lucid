@@ -25,7 +25,7 @@
 
 namespace lucid {
 
-const OpSchema ViewBackward::schema_v1{"view", 1, AmpPolicy::KeepInput, true};
+const OpSchema ViewBackward::schema_v1{"view", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, /*internal=*/true};
 
 namespace {
 

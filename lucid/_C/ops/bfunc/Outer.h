@@ -11,6 +11,7 @@
 
 namespace lucid {
 
+/// Outer.
 LUCID_API TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

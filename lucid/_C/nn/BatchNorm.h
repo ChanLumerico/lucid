@@ -28,6 +28,7 @@
 namespace lucid {
 
 template <int N>
+/// Autograd backward node for BatchNormNd.
 class LUCID_API BatchNormNdBackward : public FuncOp<BatchNormNdBackward<N>, 3> {
 public:
     static const OpSchema schema_v1;
@@ -47,14 +48,17 @@ using BatchNorm1dBackward = BatchNormNdBackward<1>;
 using BatchNorm2dBackward = BatchNormNdBackward<2>;
 using BatchNorm3dBackward = BatchNormNdBackward<3>;
 
+/// Batch norm1d.
 LUCID_API TensorImplPtr batch_norm1d_op(const TensorImplPtr& x,
                                         const TensorImplPtr& gamma,
                                         const TensorImplPtr& beta,
                                         double eps = 1e-5);
+/// Batch norm.
 LUCID_API TensorImplPtr batch_norm_op(const TensorImplPtr& x,
                                       const TensorImplPtr& gamma,
                                       const TensorImplPtr& beta,
                                       double eps = 1e-5);  // 2D, kept name for API compat
+/// Batch norm3d.
 LUCID_API TensorImplPtr batch_norm3d_op(const TensorImplPtr& x,
                                         const TensorImplPtr& gamma,
                                         const TensorImplPtr& beta,

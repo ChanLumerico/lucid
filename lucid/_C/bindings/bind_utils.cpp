@@ -1,6 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "BindingGen.h"
+
 // Mirrors `lucid/_utils/`. Each header groups a small thematic set of ops.
 #include "../core/Shape.h"
 #include "../core/TensorImpl.h"
@@ -37,7 +39,7 @@ void register_utils(py::module_& m) {
     m.def("squeeze_all", &squeeze_all_op, py::arg("a"), "Remove all size-1 dims.");
     m.def("unsqueeze", &unsqueeze_op, py::arg("a"), py::arg("dim"),
           "Insert a size-1 dim at position `dim`.");
-    m.def("contiguous", &contiguous_op, py::arg("a"), "Force a contiguous copy.");
+    bind_unary<ContiguousBackward>(m, &contiguous_op, "Force a contiguous copy.");
 
     // ----- Concatenation / stacking / splitting -----
     m.def("concatenate", &concatenate_op, py::arg("arrays"), py::arg("axis") = 0);

@@ -34,6 +34,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for ScaledDotProductAttention.
 class LUCID_API ScaledDotProductAttentionBackward
     : public FuncOp<ScaledDotProductAttentionBackward, 3> {
 public:
@@ -55,6 +56,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Scaled dot product attention.
 LUCID_API TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
                                                         const TensorImplPtr& k,
                                                         const TensorImplPtr& v,
@@ -65,6 +67,7 @@ LUCID_API TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
 // Returns {output, weights}. Weights are detached (no grad_fn) — they are an
 // intermediate of `output`'s backward chain, not an independent differentiable
 // tensor.
+/// Scaled dot product attention with weights.
 LUCID_API std::vector<TensorImplPtr> scaled_dot_product_attention_with_weights_op(
     const TensorImplPtr& q,
     const TensorImplPtr& k,

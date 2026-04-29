@@ -30,6 +30,7 @@
 
 namespace lucid {
 
+/// Autograd backward node for GroupNorm.
 class LUCID_API GroupNormBackward : public FuncOp<GroupNormBackward, 3> {
 public:
     static const OpSchema schema_v1;
@@ -46,6 +47,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+/// Group norm.
 LUCID_API TensorImplPtr group_norm_op(const TensorImplPtr& x,
                                       const TensorImplPtr& gamma,
                                       const TensorImplPtr& beta,

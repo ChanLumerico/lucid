@@ -37,6 +37,7 @@
 
 namespace lucid {
 
+/// Builder-pattern input validator; throws ShapeMismatch/DtypeMismatch on failure.
 class LUCID_API Validator {
 public:
     /// Start a single-input validation chain. `label` is used in error
