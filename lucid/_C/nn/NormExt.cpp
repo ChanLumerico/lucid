@@ -19,6 +19,7 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -160,33 +161,11 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
                                             x->device(), false);
 
-    if (!GradMode::is_enabled() ||
-        !(x->requires_grad() || gamma->requires_grad() || beta->requires_grad())) {
-        return out;
-    }
-
-    auto x_edge = detail::ensure_grad_fn(x);
-    auto m_edge = detail::ensure_grad_fn(mean);
-    auto v_edge = detail::ensure_grad_fn(var);
-    auto g_edge = detail::ensure_grad_fn(gamma);
-    auto bb_edge = detail::ensure_grad_fn(beta);
     auto bwd = std::make_shared<BatchNormEvalBackward>();
-    bwd->input_shapes_ = {x->shape(), mean->shape(), var->shape(), gamma->shape(), beta->shape()};
-    bwd->out_shape_ = x->shape();
-    bwd->dtype_ = x->dtype();
-    bwd->device_ = x->device();
-    bwd->input_tensors_ = {x, mean, var, gamma, beta};
-    bwd->saved_inputs_ = {x->storage(), mean->storage(), var->storage(), gamma->storage(),
-                          beta->storage()};
     bwd->eps_ = eps;
     bwd->rstd_ = std::move(rstd_storage);
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(m_edge, 0), Edge(v_edge, 0),
-                                          Edge(g_edge, 0), Edge(bb_edge, 0)});
-    bwd->set_saved_versions(
-        {x->version(), mean->version(), var->version(), gamma->version(), beta->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<BatchNormEvalBackward, 5>::wire_autograd(std::move(bwd),
+                                                                {x, mean, var, gamma, beta}, out);
     return out;
 }
 
@@ -449,26 +428,14 @@ TensorImplPtr LpNormalizeBackward::forward(const TensorImplPtr& x,
     auto out = std::make_shared<TensorImpl>(std::move(y_storage), x->shape(), x->dtype(),
                                             x->device(), false);
 
-    if (!GradMode::is_enabled() || !x->requires_grad())
-        return out;
-
-    auto x_edge = detail::ensure_grad_fn(x);
-    auto bwd = std::make_shared<LpNormalizeBackward>();
-    bwd->input_shapes_ = {x->shape()};
-    bwd->out_shape_ = x->shape();
-    bwd->dtype_ = x->dtype();
-    bwd->device_ = x->device();
-    bwd->input_tensors_ = {x};
-    bwd->saved_inputs_ = {x->storage()};
-    bwd->ord_ = ord;
-    bwd->axis_ = axis;
-    bwd->eps_ = eps;
-    bwd->saved_norm_ = std::move(norm_storage);
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({x->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<LpNormalizeBackward>();
+        bwd->ord_ = ord;
+        bwd->axis_ = axis;
+        bwd->eps_ = eps;
+        bwd->saved_norm_ = std::move(norm_storage);
+        kernel::NaryKernel<LpNormalizeBackward, 1>::wire_autograd(std::move(bwd), {x}, out);
+    }
     return out;
 }
 
@@ -708,28 +675,11 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
                                             x->device(), false);
 
-    if (!GradMode::is_enabled() ||
-        !(x->requires_grad() || gamma->requires_grad() || beta->requires_grad())) {
-        return out;
-    }
-
-    auto x_edge = detail::ensure_grad_fn(x);
-    auto g_edge = detail::ensure_grad_fn(gamma);
-    auto bb_edge = detail::ensure_grad_fn(beta);
     auto bwd = std::make_shared<GlobalResponseNormBackward>();
-    bwd->input_shapes_ = {x->shape(), gamma->shape(), beta->shape()};
-    bwd->out_shape_ = x->shape();
-    bwd->dtype_ = x->dtype();
-    bwd->device_ = x->device();
-    bwd->input_tensors_ = {x, gamma, beta};
-    bwd->saved_inputs_ = {x->storage(), gamma->storage(), beta->storage()};
     bwd->eps_ = eps;
     bwd->saved_Nx_ = std::move(nx_storage);
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0), Edge(bb_edge, 0)});
-    bwd->set_saved_versions({x->version(), gamma->version(), beta->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<GlobalResponseNormBackward, 3>::wire_autograd(std::move(bwd),
+                                                                     {x, gamma, beta}, out);
     return out;
 }
 

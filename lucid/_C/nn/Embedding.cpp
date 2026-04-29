@@ -19,6 +19,7 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -124,28 +125,14 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, weight->dtype(),
                                             weight->device(), false);
 
-    if (!GradMode::is_enabled() || !weight->requires_grad())
-        return out;
-
-    auto w_edge = detail::ensure_grad_fn(weight);
     auto bwd = std::make_shared<EmbeddingBackward>();
-    bwd->input_shapes_ = {weight->shape()};
-    bwd->out_shape_ = out_shape;
-    bwd->dtype_ = weight->dtype();
-    bwd->device_ = weight->device();
-    bwd->input_tensors_ = {weight};
-    bwd->saved_inputs_ = {weight->storage()};
     bwd->saved_indices_ = indices->storage();
     bwd->saved_indices_shape_ = indices->shape();
     bwd->saved_indices_dtype_ = indices->dtype();
     bwd->padding_idx_ = padding_idx;
     bwd->weight_shape_ = weight->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(w_edge, 0)});
-    bwd->set_saved_versions(
-        std::vector<std::int64_t>{static_cast<std::int64_t>(weight->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<EmbeddingBackward, 1>::wire_autograd(std::move(bwd), {weight}, out,
+                                                            /*save_ins=*/false);
     return out;
 }
 
@@ -540,26 +527,13 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
             Storage{gpu::wrap_mlx_array(std::move(out_arr), input->dtype())}, input->shape(),
             input->dtype(), input->device(), false);
 
-        if (!GradMode::is_enabled() || !input->requires_grad())
-            return out;
-        auto x_edge = detail::ensure_grad_fn(input);
         auto bwd = std::make_shared<RotaryPosEmbeddingBackward>();
-        bwd->input_shapes_ = {input->shape()};
-        bwd->out_shape_ = input->shape();
-        bwd->dtype_ = input->dtype();
-        bwd->device_ = input->device();
-        bwd->input_tensors_ = {input};
-        bwd->saved_inputs_ = {input->storage()};
         bwd->saved_cos_ = Storage{gpu::wrap_mlx_array(std::move(cos_t), input->dtype())};
         bwd->saved_sin_ = Storage{gpu::wrap_mlx_array(std::move(sin_t), input->dtype())};
         bwd->interleaved_ = interleaved;
         bwd->orig_shape_ = input->shape();
-        bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-        bwd->set_saved_versions(
-            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<RotaryPosEmbeddingBackward, 1>::wire_autograd(std::move(bwd), {input},
+                                                                         out, /*save_ins=*/false);
         return out;
     }
 
@@ -632,26 +606,15 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
     auto out = std::make_shared<TensorImpl>(Storage{std::move(out_cpu)}, input->shape(),
                                             input->dtype(), input->device(), false);
 
-    if (!GradMode::is_enabled() || !input->requires_grad())
-        return out;
-
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto bwd = std::make_shared<RotaryPosEmbeddingBackward>();
-    bwd->input_shapes_ = {input->shape()};
-    bwd->out_shape_ = input->shape();
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input};
-    bwd->saved_inputs_ = {input->storage()};
-    bwd->saved_cos_ = Storage{std::move(cos_cpu)};
-    bwd->saved_sin_ = Storage{std::move(sin_cpu)};
-    bwd->interleaved_ = interleaved;
-    bwd->orig_shape_ = input->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<RotaryPosEmbeddingBackward>();
+        bwd->saved_cos_ = Storage{std::move(cos_cpu)};
+        bwd->saved_sin_ = Storage{std::move(sin_cpu)};
+        bwd->interleaved_ = interleaved;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<RotaryPosEmbeddingBackward, 1>::wire_autograd(std::move(bwd), {input},
+                                                                         out, /*save_ins=*/false);
+    }
     return out;
 }
 

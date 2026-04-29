@@ -5,9 +5,7 @@
 
 #include <mlx/ops.h>
 
-#include "../autograd/AccumulateGrad.h"
 #include "../autograd/Helpers.h"
-#include "../autograd/Node.h"
 #include "../backend/cpu/Blas.h"
 #include "../backend/cpu/Im2Col.h"
 #include "../backend/gpu/MlxBridge.h"
@@ -19,6 +17,7 @@
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -458,33 +457,14 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
 
-    if (!GradMode::is_enabled() ||
-        !(x->requires_grad() || W->requires_grad() || b->requires_grad())) {
-        return out;
-    }
-
-    auto x_edge = detail::ensure_grad_fn(x);
-    auto W_edge = detail::ensure_grad_fn(W);
-    auto b_edge = detail::ensure_grad_fn(b);
-
     auto bwd = std::make_shared<ConvTransposeNdBackward<N>>();
-    bwd->input_shapes_ = {x->shape(), W->shape(), b->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = x->dtype();
-    bwd->device_ = x->device();
-    bwd->input_tensors_ = {x, W, b};
-    bwd->saved_inputs_ = {x->storage(), W->storage(), b->storage()};
     for (int i = 0; i < N; ++i) {
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
         bwd->opad_[i] = opad[i];
     }
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(W_edge, 0), Edge(b_edge, 0)});
-    bwd->set_saved_versions({x->version(), W->version(), b->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<ConvTransposeNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, W, b},
+                                                                     out);
     return out;
 }
 

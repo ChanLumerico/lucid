@@ -17,6 +17,7 @@
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../kernel/NaryKernel.h"
 #include "_BinaryOp.h"
 #include "_Detail.h"
 
@@ -104,25 +105,13 @@ TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     OpScopeFull scope{"outer", device, dt, Shape{}};
 
     auto wire_grad = [&](const TensorImplPtr& out) {
-        if (!(GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())))
-            return;
         auto bwd = std::make_shared<OuterBackward>();
         bwd->saved_a_ = a->storage();
         bwd->saved_b_ = b->storage();
         bwd->M_ = a->shape()[0];
         bwd->N_ = b->shape()[0];
-        bwd->dtype_ = dt;
-        bwd->device_ = device;
-        auto a_edge = detail::ensure_grad_fn(a);
-        auto b_edge = detail::ensure_grad_fn(b);
-        std::vector<Edge> edges;
-        edges.emplace_back(a_edge, 0);
-        edges.emplace_back(b_edge, 0);
-        bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version(), b->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<OuterBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out,
+                                                            /*save_ins=*/false);
     };
 
     if (device == Device::GPU) {

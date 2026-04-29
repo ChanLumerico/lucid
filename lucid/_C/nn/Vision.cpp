@@ -21,6 +21,7 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -467,52 +468,11 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
     if (!GradMode::is_enabled() || !any_grad)
         return out;
 
-    auto x1_edge = detail::ensure_grad_fn(x1);
-    auto x2_edge = detail::ensure_grad_fn(x2);
-    auto w_edge = detail::ensure_grad_fn(weight);
-    auto b_edge = bias ? detail::ensure_grad_fn(bias) : std::shared_ptr<Node>();
     auto bwd = std::make_shared<BilinearLayerBackward>();
-    if (bias) {
-        bwd->input_shapes_ = {x1->shape(), x2->shape(), weight->shape(), bias->shape()};
-        bwd->input_tensors_ = {x1, x2, weight, bias};
-        bwd->saved_inputs_ = {x1->storage(), x2->storage(), weight->storage(), bias->storage()};
-    } else {
-        // Bias slot is required by FuncOp<4>; store an empty CpuStorage and
-        // a null TensorImplPtr — apply() will detect the empty slot and skip
-        // the db output.
-        bwd->input_shapes_ = {x1->shape(), x2->shape(), weight->shape(), Shape{}};
-        bwd->input_tensors_[0] = x1;
-        bwd->input_tensors_[1] = x2;
-        bwd->input_tensors_[2] = weight;
-        // Slot 3 left default-constructed (empty weak_ptr).
-        CpuStorage empty;
-        empty.dtype = x1->dtype();
-        empty.nbytes = 0;
-        bwd->saved_inputs_ = {x1->storage(), x2->storage(), weight->storage(),
-                              Storage{std::move(empty)}};
-    }
-    bwd->out_shape_ = out_shape;
-    bwd->dtype_ = x1->dtype();
-    bwd->device_ = x1->device();
     bwd->orig_x1_shape_ = x1->shape();
     bwd->orig_x2_shape_ = x2->shape();
-    std::vector<Edge> edges{Edge(x1_edge, 0), Edge(x2_edge, 0), Edge(w_edge, 0)};
-    if (bias)
-        edges.emplace_back(b_edge, 0);
-    else
-        edges.emplace_back(std::shared_ptr<Node>(), 0);
-    bwd->set_next_edges(std::move(edges));
-    std::vector<std::int64_t> versions{static_cast<std::int64_t>(x1->version()),
-                                       static_cast<std::int64_t>(x2->version()),
-                                       static_cast<std::int64_t>(weight->version())};
-    if (bias)
-        versions.push_back(static_cast<std::int64_t>(bias->version()));
-    else
-        versions.push_back(0);
-    bwd->set_saved_versions(std::move(versions));
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<BilinearLayerBackward, 4>::wire_autograd(std::move(bwd),
+                                                                {x1, x2, weight, bias}, out);
     return out;
 }
 

@@ -20,6 +20,7 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -296,26 +297,17 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                             input->device(), false);
-    if (!GradMode::is_enabled() || !input->requires_grad())
-        return out;
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto bwd = std::make_shared<InterpolateBilinearBackward>();
-    bwd->input_shapes_ = {input->shape()};
-    bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input};
-    bwd->H_in_ = H_in;
-    bwd->W_in_ = W_in;
-    bwd->H_out_ = H_out;
-    bwd->W_out_ = W_out;
-    bwd->align_corners_ = align_corners;
-    bwd->orig_shape_ = input->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({input->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<InterpolateBilinearBackward>();
+        bwd->H_in_ = H_in;
+        bwd->W_in_ = W_in;
+        bwd->H_out_ = H_out;
+        bwd->W_out_ = W_out;
+        bwd->align_corners_ = align_corners;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<InterpolateBilinearBackward, 1>::wire_autograd(std::move(bwd), {input},
+                                                                          out, /*save_ins=*/false);
+    }
     return out;
 }
 
@@ -708,28 +700,19 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                             input->device(), false);
-    if (!GradMode::is_enabled() || !input->requires_grad())
-        return out;
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto bwd = std::make_shared<InterpolateTrilinearBackward>();
-    bwd->input_shapes_ = {input->shape()};
-    bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input};
-    bwd->D_in_ = D_in;
-    bwd->H_in_ = H_in;
-    bwd->W_in_ = W_in;
-    bwd->D_out_ = D_out;
-    bwd->H_out_ = H_out;
-    bwd->W_out_ = W_out;
-    bwd->align_corners_ = align_corners;
-    bwd->orig_shape_ = input->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({input->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<InterpolateTrilinearBackward>();
+        bwd->D_in_ = D_in;
+        bwd->H_in_ = H_in;
+        bwd->W_in_ = W_in;
+        bwd->D_out_ = D_out;
+        bwd->H_out_ = H_out;
+        bwd->W_out_ = W_out;
+        bwd->align_corners_ = align_corners;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<InterpolateTrilinearBackward, 1>::wire_autograd(std::move(bwd), {input},
+                                                                           out, /*save_ins=*/false);
+    }
     return out;
 }
 

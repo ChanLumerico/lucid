@@ -18,6 +18,7 @@
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -250,30 +251,7 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
                                             a->device(),
                                             /*requires_grad=*/false);
 
-    const bool needs_grad = GradMode::is_enabled() && (a->requires_grad() || b->requires_grad());
-    if (!needs_grad)
-        return out;
-
-    auto a_edge = detail::ensure_grad_fn(a);
-    auto b_edge = detail::ensure_grad_fn(b);
-
-    auto bwd = std::make_shared<MatmulBackward>();
-    bwd->input_shapes_ = {a->shape(), b->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a, b};  // Item #9 — for version check
-    bwd->saved_inputs_ = {a->storage(), b->storage()};
-
-    std::vector<Edge> edges;
-    edges.emplace_back(a_edge, /*input_nr=*/0);
-    edges.emplace_back(b_edge, /*input_nr=*/0);
-    bwd->set_next_edges(std::move(edges));
-    bwd->set_saved_versions({a->version(), b->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<MatmulBackward, 2>::wire_autograd({a, b}, out);
     return out;
 }
 

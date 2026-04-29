@@ -7,22 +7,12 @@
 // For ops whose input count is not known at compile time: concat, stack,
 // einsum, scatter, etc.
 //
-// Unlike AutogradNode<D, N> (fixed N), VariadicKernel stores saved metadata
-// in std::vector instead of std::array.
+// Phase 3.4: adds `wire_autograd()` static helper so Derived::forward()
+// only needs to write validation + compute. The autograd wiring block
+// collapses to one call:
 //
-// Derived implements:
-//   1. `static const OpSchema schema_v1;`
-//   2. `static TensorImplPtr forward(const std::vector<TensorImplPtr>& inputs, ...)`
-//   3. `std::vector<Storage> apply(Storage grad_out) override`
-//
-// VariadicKernel provides:
-//   - validate_versions() over all saved inputs
-//   - std::vector<Shape> input_shapes_v_   (variable-length shapes)
-//   - std::vector<Storage> saved_inputs_v_ (variable-length saved inputs)
-//   - std::vector<weak_ptr<TensorImpl>> input_tensors_v_
-//
-// Usage:
-//   class ConcatBackward : public VariadicKernel<ConcatBackward> { ... };
+//   VariadicKernel<Derived>::wire_autograd(inputs, out);
+//   return out;
 //
 // Layer: kernel/. Depends on autograd/, core/.
 
@@ -31,12 +21,16 @@
 #include <string_view>
 #include <vector>
 
-#include "../autograd/Helpers.h"  // check_version_match
+#include "../autograd/AccumulateGrad.h"
+#include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../core/Device.h"
 #include "../core/Dtype.h"
+#include "../core/GradMode.h"
 #include "../core/Shape.h"
 #include "../core/Storage.h"
+#include "../core/TensorImpl.h"
+#include "BinaryKernel.h"  // detail::ensure_grad_fn
 
 namespace lucid {
 
@@ -48,7 +42,7 @@ template <class Derived>
 class VariadicKernel : public Node {
 public:
     // ----------------------------------------------------------------
-    // IKernel interface
+    // Name
     // ----------------------------------------------------------------
     std::string_view name() const noexcept { return Derived::schema_v1.name; }
 
@@ -66,7 +60,6 @@ public:
     // ----------------------------------------------------------------
     // Saved state — populated by forward(), consumed by apply().
     // ----------------------------------------------------------------
-
     std::vector<std::weak_ptr<TensorImpl>> input_tensors_v_;
     std::vector<Shape> input_shapes_v_;
     Shape out_shape_;
@@ -74,6 +67,69 @@ public:
     Device device_ = Device::CPU;
     std::vector<Storage> saved_inputs_v_;
     Storage saved_output_;
+
+    // ----------------------------------------------------------------
+    // Phase 3.4: autograd wiring helper
+    // ----------------------------------------------------------------
+
+    /// Primary overload: wire using a pre-created (pre-populated) bwd node.
+    static bool wire_autograd(std::shared_ptr<Derived> bwd,
+                              const std::vector<TensorImplPtr>& inputs,
+                              const TensorImplPtr& out,
+                              bool save_ins = true) {
+        if (!GradMode::is_enabled())
+            return false;
+
+        bool any_grad = false;
+        for (const auto& inp : inputs)
+            any_grad |= (inp && inp->requires_grad());
+        if (!any_grad)
+            return false;
+
+        for (const auto& inp : inputs) {
+            if (inp) {
+                bwd->dtype_ = inp->dtype();
+                bwd->device_ = inp->device();
+                break;
+            }
+        }
+        bwd->out_shape_ = out->shape();
+
+        const std::size_t n = inputs.size();
+        bwd->input_shapes_v_.reserve(n);
+        bwd->input_tensors_v_.reserve(n);
+        if (save_ins)
+            bwd->saved_inputs_v_.reserve(n);
+
+        std::vector<Edge> edges;
+        std::vector<std::int64_t> versions;
+        edges.reserve(n);
+        versions.reserve(n);
+
+        for (const auto& inp : inputs) {
+            bwd->input_shapes_v_.push_back(inp ? inp->shape() : Shape{});
+            bwd->input_tensors_v_.push_back(inp);
+            if (save_ins && inp)
+                bwd->saved_inputs_v_.push_back(inp->storage());
+            edges.emplace_back(detail::ensure_grad_fn(inp), /*input_nr=*/0);
+            versions.push_back(inp ? inp->version() : 0);
+        }
+
+        bwd->set_next_edges(std::move(edges));
+        bwd->set_saved_versions(std::move(versions));
+
+        out->set_grad_fn(std::move(bwd));
+        out->set_leaf(false);
+        out->set_requires_grad(true);
+        return true;
+    }
+
+    /// Convenience overload: creates bwd internally (no extra fields).
+    static bool wire_autograd(const std::vector<TensorImplPtr>& inputs,
+                              const TensorImplPtr& out,
+                              bool save_ins = true) {
+        return wire_autograd(std::make_shared<Derived>(), inputs, out, save_ins);
+    }
 };
 
 }  // namespace kernel

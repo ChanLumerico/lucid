@@ -19,6 +19,7 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -172,28 +173,7 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
 
-    if (!GradMode::is_enabled() ||
-        !(x->requires_grad() || W->requires_grad() || b->requires_grad())) {
-        return out;
-    }
-
-    auto x_edge = detail::ensure_grad_fn(x);
-    auto W_edge = detail::ensure_grad_fn(W);
-    auto b_edge = detail::ensure_grad_fn(b);
-
-    auto bwd = std::make_shared<LinearBackward>();
-    bwd->input_shapes_ = {x->shape(), W->shape(), b->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = x->dtype();
-    bwd->device_ = x->device();
-    bwd->input_tensors_ = {x, W, b};
-    bwd->saved_inputs_ = {x->storage(), W->storage(), b->storage()};
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(W_edge, 0), Edge(b_edge, 0)});
-    bwd->set_saved_versions({x->version(), W->version(), b->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<LinearBackward, 3>::wire_autograd({x, W, b}, out);
     return out;
 }
 

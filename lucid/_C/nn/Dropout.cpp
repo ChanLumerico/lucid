@@ -21,6 +21,7 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -47,24 +48,11 @@ TensorImplPtr DropoutBackward::forward(const TensorImplPtr& a,
         Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
         auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
                                                 a->device(), false);
-        if (!GradMode::is_enabled() || !a->requires_grad())
-            return out;
-
-        auto a_edge = detail::ensure_grad_fn(a);
         auto bwd = std::make_shared<DropoutBackward>();
-        bwd->input_shapes_ = {a->shape()};
-        bwd->out_shape_ = a->shape();
-        bwd->dtype_ = a->dtype();
-        bwd->device_ = a->device();
-        bwd->input_tensors_ = {a};
         bwd->p_ = 0.0;  // identity backward
         // mask_ is empty/uninitialized — apply() detects and short-circuits.
-        bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-        bwd->set_saved_versions({a->version()});
-
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<DropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                              /*save_ins=*/false);
         return out;
     }
 
@@ -80,24 +68,13 @@ TensorImplPtr DropoutBackward::forward(const TensorImplPtr& a,
         std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
-    auto a_edge = detail::ensure_grad_fn(a);
-    auto bwd = std::make_shared<DropoutBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
-    bwd->p_ = p;
-    bwd->mask_ = std::move(scaled_mask);  // already scaled by 1/(1-p)
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<DropoutBackward>();
+        bwd->p_ = p;
+        bwd->mask_ = std::move(scaled_mask);  // already scaled by 1/(1-p)
+        kernel::NaryKernel<DropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                              /*save_ins=*/false);
+    }
     return out;
 }
 
@@ -255,21 +232,10 @@ TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
         Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
         auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
                                                 a->device(), false);
-        if (!GradMode::is_enabled() || !a->requires_grad())
-            return out;
-        auto a_edge = detail::ensure_grad_fn(a);
         auto bwd = std::make_shared<DropoutNdBackward>();
-        bwd->input_shapes_ = {a->shape()};
-        bwd->out_shape_ = a->shape();
-        bwd->dtype_ = a->dtype();
-        bwd->device_ = a->device();
-        bwd->input_tensors_ = {a};
         bwd->p_ = 0.0;
-        bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-        bwd->set_saved_versions({a->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<DropoutNdBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                                /*save_ins=*/false);
         return out;
     }
 
@@ -305,22 +271,13 @@ TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
         std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-    auto a_edge = detail::ensure_grad_fn(a);
-    auto bwd = std::make_shared<DropoutNdBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
-    bwd->p_ = p;
-    bwd->mask_ = std::move(exp_storage);  // full-shape, scaled
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<DropoutNdBackward>();
+        bwd->p_ = p;
+        bwd->mask_ = std::move(exp_storage);  // full-shape, scaled
+        kernel::NaryKernel<DropoutNdBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                                /*save_ins=*/false);
+    }
     return out;
 }
 
@@ -382,22 +339,11 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
         Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
         auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
                                                 a->device(), false);
-        if (!GradMode::is_enabled() || !a->requires_grad())
-            return out;
-        auto a_edge = detail::ensure_grad_fn(a);
         auto bwd = std::make_shared<AlphaDropoutBackward>();
-        bwd->input_shapes_ = {a->shape()};
-        bwd->out_shape_ = a->shape();
-        bwd->dtype_ = a->dtype();
-        bwd->device_ = a->device();
-        bwd->input_tensors_ = {a};
         bwd->p_ = 0.0;
         bwd->a_coef_ = 1.0;
-        bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-        bwd->set_saved_versions({a->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<AlphaDropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                                   /*save_ins=*/false);
         return out;
     }
 
@@ -424,23 +370,14 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
         std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-    auto a_edge = detail::ensure_grad_fn(a);
-    auto bwd = std::make_shared<AlphaDropoutBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
-    bwd->p_ = p;
-    bwd->a_coef_ = a_coef;
-    bwd->mask_ = std::move(mask);
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<AlphaDropoutBackward>();
+        bwd->p_ = p;
+        bwd->a_coef_ = a_coef;
+        bwd->mask_ = std::move(mask);
+        kernel::NaryKernel<AlphaDropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                                   /*save_ins=*/false);
+    }
     return out;
 }
 
@@ -642,22 +579,13 @@ TensorImplPtr DropBlockBackward::forward(
         std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-    auto a_edge = detail::ensure_grad_fn(a);
-    auto bwd = std::make_shared<DropBlockBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
-    bwd->p_ = p;
-    bwd->mask_ = std::move(keep_storage);
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<DropBlockBackward>();
+        bwd->p_ = p;
+        bwd->mask_ = std::move(keep_storage);
+        kernel::NaryKernel<DropBlockBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                                /*save_ins=*/false);
+    }
     return out;
 }
 
@@ -696,20 +624,7 @@ TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
         Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
         auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
                                                 a->device(), false);
-        if (!GradMode::is_enabled() || !a->requires_grad())
-            return out;
-        auto a_edge = detail::ensure_grad_fn(a);
-        auto bwd = std::make_shared<DropPathBackward>();
-        bwd->input_shapes_ = {a->shape()};
-        bwd->out_shape_ = a->shape();
-        bwd->dtype_ = a->dtype();
-        bwd->device_ = a->device();
-        bwd->input_tensors_ = {a};
-        bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-        bwd->set_saved_versions({a->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<DropPathBackward, 1>::wire_autograd({a}, out, /*save_ins=*/false);
         return out;
     }
 
@@ -741,21 +656,12 @@ TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
         std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(numel));
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-    auto a_edge = detail::ensure_grad_fn(a);
-    auto bwd = std::make_shared<DropPathBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
-    bwd->mask_ = std::move(exp_storage);
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<DropPathBackward>();
+        bwd->mask_ = std::move(exp_storage);
+        kernel::NaryKernel<DropPathBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                               /*save_ins=*/false);
+    }
     return out;
 }
 

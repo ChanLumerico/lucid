@@ -20,6 +20,7 @@
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -199,26 +200,12 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
                                             reduced_shape(input->shape(), reduction),
                                             input->dtype(), input->device(), false);
 
-    if (!GradMode::is_enabled() || !(input->requires_grad() || target->requires_grad()))
-        return out;
-
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto t_edge = detail::ensure_grad_fn(target);
-    auto bwd = std::make_shared<MseLossBackward>();
-    bwd->input_shapes_ = {input->shape(), target->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input, target};
-    bwd->saved_inputs_ = {input->storage(), target->storage()};
-    bwd->reduction_ = reduction;
-    bwd->orig_shape_ = input->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(t_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{
-        static_cast<std::int64_t>(input->version()), static_cast<std::int64_t>(target->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<MseLossBackward>();
+        bwd->reduction_ = reduction;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<MseLossBackward, 2>::wire_autograd(std::move(bwd), {input, target}, out);
+    }
     return out;
 }
 
@@ -359,31 +346,14 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
                                             reduced_shape(input->shape(), reduction),
                                             input->dtype(), input->device(), false);
 
-    const bool any_grad =
-        input->requires_grad() || target->requires_grad() || weight->requires_grad();
-    if (!GradMode::is_enabled() || !any_grad)
-        return out;
-
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto t_edge = detail::ensure_grad_fn(target);
-    auto w_edge = detail::ensure_grad_fn(weight);
-    auto bwd = std::make_shared<BCELossBackward>();
-    bwd->input_shapes_ = {input->shape(), target->shape(), weight->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input, target, weight};
-    bwd->saved_inputs_ = {input->storage(), target->storage(), weight->storage()};
-    bwd->reduction_ = reduction;
-    bwd->eps_ = eps;
-    bwd->orig_shape_ = input->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(t_edge, 0), Edge(w_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{
-        static_cast<std::int64_t>(input->version()), static_cast<std::int64_t>(target->version()),
-        static_cast<std::int64_t>(weight->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<BCELossBackward>();
+        bwd->reduction_ = reduction;
+        bwd->eps_ = eps;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<BCELossBackward, 3>::wire_autograd(std::move(bwd),
+                                                              {input, target, weight}, out);
+    }
     return out;
 }
 
@@ -585,34 +555,13 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
                                             reduced_shape(input->shape(), reduction),
                                             input->dtype(), input->device(), false);
 
-    const bool any_grad = input->requires_grad() || target->requires_grad() ||
-                          weight->requires_grad() || pos_weight->requires_grad();
-    if (!GradMode::is_enabled() || !any_grad)
-        return out;
-
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto t_edge = detail::ensure_grad_fn(target);
-    auto w_edge = detail::ensure_grad_fn(weight);
-    auto pw_edge = detail::ensure_grad_fn(pos_weight);
-    auto bwd = std::make_shared<BCEWithLogitsBackward>();
-    bwd->input_shapes_ = {input->shape(), target->shape(), weight->shape(), pos_weight->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input, target, weight, pos_weight};
-    bwd->saved_inputs_ = {input->storage(), target->storage(), weight->storage(),
-                          pos_weight->storage()};
-    bwd->reduction_ = reduction;
-    bwd->orig_shape_ = input->shape();
-    bwd->set_next_edges(
-        std::vector<Edge>{Edge(x_edge, 0), Edge(t_edge, 0), Edge(w_edge, 0), Edge(pw_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{
-        static_cast<std::int64_t>(input->version()), static_cast<std::int64_t>(target->version()),
-        static_cast<std::int64_t>(weight->version()),
-        static_cast<std::int64_t>(pos_weight->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<BCEWithLogitsBackward>();
+        bwd->reduction_ = reduction;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<BCEWithLogitsBackward, 4>::wire_autograd(
+            std::move(bwd), {input, target, weight, pos_weight}, out);
+    }
     return out;
 }
 
@@ -830,35 +779,24 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
         auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape_local,
                                                 input->dtype(), input->device(), false);
 
-        if (!GradMode::is_enabled() || !input->requires_grad())
-            return out;
-
-        auto x_edge = detail::ensure_grad_fn(input);
-        auto bwd = std::make_shared<CrossEntropyBackward>();
-        bwd->input_shapes_ = {input->shape()};
-        bwd->out_shape_ = out_shape_local;
-        bwd->dtype_ = input->dtype();
-        bwd->device_ = input->device();
-        bwd->input_tensors_ = {input};
-        bwd->saved_inputs_ = {input->storage()};
-        bwd->reduction_ = reduction;
-        bwd->eps_ = eps;
-        bwd->ignore_index_ = ignore_index;
-        bwd->orig_input_shape_ = input->shape();
-        bwd->has_weight_ = (weight_or_null != nullptr);
-        // Save softmax (large but unavoidable for fused backward).
-        bwd->saved_softmax_ = Storage{gpu::wrap_mlx_array(std::move(softmax), input->dtype())};
-        bwd->saved_target_ = target->storage();
-        if (weight_or_null)
-            bwd->saved_weight_ = weight_or_null->storage();
-        // Save valid_count as a 1-elem GPU array.
-        bwd->saved_valid_count_ = Storage{gpu::wrap_mlx_array(std::move(vc_safe), input->dtype())};
-        bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-        bwd->set_saved_versions(
-            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        {
+            auto bwd = std::make_shared<CrossEntropyBackward>();
+            bwd->reduction_ = reduction;
+            bwd->eps_ = eps;
+            bwd->ignore_index_ = ignore_index;
+            bwd->orig_input_shape_ = input->shape();
+            bwd->has_weight_ = (weight_or_null != nullptr);
+            // Save softmax (large but unavoidable for fused backward).
+            bwd->saved_softmax_ = Storage{gpu::wrap_mlx_array(std::move(softmax), input->dtype())};
+            bwd->saved_target_ = target->storage();
+            if (weight_or_null)
+                bwd->saved_weight_ = weight_or_null->storage();
+            // Save valid_count as a 1-elem GPU array.
+            bwd->saved_valid_count_ =
+                Storage{gpu::wrap_mlx_array(std::move(vc_safe), input->dtype())};
+            kernel::NaryKernel<CrossEntropyBackward, 1>::wire_autograd(std::move(bwd), {input}, out,
+                                                                       /*save_ins=*/false);
+        }
         return out;
     }
 
@@ -951,33 +889,22 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                             input->device(), false);
 
-    if (!GradMode::is_enabled() || !input->requires_grad())
-        return out;
-
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto bwd = std::make_shared<CrossEntropyBackward>();
-    bwd->input_shapes_ = {input->shape()};
-    bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input};
-    bwd->saved_inputs_ = {input->storage()};
-    bwd->reduction_ = reduction;
-    bwd->eps_ = eps;
-    bwd->ignore_index_ = ignore_index;
-    bwd->orig_input_shape_ = input->shape();
-    bwd->has_weight_ = (weight_or_null != nullptr);
-    bwd->saved_softmax_ = Storage{std::move(softmax_buf)};
-    bwd->saved_target_ = target->storage();
-    if (weight_or_null)
-        bwd->saved_weight_ = weight_or_null->storage();
-    bwd->saved_valid_count_ =
-        Storage{make_scalar(static_cast<double>(valid_count), input->dtype())};
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<CrossEntropyBackward>();
+        bwd->reduction_ = reduction;
+        bwd->eps_ = eps;
+        bwd->ignore_index_ = ignore_index;
+        bwd->orig_input_shape_ = input->shape();
+        bwd->has_weight_ = (weight_or_null != nullptr);
+        bwd->saved_softmax_ = Storage{std::move(softmax_buf)};
+        bwd->saved_target_ = target->storage();
+        if (weight_or_null)
+            bwd->saved_weight_ = weight_or_null->storage();
+        bwd->saved_valid_count_ =
+            Storage{make_scalar(static_cast<double>(valid_count), input->dtype())};
+        kernel::NaryKernel<CrossEntropyBackward, 1>::wire_autograd(std::move(bwd), {input}, out,
+                                                                   /*save_ins=*/false);
+    }
     return out;
 }
 
@@ -1191,31 +1118,20 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
         auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape_local,
                                                 input->dtype(), input->device(), false);
 
-        if (!GradMode::is_enabled() || !input->requires_grad())
-            return out;
-
-        auto x_edge = detail::ensure_grad_fn(input);
-        auto bwd = std::make_shared<NLLLossBackward>();
-        bwd->input_shapes_ = {input->shape()};
-        bwd->out_shape_ = out_shape_local;
-        bwd->dtype_ = input->dtype();
-        bwd->device_ = input->device();
-        bwd->input_tensors_ = {input};
-        bwd->saved_inputs_ = {input->storage()};
-        bwd->reduction_ = reduction;
-        bwd->ignore_index_ = ignore_index;
-        bwd->orig_input_shape_ = input->shape();
-        bwd->has_weight_ = (weight_or_null != nullptr);
-        bwd->saved_target_ = target->storage();
-        if (weight_or_null)
-            bwd->saved_weight_ = weight_or_null->storage();
-        bwd->saved_valid_count_ = Storage{gpu::wrap_mlx_array(std::move(vc_safe), input->dtype())};
-        bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-        bwd->set_saved_versions(
-            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        {
+            auto bwd = std::make_shared<NLLLossBackward>();
+            bwd->reduction_ = reduction;
+            bwd->ignore_index_ = ignore_index;
+            bwd->orig_input_shape_ = input->shape();
+            bwd->has_weight_ = (weight_or_null != nullptr);
+            bwd->saved_target_ = target->storage();
+            if (weight_or_null)
+                bwd->saved_weight_ = weight_or_null->storage();
+            bwd->saved_valid_count_ =
+                Storage{gpu::wrap_mlx_array(std::move(vc_safe), input->dtype())};
+            kernel::NaryKernel<NLLLossBackward, 1>::wire_autograd(std::move(bwd), {input}, out,
+                                                                  /*save_ins=*/false);
+        }
         return out;
     }
 
@@ -1284,31 +1200,20 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                             input->device(), false);
 
-    if (!GradMode::is_enabled() || !input->requires_grad())
-        return out;
-
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto bwd = std::make_shared<NLLLossBackward>();
-    bwd->input_shapes_ = {input->shape()};
-    bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input};
-    bwd->saved_inputs_ = {input->storage()};
-    bwd->reduction_ = reduction;
-    bwd->ignore_index_ = ignore_index;
-    bwd->orig_input_shape_ = input->shape();
-    bwd->has_weight_ = (weight_or_null != nullptr);
-    bwd->saved_target_ = target->storage();
-    if (weight_or_null)
-        bwd->saved_weight_ = weight_or_null->storage();
-    bwd->saved_valid_count_ =
-        Storage{make_scalar(static_cast<double>(valid_count), input->dtype())};
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<NLLLossBackward>();
+        bwd->reduction_ = reduction;
+        bwd->ignore_index_ = ignore_index;
+        bwd->orig_input_shape_ = input->shape();
+        bwd->has_weight_ = (weight_or_null != nullptr);
+        bwd->saved_target_ = target->storage();
+        if (weight_or_null)
+            bwd->saved_weight_ = weight_or_null->storage();
+        bwd->saved_valid_count_ =
+            Storage{make_scalar(static_cast<double>(valid_count), input->dtype())};
+        kernel::NaryKernel<NLLLossBackward, 1>::wire_autograd(std::move(bwd), {input}, out,
+                                                              /*save_ins=*/false);
+    }
     return out;
 }
 
@@ -1495,27 +1400,14 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
                                             reduced_shape(input->shape(), reduction),
                                             input->dtype(), input->device(), false);
 
-    if (!GradMode::is_enabled() || !(input->requires_grad() || target->requires_grad()))
-        return out;
-
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto t_edge = detail::ensure_grad_fn(target);
-    auto bwd = std::make_shared<HuberLossBackward>();
-    bwd->input_shapes_ = {input->shape(), target->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input, target};
-    bwd->saved_inputs_ = {input->storage(), target->storage()};
-    bwd->reduction_ = reduction;
-    bwd->delta_ = delta;
-    bwd->orig_shape_ = input->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(t_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{
-        static_cast<std::int64_t>(input->version()), static_cast<std::int64_t>(target->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<HuberLossBackward>();
+        bwd->reduction_ = reduction;
+        bwd->delta_ = delta;
+        bwd->orig_shape_ = input->shape();
+        kernel::NaryKernel<HuberLossBackward, 2>::wire_autograd(std::move(bwd), {input, target},
+                                                                out);
+    }
     return out;
 }
 

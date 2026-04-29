@@ -19,6 +19,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -150,21 +151,11 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     if (!GradMode::is_enabled() || !a->requires_grad())
         return result;
 
-    auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<SoftmaxBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
     bwd->saved_output_ = result->storage();
     bwd->axis_ = wrapped;
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
-    bwd->set_saved_versions({a->version()});
-
-    result->set_grad_fn(std::move(bwd));
-    result->set_leaf(false);
-    result->set_requires_grad(true);
+    kernel::NaryKernel<SoftmaxBackward, 1>::wire_autograd(std::move(bwd), {a}, result,
+                                                          /*save_ins=*/false);
     return result;
 }
 

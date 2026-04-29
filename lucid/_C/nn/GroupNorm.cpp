@@ -6,9 +6,7 @@
 
 #include <mlx/ops.h>
 
-#include "../autograd/AccumulateGrad.h"
 #include "../autograd/Helpers.h"
-#include "../autograd/Node.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
 #include "../core/Error.h"
@@ -18,6 +16,7 @@
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -272,34 +271,14 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
                                             x->device(), false);
-    if (!GradMode::is_enabled() ||
-        !(x->requires_grad() || gamma->requires_grad() || beta->requires_grad())) {
-        return out;
-    }
-
-    auto x_edge = detail::ensure_grad_fn(x);
-    auto g_edge = detail::ensure_grad_fn(gamma);
-    auto b_edge = detail::ensure_grad_fn(beta);
-
     auto bwd = std::make_shared<GroupNormBackward>();
-    bwd->input_shapes_ = {x->shape(), gamma->shape(), beta->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = x->dtype();
-    bwd->device_ = x->device();
-    bwd->input_tensors_ = {x, gamma, beta};
-    bwd->saved_inputs_ = {x->storage(), gamma->storage(), beta->storage()};
     bwd->saved_mean_ = std::move(saved_mean);
     bwd->saved_rstd_ = std::move(saved_rstd);
     bwd->B_ = B;
     bwd->C_ = C;
     bwd->G_ = G;
     bwd->spatial_dims_ = std::move(S);
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0), Edge(b_edge, 0)});
-    bwd->set_saved_versions({x->version(), gamma->version(), beta->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<GroupNormBackward, 3>::wire_autograd(std::move(bwd), {x, gamma, beta}, out);
     return out;
 }
 

@@ -20,6 +20,7 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -537,25 +538,15 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     if (!GradMode::is_enabled() || !x->requires_grad())
         return out;
 
-    auto x_edge = detail::ensure_grad_fn(x);
     auto bwd = std::make_shared<MaxPoolNdBackward<N>>();
-    bwd->input_shapes_ = {x->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = x->dtype();
-    bwd->device_ = x->device();
-    bwd->input_tensors_ = {x};
     bwd->saved_argmax_ = std::move(saved_argmax);
     for (int i = 0; i < N; ++i) {
         bwd->K_[i] = K[i];
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
     }
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({x->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<MaxPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x}, out,
+                                                               /*save_ins=*/false);
     return out;
 }
 
@@ -772,24 +763,14 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
     if (!GradMode::is_enabled() || !x->requires_grad())
         return out;
 
-    auto x_edge = detail::ensure_grad_fn(x);
     auto bwd = std::make_shared<AvgPoolNdBackward<N>>();
-    bwd->input_shapes_ = {x->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = x->dtype();
-    bwd->device_ = x->device();
-    bwd->input_tensors_ = {x};
     for (int i = 0; i < N; ++i) {
         bwd->K_[i] = K[i];
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
     }
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0)});
-    bwd->set_saved_versions({x->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<AvgPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x}, out,
+                                                               /*save_ins=*/false);
     return out;
 }
 

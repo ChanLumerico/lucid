@@ -7,9 +7,7 @@
 
 #include <mlx/ops.h>
 
-#include "../autograd/AccumulateGrad.h"
 #include "../autograd/Helpers.h"
-#include "../autograd/Node.h"
 #include "../backend/cpu/Blas.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
@@ -20,6 +18,7 @@
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -437,32 +436,14 @@ TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
                                                          bool is_causal) {
     auto core = run_forward(q, k, v, attn_mask, scale, is_causal);
 
-    if (!GradMode::is_enabled() ||
-        !(q->requires_grad() || k->requires_grad() || v->requires_grad()))
-        return core.output;
-
-    auto q_edge = detail::ensure_grad_fn(q);
-    auto k_edge = detail::ensure_grad_fn(k);
-    auto v_edge = detail::ensure_grad_fn(v);
     auto bwd = std::make_shared<ScaledDotProductAttentionBackward>();
-    bwd->input_shapes_ = {q->shape(), k->shape(), v->shape()};
-    bwd->out_shape_ = core.out_shape;
-    bwd->dtype_ = q->dtype();
-    bwd->device_ = q->device();
-    bwd->input_tensors_ = {q, k, v};
-    bwd->saved_inputs_ = {q->storage(), k->storage(), v->storage()};
     bwd->saved_weights_ = std::move(core.weights_storage);
     bwd->scale_ = scale;
     bwd->orig_q_shape_ = q->shape();
     bwd->orig_k_shape_ = k->shape();
     bwd->orig_v_shape_ = v->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(q_edge, 0), Edge(k_edge, 0), Edge(v_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(q->version()),
-                                                      static_cast<std::int64_t>(k->version()),
-                                                      static_cast<std::int64_t>(v->version())});
-    core.output->set_grad_fn(std::move(bwd));
-    core.output->set_leaf(false);
-    core.output->set_requires_grad(true);
+    kernel::NaryKernel<ScaledDotProductAttentionBackward, 3>::wire_autograd(std::move(bwd),
+                                                                            {q, k, v}, core.output);
     return core.output;
 }
 

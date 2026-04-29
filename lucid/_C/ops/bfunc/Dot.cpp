@@ -17,6 +17,7 @@
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../kernel/NaryKernel.h"
 #include "_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -133,39 +134,22 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     OpScopeFull scope{"dot", device, dt, Shape{}};
 
     auto wire_grad = [&](const TensorImplPtr& out) {
-        if (!(GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())))
-            return;
-        std::shared_ptr<Node> bwd;
         if (a->shape().size() == 1 && b->shape().size() == 1) {
             auto n = std::make_shared<Dot1DBackward>();
             n->saved_a_ = a->storage();
             n->saved_b_ = b->storage();
             n->numel_ = static_cast<std::size_t>(a->shape()[0]);
-            n->dtype_ = dt;
-            n->device_ = device;
-            bwd = std::move(n);
+            kernel::NaryKernel<Dot1DBackward, 2>::wire_autograd(std::move(n), {a, b}, out,
+                                                                /*save_ins=*/false);
         } else if (a->shape().size() == 2 && b->shape().size() == 2) {
             auto n = std::make_shared<Dot2DBackward>();
             n->saved_a_ = a->storage();
             n->saved_b_ = b->storage();
             n->a_shape_ = a->shape();
             n->b_shape_ = b->shape();
-            n->dtype_ = dt;
-            n->device_ = device;
-            bwd = std::move(n);
-        } else {
-            return;
+            kernel::NaryKernel<Dot2DBackward, 2>::wire_autograd(std::move(n), {a, b}, out,
+                                                                /*save_ins=*/false);
         }
-        auto a_edge = detail::ensure_grad_fn(a);
-        auto b_edge = detail::ensure_grad_fn(b);
-        std::vector<Edge> edges;
-        edges.emplace_back(a_edge, 0);
-        edges.emplace_back(b_edge, 0);
-        bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version(), b->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
     };
 
     if (device == Device::GPU) {

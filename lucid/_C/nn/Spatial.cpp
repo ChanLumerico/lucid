@@ -19,6 +19,7 @@
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -144,24 +145,14 @@ TensorImplPtr AffineGridBackward::forward(
     if (!GradMode::is_enabled() || !theta->requires_grad())
         return out;
 
-    auto t_edge = detail::ensure_grad_fn(theta);
     auto bwd = std::make_shared<AffineGridBackward>();
-    bwd->input_shapes_ = {theta->shape()};
-    bwd->out_shape_ = out_shape;
-    bwd->dtype_ = theta->dtype();
-    bwd->device_ = theta->device();
-    bwd->input_tensors_ = {theta};
-    bwd->saved_inputs_ = {theta->storage()};
     bwd->align_corners_ = align_corners;
     bwd->N_ = N;
     bwd->H_ = H;
     bwd->W_ = W;
     bwd->orig_theta_shape_ = theta->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(t_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(theta->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<AffineGridBackward, 1>::wire_autograd(std::move(bwd), {theta}, out,
+                                                             /*save_ins=*/false);
     return out;
 }
 
@@ -479,27 +470,14 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
         if (!GradMode::is_enabled() || !(input->requires_grad() || grid->requires_grad()))
             return out;
 
-        auto x_edge = detail::ensure_grad_fn(input);
-        auto g_edge = detail::ensure_grad_fn(grid);
         auto bwd = std::make_shared<GridSampleBackward>();
-        bwd->input_shapes_ = {input->shape(), grid->shape()};
-        bwd->out_shape_ = out_shape;
-        bwd->dtype_ = input->dtype();
-        bwd->device_ = input->device();
-        bwd->input_tensors_ = {input, grid};
-        bwd->saved_inputs_ = {input->storage(), grid->storage()};
         bwd->mode_ = mode;
         bwd->padding_mode_ = padding_mode;
         bwd->align_corners_ = align_corners;
         bwd->input_shape_ = input->shape();
         bwd->grid_shape_ = grid->shape();
-        bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0)});
-        bwd->set_saved_versions(
-            std::vector<std::int64_t>{static_cast<std::int64_t>(input->version()),
-                                      static_cast<std::int64_t>(grid->version())});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<GridSampleBackward, 2>::wire_autograd(std::move(bwd), {input, grid},
+                                                                 out);
         return out;
     }
 
@@ -597,26 +575,16 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
     if (!GradMode::is_enabled() || !(input->requires_grad() || grid->requires_grad()))
         return out;
 
-    auto x_edge = detail::ensure_grad_fn(input);
-    auto g_edge = detail::ensure_grad_fn(grid);
-    auto bwd = std::make_shared<GridSampleBackward>();
-    bwd->input_shapes_ = {input->shape(), grid->shape()};
-    bwd->out_shape_ = out_shape;
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input, grid};
-    bwd->saved_inputs_ = {input->storage(), grid->storage()};
-    bwd->mode_ = mode;
-    bwd->padding_mode_ = padding_mode;
-    bwd->align_corners_ = align_corners;
-    bwd->input_shape_ = input->shape();
-    bwd->grid_shape_ = grid->shape();
-    bwd->set_next_edges(std::vector<Edge>{Edge(x_edge, 0), Edge(g_edge, 0)});
-    bwd->set_saved_versions(std::vector<std::int64_t>{static_cast<std::int64_t>(input->version()),
-                                                      static_cast<std::int64_t>(grid->version())});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    {
+        auto bwd = std::make_shared<GridSampleBackward>();
+        bwd->mode_ = mode;
+        bwd->padding_mode_ = padding_mode;
+        bwd->align_corners_ = align_corners;
+        bwd->input_shape_ = input->shape();
+        bwd->grid_shape_ = grid->shape();
+        kernel::NaryKernel<GridSampleBackward, 2>::wire_autograd(std::move(bwd), {input, grid},
+                                                                 out);
+    }
     return out;
 }
 
