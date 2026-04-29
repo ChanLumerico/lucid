@@ -9,6 +9,7 @@
 #include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -172,14 +173,6 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
         return out;
     };
 
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto out = ::mlx::core::broadcast_to(*ga.arr, gpu::to_mlx_shape(shape));
-        // broadcast_to returns a lazy view — materialize so downstream
-        // download/copy sees the actual broadcast values.
-        out = ::mlx::core::contiguous(out);
-        return build_with_grad(Storage{gpu::wrap_mlx_array(std::move(out), dt)});
-    }
     const TensorImplPtr a_c = a->is_contiguous() ? a : contiguous_op(a);
     const std::size_t nin = a_c->shape().size();
     const std::size_t nout = shape.size();
@@ -191,56 +184,10 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
         if (padded[d] != shape[d] && padded[d] != 1)
             throw ShapeMismatch(shape, a_c->shape(), "broadcast_to");
     }
-    auto out_cpu = allocate_cpu(shape, dt);
-    const auto& ca = std::get<CpuStorage>(a_c->storage());
 
-    std::vector<std::size_t> in_str(nout, 0);
-    std::size_t s = 1;
-    for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
-        in_str[d] = (padded[d] == 1) ? 0 : s;
-        s *= static_cast<std::size_t>(padded[d]);
-    }
-    const std::size_t out_numel = numel(shape);
-    auto run = [&](auto* dst, const auto* src) {
-        std::vector<std::size_t> coord(nout, 0);
-        for (std::size_t f = 0; f < out_numel; ++f) {
-            std::size_t in_flat = 0;
-            for (std::size_t d = 0; d < nout; ++d)
-                in_flat += coord[d] * in_str[d];
-            dst[f] = src[in_flat];
-            for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
-                if (++coord[d] < static_cast<std::size_t>(shape[d]))
-                    break;
-                coord[d] = 0;
-            }
-        }
-    };
-    switch (dt) {
-        case Dtype::F32:
-            run(reinterpret_cast<float*>(out_cpu.ptr.get()),
-                reinterpret_cast<const float*>(ca.ptr.get()));
-            break;
-        case Dtype::F64:
-            run(reinterpret_cast<double*>(out_cpu.ptr.get()),
-                reinterpret_cast<const double*>(ca.ptr.get()));
-            break;
-        case Dtype::I32:
-            run(reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()),
-                reinterpret_cast<const std::int32_t*>(ca.ptr.get()));
-            break;
-        case Dtype::I64:
-            run(reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()),
-                reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
-            break;
-        case Dtype::Bool:
-        case Dtype::I8:
-            run(reinterpret_cast<std::uint8_t*>(out_cpu.ptr.get()),
-                reinterpret_cast<const std::uint8_t*>(ca.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("broadcast_to").not_implemented("dtype not supported");
-    }
-    return build_with_grad(Storage{std::move(out_cpu)});
+    Storage out_storage = backend::Dispatcher::for_device(device).broadcast(
+        a_c->storage(), a_c->shape(), shape, dt);
+    return build_with_grad(std::move(out_storage));
 }
 
 TensorImplPtr expand_op(const TensorImplPtr& a, const Shape& shape) {
