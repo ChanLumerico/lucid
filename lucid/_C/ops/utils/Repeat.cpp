@@ -19,6 +19,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -225,23 +226,11 @@ TensorImplPtr attach_repeat_grad(const TensorImplPtr& a,
                                  TensorImplPtr out,
                                  int axis,
                                  std::int64_t repeats) {
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
     auto bwd = std::make_shared<RepeatBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
     bwd->axis_ = axis;
     bwd->repeats_ = repeats;
-    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<RepeatBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                         /*save_ins=*/false);
     return out;
 }
 
@@ -249,23 +238,11 @@ TensorImplPtr attach_tile_grad(const TensorImplPtr& a,
                                TensorImplPtr out,
                                Shape padded_shape,
                                std::vector<std::int64_t> reps) {
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
     auto bwd = std::make_shared<TileBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
     bwd->padded_shape_ = std::move(padded_shape);
     bwd->reps_ = std::move(reps);
-    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<TileBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                       /*save_ins=*/false);
     return out;
 }
 

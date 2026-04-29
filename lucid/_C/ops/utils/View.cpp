@@ -19,6 +19,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "Contiguous.h"          // contiguous_op for non-contig fallback
 
@@ -101,22 +102,7 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
         out = TensorImpl::make_view(base, out_shape, std::move(new_stride), /*offset_bytes=*/0);
     }
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
-    auto a_edge = detail::ensure_grad_fn(a);
-    auto bwd = std::make_shared<ViewBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
-    bwd->set_saved_versions({a->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<ViewBackward, 1>::wire_autograd({a}, out, /*save_ins=*/false);
     return out;
 }
 

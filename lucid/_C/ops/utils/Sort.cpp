@@ -21,6 +21,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -165,25 +166,14 @@ TensorImplPtr attach_index_scatter_grad(const TensorImplPtr& a,
                                         TensorImplPtr out,
                                         Storage indices,
                                         int axis) {
-    if (!GradMode::is_enabled() || !a->requires_grad() || !differentiable_dtype(a->dtype())) {
+    if (!differentiable_dtype(a->dtype()))
         return out;
-    }
-
     auto bwd = std::make_shared<IndexScatterBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = out->shape();
     bwd->grad_shape_ = out->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
     bwd->indices_ = std::move(indices);
     bwd->axis_ = axis;
-    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<IndexScatterBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                               /*save_ins=*/false);
     return out;
 }
 

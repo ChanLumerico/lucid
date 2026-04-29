@@ -18,6 +18,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../../kernel/VariadicKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
@@ -333,25 +334,13 @@ TensorImplPtr attach_split_grad(const TensorImplPtr& a,
                                 int axis,
                                 std::int64_t offset,
                                 bool squeeze_axis) {
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
     auto bwd = std::make_shared<SplitSliceBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
     bwd->slice_shape_ = std::move(slice_shape);
     bwd->axis_ = axis;
     bwd->offset_ = offset;
     bwd->squeeze_axis_ = squeeze_axis;
-    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<SplitSliceBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                             /*save_ins=*/false);
     return out;
 }
 

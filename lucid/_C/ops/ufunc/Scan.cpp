@@ -19,6 +19,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
@@ -305,45 +306,25 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
 
 TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis) {
     auto out = scan_dispatch(a, axis, /*is_prod=*/false, "cumsum");
-    if (GradMode::is_enabled() && a->requires_grad()) {
-        int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
-        auto bwd = std::make_shared<CumsumBackward>();
-        bwd->input_shape_ = a->shape();
-        bwd->dtype_ = a->dtype();
-        bwd->device_ = a->device();
-        bwd->axis_ = ax;
-        auto a_edge = detail::ensure_grad_fn(a);
-        std::vector<Edge> edges;
-        edges.emplace_back(a_edge, 0);
-        bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
-    }
+    int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
+    auto bwd = std::make_shared<CumsumBackward>();
+    bwd->input_shape_ = a->shape();
+    bwd->axis_ = ax;
+    kernel::NaryKernel<CumsumBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                         /*save_ins=*/false);
     return out;
 }
 
 TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis) {
     auto out = scan_dispatch(a, axis, /*is_prod=*/true, "cumprod");
-    if (GradMode::is_enabled() && a->requires_grad()) {
-        int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
-        auto bwd = std::make_shared<CumprodBackward>();
-        bwd->input_shape_ = a->shape();
-        bwd->dtype_ = a->dtype();
-        bwd->device_ = a->device();
-        bwd->axis_ = ax;
-        bwd->saved_x_ = a->storage();
-        bwd->saved_y_ = out->storage();
-        auto a_edge = detail::ensure_grad_fn(a);
-        std::vector<Edge> edges;
-        edges.emplace_back(a_edge, 0);
-        bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
-    }
+    int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
+    auto bwd = std::make_shared<CumprodBackward>();
+    bwd->input_shape_ = a->shape();
+    bwd->axis_ = ax;
+    bwd->saved_x_ = a->storage();
+    bwd->saved_y_ = out->storage();
+    kernel::NaryKernel<CumprodBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                          /*save_ins=*/false);
     return out;
 }
 

@@ -19,6 +19,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -86,22 +87,13 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
             Storage mean_storage{gpu::wrap_mlx_array(std::move(m_b), dt)};
             auto bwd = std::make_shared<VarBackward>();
             bwd->input_shape_ = a->shape();
-            bwd->out_shape_ = out_shape;
-            bwd->dtype_ = dt;
-            bwd->device_ = device;
             bwd->axes_ = axes;
             bwd->keepdims_ = keepdims;
             bwd->count_ = static_cast<std::int64_t>(reduced_gpu);
             bwd->saved_input_ = a->storage();
             bwd->saved_mean_ = std::move(mean_storage);
-            auto a_edge = detail::ensure_grad_fn(a);
-            std::vector<Edge> edges;
-            edges.emplace_back(a_edge, 0);
-            bwd->set_next_edges(std::move(edges));
-            bwd->set_saved_versions({a->version()});
-            out->set_grad_fn(std::move(bwd));
-            out->set_leaf(false);
-            out->set_requires_grad(true);
+            kernel::NaryKernel<VarBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                              /*save_ins=*/false);
         }
         return out;
     }
@@ -263,23 +255,13 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
 
         auto bwd = std::make_shared<VarBackward>();
         bwd->input_shape_ = a->shape();
-        bwd->out_shape_ = out_shape;
-        bwd->dtype_ = dt;
-        bwd->device_ = device;
         bwd->axes_ = axes;
         bwd->keepdims_ = keepdims;
         bwd->count_ = static_cast<std::int64_t>(reduced);
         bwd->saved_input_ = a->storage();
         bwd->saved_mean_ = std::move(mean_storage);
-
-        auto a_edge = detail::ensure_grad_fn(a);
-        std::vector<Edge> edges;
-        edges.emplace_back(a_edge, 0);
-        bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<VarBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                          /*save_ins=*/false);
     }
     return out;
 }

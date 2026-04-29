@@ -18,6 +18,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -111,22 +112,9 @@ const OpSchema PadBackward::schema_v1{"pad", 1, AmpPolicy::KeepInput, true};
 TensorImplPtr attach_pad_grad(const TensorImplPtr& a,
                               TensorImplPtr out,
                               std::vector<std::pair<std::int64_t, std::int64_t>> pad_width) {
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
     auto bwd = std::make_shared<PadBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = out->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
     bwd->pad_width_ = std::move(pad_width);
-    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<PadBackward, 1>::wire_autograd(std::move(bwd), {a}, out, /*save_ins=*/false);
     return out;
 }
 

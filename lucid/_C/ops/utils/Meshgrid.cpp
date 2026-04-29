@@ -16,6 +16,7 @@
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -99,22 +100,10 @@ const OpSchema MeshgridBackward::schema_v1{"meshgrid", 1, AmpPolicy::KeepInput, 
 TensorImplPtr attach_meshgrid_grad(const TensorImplPtr& input,
                                    TensorImplPtr output,
                                    int carry_axis) {
-    if (!GradMode::is_enabled() || !input->requires_grad())
-        return output;
-
     auto bwd = std::make_shared<MeshgridBackward>();
-    bwd->input_shapes_ = {input->shape()};
-    bwd->out_shape_ = output->shape();
-    bwd->dtype_ = input->dtype();
-    bwd->device_ = input->device();
-    bwd->input_tensors_ = {input};
     bwd->carry_axis_ = carry_axis;
-    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(input), 0)});
-    bwd->set_saved_versions({input->version()});
-
-    output->set_grad_fn(std::move(bwd));
-    output->set_leaf(false);
-    output->set_requires_grad(true);
+    kernel::NaryKernel<MeshgridBackward, 1>::wire_autograd(std::move(bwd), {input}, output,
+                                                           /*save_ins=*/false);
     return output;
 }
 

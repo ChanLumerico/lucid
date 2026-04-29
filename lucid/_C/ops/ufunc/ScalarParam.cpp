@@ -17,6 +17,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -29,20 +30,6 @@ CpuStorage allocate_unary(const Shape& out_shape, Dtype dt) {
     out.nbytes = shape_numel(out_shape) * dtype_size(dt);
     out.ptr = allocate_aligned_bytes(out.nbytes);
     return out;
-}
-
-// Wire the autograd graph for a single-input scalar-parameterized op. Mirrors
-// UnaryOp::forward's grad-wiring path so we don't duplicate boilerplate per op.
-template <class Derived>
-void wire_grad_node(const std::shared_ptr<TensorImpl>& a,
-                    std::shared_ptr<TensorImpl>& out,
-                    const std::shared_ptr<Derived>& bwd) {
-    auto a_edge = detail::ensure_grad_fn(a);
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
-    bwd->set_saved_versions({a->version()});
-    out->set_grad_fn(bwd);
-    out->set_leaf(false);
-    out->set_requires_grad(true);
 }
 
 }  // namespace
@@ -132,18 +119,9 @@ TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a, double exp) {
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()) * 11);
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
     auto bwd = std::make_shared<PowScalarBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->saved_inputs_ = {a->storage()};
-    bwd->input_tensors_ = {a};  // Item #9 — for version check
     bwd->exp_ = exp;
-    wire_grad_node(a, out, bwd);
+    kernel::NaryKernel<PowScalarBackward, 1>::wire_autograd(std::move(bwd), {a}, out);
     return out;
 }
 
@@ -209,18 +187,11 @@ TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()) * 11);
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
     auto bwd = std::make_shared<RPowScalarBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
     bwd->saved_output_ = out->storage();
-    bwd->input_tensors_ = {a};  // Item #9 — for version check
     bwd->base_ = base;
-    wire_grad_node(a, out, bwd);
+    kernel::NaryKernel<RPowScalarBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                             /*save_ins=*/false);
     return out;
 }
 
@@ -299,19 +270,10 @@ TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
     auto bwd = std::make_shared<ClipBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->saved_inputs_ = {a->storage()};
-    bwd->input_tensors_ = {a};  // Item #9 — for version check
     bwd->min_ = min_v;
     bwd->max_ = max_v;
-    wire_grad_node(a, out, bwd);
+    kernel::NaryKernel<ClipBackward, 1>::wire_autograd(std::move(bwd), {a}, out);
     return out;
 }
 

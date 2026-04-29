@@ -20,6 +20,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 
 namespace lucid {
@@ -309,24 +310,9 @@ TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-
-    auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<LeakyReluBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
-    bwd->saved_inputs_ = {a->storage()};
     bwd->slope_ = slope;
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, /*input_nr=*/0)});
-    bwd->set_saved_versions({a->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<LeakyReluBackward, 1>::wire_autograd(std::move(bwd), {a}, out);
     return out;
 }
 
@@ -499,22 +485,9 @@ TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-    auto a_edge = detail::ensure_grad_fn(a);
     auto bwd = std::make_shared<EluBackward>();
-    bwd->input_shapes_ = {a->shape()};
-    bwd->out_shape_ = a->shape();
-    bwd->dtype_ = a->dtype();
-    bwd->device_ = a->device();
-    bwd->input_tensors_ = {a};
-    bwd->saved_inputs_ = {a->storage()};
     bwd->alpha_ = alpha;
-    bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-    bwd->set_saved_versions({a->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+    kernel::NaryKernel<EluBackward, 1>::wire_autograd(std::move(bwd), {a}, out);
     return out;
 }
 

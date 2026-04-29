@@ -19,6 +19,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "Contiguous.h"          // contiguous_op for non-contig inputs
 #include "View.h"                // reshape_op / ViewBackward
@@ -163,22 +164,11 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
     auto build_with_grad = [&](Storage&& out_storage) {
         auto out = std::make_shared<TensorImpl>(std::move(out_storage), shape, dt, device,
                                                 /*requires_grad=*/false);
-        if (GradMode::is_enabled() && a->requires_grad()) {
-            auto a_edge = detail::ensure_grad_fn(a);
-            auto bwd = std::make_shared<BroadcastBackward>();
-            bwd->input_shapes_ = {a->shape()};
-            bwd->out_shape_ = shape;
-            bwd->dtype_ = dt;
-            bwd->device_ = device;
-            bwd->input_tensors_ = {a};
-            bwd->input_shape_ = a->shape();
-            bwd->output_shape_ = shape;
-            bwd->set_next_edges(std::vector<Edge>{Edge(a_edge, 0)});
-            bwd->set_saved_versions({a->version()});
-            out->set_grad_fn(std::move(bwd));
-            out->set_leaf(false);
-            out->set_requires_grad(true);
-        }
+        auto bwd = std::make_shared<BroadcastBackward>();
+        bwd->input_shape_ = a->shape();
+        bwd->output_shape_ = shape;
+        kernel::NaryKernel<BroadcastBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                                /*save_ins=*/false);
         return out;
     };
 

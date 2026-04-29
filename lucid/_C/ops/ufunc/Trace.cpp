@@ -20,6 +20,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
@@ -121,19 +122,11 @@ TensorImplPtr trace_op(const TensorImplPtr& a) {
         out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
     }
 
-    if (GradMode::is_enabled() && a->requires_grad() && a->shape().size() == 2) {
+    if (a->shape().size() == 2) {
         auto bwd = std::make_shared<TraceBackward>();
         bwd->input_shape_ = a->shape();
-        bwd->dtype_ = dt;
-        bwd->device_ = device;
-        auto a_edge = detail::ensure_grad_fn(a);
-        std::vector<Edge> edges;
-        edges.emplace_back(a_edge, 0);
-        bwd->set_next_edges(std::move(edges));
-        bwd->set_saved_versions({a->version()});
-        out->set_grad_fn(std::move(bwd));
-        out->set_leaf(false);
-        out->set_requires_grad(true);
+        kernel::NaryKernel<TraceBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
+                                                            /*save_ins=*/false);
     }
     return out;
 }

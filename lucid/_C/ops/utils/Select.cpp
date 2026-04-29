@@ -20,6 +20,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -500,16 +501,11 @@ TensorImplPtr attach_masked_fill_grad(const TensorImplPtr& a,
     return out;
 }
 
+template <class Derived>
 TensorImplPtr attach_unary_grad(const TensorImplPtr& a,
                                 TensorImplPtr out,
-                                std::shared_ptr<Node> bwd) {
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return out;
-    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-    bwd->set_saved_versions({a->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
+                                std::shared_ptr<Derived> bwd) {
+    kernel::NaryKernel<Derived, 1>::wire_autograd(std::move(bwd), {a}, out, /*save_ins=*/false);
     return out;
 }
 
