@@ -5,6 +5,7 @@
 #include <mlx/ops.h>
 
 #include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/AutogradNode.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
@@ -12,6 +13,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -26,12 +28,12 @@ using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
-class OuterBackward : public Node {
+class OuterBackward : public AutogradNode<OuterBackward, 2> {
 public:
+    static const OpSchema schema_v1;
+
     Storage saved_a_, saved_b_;
     std::int64_t M_, N_;
-    Dtype dtype_;
-    Device device_;
 
     std::vector<Storage> apply(Storage grad_out) override {
         if (device_ == Device::GPU) {
@@ -88,6 +90,8 @@ public:
         return {Storage{std::move(da)}, Storage{std::move(db)}};
     }
 };
+
+const OpSchema OuterBackward::schema_v1{"outer", 1, AmpPolicy::KeepInput, true};
 
 }  // namespace
 

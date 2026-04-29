@@ -6,6 +6,7 @@
 #include <mlx/ops.h>
 
 #include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/AutogradNode.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
@@ -13,6 +14,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -28,12 +30,11 @@ using ufunc_detail::allocate_cpu;
 using ufunc_detail::fresh;
 
 // VarBackward: dx = (2/N) * (x - mean) * broadcast(grad)
-class VarBackward : public Node {
+class VarBackward : public AutogradNode<VarBackward, 1> {
 public:
+    static const OpSchema schema_v1;
+
     Shape input_shape_;
-    Shape out_shape_;
-    Dtype dtype_;
-    Device device_;
     std::vector<int> axes_;
     bool keepdims_;
     std::int64_t count_;
@@ -50,6 +51,8 @@ public:
         return {std::move(dx)};
     }
 };
+
+const OpSchema VarBackward::schema_v1{"var", 1, AmpPolicy::KeepInput, true};
 
 }  // namespace
 

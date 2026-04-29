@@ -6,6 +6,7 @@
 
 #include <mlx/ops.h>
 
+#include "../../autograd/AutogradNode.h"
 #include "../../autograd/FuncOp.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
@@ -331,14 +332,12 @@ Storage diagonal_backward_storage(const Storage& grad,
     return Storage{std::move(out)};
 }
 
-class WhereBackward : public Node {
+class WhereBackward : public AutogradNode<WhereBackward, 2> {
 public:
     static const OpSchema schema_v1;
 
     Storage cond_;
     Shape shape_;
-    Dtype dtype_ = Dtype::F32;
-    Device device_ = Device::CPU;
     std::weak_ptr<TensorImpl> cond_tensor_;
     std::weak_ptr<TensorImpl> x_tensor_;
     std::weak_ptr<TensorImpl> y_tensor_;
@@ -360,14 +359,12 @@ public:
 
 const OpSchema WhereBackward::schema_v1{"where", 1, AmpPolicy::KeepInput, true};
 
-class MaskedFillBackward : public Node {
+class MaskedFillBackward : public AutogradNode<MaskedFillBackward, 1> {
 public:
     static const OpSchema schema_v1;
 
     Storage mask_;
     Shape shape_;
-    Dtype dtype_ = Dtype::F32;
-    Device device_ = Device::CPU;
     std::weak_ptr<TensorImpl> input_tensor_;
     std::weak_ptr<TensorImpl> mask_tensor_;
 
@@ -412,7 +409,7 @@ public:
 
 const OpSchema RollBackward::schema_v1{"roll", 1, AmpPolicy::KeepInput, true};
 
-class GatherBackward : public Node {
+class GatherBackward : public AutogradNode<GatherBackward, 1> {
 public:
     static const OpSchema schema_v1;
 
@@ -420,9 +417,7 @@ public:
     Shape input_shape_;
     Shape output_shape_;
     int axis_ = 0;
-    Dtype dtype_ = Dtype::F32;
     Dtype index_dtype_ = Dtype::I64;
-    Device device_ = Device::CPU;
     std::weak_ptr<TensorImpl> input_tensor_;
     std::weak_ptr<TensorImpl> indices_tensor_;
 

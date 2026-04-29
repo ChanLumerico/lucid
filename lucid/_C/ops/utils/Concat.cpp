@@ -18,6 +18,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/VariadicKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
 #include "_Detail.h"
 
@@ -137,7 +138,7 @@ Storage insert_axis_slice_storage(const Storage& src,
         insert_axis_slice_cpu(std::get<CpuStorage>(src), src_shape, dst_shape, axis, offset, dt)};
 }
 
-class ConcatBackward : public Node {
+class ConcatBackward : public kernel::VariadicKernel<ConcatBackward> {
 public:
     static const OpSchema schema_v1;
 
@@ -145,8 +146,6 @@ public:
     std::vector<Shape> input_shapes_;
     Shape output_shape_;
     int axis_ = 0;
-    Dtype dtype_ = Dtype::F32;
-    Device device_ = Device::CPU;
 
     std::vector<Storage> apply(Storage grad_out) override {
         std::vector<Storage> grads;
@@ -171,7 +170,7 @@ public:
 
 const OpSchema ConcatBackward::schema_v1{"concatenate", 1, AmpPolicy::KeepInput, true};
 
-class StackBackward : public Node {
+class StackBackward : public kernel::VariadicKernel<StackBackward> {
 public:
     static const OpSchema schema_v1;
 
@@ -179,8 +178,6 @@ public:
     Shape input_shape_;
     Shape output_shape_;
     int axis_ = 0;
-    Dtype dtype_ = Dtype::F32;
-    Device device_ = Device::CPU;
 
     std::vector<Storage> apply(Storage grad_out) override {
         Shape slice_shape = output_shape_;

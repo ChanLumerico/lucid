@@ -5,6 +5,7 @@
 #include <mlx/ops.h>
 
 #include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/AutogradNode.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
@@ -12,6 +13,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -27,12 +29,12 @@ using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
 // Backward for 1-D × 1-D dot: da = b * grad, db = a * grad (grad is scalar).
-class Dot1DBackward : public Node {
+class Dot1DBackward : public AutogradNode<Dot1DBackward, 2> {
 public:
+    static const OpSchema schema_v1;
+
     Storage saved_a_, saved_b_;
     std::size_t numel_;
-    Dtype dtype_;
-    Device device_;
 
     std::vector<Storage> apply(Storage grad_out) override {
         if (device_ == Device::GPU) {
@@ -57,12 +59,12 @@ public:
 };
 
 // Backward for 2-D × 2-D dot: da = grad @ b.T, db = a.T @ grad.
-class Dot2DBackward : public Node {
+class Dot2DBackward : public AutogradNode<Dot2DBackward, 2> {
 public:
+    static const OpSchema schema_v1;
+
     Storage saved_a_, saved_b_;
     Shape a_shape_, b_shape_;
-    Dtype dtype_;
-    Device device_;
 
     std::vector<Storage> apply(Storage grad_out) override {
         const std::int64_t M = a_shape_[0], K = a_shape_[1], N = b_shape_[1];
@@ -118,6 +120,9 @@ public:
         return {Storage{std::move(da)}, Storage{std::move(db)}};
     }
 };
+
+const OpSchema Dot1DBackward::schema_v1{"dot_1d", 1, AmpPolicy::KeepInput, true};
+const OpSchema Dot2DBackward::schema_v1{"dot_2d", 1, AmpPolicy::KeepInput, true};
 
 }  // namespace
 

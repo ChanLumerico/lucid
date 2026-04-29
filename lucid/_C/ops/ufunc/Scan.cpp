@@ -6,6 +6,7 @@
 #include <mlx/ops.h>
 
 #include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/AutogradNode.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
@@ -13,6 +14,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -103,11 +105,11 @@ Storage cumsum_storage_along(
     return Storage{std::move(out)};
 }
 
-class CumsumBackward : public Node {
+class CumsumBackward : public AutogradNode<CumsumBackward, 1> {
 public:
+    static const OpSchema schema_v1;
+
     Shape input_shape_;
-    Dtype dtype_;
-    Device device_;
     int axis_;
 
     std::vector<Storage> apply(Storage grad_out) override {
@@ -127,11 +129,11 @@ public:
 //   2. p = g * y
 //   3. q = reverse_cumsum(p, axis)
 //   4. dx = q / x   (NaN at zeros — same convention as PyTorch)
-class CumprodBackward : public Node {
+class CumprodBackward : public AutogradNode<CumprodBackward, 1> {
 public:
+    static const OpSchema schema_v1;
+
     Shape input_shape_;
-    Dtype dtype_;
-    Device device_;
     int axis_;
     Storage saved_x_;
     Storage saved_y_;
@@ -207,6 +209,9 @@ public:
         return {Storage{std::move(dx)}};
     }
 };
+
+const OpSchema CumsumBackward::schema_v1{"cumsum", 1, AmpPolicy::KeepInput, true};
+const OpSchema CumprodBackward::schema_v1{"cumprod", 1, AmpPolicy::KeepInput, true};
 
 template <typename T, bool IsProd>
 void scan_axis(const T* in, T* out, const Shape& shape, int axis) {

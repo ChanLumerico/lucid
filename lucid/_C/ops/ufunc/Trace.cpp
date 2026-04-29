@@ -7,6 +7,7 @@
 #include <mlx/ops.h>
 
 #include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/AutogradNode.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
@@ -14,6 +15,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -28,11 +30,11 @@ namespace {
 using ufunc_detail::allocate_cpu;
 using ufunc_detail::fresh;
 
-class TraceBackward : public Node {
+class TraceBackward : public AutogradNode<TraceBackward, 1> {
 public:
+    static const OpSchema schema_v1;
+
     Shape input_shape_;  // (M, N)
-    Dtype dtype_;
-    Device device_;
 
     std::vector<Storage> apply(Storage grad_out) override {
         const std::int64_t M = input_shape_[0];
@@ -69,6 +71,8 @@ public:
         return {Storage{std::move(dx)}};
     }
 };
+
+const OpSchema TraceBackward::schema_v1{"trace", 1, AmpPolicy::KeepInput, true};
 
 }  // namespace
 
