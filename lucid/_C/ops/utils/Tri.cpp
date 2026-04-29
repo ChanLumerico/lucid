@@ -25,7 +25,6 @@ namespace {
 
 using utils_detail::allocate_cpu;
 using utils_detail::fresh;
-using utils_detail::mlx_shape_to_lucid;
 
 template <typename T>
 CpuStorage tri_cpu(
@@ -106,14 +105,6 @@ TensorImplPtr tri_dispatch(const TensorImplPtr& a, int k, bool upper, const char
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{name, device, dt, a->shape()};
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto raw = upper ? ::mlx::core::triu(*ga.arr, k) : ::mlx::core::tril(*ga.arr, k);
-        Shape sh = mlx_shape_to_lucid(raw.shape());
-        auto out =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(raw), dt)}, std::move(sh), dt, device);
-        return attach_tri_grad(a, std::move(out), k, upper, name);
-    }
     Shape sh = a->shape();
     auto out_storage = tri_storage(a->storage(), sh, dt, device, k, upper, name);
     auto out = fresh(std::move(out_storage), std::move(sh), dt, device);
