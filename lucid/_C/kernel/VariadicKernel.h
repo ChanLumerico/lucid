@@ -31,6 +31,7 @@
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "BinaryKernel.h"  // detail::ensure_grad_fn
+#include "IKernel.h"
 
 namespace lucid {
 
@@ -39,12 +40,12 @@ class TensorImpl;
 namespace kernel {
 
 template <class Derived>
-class VariadicKernel : public Node {
+class VariadicKernel : public Node, public IKernel {
 public:
     // ----------------------------------------------------------------
     // Name
     // ----------------------------------------------------------------
-    std::string_view name() const noexcept { return Derived::schema_v1.name; }
+    std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
     // ----------------------------------------------------------------
     // Version checking — Engine calls this before apply().

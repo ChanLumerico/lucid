@@ -39,6 +39,7 @@
 #include "../core/TensorImpl.h"
 #include "BinaryKernel.h"  // detail::ensure_grad_fn, detail::HasUnaryGpuKernel
 #include "Contig.h"        // contiguous_op forward-decl
+#include "IKernel.h"
 
 namespace lucid {
 
@@ -58,11 +59,13 @@ concept HasUnaryDispatch =
 }  // namespace detail
 
 template <class Derived>
-class UnaryKernel : public AutogradNode<Derived, 1> {
+class UnaryKernel : public AutogradNode<Derived, 1>, public kernel::IKernel {
 public:
     static constexpr bool kSavesInput = true;
     static constexpr bool kSavesOutput = false;
     static constexpr bool kHasGradient = true;
+
+    std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
     static std::shared_ptr<TensorImpl> forward(const std::shared_ptr<TensorImpl>& a);
 

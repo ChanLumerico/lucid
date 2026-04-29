@@ -46,6 +46,7 @@
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "Contig.h"  // contiguous_op forward-decl (impl in ops/utils/Contiguous.cpp)
+#include "IKernel.h"
 
 namespace lucid {
 
@@ -183,10 +184,12 @@ inline TensorImplPtr maybe_cast_for_kernel(const TensorImplPtr& t, Dtype dt) {
 }  // namespace detail
 
 template <class Derived>
-class BinaryKernel : public AutogradNode<Derived, 2> {
+class BinaryKernel : public AutogradNode<Derived, 2>, public kernel::IKernel {
 public:
     static std::shared_ptr<TensorImpl> forward(const std::shared_ptr<TensorImpl>& a,
                                                const std::shared_ptr<TensorImpl>& b);
+
+    std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
     std::vector<Storage> apply(Storage grad_out) override;
 

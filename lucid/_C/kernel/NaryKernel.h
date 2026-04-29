@@ -30,13 +30,16 @@
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "BinaryKernel.h"  // detail::ensure_grad_fn
+#include "IKernel.h"
 
 namespace lucid {
 namespace kernel {
 
 template <class Derived, std::size_t N>
-class NaryKernel : public AutogradNode<Derived, N> {
+class NaryKernel : public AutogradNode<Derived, N>, public IKernel {
 public:
+    std::string_view name() const noexcept override { return Derived::schema_v1.name; }
+
     // ----------------------------------------------------------------
     // Phase 3.4: autograd wiring helper
     // ----------------------------------------------------------------

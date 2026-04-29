@@ -37,6 +37,7 @@
 #include "../core/TensorImpl.h"
 #include "BinaryKernel.h"  // detail::ensure_grad_fn
 #include "Contig.h"        // contiguous_op forward-decl
+#include "IKernel.h"
 
 namespace lucid {
 
@@ -57,11 +58,13 @@ concept HasReduceDispatch =
 }  // namespace detail
 
 template <class Derived>
-class ReduceKernel : public AutogradNode<Derived, 1> {
+class ReduceKernel : public AutogradNode<Derived, 1>, public kernel::IKernel {
 public:
     static constexpr bool kSavesInput = true;
     static constexpr bool kSavesOutput = false;
     static constexpr bool kHasGradient = true;
+
+    std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
     /// Reduce-specific saved state.
     std::vector<int> reduce_axes_;
