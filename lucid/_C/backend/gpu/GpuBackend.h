@@ -170,6 +170,14 @@ public:
                          [](auto& x) { return ::mlx::core::multiply(::mlx::core::square(x), x); });
     }
 
+    Storage cube_root(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            ::mlx::core::array exponent(1.0 / 3.0, gpu::to_mlx_dtype(dt));
+            return ::mlx::core::multiply(::mlx::core::sign(x),
+                                         ::mlx::core::power(::mlx::core::abs(x), exponent));
+        });
+    }
+
     Storage tan(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::tan(x); });
     }

@@ -193,6 +193,9 @@ def cosh_(*args, **kwargs) -> TensorImpl:
 def cube(*args, **kwargs) -> TensorImpl:  # AmpPolicy.Promote, det=True
     ...
 
+def cube_root(*args, **kwargs) -> TensorImpl:  # AmpPolicy.ForceFP32, det=True
+    ...
+
 def cube_(*args, **kwargs) -> TensorImpl:
     ...
 

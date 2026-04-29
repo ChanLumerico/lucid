@@ -168,6 +168,18 @@ inline std::shared_ptr<Node> ensure_grad_fn(const std::shared_ptr<TensorImpl>& t
     return nullptr;
 }
 
+/// Return `t` unchanged if it already has `dt`; otherwise cast storage through
+/// the registered backend. AMP casts are transparent to autograd: kernels save
+/// original tensor edges and versions, but compute with the cast storage.
+inline TensorImplPtr maybe_cast_for_kernel(const TensorImplPtr& t, Dtype dt) {
+    if (!t || t->dtype() == dt)
+        return t;
+    auto& be = backend::Dispatcher::for_device(t->device());
+    Storage cast_storage = be.cast(t->storage(), t->shape(), t->dtype(), dt);
+    return std::make_shared<TensorImpl>(std::move(cast_storage), t->shape(), dt, t->device(),
+                                        /*requires_grad=*/false);
+}
+
 }  // namespace detail
 
 template <class Derived>
@@ -224,8 +236,8 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
         (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
     const TensorImplPtr b_contig =
         (b->device() == Device::CPU && !b->is_contiguous()) ? contiguous_op(b) : b;
-    const TensorImplPtr a_ptr = sg.maybe_cast(a_contig);
-    const TensorImplPtr b_ptr = sg.maybe_cast(b_contig);
+    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
+    const TensorImplPtr b_ptr = detail::maybe_cast_for_kernel(b_contig, eff_dt);
 
     Shape out_shape = (a_ptr->shape() == b_ptr->shape())
                           ? a_ptr->shape()

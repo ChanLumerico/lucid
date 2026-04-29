@@ -23,6 +23,12 @@ def _bounded_inputs(rng):  # for arcsin / arccos / etc.
     return [rng.uniform(-0.9, 0.9, size=(4, 5)).astype("float32")]
 
 
+def _nonzero_inputs(rng):
+    x = rng.uniform(0.1, 2.0, size=(4, 5)).astype("float32")
+    signs = rng.choice(np.array([-1.0, 1.0], dtype=np.float32), size=(4, 5))
+    return [x * signs]
+
+
 UNARY = [
     OpSpec("exp",      lambda ts: E.exp(ts[0]),      lambda ts: torch.exp(ts[0]),      input_shapes=[(4, 5)]),
     OpSpec("log",      lambda ts: E.log(ts[0]),      lambda ts: torch.log(ts[0]),      input_gen=_pos_inputs, atol=1e-3, rtol=1e-3),
@@ -30,6 +36,9 @@ UNARY = [
     OpSpec("sqrt",     lambda ts: E.sqrt(ts[0]),     lambda ts: torch.sqrt(ts[0]),     input_gen=_pos_inputs, atol=1e-3, rtol=1e-3),
     OpSpec("square",   lambda ts: E.square(ts[0]),   lambda ts: torch.square(ts[0]),   input_shapes=[(4, 5)]),
     OpSpec("cube",     lambda ts: E.cube(ts[0]),     lambda ts: ts[0] ** 3,            input_shapes=[(4, 5)]),
+    OpSpec("cube_root", lambda ts: E.cube_root(ts[0]),
+            lambda ts: torch.sign(ts[0]) * torch.pow(torch.abs(ts[0]), 1.0 / 3.0),
+            input_gen=_nonzero_inputs, atol=1e-4, rtol=1e-4),
     OpSpec("neg",      lambda ts: E.neg(ts[0]),      lambda ts: -ts[0],                input_shapes=[(4, 5)]),
     OpSpec("abs",      lambda ts: E.abs(ts[0]),      lambda ts: torch.abs(ts[0]),      input_shapes=[(4, 5)]),
     OpSpec("reciprocal", lambda ts: E.reciprocal(ts[0]), lambda ts: 1.0/ts[0], input_gen=_pos_inputs, atol=1e-3, rtol=1e-3),

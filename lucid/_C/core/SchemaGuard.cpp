@@ -1,12 +1,10 @@
 #include "SchemaGuard.h"
 
-#include "../backend/Dispatcher.h"
 #include "AmpPolicy.h"
 #include "Determinism.h"
 #include "Device.h"
 #include "Error.h"
 #include "ErrorBuilder.h"
-#include "TensorImpl.h"
 
 namespace lucid {
 
@@ -56,17 +54,6 @@ SchemaGuard::SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device devic
             effective_dtype_ = Dtype::F32;
             break;
     }
-}
-
-TensorImplPtr SchemaGuard::maybe_cast(const TensorImplPtr& t) const {
-    if (!t || t->dtype() == effective_dtype_)
-        return t;
-
-    auto& be = backend::Dispatcher::for_device(t->device());
-    Storage cast_storage = be.cast(t->storage(), t->shape(), t->dtype(), effective_dtype_);
-    return std::make_shared<TensorImpl>(
-        std::move(cast_storage), t->shape(), effective_dtype_, t->device(),
-        /*requires_grad=*/false);
 }
 
 }  // namespace lucid

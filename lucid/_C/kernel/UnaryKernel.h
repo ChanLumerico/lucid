@@ -82,7 +82,7 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
 
     const TensorImplPtr a_contig =
         (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
-    const TensorImplPtr a_ptr = sg.maybe_cast(a_contig);
+    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
 
     OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, a_ptr->shape()};
 

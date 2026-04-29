@@ -6,6 +6,7 @@
 // Element-wise unary
 #include "../ops/ufunc/Activation.h"
 #include "../ops/ufunc/Arith.h"
+#include "../ops/ufunc/CubeRoot.h"
 #include "../ops/ufunc/Discrete.h"
 #include "../ops/ufunc/Exponential.h"
 #include "../ops/ufunc/Hyperbolic.h"
@@ -36,6 +37,7 @@ void register_ufunc(py::module_& m) {
     bind_unary<ReciprocalBackward>(m, &reciprocal_op);
     bind_unary<SquareBackward>(m, &square_op);
     bind_unary<CubeBackward>(m, &cube_op);
+    bind_unary<CubeRootBackward>(m, &cube_root_op);
 
     // ----- Exponential / log -----
     bind_unary<ExpBackward>(m, &exp_op);

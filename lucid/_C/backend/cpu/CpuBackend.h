@@ -438,6 +438,23 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage cube_root(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(
+            a, shape, dt,
+            [](const float* ip, float* op, std::size_t n) {
+                for (std::size_t i = 0; i < n; ++i)
+                    op[i] = std::cbrt(ip[i]);
+            },
+            [](const double* ip, double* op, std::size_t n) {
+                for (std::size_t i = 0; i < n; ++i)
+                    op[i] = std::cbrt(ip[i]);
+            },
+            [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                for (std::size_t i = 0; i < n; ++i)
+                    op[i] = static_cast<std::int32_t>(std::cbrt(static_cast<float>(ip[i])));
+            });
+    }
+
     Storage tan(const Storage& a, const Shape& shape, Dtype dt) override {
         return unary_op(a, shape, dt, cpu::vtan_f32, cpu::vtan_f64,
                         [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {

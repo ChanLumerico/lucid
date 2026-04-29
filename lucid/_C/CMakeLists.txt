@@ -94,7 +94,6 @@ endfunction()
 lucid_object_library(
     lucid_core
     version.cpp
-    backend/BackendInit.cpp
     core/Allocator.cpp
     core/AmpPolicy.cpp
     core/Determinism.cpp
@@ -123,6 +122,8 @@ lucid_object_library(
 target_compile_options(lucid_backend_cpu PRIVATE -Wno-deprecated-declarations)
 
 lucid_object_library(lucid_backend_gpu backend/gpu/MlxBridge.cpp)
+
+lucid_object_library(lucid_backend_init backend/BackendInit.cpp)
 
 lucid_object_library(
     lucid_autograd
@@ -244,6 +245,7 @@ add_library(
     $<TARGET_OBJECTS:lucid_core>
     $<TARGET_OBJECTS:lucid_backend_cpu>
     $<TARGET_OBJECTS:lucid_backend_gpu>
+    $<TARGET_OBJECTS:lucid_backend_init>
     $<TARGET_OBJECTS:lucid_autograd>
     $<TARGET_OBJECTS:lucid_ops>
     $<TARGET_OBJECTS:lucid_random>

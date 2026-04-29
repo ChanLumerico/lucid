@@ -118,6 +118,7 @@ public:
     virtual Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage square(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage cube(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage cube_root(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage tan(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage asin(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage acos(const Storage& a, const Shape& shape, Dtype dt) = 0;

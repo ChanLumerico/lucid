@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Report direct TensorImpl field access before Phase 2 encapsulation."""
+"""Report direct external TensorImpl field access before Phase 2 encapsulation.
+
+The scan is intentionally lightweight, but it avoids counting backward-node
+state such as ``this->dtype_`` and ``bwd->device_``. Those fields are not
+TensorImpl internals and are valid op-node state.
+"""
 
 from __future__ import annotations
 
@@ -10,9 +15,16 @@ from pathlib import Path
 
 
 FIELD_RE = re.compile(
-    r"(?:->|\.)(storage_|shape_|stride_|dtype_|device_|requires_grad_|"
-    r"is_leaf_|version_|grad_fn_|grad_storage_)"
+    r"(?P<owner>[A-Za-z_][A-Za-z0-9_]*)\s*(?:->|\.)(?P<field>storage_|shape_|stride_|"
+    r"dtype_|device_|requires_grad_|is_leaf_|version_|grad_fn_|grad_storage_)\b"
 )
+
+COMMENT_RE = re.compile(r"//.*?$|/\*.*?\*/", re.MULTILINE | re.DOTALL)
+
+NON_TENSOR_OWNERS = {
+    "this",  # backward-node state inside Node subclasses
+    "bwd",   # newly allocated backward-node state
+}
 
 
 def iter_sources(root: Path) -> list[Path]:
@@ -35,20 +47,31 @@ def main() -> int:
 
     root = Path(args.root)
     counts: Counter[str] = Counter()
+    sites: list[tuple[Path, int, str]] = []
     total = 0
 
     for source in iter_sources(root):
+        if source.name == "TensorImpl.cpp":
+            continue
         try:
             text = source.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             text = source.read_text(encoding="latin-1")
+        text = COMMENT_RE.sub("", text)
         for match in FIELD_RE.finditer(text):
-            counts[match.group(1)] += 1
+            if match.group("owner") in NON_TENSOR_OWNERS:
+                continue
+            field = match.group("field")
+            counts[field] += 1
             total += 1
+            line_no = text.count("\n", 0, match.start()) + 1
+            sites.append((source, line_no, match.group(0)))
 
     print(f"direct TensorImpl field accesses: {total}")
     for field, count in counts.most_common():
         print(f"{field},{count}")
+    for source, line_no, snippet in sites:
+        print(f"{source}:{line_no}: {snippet.strip()}")
 
     if args.fail_on_any and total:
         return 1

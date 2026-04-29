@@ -12,17 +12,14 @@
 //
 //   2. AMP dtype resolution: reads the active AutocastGuard dtype
 //      (if any) and the op's AmpPolicy to compute the effective
-//      computation dtype.  Callers use `effective_dtype()` instead
-//      of the raw input dtype, and `maybe_cast()` to transparently
-//      promote inputs before they enter the kernel.
+//      computation dtype. Callers use `effective_dtype()` instead of the raw
+//      input dtype. Actual casting is performed by the kernel layer, because
+//      it requires backend dispatch and core must not depend on backend/.
 //
 // AMP policy semantics:
 //   Promote   → use autocast dtype (e.g. F16) when autocast is active.
 //   KeepInput → always use the input's native dtype, never cast.
 //   ForceFP32 → always F32, even when autocast requests F16.
-//
-// The cast inserted by `maybe_cast()` is NOT tracked by autograd:
-// AMP casts are transparent — the backward sees the original dtype.
 //
 // Layer: core/. Depends on AmpPolicy.h, Determinism.h, OpSchema.h.
 
@@ -53,13 +50,8 @@ public:
     SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device device = Device::CPU);
 
     /// The dtype that the kernel should use for compute.
-    /// Callers should cast inputs with maybe_cast() before reading.
+    /// Kernel-layer callers should cast inputs to this dtype before reading.
     Dtype effective_dtype() const noexcept { return effective_dtype_; }
-
-    /// Return `t` unchanged if its dtype already equals effective_dtype(),
-    /// otherwise return a new TensorImpl with storage cast to effective_dtype().
-    /// The cast is performed via IBackend::cast — zero autograd overhead.
-    TensorImplPtr maybe_cast(const TensorImplPtr& t) const;
 
 private:
     Dtype effective_dtype_;

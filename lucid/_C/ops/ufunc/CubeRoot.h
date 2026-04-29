@@ -15,12 +15,12 @@ namespace lucid {
 /// Autograd backward node for CubeRoot.
 class LUCID_API CubeRootBackward : public UnaryOp<CubeRootBackward> {
 public:
+    static constexpr bool kSavesInput = false;
+    static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
     static Storage dispatch(backend::IBackend& be, const Storage& a,
                             const Shape& s, Dtype dt) {
-        // TODO: call be.<method>(a, s, dt)
-        (void)be; (void)a; (void)s; (void)dt;
-        ErrorBuilder(schema_v1.name).not_implemented("dispatch not yet implemented");
+        return be.cube_root(a, s, dt);
     }
     Storage grad_formula(const Storage& g);
 };
