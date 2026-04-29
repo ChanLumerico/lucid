@@ -31,6 +31,7 @@
 #include "../autograd/AutogradNode.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
+#include "../backend/Dispatcher.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
 #include "../core/AmpPolicy.h"
@@ -171,6 +172,9 @@ public:
     static constexpr bool kSavesInputs = true;
 
 protected:
+    /// Access the backend for the given device via Dispatcher (Phase 4).
+    static backend::IBackend& backend_for(Device d) { return backend::Dispatcher::for_device(d); }
+
     /// Materialize saved input k at out_shape_ (with broadcast if needed).
     Storage saved_input_broadcasted(std::size_t k) const {
         const Shape& src = this->input_shapes_[k];
