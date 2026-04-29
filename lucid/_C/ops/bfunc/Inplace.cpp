@@ -38,7 +38,7 @@ TensorImplPtr inplace_apply(const TensorImplPtr& a,
     if (out->shape() != a->shape())
         throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");
-    a->mutable_storage() = std::move(out->storage());
+    a->mutable_storage() = std::move(out->mutable_storage());
     a->set_dtype(out->dtype());
     a->set_device(out->device());
     a->bump_version();

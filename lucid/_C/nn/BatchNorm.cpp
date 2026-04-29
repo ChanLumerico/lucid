@@ -156,8 +156,8 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
                              std::string(device_name(gamma->device())), "batch_norm");
     if (x->device() == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-    if (static_cast<int>(x->shape().size()) != N + 2)
-        throw ShapeMismatch(x->shape(), Shape{}, "batch_norm: x rank mismatch");
+        if (static_cast<int>(x->shape().size()) != N + 2)
+            throw ShapeMismatch(x->shape(), Shape{}, "batch_norm: x rank mismatch");
     if (gamma->shape().size() != 1 || beta->shape().size() != 1)
         throw ShapeMismatch(gamma->shape(), beta->shape(), "batch_norm: γ, β must be 1-D");
 

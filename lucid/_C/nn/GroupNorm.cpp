@@ -164,8 +164,8 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
                              std::string(device_name(gamma->device())), "group_norm");
     if (x->device() == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-    if (x->shape().size() < 2)
-        throw ShapeMismatch(x->shape(), Shape{}, "group_norm: x must be at least (B, C, ...)");
+        if (x->shape().size() < 2)
+            throw ShapeMismatch(x->shape(), Shape{}, "group_norm: x must be at least (B, C, ...)");
     if (gamma->shape().size() != 1 || beta->shape().size() != 1)
         throw ShapeMismatch(gamma->shape(), beta->shape(), "group_norm: γ, β must be 1-D");
 

@@ -77,9 +77,9 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                              std::string(device_name(gamma->device())), "layer_norm");
     if (x->device() == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-    if (gamma->shape() != beta->shape())
-        throw ShapeMismatch(gamma->shape(), beta->shape(),
-                            "layer_norm: γ and β must have the same shape");
+        if (gamma->shape() != beta->shape())
+            throw ShapeMismatch(gamma->shape(), beta->shape(),
+                                "layer_norm: γ and β must have the same shape");
 
     const auto [outer, N] = resolve_shapes(x->shape(), gamma->shape());
 

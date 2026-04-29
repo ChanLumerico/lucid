@@ -91,9 +91,9 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
         // GPU: MLX reshape is lazy; it produces a view internally.
         const auto& ga = std::get<GpuStorage>(a->storage());
         auto raw = ::mlx::core::reshape(*ga.arr, gpu::to_mlx_shape(out_shape));
-        out = std::make_shared<TensorImpl>(
-            Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype())}, out_shape, a->dtype(),
-            a->device(), /*requires_grad=*/false);
+        out = std::make_shared<TensorImpl>(Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype())},
+                                           out_shape, a->dtype(), a->device(),
+                                           /*requires_grad=*/false);
     } else {
         // CPU: metadata-only view when contiguous; materialise first if not.
         const TensorImplPtr& base = a->is_contiguous() ? a : contiguous_op(a);

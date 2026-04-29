@@ -518,8 +518,7 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
         ErrorBuilder("topk").not_implemented("dtype not supported");
     auto indices_out = fresh(Storage{idx_cpu}, out_shape, Dtype::I32, device);
     auto values_out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
-    values_out =
-        attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);
+    values_out = attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);
     return {std::move(values_out), std::move(indices_out)};
 }
 

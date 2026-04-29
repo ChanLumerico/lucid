@@ -139,8 +139,8 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
         auto raw = ::mlx::core::transpose(*ga.arr, perm);
         raw = ::mlx::core::contiguous(raw);
         auto out_storage = Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype())};
-        out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape,
-                                           a->dtype(), a->device(), false);
+        out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
+                                           a->device(), false);
     } else {
         out = TensorImpl::make_view(a, out_shape, out_stride, /*offset_bytes=*/0);
     }

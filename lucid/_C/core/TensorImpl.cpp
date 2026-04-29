@@ -260,12 +260,11 @@ bool TensorImpl::storage_is_shared() const noexcept {
 }
 
 std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorImpl>& base,
-                                                    Shape shape,
-                                                    Stride stride,
-                                                    std::size_t offset_bytes) {
-    auto view = std::make_shared<TensorImpl>(base->storage_, std::move(shape),
-                                              base->meta_.dtype, base->meta_.device,
-                                              false);
+                                                  Shape shape,
+                                                  Stride stride,
+                                                  std::size_t offset_bytes) {
+    auto view = std::make_shared<TensorImpl>(base->storage_, std::move(shape), base->meta_.dtype,
+                                             base->meta_.device, false);
     view->meta_.stride = std::move(stride);
     view->offset_ = base->offset_ + offset_bytes;
     // Propagate requires_grad if the base has it.

@@ -66,9 +66,9 @@ public:
     // (CPU) or MLX lazy graph (GPU). `shape`, `stride`, `offset_bytes` describe
     // the view window within `base`'s buffer.
     static std::shared_ptr<TensorImpl> make_view(const std::shared_ptr<TensorImpl>& base,
-                                                  Shape shape,
-                                                  Stride stride,
-                                                  std::size_t offset_bytes = 0);
+                                                 Shape shape,
+                                                 Stride stride,
+                                                 std::size_t offset_bytes = 0);
 
     // ------------------------------------------------------------------ //
     // TensorMeta accessors (shape/stride/dtype/device)
@@ -144,8 +144,8 @@ public:
     void zero_grad();
 
 private:
-    Storage storage_;           // base buffer (may be shared with other views)
-    std::size_t offset_ = 0;    // byte offset of this view into storage_
+    Storage storage_;         // base buffer (may be shared with other views)
+    std::size_t offset_ = 0;  // byte offset of this view into storage_
     TensorMeta meta_;
     std::optional<AutogradMeta> autograd_;
 

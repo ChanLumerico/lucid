@@ -89,9 +89,8 @@ std::shared_ptr<TensorImpl> UnaryOp<Derived>::forward(const std::shared_ptr<Tens
                                                   a_ptr->shape(), a_ptr->dtype())};
     }
 
-    auto out =
-        std::make_shared<TensorImpl>(std::move(out_storage), a_ptr->shape(), a_ptr->dtype(),
-                                     a_ptr->device(), /*requires_grad=*/false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a_ptr->shape(), a_ptr->dtype(),
+                                            a_ptr->device(), /*requires_grad=*/false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
     if constexpr (!Derived::kHasGradient) {

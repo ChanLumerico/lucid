@@ -94,9 +94,9 @@ std::shared_ptr<TensorImpl> ReduceOp<Derived>::forward(const std::shared_ptr<Ten
     Storage out_storage;
     if (a_ptr->device() == Device::GPU) {
         if constexpr (detail::HasReduceGpuKernel<Derived>) {
-            out_storage = Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()),
-                                                      a_ptr->shape(), axes, keepdims,
-                                                      a_ptr->dtype())};
+            out_storage =
+                Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()), a_ptr->shape(),
+                                            axes, keepdims, a_ptr->dtype())};
         } else {
             ErrorBuilder(Derived::schema_v1.name)
                 .not_implemented("GPU kernel not yet implemented (Phase 3.7.x in progress)");

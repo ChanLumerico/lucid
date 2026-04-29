@@ -111,12 +111,13 @@ void register_utils(py::module_& m) {
     m.def("nonzero", &nonzero_op, py::arg("a"));
     m.def("unique", &unique_op, py::arg("a"));
     // Returns (values, indices) tuple — consistent with svd/qr/eig.
-    m.def("topk",
-          [](const TensorImplPtr& a, std::int64_t k, int axis) {
-              auto res = topk_op(a, k, axis);
-              return py::make_tuple(res[0], res[1]);
-          },
-          py::arg("a"), py::arg("k"), py::arg("axis") = -1);
+    m.def(
+        "topk",
+        [](const TensorImplPtr& a, std::int64_t k, int axis) {
+            auto res = topk_op(a, k, axis);
+            return py::make_tuple(res[0], res[1]);
+        },
+        py::arg("a"), py::arg("k"), py::arg("axis") = -1);
 
     // ----- Meshgrid -----
     m.def("meshgrid", &meshgrid_op, py::arg("arrays"), py::arg("indexing_xy") = false);
