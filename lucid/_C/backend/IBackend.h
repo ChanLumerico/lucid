@@ -356,6 +356,8 @@ public:
     virtual Storage clip(const Storage& a, const Shape& shape, Dtype dt, double min_v, double max_v) = 0;
 
     virtual Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) = 0;
+
+    virtual CpuStorage to_cpu(const Storage& a, const Shape& shape) = 0;
 };
 
 }  // namespace backend

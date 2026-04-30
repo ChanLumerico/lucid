@@ -1020,6 +1020,10 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dst_dt)};
     }
 
+    CpuStorage to_cpu(const Storage& a, const Shape& shape) override {
+        return gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape);
+    }
+
 private:
     // ---- Helpers -------------------------------------------------------
 

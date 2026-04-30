@@ -2760,6 +2760,10 @@ public:
         return Storage{CpuStorage{ptr, nb, dst_dt}};
     }
 
+    CpuStorage to_cpu(const Storage& a, const Shape& /*shape*/) override {
+        return std::get<CpuStorage>(a);
+    }
+
 private:
     // ---- Helpers -------------------------------------------------------
 

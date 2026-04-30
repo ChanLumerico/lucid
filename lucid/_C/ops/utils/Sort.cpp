@@ -8,11 +8,8 @@
 #include <variant>
 #include <vector>
 
-#include <mlx/ops.h>
-
 #include "../../autograd/FuncOp.h"
 #include "../../backend/Dispatcher.h"
-#include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -144,9 +141,7 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
     const std::size_t ndim = a->shape().size();
     OpScopeFull scope{"nonzero", a->device(), a->dtype(), a->shape()};
 
-    CpuStorage cpu = (a->device() == Device::GPU)
-                         ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage()), a->shape())
-                         : std::get<CpuStorage>(a->storage());
+    CpuStorage cpu = backend::Dispatcher::for_device(a->device()).to_cpu(a->storage(), a->shape());
 
     const std::size_t n = shape_numel(a->shape());
     std::vector<bool> mask(n, false);
@@ -213,9 +208,7 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
     const Dtype dt = a->dtype();
     OpScopeFull scope{"unique", a->device(), dt, a->shape()};
 
-    CpuStorage cpu = (a->device() == Device::GPU)
-                         ? gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage()), a->shape())
-                         : std::get<CpuStorage>(a->storage());
+    CpuStorage cpu = backend::Dispatcher::for_device(a->device()).to_cpu(a->storage(), a->shape());
     const std::size_t n = shape_numel(a->shape());
 
     auto run = [&](const auto* src) -> CpuStorage {
