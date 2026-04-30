@@ -263,6 +263,22 @@ public:
         });
     }
 
+    Storage elu_backward(const Storage& a,
+                         const Storage& grad,
+                         const Shape& shape,
+                         Dtype dt,
+                         double alpha) override {
+        return mlx_binary(a, grad, shape, dt, [dt, alpha](auto& x, auto& g) {
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(dt));
+            auto pos_mask = ::mlx::core::greater_equal(x, zero);
+            auto neg_branch = ::mlx::core::multiply(alpha_arr, ::mlx::core::exp(x));
+            auto ones_arr = ::mlx::core::ones_like(x);
+            auto deriv = ::mlx::core::where(pos_mask, ones_arr, neg_branch);
+            return ::mlx::core::multiply(deriv, g);
+        });
+    }
+
     Storage selu(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, dt, [dt](auto& x) {
             constexpr double kS = 1.0507009873554805;
@@ -276,6 +292,24 @@ public:
                 sa, ::mlx::core::subtract(::mlx::core::exp(x), one));
             auto pos_mask = ::mlx::core::greater_equal(x, zero);
             return ::mlx::core::where(pos_mask, pos_branch, neg_branch);
+        });
+    }
+
+    Storage selu_backward(const Storage& a,
+                          const Storage& grad,
+                          const Shape& shape,
+                          Dtype dt) override {
+        return mlx_binary(a, grad, shape, dt, [dt](auto& x, auto& g) {
+            constexpr double kS = 1.0507009873554805;
+            constexpr double kA = 1.6732632423543772;
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array s_arr(kS, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array sa_arr(kS * kA, gpu::to_mlx_dtype(dt));
+            auto pos_mask = ::mlx::core::greater_equal(x, zero);
+            auto pos_branch = ::mlx::core::broadcast_to(s_arr, x.shape());
+            auto neg_branch = ::mlx::core::multiply(sa_arr, ::mlx::core::exp(x));
+            auto deriv = ::mlx::core::where(pos_mask, pos_branch, neg_branch);
+            return ::mlx::core::multiply(deriv, g);
         });
     }
 

@@ -24,8 +24,6 @@ namespace lucid {
 namespace {
 constexpr double kGeluC1 = 0.7978845608028654;  // sqrt(2/pi)
 constexpr double kGeluC2 = 0.044715;
-constexpr double kSeluScale = 1.0507009873554805;
-constexpr double kSeluAlpha = 1.6732632423543772;
 
 CpuStorage allocate_unary(const Shape& out_shape, Dtype dt) {
     CpuStorage out;
@@ -279,51 +277,8 @@ CpuStorage EluBackward::cpu_kernel(const CpuStorage& a,
 }
 
 Storage EluBackward::grad_formula(const Storage& g) {
-    const std::size_t n = shape_numel(out_shape_);
-    if (device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(saved_inputs_[0]);
-        const auto& gg = std::get<GpuStorage>(g);
-        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dtype_));
-        ::mlx::core::array alpha_arr(alpha_, gpu::to_mlx_dtype(dtype_));
-        auto pos_mask = ::mlx::core::greater_equal(*gx.arr, zero);
-        auto neg_branch = ::mlx::core::multiply(alpha_arr, ::mlx::core::exp(*gx.arr));
-        auto ones_arr = ::mlx::core::ones_like(*gx.arr);
-        auto deriv = ::mlx::core::where(pos_mask, ones_arr, neg_branch);
-        auto out = ::mlx::core::multiply(deriv, *gg.arr);
-        return Storage{gpu::wrap_mlx_array(std::move(out), dtype_)};
-    }
-    const auto& xc = std::get<CpuStorage>(saved_inputs_[0]);
-    const auto& gc = std::get<CpuStorage>(g);
-    CpuStorage out;
-    out.dtype = dtype_;
-    out.nbytes = n * dtype_size(dtype_);
-    out.ptr = allocate_aligned_bytes(out.nbytes);
-    switch (dtype_) {
-        case Dtype::F32: {
-            auto* xp = reinterpret_cast<const float*>(xc.ptr.get());
-            auto* gp = reinterpret_cast<const float*>(gc.ptr.get());
-            auto* qp = reinterpret_cast<float*>(out.ptr.get());
-            const float fa = static_cast<float>(alpha_);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = xp[i];
-                qp[i] = ((x >= 0.f) ? 1.f : fa * std::exp(x)) * gp[i];
-            }
-            break;
-        }
-        case Dtype::F64: {
-            auto* xp = reinterpret_cast<const double*>(xc.ptr.get());
-            auto* gp = reinterpret_cast<const double*>(gc.ptr.get());
-            auto* qp = reinterpret_cast<double*>(out.ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = xp[i];
-                qp[i] = ((x >= 0.0) ? 1.0 : alpha_ * std::exp(x)) * gp[i];
-            }
-            break;
-        }
-        default:
-            ErrorBuilder("elu backward").not_implemented("dtype not supported");
-    }
-    return Storage{std::move(out)};
+    return backend::Dispatcher::for_device(device_)
+        .elu_backward(saved_inputs_[0], g, out_shape_, dtype_, alpha_);
 }
 
 TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
@@ -352,53 +307,8 @@ LUCID_REGISTER_OP(EluBackward)
 const OpSchema SeluBackward::schema_v1{"selu", 1, AmpPolicy::ForceFP32, true};
 
 Storage SeluBackward::grad_formula(const Storage& g) {
-    const std::size_t n = shape_numel(out_shape_);
-    if (device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(saved_inputs_[0]);
-        const auto& gg = std::get<GpuStorage>(g);
-        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dtype_));
-        ::mlx::core::array s_arr(kSeluScale, gpu::to_mlx_dtype(dtype_));
-        ::mlx::core::array sa_arr(kSeluScale * kSeluAlpha, gpu::to_mlx_dtype(dtype_));
-        auto pos_mask = ::mlx::core::greater_equal(*gx.arr, zero);
-        auto pos_branch = ::mlx::core::broadcast_to(s_arr, gx.arr->shape());
-        auto neg_branch = ::mlx::core::multiply(sa_arr, ::mlx::core::exp(*gx.arr));
-        auto deriv = ::mlx::core::where(pos_mask, pos_branch, neg_branch);
-        auto out = ::mlx::core::multiply(deriv, *gg.arr);
-        return Storage{gpu::wrap_mlx_array(std::move(out), dtype_)};
-    }
-    const auto& xc = std::get<CpuStorage>(saved_inputs_[0]);
-    const auto& gc = std::get<CpuStorage>(g);
-    CpuStorage out;
-    out.dtype = dtype_;
-    out.nbytes = n * dtype_size(dtype_);
-    out.ptr = allocate_aligned_bytes(out.nbytes);
-    switch (dtype_) {
-        case Dtype::F32: {
-            auto* xp = reinterpret_cast<const float*>(xc.ptr.get());
-            auto* gp = reinterpret_cast<const float*>(gc.ptr.get());
-            auto* qp = reinterpret_cast<float*>(out.ptr.get());
-            const float s = static_cast<float>(kSeluScale);
-            const float sa = static_cast<float>(kSeluScale * kSeluAlpha);
-            for (std::size_t i = 0; i < n; ++i)
-                qp[i] = ((xp[i] >= 0.f) ? s : sa * std::exp(xp[i])) * gp[i];
-            break;
-        }
-        case Dtype::F64: {
-            auto* xp = reinterpret_cast<const double*>(xc.ptr.get());
-            auto* gp = reinterpret_cast<const double*>(gc.ptr.get());
-            auto* qp = reinterpret_cast<double*>(out.ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double dx = (xp[i] >= 0.0)
-                    ? kSeluScale
-                    : kSeluScale * kSeluAlpha * std::exp(xp[i]);
-                qp[i] = dx * gp[i];
-            }
-            break;
-        }
-        default:
-            ErrorBuilder("selu backward").not_implemented("dtype not supported");
-    }
-    return Storage{std::move(out)};
+    return backend::Dispatcher::for_device(device_)
+        .selu_backward(saved_inputs_[0], g, out_shape_, dtype_);
 }
 
 TensorImplPtr selu_op(const TensorImplPtr& a) {

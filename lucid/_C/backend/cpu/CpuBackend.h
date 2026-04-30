@@ -656,6 +656,39 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage elu_backward(const Storage& a,
+                         const Storage& grad,
+                         const Shape& shape,
+                         Dtype dt,
+                         double alpha) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const auto& gs = std::get<CpuStorage>(grad);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
+            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
+            float* qp = reinterpret_cast<float*>(ptr.get());
+            const float fa = static_cast<float>(alpha);
+            for (std::size_t i = 0; i < n; ++i) {
+                const float x = xp[i];
+                qp[i] = (x >= 0.f ? 1.f : fa * std::exp(x)) * gp[i];
+            }
+        } else if (dt == Dtype::F64) {
+            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
+            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
+            double* qp = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double x = xp[i];
+                qp[i] = (x >= 0.0 ? 1.0 : alpha * std::exp(x)) * gp[i];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::elu_backward").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage selu(const Storage& a, const Shape& shape, Dtype dt) override {
         // SELU(x) = scale * (x if x >= 0 else alpha * (exp(x) - 1))
         constexpr double kScale = 1.0507009873554805;
@@ -678,6 +711,40 @@ public:
                 q[i] = kScale * (p[i] >= 0.0 ? p[i] : kAlpha * (std::exp(p[i]) - 1.0));
         } else {
             ErrorBuilder("cpu_backend::selu").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage selu_backward(const Storage& a,
+                          const Storage& grad,
+                          const Shape& shape,
+                          Dtype dt) override {
+        constexpr double kScale = 1.0507009873554805;
+        constexpr double kAlpha = 1.6732632423543772;
+        const auto& cs = std::get<CpuStorage>(a);
+        const auto& gs = std::get<CpuStorage>(grad);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
+            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
+            float* qp = reinterpret_cast<float*>(ptr.get());
+            const float s = static_cast<float>(kScale);
+            const float sa = static_cast<float>(kScale * kAlpha);
+            for (std::size_t i = 0; i < n; ++i)
+                qp[i] = (xp[i] >= 0.f ? s : sa * std::exp(xp[i])) * gp[i];
+        } else if (dt == Dtype::F64) {
+            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
+            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
+            double* qp = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double dx =
+                    xp[i] >= 0.0 ? kScale : kScale * kAlpha * std::exp(xp[i]);
+                qp[i] = dx * gp[i];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::selu_backward").not_implemented("dtype not supported");
         }
         return Storage{CpuStorage{ptr, nb, dt}};
     }
