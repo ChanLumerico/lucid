@@ -301,6 +301,12 @@ public:
                                                     Dtype dt,
                                                     bool descending) = 0;
     virtual Storage argsort(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
+    virtual Storage arg_reduce_index(const Storage& a,
+                                     const Shape& shape,
+                                     int axis,
+                                     bool keepdims,
+                                     Dtype dt,
+                                     bool is_min) = 0;
     virtual Storage scatter_add_axis(const Storage& grad,
                                      const Storage& indices,
                                      const Shape& output_shape,

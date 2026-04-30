@@ -891,6 +891,19 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), Dtype::I32)};
     }
 
+    Storage arg_reduce_index(const Storage& a,
+                             const Shape& /*shape*/,
+                             int axis,
+                             bool keepdims,
+                             Dtype /*dt*/,
+                             bool is_min) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto out = is_min ? ::mlx::core::argmin(*ga.arr, axis, keepdims)
+                          : ::mlx::core::argmax(*ga.arr, axis, keepdims);
+        out = ::mlx::core::astype(out, ::mlx::core::int64);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), Dtype::I64)};
+    }
+
     Storage scatter_add_axis(const Storage& grad,
                              const Storage& indices,
                              const Shape& output_shape,

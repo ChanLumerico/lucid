@@ -32,7 +32,6 @@ namespace {
 
 using utils_detail::allocate_cpu;
 using utils_detail::fresh;
-using utils_detail::mlx_shape_to_lucid;
 using utils_detail::wrap_axis;
 
 bool differentiable_dtype(Dtype dt) {
@@ -113,56 +112,16 @@ TensorImplPtr argext_dispatch(
     Validator::input(a, std::string(name) + ".a").non_null();
     const Device device = a->device();
     OpScopeFull scope{name, device, a->dtype(), a->shape()};
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto out = is_min ? ::mlx::core::argmin(*ga.arr, axis, keepdims)
-                          : ::mlx::core::argmax(*ga.arr, axis, keepdims);
-        Shape sh = mlx_shape_to_lucid(out.shape());
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I32)}, std::move(sh),
-                     Dtype::I32, device);
-    }
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     Shape out_shape = a->shape();
     if (keepdims)
         out_shape[ax] = 1;
     else
         out_shape.erase(out_shape.begin() + ax);
-    auto out_cpu = allocate_cpu(out_shape, Dtype::I64);
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    std::size_t outer = 1;
-    for (int d = 0; d < ax; ++d)
-        outer *= static_cast<std::size_t>(a->shape()[d]);
-    std::size_t inner = 1;
-    for (std::size_t d = ax + 1; d < a->shape().size(); ++d)
-        inner *= static_cast<std::size_t>(a->shape()[d]);
-    const std::size_t L = static_cast<std::size_t>(a->shape()[ax]);
-    auto run = [&](const auto* src) {
-        auto* dst = reinterpret_cast<std::int64_t*>(out_cpu.ptr.get());
-        for (std::size_t o = 0; o < outer; ++o)
-            for (std::size_t j = 0; j < inner; ++j) {
-                std::int64_t best = 0;
-                auto best_v = src[o * L * inner + j];
-                for (std::size_t k = 1; k < L; ++k) {
-                    const auto v = src[(o * L + k) * inner + j];
-                    if (is_min ? (v < best_v) : (v > best_v)) {
-                        best_v = v;
-                        best = static_cast<std::int64_t>(k);
-                    }
-                }
-                dst[o * inner + j] = best;
-            }
-    };
-    if (a->dtype() == Dtype::F32)
-        run(reinterpret_cast<const float*>(ca.ptr.get()));
-    else if (a->dtype() == Dtype::F64)
-        run(reinterpret_cast<const double*>(ca.ptr.get()));
-    else if (a->dtype() == Dtype::I32)
-        run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()));
-    else if (a->dtype() == Dtype::I64)
-        run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
-    else
-        ErrorBuilder(name).not_implemented("dtype not supported");
-    return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), Dtype::I64, device);
+    Storage out = backend::Dispatcher::for_device(device)
+                      .arg_reduce_index(a->storage(), a->shape(), ax, keepdims, a->dtype(),
+                                        is_min);
+    return fresh(std::move(out), std::move(out_shape), Dtype::I64, device);
 }
 }  // namespace
 

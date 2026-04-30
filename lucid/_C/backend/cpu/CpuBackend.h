@@ -2259,6 +2259,62 @@ public:
         return std::move(result.second);
     }
 
+    Storage arg_reduce_index(const Storage& a,
+                             const Shape& shape,
+                             int axis,
+                             bool keepdims,
+                             Dtype dt,
+                             bool is_min) override {
+        Shape out_shape = shape;
+        if (keepdims)
+            out_shape[static_cast<std::size_t>(axis)] = 1;
+        else
+            out_shape.erase(out_shape.begin() + axis);
+        const std::size_t nbytes = shape_numel(out_shape) * dtype_size(Dtype::I64);
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        auto* dst = reinterpret_cast<std::int64_t*>(ptr.get());
+        const auto& ca = std::get<CpuStorage>(a);
+
+        std::size_t outer = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        std::size_t inner = 1;
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
+            inner *= static_cast<std::size_t>(shape[d]);
+        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+
+        auto run = [&](const auto* src) {
+            for (std::size_t o = 0; o < outer; ++o) {
+                for (std::size_t j = 0; j < inner; ++j) {
+                    std::int64_t best = 0;
+                    auto best_v = src[o * L * inner + j];
+                    for (std::size_t k = 1; k < L; ++k) {
+                        const auto v = src[(o * L + k) * inner + j];
+                        if (is_min ? (v < best_v) : (v > best_v)) {
+                            best_v = v;
+                            best = static_cast<std::int64_t>(k);
+                        }
+                    }
+                    dst[o * inner + j] = best;
+                }
+            }
+        };
+
+        if (dt == Dtype::F32) {
+            run(reinterpret_cast<const float*>(ca.ptr.get()));
+        } else if (dt == Dtype::F64) {
+            run(reinterpret_cast<const double*>(ca.ptr.get()));
+        } else if (dt == Dtype::I32) {
+            run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()));
+        } else if (dt == Dtype::I64) {
+            run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
+        } else {
+            ErrorBuilder("cpu_backend::arg_reduce_index")
+                .not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nbytes, Dtype::I64}};
+    }
+
     Storage scatter_add_axis(const Storage& grad,
                              const Storage& indices,
                              const Shape& output_shape,
