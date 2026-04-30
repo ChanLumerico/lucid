@@ -368,6 +368,19 @@ public:
                                                           const Shape& shape,
                                                           Dtype dt,
                                                           int reduction) = 0;
+    virtual Storage huber_loss(const Storage& input,
+                               const Storage& target,
+                               const Shape& shape,
+                               Dtype dt,
+                               double delta,
+                               int reduction) = 0;
+    virtual std::pair<Storage, Storage> huber_loss_backward(const Storage& input,
+                                                            const Storage& target,
+                                                            const Storage& grad,
+                                                            const Shape& shape,
+                                                            Dtype dt,
+                                                            double delta,
+                                                            int reduction) = 0;
 
     virtual CpuStorage to_cpu(const Storage& a, const Shape& shape) = 0;
 };

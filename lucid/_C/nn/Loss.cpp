@@ -1259,61 +1259,13 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
     if (delta <= 0.0)
         ErrorBuilder("huber_loss").fail("delta must be positive");
 
-    const std::size_t numel = input->numel();
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(input->shape(), reduction)};
 
-    Storage out_storage;
-    if (input->device() == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage());
-        const auto& gt = std::get<GpuStorage>(target->storage());
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
-        auto d = mlx_scalar(delta, mlx_dt);
-        auto half_d_sq = mlx_scalar(0.5 * delta * delta, mlx_dt);
-        auto half = mlx_scalar(0.5, mlx_dt);
-        auto r = ::mlx::core::subtract(*gx.arr, *gt.arr);
-        auto ar = ::mlx::core::abs(r);
-        auto sq_term = ::mlx::core::multiply(half, ::mlx::core::multiply(r, r));
-        auto lin_term = ::mlx::core::subtract(::mlx::core::multiply(d, ar), half_d_sq);
-        auto cond = ::mlx::core::less(ar, d);
-        // less(ar, d) is true when |r| < d. We want quadratic when |r| <= d,
-        // and linear otherwise. The boundary point matches both branches, so
-        // we use less here for safety with NaN propagation.
-        auto l = ::mlx::core::where(cond, sq_term, lin_term);
-        auto red = mlx_apply_reduction(l, reduction);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype())};
-    } else {
-        auto loss_buf = allocate_size(numel, input->dtype());
-        const auto& xs = std::get<CpuStorage>(input->storage());
-        const auto& ts = std::get<CpuStorage>(target->storage());
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            auto* lp = reinterpret_cast<T*>(loss_buf.ptr.get());
-            const T d = static_cast<T>(delta);
-            for (std::size_t i = 0; i < numel; ++i) {
-                const T r = xp[i] - tp[i];
-                const T ar = std::abs(r);
-                lp[i] = (ar <= d) ? T{0.5} * r * r : d * (ar - T{0.5} * d);
-            }
-        };
-        if (input->dtype() == Dtype::F32)
-            compute(float{});
-        else if (input->dtype() == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("huber_loss").not_implemented("dtype not supported");
-
-        if (input->dtype() == Dtype::F32) {
-            out_storage = apply_reduction<float>(reinterpret_cast<float*>(loss_buf.ptr.get()),
-                                                 numel, reduction, input->dtype());
-        } else {
-            out_storage = apply_reduction<double>(reinterpret_cast<double*>(loss_buf.ptr.get()),
-                                                  numel, reduction, input->dtype());
-        }
-    }
+    Storage out_storage =
+        backend::Dispatcher::for_device(input->device())
+            .huber_loss(input->storage(), target->storage(), input->shape(), input->dtype(), delta,
+                        static_cast<int>(reduction));
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
                                             reduced_shape(input->shape(), reduction),
@@ -1331,66 +1283,11 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
 }
 
 std::vector<Storage> HuberLossBackward::apply(Storage grad_out) {
-    const std::size_t numel = shape_numel(orig_shape_);
-
-    if (device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(saved_inputs_[0]);
-        const auto& gt = std::get<GpuStorage>(saved_inputs_[1]);
-        const auto& gg = std::get<GpuStorage>(grad_out);
-        const auto mlx_dt = gpu::to_mlx_dtype(dtype_);
-        auto d = mlx_scalar(delta_, mlx_dt);
-        auto neg_d = mlx_scalar(-delta_, mlx_dt);
-        auto r = ::mlx::core::subtract(*gx.arr, *gt.arr);
-        auto ar = ::mlx::core::abs(r);
-        auto cond = ::mlx::core::less(ar, d);
-        auto sgn_d = ::mlx::core::where(::mlx::core::greater(r, mlx_scalar(0.0, mlx_dt)), d, neg_d);
-        auto dr = ::mlx::core::where(cond, r, sgn_d);
-
-        auto scaled = mlx_grad_scale(*gg.arr, reduction_, numel, mlx_dt);
-        if (reduction_ != Reduction::None)
-            scaled = ::mlx::core::broadcast_to(scaled, gpu::to_mlx_shape(orig_shape_));
-        auto dx = ::mlx::core::multiply(dr, scaled);
-        auto dt = ::mlx::core::negative(dx);
-        return {Storage{gpu::wrap_mlx_array(std::move(dx), dtype_)},
-                Storage{gpu::wrap_mlx_array(std::move(dt), dtype_)}};
-    }
-
-    auto dx_cpu = allocate_size(numel, dtype_);
-    auto dt_cpu = allocate_size(numel, dtype_);
-    const auto& xs = std::get<CpuStorage>(saved_inputs_[0]);
-    const auto& ts = std::get<CpuStorage>(saved_inputs_[1]);
-    const auto& gs = std::get<CpuStorage>(grad_out);
-
-    auto compute = [&](auto type_tag) {
-        using T = decltype(type_tag);
-        auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-        auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-        auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-        auto* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
-        auto* dtp = reinterpret_cast<T*>(dt_cpu.ptr.get());
-        const T d = static_cast<T>(delta_);
-        const bool elem = (reduction_ == Reduction::None);
-        const T mean_scale = static_cast<T>(numel);
-        for (std::size_t i = 0; i < numel; ++i) {
-            const T go = elem ? gp[i] : gp[0];
-            const T scale = (reduction_ == Reduction::Mean) ? (go / mean_scale) : go;
-            const T r = xp[i] - tp[i];
-            T dr;
-            if (std::abs(r) <= d)
-                dr = r;
-            else
-                dr = (r > T{0}) ? d : -d;
-            dxp[i] = dr * scale;
-            dtp[i] = -dxp[i];
-        }
-    };
-    if (dtype_ == Dtype::F32)
-        compute(float{});
-    else if (dtype_ == Dtype::F64)
-        compute(double{});
-    else
-        ErrorBuilder("huber_loss backward").not_implemented("dtype not supported");
-    return {Storage{std::move(dx_cpu)}, Storage{std::move(dt_cpu)}};
+    auto grads = backend::Dispatcher::for_device(device_)
+                     .huber_loss_backward(saved_inputs_[0], saved_inputs_[1], grad_out,
+                                          orig_shape_, dtype_, delta_,
+                                          static_cast<int>(reduction_));
+    return {std::move(grads.first), std::move(grads.second)};
 }
 
 TensorImplPtr huber_loss_op(const TensorImplPtr& input,
