@@ -2760,6 +2760,79 @@ public:
         return Storage{CpuStorage{ptr, nb, dst_dt}};
     }
 
+    Storage mse_loss(const Storage& input,
+                     const Storage& target,
+                     const Shape& shape,
+                     Dtype dt,
+                     int reduction) override {
+        const std::size_t n = shape_numel(shape);
+        if (reduction == 0) {
+            const std::size_t nb = n * dtype_size(dt);
+            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+            compute_mse_loss_values(input, target, ptr.get(), n, dt);
+            return Storage{CpuStorage{ptr, nb, dt}};
+        }
+
+        auto scalar = allocate_aligned_bytes(dtype_size(dt), Device::CPU);
+        if (dt == Dtype::F32) {
+            float sum = mse_loss_sum<float>(input, target, n);
+            if (reduction == 1)
+                sum /= static_cast<float>(n);
+            *reinterpret_cast<float*>(scalar.get()) = sum;
+        } else if (dt == Dtype::F64) {
+            double sum = mse_loss_sum<double>(input, target, n);
+            if (reduction == 1)
+                sum /= static_cast<double>(n);
+            *reinterpret_cast<double*>(scalar.get()) = sum;
+        } else {
+            ErrorBuilder("cpu_backend::mse_loss").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{scalar, dtype_size(dt), dt}};
+    }
+
+    std::pair<Storage, Storage> mse_loss_backward(const Storage& input,
+                                                  const Storage& target,
+                                                  const Storage& grad,
+                                                  const Shape& shape,
+                                                  Dtype dt,
+                                                  int reduction) override {
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nb = n * dtype_size(dt);
+        auto dx = allocate_aligned_bytes(nb, Device::CPU);
+        auto dtarget = allocate_aligned_bytes(nb, Device::CPU);
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& gs = std::get<CpuStorage>(grad);
+
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
+            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            auto* dxp = reinterpret_cast<T*>(dx.get());
+            auto* dtp = reinterpret_cast<T*>(dtarget.get());
+            const bool elem = reduction == 0;
+            const T mean_scale = static_cast<T>(n);
+            for (std::size_t i = 0; i < n; ++i) {
+                const T go = elem ? gp[i] : gp[0];
+                const T scale = (reduction == 1) ? (go / mean_scale) : go;
+                const T d = xp[i] - tp[i];
+                dxp[i] = static_cast<T>(2) * d * scale;
+                dtp[i] = -dxp[i];
+            }
+        };
+
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::mse_loss_backward")
+                .not_implemented("dtype not supported");
+
+        return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}}};
+    }
+
     CpuStorage to_cpu(const Storage& a, const Shape& /*shape*/) override {
         return std::get<CpuStorage>(a);
     }
@@ -2820,6 +2893,48 @@ private:
             }
         }
         return {std::move(values), std::move(indices)};
+    }
+
+    void compute_mse_loss_values(const Storage& input,
+                                 const Storage& target,
+                                 std::byte* out,
+                                 std::size_t n,
+                                 Dtype dt) {
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        if (dt == Dtype::F32) {
+            const auto* xp = reinterpret_cast<const float*>(xs.ptr.get());
+            const auto* tp = reinterpret_cast<const float*>(ts.ptr.get());
+            auto* lp = reinterpret_cast<float*>(out);
+            for (std::size_t i = 0; i < n; ++i) {
+                const float d = xp[i] - tp[i];
+                lp[i] = d * d;
+            }
+        } else if (dt == Dtype::F64) {
+            const auto* xp = reinterpret_cast<const double*>(xs.ptr.get());
+            const auto* tp = reinterpret_cast<const double*>(ts.ptr.get());
+            auto* lp = reinterpret_cast<double*>(out);
+            for (std::size_t i = 0; i < n; ++i) {
+                const double d = xp[i] - tp[i];
+                lp[i] = d * d;
+            }
+        } else {
+            ErrorBuilder("cpu_backend::mse_loss").not_implemented("dtype not supported");
+        }
+    }
+
+    template <typename T>
+    T mse_loss_sum(const Storage& input, const Storage& target, std::size_t n) {
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+        const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
+        T sum = T{0};
+        for (std::size_t i = 0; i < n; ++i) {
+            const T d = xp[i] - tp[i];
+            sum += d * d;
+        }
+        return sum;
     }
 
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {

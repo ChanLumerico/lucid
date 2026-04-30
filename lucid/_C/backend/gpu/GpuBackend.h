@@ -1020,6 +1020,42 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dst_dt)};
     }
 
+    Storage mse_loss(const Storage& input,
+                     const Storage& target,
+                     const Shape& /*shape*/,
+                     Dtype dt,
+                     int reduction) override {
+        const auto& x = std::get<GpuStorage>(input);
+        const auto& t = std::get<GpuStorage>(target);
+        auto diff = ::mlx::core::subtract(*x.arr, *t.arr);
+        auto sq = ::mlx::core::multiply(diff, diff);
+        auto reduced = apply_loss_reduction(sq, reduction);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(reduced), dt)};
+    }
+
+    std::pair<Storage, Storage> mse_loss_backward(const Storage& input,
+                                                  const Storage& target,
+                                                  const Storage& grad,
+                                                  const Shape& shape,
+                                                  Dtype dt,
+                                                  int reduction) override {
+        const auto& x = std::get<GpuStorage>(input);
+        const auto& t = std::get<GpuStorage>(target);
+        const auto& g = std::get<GpuStorage>(grad);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto scaled = scale_loss_grad(*g.arr, reduction, shape_numel(shape), mlx_dt);
+        if (reduction != 0)
+            scaled = ::mlx::core::broadcast_to(scaled, gpu::to_mlx_shape(shape));
+        auto diff = ::mlx::core::subtract(*x.arr, *t.arr);
+        auto two = gpu::mlx_scalar(2.0, mlx_dt);
+        auto dx = ::mlx::core::multiply(::mlx::core::multiply(two, diff), scaled);
+        auto dtarget = ::mlx::core::negative(dx);
+        return {
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dtarget), dt)},
+        };
+    }
+
     CpuStorage to_cpu(const Storage& a, const Shape& shape) override {
         return gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape);
     }
@@ -1043,6 +1079,25 @@ private:
         out_shape[axis] = static_cast<int>(k);
         selector_arr = ::mlx::core::broadcast_to(selector_arr, out_shape);
         return ::mlx::core::take_along_axis(idx, selector_arr, axis);
+    }
+
+    ::mlx::core::array apply_loss_reduction(const ::mlx::core::array& values, int reduction) {
+        if (reduction == 0)
+            return values;
+        auto sum = ::mlx::core::sum(values, /*keepdims=*/false);
+        if (reduction == 1)
+            return ::mlx::core::divide(sum, gpu::mlx_scalar(static_cast<double>(values.size()),
+                                                           values.dtype()));
+        return sum;
+    }
+
+    ::mlx::core::array scale_loss_grad(const ::mlx::core::array& grad,
+                                       int reduction,
+                                       std::size_t numel,
+                                       ::mlx::core::Dtype dt) {
+        if (reduction == 1)
+            return ::mlx::core::divide(grad, gpu::mlx_scalar(static_cast<double>(numel), dt));
+        return grad;
     }
 
     template <class Fn>

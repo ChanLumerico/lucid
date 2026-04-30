@@ -357,6 +357,18 @@ public:
 
     virtual Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) = 0;
 
+    virtual Storage mse_loss(const Storage& input,
+                             const Storage& target,
+                             const Shape& shape,
+                             Dtype dt,
+                             int reduction) = 0;
+    virtual std::pair<Storage, Storage> mse_loss_backward(const Storage& input,
+                                                          const Storage& target,
+                                                          const Storage& grad,
+                                                          const Shape& shape,
+                                                          Dtype dt,
+                                                          int reduction) = 0;
+
     virtual CpuStorage to_cpu(const Storage& a, const Shape& shape) = 0;
 };
 

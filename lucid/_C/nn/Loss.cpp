@@ -11,6 +11,7 @@
 #include "../autograd/AccumulateGrad.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
+#include "../backend/Dispatcher.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
 #include "../core/Error.h"
@@ -150,51 +151,13 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
         throw DtypeMismatch(std::string(dtype_name(input->dtype())),
                             std::string(dtype_name(target->dtype())), "mse_loss");
 
-    const std::size_t numel = input->numel();
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(input->shape(), reduction)};
 
-    Storage out_storage;
-    if (input->device() == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage());
-        const auto& gt = std::get<GpuStorage>(target->storage());
-        if (!gx.arr || !gt.arr)
-            ErrorBuilder("mse_loss").fail("null GPU array");
-        auto diff = ::mlx::core::subtract(*gx.arr, *gt.arr);
-        auto sq = ::mlx::core::multiply(diff, diff);
-        auto red = mlx_apply_reduction(sq, reduction);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype())};
-    } else {
-        auto loss_buf = allocate_size(numel, input->dtype());
-        const auto& xs = std::get<CpuStorage>(input->storage());
-        const auto& ts = std::get<CpuStorage>(target->storage());
-        switch (input->dtype()) {
-            case Dtype::F32: {
-                auto* xp = reinterpret_cast<const float*>(xs.ptr.get());
-                auto* tp = reinterpret_cast<const float*>(ts.ptr.get());
-                auto* lp = reinterpret_cast<float*>(loss_buf.ptr.get());
-                for (std::size_t i = 0; i < numel; ++i) {
-                    const float d = xp[i] - tp[i];
-                    lp[i] = d * d;
-                }
-                out_storage = apply_reduction<float>(lp, numel, reduction, input->dtype());
-                break;
-            }
-            case Dtype::F64: {
-                auto* xp = reinterpret_cast<const double*>(xs.ptr.get());
-                auto* tp = reinterpret_cast<const double*>(ts.ptr.get());
-                auto* lp = reinterpret_cast<double*>(loss_buf.ptr.get());
-                for (std::size_t i = 0; i < numel; ++i) {
-                    const double d = xp[i] - tp[i];
-                    lp[i] = d * d;
-                }
-                out_storage = apply_reduction<double>(lp, numel, reduction, input->dtype());
-                break;
-            }
-            default:
-                ErrorBuilder("mse_loss").not_implemented("dtype not supported");
-        }
-    }
+    Storage out_storage =
+        backend::Dispatcher::for_device(input->device())
+            .mse_loss(input->storage(), target->storage(), input->shape(), input->dtype(),
+                      static_cast<int>(reduction));
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
                                             reduced_shape(input->shape(), reduction),
@@ -210,54 +173,10 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
 }
 
 std::vector<Storage> MseLossBackward::apply(Storage grad_out) {
-    const std::size_t numel = shape_numel(orig_shape_);
-
-    if (device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(saved_inputs_[0]);
-        const auto& gt = std::get<GpuStorage>(saved_inputs_[1]);
-        const auto& gg = std::get<GpuStorage>(grad_out);
-        const auto mlx_dt = gpu::to_mlx_dtype(dtype_);
-        auto scaled = mlx_grad_scale(*gg.arr, reduction_, numel, mlx_dt);
-        if (reduction_ != Reduction::None)
-            scaled = ::mlx::core::broadcast_to(scaled, gpu::to_mlx_shape(orig_shape_));
-        auto diff = ::mlx::core::subtract(*gx.arr, *gt.arr);
-        auto two = mlx_scalar(2.0, mlx_dt);
-        auto dx = ::mlx::core::multiply(::mlx::core::multiply(two, diff), scaled);
-        auto dt = ::mlx::core::negative(dx);
-        return {Storage{gpu::wrap_mlx_array(std::move(dx), dtype_)},
-                Storage{gpu::wrap_mlx_array(std::move(dt), dtype_)}};
-    }
-
-    auto dx_cpu = allocate_size(numel, dtype_);
-    auto dt_cpu = allocate_size(numel, dtype_);
-    const auto& xs = std::get<CpuStorage>(saved_inputs_[0]);
-    const auto& ts = std::get<CpuStorage>(saved_inputs_[1]);
-    const auto& gs = std::get<CpuStorage>(grad_out);
-
-    auto compute = [&](auto type_tag) {
-        using T = decltype(type_tag);
-        auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-        auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-        auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-        auto* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
-        auto* dtp = reinterpret_cast<T*>(dt_cpu.ptr.get());
-        const bool elem = (reduction_ == Reduction::None);
-        const T mean_scale = static_cast<T>(numel);
-        for (std::size_t i = 0; i < numel; ++i) {
-            const T go = elem ? gp[i] : gp[0];
-            const T scale = (reduction_ == Reduction::Mean) ? (go / mean_scale) : go;
-            const T d = xp[i] - tp[i];
-            dxp[i] = static_cast<T>(2) * d * scale;
-            dtp[i] = -dxp[i];
-        }
-    };
-    if (dtype_ == Dtype::F32)
-        compute(float{});
-    else if (dtype_ == Dtype::F64)
-        compute(double{});
-    else
-        ErrorBuilder("mse_loss backward").not_implemented("dtype not supported");
-    return {Storage{std::move(dx_cpu)}, Storage{std::move(dt_cpu)}};
+    auto grads = backend::Dispatcher::for_device(device_)
+                     .mse_loss_backward(saved_inputs_[0], saved_inputs_[1], grad_out,
+                                        orig_shape_, dtype_, static_cast<int>(reduction_));
+    return {std::move(grads.first), std::move(grads.second)};
 }
 
 TensorImplPtr mse_loss_op(const TensorImplPtr& input, const TensorImplPtr& target, int reduction) {
