@@ -9,6 +9,7 @@
 #include "../../autograd/FuncOp.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -257,37 +258,11 @@ TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis) 
     const Device device = a->device();
     OpScopeFull scope{"repeat", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto out = ::mlx::core::repeat(*ga.arr, static_cast<int>(repeats), ax);
-        Shape sh = mlx_shape_to_lucid(out.shape());
-        auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
-        return attach_repeat_grad(a, std::move(result), ax, repeats);
-    }
     Shape out_shape = a->shape();
     out_shape[ax] *= repeats;
-    auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const std::size_t elem = dtype_size(dt);
-    std::size_t outer = 1;
-    for (int d = 0; d < ax; ++d)
-        outer *= static_cast<std::size_t>(a->shape()[d]);
-    std::size_t inner = elem;
-    for (std::size_t d = ax + 1; d < a->shape().size(); ++d)
-        inner *= static_cast<std::size_t>(a->shape()[d]);
-    const std::size_t L = static_cast<std::size_t>(a->shape()[ax]);
-    auto* dst = out_cpu.ptr.get();
-    for (std::size_t o = 0; o < outer; ++o) {
-        for (std::size_t k = 0; k < L; ++k) {
-            const auto* src = ca.ptr.get() + (o * L + k) * inner;
-            for (std::int64_t r = 0; r < repeats; ++r) {
-                std::memcpy(dst, src, inner);
-                dst += inner;
-            }
-        }
-    }
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
+    Storage out_storage =
+        backend::Dispatcher::for_device(device).repeat(a->storage(), a->shape(), dt, repeats, ax);
+    auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
     return attach_repeat_grad(a, std::move(result), ax, repeats);
 }
 
@@ -300,19 +275,6 @@ TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
     if (nout < a->shape().size())
         ErrorBuilder("tile").fail("reps must be at least as long as ndim");
 
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        std::vector<int> reps_int(reps.begin(), reps.end());
-        auto out = ::mlx::core::tile(*ga.arr, std::move(reps_int));
-        Shape sh = mlx_shape_to_lucid(out.shape());
-        Shape padded(nout, 1);
-        const std::size_t lead = nout - a->shape().size();
-        for (std::size_t d = 0; d < a->shape().size(); ++d)
-            padded[lead + d] = a->shape()[d];
-        auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
-        return attach_tile_grad(a, std::move(result), std::move(padded), std::move(reps));
-    }
     Shape padded(nout, 1);
     const std::size_t lead = nout - a->shape().size();
     for (std::size_t d = 0; d < a->shape().size(); ++d)
@@ -321,30 +283,9 @@ TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
     for (std::size_t d = 0; d < nout; ++d)
         out_shape[d] = padded[d] * reps[d];
 
-    auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const std::size_t elem = dtype_size(dt);
-    Stride in_stride(nout);
-    if (nout > 0) {
-        in_stride.back() = 1;
-        for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 2; d >= 0; --d)
-            in_stride[d] = in_stride[d + 1] * padded[d + 1];
-    }
-    const std::size_t total = numel(out_shape);
-    std::vector<std::int64_t> coord(nout, 0);
-    for (std::size_t f = 0; f < total; ++f) {
-        std::size_t in_flat = 0;
-        for (std::size_t d = 0; d < nout; ++d)
-            in_flat += static_cast<std::size_t>(coord[d] % padded[d]) *
-                       static_cast<std::size_t>(in_stride[d]);
-        std::memcpy(out_cpu.ptr.get() + f * elem, ca.ptr.get() + in_flat * elem, elem);
-        for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
-            if (++coord[d] < out_shape[d])
-                break;
-            coord[d] = 0;
-        }
-    }
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
+    Storage out_storage =
+        backend::Dispatcher::for_device(device).tile(a->storage(), a->shape(), dt, reps);
+    auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
     return attach_tile_grad(a, std::move(result), std::move(padded), std::move(reps));
 }
 

@@ -864,6 +864,78 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage repeat(const Storage& a,
+                   const Shape& shape,
+                   Dtype dt,
+                   std::int64_t repeats,
+                   int axis) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        Shape out_shape = shape;
+        out_shape[static_cast<std::size_t>(axis)] *= repeats;
+        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::size_t elem = dtype_size(dt);
+        std::size_t outer = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        std::size_t inner = elem;
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
+            inner *= static_cast<std::size_t>(shape[d]);
+        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        auto* dst = ptr.get();
+        for (std::size_t o = 0; o < outer; ++o) {
+            for (std::size_t k = 0; k < L; ++k) {
+                const auto* src = cs.ptr.get() + (o * L + k) * inner;
+                for (std::int64_t r = 0; r < repeats; ++r) {
+                    std::memcpy(dst, src, inner);
+                    dst += inner;
+                }
+            }
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage tile(const Storage& a,
+                 const Shape& shape,
+                 Dtype dt,
+                 const std::vector<std::int64_t>& reps) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const std::size_t nout = reps.size();
+        Shape padded(nout, 1);
+        const std::size_t lead = nout - shape.size();
+        for (std::size_t d = 0; d < shape.size(); ++d)
+            padded[lead + d] = shape[d];
+        Shape out_shape(nout);
+        for (std::size_t d = 0; d < nout; ++d)
+            out_shape[d] = padded[d] * reps[d];
+
+        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::size_t elem = dtype_size(dt);
+        Stride in_stride(nout);
+        if (nout > 0) {
+            in_stride.back() = 1;
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nout) - 2; d >= 0; --d)
+                in_stride[static_cast<std::size_t>(d)] =
+                    in_stride[static_cast<std::size_t>(d) + 1] * padded[static_cast<std::size_t>(d) + 1];
+        }
+        const std::size_t total = shape_numel(out_shape);
+        std::vector<std::int64_t> coord(nout, 0);
+        for (std::size_t f = 0; f < total; ++f) {
+            std::size_t in_flat = 0;
+            for (std::size_t d = 0; d < nout; ++d)
+                in_flat += static_cast<std::size_t>(coord[d] % padded[d]) *
+                           static_cast<std::size_t>(in_stride[d]);
+            std::memcpy(ptr.get() + f * elem, cs.ptr.get() + in_flat * elem, elem);
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nout) - 1; d >= 0; --d) {
+                if (++coord[static_cast<std::size_t>(d)] < out_shape[static_cast<std::size_t>(d)])
+                    break;
+                coord[static_cast<std::size_t>(d)] = 0;
+            }
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override {
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);

@@ -362,6 +362,26 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage repeat(const Storage& a,
+                   const Shape& /*shape*/,
+                   Dtype dt,
+                   std::int64_t repeats,
+                   int axis) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::repeat(*gs.arr, static_cast<int>(repeats), axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage tile(const Storage& a,
+                 const Shape& /*shape*/,
+                 Dtype dt,
+                 const std::vector<std::int64_t>& reps) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        std::vector<int> reps_int(reps.begin(), reps.end());
+        auto result = ::mlx::core::tile(*gs.arr, std::move(reps_int));
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     Storage cast(const Storage& a,
                  const Shape& /*shape*/,
                  Dtype /*src_dt*/,

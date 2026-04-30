@@ -169,6 +169,17 @@ public:
                               const Shape& dst_shape,
                               Dtype dt) = 0;
 
+    virtual Storage repeat(const Storage& a,
+                           const Shape& shape,
+                           Dtype dt,
+                           std::int64_t repeats,
+                           int axis) = 0;
+
+    virtual Storage tile(const Storage& a,
+                         const Shape& shape,
+                         Dtype dt,
+                         const std::vector<std::int64_t>& reps) = 0;
+
     virtual Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) = 0;
 };
 
