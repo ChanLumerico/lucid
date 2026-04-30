@@ -155,6 +155,9 @@ public:
                                const ReduceOpts& opts,
                                Dtype dt) = 0;
 
+    virtual Storage cumsum(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
+    virtual Storage cumprod(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
+
     // ---- Linear algebra -----------------------------------------------
 
     /// N-D batched matrix multiply: a [...,M,K] @ b [...,K,N] → [...,M,N].

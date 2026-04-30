@@ -9,6 +9,7 @@
 #include "../../autograd/AutogradNode.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -255,51 +256,10 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
         ErrorBuilder(name).fail("axis out of range");
     OpScopeFull scope{name, device, dt, sh};
 
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto out = is_prod ? ::mlx::core::cumprod(*ga.arr, ax) : ::mlx::core::cumsum(*ga.arr, ax);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, sh, dt, device);
-    }
-
-    auto out_cpu = allocate_cpu(sh, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    if (dt == Dtype::F32) {
-        if (is_prod)
-            scan_axis<float, true>(reinterpret_cast<const float*>(ca.ptr.get()),
-                                   reinterpret_cast<float*>(out_cpu.ptr.get()), sh, ax);
-        else
-            scan_axis<float, false>(reinterpret_cast<const float*>(ca.ptr.get()),
-                                    reinterpret_cast<float*>(out_cpu.ptr.get()), sh, ax);
-    } else if (dt == Dtype::F64) {
-        if (is_prod)
-            scan_axis<double, true>(reinterpret_cast<const double*>(ca.ptr.get()),
-                                    reinterpret_cast<double*>(out_cpu.ptr.get()), sh, ax);
-        else
-            scan_axis<double, false>(reinterpret_cast<const double*>(ca.ptr.get()),
-                                     reinterpret_cast<double*>(out_cpu.ptr.get()), sh, ax);
-    } else if (dt == Dtype::I32) {
-        if (is_prod)
-            scan_axis<std::int32_t, true>(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-                                          reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()), sh,
-                                          ax);
-        else
-            scan_axis<std::int32_t, false>(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-                                           reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()), sh,
-                                           ax);
-    } else if (dt == Dtype::I64) {
-        if (is_prod)
-            scan_axis<std::int64_t, true>(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-                                          reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), sh,
-                                          ax);
-        else
-            scan_axis<std::int64_t, false>(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-                                           reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), sh,
-                                           ax);
-    } else {
-        ErrorBuilder(name).not_implemented("dtype not supported");
-    }
-
-    return fresh(Storage{std::move(out_cpu)}, sh, dt, device);
+    Storage out_storage = is_prod
+                              ? backend::Dispatcher::for_device(device).cumprod(a->storage(), sh, ax, dt)
+                              : backend::Dispatcher::for_device(device).cumsum(a->storage(), sh, ax, dt);
+    return fresh(std::move(out_storage), sh, dt, device);
 }
 
 }  // namespace

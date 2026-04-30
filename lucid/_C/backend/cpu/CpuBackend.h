@@ -757,6 +757,90 @@ public:
         return reduce_axes(a, in_shape, opts, dt, ReduceOp::Min);
     }
 
+    Storage cumsum(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t nb = cs.nbytes;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const int ndim = static_cast<int>(shape.size());
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (int d = axis + 1; d < ndim; ++d)
+            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+
+        auto run = [&](auto* dst, const auto* src) {
+            using T = std::remove_pointer_t<decltype(dst)>;
+            for (std::size_t o = 0; o < outer; ++o)
+                for (std::size_t j = 0; j < inner; ++j) {
+                    T acc = src[(o * L) * inner + j];
+                    dst[(o * L) * inner + j] = acc;
+                    for (std::size_t k = 1; k < L; ++k) {
+                        acc = acc + src[(o * L + k) * inner + j];
+                        dst[(o * L + k) * inner + j] = acc;
+                    }
+                }
+        };
+
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(cs.ptr.get()));
+        else if (dt == Dtype::I32)
+            run(reinterpret_cast<std::int32_t*>(ptr.get()),
+                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
+        else if (dt == Dtype::I64)
+            run(reinterpret_cast<std::int64_t*>(ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::cumsum").not_implemented("dtype not supported");
+
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage cumprod(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t nb = cs.nbytes;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const int ndim = static_cast<int>(shape.size());
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (int d = axis + 1; d < ndim; ++d)
+            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+
+        auto run = [&](auto* dst, const auto* src) {
+            using T = std::remove_pointer_t<decltype(dst)>;
+            for (std::size_t o = 0; o < outer; ++o)
+                for (std::size_t j = 0; j < inner; ++j) {
+                    T acc = src[(o * L) * inner + j];
+                    dst[(o * L) * inner + j] = acc;
+                    for (std::size_t k = 1; k < L; ++k) {
+                        acc = acc * src[(o * L + k) * inner + j];
+                        dst[(o * L + k) * inner + j] = acc;
+                    }
+                }
+        };
+
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(cs.ptr.get()));
+        else if (dt == Dtype::I32)
+            run(reinterpret_cast<std::int32_t*>(ptr.get()),
+                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
+        else if (dt == Dtype::I64)
+            run(reinterpret_cast<std::int64_t*>(ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::cumprod").not_implemented("dtype not supported");
+
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
