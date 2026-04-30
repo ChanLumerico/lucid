@@ -9,7 +9,7 @@
 #include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
-#include "../../backend/cpu/Shape.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -53,53 +53,6 @@ std::vector<int> validate_perm(const std::vector<int>& perm, int ndim) {
     return normalized;
 }
 
-CpuStorage allocate_like(const Shape& shape, Dtype dt) {
-    CpuStorage out;
-    out.dtype = dt;
-    out.nbytes = shape_numel(shape) * dtype_size(dt);
-    out.ptr = allocate_aligned_bytes(out.nbytes);
-    return out;
-}
-
-CpuStorage permute_copy(const CpuStorage& in,
-                        const Shape& in_shape,
-                        const std::vector<int>& perm,
-                        Dtype dt) {
-    Shape out_shape;
-    out_shape.reserve(perm.size());
-    for (int p : perm)
-        out_shape.push_back(in_shape[static_cast<std::size_t>(p)]);
-
-    auto out = allocate_like(out_shape, dt);
-    if (out.nbytes == 0)
-        return out;
-
-    switch (dt) {
-        case Dtype::F32:
-            backend::cpu::permute_copy_f32(reinterpret_cast<const float*>(in.ptr.get()),
-                                           reinterpret_cast<float*>(out.ptr.get()), in_shape, perm);
-            break;
-        case Dtype::F64:
-            backend::cpu::permute_copy_f64(reinterpret_cast<const double*>(in.ptr.get()),
-                                           reinterpret_cast<double*>(out.ptr.get()), in_shape,
-                                           perm);
-            break;
-        case Dtype::I32:
-            backend::cpu::permute_copy_i32(reinterpret_cast<const std::int32_t*>(in.ptr.get()),
-                                           reinterpret_cast<std::int32_t*>(out.ptr.get()), in_shape,
-                                           perm);
-            break;
-        case Dtype::I64:
-            backend::cpu::permute_copy_i64(reinterpret_cast<const std::int64_t*>(in.ptr.get()),
-                                           reinterpret_cast<std::int64_t*>(out.ptr.get()), in_shape,
-                                           perm);
-            break;
-        default:
-            ErrorBuilder("permute").not_implemented("dtype not supported (F32/F64/I32/I64)");
-    }
-    return out;
-}
-
 std::vector<int> inverse_perm(const std::vector<int>& perm) {
     std::vector<int> inv(perm.size());
     for (std::size_t i = 0; i < perm.size(); ++i) {
@@ -131,22 +84,11 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
     // ops (matmul, conv, ...) can always assume contiguous row-major layout.
     // GPU: MLX contiguous() materialises the lazy transpose in-place.
     // CPU: permute_copy_<dtype> produces a fresh contiguous CpuStorage.
-    TensorImplPtr out;
-    if (a->device() == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        if (!ga.arr)
-            ErrorBuilder("permute").fail("null GPU array");
-        auto raw = ::mlx::core::transpose(*ga.arr, perm);
-        raw = ::mlx::core::contiguous(raw);
-        auto out_storage = Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype())};
-        out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
-                                           a->device(), false);
-    } else {
-        const auto& src = std::get<CpuStorage>(a->storage());
-        auto phys = permute_copy(src, a->shape(), perm, a->dtype());
-        out = std::make_shared<TensorImpl>(Storage{std::move(phys)}, out_shape, a->dtype(),
-                                           a->device(), false);
-    }
+    Storage out_storage =
+        backend::Dispatcher::for_device(a->device()).permute(a->storage(), a->shape(), perm,
+                                                             a->dtype());
+    TensorImplPtr out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape,
+                                                     a->dtype(), a->device(), false);
 
     auto bwd = std::make_shared<PermuteBackward>();
     bwd->perm_ = perm;
@@ -159,18 +101,8 @@ std::vector<Storage> PermuteBackward::apply(Storage grad_out) {
     // dx = permute(g, inverse_perm). The gradient arrives in `out_shape_`;
     // applying inverse_perm produces a buffer in `input_shapes_[0]` layout.
     const auto inv = inverse_perm(perm_);
-    Storage dx;
-    if (device_ == Device::GPU) {
-        const auto& gg = std::get<GpuStorage>(grad_out);
-        if (!gg.arr)
-            ErrorBuilder("permute backward").fail("null GPU array");
-        auto raw = ::mlx::core::transpose(*gg.arr, inv);
-        raw = ::mlx::core::contiguous(raw);
-        dx = Storage{gpu::wrap_mlx_array(std::move(raw), dtype_)};
-    } else {
-        const auto& g_cpu = std::get<CpuStorage>(grad_out);
-        dx = Storage{permute_copy(g_cpu, out_shape_, inv, dtype_)};
-    }
+    Storage dx = backend::Dispatcher::for_device(device_).permute(grad_out, out_shape_, inv,
+                                                                  dtype_);
     return {std::move(dx)};
 }
 

@@ -394,6 +394,15 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage permute(const Storage& a,
+                    const Shape& /*shape*/,
+                    const std::vector<int>& perm,
+                    Dtype dt) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::transpose(*gs.arr, perm);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     Storage pad(const Storage& a,
                 const Shape& /*shape*/,
                 Dtype dt,

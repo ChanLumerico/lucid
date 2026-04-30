@@ -184,6 +184,11 @@ public:
                          Dtype dt,
                          const std::vector<std::int64_t>& reps) = 0;
 
+    virtual Storage permute(const Storage& a,
+                            const Shape& shape,
+                            const std::vector<int>& perm,
+                            Dtype dt) = 0;
+
     virtual Storage pad(const Storage& a,
                         const Shape& shape,
                         Dtype dt,

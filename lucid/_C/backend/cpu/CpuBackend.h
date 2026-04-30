@@ -20,6 +20,7 @@
 #include "../IBackend.h"
 #include "Blas.h"
 #include "Reduce.h"
+#include "Shape.h"
 #include "Vdsp.h"
 #include "Vforce.h"
 
@@ -1016,6 +1017,43 @@ public:
                     break;
                 coord[static_cast<std::size_t>(d)] = 0;
             }
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage permute(const Storage& a,
+                    const Shape& shape,
+                    const std::vector<int>& perm,
+                    Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        Shape out_shape;
+        out_shape.reserve(perm.size());
+        for (int p : perm)
+            out_shape.push_back(shape[static_cast<std::size_t>(p)]);
+        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (nb == 0)
+            return Storage{CpuStorage{ptr, nb, dt}};
+        switch (dt) {
+            case Dtype::F32:
+                cpu::permute_copy_f32(reinterpret_cast<const float*>(cs.ptr.get()),
+                                      reinterpret_cast<float*>(ptr.get()), shape, perm);
+                break;
+            case Dtype::F64:
+                cpu::permute_copy_f64(reinterpret_cast<const double*>(cs.ptr.get()),
+                                      reinterpret_cast<double*>(ptr.get()), shape, perm);
+                break;
+            case Dtype::I32:
+                cpu::permute_copy_i32(reinterpret_cast<const std::int32_t*>(cs.ptr.get()),
+                                      reinterpret_cast<std::int32_t*>(ptr.get()), shape, perm);
+                break;
+            case Dtype::I64:
+                cpu::permute_copy_i64(reinterpret_cast<const std::int64_t*>(cs.ptr.get()),
+                                      reinterpret_cast<std::int64_t*>(ptr.get()), shape, perm);
+                break;
+            default:
+                ErrorBuilder("cpu_backend::permute")
+                    .not_implemented("dtype not supported (F32/F64/I32/I64)");
         }
         return Storage{CpuStorage{ptr, nb, dt}};
     }
