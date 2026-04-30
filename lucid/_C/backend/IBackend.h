@@ -294,6 +294,12 @@ public:
                                   const Shape& output_shape,
                                   const std::vector<std::int64_t>& reps,
                                   Dtype dt) = 0;
+    virtual Storage scatter_add_axis(const Storage& grad,
+                                     const Storage& indices,
+                                     const Shape& output_shape,
+                                     const Shape& grad_shape,
+                                     int axis,
+                                     Dtype dt) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 

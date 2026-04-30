@@ -2226,6 +2226,59 @@ public:
         return Storage{CpuStorage{ptr, out_nbytes, dt}};
     }
 
+    Storage scatter_add_axis(const Storage& grad,
+                             const Storage& indices,
+                             const Shape& output_shape,
+                             const Shape& grad_shape,
+                             int axis,
+                             Dtype dt) override {
+        const auto& g = std::get<CpuStorage>(grad);
+        const auto& idx_storage = std::get<CpuStorage>(indices);
+        const std::size_t nbytes = shape_numel(output_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        std::memset(ptr.get(), 0, nbytes);
+
+        std::size_t outer = 1;
+        std::size_t inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(output_shape[static_cast<std::size_t>(d)]);
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < output_shape.size(); ++d)
+            inner *= static_cast<std::size_t>(output_shape[d]);
+        const std::size_t L =
+            static_cast<std::size_t>(output_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t K =
+            static_cast<std::size_t>(grad_shape[static_cast<std::size_t>(axis)]);
+        const auto* idx = reinterpret_cast<const std::int32_t*>(idx_storage.ptr.get());
+
+        auto run = [&](auto* dst, const auto* gp) {
+            for (std::size_t o = 0; o < outer; ++o) {
+                for (std::size_t j = 0; j < inner; ++j) {
+                    for (std::size_t k = 0; k < K; ++k) {
+                        const std::size_t grad_flat = (o * K + k) * inner + j;
+                        std::int32_t src_k = idx[grad_flat];
+                        if (src_k < 0)
+                            src_k += static_cast<std::int32_t>(L);
+                        const std::size_t dst_flat =
+                            (o * L + static_cast<std::size_t>(src_k)) * inner + j;
+                        dst[dst_flat] += gp[grad_flat];
+                    }
+                }
+            }
+        };
+
+        if (dt == Dtype::F32) {
+            run(reinterpret_cast<float*>(ptr.get()),
+                reinterpret_cast<const float*>(g.ptr.get()));
+        } else if (dt == Dtype::F64) {
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(g.ptr.get()));
+        } else {
+            ErrorBuilder("cpu_backend::scatter_add_axis")
+                .not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nbytes, dt}};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

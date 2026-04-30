@@ -868,6 +868,19 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage scatter_add_axis(const Storage& grad,
+                             const Storage& indices,
+                             const Shape& output_shape,
+                             const Shape& /*grad_shape*/,
+                             int axis,
+                             Dtype dt) override {
+        const auto& g = std::get<GpuStorage>(grad);
+        const auto& idx = std::get<GpuStorage>(indices);
+        auto base = ::mlx::core::zeros(gpu::to_mlx_shape(output_shape), gpu::to_mlx_dtype(dt));
+        auto out = ::mlx::core::scatter_add_axis(base, *idx.arr, *g.arr, axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

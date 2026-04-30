@@ -11,6 +11,7 @@
 #include <mlx/ops.h>
 
 #include "../../autograd/FuncOp.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -85,41 +86,6 @@ std::pair<CpuStorage, CpuStorage> sort_select_cpu(const CpuStorage& input,
     return {std::move(values), std::move(indices)};
 }
 
-template <typename T>
-CpuStorage scatter_axis_add_cpu(const CpuStorage& grad,
-                                const CpuStorage& indices,
-                                const Shape& input_shape,
-                                const Shape& grad_shape,
-                                int axis,
-                                Dtype dt) {
-    auto out = allocate_cpu(input_shape, dt);
-    const auto* g = reinterpret_cast<const T*>(grad.ptr.get());
-    const auto* idx = reinterpret_cast<const std::int32_t*>(indices.ptr.get());
-    auto* dst = reinterpret_cast<T*>(out.ptr.get());
-
-    std::size_t outer = 1, inner = 1;
-    for (int d = 0; d < axis; ++d)
-        outer *= static_cast<std::size_t>(input_shape[d]);
-    for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < input_shape.size(); ++d)
-        inner *= static_cast<std::size_t>(input_shape[d]);
-    const std::size_t L = static_cast<std::size_t>(input_shape[static_cast<std::size_t>(axis)]);
-    const std::size_t K = static_cast<std::size_t>(grad_shape[static_cast<std::size_t>(axis)]);
-
-    for (std::size_t o = 0; o < outer; ++o) {
-        for (std::size_t j = 0; j < inner; ++j) {
-            for (std::size_t k = 0; k < K; ++k) {
-                const std::size_t grad_flat = (o * K + k) * inner + j;
-                std::int32_t src_k = idx[grad_flat];
-                if (src_k < 0)
-                    src_k += static_cast<std::int32_t>(L);
-                const std::size_t dst_flat = (o * L + static_cast<std::size_t>(src_k)) * inner + j;
-                dst[dst_flat] += g[grad_flat];
-            }
-        }
-    }
-    return out;
-}
-
 Storage scatter_axis_add_storage(const Storage& grad,
                                  const Storage& indices,
                                  const Shape& input_shape,
@@ -127,23 +93,8 @@ Storage scatter_axis_add_storage(const Storage& grad,
                                  int axis,
                                  Dtype dt,
                                  Device device) {
-    if (device == Device::GPU) {
-        const auto& gg = std::get<GpuStorage>(grad);
-        const auto& gi = std::get<GpuStorage>(indices);
-        auto base = ::mlx::core::zeros(gpu::to_mlx_shape(input_shape), gpu::to_mlx_dtype(dt));
-        auto out = ::mlx::core::scatter_add_axis(base, *gi.arr, *gg.arr, axis);
-        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
-    }
-    const auto& g = std::get<CpuStorage>(grad);
-    const auto& idx = std::get<CpuStorage>(indices);
-    switch (dt) {
-        case Dtype::F32:
-            return Storage{scatter_axis_add_cpu<float>(g, idx, input_shape, grad_shape, axis, dt)};
-        case Dtype::F64:
-            return Storage{scatter_axis_add_cpu<double>(g, idx, input_shape, grad_shape, axis, dt)};
-        default:
-            ErrorBuilder("sort/topk backward").not_implemented("dtype not supported");
-    }
+    return backend::Dispatcher::for_device(device)
+        .scatter_add_axis(grad, indices, input_shape, grad_shape, axis, dt);
 }
 
 class IndexScatterBackward : public FuncOp<IndexScatterBackward, 1> {
