@@ -2914,6 +2914,97 @@ public:
         return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}}};
     }
 
+    Storage bce_loss(const Storage& input,
+                     const Storage& target,
+                     const Storage& weight,
+                     const Shape& shape,
+                     Dtype dt,
+                     double eps,
+                     int reduction) override {
+        const std::size_t n = shape_numel(shape);
+        if (reduction == 0) {
+            const std::size_t nb = n * dtype_size(dt);
+            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+            compute_bce_loss_values(input, target, weight, ptr.get(), n, dt, eps);
+            return Storage{CpuStorage{ptr, nb, dt}};
+        }
+
+        auto scalar = allocate_aligned_bytes(dtype_size(dt), Device::CPU);
+        if (dt == Dtype::F32) {
+            float sum =
+                bce_loss_sum<float>(input, target, weight, n, static_cast<float>(eps));
+            if (reduction == 1)
+                sum /= static_cast<float>(n);
+            *reinterpret_cast<float*>(scalar.get()) = sum;
+        } else if (dt == Dtype::F64) {
+            double sum = bce_loss_sum<double>(input, target, weight, n, eps);
+            if (reduction == 1)
+                sum /= static_cast<double>(n);
+            *reinterpret_cast<double*>(scalar.get()) = sum;
+        } else {
+            ErrorBuilder("cpu_backend::bce_loss").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{scalar, dtype_size(dt), dt}};
+    }
+
+    std::vector<Storage> bce_loss_backward(const Storage& input,
+                                           const Storage& target,
+                                           const Storage& weight,
+                                           const Storage& grad,
+                                           const Shape& shape,
+                                           Dtype dt,
+                                           double eps,
+                                           int reduction) override {
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nb = n * dtype_size(dt);
+        auto dx = allocate_aligned_bytes(nb, Device::CPU);
+        auto dtarget = allocate_aligned_bytes(nb, Device::CPU);
+        auto dweight = allocate_aligned_bytes(nb, Device::CPU);
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& ws = std::get<CpuStorage>(weight);
+        const auto& gs = std::get<CpuStorage>(grad);
+
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
+            const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
+            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            auto* dxp = reinterpret_cast<T*>(dx.get());
+            auto* dtp = reinterpret_cast<T*>(dtarget.get());
+            auto* dwp = reinterpret_cast<T*>(dweight.get());
+            const T e = static_cast<T>(eps);
+            const bool elem = reduction == 0;
+            const T mean_scale = static_cast<T>(n);
+            for (std::size_t i = 0; i < n; ++i) {
+                const T go = elem ? gp[i] : gp[0];
+                const T scale = (reduction == 1) ? (go / mean_scale) : go;
+                const T p = std::min(std::max(xp[i], e), static_cast<T>(1) - e);
+                const T y = tp[i];
+                const T w = wp[i];
+                const T one = static_cast<T>(1);
+                const T dlp = -y / p + (one - y) / (one - p);
+                dxp[i] = w * dlp * scale;
+                const T dly = -std::log(p) + std::log(one - p);
+                dtp[i] = w * dly * scale;
+                const T l = -(y * std::log(p) + (one - y) * std::log(one - p));
+                dwp[i] = l * scale;
+            }
+        };
+
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::bce_loss_backward")
+                .not_implemented("dtype not supported");
+
+        return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}},
+                Storage{CpuStorage{dweight, nb, dt}}};
+    }
+
     CpuStorage to_cpu(const Storage& a, const Shape& /*shape*/) override {
         return std::get<CpuStorage>(a);
     }
@@ -3057,6 +3148,60 @@ private:
             const T r = xp[i] - tp[i];
             const T ar = std::abs(r);
             sum += (ar <= delta) ? T{0.5} * r * r : delta * (ar - T{0.5} * delta);
+        }
+        return sum;
+    }
+
+    void compute_bce_loss_values(const Storage& input,
+                                 const Storage& target,
+                                 const Storage& weight,
+                                 std::byte* out,
+                                 std::size_t n,
+                                 Dtype dt,
+                                 double eps) {
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& ws = std::get<CpuStorage>(weight);
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
+            const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
+            auto* lp = reinterpret_cast<T*>(out);
+            const T e = static_cast<T>(eps);
+            const T one = static_cast<T>(1);
+            for (std::size_t i = 0; i < n; ++i) {
+                const T p = std::min(std::max(xp[i], e), one - e);
+                const T l = -(tp[i] * std::log(p) + (one - tp[i]) * std::log(one - p));
+                lp[i] = wp[i] * l;
+            }
+        };
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::bce_loss").not_implemented("dtype not supported");
+    }
+
+    template <typename T>
+    T bce_loss_sum(const Storage& input,
+                   const Storage& target,
+                   const Storage& weight,
+                   std::size_t n,
+                   T eps) {
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& ws = std::get<CpuStorage>(weight);
+        const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+        const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
+        const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
+        const T one = static_cast<T>(1);
+        T sum = T{0};
+        for (std::size_t i = 0; i < n; ++i) {
+            const T p = std::min(std::max(xp[i], eps), one - eps);
+            const T l = -(tp[i] * std::log(p) + (one - tp[i]) * std::log(one - p));
+            sum += wp[i] * l;
         }
         return sum;
     }

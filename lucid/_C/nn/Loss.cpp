@@ -202,64 +202,13 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
         throw ShapeMismatch(input->shape(), target->shape(),
                             "bce_loss: input/target shape mismatch");
 
-    const std::size_t numel = input->numel();
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(input->shape(), reduction)};
 
-    Storage out_storage;
-    if (input->device() == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(input->storage());
-        const auto& gt = std::get<GpuStorage>(target->storage());
-        const auto& gw = std::get<GpuStorage>(weight->storage());
-        const auto mlx_dt = gpu::to_mlx_dtype(input->dtype());
-        auto e_lo = mlx_scalar(eps, mlx_dt);
-        auto one = mlx_scalar(1.0, mlx_dt);
-        auto e_hi = ::mlx::core::subtract(one, e_lo);
-        auto p = ::mlx::core::clip(*gx.arr, std::optional<::mlx::core::array>(e_lo),
-                                   std::optional<::mlx::core::array>(e_hi));
-        auto one_mt = ::mlx::core::subtract(one, *gt.arr);
-        auto one_mp = ::mlx::core::subtract(one, p);
-        auto term1 = ::mlx::core::multiply(*gt.arr, ::mlx::core::log(p));
-        auto term2 = ::mlx::core::multiply(one_mt, ::mlx::core::log(one_mp));
-        auto l = ::mlx::core::negative(::mlx::core::add(term1, term2));
-        auto wl = ::mlx::core::multiply(*gw.arr, l);
-        auto red = mlx_apply_reduction(wl, reduction);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(red), input->dtype())};
-    } else {
-        auto loss_buf = allocate_size(numel, input->dtype());
-        const auto& xs = std::get<CpuStorage>(input->storage());
-        const auto& ts = std::get<CpuStorage>(target->storage());
-        const auto& ws = std::get<CpuStorage>(weight->storage());
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
-            auto* lp = reinterpret_cast<T*>(loss_buf.ptr.get());
-            const T e = static_cast<T>(eps);
-            for (std::size_t i = 0; i < numel; ++i) {
-                T p = std::min(std::max(xp[i], e), static_cast<T>(1) - e);
-                const T l = -(tp[i] * std::log(p) +
-                              (static_cast<T>(1) - tp[i]) * std::log(static_cast<T>(1) - p));
-                lp[i] = wp[i] * l;
-            }
-        };
-        if (input->dtype() == Dtype::F32)
-            compute(float{});
-        else if (input->dtype() == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("bce_loss").not_implemented("dtype not supported");
-
-        if (input->dtype() == Dtype::F32) {
-            out_storage = apply_reduction<float>(reinterpret_cast<float*>(loss_buf.ptr.get()),
-                                                 numel, reduction, input->dtype());
-        } else {
-            out_storage = apply_reduction<double>(reinterpret_cast<double*>(loss_buf.ptr.get()),
-                                                  numel, reduction, input->dtype());
-        }
-    }
+    Storage out_storage =
+        backend::Dispatcher::for_device(input->device())
+            .bce_loss(input->storage(), target->storage(), weight->storage(), input->shape(),
+                      input->dtype(), eps, static_cast<int>(reduction));
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage),
                                             reduced_shape(input->shape(), reduction),
@@ -277,82 +226,9 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
 }
 
 std::vector<Storage> BCELossBackward::apply(Storage grad_out) {
-    const std::size_t numel = shape_numel(orig_shape_);
-
-    if (device_ == Device::GPU) {
-        const auto& gx = std::get<GpuStorage>(saved_inputs_[0]);
-        const auto& gt = std::get<GpuStorage>(saved_inputs_[1]);
-        const auto& gw = std::get<GpuStorage>(saved_inputs_[2]);
-        const auto& gg = std::get<GpuStorage>(grad_out);
-        const auto mlx_dt = gpu::to_mlx_dtype(dtype_);
-        auto e_lo = mlx_scalar(eps_, mlx_dt);
-        auto one = mlx_scalar(1.0, mlx_dt);
-        auto e_hi = ::mlx::core::subtract(one, e_lo);
-        auto p = ::mlx::core::clip(*gx.arr, std::optional<::mlx::core::array>(e_lo),
-                                   std::optional<::mlx::core::array>(e_hi));
-        auto one_mp = ::mlx::core::subtract(one, p);
-        auto one_mt = ::mlx::core::subtract(one, *gt.arr);
-        auto log_p = ::mlx::core::log(p);
-        auto log_1mp = ::mlx::core::log(one_mp);
-        auto dlp = ::mlx::core::add(::mlx::core::negative(::mlx::core::divide(*gt.arr, p)),
-                                    ::mlx::core::divide(one_mt, one_mp));
-        auto dly = ::mlx::core::add(::mlx::core::negative(log_p), log_1mp);
-        auto l = ::mlx::core::negative(::mlx::core::add(::mlx::core::multiply(*gt.arr, log_p),
-                                                        ::mlx::core::multiply(one_mt, log_1mp)));
-
-        auto scaled = mlx_grad_scale(*gg.arr, reduction_, numel, mlx_dt);
-        if (reduction_ != Reduction::None)
-            scaled = ::mlx::core::broadcast_to(scaled, gpu::to_mlx_shape(orig_shape_));
-        auto dx = ::mlx::core::multiply(*gw.arr, ::mlx::core::multiply(dlp, scaled));
-        auto dt = ::mlx::core::multiply(*gw.arr, ::mlx::core::multiply(dly, scaled));
-        auto dw = ::mlx::core::multiply(l, scaled);
-        return {Storage{gpu::wrap_mlx_array(std::move(dx), dtype_)},
-                Storage{gpu::wrap_mlx_array(std::move(dt), dtype_)},
-                Storage{gpu::wrap_mlx_array(std::move(dw), dtype_)}};
-    }
-
-    auto dx_cpu = allocate_size(numel, dtype_);
-    auto dt_cpu = allocate_size(numel, dtype_);
-    auto dw_cpu = allocate_size(numel, dtype_);
-    const auto& xs = std::get<CpuStorage>(saved_inputs_[0]);
-    const auto& ts = std::get<CpuStorage>(saved_inputs_[1]);
-    const auto& ws = std::get<CpuStorage>(saved_inputs_[2]);
-    const auto& gs = std::get<CpuStorage>(grad_out);
-
-    auto compute = [&](auto type_tag) {
-        using T = decltype(type_tag);
-        auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-        auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-        auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
-        auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-        auto* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
-        auto* dtp = reinterpret_cast<T*>(dt_cpu.ptr.get());
-        auto* dwp = reinterpret_cast<T*>(dw_cpu.ptr.get());
-        const T e = static_cast<T>(eps_);
-        const bool elem = (reduction_ == Reduction::None);
-        const T mean_scale = static_cast<T>(numel);
-        for (std::size_t i = 0; i < numel; ++i) {
-            const T go = elem ? gp[i] : gp[0];
-            const T scale = (reduction_ == Reduction::Mean) ? (go / mean_scale) : go;
-            T p = std::min(std::max(xp[i], e), static_cast<T>(1) - e);
-            const T y = tp[i];
-            const T w = wp[i];
-            const T dlp = -y / p + (static_cast<T>(1) - y) / (static_cast<T>(1) - p);
-            dxp[i] = w * dlp * scale;
-            const T dly = -std::log(p) + std::log(static_cast<T>(1) - p);
-            dtp[i] = w * dly * scale;
-            const T l =
-                -(y * std::log(p) + (static_cast<T>(1) - y) * std::log(static_cast<T>(1) - p));
-            dwp[i] = l * scale;
-        }
-    };
-    if (dtype_ == Dtype::F32)
-        compute(float{});
-    else if (dtype_ == Dtype::F64)
-        compute(double{});
-    else
-        ErrorBuilder("bce_loss backward").not_implemented("dtype not supported");
-    return {Storage{std::move(dx_cpu)}, Storage{std::move(dt_cpu)}, Storage{std::move(dw_cpu)}};
+    return backend::Dispatcher::for_device(device_)
+        .bce_loss_backward(saved_inputs_[0], saved_inputs_[1], saved_inputs_[2], grad_out,
+                           orig_shape_, dtype_, eps_, static_cast<int>(reduction_));
 }
 
 TensorImplPtr bce_loss_op(const TensorImplPtr& input,

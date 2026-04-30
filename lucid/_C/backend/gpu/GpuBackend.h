@@ -1108,6 +1108,74 @@ public:
         };
     }
 
+    Storage bce_loss(const Storage& input,
+                     const Storage& target,
+                     const Storage& weight,
+                     const Shape& /*shape*/,
+                     Dtype dt,
+                     double eps,
+                     int reduction) override {
+        const auto& x = std::get<GpuStorage>(input);
+        const auto& t = std::get<GpuStorage>(target);
+        const auto& w = std::get<GpuStorage>(weight);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto e_lo = gpu::mlx_scalar(eps, mlx_dt);
+        auto one = gpu::mlx_scalar(1.0, mlx_dt);
+        auto e_hi = ::mlx::core::subtract(one, e_lo);
+        auto p = ::mlx::core::clip(*x.arr, std::optional<::mlx::core::array>(e_lo),
+                                   std::optional<::mlx::core::array>(e_hi));
+        auto one_mt = ::mlx::core::subtract(one, *t.arr);
+        auto one_mp = ::mlx::core::subtract(one, p);
+        auto term1 = ::mlx::core::multiply(*t.arr, ::mlx::core::log(p));
+        auto term2 = ::mlx::core::multiply(one_mt, ::mlx::core::log(one_mp));
+        auto values = ::mlx::core::multiply(*w.arr, ::mlx::core::negative(
+                                                       ::mlx::core::add(term1, term2)));
+        auto reduced = apply_loss_reduction(values, reduction);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(reduced), dt)};
+    }
+
+    std::vector<Storage> bce_loss_backward(const Storage& input,
+                                           const Storage& target,
+                                           const Storage& weight,
+                                           const Storage& grad,
+                                           const Shape& shape,
+                                           Dtype dt,
+                                           double eps,
+                                           int reduction) override {
+        const auto& x = std::get<GpuStorage>(input);
+        const auto& t = std::get<GpuStorage>(target);
+        const auto& w = std::get<GpuStorage>(weight);
+        const auto& g = std::get<GpuStorage>(grad);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto e_lo = gpu::mlx_scalar(eps, mlx_dt);
+        auto one = gpu::mlx_scalar(1.0, mlx_dt);
+        auto e_hi = ::mlx::core::subtract(one, e_lo);
+        auto p = ::mlx::core::clip(*x.arr, std::optional<::mlx::core::array>(e_lo),
+                                   std::optional<::mlx::core::array>(e_hi));
+        auto one_mp = ::mlx::core::subtract(one, p);
+        auto one_mt = ::mlx::core::subtract(one, *t.arr);
+        auto log_p = ::mlx::core::log(p);
+        auto log_1mp = ::mlx::core::log(one_mp);
+        auto dlp = ::mlx::core::add(::mlx::core::negative(::mlx::core::divide(*t.arr, p)),
+                                    ::mlx::core::divide(one_mt, one_mp));
+        auto dtarget_term = ::mlx::core::add(::mlx::core::negative(log_p), log_1mp);
+        auto values =
+            ::mlx::core::negative(::mlx::core::add(::mlx::core::multiply(*t.arr, log_p),
+                                                   ::mlx::core::multiply(one_mt, log_1mp)));
+        auto scaled = scale_loss_grad(*g.arr, reduction, shape_numel(shape), mlx_dt);
+        if (reduction != 0)
+            scaled = ::mlx::core::broadcast_to(scaled, gpu::to_mlx_shape(shape));
+        auto dx = ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dlp, scaled));
+        auto dtarget =
+            ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dtarget_term, scaled));
+        auto dweight = ::mlx::core::multiply(values, scaled);
+        return {
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dtarget), dt)},
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dweight), dt)},
+        };
+    }
+
     CpuStorage to_cpu(const Storage& a, const Shape& shape) override {
         return gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape);
     }

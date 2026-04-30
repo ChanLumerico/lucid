@@ -381,6 +381,21 @@ public:
                                                             Dtype dt,
                                                             double delta,
                                                             int reduction) = 0;
+    virtual Storage bce_loss(const Storage& input,
+                             const Storage& target,
+                             const Storage& weight,
+                             const Shape& shape,
+                             Dtype dt,
+                             double eps,
+                             int reduction) = 0;
+    virtual std::vector<Storage> bce_loss_backward(const Storage& input,
+                                                   const Storage& target,
+                                                   const Storage& weight,
+                                                   const Storage& grad,
+                                                   const Shape& shape,
+                                                   Dtype dt,
+                                                   double eps,
+                                                   int reduction) = 0;
 
     virtual CpuStorage to_cpu(const Storage& a, const Shape& shape) = 0;
 };
