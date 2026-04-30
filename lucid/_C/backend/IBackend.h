@@ -163,6 +163,10 @@ public:
                                      const Shape& shape,
                                      int axis,
                                      Dtype dt) = 0;
+    virtual Storage trace(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage trace_backward(const Storage& grad_out,
+                                   const Shape& input_shape,
+                                   Dtype dt) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 

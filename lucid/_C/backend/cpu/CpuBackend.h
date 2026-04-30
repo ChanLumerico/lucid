@@ -967,6 +967,61 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage trace(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const std::int64_t M = shape[0];
+        const std::int64_t N = shape[1];
+        const std::int64_t L = std::min(M, N);
+        Shape out_shape(shape.begin() + 2, shape.end());
+        const std::size_t out_numel = shape_numel(out_shape);
+        const std::size_t out_nbytes = out_numel * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+        auto run = [&](auto* out_p, const auto* in_p) {
+            using T = std::remove_pointer_t<decltype(out_p)>;
+            for (std::size_t k = 0; k < out_numel; ++k) {
+                T sum{};
+                for (std::int64_t i = 0; i < L; ++i) {
+                    const std::size_t idx = (i * N + i) * out_numel + k;
+                    sum = static_cast<T>(static_cast<double>(sum) + static_cast<double>(in_p[idx]));
+                }
+                out_p[k] = sum;
+            }
+        };
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()),
+                reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(cs.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::trace").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
+    Storage trace_backward(const Storage& grad_out, const Shape& input_shape, Dtype dt) override {
+        const auto& cg = std::get<CpuStorage>(grad_out);
+        const std::int64_t M = input_shape[0];
+        const std::int64_t N = input_shape[1];
+        const std::int64_t L = std::min(M, N);
+        const std::size_t total = static_cast<std::size_t>(M * N);
+        const std::size_t nbytes = total * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        std::memset(ptr.get(), 0, nbytes);
+        auto fill = [&](auto* dst, const auto* gp) {
+            for (std::int64_t i = 0; i < L; ++i)
+                dst[i * N + i] = *gp;
+        };
+        if (dt == Dtype::F32)
+            fill(reinterpret_cast<float*>(ptr.get()),
+                 reinterpret_cast<const float*>(cg.ptr.get()));
+        else if (dt == Dtype::F64)
+            fill(reinterpret_cast<double*>(ptr.get()),
+                 reinterpret_cast<const double*>(cg.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::trace_backward").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nbytes, dt}};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

@@ -368,6 +368,22 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage trace(const Storage& a, const Shape& /*shape*/, Dtype dt) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::trace(*gs.arr, /*offset=*/0, /*axis1=*/0, /*axis2=*/1);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage trace_backward(const Storage& grad_out, const Shape& input_shape, Dtype dt) override {
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        const std::int64_t M = input_shape[0];
+        const std::int64_t N = input_shape[1];
+        auto eye = ::mlx::core::eye(static_cast<int>(M), static_cast<int>(N), 0,
+                                    gpu::to_mlx_dtype(dt));
+        auto result = ::mlx::core::multiply(eye, *gg.arr);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
