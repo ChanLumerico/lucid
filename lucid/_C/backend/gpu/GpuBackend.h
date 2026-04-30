@@ -568,6 +568,54 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage reshape(const Storage& a,
+                    const Shape& /*src_shape*/,
+                    const Shape& dst_shape,
+                    Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::reshape(*ga.arr, gpu::to_mlx_shape(dst_shape));
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage slice_axis(const Storage& a,
+                       const Shape& src_shape,
+                       const Shape& slice_shape,
+                       int axis,
+                       std::int64_t offset,
+                       Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        ::mlx::core::Shape lo(src_shape.size(), 0);
+        ::mlx::core::Shape hi = gpu::to_mlx_shape(src_shape);
+        lo[static_cast<std::size_t>(axis)] = static_cast<::mlx::core::ShapeElem>(offset);
+        hi[static_cast<std::size_t>(axis)] =
+            static_cast<::mlx::core::ShapeElem>(offset + slice_shape[static_cast<std::size_t>(axis)]);
+        auto result = ::mlx::core::slice(*ga.arr, lo, hi);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage insert_axis_slice(const Storage& a,
+                              const Shape& src_shape,
+                              const Shape& dst_shape,
+                              int axis,
+                              std::int64_t offset,
+                              Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        std::vector<std::pair<int, int>> pad;
+        pad.reserve(dst_shape.size());
+        for (std::size_t d = 0; d < dst_shape.size(); ++d) {
+            if (static_cast<int>(d) == axis) {
+                const auto before = static_cast<int>(offset);
+                const auto after = static_cast<int>(dst_shape[d] - offset - src_shape[d]);
+                pad.emplace_back(before, after);
+            } else {
+                pad.emplace_back(0, 0);
+            }
+        }
+        ::mlx::core::array zero(static_cast<float>(0.0), gpu::to_mlx_dtype(dt));
+        auto result = ::mlx::core::pad(*ga.arr, pad, zero);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

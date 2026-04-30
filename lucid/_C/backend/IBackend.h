@@ -221,6 +221,22 @@ public:
                          Dtype dt,
                          const std::vector<std::int64_t>& shifts,
                          const std::vector<int>& axes) = 0;
+    virtual Storage reshape(const Storage& a,
+                            const Shape& src_shape,
+                            const Shape& dst_shape,
+                            Dtype dt) = 0;
+    virtual Storage slice_axis(const Storage& a,
+                               const Shape& src_shape,
+                               const Shape& slice_shape,
+                               int axis,
+                               std::int64_t offset,
+                               Dtype dt) = 0;
+    virtual Storage insert_axis_slice(const Storage& a,
+                                      const Shape& src_shape,
+                                      const Shape& dst_shape,
+                                      int axis,
+                                      std::int64_t offset,
+                                      Dtype dt) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 

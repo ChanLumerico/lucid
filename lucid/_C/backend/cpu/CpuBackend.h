@@ -1609,6 +1609,76 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage reshape(const Storage& a,
+                    const Shape& /*src_shape*/,
+                    const Shape& /*dst_shape*/,
+                    Dtype dt) override {
+        const auto& as = std::get<CpuStorage>(a);
+        auto ptr = allocate_aligned_bytes(as.nbytes, Device::CPU);
+        if (as.nbytes > 0)
+            std::memcpy(ptr.get(), as.ptr.get(), as.nbytes);
+        return Storage{CpuStorage{ptr, as.nbytes, dt}};
+    }
+
+    Storage slice_axis(const Storage& a,
+                       const Shape& src_shape,
+                       const Shape& slice_shape,
+                       int axis,
+                       std::int64_t offset,
+                       Dtype dt) override {
+        const auto& as = std::get<CpuStorage>(a);
+        std::size_t out_nbytes = shape_numel(slice_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+        const std::size_t elem = dtype_size(dt);
+        std::size_t outer = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(src_shape[static_cast<std::size_t>(d)]);
+        std::size_t inner_bytes = elem;
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < src_shape.size(); ++d)
+            inner_bytes *= static_cast<std::size_t>(src_shape[d]);
+        const std::size_t src_axis = static_cast<std::size_t>(src_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t slice_axis = static_cast<std::size_t>(slice_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t copy_bytes = slice_axis * inner_bytes;
+        for (std::size_t o = 0; o < outer; ++o) {
+            const auto* src_ptr =
+                as.ptr.get() + (o * src_axis + static_cast<std::size_t>(offset)) * inner_bytes;
+            auto* dst_ptr = ptr.get() + o * copy_bytes;
+            if (copy_bytes > 0)
+                std::memcpy(dst_ptr, src_ptr, copy_bytes);
+        }
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
+    Storage insert_axis_slice(const Storage& a,
+                              const Shape& src_shape,
+                              const Shape& dst_shape,
+                              int axis,
+                              std::int64_t offset,
+                              Dtype dt) override {
+        const auto& as = std::get<CpuStorage>(a);
+        std::size_t out_nbytes = shape_numel(dst_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+        std::memset(ptr.get(), 0, out_nbytes);
+        const std::size_t elem = dtype_size(dt);
+        std::size_t outer = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(dst_shape[static_cast<std::size_t>(d)]);
+        std::size_t inner_bytes = elem;
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < dst_shape.size(); ++d)
+            inner_bytes *= static_cast<std::size_t>(dst_shape[d]);
+        const std::size_t dst_axis = static_cast<std::size_t>(dst_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t src_axis = static_cast<std::size_t>(src_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t copy_bytes = src_axis * inner_bytes;
+        for (std::size_t o = 0; o < outer; ++o) {
+            const auto* src_ptr = as.ptr.get() + o * copy_bytes;
+            auto* dst_ptr =
+                ptr.get() + (o * dst_axis + static_cast<std::size_t>(offset)) * inner_bytes;
+            if (copy_bytes > 0)
+                std::memcpy(dst_ptr, src_ptr, copy_bytes);
+        }
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
