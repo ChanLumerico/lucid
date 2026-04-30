@@ -10,6 +10,7 @@
 #include "../../autograd/FuncOp.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -58,24 +59,7 @@ Storage where_branch_storage(const Storage& grad,
                              Dtype dt,
                              Device device,
                              bool true_branch) {
-    if (device == Device::GPU) {
-        const auto& gg = std::get<GpuStorage>(grad);
-        const auto& gc = std::get<GpuStorage>(cond);
-        auto zero = ::mlx::core::zeros(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
-        auto out = true_branch ? ::mlx::core::where(*gc.arr, *gg.arr, zero)
-                               : ::mlx::core::where(*gc.arr, zero, *gg.arr);
-        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
-    }
-    const auto& g = std::get<CpuStorage>(grad);
-    const auto& c = std::get<CpuStorage>(cond);
-    switch (dt) {
-        case Dtype::F32:
-            return Storage{where_branch_cpu<float>(g, c, shape, dt, true_branch)};
-        case Dtype::F64:
-            return Storage{where_branch_cpu<double>(g, c, shape, dt, true_branch)};
-        default:
-            ErrorBuilder("where backward").not_implemented("dtype not supported");
-    }
+    return backend::Dispatcher::for_device(device).where_branch(grad, cond, shape, dt, true_branch);
 }
 
 template <typename T>
@@ -141,31 +125,8 @@ Storage gather_backward_storage(const Storage& grad,
                                 Dtype index_dtype,
                                 Dtype dt,
                                 Device device) {
-    if (device == Device::GPU) {
-        const auto& gg = std::get<GpuStorage>(grad);
-        const auto& gi = std::get<GpuStorage>(indices);
-        auto idx = *gi.arr;
-        auto axis_len = ::mlx::core::array(
-            static_cast<std::int32_t>(input_shape[static_cast<std::size_t>(axis)]), idx.dtype());
-        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
-        auto fixed =
-            ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
-        auto base = ::mlx::core::zeros(gpu::to_mlx_shape(input_shape), gpu::to_mlx_dtype(dt));
-        auto out = ::mlx::core::scatter_add_axis(base, fixed, *gg.arr, axis);
-        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
-    }
-    const auto& g = std::get<CpuStorage>(grad);
-    const auto& idx = std::get<CpuStorage>(indices);
-    switch (dt) {
-        case Dtype::F32:
-            return Storage{gather_backward_cpu_typed<float>(g, idx, input_shape, output_shape, axis,
-                                                            index_dtype, dt)};
-        case Dtype::F64:
-            return Storage{gather_backward_cpu_typed<double>(g, idx, input_shape, output_shape,
-                                                             axis, index_dtype, dt)};
-        default:
-            ErrorBuilder("gather backward").not_implemented("dtype not supported");
-    }
+    return backend::Dispatcher::for_device(device).gather_backward(
+        grad, indices, input_shape, output_shape, axis, index_dtype, dt);
 }
 
 template <typename T>
@@ -245,92 +206,8 @@ Storage diagonal_backward_storage(const Storage& grad,
                                   int axis2,
                                   Dtype dt,
                                   Device device) {
-    if (device == Device::GPU) {
-        // Native MLX path: scatter_add along all axes simultaneously.
-        // Construct one index array per input dim sized to grad's shape,
-        // selecting the diagonal positions for axis1/axis2 and pass-through
-        // positions for batch axes.
-        const auto& gg = std::get<GpuStorage>(grad);
-        const std::size_t ndim = input_shape.size();
-        const int a1n = axis1 < 0 ? axis1 + static_cast<int>(ndim) : axis1;
-        const int a2n = axis2 < 0 ? axis2 + static_cast<int>(ndim) : axis2;
-        const std::int64_t r0 = (offset >= 0) ? 0 : -offset;
-        const std::int64_t c0 = (offset >= 0) ? offset : 0;
-        const std::int64_t L = output_shape.empty() ? 0 : output_shape.back();
-
-        ::mlx::core::Shape mlx_in_shape = gpu::to_mlx_shape(input_shape);
-        ::mlx::core::Shape mlx_out_shape = gpu::to_mlx_shape(output_shape);
-
-        auto base = ::mlx::core::zeros(mlx_in_shape, gpu::to_mlx_dtype(dt));
-
-        // Helper: construct an int32 index array of shape `mlx_out_shape`
-        // whose values along the index_axis equal `arange(start, start+L)`,
-        // and along all other axes are broadcast from a singleton.
-        auto build_index = [&](int axis_in_input, std::int64_t start) {
-            // Position of this axis within output_shape:
-            //   batch axes (excluding axis1, axis2) keep their original
-            //   relative order in output_shape; axis1/axis2 collapse into
-            //   the trailing L axis.
-            int out_axis;
-            if (axis_in_input == a1n || axis_in_input == a2n) {
-                out_axis = static_cast<int>(output_shape.size()) - 1;
-            } else {
-                int rel = 0;
-                for (int d = 0; d < axis_in_input; ++d)
-                    if (d != a1n && d != a2n)
-                        ++rel;
-                out_axis = rel;
-            }
-            const std::int64_t span = (axis_in_input == a1n || axis_in_input == a2n)
-                                          ? L
-                                          : input_shape[static_cast<std::size_t>(axis_in_input)];
-            auto arr = ::mlx::core::arange(static_cast<int>(start), static_cast<int>(start + span),
-                                           ::mlx::core::int32);
-            // Reshape to broadcast along out_axis.
-            ::mlx::core::Shape bc(output_shape.size(), 1);
-            bc[static_cast<std::size_t>(out_axis)] = static_cast<int>(span);
-            arr = ::mlx::core::reshape(arr, bc);
-            return ::mlx::core::broadcast_to(arr, mlx_out_shape);
-        };
-
-        std::vector<::mlx::core::array> indices;
-        std::vector<int> axes_v;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            std::int64_t start = 0;
-            if (static_cast<int>(d) == a1n)
-                start = r0;
-            else if (static_cast<int>(d) == a2n)
-                start = c0;
-            indices.push_back(build_index(static_cast<int>(d), start));
-            axes_v.push_back(static_cast<int>(d));
-        }
-        // MLX scatter contract: updates.shape = indices.shape + (1,)*ndim_a
-        // when axes covers every dim of `a` (each scatter-position writes a
-        // single element). Reshape grad so each entry sits in its own
-        // (1,...,1) trailing slice.
-        ::mlx::core::Shape upd_shape = mlx_out_shape;
-        for (std::size_t d = 0; d < ndim; ++d)
-            upd_shape.push_back(1);
-        auto updates = ::mlx::core::reshape(*gg.arr, upd_shape);
-        auto out = ::mlx::core::scatter_add(base, indices, updates, axes_v);
-        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
-    }
-
-    const auto& g = std::get<CpuStorage>(grad);
-    CpuStorage out;
-    switch (dt) {
-        case Dtype::F32:
-            out = diagonal_backward_cpu_typed<float>(g, input_shape, output_shape, offset, axis1,
-                                                     axis2, dt);
-            break;
-        case Dtype::F64:
-            out = diagonal_backward_cpu_typed<double>(g, input_shape, output_shape, offset, axis1,
-                                                      axis2, dt);
-            break;
-        default:
-            ErrorBuilder("diagonal backward").not_implemented("dtype not supported");
-    }
-    return Storage{std::move(out)};
+    return backend::Dispatcher::for_device(device).diagonal_backward(
+        grad, input_shape, output_shape, offset, axis1, axis2, dt);
 }
 
 class WhereBackward : public AutogradNode<WhereBackward, 2> {
@@ -571,33 +448,10 @@ TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, 
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"masked_fill", device, dt, a->shape()};
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        const auto& gm = std::get<GpuStorage>(mask->storage());
-        ::mlx::core::array v(static_cast<float>(value), gpu::to_mlx_dtype(dt));
-        auto out = ::mlx::core::where(*gm.arr, v, *ga.arr);
-        auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, a->shape(), dt, device);
-        return attach_masked_fill_grad(a, mask, std::move(result));
-    }
-    auto out_cpu = allocate_cpu(a->shape(), dt);
-    const std::size_t n = numel(a->shape());
-    const auto* m =
-        reinterpret_cast<const std::uint8_t*>(std::get<CpuStorage>(mask->storage()).ptr.get());
-    auto run = [&](auto* dst, const auto* src) {
-        using T = std::remove_pointer_t<decltype(dst)>;
-        for (std::size_t i = 0; i < n; ++i)
-            dst[i] = m[i] ? static_cast<T>(value) : src[i];
-    };
-    if (dt == Dtype::F32)
-        run(reinterpret_cast<float*>(out_cpu.ptr.get()),
-            reinterpret_cast<const float*>(std::get<CpuStorage>(a->storage()).ptr.get()));
-    else if (dt == Dtype::F64)
-        run(reinterpret_cast<double*>(out_cpu.ptr.get()),
-            reinterpret_cast<const double*>(std::get<CpuStorage>(a->storage()).ptr.get()));
-    else
-        ErrorBuilder("masked_fill").not_implemented("dtype not supported");
-    auto result = fresh(Storage{std::move(out_cpu)}, a->shape(), dt, device);
+    auto out_storage =
+        backend::Dispatcher::for_device(device).masked_fill(a->storage(), mask->storage(),
+                                                            a->shape(), dt, value);
+    auto result = fresh(std::move(out_storage), a->shape(), dt, device);
     return attach_masked_fill_grad(a, mask, std::move(result));
 }
 
@@ -682,75 +536,10 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
                             "gather: a and indices must have same rank");
     const std::size_t ndim = a->shape().size();
     int ax = wrap_axis(axis, static_cast<int>(ndim));
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        const auto& gi = std::get<GpuStorage>(indices->storage());
-        auto out = ::mlx::core::take_along_axis(*ga.arr, *gi.arr, ax);
-        Shape sh = mlx_shape_to_lucid(out.shape());
-        auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
-        if (GradMode::is_enabled() && a->requires_grad()) {
-            auto bwd = std::make_shared<GatherBackward>();
-            bwd->indices_ = indices->storage();
-            bwd->input_shape_ = a->shape();
-            bwd->output_shape_ = result->shape();
-            bwd->axis_ = ax;
-            bwd->dtype_ = dt;
-            bwd->index_dtype_ = indices->dtype();
-            bwd->device_ = device;
-            bwd->input_tensor_ = a;
-            bwd->indices_tensor_ = indices;
-            bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
-            bwd->set_saved_versions({a->version(), indices->version()});
-            result->set_grad_fn(std::move(bwd));
-            result->set_leaf(false);
-            result->set_requires_grad(true);
-        }
-        return result;
-    }
     Shape out_shape = indices->shape();
-    auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const auto& ci = std::get<CpuStorage>(indices->storage());
-    const std::size_t elem = dtype_size(dt);
-
-    Stride a_stride(ndim), out_stride(ndim);
-    if (ndim > 0) {
-        a_stride.back() = 1;
-        out_stride.back() = 1;
-        for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d) {
-            a_stride[d] = a_stride[d + 1] * a->shape()[d + 1];
-            out_stride[d] = out_stride[d + 1] * out_shape[d + 1];
-        }
-    }
-    const std::size_t total = numel(out_shape);
-
-    auto load_idx = [&](std::size_t flat) -> std::int64_t {
-        if (indices->dtype() == Dtype::I32)
-            return reinterpret_cast<const std::int32_t*>(ci.ptr.get())[flat];
-        if (indices->dtype() == Dtype::I64)
-            return reinterpret_cast<const std::int64_t*>(ci.ptr.get())[flat];
-        ErrorBuilder("gather").not_implemented("indices dtype must be I32 or I64");
-    };
-
-    std::vector<std::int64_t> coord(ndim, 0);
-    for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-        std::int64_t k = load_idx(out_flat);
-        if (k < 0)
-            k += a->shape()[ax];
-        std::size_t a_flat = 0;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            std::int64_t c = (static_cast<int>(d) == ax) ? k : coord[d];
-            a_flat += static_cast<std::size_t>(c) * static_cast<std::size_t>(a_stride[d]);
-        }
-        std::memcpy(out_cpu.ptr.get() + out_flat * elem, ca.ptr.get() + a_flat * elem, elem);
-        for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 1; d >= 0; --d) {
-            if (++coord[d] < out_shape[d])
-                break;
-            coord[d] = 0;
-        }
-    }
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
+    auto out_storage = backend::Dispatcher::for_device(device).gather(
+        a->storage(), indices->storage(), a->shape(), out_shape, ax, indices->dtype(), dt);
+    auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
     if (GradMode::is_enabled() && a->requires_grad()) {
         auto bwd = std::make_shared<GatherBackward>();
         bwd->indices_ = indices->storage();
@@ -783,25 +572,6 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     int a2 = wrap_axis(axis2, static_cast<int>(ndim));
     if (a1 == a2)
         ErrorBuilder("diagonal").fail("axis1 and axis2 must differ");
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        // MLX diagonal returns a strided view; contiguous() materializes a
-        // dense buffer matching lucid's row-major layout convention.
-        auto out = ::mlx::core::contiguous(::mlx::core::diagonal(*ga.arr, offset, a1, a2));
-        Shape sh = mlx_shape_to_lucid(out.shape());
-        auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
-        auto bwd = std::make_shared<DiagonalBackward>();
-        bwd->input_shapes_ = {a->shape()};
-        bwd->out_shape_ = result->shape();
-        bwd->dtype_ = dt;
-        bwd->device_ = device;
-        bwd->input_tensors_ = {a};
-        bwd->offset_ = offset;
-        bwd->axis1_ = a1;
-        bwd->axis2_ = a2;
-        return attach_unary_grad(a, std::move(result), std::move(bwd));
-    }
     if (a1 > a2)
         std::swap(a1, a2);
 
@@ -818,50 +588,9 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
         out_shape.push_back(a->shape()[d]);
     }
     out_shape.push_back(L);
-    auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const std::size_t elem = dtype_size(dt);
-
-    Stride a_stride(ndim);
-    if (ndim > 0) {
-        a_stride.back() = 1;
-        for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d)
-            a_stride[d] = a_stride[d + 1] * a->shape()[d + 1];
-    }
-
-    std::vector<std::size_t> outer_dims;
-    for (std::size_t d = 0; d < ndim; ++d)
-        if ((int)d != a1 && (int)d != a2)
-            outer_dims.push_back(d);
-
-    std::size_t outer_numel = 1;
-    for (auto d : outer_dims)
-        outer_numel *= static_cast<std::size_t>(a->shape()[d]);
-
-    std::vector<std::int64_t> coord(ndim, 0);
-    for (std::size_t o = 0; o < outer_numel; ++o) {
-        std::size_t rem = o;
-        for (auto d : outer_dims) {
-            std::size_t prod = 1;
-            for (std::size_t e : outer_dims)
-                if (e > d)
-                    prod *= static_cast<std::size_t>(a->shape()[e]);
-            coord[d] = rem / prod;
-            rem %= prod;
-        }
-        for (std::int64_t i = 0; i < L; ++i) {
-            coord[a1] = r0 + i;
-            coord[a2] = c0 + i;
-            std::size_t a_flat = 0;
-            for (std::size_t d = 0; d < ndim; ++d)
-                a_flat +=
-                    static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(a_stride[d]);
-            const std::size_t out_flat =
-                o * static_cast<std::size_t>(L) + static_cast<std::size_t>(i);
-            std::memcpy(out_cpu.ptr.get() + out_flat * elem, ca.ptr.get() + a_flat * elem, elem);
-        }
-    }
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
+    auto out_storage = backend::Dispatcher::for_device(device).diagonal(
+        a->storage(), a->shape(), offset, a1, a2, dt);
+    auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
     auto bwd = std::make_shared<DiagonalBackward>();
     bwd->input_shapes_ = {a->shape()};
     bwd->out_shape_ = result->shape();

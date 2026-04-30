@@ -428,6 +428,135 @@ public:
         return result;
     }
 
+    Storage where_branch(const Storage& grad,
+                         const Storage& cond,
+                         const Shape& shape,
+                         Dtype dt,
+                         bool true_branch) override {
+        const auto& gg = std::get<GpuStorage>(grad);
+        const auto& gc = std::get<GpuStorage>(cond);
+        auto zero = ::mlx::core::zeros(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
+        auto result = true_branch ? ::mlx::core::where(*gc.arr, *gg.arr, zero)
+                                  : ::mlx::core::where(*gc.arr, zero, *gg.arr);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage masked_fill(const Storage& a,
+                        const Storage& mask,
+                        const Shape& /*shape*/,
+                        Dtype dt,
+                        double value) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        const auto& gm = std::get<GpuStorage>(mask);
+        ::mlx::core::array v(static_cast<float>(value), gpu::to_mlx_dtype(dt));
+        auto result = ::mlx::core::where(*gm.arr, v, *ga.arr);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage gather(const Storage& a,
+                   const Storage& indices,
+                   const Shape& /*input_shape*/,
+                   const Shape& /*output_shape*/,
+                   int axis,
+                   Dtype /*index_dtype*/,
+                   Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        const auto& gi = std::get<GpuStorage>(indices);
+        auto result = ::mlx::core::take_along_axis(*ga.arr, *gi.arr, axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage gather_backward(const Storage& grad,
+                            const Storage& indices,
+                            const Shape& input_shape,
+                            const Shape& /*output_shape*/,
+                            int axis,
+                            Dtype /*index_dtype*/,
+                            Dtype dt) override {
+        const auto& gg = std::get<GpuStorage>(grad);
+        const auto& gi = std::get<GpuStorage>(indices);
+        auto idx = *gi.arr;
+        auto axis_len = ::mlx::core::array(
+            static_cast<std::int32_t>(input_shape[static_cast<std::size_t>(axis)]), idx.dtype());
+        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
+        auto fixed =
+            ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
+        auto base = ::mlx::core::zeros(gpu::to_mlx_shape(input_shape), gpu::to_mlx_dtype(dt));
+        auto result = ::mlx::core::scatter_add_axis(base, fixed, *gg.arr, axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage diagonal(const Storage& a,
+                     const Shape& /*input_shape*/,
+                     int offset,
+                     int axis1,
+                     int axis2,
+                     Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::contiguous(::mlx::core::diagonal(*ga.arr, offset, axis1, axis2));
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
+    }
+
+    Storage diagonal_backward(const Storage& grad,
+                              const Shape& input_shape,
+                              const Shape& output_shape,
+                              int offset,
+                              int axis1,
+                              int axis2,
+                              Dtype dt) override {
+        const auto& gg = std::get<GpuStorage>(grad);
+        const std::size_t ndim = input_shape.size();
+        const int a1n = axis1 < 0 ? axis1 + static_cast<int>(ndim) : axis1;
+        const int a2n = axis2 < 0 ? axis2 + static_cast<int>(ndim) : axis2;
+        const std::int64_t r0 = (offset >= 0) ? 0 : -offset;
+        const std::int64_t c0 = (offset >= 0) ? offset : 0;
+        const std::int64_t L = output_shape.empty() ? 0 : output_shape.back();
+
+        ::mlx::core::Shape mlx_in_shape = gpu::to_mlx_shape(input_shape);
+        ::mlx::core::Shape mlx_out_shape = gpu::to_mlx_shape(output_shape);
+        auto base = ::mlx::core::zeros(mlx_in_shape, gpu::to_mlx_dtype(dt));
+
+        auto build_index = [&](int axis_in_input, std::int64_t start) {
+            int out_axis;
+            if (axis_in_input == a1n || axis_in_input == a2n) {
+                out_axis = static_cast<int>(output_shape.size()) - 1;
+            } else {
+                int rel = 0;
+                for (int d = 0; d < axis_in_input; ++d)
+                    if (d != a1n && d != a2n)
+                        ++rel;
+                out_axis = rel;
+            }
+            const std::int64_t span = (axis_in_input == a1n || axis_in_input == a2n)
+                                          ? L
+                                          : input_shape[static_cast<std::size_t>(axis_in_input)];
+            auto arr = ::mlx::core::arange(static_cast<int>(start), static_cast<int>(start + span),
+                                           ::mlx::core::int32);
+            ::mlx::core::Shape bc(output_shape.size(), 1);
+            bc[static_cast<std::size_t>(out_axis)] = static_cast<int>(span);
+            arr = ::mlx::core::reshape(arr, bc);
+            return ::mlx::core::broadcast_to(arr, mlx_out_shape);
+        };
+
+        std::vector<::mlx::core::array> indices;
+        std::vector<int> axes_v;
+        for (std::size_t d = 0; d < ndim; ++d) {
+            std::int64_t start = 0;
+            if (static_cast<int>(d) == a1n)
+                start = r0;
+            else if (static_cast<int>(d) == a2n)
+                start = c0;
+            indices.push_back(build_index(static_cast<int>(d), start));
+            axes_v.push_back(static_cast<int>(d));
+        }
+        ::mlx::core::Shape upd_shape = mlx_out_shape;
+        for (std::size_t d = 0; d < ndim; ++d)
+            upd_shape.push_back(1);
+        auto updates = ::mlx::core::reshape(*gg.arr, upd_shape);
+        auto result = ::mlx::core::scatter_add(base, indices, updates, axes_v);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

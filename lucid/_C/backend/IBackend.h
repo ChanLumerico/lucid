@@ -179,6 +179,43 @@ public:
                                           const Shape& out_shape,
                                           Dtype dt,
                                           bool indexing_xy) = 0;
+    virtual Storage where_branch(const Storage& grad,
+                                 const Storage& cond,
+                                 const Shape& shape,
+                                 Dtype dt,
+                                 bool true_branch) = 0;
+    virtual Storage masked_fill(const Storage& a,
+                                const Storage& mask,
+                                const Shape& shape,
+                                Dtype dt,
+                                double value) = 0;
+    virtual Storage gather(const Storage& a,
+                           const Storage& indices,
+                           const Shape& input_shape,
+                           const Shape& output_shape,
+                           int axis,
+                           Dtype index_dtype,
+                           Dtype dt) = 0;
+    virtual Storage gather_backward(const Storage& grad,
+                                    const Storage& indices,
+                                    const Shape& input_shape,
+                                    const Shape& output_shape,
+                                    int axis,
+                                    Dtype index_dtype,
+                                    Dtype dt) = 0;
+    virtual Storage diagonal(const Storage& a,
+                             const Shape& input_shape,
+                             int offset,
+                             int axis1,
+                             int axis2,
+                             Dtype dt) = 0;
+    virtual Storage diagonal_backward(const Storage& grad,
+                                      const Shape& input_shape,
+                                      const Shape& output_shape,
+                                      int offset,
+                                      int axis1,
+                                      int axis2,
+                                      Dtype dt) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 
