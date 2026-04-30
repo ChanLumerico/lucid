@@ -396,6 +396,23 @@ public:
                                                    Dtype dt,
                                                    double eps,
                                                    int reduction) = 0;
+    virtual Storage bce_with_logits_loss(const Storage& input,
+                                         const Storage& target,
+                                         const Storage& weight,
+                                         const Storage& pos_weight,
+                                         const Shape& shape,
+                                         const Shape& weight_shape,
+                                         const Shape& pos_weight_shape,
+                                         Dtype dt,
+                                         int reduction) = 0;
+    virtual std::vector<Storage> bce_with_logits_backward(const Storage& input,
+                                                          const Storage& target,
+                                                          const Storage& weight,
+                                                          const Storage& pos_weight,
+                                                          const Storage& grad,
+                                                          const Shape& shape,
+                                                          Dtype dt,
+                                                          int reduction) = 0;
 
     virtual CpuStorage to_cpu(const Storage& a, const Shape& shape) = 0;
 };

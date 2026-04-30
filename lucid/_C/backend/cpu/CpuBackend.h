@@ -3005,6 +3005,112 @@ public:
                 Storage{CpuStorage{dweight, nb, dt}}};
     }
 
+    Storage bce_with_logits_loss(const Storage& input,
+                                 const Storage& target,
+                                 const Storage& weight,
+                                 const Storage& pos_weight,
+                                 const Shape& shape,
+                                 const Shape& weight_shape,
+                                 const Shape& pos_weight_shape,
+                                 Dtype dt,
+                                 int reduction) override {
+        const std::size_t n = shape_numel(shape);
+        Storage weight_storage =
+            weight_shape == shape ? weight : broadcast(weight, weight_shape, shape, dt);
+        Storage pos_weight_storage =
+            pos_weight_shape == shape ? pos_weight
+                                      : broadcast(pos_weight, pos_weight_shape, shape, dt);
+        if (reduction == 0) {
+            const std::size_t nb = n * dtype_size(dt);
+            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+            compute_bce_logits_values(input, target, weight_storage, pos_weight_storage, ptr.get(),
+                                      n, dt);
+            return Storage{CpuStorage{ptr, nb, dt}};
+        }
+
+        auto scalar = allocate_aligned_bytes(dtype_size(dt), Device::CPU);
+        if (dt == Dtype::F32) {
+            float sum = bce_logits_sum<float>(input, target, weight_storage, pos_weight_storage, n);
+            if (reduction == 1)
+                sum /= static_cast<float>(n);
+            *reinterpret_cast<float*>(scalar.get()) = sum;
+        } else if (dt == Dtype::F64) {
+            double sum = bce_logits_sum<double>(input, target, weight_storage, pos_weight_storage, n);
+            if (reduction == 1)
+                sum /= static_cast<double>(n);
+            *reinterpret_cast<double*>(scalar.get()) = sum;
+        } else {
+            ErrorBuilder("cpu_backend::bce_with_logits_loss")
+                .not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{scalar, dtype_size(dt), dt}};
+    }
+
+    std::vector<Storage> bce_with_logits_backward(const Storage& input,
+                                                  const Storage& target,
+                                                  const Storage& weight,
+                                                  const Storage& pos_weight,
+                                                  const Storage& grad,
+                                                  const Shape& shape,
+                                                  Dtype dt,
+                                                  int reduction) override {
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nb = n * dtype_size(dt);
+        auto dx = allocate_aligned_bytes(nb, Device::CPU);
+        auto dtarget = allocate_aligned_bytes(nb, Device::CPU);
+        auto dweight = allocate_aligned_bytes(nb, Device::CPU);
+        auto dpos_weight = allocate_aligned_bytes(nb, Device::CPU);
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& ws = std::get<CpuStorage>(weight);
+        const auto& pws = std::get<CpuStorage>(pos_weight);
+        const auto& gs = std::get<CpuStorage>(grad);
+
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
+            const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
+            const auto* pwp = reinterpret_cast<const T*>(pws.ptr.get());
+            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            auto* dxp = reinterpret_cast<T*>(dx.get());
+            auto* dtp = reinterpret_cast<T*>(dtarget.get());
+            auto* dwp = reinterpret_cast<T*>(dweight.get());
+            auto* dpwp = reinterpret_cast<T*>(dpos_weight.get());
+            const bool elem = reduction == 0;
+            const T mean_scale = static_cast<T>(n);
+            const T one = static_cast<T>(1);
+            for (std::size_t i = 0; i < n; ++i) {
+                const T go = elem ? gp[i] : gp[0];
+                const T scale = (reduction == 1) ? (go / mean_scale) : go;
+                const T x = xp[i];
+                const T y = tp[i];
+                const T pw = pwp[i];
+                const T sigm = one / (one + std::exp(-x));
+                const T log_weight = (pw - one) * y + one;
+                const T log1pexp = std::log1p(std::exp(-std::abs(x)));
+                const T loss = std::max(x, T{0}) - x * y + log_weight * log1pexp;
+                const T w = wp[i];
+                dxp[i] = w * (log_weight * sigm - y) * scale;
+                dtp[i] = w * (-x + (pw - one) * log1pexp) * scale;
+                dwp[i] = loss * scale;
+                dpwp[i] = w * y * log1pexp * scale;
+            }
+        };
+
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::bce_with_logits_backward")
+                .not_implemented("dtype not supported");
+
+        return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}},
+                Storage{CpuStorage{dweight, nb, dt}},
+                Storage{CpuStorage{dpos_weight, nb, dt}}};
+    }
+
     CpuStorage to_cpu(const Storage& a, const Shape& /*shape*/) override {
         return std::get<CpuStorage>(a);
     }
@@ -3202,6 +3308,70 @@ private:
             const T p = std::min(std::max(xp[i], eps), one - eps);
             const T l = -(tp[i] * std::log(p) + (one - tp[i]) * std::log(one - p));
             sum += wp[i] * l;
+        }
+        return sum;
+    }
+
+    void compute_bce_logits_values(const Storage& input,
+                                   const Storage& target,
+                                   const Storage& weight,
+                                   const Storage& pos_weight,
+                                   std::byte* out,
+                                   std::size_t n,
+                                   Dtype dt) {
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& ws = std::get<CpuStorage>(weight);
+        const auto& pws = std::get<CpuStorage>(pos_weight);
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
+            const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
+            const auto* pwp = reinterpret_cast<const T*>(pws.ptr.get());
+            auto* lp = reinterpret_cast<T*>(out);
+            const T one = static_cast<T>(1);
+            for (std::size_t i = 0; i < n; ++i) {
+                const T x = xp[i];
+                const T y = tp[i];
+                const T log_weight = (pwp[i] - one) * y + one;
+                const T log1pexp = std::log1p(std::exp(-std::abs(x)));
+                const T loss = std::max(x, T{0}) - x * y + log_weight * log1pexp;
+                lp[i] = wp[i] * loss;
+            }
+        };
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::bce_with_logits_loss")
+                .not_implemented("dtype not supported");
+    }
+
+    template <typename T>
+    T bce_logits_sum(const Storage& input,
+                     const Storage& target,
+                     const Storage& weight,
+                     const Storage& pos_weight,
+                     std::size_t n) {
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& ws = std::get<CpuStorage>(weight);
+        const auto& pws = std::get<CpuStorage>(pos_weight);
+        const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+        const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
+        const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
+        const auto* pwp = reinterpret_cast<const T*>(pws.ptr.get());
+        const T one = static_cast<T>(1);
+        T sum = T{0};
+        for (std::size_t i = 0; i < n; ++i) {
+            const T x = xp[i];
+            const T y = tp[i];
+            const T log_weight = (pwp[i] - one) * y + one;
+            const T log1pexp = std::log1p(std::exp(-std::abs(x)));
+            const T loss = std::max(x, T{0}) - x * y + log_weight * log1pexp;
+            sum += wp[i] * loss;
         }
         return sum;
     }

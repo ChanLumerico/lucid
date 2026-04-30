@@ -1176,6 +1176,81 @@ public:
         };
     }
 
+    Storage bce_with_logits_loss(const Storage& input,
+                                 const Storage& target,
+                                 const Storage& weight,
+                                 const Storage& pos_weight,
+                                 const Shape& /*shape*/,
+                                 const Shape& /*weight_shape*/,
+                                 const Shape& /*pos_weight_shape*/,
+                                 Dtype dt,
+                                 int reduction) override {
+        const auto& x = std::get<GpuStorage>(input);
+        const auto& t = std::get<GpuStorage>(target);
+        const auto& w = std::get<GpuStorage>(weight);
+        const auto& pw = std::get<GpuStorage>(pos_weight);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto one = gpu::mlx_scalar(1.0, mlx_dt);
+        auto zero = gpu::mlx_scalar(0.0, mlx_dt);
+        auto pw_m1 = ::mlx::core::subtract(*pw.arr, one);
+        auto log_weight = ::mlx::core::add(::mlx::core::multiply(pw_m1, *t.arr), one);
+        auto log1pexp = ::mlx::core::log1p(::mlx::core::exp(
+            ::mlx::core::negative(::mlx::core::abs(*x.arr))));
+        auto max0 = ::mlx::core::maximum(*x.arr, zero);
+        auto loss = ::mlx::core::add(
+            ::mlx::core::subtract(max0, ::mlx::core::multiply(*x.arr, *t.arr)),
+            ::mlx::core::multiply(log_weight, log1pexp));
+        auto values = ::mlx::core::multiply(*w.arr, loss);
+        auto reduced = apply_loss_reduction(values, reduction);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(reduced), dt)};
+    }
+
+    std::vector<Storage> bce_with_logits_backward(const Storage& input,
+                                                  const Storage& target,
+                                                  const Storage& weight,
+                                                  const Storage& pos_weight,
+                                                  const Storage& grad,
+                                                  const Shape& shape,
+                                                  Dtype dt,
+                                                  int reduction) override {
+        const auto& x = std::get<GpuStorage>(input);
+        const auto& t = std::get<GpuStorage>(target);
+        const auto& w = std::get<GpuStorage>(weight);
+        const auto& pw = std::get<GpuStorage>(pos_weight);
+        const auto& g = std::get<GpuStorage>(grad);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto one = gpu::mlx_scalar(1.0, mlx_dt);
+        auto zero = gpu::mlx_scalar(0.0, mlx_dt);
+        auto pw_m1 = ::mlx::core::subtract(*pw.arr, one);
+        auto log_weight = ::mlx::core::add(::mlx::core::multiply(pw_m1, *t.arr), one);
+        auto sigm = ::mlx::core::sigmoid(*x.arr);
+        auto log1pexp = ::mlx::core::log1p(::mlx::core::exp(
+            ::mlx::core::negative(::mlx::core::abs(*x.arr))));
+        auto dlx = ::mlx::core::subtract(::mlx::core::multiply(log_weight, sigm), *t.arr);
+        auto dtarget_term = ::mlx::core::add(::mlx::core::negative(*x.arr),
+                                             ::mlx::core::multiply(pw_m1, log1pexp));
+        auto loss = ::mlx::core::add(
+            ::mlx::core::subtract(::mlx::core::maximum(*x.arr, zero),
+                                  ::mlx::core::multiply(*x.arr, *t.arr)),
+            ::mlx::core::multiply(log_weight, log1pexp));
+        auto dpos_weight =
+            ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(*t.arr, log1pexp));
+        auto scaled = scale_loss_grad(*g.arr, reduction, shape_numel(shape), mlx_dt);
+        if (reduction != 0)
+            scaled = ::mlx::core::broadcast_to(scaled, gpu::to_mlx_shape(shape));
+        auto dx = ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dlx, scaled));
+        auto dtarget =
+            ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dtarget_term, scaled));
+        auto dweight = ::mlx::core::multiply(loss, scaled);
+        auto dpos_weight_scaled = ::mlx::core::multiply(dpos_weight, scaled);
+        return {
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dtarget), dt)},
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dweight), dt)},
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dpos_weight_scaled), dt)},
+        };
+    }
+
     CpuStorage to_cpu(const Storage& a, const Shape& shape) override {
         return gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape);
     }
