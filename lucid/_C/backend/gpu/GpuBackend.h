@@ -318,6 +318,15 @@ public:
         });
     }
 
+    Storage variance(const Storage& a,
+                     const Shape& /*in_shape*/,
+                     const ReduceOpts& opts,
+                     Dtype dt) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::var(*gs.arr, opts.axes, opts.keepdims, /*ddof=*/0);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     Storage reduce_max(const Storage& a,
                        const Shape& in_shape,
                        const ReduceOpts& opts,

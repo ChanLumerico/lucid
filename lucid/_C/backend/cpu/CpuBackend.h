@@ -744,6 +744,117 @@ public:
         return reduce_axes(a, in_shape, opts, dt, ReduceOp::Mean);
     }
 
+    Storage variance(const Storage& a,
+                     const Shape& in_shape,
+                     const ReduceOpts& opts,
+                     Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        auto is_reduced_axis = [&](std::size_t d) {
+            return std::find(opts.axes.begin(), opts.axes.end(), static_cast<int>(d)) !=
+                   opts.axes.end();
+        };
+        Shape out_shape;
+        if (opts.keepdims) {
+            out_shape = in_shape;
+            for (int ax : opts.axes)
+                out_shape[static_cast<std::size_t>(ax)] = 1;
+        } else {
+            for (std::size_t d = 0; d < in_shape.size(); ++d) {
+                if (!is_reduced_axis(d))
+                    out_shape.push_back(in_shape[d]);
+            }
+        }
+
+        const std::size_t in_numel = shape_numel(in_shape);
+        const std::size_t out_numel = shape_numel(out_shape);
+        std::size_t reduced = 1;
+        for (int ax : opts.axes)
+            reduced *= static_cast<std::size_t>(in_shape[static_cast<std::size_t>(ax)]);
+        if (reduced == 0)
+            reduced = 1;
+
+        const std::size_t out_nbytes = out_numel * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+
+        auto compute = [&](auto* out_p, const auto* in_p) {
+            using T = std::remove_pointer_t<decltype(out_p)>;
+            std::vector<double> means(out_numel, 0.0);
+            std::vector<std::int64_t> coords(in_shape.size(), 0);
+
+            Shape kd_shape = in_shape;
+            for (int ax : opts.axes)
+                kd_shape[static_cast<std::size_t>(ax)] = 1;
+
+            Stride kd_stride(kd_shape.size());
+            if (!kd_shape.empty()) {
+                kd_stride.back() = 1;
+                for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(kd_shape.size()) - 2; i >= 0;
+                     --i) {
+                    kd_stride[static_cast<std::size_t>(i)] =
+                        kd_stride[static_cast<std::size_t>(i) + 1] *
+                        kd_shape[static_cast<std::size_t>(i) + 1];
+                }
+            }
+
+            Stride in_stride(in_shape.size());
+            if (!in_shape.empty()) {
+                in_stride.back() = 1;
+                for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(in_shape.size()) - 2; i >= 0;
+                     --i) {
+                    in_stride[static_cast<std::size_t>(i)] =
+                        in_stride[static_cast<std::size_t>(i) + 1] *
+                        in_shape[static_cast<std::size_t>(i) + 1];
+                }
+            }
+
+            auto flat_to_coord = [&](std::size_t flat) {
+                for (std::size_t d = 0; d < in_shape.size(); ++d) {
+                    coords[d] = flat / static_cast<std::size_t>(in_stride[d]);
+                    flat %= static_cast<std::size_t>(in_stride[d]);
+                }
+            };
+
+            auto kd_flat = [&]() {
+                std::size_t f = 0;
+                for (std::size_t d = 0; d < in_shape.size(); ++d) {
+                    std::int64_t c = coords[d];
+                    if (kd_shape[d] == 1)
+                        c = 0;
+                    f += c * static_cast<std::size_t>(kd_stride[d]);
+                }
+                return f;
+            };
+
+            for (std::size_t i = 0; i < in_numel; ++i) {
+                flat_to_coord(i);
+                means[kd_flat()] += static_cast<double>(in_p[i]);
+            }
+            for (auto& m : means)
+                m /= static_cast<double>(reduced);
+
+            std::vector<double> vars(out_numel, 0.0);
+            for (std::size_t i = 0; i < in_numel; ++i) {
+                flat_to_coord(i);
+                const auto kf = kd_flat();
+                const double d = static_cast<double>(in_p[i]) - means[kf];
+                vars[kf] += d * d;
+            }
+            for (std::size_t k = 0; k < out_numel; ++k)
+                out_p[k] = static_cast<T>(vars[k] / static_cast<double>(reduced));
+        };
+
+        if (dt == Dtype::F32)
+            compute(reinterpret_cast<float*>(ptr.get()),
+                    reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            compute(reinterpret_cast<double*>(ptr.get()),
+                    reinterpret_cast<const double*>(cs.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::variance").not_implemented("dtype not supported");
+
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
     Storage reduce_max(const Storage& a,
                        const Shape& in_shape,
                        const ReduceOpts& opts,

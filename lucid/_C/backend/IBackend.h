@@ -146,6 +146,10 @@ public:
                                 const Shape& in_shape,
                                 const ReduceOpts& opts,
                                 Dtype dt) = 0;
+    virtual Storage variance(const Storage& a,
+                             const Shape& in_shape,
+                             const ReduceOpts& opts,
+                             Dtype dt) = 0;
     virtual Storage reduce_max(const Storage& a,
                                const Shape& in_shape,
                                const ReduceOpts& opts,
