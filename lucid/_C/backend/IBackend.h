@@ -129,6 +129,10 @@ public:
     virtual Storage invert(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage silu(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage gelu(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage gelu_backward(const Storage& a,
+                                  const Storage& grad,
+                                  const Shape& shape,
+                                  Dtype dt) = 0;
     virtual Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) = 0;
     virtual Storage softplus(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage elu(const Storage& a, const Shape& shape, Dtype dt, double alpha) = 0;
@@ -143,8 +147,20 @@ public:
                                   const Shape& shape,
                                   Dtype dt) = 0;
     virtual Storage mish(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage mish_backward(const Storage& a,
+                                  const Storage& grad,
+                                  const Shape& shape,
+                                  Dtype dt) = 0;
     virtual Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage hard_sigmoid_backward(const Storage& a,
+                                          const Storage& grad,
+                                          const Shape& shape,
+                                          Dtype dt) = 0;
     virtual Storage hard_swish(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage hard_swish_backward(const Storage& a,
+                                        const Storage& grad,
+                                        const Shape& shape,
+                                        Dtype dt) = 0;
     virtual Storage relu6(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
     // ---- Reduction ----------------------------------------------------

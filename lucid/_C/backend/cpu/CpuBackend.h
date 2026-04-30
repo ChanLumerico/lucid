@@ -582,6 +582,49 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage gelu_backward(const Storage& a,
+                          const Storage& grad,
+                          const Shape& shape,
+                          Dtype dt) override {
+        constexpr double kC1 = 0.7978845608028654;  // sqrt(2/pi)
+        constexpr double kC2 = 0.044715;
+        const auto& cs = std::get<CpuStorage>(a);
+        const auto& gs = std::get<CpuStorage>(grad);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* x = reinterpret_cast<const float*>(cs.ptr.get());
+            const float* g = reinterpret_cast<const float*>(gs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            const float c1 = static_cast<float>(kC1);
+            const float c2 = static_cast<float>(kC2);
+            for (std::size_t i = 0; i < n; ++i) {
+                const float xi = x[i];
+                const float inner = c1 * (xi + c2 * xi * xi * xi);
+                const float t = std::tanh(inner);
+                const float dinner = c1 * (1.f + 3.f * c2 * xi * xi);
+                const float dx = 0.5f * (1.f + t) + 0.5f * xi * (1.f - t * t) * dinner;
+                q[i] = dx * g[i];
+            }
+        } else if (dt == Dtype::F64) {
+            const double* x = reinterpret_cast<const double*>(cs.ptr.get());
+            const double* g = reinterpret_cast<const double*>(gs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double xi = x[i];
+                const double inner = kC1 * (xi + kC2 * xi * xi * xi);
+                const double t = std::tanh(inner);
+                const double dinner = kC1 * (1.0 + 3.0 * kC2 * xi * xi);
+                const double dx = 0.5 * (1.0 + t) + 0.5 * xi * (1.0 - t * t) * dinner;
+                q[i] = dx * g[i];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::gelu_backward").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) override {
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
@@ -777,6 +820,43 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage mish_backward(const Storage& a,
+                          const Storage& grad,
+                          const Shape& shape,
+                          Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const auto& gs = std::get<CpuStorage>(grad);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
+            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
+            float* qp = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const float x = xp[i];
+                const float sp = std::max(x, 0.f) + std::log1p(std::exp(-std::abs(x)));
+                const float t = std::tanh(sp);
+                const float sig = 1.f / (1.f + std::exp(-x));
+                qp[i] = (t + x * (1.f - t * t) * sig) * gp[i];
+            }
+        } else if (dt == Dtype::F64) {
+            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
+            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
+            double* qp = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double x = xp[i];
+                const double sp = std::max(x, 0.0) + std::log1p(std::exp(-std::abs(x)));
+                const double t = std::tanh(sp);
+                const double sig = 1.0 / (1.0 + std::exp(-x));
+                qp[i] = (t + x * (1.0 - t * t) * sig) * gp[i];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::mish_backward").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) override {
         // clip((x + 3) / 6, 0, 1)
         const auto& cs = std::get<CpuStorage>(a);
@@ -799,6 +879,34 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage hard_sigmoid_backward(const Storage& a,
+                                  const Storage& grad,
+                                  const Shape& shape,
+                                  Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const auto& gs = std::get<CpuStorage>(grad);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
+            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
+            float* qp = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                qp[i] = (xp[i] > -3.f && xp[i] < 3.f) ? gp[i] / 6.f : 0.f;
+        } else if (dt == Dtype::F64) {
+            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
+            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
+            double* qp = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                qp[i] = (xp[i] > -3.0 && xp[i] < 3.0) ? gp[i] / 6.0 : 0.0;
+        } else {
+            ErrorBuilder("cpu_backend::hard_sigmoid_backward")
+                .not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage hard_swish(const Storage& a, const Shape& shape, Dtype dt) override {
         // x * clip((x + 3) / 6, 0, 1)
         const auto& cs = std::get<CpuStorage>(a);
@@ -817,6 +925,51 @@ public:
                 q[i] = p[i] * std::min(std::max((p[i] + 3.0) / 6.0, 0.0), 1.0);
         } else {
             ErrorBuilder("cpu_backend::hard_swish").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage hard_swish_backward(const Storage& a,
+                                const Storage& grad,
+                                const Shape& shape,
+                                Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const auto& gs = std::get<CpuStorage>(grad);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
+            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
+            float* qp = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const float x = xp[i];
+                float dx;
+                if (x <= -3.f)
+                    dx = 0.f;
+                else if (x >= 3.f)
+                    dx = 1.f;
+                else
+                    dx = x / 3.f + 0.5f;
+                qp[i] = dx * gp[i];
+            }
+        } else if (dt == Dtype::F64) {
+            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
+            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
+            double* qp = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double x = xp[i];
+                double dx;
+                if (x <= -3.0)
+                    dx = 0.0;
+                else if (x >= 3.0)
+                    dx = 1.0;
+                else
+                    dx = x / 3.0 + 0.5;
+                qp[i] = dx * gp[i];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::hard_swish_backward").not_implemented("dtype not supported");
         }
         return Storage{CpuStorage{ptr, nb, dt}};
     }
