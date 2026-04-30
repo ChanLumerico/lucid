@@ -382,6 +382,21 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage pad(const Storage& a,
+                const Shape& /*shape*/,
+                Dtype dt,
+                const std::vector<std::pair<std::int64_t, std::int64_t>>& pad_width,
+                double constant) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        std::vector<std::pair<int, int>> mlx_pad;
+        mlx_pad.reserve(pad_width.size());
+        for (const auto& [lo, hi] : pad_width)
+            mlx_pad.emplace_back(static_cast<int>(lo), static_cast<int>(hi));
+        ::mlx::core::array pad_value(static_cast<float>(constant), gpu::to_mlx_dtype(dt));
+        auto result = ::mlx::core::pad(*gs.arr, mlx_pad, pad_value);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     Storage cast(const Storage& a,
                  const Shape& /*shape*/,
                  Dtype /*src_dt*/,

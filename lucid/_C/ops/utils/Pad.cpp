@@ -8,6 +8,7 @@
 #include "../../autograd/FuncOp.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -28,7 +29,6 @@ namespace {
 
 using utils_detail::allocate_cpu;
 using utils_detail::fresh;
-using utils_detail::mlx_shape_to_lucid;
 using utils_detail::numel;
 
 CpuStorage crop_pad_cpu(const CpuStorage& grad,
@@ -131,85 +131,14 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
     OpScopeFull scope{"pad", device, dt, a->shape()};
     if (pad_width.size() != a->shape().size())
         ErrorBuilder("pad").fail("pad_width length must equal ndim");
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        std::vector<std::pair<int, int>> mlx_pad;
-        mlx_pad.reserve(pad_width.size());
-        for (auto& [lo, hi] : pad_width)
-            mlx_pad.emplace_back(static_cast<int>(lo), static_cast<int>(hi));
-        ::mlx::core::array pad_value(static_cast<float>(constant), gpu::to_mlx_dtype(dt));
-        auto out = ::mlx::core::pad(*ga.arr, mlx_pad, pad_value);
-        Shape sh = mlx_shape_to_lucid(out.shape());
-        auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
-        return attach_pad_grad(a, std::move(result), std::move(pad_width));
-    }
     const std::size_t ndim = a->shape().size();
     Shape out_shape(ndim);
     for (std::size_t d = 0; d < ndim; ++d)
         out_shape[d] = a->shape()[d] + pad_width[d].first + pad_width[d].second;
 
-    auto out_cpu = allocate_cpu(out_shape, dt);
-    auto fill = [&](auto* dst, std::size_t n, double value) {
-        using T = std::remove_pointer_t<decltype(dst)>;
-        const T v = static_cast<T>(value);
-        for (std::size_t i = 0; i < n; ++i)
-            dst[i] = v;
-    };
-    const std::size_t out_numel = numel(out_shape);
-    if (constant != 0.0) {
-        switch (dt) {
-            case Dtype::F32:
-                fill(reinterpret_cast<float*>(out_cpu.ptr.get()), out_numel, constant);
-                break;
-            case Dtype::F64:
-                fill(reinterpret_cast<double*>(out_cpu.ptr.get()), out_numel, constant);
-                break;
-            case Dtype::I32:
-                fill(reinterpret_cast<std::int32_t*>(out_cpu.ptr.get()), out_numel, constant);
-                break;
-            case Dtype::I64:
-                fill(reinterpret_cast<std::int64_t*>(out_cpu.ptr.get()), out_numel, constant);
-                break;
-            default:
-                ErrorBuilder("pad").not_implemented("dtype not supported");
-        }
-    }
-
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const std::size_t elem = dtype_size(dt);
-    Stride in_stride(ndim), out_stride(ndim);
-    if (ndim > 0) {
-        in_stride.back() = 1;
-        out_stride.back() = 1;
-        for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d) {
-            in_stride[d] = in_stride[d + 1] * a->shape()[d + 1];
-            out_stride[d] = out_stride[d + 1] * out_shape[d + 1];
-        }
-    }
-    const std::size_t row_in = static_cast<std::size_t>(a->shape().back());
-    const std::size_t row_bytes = row_in * elem;
-    const std::size_t in_numel = numel(a->shape());
-    const std::size_t rows = in_numel / row_in;
-
-    std::vector<std::int64_t> coord(ndim - 1, 0);
-    for (std::size_t r = 0; r < rows; ++r) {
-        std::size_t out_off = pad_width.back().first;
-        for (std::size_t d = 0; d + 1 < ndim; ++d)
-            out_off += static_cast<std::size_t>(coord[d] + pad_width[d].first) *
-                       static_cast<std::size_t>(out_stride[d]);
-        std::size_t in_off = 0;
-        for (std::size_t d = 0; d + 1 < ndim; ++d)
-            in_off += static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
-        std::memcpy(out_cpu.ptr.get() + out_off * elem, ca.ptr.get() + in_off * elem, row_bytes);
-        for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d) {
-            if (++coord[d] < a->shape()[d])
-                break;
-            coord[d] = 0;
-        }
-    }
-
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
+    Storage out_storage = backend::Dispatcher::for_device(device).pad(
+        a->storage(), a->shape(), dt, pad_width, constant);
+    auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
     return attach_pad_grad(a, std::move(result), std::move(pad_width));
 }
 

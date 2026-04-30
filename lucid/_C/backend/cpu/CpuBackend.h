@@ -936,6 +936,81 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage pad(const Storage& a,
+                const Shape& shape,
+                Dtype dt,
+                const std::vector<std::pair<std::int64_t, std::int64_t>>& pad_width,
+                double constant) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const std::size_t ndim = shape.size();
+        Shape out_shape(ndim);
+        for (std::size_t d = 0; d < ndim; ++d)
+            out_shape[d] = shape[d] + pad_width[d].first + pad_width[d].second;
+
+        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto fill = [&](auto* dst, std::size_t n, double value) {
+            using T = std::remove_pointer_t<decltype(dst)>;
+            const T v = static_cast<T>(value);
+            for (std::size_t i = 0; i < n; ++i)
+                dst[i] = v;
+        };
+        const std::size_t out_numel = shape_numel(out_shape);
+        if (constant != 0.0) {
+            switch (dt) {
+                case Dtype::F32:
+                    fill(reinterpret_cast<float*>(ptr.get()), out_numel, constant);
+                    break;
+                case Dtype::F64:
+                    fill(reinterpret_cast<double*>(ptr.get()), out_numel, constant);
+                    break;
+                case Dtype::I32:
+                    fill(reinterpret_cast<std::int32_t*>(ptr.get()), out_numel, constant);
+                    break;
+                case Dtype::I64:
+                    fill(reinterpret_cast<std::int64_t*>(ptr.get()), out_numel, constant);
+                    break;
+                default:
+                    ErrorBuilder("cpu_backend::pad").not_implemented("dtype not supported");
+            }
+        }
+
+        const std::size_t elem = dtype_size(dt);
+        Stride in_stride(ndim), out_stride(ndim);
+        if (ndim > 0) {
+            in_stride.back() = 1;
+            out_stride.back() = 1;
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
+                in_stride[static_cast<std::size_t>(d)] =
+                    in_stride[static_cast<std::size_t>(d) + 1] * shape[static_cast<std::size_t>(d) + 1];
+                out_stride[static_cast<std::size_t>(d)] =
+                    out_stride[static_cast<std::size_t>(d) + 1] * out_shape[static_cast<std::size_t>(d) + 1];
+            }
+        }
+        const std::size_t row_in = static_cast<std::size_t>(shape.back());
+        const std::size_t row_bytes = row_in * elem;
+        const std::size_t in_numel = shape_numel(shape);
+        const std::size_t rows = in_numel / row_in;
+
+        std::vector<std::int64_t> coord(ndim - 1, 0);
+        for (std::size_t r = 0; r < rows; ++r) {
+            std::size_t out_off = static_cast<std::size_t>(pad_width.back().first);
+            for (std::size_t d = 0; d + 1 < ndim; ++d)
+                out_off += static_cast<std::size_t>(coord[d] + pad_width[d].first) *
+                           static_cast<std::size_t>(out_stride[d]);
+            std::size_t in_off = 0;
+            for (std::size_t d = 0; d + 1 < ndim; ++d)
+                in_off += static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
+            std::memcpy(ptr.get() + out_off * elem, cs.ptr.get() + in_off * elem, row_bytes);
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
+                if (++coord[static_cast<std::size_t>(d)] < shape[static_cast<std::size_t>(d)])
+                    break;
+                coord[static_cast<std::size_t>(d)] = 0;
+            }
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override {
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);

@@ -23,6 +23,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "../core/Device.h"
@@ -179,6 +180,12 @@ public:
                          const Shape& shape,
                          Dtype dt,
                          const std::vector<std::int64_t>& reps) = 0;
+
+    virtual Storage pad(const Storage& a,
+                        const Shape& shape,
+                        Dtype dt,
+                        const std::vector<std::pair<std::int64_t, std::int64_t>>& pad_width,
+                        double constant) = 0;
 
     virtual Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) = 0;
 };
