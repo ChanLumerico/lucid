@@ -2,12 +2,10 @@
 
 #include <cstring>
 
-#include <mlx/ops.h>
-
 #include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
-#include "../../backend/gpu/MlxBridge.h"
+#include "../../backend/Dispatcher.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -32,11 +30,8 @@ TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
 
     Storage out_storage;
     if (a->device() == Device::GPU) {
-        const auto& src = std::get<GpuStorage>(a->storage());
-        if (!src.arr)
-            ErrorBuilder("contiguous").fail("null GPU array");
-        auto out = ::mlx::core::contiguous(*src.arr);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
+        out_storage = backend::Dispatcher::for_device(Device::GPU).clone(
+            a->storage(), a->shape(), a->dtype());
     } else {
         const auto& src = std::get<CpuStorage>(a->storage());
         const std::size_t elem = dtype_size(a->dtype());
