@@ -231,6 +231,16 @@ public:
         });
     }
 
+    Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) override {
+        return mlx_unary(a, shape, dt, [dt, slope](auto& x) {
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array slope_arr(slope, gpu::to_mlx_dtype(dt));
+            auto pos_mask = ::mlx::core::greater_equal(x, zero);
+            auto neg_branch = ::mlx::core::multiply(slope_arr, x);
+            return ::mlx::core::where(pos_mask, x, neg_branch);
+        });
+    }
+
     Storage softplus(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, dt, [dt](auto& x) {
             ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
@@ -238,6 +248,18 @@ public:
             auto neg_abs = ::mlx::core::negative(::mlx::core::abs(x));
             auto log1p = ::mlx::core::log1p(::mlx::core::exp(neg_abs));
             return ::mlx::core::add(pos, log1p);
+        });
+    }
+
+    Storage elu(const Storage& a, const Shape& shape, Dtype dt, double alpha) override {
+        return mlx_unary(a, shape, dt, [dt, alpha](auto& x) {
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(dt));
+            auto pos_mask = ::mlx::core::greater_equal(x, zero);
+            auto neg =
+                ::mlx::core::multiply(alpha_arr, ::mlx::core::subtract(::mlx::core::exp(x), one));
+            return ::mlx::core::where(pos_mask, x, neg);
         });
     }
 

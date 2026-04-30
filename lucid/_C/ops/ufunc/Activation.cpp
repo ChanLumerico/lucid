@@ -5,6 +5,7 @@
 #include <mlx/ops.h>
 
 #include "../../autograd/Helpers.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/cpu/Vdsp.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
@@ -211,21 +212,8 @@ TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
     Validator::input(a, "leaky_relu.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
-    Storage out_storage;
-    if (a->device() == Device::GPU) {
-        const auto& g = std::get<GpuStorage>(a->storage());
-        if (!g.arr)
-            ErrorBuilder("leaky_relu").fail("null GPU input");
-        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype()));
-        ::mlx::core::array slope_arr(slope, gpu::to_mlx_dtype(a->dtype()));
-        auto pos_mask = ::mlx::core::greater_equal(*g.arr, zero);
-        auto neg_branch = ::mlx::core::multiply(slope_arr, *g.arr);
-        auto out = ::mlx::core::where(pos_mask, *g.arr, neg_branch);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
-    } else {
-        out_storage =
-            Storage{cpu_kernel(std::get<CpuStorage>(a->storage()), a->shape(), a->dtype(), slope)};
-    }
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .leaky_relu(a->storage(), a->shape(), a->dtype(), slope);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
@@ -342,23 +330,9 @@ TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
     Validator::input(a, "elu.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
-    Storage out_storage;
-    if (a->device() == Device::GPU) {
-        const auto& g = std::get<GpuStorage>(a->storage());
-        if (!g.arr)
-            ErrorBuilder("elu").fail("null GPU input");
-        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(a->dtype()));
-        ::mlx::core::array one(1.0, gpu::to_mlx_dtype(a->dtype()));
-        ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(a->dtype()));
-        auto pos_mask = ::mlx::core::greater_equal(*g.arr, zero);
-        auto neg =
-            ::mlx::core::multiply(alpha_arr, ::mlx::core::subtract(::mlx::core::exp(*g.arr), one));
-        auto out = ::mlx::core::where(pos_mask, *g.arr, neg);
-        out_storage = Storage{gpu::wrap_mlx_array(std::move(out), a->dtype())};
-    } else {
-        out_storage =
-            Storage{cpu_kernel(std::get<CpuStorage>(a->storage()), a->shape(), a->dtype(), alpha)};
-    }
+    Storage out_storage =
+        backend::Dispatcher::for_device(a->device())
+            .elu(a->storage(), a->shape(), a->dtype(), alpha);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));

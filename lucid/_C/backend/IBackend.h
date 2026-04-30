@@ -129,7 +129,9 @@ public:
     virtual Storage invert(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage silu(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage gelu(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) = 0;
     virtual Storage softplus(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage elu(const Storage& a, const Shape& shape, Dtype dt, double alpha) = 0;
     virtual Storage selu(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage mish(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) = 0;

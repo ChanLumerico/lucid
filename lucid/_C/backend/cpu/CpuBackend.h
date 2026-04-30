@@ -582,6 +582,28 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            const float fs = static_cast<float>(slope);
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = p[i] >= 0.f ? p[i] : fs * p[i];
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = p[i] >= 0.0 ? p[i] : slope * p[i];
+        } else {
+            ErrorBuilder("cpu_backend::leaky_relu").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage softplus(const Storage& a, const Shape& shape, Dtype dt) override {
         // softplus(x) = log(1 + exp(x)) — numerically stable: max(x,0) + log1p(exp(-|x|))
         const auto& cs = std::get<CpuStorage>(a);
@@ -604,6 +626,32 @@ public:
             }
         } else {
             ErrorBuilder("cpu_backend::softplus").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage elu(const Storage& a, const Shape& shape, Dtype dt, double alpha) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            const float fa = static_cast<float>(alpha);
+            for (std::size_t i = 0; i < n; ++i) {
+                const float x = p[i];
+                q[i] = x >= 0.f ? x : fa * (std::exp(x) - 1.f);
+            }
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double x = p[i];
+                q[i] = x >= 0.0 ? x : alpha * (std::exp(x) - 1.0);
+            }
+        } else {
+            ErrorBuilder("cpu_backend::elu").not_implemented("dtype not supported");
         }
         return Storage{CpuStorage{ptr, nb, dt}};
     }
