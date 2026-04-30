@@ -1776,6 +1776,188 @@ public:
         return out;
     }
 
+    Storage repeat_backward(const Storage& grad_out,
+                            const Shape& input_shape,
+                            const Shape& output_shape,
+                            int axis,
+                            std::int64_t repeats,
+                            Dtype dt) override {
+        const auto& g = std::get<CpuStorage>(grad_out);
+        std::size_t out_nbytes = shape_numel(input_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+        std::memset(ptr.get(), 0, out_nbytes);
+
+        const std::size_t ndim = output_shape.size();
+        Stride out_stride(ndim), in_stride(ndim);
+        if (ndim > 0) {
+            out_stride.back() = 1;
+            in_stride.back() = 1;
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
+                out_stride[static_cast<std::size_t>(d)] =
+                    out_stride[static_cast<std::size_t>(d) + 1] *
+                    output_shape[static_cast<std::size_t>(d) + 1];
+                in_stride[static_cast<std::size_t>(d)] =
+                    in_stride[static_cast<std::size_t>(d) + 1] *
+                    input_shape[static_cast<std::size_t>(d) + 1];
+            }
+        }
+
+        const std::size_t total = shape_numel(output_shape);
+        if (dt == Dtype::F32) {
+            auto* out = reinterpret_cast<float*>(ptr.get());
+            const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
+            for (std::size_t flat = 0; flat < total; ++flat) {
+                std::size_t rem = flat;
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
+                    if (static_cast<int>(d) == axis)
+                        coord /= static_cast<std::size_t>(repeats);
+                    in_flat += coord * static_cast<std::size_t>(in_stride[d]);
+                }
+                out[in_flat] += gp[flat];
+            }
+        } else if (dt == Dtype::F64) {
+            auto* out = reinterpret_cast<double*>(ptr.get());
+            const auto* gp = reinterpret_cast<const double*>(g.ptr.get());
+            for (std::size_t flat = 0; flat < total; ++flat) {
+                std::size_t rem = flat;
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
+                    if (static_cast<int>(d) == axis)
+                        coord /= static_cast<std::size_t>(repeats);
+                    in_flat += coord * static_cast<std::size_t>(in_stride[d]);
+                }
+                out[in_flat] += gp[flat];
+            }
+        } else if (dt == Dtype::I32) {
+            auto* out = reinterpret_cast<std::int32_t*>(ptr.get());
+            const auto* gp = reinterpret_cast<const std::int32_t*>(g.ptr.get());
+            for (std::size_t flat = 0; flat < total; ++flat) {
+                std::size_t rem = flat;
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
+                    if (static_cast<int>(d) == axis)
+                        coord /= static_cast<std::size_t>(repeats);
+                    in_flat += coord * static_cast<std::size_t>(in_stride[d]);
+                }
+                out[in_flat] += gp[flat];
+            }
+        } else if (dt == Dtype::I64) {
+            auto* out = reinterpret_cast<std::int64_t*>(ptr.get());
+            const auto* gp = reinterpret_cast<const std::int64_t*>(g.ptr.get());
+            for (std::size_t flat = 0; flat < total; ++flat) {
+                std::size_t rem = flat;
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
+                    if (static_cast<int>(d) == axis)
+                        coord /= static_cast<std::size_t>(repeats);
+                    in_flat += coord * static_cast<std::size_t>(in_stride[d]);
+                }
+                out[in_flat] += gp[flat];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::repeat_backward").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
+    Storage tile_backward(const Storage& grad_out,
+                          const Shape& input_shape,
+                          const Shape& padded_shape,
+                          const Shape& output_shape,
+                          const std::vector<std::int64_t>& /*reps*/,
+                          Dtype dt) override {
+        const auto& g = std::get<CpuStorage>(grad_out);
+        std::size_t out_nbytes = shape_numel(input_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+        std::memset(ptr.get(), 0, out_nbytes);
+
+        const std::size_t ndim = output_shape.size();
+        Stride out_stride(ndim), padded_stride(ndim);
+        if (ndim > 0) {
+            out_stride.back() = 1;
+            padded_stride.back() = 1;
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
+                out_stride[static_cast<std::size_t>(d)] =
+                    out_stride[static_cast<std::size_t>(d) + 1] *
+                    output_shape[static_cast<std::size_t>(d) + 1];
+                padded_stride[static_cast<std::size_t>(d)] =
+                    padded_stride[static_cast<std::size_t>(d) + 1] *
+                    padded_shape[static_cast<std::size_t>(d) + 1];
+            }
+        }
+
+        const std::size_t total = shape_numel(output_shape);
+        if (dt == Dtype::F32) {
+            auto* out = reinterpret_cast<float*>(ptr.get());
+            const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
+            for (std::size_t flat = 0; flat < total; ++flat) {
+                std::size_t rem = flat;
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    const std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
+                    const std::size_t in_coord = coord % static_cast<std::size_t>(padded_shape[d]);
+                    in_flat += in_coord * static_cast<std::size_t>(padded_stride[d]);
+                }
+                out[in_flat] += gp[flat];
+            }
+        } else if (dt == Dtype::F64) {
+            auto* out = reinterpret_cast<double*>(ptr.get());
+            const auto* gp = reinterpret_cast<const double*>(g.ptr.get());
+            for (std::size_t flat = 0; flat < total; ++flat) {
+                std::size_t rem = flat;
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    const std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
+                    const std::size_t in_coord = coord % static_cast<std::size_t>(padded_shape[d]);
+                    in_flat += in_coord * static_cast<std::size_t>(padded_stride[d]);
+                }
+                out[in_flat] += gp[flat];
+            }
+        } else if (dt == Dtype::I32) {
+            auto* out = reinterpret_cast<std::int32_t*>(ptr.get());
+            const auto* gp = reinterpret_cast<const std::int32_t*>(g.ptr.get());
+            for (std::size_t flat = 0; flat < total; ++flat) {
+                std::size_t rem = flat;
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    const std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
+                    const std::size_t in_coord = coord % static_cast<std::size_t>(padded_shape[d]);
+                    in_flat += in_coord * static_cast<std::size_t>(padded_stride[d]);
+                }
+                out[in_flat] += gp[flat];
+            }
+        } else if (dt == Dtype::I64) {
+            auto* out = reinterpret_cast<std::int64_t*>(ptr.get());
+            const auto* gp = reinterpret_cast<const std::int64_t*>(g.ptr.get());
+            for (std::size_t flat = 0; flat < total; ++flat) {
+                std::size_t rem = flat;
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    const std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
+                    const std::size_t in_coord = coord % static_cast<std::size_t>(padded_shape[d]);
+                    in_flat += in_coord * static_cast<std::size_t>(padded_stride[d]);
+                }
+                out[in_flat] += gp[flat];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::tile_backward").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

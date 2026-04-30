@@ -673,6 +673,54 @@ public:
         return out;
     }
 
+    Storage repeat_backward(const Storage& grad_out,
+                            const Shape& input_shape,
+                            const Shape& output_shape,
+                            int axis,
+                            std::int64_t repeats,
+                            Dtype dt) override {
+        const auto& g = std::get<GpuStorage>(grad_out);
+        ::mlx::core::Shape reshape_shape;
+        reshape_shape.reserve(output_shape.size() + 1);
+        for (std::size_t d = 0; d < output_shape.size(); ++d) {
+            if (static_cast<int>(d) == axis) {
+                reshape_shape.push_back(
+                    static_cast<::mlx::core::ShapeElem>(input_shape[d]));
+                reshape_shape.push_back(static_cast<::mlx::core::ShapeElem>(repeats));
+            } else {
+                reshape_shape.push_back(static_cast<::mlx::core::ShapeElem>(output_shape[d]));
+            }
+        }
+        auto reshaped = ::mlx::core::reshape(*g.arr, reshape_shape);
+        auto summed = ::mlx::core::sum(reshaped, std::vector<int>{axis + 1}, /*keepdims=*/false);
+        auto result = ::mlx::core::reshape(summed, gpu::to_mlx_shape(input_shape));
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage tile_backward(const Storage& grad_out,
+                          const Shape& input_shape,
+                          const Shape& padded_shape,
+                          const Shape& /*output_shape*/,
+                          const std::vector<std::int64_t>& reps,
+                          Dtype dt) override {
+        const auto& g = std::get<GpuStorage>(grad_out);
+        ::mlx::core::Shape reshape_shape;
+        reshape_shape.reserve(reps.size() * 2);
+        std::vector<int> sum_axes;
+        sum_axes.reserve(reps.size());
+        for (std::size_t d = 0; d < reps.size(); ++d) {
+            sum_axes.push_back(static_cast<int>(reshape_shape.size()));
+            reshape_shape.push_back(static_cast<::mlx::core::ShapeElem>(reps[d]));
+            reshape_shape.push_back(static_cast<::mlx::core::ShapeElem>(padded_shape[d]));
+        }
+        auto reshaped = ::mlx::core::reshape(*g.arr, reshape_shape);
+        auto summed = sum_axes.empty() ? reshaped
+                                       : ::mlx::core::sum(reshaped, sum_axes,
+                                                          /*keepdims=*/false);
+        auto result = ::mlx::core::reshape(summed, gpu::to_mlx_shape(input_shape));
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

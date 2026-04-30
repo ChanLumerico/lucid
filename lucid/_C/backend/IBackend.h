@@ -255,6 +255,18 @@ public:
                                           int axis,
                                           const std::vector<std::int64_t>& indices,
                                           Dtype dt) = 0;
+    virtual Storage repeat_backward(const Storage& grad_out,
+                                    const Shape& input_shape,
+                                    const Shape& output_shape,
+                                    int axis,
+                                    std::int64_t repeats,
+                                    Dtype dt) = 0;
+    virtual Storage tile_backward(const Storage& grad_out,
+                                  const Shape& input_shape,
+                                  const Shape& padded_shape,
+                                  const Shape& output_shape,
+                                  const std::vector<std::int64_t>& reps,
+                                  Dtype dt) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 
