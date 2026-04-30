@@ -616,6 +616,63 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage concatenate(const std::vector<Storage>& xs,
+                        const std::vector<Shape>& /*shapes*/,
+                        int axis,
+                        Dtype dt) override {
+        std::vector<::mlx::core::array> arrays;
+        arrays.reserve(xs.size());
+        for (const auto& x : xs)
+            arrays.push_back(*std::get<GpuStorage>(x).arr);
+        auto result = ::mlx::core::concatenate(std::move(arrays), axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage stack(const std::vector<Storage>& xs,
+                  const Shape& /*input_shape*/,
+                  int axis,
+                  Dtype dt) override {
+        std::vector<::mlx::core::array> arrays;
+        arrays.reserve(xs.size());
+        for (const auto& x : xs)
+            arrays.push_back(*std::get<GpuStorage>(x).arr);
+        auto result = ::mlx::core::stack(arrays, axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    std::vector<Storage> split_equal(const Storage& a,
+                                     const Shape& /*shape*/,
+                                     int axis,
+                                     std::int64_t num_splits,
+                                     Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto pieces = ::mlx::core::split(*ga.arr, static_cast<int>(num_splits), axis);
+        std::vector<Storage> out;
+        out.reserve(pieces.size());
+        for (auto& p : pieces) {
+            auto contiguous = ::mlx::core::contiguous(p);
+            out.push_back(Storage{gpu::wrap_mlx_array(std::move(contiguous), dt)});
+        }
+        return out;
+    }
+
+    std::vector<Storage> split_at(const Storage& a,
+                                  const Shape& /*shape*/,
+                                  int axis,
+                                  const std::vector<std::int64_t>& indices,
+                                  Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        ::mlx::core::Shape mlx_idx(indices.begin(), indices.end());
+        auto pieces = ::mlx::core::split(*ga.arr, mlx_idx, axis);
+        std::vector<Storage> out;
+        out.reserve(pieces.size());
+        for (auto& p : pieces) {
+            auto contiguous = ::mlx::core::contiguous(p);
+            out.push_back(Storage{gpu::wrap_mlx_array(std::move(contiguous), dt)});
+        }
+        return out;
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

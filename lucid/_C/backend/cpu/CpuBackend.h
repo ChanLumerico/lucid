@@ -1679,6 +1679,103 @@ public:
         return Storage{CpuStorage{ptr, out_nbytes, dt}};
     }
 
+    Storage concatenate(const std::vector<Storage>& xs,
+                        const std::vector<Shape>& shapes,
+                        int axis,
+                        Dtype dt) override {
+        Shape out_shape = shapes.front();
+        std::int64_t cat_dim = 0;
+        for (const auto& shape : shapes)
+            cat_dim += shape[static_cast<std::size_t>(axis)];
+        out_shape[static_cast<std::size_t>(axis)] = cat_dim;
+
+        std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+        const std::size_t elem = dtype_size(dt);
+        std::size_t outer = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(out_shape[static_cast<std::size_t>(d)]);
+        std::size_t inner_per_unit = elem;
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < out_shape.size(); ++d)
+            inner_per_unit *= static_cast<std::size_t>(out_shape[d]);
+
+        auto* dst = ptr.get();
+        for (std::size_t o = 0; o < outer; ++o) {
+            for (std::size_t i = 0; i < xs.size(); ++i) {
+                const auto& cs = std::get<CpuStorage>(xs[i]);
+                const std::size_t L = static_cast<std::size_t>(
+                    shapes[i][static_cast<std::size_t>(axis)]);
+                const std::size_t bytes = L * inner_per_unit;
+                std::memcpy(dst, cs.ptr.get() + o * bytes, bytes);
+                dst += bytes;
+            }
+        }
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
+    Storage stack(const std::vector<Storage>& xs,
+                  const Shape& input_shape,
+                  int axis,
+                  Dtype dt) override {
+        Shape out_shape = input_shape;
+        out_shape.insert(out_shape.begin() + axis, static_cast<std::int64_t>(xs.size()));
+        std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+        const std::size_t elem = dtype_size(dt);
+        std::size_t outer = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(out_shape[static_cast<std::size_t>(d)]);
+        std::size_t inner_bytes = elem;
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < out_shape.size(); ++d)
+            inner_bytes *= static_cast<std::size_t>(out_shape[d]);
+        const std::size_t block_bytes = static_cast<std::size_t>(xs.size()) * inner_bytes;
+        for (std::size_t idx = 0; idx < xs.size(); ++idx) {
+            const auto& cs = std::get<CpuStorage>(xs[idx]);
+            for (std::size_t o = 0; o < outer; ++o) {
+                std::memcpy(ptr.get() + o * block_bytes + idx * inner_bytes,
+                            cs.ptr.get() + o * inner_bytes, inner_bytes);
+            }
+        }
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
+    std::vector<Storage> split_equal(const Storage& a,
+                                     const Shape& shape,
+                                     int axis,
+                                     std::int64_t num_splits,
+                                     Dtype dt) override {
+        std::vector<Storage> out;
+        out.reserve(static_cast<std::size_t>(num_splits));
+        Shape piece_shape = shape;
+        const std::int64_t piece = shape[static_cast<std::size_t>(axis)] / num_splits;
+        piece_shape[static_cast<std::size_t>(axis)] = piece;
+        for (std::int64_t k = 0; k < num_splits; ++k) {
+            out.push_back(slice_axis(a, shape, piece_shape, axis, k * piece, dt));
+        }
+        return out;
+    }
+
+    std::vector<Storage> split_at(const Storage& a,
+                                  const Shape& shape,
+                                  int axis,
+                                  const std::vector<std::int64_t>& indices,
+                                  Dtype dt) override {
+        std::vector<Storage> out;
+        out.reserve(indices.size() + 1);
+        std::int64_t off = 0;
+        for (auto idx : indices) {
+            Shape piece_shape = shape;
+            piece_shape[static_cast<std::size_t>(axis)] = idx - off;
+            out.push_back(slice_axis(a, shape, piece_shape, axis, off, dt));
+            off = idx;
+        }
+        Shape tail_shape = shape;
+        tail_shape[static_cast<std::size_t>(axis)] =
+            shape[static_cast<std::size_t>(axis)] - off;
+        out.push_back(slice_axis(a, shape, tail_shape, axis, off, dt));
+        return out;
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

@@ -237,6 +237,24 @@ public:
                                       int axis,
                                       std::int64_t offset,
                                       Dtype dt) = 0;
+    virtual Storage concatenate(const std::vector<Storage>& xs,
+                                const std::vector<Shape>& shapes,
+                                int axis,
+                                Dtype dt) = 0;
+    virtual Storage stack(const std::vector<Storage>& xs,
+                          const Shape& input_shape,
+                          int axis,
+                          Dtype dt) = 0;
+    virtual std::vector<Storage> split_equal(const Storage& a,
+                                             const Shape& shape,
+                                             int axis,
+                                             std::int64_t num_splits,
+                                             Dtype dt) = 0;
+    virtual std::vector<Storage> split_at(const Storage& a,
+                                          const Shape& shape,
+                                          int axis,
+                                          const std::vector<std::int64_t>& indices,
+                                          Dtype dt) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 
