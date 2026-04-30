@@ -1078,6 +1078,30 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage reverse_along_axis(const Storage& a,
+                               const Shape& shape,
+                               int axis,
+                               Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
+        const std::size_t elem = dtype_size(dt);
+        const int ndim = static_cast<int>(shape.size());
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (int d = axis + 1; d < ndim; ++d)
+            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        for (std::size_t o = 0; o < outer; ++o) {
+            for (std::size_t k = 0; k < L; ++k) {
+                std::memcpy(ptr.get() + ((o * L + k) * inner) * elem,
+                            cs.ptr.get() + ((o * L + (L - 1 - k)) * inner) * elem,
+                            inner * elem);
+            }
+        }
+        return Storage{CpuStorage{ptr, cs.nbytes, dt}};
+    }
+
     Storage trace(const Storage& a, const Shape& shape, Dtype dt) override {
         const auto& cs = std::get<CpuStorage>(a);
         const std::int64_t M = shape[0];

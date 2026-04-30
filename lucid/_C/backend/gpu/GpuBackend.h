@@ -377,6 +377,23 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage reverse_along_axis(const Storage& a,
+                               const Shape& shape,
+                               int axis,
+                               Dtype dt) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        std::vector<std::int32_t> idx(shape[static_cast<std::size_t>(axis)]);
+        for (std::int64_t i = 0; i < shape[static_cast<std::size_t>(axis)]; ++i)
+            idx[static_cast<std::size_t>(i)] =
+                static_cast<std::int32_t>(shape[static_cast<std::size_t>(axis)] - 1 - i);
+        ::mlx::core::Shape idx_shape(shape.size(), 1);
+        idx_shape[static_cast<std::size_t>(axis)] = shape[static_cast<std::size_t>(axis)];
+        ::mlx::core::array idx_arr(idx.data(), idx_shape, ::mlx::core::int32);
+        idx_arr = ::mlx::core::broadcast_to(idx_arr, gpu::to_mlx_shape(shape));
+        auto result = ::mlx::core::take_along_axis(*gs.arr, idx_arr, axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     Storage trace(const Storage& a, const Shape& /*shape*/, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
         auto result = ::mlx::core::trace(*gs.arr, /*offset=*/0, /*axis1=*/0, /*axis2=*/1);
