@@ -157,6 +157,12 @@ public:
 
     virtual Storage cumsum(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
     virtual Storage cumprod(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
+    virtual Storage softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
+    virtual Storage softmax_backward(const Storage& z,
+                                     const Storage& grad_out,
+                                     const Shape& shape,
+                                     int axis,
+                                     Dtype dt) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 

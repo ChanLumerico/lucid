@@ -842,6 +842,131 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t nb = cs.nbytes;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::size_t axis_dim = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
+            inner *= static_cast<std::size_t>(shape[d]);
+
+        if (dt == Dtype::F32) {
+            const float* in = reinterpret_cast<const float*>(cs.ptr.get());
+            float* out = reinterpret_cast<float*>(ptr.get());
+            if (inner == 1) {
+                for (std::size_t o = 0; o < outer; ++o) {
+                    const float* row = in + o * axis_dim;
+                    float* dst = out + o * axis_dim;
+                    const float m = cpu::vmaxval_f32(row, axis_dim);
+                    const float neg_m = -m;
+                    cpu::vsadd_f32(row, neg_m, dst, axis_dim);
+                    cpu::vexp_f32(dst, dst, axis_dim);
+                    const float inv_s = 1.0f / cpu::vsum_f32(dst, axis_dim);
+                    cpu::vsmul_f32(dst, inv_s, dst, axis_dim);
+                }
+            } else {
+                for (std::size_t o = 0; o < outer; ++o) {
+                    for (std::size_t i = 0; i < inner; ++i) {
+                        const float* base = in + o * axis_dim * inner + i;
+                        float m = base[0];
+                        for (std::size_t r = 1; r < axis_dim; ++r) {
+                            const float v = base[r * inner];
+                            if (v > m)
+                                m = v;
+                        }
+                        float* obase = out + o * axis_dim * inner + i;
+                        float s = 0.0f;
+                        for (std::size_t r = 0; r < axis_dim; ++r) {
+                            const float e = std::exp(base[r * inner] - m);
+                            obase[r * inner] = e;
+                            s += e;
+                        }
+                        const float inv = 1.0f / s;
+                        for (std::size_t r = 0; r < axis_dim; ++r)
+                            obase[r * inner] *= inv;
+                    }
+                }
+            }
+        } else if (dt == Dtype::F64) {
+            const double* in = reinterpret_cast<const double*>(cs.ptr.get());
+            double* out = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t o = 0; o < outer; ++o) {
+                for (std::size_t i = 0; i < inner; ++i) {
+                    const double* base = in + o * axis_dim * inner + i;
+                    double m = base[0];
+                    for (std::size_t r = 1; r < axis_dim; ++r) {
+                        const double v = base[r * inner];
+                        if (v > m)
+                            m = v;
+                    }
+                    double* obase = out + o * axis_dim * inner + i;
+                    double s = 0.0;
+                    for (std::size_t r = 0; r < axis_dim; ++r) {
+                        const double e = std::exp(base[r * inner] - m);
+                        obase[r * inner] = e;
+                        s += e;
+                    }
+                    const double inv = 1.0 / s;
+                    for (std::size_t r = 0; r < axis_dim; ++r)
+                        obase[r * inner] *= inv;
+                }
+            }
+        } else {
+            ErrorBuilder("cpu_backend::softmax").not_implemented("dtype not supported");
+        }
+
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage softmax_backward(const Storage& z,
+                             const Storage& grad_out,
+                             const Shape& shape,
+                             int axis,
+                             Dtype dt) override {
+        const auto& z_cpu = std::get<CpuStorage>(z);
+        const auto& g_cpu = std::get<CpuStorage>(grad_out);
+        std::size_t nb = z_cpu.nbytes;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::size_t axis_dim = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
+            inner *= static_cast<std::size_t>(shape[d]);
+
+        auto run = [&](auto* dx, const auto* zp, const auto* gp) {
+            using T = std::remove_pointer_t<decltype(dx)>;
+            for (std::size_t o = 0; o < outer; ++o) {
+                for (std::size_t i = 0; i < inner; ++i) {
+                    const T* zb = zp + o * axis_dim * inner + i;
+                    const T* gb = gp + o * axis_dim * inner + i;
+                    T sum = T{};
+                    for (std::size_t r = 0; r < axis_dim; ++r)
+                        sum += gb[r * inner] * zb[r * inner];
+                    T* xb = dx + o * axis_dim * inner + i;
+                    for (std::size_t r = 0; r < axis_dim; ++r)
+                        xb[r * inner] = zb[r * inner] * (gb[r * inner] - sum);
+                }
+            }
+        };
+
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()),
+                reinterpret_cast<const float*>(z_cpu.ptr.get()),
+                reinterpret_cast<const float*>(g_cpu.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(z_cpu.ptr.get()),
+                reinterpret_cast<const double*>(g_cpu.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::softmax_backward").not_implemented("dtype not supported");
+
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

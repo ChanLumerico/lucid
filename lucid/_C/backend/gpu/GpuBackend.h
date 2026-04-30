@@ -348,6 +348,26 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage softmax(const Storage& a, const Shape& /*shape*/, int axis, Dtype dt) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::softmax(*gs.arr, axis, /*precise=*/true);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage softmax_backward(const Storage& z,
+                             const Storage& grad_out,
+                             const Shape& /*shape*/,
+                             int axis,
+                             Dtype dt) override {
+        const auto& z_gpu = std::get<GpuStorage>(z);
+        const auto& g_gpu = std::get<GpuStorage>(grad_out);
+        auto gz = ::mlx::core::multiply(*g_gpu.arr, *z_gpu.arr);
+        auto sum_gz = ::mlx::core::sum(gz, std::vector<int>{axis}, /*keepdims=*/true);
+        auto diff = ::mlx::core::subtract(*g_gpu.arr, sum_gz);
+        auto result = ::mlx::core::multiply(*z_gpu.arr, diff);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
