@@ -167,6 +167,10 @@ public:
     virtual Storage trace_backward(const Storage& grad_out,
                                    const Shape& input_shape,
                                    Dtype dt) = 0;
+    virtual std::vector<Storage> meshgrid(const std::vector<Storage>& xs,
+                                          const Shape& out_shape,
+                                          Dtype dt,
+                                          bool indexing_xy) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 

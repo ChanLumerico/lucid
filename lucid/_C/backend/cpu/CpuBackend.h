@@ -1022,6 +1022,41 @@ public:
         return Storage{CpuStorage{ptr, nbytes, dt}};
     }
 
+    std::vector<Storage> meshgrid(const std::vector<Storage>& xs,
+                                  const Shape& out_shape,
+                                  Dtype dt,
+                                  bool indexing_xy) override {
+        const std::size_t N = xs.size();
+        const std::size_t total = shape_numel(out_shape);
+        const std::size_t elem = dtype_size(dt);
+        std::vector<Storage> result;
+        result.reserve(N);
+        for (std::size_t i = 0; i < N; ++i) {
+            const auto& cv = std::get<CpuStorage>(xs[i]);
+            std::size_t out_nbytes = total * elem;
+            auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+            std::size_t carry_axis = i;
+            if (indexing_xy && N >= 2 && i < 2)
+                carry_axis = 1 - i;
+
+            std::vector<std::int64_t> coord(N, 0);
+            for (std::size_t f = 0; f < total; ++f) {
+                const std::int64_t k = coord[carry_axis];
+                std::memcpy(ptr.get() + f * elem, cv.ptr.get() + static_cast<std::size_t>(k) * elem,
+                            elem);
+                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(N) - 1; d >= 0; --d) {
+                    if (++coord[static_cast<std::size_t>(d)] <
+                        out_shape[static_cast<std::size_t>(d)]) {
+                        break;
+                    }
+                    coord[static_cast<std::size_t>(d)] = 0;
+                }
+            }
+            result.push_back(Storage{CpuStorage{ptr, out_nbytes, dt}});
+        }
+        return result;
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

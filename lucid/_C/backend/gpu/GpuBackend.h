@@ -384,6 +384,24 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    std::vector<Storage> meshgrid(const std::vector<Storage>& xs,
+                                  const Shape& /*out_shape*/,
+                                  Dtype dt,
+                                  bool indexing_xy) override {
+        std::vector<::mlx::core::array> arrays;
+        arrays.reserve(xs.size());
+        for (const auto& x : xs)
+            arrays.push_back(*std::get<GpuStorage>(x).arr);
+        auto out = ::mlx::core::meshgrid(arrays, false, indexing_xy ? "xy" : "ij");
+        std::vector<Storage> result;
+        result.reserve(out.size());
+        for (auto& arr : out) {
+            auto contiguous = ::mlx::core::contiguous(arr);
+            result.push_back(Storage{gpu::wrap_mlx_array(std::move(contiguous), dt)});
+        }
+        return result;
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
