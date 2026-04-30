@@ -868,6 +868,29 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    std::pair<Storage, Storage> sort_select(const Storage& a,
+                                            const Shape& /*input_shape*/,
+                                            const Shape& output_shape,
+                                            int axis,
+                                            Dtype dt,
+                                            bool descending) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto idx = ::mlx::core::argsort(*ga.arr, axis);
+        if (descending)
+            idx = take_descending_top_indices(idx, axis, output_shape);
+        auto values = ::mlx::core::take_along_axis(*ga.arr, idx, axis);
+        return {
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(values), dt)},
+            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(idx), Dtype::I32)},
+        };
+    }
+
+    Storage argsort(const Storage& a, const Shape& /*shape*/, int axis, Dtype /*dt*/) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto out = ::mlx::core::argsort(*ga.arr, axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), Dtype::I32)};
+    }
+
     Storage scatter_add_axis(const Storage& grad,
                              const Storage& indices,
                              const Shape& output_shape,
@@ -986,6 +1009,24 @@ public:
 
 private:
     // ---- Helpers -------------------------------------------------------
+
+    ::mlx::core::array take_descending_top_indices(const ::mlx::core::array& idx,
+                                                   int axis,
+                                                   const Shape& output_shape) {
+        const auto& full_shape = idx.shape();
+        const std::int64_t k = output_shape[static_cast<std::size_t>(axis)];
+        const std::int64_t L = full_shape[axis];
+        std::vector<std::int32_t> selector(static_cast<std::size_t>(k));
+        for (std::int64_t i = 0; i < k; ++i)
+            selector[static_cast<std::size_t>(i)] = static_cast<std::int32_t>(L - 1 - i);
+        ::mlx::core::Shape selector_shape(full_shape.size(), 1);
+        selector_shape[axis] = static_cast<int>(k);
+        ::mlx::core::array selector_arr(selector.data(), selector_shape, ::mlx::core::int32);
+        ::mlx::core::Shape out_shape = full_shape;
+        out_shape[axis] = static_cast<int>(k);
+        selector_arr = ::mlx::core::broadcast_to(selector_arr, out_shape);
+        return ::mlx::core::take_along_axis(idx, selector_arr, axis);
+    }
 
     template <class Fn>
     Storage mlx_unary(const Storage& a, const Shape& /*shape*/, Dtype dt, Fn fn) {

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <numeric>
 
 #include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
@@ -2226,6 +2227,38 @@ public:
         return Storage{CpuStorage{ptr, out_nbytes, dt}};
     }
 
+    std::pair<Storage, Storage> sort_select(const Storage& a,
+                                            const Shape& input_shape,
+                                            const Shape& output_shape,
+                                            int axis,
+                                            Dtype dt,
+                                            bool descending) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        CpuStorage values;
+        CpuStorage indices;
+        if (dt == Dtype::F32) {
+            std::tie(values, indices) =
+                sort_select_cpu<float>(ca, input_shape, output_shape, axis, dt, descending);
+        } else if (dt == Dtype::F64) {
+            std::tie(values, indices) =
+                sort_select_cpu<double>(ca, input_shape, output_shape, axis, dt, descending);
+        } else if (dt == Dtype::I32) {
+            std::tie(values, indices) =
+                sort_select_cpu<std::int32_t>(ca, input_shape, output_shape, axis, dt, descending);
+        } else if (dt == Dtype::I64) {
+            std::tie(values, indices) =
+                sort_select_cpu<std::int64_t>(ca, input_shape, output_shape, axis, dt, descending);
+        } else {
+            ErrorBuilder("cpu_backend::sort_select").not_implemented("dtype not supported");
+        }
+        return {Storage{std::move(values)}, Storage{std::move(indices)}};
+    }
+
+    Storage argsort(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        auto result = sort_select(a, shape, shape, axis, dt, /*descending=*/false);
+        return std::move(result.second);
+    }
+
     Storage scatter_add_axis(const Storage& grad,
                              const Storage& indices,
                              const Shape& output_shape,
@@ -2673,6 +2706,61 @@ public:
 
 private:
     // ---- Helpers -------------------------------------------------------
+
+    template <typename T>
+    static std::pair<CpuStorage, CpuStorage> sort_select_cpu(const CpuStorage& input,
+                                                             const Shape& input_shape,
+                                                             const Shape& output_shape,
+                                                             int axis,
+                                                             Dtype dt,
+                                                             bool descending) {
+        const std::size_t value_nbytes = shape_numel(output_shape) * dtype_size(dt);
+        CpuStorage values{allocate_aligned_bytes(value_nbytes, Device::CPU), value_nbytes, dt};
+        const std::size_t index_nbytes = shape_numel(output_shape) * dtype_size(Dtype::I32);
+        CpuStorage indices{
+            allocate_aligned_bytes(index_nbytes, Device::CPU), index_nbytes, Dtype::I32};
+
+        const auto* src = reinterpret_cast<const T*>(input.ptr.get());
+        auto* dst = reinterpret_cast<T*>(values.ptr.get());
+        auto* idx_dst = reinterpret_cast<std::int32_t*>(indices.ptr.get());
+
+        std::size_t outer = 1;
+        std::size_t inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(input_shape[static_cast<std::size_t>(d)]);
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < input_shape.size(); ++d)
+            inner *= static_cast<std::size_t>(input_shape[d]);
+        const std::size_t L =
+            static_cast<std::size_t>(input_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t K =
+            static_cast<std::size_t>(output_shape[static_cast<std::size_t>(axis)]);
+
+        std::vector<std::int32_t> order(L);
+        for (std::size_t o = 0; o < outer; ++o) {
+            for (std::size_t j = 0; j < inner; ++j) {
+                std::iota(order.begin(), order.end(), 0);
+                auto cmp = [&](std::int32_t lhs, std::int32_t rhs) {
+                    const T lv = src[(o * L + static_cast<std::size_t>(lhs)) * inner + j];
+                    const T rv = src[(o * L + static_cast<std::size_t>(rhs)) * inner + j];
+                    return descending ? (lv > rv) : (lv < rv);
+                };
+                if (K == L) {
+                    std::sort(order.begin(), order.end(), cmp);
+                } else {
+                    std::partial_sort(order.begin(), order.begin() + K, order.end(), cmp);
+                }
+                for (std::size_t k = 0; k < K; ++k) {
+                    const std::int32_t src_k = order[k];
+                    const std::size_t out_flat = (o * K + k) * inner + j;
+                    const std::size_t src_flat =
+                        (o * L + static_cast<std::size_t>(src_k)) * inner + j;
+                    dst[out_flat] = src[src_flat];
+                    idx_dst[out_flat] = src_k;
+                }
+            }
+        }
+        return {std::move(values), std::move(indices)};
+    }
 
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {
         switch (dt) {

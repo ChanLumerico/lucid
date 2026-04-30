@@ -294,6 +294,13 @@ public:
                                   const Shape& output_shape,
                                   const std::vector<std::int64_t>& reps,
                                   Dtype dt) = 0;
+    virtual std::pair<Storage, Storage> sort_select(const Storage& a,
+                                                    const Shape& input_shape,
+                                                    const Shape& output_shape,
+                                                    int axis,
+                                                    Dtype dt,
+                                                    bool descending) = 0;
+    virtual Storage argsort(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
     virtual Storage scatter_add_axis(const Storage& grad,
                                      const Storage& indices,
                                      const Shape& output_shape,

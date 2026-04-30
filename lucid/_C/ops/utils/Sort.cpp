@@ -39,53 +39,6 @@ bool differentiable_dtype(Dtype dt) {
     return dt == Dtype::F32 || dt == Dtype::F64;
 }
 
-template <typename T>
-std::pair<CpuStorage, CpuStorage> sort_select_cpu(const CpuStorage& input,
-                                                  const Shape& input_shape,
-                                                  const Shape& output_shape,
-                                                  int axis,
-                                                  Dtype dt,
-                                                  bool descending) {
-    auto values = allocate_cpu(output_shape, dt);
-    auto indices = allocate_cpu(output_shape, Dtype::I32);
-    const auto* src = reinterpret_cast<const T*>(input.ptr.get());
-    auto* dst = reinterpret_cast<T*>(values.ptr.get());
-    auto* idx_dst = reinterpret_cast<std::int32_t*>(indices.ptr.get());
-
-    std::size_t outer = 1, inner = 1;
-    for (int d = 0; d < axis; ++d)
-        outer *= static_cast<std::size_t>(input_shape[d]);
-    for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < input_shape.size(); ++d)
-        inner *= static_cast<std::size_t>(input_shape[d]);
-    const std::size_t L = static_cast<std::size_t>(input_shape[static_cast<std::size_t>(axis)]);
-    const std::size_t K = static_cast<std::size_t>(output_shape[static_cast<std::size_t>(axis)]);
-
-    std::vector<std::int32_t> order(L);
-    for (std::size_t o = 0; o < outer; ++o) {
-        for (std::size_t j = 0; j < inner; ++j) {
-            std::iota(order.begin(), order.end(), 0);
-            auto cmp = [&](std::int32_t lhs, std::int32_t rhs) {
-                const T lv = src[(o * L + static_cast<std::size_t>(lhs)) * inner + j];
-                const T rv = src[(o * L + static_cast<std::size_t>(rhs)) * inner + j];
-                return descending ? (lv > rv) : (lv < rv);
-            };
-            if (K == L) {
-                std::sort(order.begin(), order.end(), cmp);
-            } else {
-                std::partial_sort(order.begin(), order.begin() + K, order.end(), cmp);
-            }
-            for (std::size_t k = 0; k < K; ++k) {
-                const std::int32_t src_k = order[k];
-                const std::size_t out_flat = (o * K + k) * inner + j;
-                const std::size_t src_flat = (o * L + static_cast<std::size_t>(src_k)) * inner + j;
-                dst[out_flat] = src[src_flat];
-                idx_dst[out_flat] = src_k;
-            }
-        }
-    }
-    return {std::move(values), std::move(indices)};
-}
-
 Storage scatter_axis_add_storage(const Storage& grad,
                                  const Storage& indices,
                                  const Shape& input_shape,
@@ -128,23 +81,6 @@ TensorImplPtr attach_index_scatter_grad(const TensorImplPtr& a,
     return out;
 }
 
-::mlx::core::array take_descending_top_indices(const ::mlx::core::array& idx,
-                                               int axis,
-                                               std::int64_t k) {
-    const auto& full_shape = idx.shape();
-    const std::int64_t L = full_shape[axis];
-    std::vector<std::int32_t> selector(static_cast<std::size_t>(k));
-    for (std::int64_t i = 0; i < k; ++i)
-        selector[static_cast<std::size_t>(i)] = static_cast<std::int32_t>(L - 1 - i);
-    ::mlx::core::Shape selector_shape(full_shape.size(), 1);
-    selector_shape[axis] = static_cast<int>(k);
-    ::mlx::core::array selector_arr(selector.data(), selector_shape, ::mlx::core::int32);
-    ::mlx::core::Shape out_shape = full_shape;
-    out_shape[axis] = static_cast<int>(k);
-    selector_arr = ::mlx::core::broadcast_to(selector_arr, out_shape);
-    return ::mlx::core::take_along_axis(idx, selector_arr, axis);
-}
-
 }  // namespace
 
 TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
@@ -153,83 +89,22 @@ TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
     const Device device = a->device();
     OpScopeFull scope{"sort", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto idx = ::mlx::core::argsort(*ga.arr, ax);
-        auto out_raw = ::mlx::core::take_along_axis(*ga.arr, idx, ax);
-        auto out =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out_raw), dt)}, a->shape(), dt, device);
-        return attach_index_scatter_grad(
-            a, std::move(out), Storage{gpu::wrap_mlx_array(std::move(idx), Dtype::I32)}, ax);
-    }
     Shape out_shape = a->shape();
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    CpuStorage out_cpu;
-    CpuStorage idx_cpu;
-    if (dt == Dtype::F32)
-        std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<float>(ca, a->shape(), out_shape, ax, dt, false);
-    else if (dt == Dtype::F64)
-        std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<double>(ca, a->shape(), out_shape, ax, dt, false);
-    else if (dt == Dtype::I32)
-        std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<std::int32_t>(ca, a->shape(), out_shape, ax, dt, false);
-    else if (dt == Dtype::I64)
-        std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<std::int64_t>(ca, a->shape(), out_shape, ax, dt, false);
-    else
-        ErrorBuilder("sort").not_implemented("dtype not supported");
-    auto out = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
-    return attach_index_scatter_grad(a, std::move(out), Storage{std::move(idx_cpu)}, ax);
+    auto [values, indices] = backend::Dispatcher::for_device(device)
+                                 .sort_select(a->storage(), a->shape(), out_shape, ax, dt,
+                                              /*descending=*/false);
+    auto out = fresh(std::move(values), std::move(out_shape), dt, device);
+    return attach_index_scatter_grad(a, std::move(out), std::move(indices), ax);
 }
 
 TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
     Validator::input(a, "argsort.a").non_null();
     const Device device = a->device();
     OpScopeFull scope{"argsort", device, a->dtype(), a->shape()};
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto out = ::mlx::core::argsort(*ga.arr, axis);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I32)}, a->shape(),
-                     Dtype::I32, device);
-    }
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
-    Shape out_shape = a->shape();
-    auto out_cpu = allocate_cpu(out_shape, Dtype::I32);
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    std::size_t outer = 1, inner = 1;
-    for (int d = 0; d < ax; ++d)
-        outer *= static_cast<std::size_t>(a->shape()[d]);
-    for (std::size_t d = ax + 1; d < a->shape().size(); ++d)
-        inner *= static_cast<std::size_t>(a->shape()[d]);
-    const std::size_t L = static_cast<std::size_t>(a->shape()[ax]);
-    auto* dst = reinterpret_cast<std::int32_t*>(out_cpu.ptr.get());
-
-    auto run = [&](const auto* src) {
-        std::vector<std::int32_t> idx(L);
-        for (std::size_t o = 0; o < outer; ++o)
-            for (std::size_t j = 0; j < inner; ++j) {
-                for (std::size_t k = 0; k < L; ++k)
-                    idx[k] = static_cast<std::int32_t>(k);
-                std::sort(idx.begin(), idx.end(), [&](std::int32_t x, std::int32_t y) {
-                    return src[(o * L + x) * inner + j] < src[(o * L + y) * inner + j];
-                });
-                for (std::size_t k = 0; k < L; ++k)
-                    dst[(o * L + k) * inner + j] = idx[k];
-            }
-    };
-    if (a->dtype() == Dtype::F32)
-        run(reinterpret_cast<const float*>(ca.ptr.get()));
-    else if (a->dtype() == Dtype::F64)
-        run(reinterpret_cast<const double*>(ca.ptr.get()));
-    else if (a->dtype() == Dtype::I32)
-        run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()));
-    else if (a->dtype() == Dtype::I64)
-        run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
-    else
-        ErrorBuilder("argsort").not_implemented("dtype not supported");
-    return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), Dtype::I32, device);
+    Storage out = backend::Dispatcher::for_device(device).argsort(a->storage(), a->shape(), ax,
+                                                                  a->dtype());
+    return fresh(std::move(out), a->shape(), Dtype::I32, device);
 }
 
 namespace {
@@ -426,39 +301,11 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
         ErrorBuilder("topk").fail("k must be in (0, axis_size]");
     Shape out_shape = a->shape();
     out_shape[static_cast<std::size_t>(ax)] = k;
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto full_idx = ::mlx::core::argsort(*ga.arr, ax);
-        auto idx_mlx = take_descending_top_indices(full_idx, ax, k);
-        auto values_mlx = ::mlx::core::take_along_axis(*ga.arr, idx_mlx, ax);
-        values_mlx = ::mlx::core::contiguous(values_mlx);
-        Shape sh = mlx_shape_to_lucid(values_mlx.shape());
-        auto idx_storage = Storage{gpu::wrap_mlx_array(::mlx::core::array(idx_mlx), Dtype::I32)};
-        auto values_out =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(values_mlx), dt)}, sh, dt, device);
-        auto indices_out = fresh(std::move(idx_storage), sh, Dtype::I32, device);
-        values_out =
-            attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);
-        return {std::move(values_out), std::move(indices_out)};
-    }
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    CpuStorage out_cpu, idx_cpu;
-    if (dt == Dtype::F32)
-        std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<float>(ca, a->shape(), out_shape, ax, dt, true);
-    else if (dt == Dtype::F64)
-        std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<double>(ca, a->shape(), out_shape, ax, dt, true);
-    else if (dt == Dtype::I32)
-        std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<std::int32_t>(ca, a->shape(), out_shape, ax, dt, true);
-    else if (dt == Dtype::I64)
-        std::tie(out_cpu, idx_cpu) =
-            sort_select_cpu<std::int64_t>(ca, a->shape(), out_shape, ax, dt, true);
-    else
-        ErrorBuilder("topk").not_implemented("dtype not supported");
-    auto indices_out = fresh(Storage{idx_cpu}, out_shape, Dtype::I32, device);
-    auto values_out = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
+    auto [values, indices] = backend::Dispatcher::for_device(device)
+                                 .sort_select(a->storage(), a->shape(), out_shape, ax, dt,
+                                              /*descending=*/true);
+    auto indices_out = fresh(std::move(indices), out_shape, Dtype::I32, device);
+    auto values_out = fresh(std::move(values), out_shape, dt, device);
     values_out = attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);
     return {std::move(values_out), std::move(indices_out)};
 }
