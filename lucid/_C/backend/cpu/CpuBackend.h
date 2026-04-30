@@ -1564,6 +1564,51 @@ public:
         return out;
     }
 
+    Storage roll(const Storage& a,
+                 const Shape& shape,
+                 Dtype dt,
+                 const std::vector<std::int64_t>& shifts,
+                 const std::vector<int>& axes) override {
+        const auto& as = std::get<CpuStorage>(a);
+        const std::size_t ndim = shape.size();
+        std::vector<std::int64_t> shift_per_dim(ndim, 0);
+        for (std::size_t i = 0; i < axes.size(); ++i) {
+            int ax = axes[i];
+            if (ax < 0)
+                ax += static_cast<int>(ndim);
+            shift_per_dim[static_cast<std::size_t>(ax)] += shifts[i];
+        }
+        std::size_t nb = shape_numel(shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::size_t elem = dtype_size(dt);
+        Stride stride(ndim);
+        if (ndim > 0) {
+            stride.back() = 1;
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d)
+                stride[static_cast<std::size_t>(d)] =
+                    stride[static_cast<std::size_t>(d) + 1] *
+                    shape[static_cast<std::size_t>(d) + 1];
+        }
+        const std::size_t total = shape_numel(shape);
+        std::vector<std::int64_t> coord(ndim, 0);
+        for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
+            std::size_t in_flat = 0;
+            for (std::size_t d = 0; d < ndim; ++d) {
+                std::int64_t c = coord[d] - shift_per_dim[d];
+                std::int64_t L = shape[d];
+                c = ((c % L) + L) % L;
+                in_flat += static_cast<std::size_t>(c) * static_cast<std::size_t>(stride[d]);
+            }
+            std::memcpy(ptr.get() + out_flat * elem, as.ptr.get() + in_flat * elem, elem);
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 1; d >= 0; --d) {
+                if (++coord[static_cast<std::size_t>(d)] < shape[static_cast<std::size_t>(d)])
+                    break;
+                coord[static_cast<std::size_t>(d)] = 0;
+            }
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

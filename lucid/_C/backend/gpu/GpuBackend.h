@@ -557,6 +557,17 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage roll(const Storage& a,
+                 const Shape& /*shape*/,
+                 Dtype dt,
+                 const std::vector<std::int64_t>& shifts,
+                 const std::vector<int>& axes) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        ::mlx::core::Shape mshifts(shifts.begin(), shifts.end());
+        auto result = ::mlx::core::roll(*ga.arr, mshifts, axes);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     // ---- Linear algebra -----------------------------------------------
 
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {

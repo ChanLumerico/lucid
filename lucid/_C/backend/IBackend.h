@@ -216,6 +216,11 @@ public:
                                       int axis1,
                                       int axis2,
                                       Dtype dt) = 0;
+    virtual Storage roll(const Storage& a,
+                         const Shape& shape,
+                         Dtype dt,
+                         const std::vector<std::int64_t>& shifts,
+                         const std::vector<int>& axes) = 0;
 
     // ---- Linear algebra -----------------------------------------------
 

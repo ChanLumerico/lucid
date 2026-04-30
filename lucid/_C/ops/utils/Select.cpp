@@ -272,16 +272,8 @@ public:
         inv_shifts.reserve(shifts_.size());
         for (auto s : shifts_)
             inv_shifts.push_back(-s);
-        if (device_ == Device::GPU) {
-            const auto& g = std::get<GpuStorage>(grad_out);
-            ::mlx::core::Shape mshifts(inv_shifts.begin(), inv_shifts.end());
-            auto out = ::mlx::core::roll(*g.arr, mshifts, axes_);
-            return {Storage{gpu::wrap_mlx_array(std::move(out), dtype_)}};
-        }
-        auto t =
-            std::make_shared<TensorImpl>(std::move(grad_out), out_shape_, dtype_, device_, false);
-        auto out = roll_op(t, std::move(inv_shifts), axes_);
-        return {out->storage()};
+        return {backend::Dispatcher::for_device(device_).roll(
+            grad_out, out_shape_, dtype_, inv_shifts, axes_)};
     }
 };
 
@@ -464,56 +456,12 @@ TensorImplPtr roll_op(const TensorImplPtr& a,
     OpScopeFull scope{"roll", device, dt, a->shape()};
     if (shifts.size() != axes.size())
         ErrorBuilder("roll").fail("shifts and axes must have equal length");
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        ::mlx::core::Shape mshifts(shifts.begin(), shifts.end());
-        auto out = ::mlx::core::roll(*ga.arr, mshifts, axes);
-        auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, a->shape(), dt, device);
-        auto bwd = std::make_shared<RollBackward>();
-        bwd->input_shapes_ = {a->shape()};
-        bwd->out_shape_ = result->shape();
-        bwd->dtype_ = dt;
-        bwd->device_ = device;
-        bwd->input_tensors_ = {a};
-        bwd->shifts_ = shifts;
-        bwd->axes_ = axes;
-        return attach_unary_grad(a, std::move(result), std::move(bwd));
-    }
     const std::size_t ndim = a->shape().size();
-    std::vector<std::int64_t> shift_per_dim(ndim, 0);
-    for (std::size_t i = 0; i < axes.size(); ++i) {
-        const int ax = wrap_axis(axes[i], static_cast<int>(ndim));
-        shift_per_dim[ax] += shifts[i];
-    }
-    Shape out_shape = a->shape();
-    auto out_cpu = allocate_cpu(out_shape, dt);
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const std::size_t elem = dtype_size(dt);
-    Stride stride(ndim);
-    if (ndim > 0) {
-        stride.back() = 1;
-        for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d)
-            stride[d] = stride[d + 1] * out_shape[d + 1];
-    }
-    const std::size_t total = numel(out_shape);
-    std::vector<std::int64_t> coord(ndim, 0);
-    for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-        std::size_t in_flat = 0;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            std::int64_t c = coord[d] - shift_per_dim[d];
-            std::int64_t L = out_shape[d];
-            c = ((c % L) + L) % L;
-            in_flat += static_cast<std::size_t>(c) * static_cast<std::size_t>(stride[d]);
-        }
-        std::memcpy(out_cpu.ptr.get() + out_flat * elem, ca.ptr.get() + in_flat * elem, elem);
-        for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 1; d >= 0; --d) {
-            if (++coord[d] < out_shape[d])
-                break;
-            coord[d] = 0;
-        }
-    }
-    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
+    for (std::size_t i = 0; i < axes.size(); ++i)
+        axes[i] = wrap_axis(axes[i], static_cast<int>(ndim));
+    auto out_storage =
+        backend::Dispatcher::for_device(device).roll(a->storage(), a->shape(), dt, shifts, axes);
+    auto result = fresh(std::move(out_storage), a->shape(), dt, device);
     auto bwd = std::make_shared<RollBackward>();
     bwd->input_shapes_ = {a->shape()};
     bwd->out_shape_ = result->shape();
