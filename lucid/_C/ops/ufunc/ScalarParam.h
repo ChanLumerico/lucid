@@ -29,7 +29,6 @@ public:
     double exp_ = 0.0;
     static const OpSchema schema_v1;
     static TensorImplPtr forward(const TensorImplPtr& a, double exp);
-    static CpuStorage cpu_kernel(const CpuStorage& a, const Shape& out_shape, Dtype dt, double exp);
     Storage grad_formula(const Storage& g);
 };
 
@@ -42,10 +41,6 @@ public:
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
     static TensorImplPtr forward(double base, const TensorImplPtr& a);
-    static CpuStorage cpu_kernel(const CpuStorage& a,
-                                 const Shape& out_shape,
-                                 Dtype dt,
-                                 double base);
     Storage grad_formula(const Storage& g);
 };
 
@@ -56,8 +51,6 @@ public:
     double max_ = 0.0;
     static const OpSchema schema_v1;
     static TensorImplPtr forward(const TensorImplPtr& a, double min_v, double max_v);
-    static CpuStorage cpu_kernel(
-        const CpuStorage& a, const Shape& out_shape, Dtype dt, double min_v, double max_v);
     Storage grad_formula(const Storage& g);
 };
 

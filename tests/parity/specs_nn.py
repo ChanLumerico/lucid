@@ -581,7 +581,7 @@ SPECS: list[OpSpec] = [
         notes="C.2 — rotate forward shape smoke; pixel values differ from torch (different convention).",
     ),
 
-    # ---- C.3: pow_scalar / rpow_scalar (CPU fwd+bwd only; GPU cpu_kernel fallback) ----
+    # ---- C.3: pow_scalar / rpow_scalar ----
     OpSpec(
         name="pow_scalar_cube",
         engine_fn=lambda ts: E.pow_scalar(ts[0], 3.0),
@@ -589,8 +589,7 @@ SPECS: list[OpSpec] = [
         input_gen=lambda rng: [
             np.abs(rng.standard_normal((4, 5)).astype("float32")) + 0.1
         ],
-        skip_gpu=True,
-        notes="C.3 — pow_scalar fwd+bwd (CPU only; GPU path not yet fully wired).",
+        notes="C.3 — pow_scalar fwd+bwd on CPU/GPU.",
     ),
     OpSpec(
         name="rpow_scalar_base2",
@@ -599,8 +598,7 @@ SPECS: list[OpSpec] = [
         input_gen=lambda rng: [
             rng.uniform(0.1, 2.0, size=(4, 5)).astype("float32")
         ],
-        skip_gpu=True,
-        notes="C.3 — rpow_scalar fwd+bwd (CPU only).",
+        notes="C.3 — rpow_scalar fwd+bwd on CPU/GPU.",
     ),
 
     # ---- C.3: affine_grid ----

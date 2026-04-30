@@ -1011,6 +1011,98 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage pow_scalar(const Storage& a, const Shape& shape, Dtype dt, double exp) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const std::size_t numel = shape_numel(shape);
+        std::size_t nb = numel * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        switch (dt) {
+            case Dtype::F32: {
+                std::vector<float> exp_buf(numel, static_cast<float>(exp));
+                cpu::vpow_f32(reinterpret_cast<const float*>(cs.ptr.get()), exp_buf.data(),
+                              reinterpret_cast<float*>(ptr.get()), numel);
+                break;
+            }
+            case Dtype::F64: {
+                std::vector<double> exp_buf(numel, exp);
+                cpu::vpow_f64(reinterpret_cast<const double*>(cs.ptr.get()), exp_buf.data(),
+                              reinterpret_cast<double*>(ptr.get()), numel);
+                break;
+            }
+            default:
+                ErrorBuilder("cpu_backend::pow_scalar").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage rpow_scalar(const Storage& a, const Shape& shape, Dtype dt, double base) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const std::size_t numel = shape_numel(shape);
+        std::size_t nb = numel * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        switch (dt) {
+            case Dtype::F32: {
+                std::vector<float> base_buf(numel, static_cast<float>(base));
+                cpu::vpow_f32(base_buf.data(), reinterpret_cast<const float*>(cs.ptr.get()),
+                              reinterpret_cast<float*>(ptr.get()), numel);
+                break;
+            }
+            case Dtype::F64: {
+                std::vector<double> base_buf(numel, base);
+                cpu::vpow_f64(base_buf.data(), reinterpret_cast<const double*>(cs.ptr.get()),
+                              reinterpret_cast<double*>(ptr.get()), numel);
+                break;
+            }
+            default:
+                ErrorBuilder("cpu_backend::rpow_scalar").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage clip(const Storage& a,
+                 const Shape& shape,
+                 Dtype dt,
+                 double min_v,
+                 double max_v) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const std::size_t numel = shape_numel(shape);
+        std::size_t nb = numel * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        switch (dt) {
+            case Dtype::F32: {
+                const auto* src = reinterpret_cast<const float*>(cs.ptr.get());
+                auto* dst = reinterpret_cast<float*>(ptr.get());
+                const float lo = static_cast<float>(min_v);
+                const float hi = static_cast<float>(max_v);
+                for (std::size_t i = 0; i < numel; ++i) {
+                    float v = src[i];
+                    if (v < lo)
+                        v = lo;
+                    else if (v > hi)
+                        v = hi;
+                    dst[i] = v;
+                }
+                break;
+            }
+            case Dtype::F64: {
+                const auto* src = reinterpret_cast<const double*>(cs.ptr.get());
+                auto* dst = reinterpret_cast<double*>(ptr.get());
+                for (std::size_t i = 0; i < numel; ++i) {
+                    double v = src[i];
+                    if (v < min_v)
+                        v = min_v;
+                    else if (v > max_v)
+                        v = max_v;
+                    dst[i] = v;
+                }
+                break;
+            }
+            default:
+                ErrorBuilder("cpu_backend::clip").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override {
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);

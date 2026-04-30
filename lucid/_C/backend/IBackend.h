@@ -187,6 +187,10 @@ public:
                         const std::vector<std::pair<std::int64_t, std::int64_t>>& pad_width,
                         double constant) = 0;
 
+    virtual Storage pow_scalar(const Storage& a, const Shape& shape, Dtype dt, double exp) = 0;
+    virtual Storage rpow_scalar(const Storage& a, const Shape& shape, Dtype dt, double base) = 0;
+    virtual Storage clip(const Storage& a, const Shape& shape, Dtype dt, double min_v, double max_v) = 0;
+
     virtual Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) = 0;
 };
 

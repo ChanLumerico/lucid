@@ -397,6 +397,30 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage pow_scalar(const Storage& a, const Shape& /*shape*/, Dtype dt, double exp) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::power(*gs.arr, gpu::mlx_scalar(exp, gpu::to_mlx_dtype(dt)));
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage rpow_scalar(const Storage& a, const Shape& /*shape*/, Dtype dt, double base) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::power(gpu::mlx_scalar(base, gpu::to_mlx_dtype(dt)), *gs.arr);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage clip(const Storage& a,
+                 const Shape& /*shape*/,
+                 Dtype dt,
+                 double min_v,
+                 double max_v) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto lo = gpu::mlx_scalar(min_v, gpu::to_mlx_dtype(dt));
+        auto hi = gpu::mlx_scalar(max_v, gpu::to_mlx_dtype(dt));
+        auto result = ::mlx::core::clip(*gs.arr, lo, hi);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     Storage cast(const Storage& a,
                  const Shape& /*shape*/,
                  Dtype /*src_dt*/,
