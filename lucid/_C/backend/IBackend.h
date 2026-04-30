@@ -92,6 +92,11 @@ public:
     virtual Storage mul(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage div(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage pow(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
+    virtual Storage bitwise_binary(const Storage& a,
+                                   const Storage& b,
+                                   const Shape& shape,
+                                   Dtype dt,
+                                   int op) = 0;
     virtual Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage minimum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
 

@@ -77,6 +77,22 @@ public:
                           [](auto& x, auto& y) { return ::mlx::core::power(x, y); });
     }
 
+    Storage bitwise_binary(const Storage& a,
+                           const Storage& b,
+                           const Shape& shape,
+                           Dtype dt,
+                           int op) override {
+        return mlx_binary(a, b, shape, dt, [op](auto& x, auto& y) {
+            if (op == 0)
+                return ::mlx::core::bitwise_and(x, y);
+            if (op == 1)
+                return ::mlx::core::bitwise_or(x, y);
+            if (op == 2)
+                return ::mlx::core::bitwise_xor(x, y);
+            ErrorBuilder("gpu_backend::bitwise_binary").fail("unknown op");
+        });
+    }
+
     Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
         return mlx_binary(a, b, shape, dt,
                           [](auto& x, auto& y) { return ::mlx::core::maximum(x, y); });

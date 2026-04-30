@@ -157,6 +157,62 @@ public:
             });
     }
 
+    Storage bitwise_binary(const Storage& a,
+                           const Storage& b,
+                           const Shape& shape,
+                           Dtype dt,
+                           int op) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const auto& cb = std::get<CpuStorage>(b);
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+
+        auto run = [&](auto* dst, const auto* lhs, const auto* rhs) {
+            using T = std::remove_pointer_t<decltype(dst)>;
+            for (std::size_t i = 0; i < n; ++i) {
+                const auto x = static_cast<std::int64_t>(lhs[i]);
+                const auto y = static_cast<std::int64_t>(rhs[i]);
+                std::int64_t out;
+                if (op == 0)
+                    out = x & y;
+                else if (op == 1)
+                    out = x | y;
+                else if (op == 2)
+                    out = x ^ y;
+                else
+                    ErrorBuilder("cpu_backend::bitwise_binary").fail("unknown op");
+                dst[i] = static_cast<T>(out);
+            }
+        };
+
+        if (dt == Dtype::I32) {
+            run(reinterpret_cast<std::int32_t*>(ptr.get()),
+                reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::int32_t*>(cb.ptr.get()));
+        } else if (dt == Dtype::I64) {
+            run(reinterpret_cast<std::int64_t*>(ptr.get()),
+                reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cb.ptr.get()));
+        } else if (dt == Dtype::I16) {
+            run(reinterpret_cast<std::int16_t*>(ptr.get()),
+                reinterpret_cast<const std::int16_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::int16_t*>(cb.ptr.get()));
+        } else if (dt == Dtype::I8) {
+            run(reinterpret_cast<std::int8_t*>(ptr.get()),
+                reinterpret_cast<const std::int8_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::int8_t*>(cb.ptr.get()));
+        } else if (dt == Dtype::Bool) {
+            run(reinterpret_cast<std::uint8_t*>(ptr.get()),
+                reinterpret_cast<const std::uint8_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::uint8_t*>(cb.ptr.get()));
+        } else {
+            ErrorBuilder("cpu_backend::bitwise_binary")
+                .not_implemented("dtype must be integer or bool");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
         return binary_op(
             a, b, shape, dt,
