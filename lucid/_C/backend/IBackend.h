@@ -336,6 +336,10 @@ public:
                                  const Shape& a_shape,
                                  const Shape& b_shape,
                                  Dtype dt) = 0;
+    virtual Storage linalg_matrix_power(const Storage& a,
+                                        const Shape& shape,
+                                        int power,
+                                        Dtype dt) = 0;
 
     // ---- Broadcast / cast --------------------------------------------
 

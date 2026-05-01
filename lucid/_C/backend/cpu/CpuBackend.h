@@ -2702,6 +2702,59 @@ public:
         return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
     }
 
+    Storage linalg_matrix_power(const Storage& a,
+                                const Shape& shape,
+                                int power,
+                                Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(shape, /*mat_dims=*/2);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        const int reps = std::abs(power);
+
+        auto run = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const T* in_p = reinterpret_cast<const T*>(cs.ptr.get());
+            T* out_p = reinterpret_cast<T*>(ptr.get());
+            std::vector<T> base(per_mat), tmp(per_mat);
+            for (std::int64_t b = 0; b < batch; ++b) {
+                T* result = out_p + b * per_mat;
+                if (power == 0) {
+                    set_matrix_identity(result, n);
+                    continue;
+                }
+                std::memcpy(base.data(), in_p + b * per_mat, per_mat * sizeof(T));
+                if (power < 0) {
+                    int info = 0;
+                    if constexpr (std::is_same_v<T, float>)
+                        cpu::lapack_inv_f32(base.data(), n, &info);
+                    else
+                        cpu::lapack_inv_f64(base.data(), n, &info);
+                    check_lapack_info(info, "matrix_power");
+                }
+                std::memcpy(result, base.data(), per_mat * sizeof(T));
+                for (int i = 1; i < reps; ++i) {
+                    if constexpr (std::is_same_v<T, float>)
+                        cpu::sgemm(false, false, n, n, n, 1.0f, result, n, base.data(), n, 0.0f,
+                                   tmp.data(), n);
+                    else
+                        cpu::dgemm(false, false, n, n, n, 1.0, result, n, base.data(), n, 0.0,
+                                   tmp.data(), n);
+                    std::memcpy(result, tmp.data(), per_mat * sizeof(T));
+                }
+            }
+        };
+
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu_backend::linalg_matrix_power").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, cs.nbytes, dt}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
@@ -4153,6 +4206,14 @@ private:
             ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info));
         if (info > 0)
             ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")");
+    }
+
+    template <typename T>
+    static void set_matrix_identity(T* out, int n) {
+        const std::size_t total = static_cast<std::size_t>(n) * n;
+        std::memset(out, 0, total * sizeof(T));
+        for (int i = 0; i < n; ++i)
+            out[i * n + i] = T{1};
     }
 
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {

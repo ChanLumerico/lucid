@@ -1051,6 +1051,27 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
+    Storage linalg_matrix_power(const Storage& a,
+                                const Shape& shape,
+                                int power,
+                                Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        if (power == 0) {
+            auto eye = ::mlx::core::eye(n, n, 0, gpu::to_mlx_dtype(dt));
+            if (shape.size() > 2) {
+                eye = ::mlx::core::broadcast_to(eye, gpu::to_mlx_shape(shape));
+            }
+            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(eye), dt)};
+        }
+        const int reps = std::abs(power);
+        auto base = (power < 0) ? ::mlx::core::linalg::inv(*ga.arr, k_linalg_stream) : *ga.arr;
+        ::mlx::core::array result = base;
+        for (int i = 1; i < reps; ++i)
+            result = ::mlx::core::matmul(result, base);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
