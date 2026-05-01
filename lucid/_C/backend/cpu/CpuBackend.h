@@ -64,6 +64,44 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage contiguous(const Storage& src,
+                       const Shape& shape,
+                       const Stride& stride,
+                       std::size_t storage_offset,
+                       bool already_contiguous,
+                       Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(src);
+        const std::size_t elem = dtype_size(dt);
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nbytes = n * elem;
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        if (nbytes == 0)
+            return Storage{CpuStorage{ptr, nbytes, dt}};
+
+        if (already_contiguous && storage_offset == 0) {
+            std::memcpy(ptr.get(), cs.ptr.get(), nbytes);
+            return Storage{CpuStorage{ptr, nbytes, dt}};
+        }
+
+        const int ndim = static_cast<int>(shape.size());
+        const auto* base = reinterpret_cast<const std::uint8_t*>(cs.ptr.get()) + storage_offset;
+        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        std::vector<std::size_t> coord(static_cast<std::size_t>(ndim), 0);
+        for (std::size_t f = 0; f < n; ++f) {
+            std::ptrdiff_t byte_offset = 0;
+            for (int d = 0; d < ndim; ++d)
+                byte_offset +=
+                    static_cast<std::ptrdiff_t>(coord[d]) * static_cast<std::ptrdiff_t>(stride[d]);
+            std::memcpy(dst + f * elem, base + byte_offset, elem);
+            for (int d = ndim - 1; d >= 0; --d) {
+                if (++coord[d] < static_cast<std::size_t>(shape[d]))
+                    break;
+                coord[d] = 0;
+            }
+        }
+        return Storage{CpuStorage{ptr, nbytes, dt}};
+    }
+
     // ---- Elementwise binary -------------------------------------------
 
     Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {

@@ -1,12 +1,9 @@
 #include "Contiguous.h"
 
-#include <cstring>
-
 #include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
-#include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -28,46 +25,9 @@ TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
 
-    Storage out_storage;
-    if (a->device() == Device::GPU) {
-        out_storage = backend::Dispatcher::for_device(Device::GPU).clone(
-            a->storage(), a->shape(), a->dtype());
-    } else {
-        const auto& src = std::get<CpuStorage>(a->storage());
-        const std::size_t elem = dtype_size(a->dtype());
-        const std::size_t n = shape_numel(a->shape());
-        CpuStorage out;
-        out.dtype = a->dtype();
-        out.nbytes = n * elem;
-        out.ptr = allocate_aligned_bytes(out.nbytes);
-        if (out.nbytes > 0) {
-            if (a->is_contiguous() && a->storage_offset() == 0) {
-                std::memcpy(out.ptr.get(), src.ptr.get(), out.nbytes);
-            } else {
-                // Stride-walking copy: handles permuted/sliced views.
-                const auto& shape = a->shape();
-                const auto& stride = a->stride();
-                const int ndim = static_cast<int>(shape.size());
-                const std::uint8_t* base =
-                    reinterpret_cast<const std::uint8_t*>(src.ptr.get()) + a->storage_offset();
-                std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(out.ptr.get());
-                std::vector<std::size_t> coord(static_cast<std::size_t>(ndim), 0);
-                for (std::size_t f = 0; f < n; ++f) {
-                    std::ptrdiff_t byte_offset = 0;
-                    for (int d = 0; d < ndim; ++d)
-                        byte_offset += static_cast<std::ptrdiff_t>(coord[d]) *
-                                       static_cast<std::ptrdiff_t>(stride[d]);
-                    std::memcpy(dst + f * elem, base + byte_offset, elem);
-                    for (int d = ndim - 1; d >= 0; --d) {
-                        if (++coord[d] < static_cast<std::size_t>(shape[d]))
-                            break;
-                        coord[d] = 0;
-                    }
-                }
-            }
-        }
-        out_storage = Storage{std::move(out)};
-    }
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .contiguous(a->storage(), a->shape(), a->stride(),
+                                          a->storage_offset(), a->is_contiguous(), a->dtype());
 
     auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                                a->device(), false);

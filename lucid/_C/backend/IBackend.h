@@ -90,6 +90,14 @@ public:
     /// Clone a storage buffer (deep copy).
     virtual Storage clone(const Storage& src, const Shape& shape, Dtype dt) = 0;
 
+    /// Materialize a logical tensor view into contiguous storage.
+    virtual Storage contiguous(const Storage& src,
+                               const Shape& shape,
+                               const Stride& stride,
+                               std::size_t storage_offset,
+                               bool already_contiguous,
+                               Dtype dt) = 0;
+
     // ---- Elementwise binary -------------------------------------------
     // All elementwise binary ops expect pre-broadcast (same-shape) inputs.
 

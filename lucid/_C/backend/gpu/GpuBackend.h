@@ -54,6 +54,15 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 
+    Storage contiguous(const Storage& src,
+                       const Shape& shape,
+                       const Stride& /*stride*/,
+                       std::size_t /*storage_offset*/,
+                       bool /*already_contiguous*/,
+                       Dtype dt) override {
+        return clone(src, shape, dt);
+    }
+
     // ---- Elementwise binary -------------------------------------------
 
     Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
