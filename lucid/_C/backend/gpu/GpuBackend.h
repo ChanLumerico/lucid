@@ -1144,6 +1144,22 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(v), dt)}};
     }
 
+    std::vector<Storage> linalg_svd(const Storage& a,
+                                    const Shape& /*shape*/,
+                                    bool compute_uv,
+                                    const Shape& /*u_shape*/,
+                                    const Shape& /*s_shape*/,
+                                    const Shape& /*vt_shape*/,
+                                    Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto pieces = ::mlx::core::linalg::svd(*ga.arr, compute_uv, k_linalg_stream);
+        std::vector<Storage> out;
+        out.reserve(pieces.size());
+        for (auto& p : pieces)
+            out.push_back(Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(p), dt)});
+        return out;
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,

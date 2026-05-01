@@ -2967,6 +2967,83 @@ public:
                 Storage{CpuStorage{vectors_ptr, vectors_nbytes, dt}}};
     }
 
+    std::vector<Storage> linalg_svd(const Storage& a,
+                                    const Shape& shape,
+                                    bool compute_uv,
+                                    const Shape& u_shape,
+                                    const Shape& s_shape,
+                                    const Shape& vt_shape,
+                                    Dtype dt) override {
+        const int m = static_cast<int>(shape[shape.size() - 2]);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const int k = std::min(m, n);
+        const std::int64_t batch = leading_matrix_batch_count(shape, /*mat_dims=*/2);
+        const std::size_t in_per = static_cast<std::size_t>(m) * n;
+        const std::size_t s_per = static_cast<std::size_t>(k);
+        const std::size_t u_per = static_cast<std::size_t>(m) * k;
+        const std::size_t vt_per = static_cast<std::size_t>(k) * n;
+        const std::size_t s_nbytes = shape_numel(s_shape) * dtype_size(dt);
+        auto s_ptr = allocate_aligned_bytes(s_nbytes, Device::CPU);
+        const auto& cs = std::get<CpuStorage>(a);
+
+        if (!compute_uv) {
+            int info = 0;
+            if (dt == Dtype::F32) {
+                std::vector<float> u(u_per), vt(vt_per);
+                const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
+                auto* s_p = reinterpret_cast<float*>(s_ptr.get());
+                for (std::int64_t b = 0; b < batch; ++b) {
+                    cpu::lapack_svd_f32(in_p + b * in_per, m, n, false, u.data(), s_p + b * s_per,
+                                        vt.data(), &info);
+                    check_lapack_info(info, "svd");
+                }
+            } else if (dt == Dtype::F64) {
+                std::vector<double> u(u_per), vt(vt_per);
+                const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
+                auto* s_p = reinterpret_cast<double*>(s_ptr.get());
+                for (std::int64_t b = 0; b < batch; ++b) {
+                    cpu::lapack_svd_f64(in_p + b * in_per, m, n, false, u.data(), s_p + b * s_per,
+                                        vt.data(), &info);
+                    check_lapack_info(info, "svd");
+                }
+            } else {
+                ErrorBuilder("cpu_backend::linalg_svd").not_implemented("dtype not supported");
+            }
+            return {Storage{CpuStorage{s_ptr, s_nbytes, dt}}};
+        }
+
+        const std::size_t u_nbytes = shape_numel(u_shape) * dtype_size(dt);
+        const std::size_t vt_nbytes = shape_numel(vt_shape) * dtype_size(dt);
+        auto u_ptr = allocate_aligned_bytes(u_nbytes, Device::CPU);
+        auto vt_ptr = allocate_aligned_bytes(vt_nbytes, Device::CPU);
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
+            auto* u_p = reinterpret_cast<float*>(u_ptr.get());
+            auto* s_p = reinterpret_cast<float*>(s_ptr.get());
+            auto* vt_p = reinterpret_cast<float*>(vt_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_svd_f32(in_p + b * in_per, m, n, false, u_p + b * u_per,
+                                    s_p + b * s_per, vt_p + b * vt_per, &info);
+                check_lapack_info(info, "svd");
+            }
+        } else if (dt == Dtype::F64) {
+            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* u_p = reinterpret_cast<double*>(u_ptr.get());
+            auto* s_p = reinterpret_cast<double*>(s_ptr.get());
+            auto* vt_p = reinterpret_cast<double*>(vt_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_svd_f64(in_p + b * in_per, m, n, false, u_p + b * u_per,
+                                    s_p + b * s_per, vt_p + b * vt_per, &info);
+                check_lapack_info(info, "svd");
+            }
+        } else {
+            ErrorBuilder("cpu_backend::linalg_svd").not_implemented("dtype not supported");
+        }
+        return {Storage{CpuStorage{u_ptr, u_nbytes, dt}}, Storage{CpuStorage{s_ptr, s_nbytes, dt}},
+                Storage{CpuStorage{vt_ptr, vt_nbytes, dt}}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,

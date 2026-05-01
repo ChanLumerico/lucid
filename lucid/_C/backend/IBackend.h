@@ -365,6 +365,13 @@ public:
                                    const Shape& values_shape,
                                    const Shape& vectors_shape,
                                    Dtype dt) = 0;
+    virtual std::vector<Storage> linalg_svd(const Storage& a,
+                                            const Shape& shape,
+                                            bool compute_uv,
+                                            const Shape& u_shape,
+                                            const Shape& s_shape,
+                                            const Shape& vt_shape,
+                                            Dtype dt) = 0;
 
     // ---- Broadcast / cast --------------------------------------------
 
