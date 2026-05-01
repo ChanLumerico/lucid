@@ -2916,6 +2916,108 @@ public:
                 Storage{CpuStorage{dbeta_ptr, param_nbytes, dt}}};
     }
 
+    std::vector<Storage> group_norm_forward(const Storage& x,
+                                            const Storage& gamma,
+                                            const Storage& beta,
+                                            int batch,
+                                            int channels,
+                                            int spatial,
+                                            int groups,
+                                            const std::vector<int>& /*spatial_dims*/,
+                                            double eps,
+                                            const Shape& /*x_shape*/,
+                                            Dtype dt) override {
+        const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
+        const std::size_t saved_numel = static_cast<std::size_t>(batch) * groups;
+        auto y_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
+        auto mean_ptr = allocate_aligned_bytes(saved_numel * dtype_size(dt), Device::CPU);
+        auto rstd_ptr = allocate_aligned_bytes(saved_numel * dtype_size(dt), Device::CPU);
+        if (total > 0) {
+            const auto& x_cpu = std::get<CpuStorage>(x);
+            const auto& g_cpu = std::get<CpuStorage>(gamma);
+            const auto& b_cpu = std::get<CpuStorage>(beta);
+            if (dt == Dtype::F32) {
+                group_norm_forward_typed<float>(reinterpret_cast<const float*>(x_cpu.ptr.get()),
+                                                reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                                                reinterpret_cast<const float*>(b_cpu.ptr.get()),
+                                                reinterpret_cast<float*>(y_ptr.get()),
+                                                reinterpret_cast<float*>(mean_ptr.get()),
+                                                reinterpret_cast<float*>(rstd_ptr.get()), batch,
+                                                channels, spatial, groups, eps);
+            } else if (dt == Dtype::F64) {
+                group_norm_forward_typed<double>(reinterpret_cast<const double*>(x_cpu.ptr.get()),
+                                                 reinterpret_cast<const double*>(g_cpu.ptr.get()),
+                                                 reinterpret_cast<const double*>(b_cpu.ptr.get()),
+                                                 reinterpret_cast<double*>(y_ptr.get()),
+                                                 reinterpret_cast<double*>(mean_ptr.get()),
+                                                 reinterpret_cast<double*>(rstd_ptr.get()), batch,
+                                                 channels, spatial, groups, eps);
+            } else {
+                ErrorBuilder("cpu_backend::group_norm_forward")
+                    .not_implemented("dtype not supported");
+            }
+        }
+        return {Storage{CpuStorage{y_ptr, total * dtype_size(dt), dt}},
+                Storage{CpuStorage{mean_ptr, saved_numel * dtype_size(dt), dt}},
+                Storage{CpuStorage{rstd_ptr, saved_numel * dtype_size(dt), dt}}};
+    }
+
+    std::vector<Storage> group_norm_backward(const Storage& x,
+                                             const Storage& gamma,
+                                             const Storage& saved_mean,
+                                             const Storage& saved_rstd,
+                                             const Storage& grad,
+                                             int batch,
+                                             int channels,
+                                             int spatial,
+                                             int groups,
+                                             const std::vector<int>& /*spatial_dims*/,
+                                             const Shape& /*x_shape*/,
+                                             Dtype dt) override {
+        const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
+        const std::size_t param_nbytes = static_cast<std::size_t>(channels) * dtype_size(dt);
+        auto dx_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
+        auto dgamma_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
+        auto dbeta_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
+        if (dx_ptr && total > 0) {
+            const auto& x_cpu = std::get<CpuStorage>(x);
+            const auto& gamma_cpu = std::get<CpuStorage>(gamma);
+            const auto& mean_cpu = std::get<CpuStorage>(saved_mean);
+            const auto& rstd_cpu = std::get<CpuStorage>(saved_rstd);
+            const auto& g_cpu = std::get<CpuStorage>(grad);
+            if (dt == Dtype::F32) {
+                group_norm_backward_typed<float>(
+                    reinterpret_cast<const float*>(x_cpu.ptr.get()),
+                    reinterpret_cast<const float*>(gamma_cpu.ptr.get()),
+                    reinterpret_cast<const float*>(mean_cpu.ptr.get()),
+                    reinterpret_cast<const float*>(rstd_cpu.ptr.get()),
+                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                    reinterpret_cast<float*>(dx_ptr.get()),
+                    reinterpret_cast<float*>(dgamma_ptr.get()),
+                    reinterpret_cast<float*>(dbeta_ptr.get()), batch, channels, spatial, groups);
+            } else if (dt == Dtype::F64) {
+                group_norm_backward_typed<double>(
+                    reinterpret_cast<const double*>(x_cpu.ptr.get()),
+                    reinterpret_cast<const double*>(gamma_cpu.ptr.get()),
+                    reinterpret_cast<const double*>(mean_cpu.ptr.get()),
+                    reinterpret_cast<const double*>(rstd_cpu.ptr.get()),
+                    reinterpret_cast<const double*>(g_cpu.ptr.get()),
+                    reinterpret_cast<double*>(dx_ptr.get()),
+                    reinterpret_cast<double*>(dgamma_ptr.get()),
+                    reinterpret_cast<double*>(dbeta_ptr.get()), batch, channels, spatial, groups);
+            } else {
+                ErrorBuilder("cpu_backend::group_norm_backward")
+                    .not_implemented("dtype not supported");
+            }
+        } else if (param_nbytes) {
+            std::memset(dgamma_ptr.get(), 0, param_nbytes);
+            std::memset(dbeta_ptr.get(), 0, param_nbytes);
+        }
+        return {Storage{CpuStorage{dx_ptr, total * dtype_size(dt), dt}},
+                Storage{CpuStorage{dgamma_ptr, param_nbytes, dt}},
+                Storage{CpuStorage{dbeta_ptr, param_nbytes, dt}}};
+    }
+
     Storage linalg_norm(const Storage& a,
                         const Shape& shape,
                         double ord,
@@ -4971,6 +5073,114 @@ private:
             }
             dgamma[c] = sum_g_xn;
             dbeta[c] = sum_g;
+        }
+    }
+
+    template <typename T>
+    static void group_norm_forward_typed(const T* x,
+                                         const T* gamma,
+                                         const T* beta,
+                                         T* y,
+                                         T* mean_bg,
+                                         T* rstd_bg,
+                                         int batch,
+                                         int channels,
+                                         int spatial,
+                                         int groups,
+                                         double eps) {
+        const int Cg = channels / groups;
+        const std::size_t per_group = static_cast<std::size_t>(Cg) * spatial;
+        const T inv_pg = T{1} / static_cast<T>(per_group);
+        for (int b = 0; b < batch; ++b) {
+            for (int g = 0; g < groups; ++g) {
+                T mean = T{};
+                for (int cc = 0; cc < Cg; ++cc) {
+                    const int c = g * Cg + cc;
+                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    for (int i = 0; i < spatial; ++i)
+                        mean += xb[i];
+                }
+                mean *= inv_pg;
+                T var = T{};
+                for (int cc = 0; cc < Cg; ++cc) {
+                    const int c = g * Cg + cc;
+                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    for (int i = 0; i < spatial; ++i) {
+                        const T d = xb[i] - mean;
+                        var += d * d;
+                    }
+                }
+                var *= inv_pg;
+                const T rstd = T{1} / std::sqrt(var + static_cast<T>(eps));
+                for (int cc = 0; cc < Cg; ++cc) {
+                    const int c = g * Cg + cc;
+                    const T gc = gamma[c];
+                    const T bc = beta[c];
+                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    T* yb = y + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    for (int i = 0; i < spatial; ++i)
+                        yb[i] = gc * (xb[i] - mean) * rstd + bc;
+                }
+                mean_bg[b * groups + g] = mean;
+                rstd_bg[b * groups + g] = rstd;
+            }
+        }
+    }
+
+    template <typename T>
+    static void group_norm_backward_typed(const T* x,
+                                          const T* gamma,
+                                          const T* mean_bg,
+                                          const T* rstd_bg,
+                                          const T* g,
+                                          T* dx,
+                                          T* dgamma,
+                                          T* dbeta,
+                                          int batch,
+                                          int channels,
+                                          int spatial,
+                                          int groups) {
+        const int Cg = channels / groups;
+        const std::size_t per_group = static_cast<std::size_t>(Cg) * spatial;
+        const T inv_pg = T{1} / static_cast<T>(per_group);
+        for (int co = 0; co < channels; ++co) {
+            dgamma[co] = T{};
+            dbeta[co] = T{};
+        }
+        for (int b = 0; b < batch; ++b) {
+            for (int gi = 0; gi < groups; ++gi) {
+                const T m = mean_bg[b * groups + gi];
+                const T r = rstd_bg[b * groups + gi];
+                T sum_dxn = T{};
+                T sum_dxn_xn = T{};
+                for (int cc = 0; cc < Cg; ++cc) {
+                    const int c = gi * Cg + cc;
+                    const T gc = gamma[c];
+                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    for (int i = 0; i < spatial; ++i) {
+                        const T xn_i = (xb[i] - m) * r;
+                        const T dxn_i = gc * gb[i];
+                        sum_dxn += dxn_i;
+                        sum_dxn_xn += dxn_i * xn_i;
+                        dgamma[c] += gb[i] * xn_i;
+                        dbeta[c] += gb[i];
+                    }
+                }
+                for (int cc = 0; cc < Cg; ++cc) {
+                    const int c = gi * Cg + cc;
+                    const T gc = gamma[c];
+                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    T* dxb = dx + (static_cast<std::size_t>(b) * channels + c) * spatial;
+                    for (int i = 0; i < spatial; ++i) {
+                        const T xn_i = (xb[i] - m) * r;
+                        const T dxn_i = gc * gb[i];
+                        dxb[i] = inv_pg * r *
+                                 (static_cast<T>(per_group) * dxn_i - sum_dxn - xn_i * sum_dxn_xn);
+                    }
+                }
+            }
         }
     }
 

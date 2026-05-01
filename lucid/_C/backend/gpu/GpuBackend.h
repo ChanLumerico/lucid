@@ -1222,6 +1222,128 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dbeta), dt)}};
     }
 
+    std::vector<Storage> group_norm_forward(const Storage& x,
+                                            const Storage& gamma,
+                                            const Storage& beta,
+                                            int batch,
+                                            int channels,
+                                            int /*spatial*/,
+                                            int groups,
+                                            const std::vector<int>& spatial_dims,
+                                            double eps,
+                                            const Shape& x_shape,
+                                            Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gg = std::get<GpuStorage>(gamma);
+        const auto& gb = std::get<GpuStorage>(beta);
+        const int ndim = static_cast<int>(spatial_dims.size());
+        const int channels_per_group = channels / groups;
+        using SE = ::mlx::core::ShapeElem;
+        ::mlx::core::Shape grouped;
+        grouped.reserve(static_cast<std::size_t>(ndim) + 3);
+        grouped.push_back(static_cast<SE>(batch));
+        grouped.push_back(static_cast<SE>(groups));
+        grouped.push_back(static_cast<SE>(channels_per_group));
+        for (int s : spatial_dims)
+            grouped.push_back(static_cast<SE>(s));
+        auto x_g = ::mlx::core::reshape(*gx.arr, grouped);
+
+        std::vector<int> reduce_axes;
+        reduce_axes.reserve(static_cast<std::size_t>(ndim) + 1);
+        reduce_axes.push_back(2);
+        for (int i = 0; i < ndim; ++i)
+            reduce_axes.push_back(3 + i);
+        auto mean = ::mlx::core::mean(x_g, reduce_axes, /*keepdims=*/true);
+        auto centered = ::mlx::core::subtract(x_g, mean);
+        auto var = ::mlx::core::mean(::mlx::core::square(centered), reduce_axes,
+                                     /*keepdims=*/true);
+        auto rstd =
+            ::mlx::core::rsqrt(::mlx::core::add(var, gpu::mlx_scalar(eps, gpu::to_mlx_dtype(dt))));
+        auto xnorm_g = ::mlx::core::multiply(centered, rstd);
+        auto xnorm = ::mlx::core::reshape(xnorm_g, gpu::to_mlx_shape(x_shape));
+        ::mlx::core::Shape br_c(static_cast<std::size_t>(ndim) + 2, 1);
+        br_c[1] = static_cast<SE>(channels);
+        auto g_view = ::mlx::core::reshape(*gg.arr, br_c);
+        auto b_view = ::mlx::core::reshape(*gb.arr, br_c);
+        auto y = ::mlx::core::add(::mlx::core::multiply(xnorm, g_view), b_view);
+        ::mlx::core::Shape mr{static_cast<SE>(batch), static_cast<SE>(groups)};
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(y), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(::mlx::core::reshape(mean, mr)),
+                                            dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(::mlx::core::reshape(rstd, mr)),
+                                            dt)}};
+    }
+
+    std::vector<Storage> group_norm_backward(const Storage& x,
+                                             const Storage& gamma,
+                                             const Storage& saved_mean,
+                                             const Storage& saved_rstd,
+                                             const Storage& grad,
+                                             int batch,
+                                             int channels,
+                                             int /*spatial*/,
+                                             int groups,
+                                             const std::vector<int>& spatial_dims,
+                                             const Shape& x_shape,
+                                             Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gg = std::get<GpuStorage>(gamma);
+        const auto& gm = std::get<GpuStorage>(saved_mean);
+        const auto& gr = std::get<GpuStorage>(saved_rstd);
+        const auto& ggrad = std::get<GpuStorage>(grad);
+        const int ndim = static_cast<int>(spatial_dims.size());
+        const int channels_per_group = channels / groups;
+        using SE = ::mlx::core::ShapeElem;
+        ::mlx::core::Shape grouped;
+        grouped.reserve(static_cast<std::size_t>(ndim) + 3);
+        grouped.push_back(static_cast<SE>(batch));
+        grouped.push_back(static_cast<SE>(groups));
+        grouped.push_back(static_cast<SE>(channels_per_group));
+        for (int s : spatial_dims)
+            grouped.push_back(static_cast<SE>(s));
+        ::mlx::core::Shape mr_shape;
+        mr_shape.reserve(static_cast<std::size_t>(ndim) + 3);
+        mr_shape.push_back(static_cast<SE>(batch));
+        mr_shape.push_back(static_cast<SE>(groups));
+        for (int i = 0; i < ndim + 1; ++i)
+            mr_shape.push_back(1);
+        ::mlx::core::Shape br_c(static_cast<std::size_t>(ndim) + 2, 1);
+        br_c[1] = static_cast<SE>(channels);
+
+        auto x_g = ::mlx::core::reshape(*gx.arr, grouped);
+        auto mean_g = ::mlx::core::reshape(*gm.arr, mr_shape);
+        auto rstd_g = ::mlx::core::reshape(*gr.arr, mr_shape);
+        auto centered = ::mlx::core::subtract(x_g, mean_g);
+        auto xnorm_g = ::mlx::core::multiply(centered, rstd_g);
+        auto xnorm = ::mlx::core::reshape(xnorm_g, gpu::to_mlx_shape(x_shape));
+
+        std::vector<int> ch_axes;
+        ch_axes.reserve(static_cast<std::size_t>(ndim) + 1);
+        ch_axes.push_back(0);
+        for (int i = 0; i < ndim; ++i)
+            ch_axes.push_back(2 + i);
+        auto dgamma = ::mlx::core::sum(::mlx::core::multiply(*ggrad.arr, xnorm), ch_axes, false);
+        auto dbeta = ::mlx::core::sum(*ggrad.arr, ch_axes, false);
+
+        std::vector<int> red_axes;
+        red_axes.reserve(static_cast<std::size_t>(ndim) + 1);
+        red_axes.push_back(2);
+        for (int i = 0; i < ndim; ++i)
+            red_axes.push_back(3 + i);
+        auto gamma_view = ::mlx::core::reshape(*gg.arr, br_c);
+        auto gx_scaled4 = ::mlx::core::multiply(gamma_view, *ggrad.arr);
+        auto gx_scaled_g = ::mlx::core::reshape(gx_scaled4, grouped);
+        auto mean1 = ::mlx::core::mean(gx_scaled_g, red_axes, true);
+        auto mean2 = ::mlx::core::mean(::mlx::core::multiply(gx_scaled_g, xnorm_g), red_axes, true);
+        auto inner = ::mlx::core::subtract(::mlx::core::subtract(gx_scaled_g, mean1),
+                                           ::mlx::core::multiply(xnorm_g, mean2));
+        auto dx_g = ::mlx::core::multiply(rstd_g, inner);
+        auto dx = ::mlx::core::reshape(dx_g, gpu::to_mlx_shape(x_shape));
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dgamma), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dbeta), dt)}};
+    }
+
     Storage linalg_norm(const Storage& a,
                         const Shape& /*shape*/,
                         double ord,
