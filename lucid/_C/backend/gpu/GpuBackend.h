@@ -10,8 +10,10 @@
 // Layer: backend/gpu/. Depends on backend/ and core/ only.
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
 #include <mlx/array.h>
 #include <mlx/linalg.h>
@@ -1078,6 +1080,39 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
+    Storage linalg_det(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        auto factors = ::mlx::core::linalg::lu(*ga.arr, k_linalg_stream);
+        if (factors.size() < 3)
+            ErrorBuilder("gpu_backend::linalg_det").fail("lu returned fewer than 3 factors");
+
+        const auto& p = factors[0];
+        const auto& u = factors[2];
+        auto diag = ::mlx::core::diagonal(u, 0, -2, -1);
+        auto det_u = ::mlx::core::prod(diag, /*keepdims=*/false);
+
+        Shape out_shape(shape.begin(), shape.end() - 2);
+        std::int64_t batch = 1;
+        for (std::size_t i = 0; i + 2 < shape.size(); ++i)
+            batch *= shape[i];
+
+        auto p_eval = p;
+        p_eval.eval();
+        const std::size_t matrix_n = static_cast<std::size_t>(n);
+        std::vector<float> signs(static_cast<std::size_t>(batch), 1.0f);
+        const auto* p_data = p_eval.data<std::uint32_t>();
+        for (std::int64_t b = 0; b < batch; ++b)
+            signs[static_cast<std::size_t>(b)] = perm_index_sign(p_data + b * matrix_n, matrix_n);
+
+        ::mlx::core::array sign_arr(signs.data(), gpu::to_mlx_shape(out_shape),
+                                    ::mlx::core::float32);
+        if (dt != Dtype::F32)
+            sign_arr = ::mlx::core::astype(sign_arr, gpu::to_mlx_dtype(dt));
+        auto det_a = ::mlx::core::multiply(det_u, sign_arr);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(det_a), dt)};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
@@ -1661,6 +1696,22 @@ private:
         }
         auto result = fn(*gs.arr, axes, opts.keepdims);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    static float perm_index_sign(const std::uint32_t* p, std::size_t n) {
+        std::vector<bool> seen(n, false);
+        std::size_t cycles = 0;
+        for (std::size_t i = 0; i < n; ++i) {
+            if (seen[i])
+                continue;
+            ++cycles;
+            std::size_t j = i;
+            while (!seen[j]) {
+                seen[j] = true;
+                j = p[j];
+            }
+        }
+        return ((n - cycles) % 2 == 0) ? 1.0f : -1.0f;
     }
 };
 

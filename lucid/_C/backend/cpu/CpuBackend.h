@@ -2786,6 +2786,58 @@ public:
         return Storage{CpuStorage{ptr, out_nbytes, dt}};
     }
 
+    Storage linalg_det(const Storage& a, const Shape& shape, Dtype dt) override {
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        Shape out_shape(shape.begin(), shape.end() - 2);
+        const std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+
+        const auto& cs = std::get<CpuStorage>(a);
+        const std::int64_t batch = leading_matrix_batch_count(shape, /*mat_dims=*/2);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        std::vector<int> ipiv(n);
+        int info = 0;
+
+        if (dt == Dtype::F32) {
+            std::vector<float> l(per_mat), u(per_mat);
+            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
+            auto* out_p = reinterpret_cast<float*>(ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_lu_f32(in_p + b * per_mat, n, ipiv.data(), l.data(), u.data(), &info);
+                if (info < 0)
+                    check_lapack_info(info, "det");
+                float det = ipiv_sign(ipiv.data(), n);
+                if (info > 0) {
+                    det = 0.0f;
+                } else {
+                    for (int i = 0; i < n; ++i)
+                        det *= u[i * n + i];
+                }
+                out_p[b] = det;
+            }
+        } else if (dt == Dtype::F64) {
+            std::vector<double> l(per_mat), u(per_mat);
+            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* out_p = reinterpret_cast<double*>(ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_lu_f64(in_p + b * per_mat, n, ipiv.data(), l.data(), u.data(), &info);
+                if (info < 0)
+                    check_lapack_info(info, "det");
+                double det = ipiv_sign(ipiv.data(), n);
+                if (info > 0) {
+                    det = 0.0;
+                } else {
+                    for (int i = 0; i < n; ++i)
+                        det *= u[i * n + i];
+                }
+                out_p[b] = det;
+            }
+        } else {
+            ErrorBuilder("cpu_backend::linalg_det").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
@@ -4279,6 +4331,14 @@ private:
             cpu::dgemm(/*transA=*/true, /*transB=*/false, n, m, k, 1.0, vt.data(), n,
                        s_inv_ut.data(), m, 0.0, aplus, m);
         }
+    }
+
+    static float ipiv_sign(const int* ipiv, int n) {
+        int swaps = 0;
+        for (int i = 0; i < n; ++i)
+            if (ipiv[i] != i + 1)
+                ++swaps;
+        return (swaps % 2 == 0) ? 1.0f : -1.0f;
     }
 
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {
