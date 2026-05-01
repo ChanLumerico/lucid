@@ -5,6 +5,7 @@
 #include <cstring>
 #include <variant>
 
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -24,9 +25,7 @@ using utils_detail::fresh;
 
 // Materialize an input on CPU regardless of source device.
 CpuStorage to_cpu(const TensorImplPtr& a) {
-    if (a->device() == Device::GPU)
-        return gpu::download_gpu_to_cpu(std::get<GpuStorage>(a->storage()), a->shape());
-    return std::get<CpuStorage>(a->storage());
+    return backend::Dispatcher::for_device(a->device()).to_cpu(a->storage(), a->shape());
 }
 
 // Wrap a freshly-built CpuStorage as a Storage that lives on `target_device`,
