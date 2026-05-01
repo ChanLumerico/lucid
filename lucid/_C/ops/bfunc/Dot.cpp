@@ -2,14 +2,11 @@
 
 #include <variant>
 
-#include <mlx/ops.h>
-
 #include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/AutogradNode.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
-#include "../../backend/gpu/MlxBridge.h"
-#include "../../core/Allocator.h"
+#include "../../backend/Dispatcher.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -25,7 +22,6 @@ namespace lucid {
 
 namespace {
 
-using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
@@ -38,23 +34,11 @@ public:
     std::size_t numel_;
 
     std::vector<Storage> apply(Storage grad_out) override {
-        if (device_ == Device::GPU) {
-            // Pure-MLX path: scalar grad broadcasts over saved vectors.
-            const auto& gg = std::get<GpuStorage>(grad_out);
-            const auto& ga = std::get<GpuStorage>(saved_a_);
-            const auto& gb = std::get<GpuStorage>(saved_b_);
-            auto da = ::mlx::core::multiply(*gb.arr, *gg.arr);
-            auto db = ::mlx::core::multiply(*ga.arr, *gg.arr);
-            return {Storage{gpu::wrap_mlx_array(std::move(da), dtype_)},
-                    Storage{gpu::wrap_mlx_array(std::move(db), dtype_)}};
-        }
-        // CPU path: read scalar grad and dispatch through Accelerate-backed
-        // mul_scalar_storage helper.
-        const auto& cg = std::get<CpuStorage>(grad_out);
-        double g = (dtype_ == Dtype::F32) ? *reinterpret_cast<const float*>(cg.ptr.get())
-                                          : *reinterpret_cast<const double*>(cg.ptr.get());
-        Storage da = mul_scalar_storage(saved_b_, g, numel_, dtype_, device_);
-        Storage db = mul_scalar_storage(saved_a_, g, numel_, dtype_, device_);
+        Shape vec_shape{static_cast<std::int64_t>(numel_)};
+        auto& be = backend::Dispatcher::for_device(device_);
+        Storage scaled_grad = be.broadcast(grad_out, Shape{}, vec_shape, dtype_);
+        Storage da = be.mul(saved_b_, scaled_grad, vec_shape, dtype_);
+        Storage db = be.mul(saved_a_, scaled_grad, vec_shape, dtype_);
         return {std::move(da), std::move(db)};
     }
 };
@@ -69,56 +53,20 @@ public:
 
     std::vector<Storage> apply(Storage grad_out) override {
         const std::int64_t M = a_shape_[0], K = a_shape_[1], N = b_shape_[1];
-        if (device_ == Device::GPU) {
-            const auto& gg = std::get<GpuStorage>(grad_out);
-            const auto& ga = std::get<GpuStorage>(saved_a_);
-            const auto& gb = std::get<GpuStorage>(saved_b_);
-            auto bT = ::mlx::core::transpose(*gb.arr, {1, 0});
-            auto aT = ::mlx::core::transpose(*ga.arr, {1, 0});
-            auto da = ::mlx::core::matmul(*gg.arr, bT);
-            auto db = ::mlx::core::matmul(aT, *gg.arr);
-            return {Storage{gpu::wrap_mlx_array(std::move(da), dtype_)},
-                    Storage{gpu::wrap_mlx_array(std::move(db), dtype_)}};
-        }
-        const auto& cg = std::get<CpuStorage>(grad_out);
-        const auto& ca = std::get<CpuStorage>(saved_a_);
-        const auto& cb = std::get<CpuStorage>(saved_b_);
-        CpuStorage da, db;
-        da.dtype = db.dtype = dtype_;
-        da.nbytes = static_cast<std::size_t>(M * K) * dtype_size(dtype_);
-        db.nbytes = static_cast<std::size_t>(K * N) * dtype_size(dtype_);
-        da.ptr = allocate_aligned_bytes(da.nbytes);
-        db.ptr = allocate_aligned_bytes(db.nbytes);
-        auto run = [&](auto* dap, auto* dbp, const auto* gp, const auto* ap, const auto* bp) {
-            using T = std::remove_pointer_t<decltype(dap)>;
-            for (std::int64_t i = 0; i < M; ++i)
-                for (std::int64_t k = 0; k < K; ++k) {
-                    T s{};
-                    for (std::int64_t j = 0; j < N; ++j)
-                        s = s + gp[i * N + j] * bp[k * N + j];
-                    dap[i * K + k] = s;
-                }
-            for (std::int64_t k = 0; k < K; ++k)
-                for (std::int64_t j = 0; j < N; ++j) {
-                    T s{};
-                    for (std::int64_t i = 0; i < M; ++i)
-                        s = s + ap[i * K + k] * gp[i * N + j];
-                    dbp[k * N + j] = s;
-                }
-        };
-        if (dtype_ == Dtype::F32)
-            run(reinterpret_cast<float*>(da.ptr.get()), reinterpret_cast<float*>(db.ptr.get()),
-                reinterpret_cast<const float*>(cg.ptr.get()),
-                reinterpret_cast<const float*>(ca.ptr.get()),
-                reinterpret_cast<const float*>(cb.ptr.get()));
-        else if (dtype_ == Dtype::F64)
-            run(reinterpret_cast<double*>(da.ptr.get()), reinterpret_cast<double*>(db.ptr.get()),
-                reinterpret_cast<const double*>(cg.ptr.get()),
-                reinterpret_cast<const double*>(ca.ptr.get()),
-                reinterpret_cast<const double*>(cb.ptr.get()));
-        else
-            ErrorBuilder("dot backward").not_implemented("dtype not supported");
-        return {Storage{std::move(da)}, Storage{std::move(db)}};
+        backend::MatmulOpts da_opts;
+        da_opts.M = static_cast<int>(M);
+        da_opts.K = static_cast<int>(N);
+        da_opts.N = static_cast<int>(K);
+        da_opts.transB = true;
+        backend::MatmulOpts db_opts;
+        db_opts.M = static_cast<int>(K);
+        db_opts.K = static_cast<int>(M);
+        db_opts.N = static_cast<int>(N);
+        db_opts.transA = true;
+        auto& be = backend::Dispatcher::for_device(device_);
+        Storage da = be.matmul(grad_out, saved_b_, da_opts, dtype_);
+        Storage db = be.matmul(saved_a_, grad_out, db_opts, dtype_);
+        return {std::move(da), std::move(db)};
     }
 };
 
@@ -152,48 +100,15 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         }
     };
 
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        const auto& gb = std::get<GpuStorage>(b->storage());
-        ::mlx::core::array out = (a->shape().size() == 1 && b->shape().size() == 1)
-                                     ? ::mlx::core::sum(::mlx::core::multiply(*ga.arr, *gb.arr))
-                                     : ::mlx::core::matmul(*ga.arr, *gb.arr);
-        Shape out_shape;
-        for (auto d : out.shape())
-            out_shape.push_back(static_cast<std::int64_t>(d));
-        auto t = fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(out_shape), dt,
-                       device);
-        wire_grad(t);
-        return t;
-    }
-
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const auto& cb = std::get<CpuStorage>(b->storage());
-
     if (a->shape().size() == 1 && b->shape().size() == 1) {
         if (a->shape()[0] != b->shape()[0])
             throw ShapeMismatch(a->shape(), b->shape(), "dot");
         Shape out_shape{};
-        auto out_cpu = allocate_cpu(out_shape, dt);
-        const std::size_t n = static_cast<std::size_t>(a->shape()[0]);
-        if (dt == Dtype::F32) {
-            const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
-            const auto* q = reinterpret_cast<const float*>(cb.ptr.get());
-            float s = 0.f;
-            for (std::size_t i = 0; i < n; ++i)
-                s += p[i] * q[i];
-            *reinterpret_cast<float*>(out_cpu.ptr.get()) = s;
-        } else if (dt == Dtype::F64) {
-            const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
-            const auto* q = reinterpret_cast<const double*>(cb.ptr.get());
-            double s = 0.0;
-            for (std::size_t i = 0; i < n; ++i)
-                s += p[i] * q[i];
-            *reinterpret_cast<double*>(out_cpu.ptr.get()) = s;
-        } else {
-            ErrorBuilder("dot").not_implemented("dtype not supported (CPU)");
-        }
-        auto t = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
+        auto& be = backend::Dispatcher::for_device(device);
+        Storage values = be.mul(a->storage(), b->storage(), a->shape(), dt);
+        backend::ReduceOpts opts{{0}, false};
+        Storage out = be.reduce_sum(values, a->shape(), opts, dt);
+        auto t = fresh(std::move(out), out_shape, dt, device);
         wire_grad(t);
         return t;
     }
@@ -204,28 +119,13 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         if (K != Kb)
             throw ShapeMismatch(a->shape(), b->shape(), "dot");
         Shape out_shape{M, N};
-        auto out_cpu = allocate_cpu(out_shape, dt);
-        auto run = [&](auto* op, const auto* ap, const auto* bp) {
-            using T = std::remove_pointer_t<decltype(op)>;
-            for (std::int64_t i = 0; i < M; ++i)
-                for (std::int64_t j = 0; j < N; ++j) {
-                    T s{};
-                    for (std::int64_t k = 0; k < K; ++k)
-                        s = s + ap[i * K + k] * bp[k * N + j];
-                    op[i * N + j] = s;
-                }
-        };
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(out_cpu.ptr.get()),
-                reinterpret_cast<const float*>(ca.ptr.get()),
-                reinterpret_cast<const float*>(cb.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(out_cpu.ptr.get()),
-                reinterpret_cast<const double*>(ca.ptr.get()),
-                reinterpret_cast<const double*>(cb.ptr.get()));
-        else
-            ErrorBuilder("dot").not_implemented("dtype not supported (CPU)");
-        auto t = fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
+        backend::MatmulOpts opts;
+        opts.M = static_cast<int>(M);
+        opts.K = static_cast<int>(K);
+        opts.N = static_cast<int>(N);
+        Storage out =
+            backend::Dispatcher::for_device(device).matmul(a->storage(), b->storage(), opts, dt);
+        auto t = fresh(std::move(out), out_shape, dt, device);
         wire_grad(t);
         return t;
     }
