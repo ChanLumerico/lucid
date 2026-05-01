@@ -330,6 +330,7 @@ public:
                                 bool keepdims,
                                 Dtype dt) = 0;
     virtual Storage linalg_cholesky(const Storage& a, const Shape& shape, bool upper, Dtype dt) = 0;
+    virtual Storage linalg_inv(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
     // ---- Broadcast / cast --------------------------------------------
 

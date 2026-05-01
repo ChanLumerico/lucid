@@ -2633,6 +2633,33 @@ public:
         return Storage{CpuStorage{ptr, cs.nbytes, dt}};
     }
 
+    Storage linalg_inv(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
+        if (cs.nbytes > 0)
+            std::memcpy(ptr.get(), cs.ptr.get(), cs.nbytes);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(shape, /*mat_dims=*/2);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        int info = 0;
+        if (dt == Dtype::F32) {
+            auto* p = reinterpret_cast<float*>(ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_inv_f32(p + b * per_mat, n, &info);
+                check_lapack_info(info, "inv");
+            }
+        } else if (dt == Dtype::F64) {
+            auto* p = reinterpret_cast<double*>(ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_inv_f64(p + b * per_mat, n, &info);
+                check_lapack_info(info, "inv");
+            }
+        } else {
+            ErrorBuilder("cpu_backend::linalg_inv").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, cs.nbytes, dt}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
