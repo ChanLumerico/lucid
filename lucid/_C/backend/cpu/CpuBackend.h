@@ -157,11 +157,8 @@ public:
             });
     }
 
-    Storage bitwise_binary(const Storage& a,
-                           const Storage& b,
-                           const Shape& shape,
-                           Dtype dt,
-                           int op) override {
+    Storage bitwise_binary(
+        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) override {
         const auto& ca = std::get<CpuStorage>(a);
         const auto& cb = std::get<CpuStorage>(b);
         const std::size_t n = shape_numel(shape);
@@ -213,11 +210,8 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage compare_binary(const Storage& a,
-                           const Storage& b,
-                           const Shape& shape,
-                           Dtype dt,
-                           int op) override {
+    Storage compare_binary(
+        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) override {
         const auto& ca = std::get<CpuStorage>(a);
         const auto& cb = std::get<CpuStorage>(b);
         const std::size_t n = shape_numel(shape);
@@ -504,8 +498,8 @@ public:
         return unary_op(a, shape, dt, cpu::vlog2_f32, cpu::vlog2_f64,
                         [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
                             for (std::size_t i = 0; i < n; ++i)
-                                op[i] = static_cast<std::int32_t>(
-                                    std::log2(static_cast<float>(ip[i])));
+                                op[i] =
+                                    static_cast<std::int32_t>(std::log2(static_cast<float>(ip[i])));
                         });
     }
 
@@ -576,8 +570,8 @@ public:
         return unary_op(a, shape, dt, cpu::vtan_f32, cpu::vtan_f64,
                         [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
                             for (std::size_t i = 0; i < n; ++i)
-                                op[i] = static_cast<std::int32_t>(
-                                    std::tan(static_cast<float>(ip[i])));
+                                op[i] =
+                                    static_cast<std::int32_t>(std::tan(static_cast<float>(ip[i])));
                         });
     }
 
@@ -585,8 +579,8 @@ public:
         return unary_op(a, shape, dt, cpu::vasin_f32, cpu::vasin_f64,
                         [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
                             for (std::size_t i = 0; i < n; ++i)
-                                op[i] = static_cast<std::int32_t>(
-                                    std::asin(static_cast<float>(ip[i])));
+                                op[i] =
+                                    static_cast<std::int32_t>(std::asin(static_cast<float>(ip[i])));
                         });
     }
 
@@ -594,8 +588,8 @@ public:
         return unary_op(a, shape, dt, cpu::vacos_f32, cpu::vacos_f64,
                         [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
                             for (std::size_t i = 0; i < n; ++i)
-                                op[i] = static_cast<std::int32_t>(
-                                    std::acos(static_cast<float>(ip[i])));
+                                op[i] =
+                                    static_cast<std::int32_t>(std::acos(static_cast<float>(ip[i])));
                         });
     }
 
@@ -603,8 +597,8 @@ public:
         return unary_op(a, shape, dt, cpu::vatan_f32, cpu::vatan_f64,
                         [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
                             for (std::size_t i = 0; i < n; ++i)
-                                op[i] = static_cast<std::int32_t>(
-                                    std::atan(static_cast<float>(ip[i])));
+                                op[i] =
+                                    static_cast<std::int32_t>(std::atan(static_cast<float>(ip[i])));
                         });
     }
 
@@ -612,8 +606,8 @@ public:
         return unary_op(a, shape, dt, cpu::vsinh_f32, cpu::vsinh_f64,
                         [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
                             for (std::size_t i = 0; i < n; ++i)
-                                op[i] = static_cast<std::int32_t>(
-                                    std::sinh(static_cast<float>(ip[i])));
+                                op[i] =
+                                    static_cast<std::int32_t>(std::sinh(static_cast<float>(ip[i])));
                         });
     }
 
@@ -621,8 +615,8 @@ public:
         return unary_op(a, shape, dt, cpu::vcosh_f32, cpu::vcosh_f64,
                         [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
                             for (std::size_t i = 0; i < n; ++i)
-                                op[i] = static_cast<std::int32_t>(
-                                    std::cosh(static_cast<float>(ip[i])));
+                                op[i] =
+                                    static_cast<std::int32_t>(std::cosh(static_cast<float>(ip[i])));
                         });
     }
 
@@ -898,8 +892,7 @@ public:
             const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
             double* qp = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
-                const double dx =
-                    xp[i] >= 0.0 ? kScale : kScale * kAlpha * std::exp(xp[i]);
+                const double dx = xp[i] >= 0.0 ? kScale : kScale * kAlpha * std::exp(xp[i]);
                 qp[i] = dx * gp[i];
             }
         } else {
@@ -1341,7 +1334,8 @@ public:
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t nb = cs.nbytes;
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t axis_dim = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        const std::size_t axis_dim =
+            static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
         std::size_t outer = 1, inner = 1;
         for (int d = 0; d < axis; ++d)
             outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
@@ -1425,7 +1419,8 @@ public:
         const auto& g_cpu = std::get<CpuStorage>(grad_out);
         std::size_t nb = z_cpu.nbytes;
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t axis_dim = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        const std::size_t axis_dim =
+            static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
         std::size_t outer = 1, inner = 1;
         for (int d = 0; d < axis; ++d)
             outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
@@ -1462,10 +1457,7 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage reverse_along_axis(const Storage& a,
-                               const Shape& shape,
-                               int axis,
-                               Dtype dt) override {
+    Storage reverse_along_axis(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
         const auto& cs = std::get<CpuStorage>(a);
         auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
         const std::size_t elem = dtype_size(dt);
@@ -1479,8 +1471,7 @@ public:
         for (std::size_t o = 0; o < outer; ++o) {
             for (std::size_t k = 0; k < L; ++k) {
                 std::memcpy(ptr.get() + ((o * L + k) * inner) * elem,
-                            cs.ptr.get() + ((o * L + (L - 1 - k)) * inner) * elem,
-                            inner * elem);
+                            cs.ptr.get() + ((o * L + (L - 1 - k)) * inner) * elem, inner * elem);
             }
         }
         return Storage{CpuStorage{ptr, cs.nbytes, dt}};
@@ -1507,8 +1498,7 @@ public:
             }
         };
         if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()),
-                reinterpret_cast<const float*>(cs.ptr.get()));
+            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
         else if (dt == Dtype::F64)
             run(reinterpret_cast<double*>(ptr.get()),
                 reinterpret_cast<const double*>(cs.ptr.get()));
@@ -1531,8 +1521,7 @@ public:
                 dst[i * N + i] = *gp;
         };
         if (dt == Dtype::F32)
-            fill(reinterpret_cast<float*>(ptr.get()),
-                 reinterpret_cast<const float*>(cg.ptr.get()));
+            fill(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cg.ptr.get()));
         else if (dt == Dtype::F64)
             fill(reinterpret_cast<double*>(ptr.get()),
                  reinterpret_cast<const double*>(cg.ptr.get()));
@@ -1841,8 +1830,8 @@ public:
                 coord[static_cast<std::size_t>(a2)] = c0 + i;
                 std::size_t a_flat = 0;
                 for (std::size_t d = 0; d < ndim; ++d)
-                    a_flat += static_cast<std::size_t>(coord[d]) *
-                              static_cast<std::size_t>(a_stride[d]);
+                    a_flat +=
+                        static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(a_stride[d]);
                 const std::size_t out_flat =
                     o * static_cast<std::size_t>(L) + static_cast<std::size_t>(i);
                 std::memcpy(ptr.get() + out_flat * elem, as.ptr.get() + a_flat * elem, elem);
@@ -1969,9 +1958,8 @@ public:
         if (ndim > 0) {
             stride.back() = 1;
             for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d)
-                stride[static_cast<std::size_t>(d)] =
-                    stride[static_cast<std::size_t>(d) + 1] *
-                    shape[static_cast<std::size_t>(d) + 1];
+                stride[static_cast<std::size_t>(d)] = stride[static_cast<std::size_t>(d) + 1] *
+                                                      shape[static_cast<std::size_t>(d) + 1];
         }
         const std::size_t total = shape_numel(shape);
         std::vector<std::int64_t> coord(ndim, 0);
@@ -2020,8 +2008,10 @@ public:
         std::size_t inner_bytes = elem;
         for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < src_shape.size(); ++d)
             inner_bytes *= static_cast<std::size_t>(src_shape[d]);
-        const std::size_t src_axis = static_cast<std::size_t>(src_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t slice_axis = static_cast<std::size_t>(slice_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t src_axis =
+            static_cast<std::size_t>(src_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t slice_axis =
+            static_cast<std::size_t>(slice_shape[static_cast<std::size_t>(axis)]);
         const std::size_t copy_bytes = slice_axis * inner_bytes;
         for (std::size_t o = 0; o < outer; ++o) {
             const auto* src_ptr =
@@ -2050,8 +2040,10 @@ public:
         std::size_t inner_bytes = elem;
         for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < dst_shape.size(); ++d)
             inner_bytes *= static_cast<std::size_t>(dst_shape[d]);
-        const std::size_t dst_axis = static_cast<std::size_t>(dst_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t src_axis = static_cast<std::size_t>(src_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t dst_axis =
+            static_cast<std::size_t>(dst_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t src_axis =
+            static_cast<std::size_t>(src_shape[static_cast<std::size_t>(axis)]);
         const std::size_t copy_bytes = src_axis * inner_bytes;
         for (std::size_t o = 0; o < outer; ++o) {
             const auto* src_ptr = as.ptr.get() + o * copy_bytes;
@@ -2087,8 +2079,8 @@ public:
         for (std::size_t o = 0; o < outer; ++o) {
             for (std::size_t i = 0; i < xs.size(); ++i) {
                 const auto& cs = std::get<CpuStorage>(xs[i]);
-                const std::size_t L = static_cast<std::size_t>(
-                    shapes[i][static_cast<std::size_t>(axis)]);
+                const std::size_t L =
+                    static_cast<std::size_t>(shapes[i][static_cast<std::size_t>(axis)]);
                 const std::size_t bytes = L * inner_per_unit;
                 std::memcpy(dst, cs.ptr.get() + o * bytes, bytes);
                 dst += bytes;
@@ -2154,8 +2146,7 @@ public:
             off = idx;
         }
         Shape tail_shape = shape;
-        tail_shape[static_cast<std::size_t>(axis)] =
-            shape[static_cast<std::size_t>(axis)] - off;
+        tail_shape[static_cast<std::size_t>(axis)] = shape[static_cast<std::size_t>(axis)] - off;
         out.push_back(slice_axis(a, shape, tail_shape, axis, off, dt));
         return out;
     }
@@ -2424,8 +2415,7 @@ public:
         } else if (dt == Dtype::I64) {
             run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
         } else {
-            ErrorBuilder("cpu_backend::arg_reduce_index")
-                .not_implemented("dtype not supported");
+            ErrorBuilder("cpu_backend::arg_reduce_index").not_implemented("dtype not supported");
         }
         return Storage{CpuStorage{ptr, nbytes, Dtype::I64}};
     }
@@ -2450,8 +2440,7 @@ public:
             inner *= static_cast<std::size_t>(output_shape[d]);
         const std::size_t L =
             static_cast<std::size_t>(output_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t K =
-            static_cast<std::size_t>(grad_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t K = static_cast<std::size_t>(grad_shape[static_cast<std::size_t>(axis)]);
         const auto* idx = reinterpret_cast<const std::int32_t*>(idx_storage.ptr.get());
 
         auto run = [&](auto* dst, const auto* gp) {
@@ -2471,14 +2460,11 @@ public:
         };
 
         if (dt == Dtype::F32) {
-            run(reinterpret_cast<float*>(ptr.get()),
-                reinterpret_cast<const float*>(g.ptr.get()));
+            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(g.ptr.get()));
         } else if (dt == Dtype::F64) {
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(g.ptr.get()));
+            run(reinterpret_cast<double*>(ptr.get()), reinterpret_cast<const double*>(g.ptr.get()));
         } else {
-            ErrorBuilder("cpu_backend::scatter_add_axis")
-                .not_implemented("dtype not supported");
+            ErrorBuilder("cpu_backend::scatter_add_axis").not_implemented("dtype not supported");
         }
         return Storage{CpuStorage{ptr, nbytes, dt}};
     }
@@ -2590,11 +2576,8 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage repeat(const Storage& a,
-                   const Shape& shape,
-                   Dtype dt,
-                   std::int64_t repeats,
-                   int axis) override {
+    Storage repeat(
+        const Storage& a, const Shape& shape, Dtype dt, std::int64_t repeats, int axis) override {
         const auto& cs = std::get<CpuStorage>(a);
         Shape out_shape = shape;
         out_shape[static_cast<std::size_t>(axis)] *= repeats;
@@ -2643,7 +2626,8 @@ public:
             in_stride.back() = 1;
             for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nout) - 2; d >= 0; --d)
                 in_stride[static_cast<std::size_t>(d)] =
-                    in_stride[static_cast<std::size_t>(d) + 1] * padded[static_cast<std::size_t>(d) + 1];
+                    in_stride[static_cast<std::size_t>(d) + 1] *
+                    padded[static_cast<std::size_t>(d) + 1];
         }
         const std::size_t total = shape_numel(out_shape);
         std::vector<std::int64_t> coord(nout, 0);
@@ -2745,9 +2729,11 @@ public:
             out_stride.back() = 1;
             for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
                 in_stride[static_cast<std::size_t>(d)] =
-                    in_stride[static_cast<std::size_t>(d) + 1] * shape[static_cast<std::size_t>(d) + 1];
+                    in_stride[static_cast<std::size_t>(d) + 1] *
+                    shape[static_cast<std::size_t>(d) + 1];
                 out_stride[static_cast<std::size_t>(d)] =
-                    out_stride[static_cast<std::size_t>(d) + 1] * out_shape[static_cast<std::size_t>(d) + 1];
+                    out_stride[static_cast<std::size_t>(d) + 1] *
+                    out_shape[static_cast<std::size_t>(d) + 1];
             }
         }
         const std::size_t row_in = static_cast<std::size_t>(shape.back());
@@ -2763,7 +2749,8 @@ public:
                            static_cast<std::size_t>(out_stride[d]);
             std::size_t in_off = 0;
             for (std::size_t d = 0; d + 1 < ndim; ++d)
-                in_off += static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
+                in_off +=
+                    static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
             std::memcpy(ptr.get() + out_off * elem, cs.ptr.get() + in_off * elem, row_bytes);
             for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
                 if (++coord[static_cast<std::size_t>(d)] < shape[static_cast<std::size_t>(d)])
@@ -2822,11 +2809,8 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage clip(const Storage& a,
-                 const Shape& shape,
-                 Dtype dt,
-                 double min_v,
-                 double max_v) override {
+    Storage clip(
+        const Storage& a, const Shape& shape, Dtype dt, double min_v, double max_v) override {
         const auto& cs = std::get<CpuStorage>(a);
         const std::size_t numel = shape_numel(shape);
         std::size_t nb = numel * dtype_size(dt);
@@ -2942,8 +2926,7 @@ public:
         else if (dt == Dtype::F64)
             compute(double{});
         else
-            ErrorBuilder("cpu_backend::mse_loss_backward")
-                .not_implemented("dtype not supported");
+            ErrorBuilder("cpu_backend::mse_loss_backward").not_implemented("dtype not supported");
 
         return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}}};
     }
@@ -3023,8 +3006,7 @@ public:
         else if (dt == Dtype::F64)
             compute(double{});
         else
-            ErrorBuilder("cpu_backend::huber_loss_backward")
-                .not_implemented("dtype not supported");
+            ErrorBuilder("cpu_backend::huber_loss_backward").not_implemented("dtype not supported");
 
         return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}}};
     }
@@ -3046,8 +3028,7 @@ public:
 
         auto scalar = allocate_aligned_bytes(dtype_size(dt), Device::CPU);
         if (dt == Dtype::F32) {
-            float sum =
-                bce_loss_sum<float>(input, target, weight, n, static_cast<float>(eps));
+            float sum = bce_loss_sum<float>(input, target, weight, n, static_cast<float>(eps));
             if (reduction == 1)
                 sum /= static_cast<float>(n);
             *reinterpret_cast<float*>(scalar.get()) = sum;
@@ -3113,8 +3094,7 @@ public:
         else if (dt == Dtype::F64)
             compute(double{});
         else
-            ErrorBuilder("cpu_backend::bce_loss_backward")
-                .not_implemented("dtype not supported");
+            ErrorBuilder("cpu_backend::bce_loss_backward").not_implemented("dtype not supported");
 
         return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}},
                 Storage{CpuStorage{dweight, nb, dt}}};
@@ -3132,9 +3112,9 @@ public:
         const std::size_t n = shape_numel(shape);
         Storage weight_storage =
             weight_shape == shape ? weight : broadcast(weight, weight_shape, shape, dt);
-        Storage pos_weight_storage =
-            pos_weight_shape == shape ? pos_weight
-                                      : broadcast(pos_weight, pos_weight_shape, shape, dt);
+        Storage pos_weight_storage = pos_weight_shape == shape
+                                         ? pos_weight
+                                         : broadcast(pos_weight, pos_weight_shape, shape, dt);
         if (reduction == 0) {
             const std::size_t nb = n * dtype_size(dt);
             auto ptr = allocate_aligned_bytes(nb, Device::CPU);
@@ -3150,7 +3130,8 @@ public:
                 sum /= static_cast<float>(n);
             *reinterpret_cast<float*>(scalar.get()) = sum;
         } else if (dt == Dtype::F64) {
-            double sum = bce_logits_sum<double>(input, target, weight_storage, pos_weight_storage, n);
+            double sum =
+                bce_logits_sum<double>(input, target, weight_storage, pos_weight_storage, n);
             if (reduction == 1)
                 sum /= static_cast<double>(n);
             *reinterpret_cast<double*>(scalar.get()) = sum;
@@ -3222,8 +3203,233 @@ public:
                 .not_implemented("dtype not supported");
 
         return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}},
-                Storage{CpuStorage{dweight, nb, dt}},
-                Storage{CpuStorage{dpos_weight, nb, dt}}};
+                Storage{CpuStorage{dweight, nb, dt}}, Storage{CpuStorage{dpos_weight, nb, dt}}};
+    }
+
+    ClassLossForwardResult cross_entropy_loss(const Storage& input,
+                                              const Storage& target,
+                                              const Storage* weight,
+                                              const Shape& input_shape,
+                                              const Shape& /*target_shape*/,
+                                              Dtype dt,
+                                              double eps,
+                                              int ignore_index,
+                                              int reduction) override {
+        const int n_batch = static_cast<int>(input_shape[0]);
+        const int channels = static_cast<int>(input_shape[1]);
+        const int spatial = class_loss_spatial(input_shape);
+        const std::size_t samples = static_cast<std::size_t>(n_batch) * spatial;
+        const std::size_t input_numel = samples * static_cast<std::size_t>(channels);
+        CpuStorage softmax{allocate_aligned_bytes(input_numel * dtype_size(dt), Device::CPU),
+                           input_numel * dtype_size(dt), dt};
+        CpuStorage losses{allocate_aligned_bytes(samples * dtype_size(dt), Device::CPU),
+                          samples * dtype_size(dt), dt};
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const CpuStorage* ws = weight ? &std::get<CpuStorage>(*weight) : nullptr;
+        std::size_t valid_count = 0;
+
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            auto* sp = reinterpret_cast<T*>(softmax.ptr.get());
+            auto* lp = reinterpret_cast<T*>(losses.ptr.get());
+            const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
+            for (int n = 0; n < n_batch; ++n) {
+                for (int s = 0; s < spatial; ++s) {
+                    T mx = -std::numeric_limits<T>::infinity();
+                    for (int c = 0; c < channels; ++c)
+                        mx = std::max(mx, xp[(n * channels + c) * spatial + s]);
+                    T sum = T{0};
+                    for (int c = 0; c < channels; ++c) {
+                        const T e = std::exp(xp[(n * channels + c) * spatial + s] - mx);
+                        sp[(n * channels + c) * spatial + s] = e;
+                        sum += e;
+                    }
+                    const T inv = T{1} / sum;
+                    for (int c = 0; c < channels; ++c)
+                        sp[(n * channels + c) * spatial + s] *= inv;
+                    const std::int64_t y = read_target_index(ts, n * spatial + s);
+                    if (static_cast<int>(y) == ignore_index) {
+                        lp[n * spatial + s] = T{0};
+                        continue;
+                    }
+                    ++valid_count;
+                    const T pred = sp[(n * channels + static_cast<int>(y)) * spatial + s];
+                    const T w = wp ? wp[static_cast<int>(y)] : T{1};
+                    lp[n * spatial + s] = -w * std::log(pred + static_cast<T>(eps));
+                }
+            }
+        };
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::cross_entropy_loss").not_implemented("dtype not supported");
+        if (valid_count == 0)
+            valid_count = 1;
+
+        return {reduce_class_losses(losses, samples, valid_count, dt, reduction),
+                Storage{std::move(softmax)},
+                Storage{make_cpu_scalar(static_cast<double>(valid_count), dt)}};
+    }
+
+    Storage cross_entropy_backward(const Storage& saved_softmax,
+                                   const Storage& target,
+                                   const Storage* weight,
+                                   const Storage& valid_count,
+                                   const Storage& grad,
+                                   const Shape& input_shape,
+                                   Dtype dt,
+                                   int ignore_index,
+                                   int reduction) override {
+        const int n_batch = static_cast<int>(input_shape[0]);
+        const int channels = static_cast<int>(input_shape[1]);
+        const int spatial = class_loss_spatial(input_shape);
+        const std::size_t numel = static_cast<std::size_t>(n_batch) * channels * spatial;
+        CpuStorage dx{allocate_aligned_bytes(numel * dtype_size(dt), Device::CPU),
+                      numel * dtype_size(dt), dt};
+        if (dx.nbytes)
+            std::memset(dx.ptr.get(), 0, dx.nbytes);
+        const auto& sm = std::get<CpuStorage>(saved_softmax);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& gs = std::get<CpuStorage>(grad);
+        const auto& vc = std::get<CpuStorage>(valid_count);
+        const CpuStorage* ws = weight ? &std::get<CpuStorage>(*weight) : nullptr;
+
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* sp = reinterpret_cast<const T*>(sm.ptr.get());
+            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            auto* dxp = reinterpret_cast<T*>(dx.ptr.get());
+            const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
+            const T valid = *reinterpret_cast<const T*>(vc.ptr.get());
+            const bool elem = reduction == 0;
+            for (int n = 0; n < n_batch; ++n) {
+                for (int s = 0; s < spatial; ++s) {
+                    const std::int64_t y = read_target_index(ts, n * spatial + s);
+                    if (static_cast<int>(y) == ignore_index)
+                        continue;
+                    const T go = elem ? gp[n * spatial + s] : gp[0];
+                    const T scale = (reduction == 1) ? (go / valid) : go;
+                    const T w = wp ? wp[static_cast<int>(y)] : T{1};
+                    for (int c = 0; c < channels; ++c) {
+                        T v = sp[(n * channels + c) * spatial + s];
+                        if (c == static_cast<int>(y))
+                            v -= T{1};
+                        dxp[(n * channels + c) * spatial + s] = w * v * scale;
+                    }
+                }
+            }
+        };
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::cross_entropy_backward")
+                .not_implemented("dtype not supported");
+        return Storage{std::move(dx)};
+    }
+
+    ClassLossForwardResult nll_loss(const Storage& input,
+                                    const Storage& target,
+                                    const Storage* weight,
+                                    const Shape& input_shape,
+                                    const Shape& /*target_shape*/,
+                                    Dtype dt,
+                                    int ignore_index,
+                                    int reduction) override {
+        const int n_batch = static_cast<int>(input_shape[0]);
+        const int channels = static_cast<int>(input_shape[1]);
+        const int spatial = class_loss_spatial(input_shape);
+        const std::size_t samples = static_cast<std::size_t>(n_batch) * spatial;
+        CpuStorage losses{allocate_aligned_bytes(samples * dtype_size(dt), Device::CPU),
+                          samples * dtype_size(dt), dt};
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& ts = std::get<CpuStorage>(target);
+        const CpuStorage* ws = weight ? &std::get<CpuStorage>(*weight) : nullptr;
+        std::size_t valid_count = 0;
+
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            auto* lp = reinterpret_cast<T*>(losses.ptr.get());
+            const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
+            for (int n = 0; n < n_batch; ++n) {
+                for (int s = 0; s < spatial; ++s) {
+                    const std::int64_t y = read_target_index(ts, n * spatial + s);
+                    if (static_cast<int>(y) == ignore_index) {
+                        lp[n * spatial + s] = T{0};
+                        continue;
+                    }
+                    ++valid_count;
+                    const T w = wp ? wp[static_cast<int>(y)] : T{1};
+                    lp[n * spatial + s] =
+                        -w * xp[(n * channels + static_cast<int>(y)) * spatial + s];
+                }
+            }
+        };
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::nll_loss").not_implemented("dtype not supported");
+        if (valid_count == 0)
+            valid_count = 1;
+        return {reduce_class_losses(losses, samples, valid_count, dt, reduction), Storage{},
+                Storage{make_cpu_scalar(static_cast<double>(valid_count), dt)}};
+    }
+
+    Storage nll_loss_backward(const Storage& target,
+                              const Storage* weight,
+                              const Storage& valid_count,
+                              const Storage& grad,
+                              const Shape& input_shape,
+                              Dtype dt,
+                              int ignore_index,
+                              int reduction) override {
+        const int n_batch = static_cast<int>(input_shape[0]);
+        const int channels = static_cast<int>(input_shape[1]);
+        const int spatial = class_loss_spatial(input_shape);
+        const std::size_t numel = static_cast<std::size_t>(n_batch) * channels * spatial;
+        CpuStorage dx{allocate_aligned_bytes(numel * dtype_size(dt), Device::CPU),
+                      numel * dtype_size(dt), dt};
+        if (dx.nbytes)
+            std::memset(dx.ptr.get(), 0, dx.nbytes);
+        const auto& ts = std::get<CpuStorage>(target);
+        const auto& gs = std::get<CpuStorage>(grad);
+        const auto& vc = std::get<CpuStorage>(valid_count);
+        const CpuStorage* ws = weight ? &std::get<CpuStorage>(*weight) : nullptr;
+
+        auto compute = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            auto* dxp = reinterpret_cast<T*>(dx.ptr.get());
+            const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
+            const T valid = *reinterpret_cast<const T*>(vc.ptr.get());
+            const bool elem = reduction == 0;
+            for (int n = 0; n < n_batch; ++n) {
+                for (int s = 0; s < spatial; ++s) {
+                    const std::int64_t y = read_target_index(ts, n * spatial + s);
+                    if (static_cast<int>(y) == ignore_index)
+                        continue;
+                    const T go = elem ? gp[n * spatial + s] : gp[0];
+                    const T scale = (reduction == 1) ? (go / valid) : go;
+                    const T w = wp ? wp[static_cast<int>(y)] : T{1};
+                    dxp[(n * channels + static_cast<int>(y)) * spatial + s] = -w * scale;
+                }
+            }
+        };
+        if (dt == Dtype::F32)
+            compute(float{});
+        else if (dt == Dtype::F64)
+            compute(double{});
+        else
+            ErrorBuilder("cpu_backend::nll_loss_backward").not_implemented("dtype not supported");
+        return Storage{std::move(dx)};
     }
 
     CpuStorage to_cpu(const Storage& a, const Shape& /*shape*/) override {
@@ -3243,8 +3449,8 @@ private:
         const std::size_t value_nbytes = shape_numel(output_shape) * dtype_size(dt);
         CpuStorage values{allocate_aligned_bytes(value_nbytes, Device::CPU), value_nbytes, dt};
         const std::size_t index_nbytes = shape_numel(output_shape) * dtype_size(Dtype::I32);
-        CpuStorage indices{
-            allocate_aligned_bytes(index_nbytes, Device::CPU), index_nbytes, Dtype::I32};
+        CpuStorage indices{allocate_aligned_bytes(index_nbytes, Device::CPU), index_nbytes,
+                           Dtype::I32};
 
         const auto* src = reinterpret_cast<const T*>(input.ptr.get());
         auto* dst = reinterpret_cast<T*>(values.ptr.get());
@@ -3256,8 +3462,7 @@ private:
             outer *= static_cast<std::size_t>(input_shape[static_cast<std::size_t>(d)]);
         for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < input_shape.size(); ++d)
             inner *= static_cast<std::size_t>(input_shape[d]);
-        const std::size_t L =
-            static_cast<std::size_t>(input_shape[static_cast<std::size_t>(axis)]);
+        const std::size_t L = static_cast<std::size_t>(input_shape[static_cast<std::size_t>(axis)]);
         const std::size_t K =
             static_cast<std::size_t>(output_shape[static_cast<std::size_t>(axis)]);
 
@@ -3288,11 +3493,8 @@ private:
         return {std::move(values), std::move(indices)};
     }
 
-    void compute_mse_loss_values(const Storage& input,
-                                 const Storage& target,
-                                 std::byte* out,
-                                 std::size_t n,
-                                 Dtype dt) {
+    void compute_mse_loss_values(
+        const Storage& input, const Storage& target, std::byte* out, std::size_t n, Dtype dt) {
         const auto& xs = std::get<CpuStorage>(input);
         const auto& ts = std::get<CpuStorage>(target);
         if (dt == Dtype::F32) {
@@ -3406,11 +3608,8 @@ private:
     }
 
     template <typename T>
-    T bce_loss_sum(const Storage& input,
-                   const Storage& target,
-                   const Storage& weight,
-                   std::size_t n,
-                   T eps) {
+    T bce_loss_sum(
+        const Storage& input, const Storage& target, const Storage& weight, std::size_t n, T eps) {
         const auto& xs = std::get<CpuStorage>(input);
         const auto& ts = std::get<CpuStorage>(target);
         const auto& ws = std::get<CpuStorage>(weight);
@@ -3489,6 +3688,85 @@ private:
             sum += wp[i] * loss;
         }
         return sum;
+    }
+
+    static int class_loss_spatial(const Shape& input_shape) {
+        int spatial = 1;
+        for (std::size_t i = 2; i < input_shape.size(); ++i)
+            spatial *= static_cast<int>(input_shape[i]);
+        return spatial;
+    }
+
+    static CpuStorage make_cpu_scalar(double value, Dtype dt) {
+        CpuStorage out{allocate_aligned_bytes(dtype_size(dt), Device::CPU), dtype_size(dt), dt};
+        if (dt == Dtype::F32)
+            *reinterpret_cast<float*>(out.ptr.get()) = static_cast<float>(value);
+        else if (dt == Dtype::F64)
+            *reinterpret_cast<double*>(out.ptr.get()) = value;
+        else
+            ErrorBuilder("cpu_backend::class_loss_scalar").not_implemented("dtype not supported");
+        return out;
+    }
+
+    static std::int64_t read_target_index(const CpuStorage& target, std::size_t i) {
+        switch (target.dtype) {
+            case Dtype::I8:
+                return static_cast<std::int64_t>(
+                    reinterpret_cast<const std::int8_t*>(target.ptr.get())[i]);
+            case Dtype::I16:
+                return static_cast<std::int64_t>(
+                    reinterpret_cast<const std::int16_t*>(target.ptr.get())[i]);
+            case Dtype::I32:
+                return static_cast<std::int64_t>(
+                    reinterpret_cast<const std::int32_t*>(target.ptr.get())[i]);
+            case Dtype::I64:
+                return reinterpret_cast<const std::int64_t*>(target.ptr.get())[i];
+            case Dtype::F32:
+                return static_cast<std::int64_t>(
+                    reinterpret_cast<const float*>(target.ptr.get())[i]);
+            case Dtype::F64:
+                return static_cast<std::int64_t>(
+                    reinterpret_cast<const double*>(target.ptr.get())[i]);
+            default:
+                ErrorBuilder("cpu_backend::class_loss_target")
+                    .not_implemented("dtype not supported");
+        }
+    }
+
+    template <typename T>
+    static T sum_values(const T* values, std::size_t n) {
+        T sum = T{0};
+        for (std::size_t i = 0; i < n; ++i)
+            sum += values[i];
+        return sum;
+    }
+
+    static Storage reduce_class_losses(const CpuStorage& losses,
+                                       std::size_t samples,
+                                       std::size_t valid_count,
+                                       Dtype dt,
+                                       int reduction) {
+        if (reduction == 0) {
+            CpuStorage out{allocate_aligned_bytes(samples * dtype_size(dt), Device::CPU),
+                           samples * dtype_size(dt), dt};
+            std::memcpy(out.ptr.get(), losses.ptr.get(), out.nbytes);
+            return Storage{std::move(out)};
+        }
+        if (dt == Dtype::F32) {
+            const auto* lp = reinterpret_cast<const float*>(losses.ptr.get());
+            float sum = sum_values(lp, samples);
+            if (reduction == 1)
+                sum /= static_cast<float>(valid_count);
+            return Storage{make_cpu_scalar(static_cast<double>(sum), dt)};
+        }
+        if (dt == Dtype::F64) {
+            const auto* lp = reinterpret_cast<const double*>(losses.ptr.get());
+            double sum = sum_values(lp, samples);
+            if (reduction == 1)
+                sum /= static_cast<double>(valid_count);
+            return Storage{make_cpu_scalar(sum, dt)};
+        }
+        ErrorBuilder("cpu_backend::class_loss_reduce").not_implemented("dtype not supported");
     }
 
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {

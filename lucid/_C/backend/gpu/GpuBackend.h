@@ -77,11 +77,8 @@ public:
                           [](auto& x, auto& y) { return ::mlx::core::power(x, y); });
     }
 
-    Storage bitwise_binary(const Storage& a,
-                           const Storage& b,
-                           const Shape& shape,
-                           Dtype dt,
-                           int op) override {
+    Storage bitwise_binary(
+        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) override {
         return mlx_binary(a, b, shape, dt, [op](auto& x, auto& y) {
             if (op == 0)
                 return ::mlx::core::bitwise_and(x, y);
@@ -93,11 +90,8 @@ public:
         });
     }
 
-    Storage compare_binary(const Storage& a,
-                           const Storage& b,
-                           const Shape& shape,
-                           Dtype /*dt*/,
-                           int op) override {
+    Storage compare_binary(
+        const Storage& a, const Storage& b, const Shape& shape, Dtype /*dt*/, int op) override {
         return mlx_binary(a, b, shape, Dtype::Bool, [op](auto& x, auto& y) {
             if (op == 0)
                 return ::mlx::core::equal(x, y);
@@ -261,11 +255,10 @@ public:
             ::mlx::core::array a044(0.044715, gpu::to_mlx_dtype(dt));
             ::mlx::core::array kk(k0, gpu::to_mlx_dtype(dt));
             auto x3 = ::mlx::core::multiply(::mlx::core::square(x), x);
-            auto inner = ::mlx::core::multiply(
-                kk, ::mlx::core::add(x, ::mlx::core::multiply(a044, x3)));
+            auto inner =
+                ::mlx::core::multiply(kk, ::mlx::core::add(x, ::mlx::core::multiply(a044, x3)));
             auto t = ::mlx::core::tanh(inner);
-            return ::mlx::core::multiply(::mlx::core::multiply(half, x),
-                                         ::mlx::core::add(one, t));
+            return ::mlx::core::multiply(::mlx::core::multiply(half, x), ::mlx::core::add(one, t));
         });
     }
 
@@ -288,14 +281,12 @@ public:
             auto t = ::mlx::core::tanh(inner);
             auto dinner = ::mlx::core::multiply(
                 c1,
-                ::mlx::core::add(one, ::mlx::core::multiply(
-                                          three, ::mlx::core::multiply(c2, x2))));
+                ::mlx::core::add(one, ::mlx::core::multiply(three, ::mlx::core::multiply(c2, x2))));
             auto t2 = ::mlx::core::multiply(t, t);
             auto term1 = ::mlx::core::multiply(half, ::mlx::core::add(one, t));
             auto term2 = ::mlx::core::multiply(
-                half,
-                ::mlx::core::multiply(
-                    x, ::mlx::core::multiply(::mlx::core::subtract(one, t2), dinner)));
+                half, ::mlx::core::multiply(
+                          x, ::mlx::core::multiply(::mlx::core::subtract(one, t2), dinner)));
             auto dx = ::mlx::core::add(term1, term2);
             return ::mlx::core::multiply(dx, g);
         });
@@ -358,8 +349,8 @@ public:
             ::mlx::core::array s(kS, gpu::to_mlx_dtype(dt));
             ::mlx::core::array sa(kS * kA, gpu::to_mlx_dtype(dt));
             auto pos_branch = ::mlx::core::multiply(s, x);
-            auto neg_branch = ::mlx::core::multiply(
-                sa, ::mlx::core::subtract(::mlx::core::exp(x), one));
+            auto neg_branch =
+                ::mlx::core::multiply(sa, ::mlx::core::subtract(::mlx::core::exp(x), one));
             auto pos_mask = ::mlx::core::greater_equal(x, zero);
             return ::mlx::core::where(pos_mask, pos_branch, neg_branch);
         });
@@ -562,10 +553,7 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
-    Storage reverse_along_axis(const Storage& a,
-                               const Shape& shape,
-                               int axis,
-                               Dtype dt) override {
+    Storage reverse_along_axis(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
         std::vector<std::int32_t> idx(shape[static_cast<std::size_t>(axis)]);
         for (std::int64_t i = 0; i < shape[static_cast<std::size_t>(axis)]; ++i)
@@ -589,8 +577,8 @@ public:
         const auto& gg = std::get<GpuStorage>(grad_out);
         const std::int64_t M = input_shape[0];
         const std::int64_t N = input_shape[1];
-        auto eye = ::mlx::core::eye(static_cast<int>(M), static_cast<int>(N), 0,
-                                    gpu::to_mlx_dtype(dt));
+        auto eye =
+            ::mlx::core::eye(static_cast<int>(M), static_cast<int>(N), 0, gpu::to_mlx_dtype(dt));
         auto result = ::mlx::core::multiply(eye, *gg.arr);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
@@ -772,8 +760,8 @@ public:
         ::mlx::core::Shape lo(src_shape.size(), 0);
         ::mlx::core::Shape hi = gpu::to_mlx_shape(src_shape);
         lo[static_cast<std::size_t>(axis)] = static_cast<::mlx::core::ShapeElem>(offset);
-        hi[static_cast<std::size_t>(axis)] =
-            static_cast<::mlx::core::ShapeElem>(offset + slice_shape[static_cast<std::size_t>(axis)]);
+        hi[static_cast<std::size_t>(axis)] = static_cast<::mlx::core::ShapeElem>(
+            offset + slice_shape[static_cast<std::size_t>(axis)]);
         auto result = ::mlx::core::slice(*ga.arr, lo, hi);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
@@ -869,8 +857,7 @@ public:
         reshape_shape.reserve(output_shape.size() + 1);
         for (std::size_t d = 0; d < output_shape.size(); ++d) {
             if (static_cast<int>(d) == axis) {
-                reshape_shape.push_back(
-                    static_cast<::mlx::core::ShapeElem>(input_shape[d]));
+                reshape_shape.push_back(static_cast<::mlx::core::ShapeElem>(input_shape[d]));
                 reshape_shape.push_back(static_cast<::mlx::core::ShapeElem>(repeats));
             } else {
                 reshape_shape.push_back(static_cast<::mlx::core::ShapeElem>(output_shape[d]));
@@ -1037,11 +1024,8 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
-    Storage clip(const Storage& a,
-                 const Shape& /*shape*/,
-                 Dtype dt,
-                 double min_v,
-                 double max_v) override {
+    Storage clip(
+        const Storage& a, const Shape& /*shape*/, Dtype dt, double min_v, double max_v) override {
         const auto& gs = std::get<GpuStorage>(a);
         auto lo = gpu::mlx_scalar(min_v, gpu::to_mlx_dtype(dt));
         auto hi = gpu::mlx_scalar(max_v, gpu::to_mlx_dtype(dt));
@@ -1166,8 +1150,8 @@ public:
         auto one_mp = ::mlx::core::subtract(one, p);
         auto term1 = ::mlx::core::multiply(*t.arr, ::mlx::core::log(p));
         auto term2 = ::mlx::core::multiply(one_mt, ::mlx::core::log(one_mp));
-        auto values = ::mlx::core::multiply(*w.arr, ::mlx::core::negative(
-                                                       ::mlx::core::add(term1, term2)));
+        auto values =
+            ::mlx::core::multiply(*w.arr, ::mlx::core::negative(::mlx::core::add(term1, term2)));
         auto reduced = apply_loss_reduction(values, reduction);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(reduced), dt)};
     }
@@ -1197,15 +1181,13 @@ public:
         auto dlp = ::mlx::core::add(::mlx::core::negative(::mlx::core::divide(*t.arr, p)),
                                     ::mlx::core::divide(one_mt, one_mp));
         auto dtarget_term = ::mlx::core::add(::mlx::core::negative(log_p), log_1mp);
-        auto values =
-            ::mlx::core::negative(::mlx::core::add(::mlx::core::multiply(*t.arr, log_p),
-                                                   ::mlx::core::multiply(one_mt, log_1mp)));
+        auto values = ::mlx::core::negative(::mlx::core::add(
+            ::mlx::core::multiply(*t.arr, log_p), ::mlx::core::multiply(one_mt, log_1mp)));
         auto scaled = scale_loss_grad(*g.arr, reduction, shape_numel(shape), mlx_dt);
         if (reduction != 0)
             scaled = ::mlx::core::broadcast_to(scaled, gpu::to_mlx_shape(shape));
         auto dx = ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dlp, scaled));
-        auto dtarget =
-            ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dtarget_term, scaled));
+        auto dtarget = ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dtarget_term, scaled));
         auto dweight = ::mlx::core::multiply(values, scaled);
         return {
             Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
@@ -1232,12 +1214,12 @@ public:
         auto zero = gpu::mlx_scalar(0.0, mlx_dt);
         auto pw_m1 = ::mlx::core::subtract(*pw.arr, one);
         auto log_weight = ::mlx::core::add(::mlx::core::multiply(pw_m1, *t.arr), one);
-        auto log1pexp = ::mlx::core::log1p(::mlx::core::exp(
-            ::mlx::core::negative(::mlx::core::abs(*x.arr))));
+        auto log1pexp =
+            ::mlx::core::log1p(::mlx::core::exp(::mlx::core::negative(::mlx::core::abs(*x.arr))));
         auto max0 = ::mlx::core::maximum(*x.arr, zero);
-        auto loss = ::mlx::core::add(
-            ::mlx::core::subtract(max0, ::mlx::core::multiply(*x.arr, *t.arr)),
-            ::mlx::core::multiply(log_weight, log1pexp));
+        auto loss =
+            ::mlx::core::add(::mlx::core::subtract(max0, ::mlx::core::multiply(*x.arr, *t.arr)),
+                             ::mlx::core::multiply(log_weight, log1pexp));
         auto values = ::mlx::core::multiply(*w.arr, loss);
         auto reduced = apply_loss_reduction(values, reduction);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(reduced), dt)};
@@ -1262,23 +1244,20 @@ public:
         auto pw_m1 = ::mlx::core::subtract(*pw.arr, one);
         auto log_weight = ::mlx::core::add(::mlx::core::multiply(pw_m1, *t.arr), one);
         auto sigm = ::mlx::core::sigmoid(*x.arr);
-        auto log1pexp = ::mlx::core::log1p(::mlx::core::exp(
-            ::mlx::core::negative(::mlx::core::abs(*x.arr))));
+        auto log1pexp =
+            ::mlx::core::log1p(::mlx::core::exp(::mlx::core::negative(::mlx::core::abs(*x.arr))));
         auto dlx = ::mlx::core::subtract(::mlx::core::multiply(log_weight, sigm), *t.arr);
-        auto dtarget_term = ::mlx::core::add(::mlx::core::negative(*x.arr),
-                                             ::mlx::core::multiply(pw_m1, log1pexp));
-        auto loss = ::mlx::core::add(
-            ::mlx::core::subtract(::mlx::core::maximum(*x.arr, zero),
-                                  ::mlx::core::multiply(*x.arr, *t.arr)),
-            ::mlx::core::multiply(log_weight, log1pexp));
-        auto dpos_weight =
-            ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(*t.arr, log1pexp));
+        auto dtarget_term =
+            ::mlx::core::add(::mlx::core::negative(*x.arr), ::mlx::core::multiply(pw_m1, log1pexp));
+        auto loss = ::mlx::core::add(::mlx::core::subtract(::mlx::core::maximum(*x.arr, zero),
+                                                           ::mlx::core::multiply(*x.arr, *t.arr)),
+                                     ::mlx::core::multiply(log_weight, log1pexp));
+        auto dpos_weight = ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(*t.arr, log1pexp));
         auto scaled = scale_loss_grad(*g.arr, reduction, shape_numel(shape), mlx_dt);
         if (reduction != 0)
             scaled = ::mlx::core::broadcast_to(scaled, gpu::to_mlx_shape(shape));
         auto dx = ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dlx, scaled));
-        auto dtarget =
-            ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dtarget_term, scaled));
+        auto dtarget = ::mlx::core::multiply(*w.arr, ::mlx::core::multiply(dtarget_term, scaled));
         auto dweight = ::mlx::core::multiply(loss, scaled);
         auto dpos_weight_scaled = ::mlx::core::multiply(dpos_weight, scaled);
         return {
@@ -1287,6 +1266,137 @@ public:
             Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dweight), dt)},
             Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dpos_weight_scaled), dt)},
         };
+    }
+
+    ClassLossForwardResult cross_entropy_loss(const Storage& input,
+                                              const Storage& target,
+                                              const Storage* weight,
+                                              const Shape& /*input_shape*/,
+                                              const Shape& target_shape,
+                                              Dtype dt,
+                                              double eps,
+                                              int ignore_index,
+                                              int reduction) override {
+        const auto& x = std::get<GpuStorage>(input);
+        const auto& t = std::get<GpuStorage>(target);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto softmax = ::mlx::core::softmax(*x.arr, std::vector<int>{1}, /*precise=*/true);
+        auto t_idx = class_target_indices(*t.arr, target_shape);
+        auto ig_mask = class_ignore_mask(t_idx, ignore_index);
+        auto safe_t = safe_class_indices(t_idx, ig_mask);
+
+        auto pred = ::mlx::core::take_along_axis(softmax, safe_t, 1);
+        auto neg_log_pred = ::mlx::core::negative(
+            ::mlx::core::log(::mlx::core::add(pred, gpu::mlx_scalar(eps, mlx_dt))));
+        auto w_gather = class_weight_gather(weight, safe_t, neg_log_pred.shape(), mlx_dt);
+        auto ig_mask_dt = ::mlx::core::astype(ig_mask, mlx_dt);
+        auto loss =
+            ::mlx::core::multiply(::mlx::core::multiply(w_gather, neg_log_pred), ig_mask_dt);
+        auto loss_squeezed = ::mlx::core::squeeze(loss, std::vector<int>{1});
+        auto valid_count = class_valid_count(ig_mask_dt, mlx_dt);
+        auto output = reduce_class_loss(loss_squeezed, valid_count, dt, reduction);
+        return {std::move(output),
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(softmax), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(valid_count), dt)}};
+    }
+
+    Storage cross_entropy_backward(const Storage& saved_softmax,
+                                   const Storage& target,
+                                   const Storage* weight,
+                                   const Storage& valid_count,
+                                   const Storage& grad,
+                                   const Shape& input_shape,
+                                   Dtype dt,
+                                   int ignore_index,
+                                   int reduction) override {
+        const auto& sm = std::get<GpuStorage>(saved_softmax);
+        const auto& t = std::get<GpuStorage>(target);
+        const auto& vc = std::get<GpuStorage>(valid_count);
+        const auto& g = std::get<GpuStorage>(grad);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto full_shape = gpu::to_mlx_shape(input_shape);
+        auto t_shape = full_shape;
+        t_shape[1] = 1;
+        auto t_idx = ::mlx::core::reshape(::mlx::core::astype(*t.arr, ::mlx::core::int64), t_shape);
+        auto ig_mask = class_ignore_mask(t_idx, ignore_index);
+        auto safe_t = safe_class_indices(t_idx, ig_mask);
+
+        auto c_range = ::mlx::core::astype(
+            ::mlx::core::arange(0, static_cast<int>(input_shape[1]), 1), ::mlx::core::int64);
+        ::mlx::core::Shape c_shape(full_shape.size(), 1);
+        c_shape[1] = static_cast<int>(input_shape[1]);
+        auto c_idx = ::mlx::core::reshape(c_range, c_shape);
+        auto onehot = ::mlx::core::astype(::mlx::core::equal(c_idx, t_idx), mlx_dt);
+        auto base = ::mlx::core::subtract(*sm.arr, onehot);
+
+        auto w_gather = class_weight_gather(weight, safe_t, t_shape, mlx_dt);
+        w_gather = ::mlx::core::multiply(w_gather, ::mlx::core::astype(ig_mask, mlx_dt));
+        auto w_full = ::mlx::core::broadcast_to(w_gather, full_shape);
+        auto scaled = class_scaled_grad(*g.arr, *vc.arr, t_shape, reduction);
+        auto scaled_full = ::mlx::core::broadcast_to(scaled, full_shape);
+        auto dx = ::mlx::core::multiply(::mlx::core::multiply(base, w_full), scaled_full);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)};
+    }
+
+    ClassLossForwardResult nll_loss(const Storage& input,
+                                    const Storage& target,
+                                    const Storage* weight,
+                                    const Shape& /*input_shape*/,
+                                    const Shape& target_shape,
+                                    Dtype dt,
+                                    int ignore_index,
+                                    int reduction) override {
+        const auto& x = std::get<GpuStorage>(input);
+        const auto& t = std::get<GpuStorage>(target);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto t_idx = class_target_indices(*t.arr, target_shape);
+        auto ig_mask = class_ignore_mask(t_idx, ignore_index);
+        auto safe_t = safe_class_indices(t_idx, ig_mask);
+        auto pred = ::mlx::core::take_along_axis(*x.arr, safe_t, 1);
+        auto neg = ::mlx::core::negative(pred);
+        auto w_gather = class_weight_gather(weight, safe_t, neg.shape(), mlx_dt);
+        auto ig_mask_dt = ::mlx::core::astype(ig_mask, mlx_dt);
+        auto loss = ::mlx::core::multiply(::mlx::core::multiply(w_gather, neg), ig_mask_dt);
+        auto loss_squeezed = ::mlx::core::squeeze(loss, std::vector<int>{1});
+        auto valid_count = class_valid_count(ig_mask_dt, mlx_dt);
+        auto output = reduce_class_loss(loss_squeezed, valid_count, dt, reduction);
+        return {std::move(output), Storage{},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(valid_count), dt)}};
+    }
+
+    Storage nll_loss_backward(const Storage& target,
+                              const Storage* weight,
+                              const Storage& valid_count,
+                              const Storage& grad,
+                              const Shape& input_shape,
+                              Dtype dt,
+                              int ignore_index,
+                              int reduction) override {
+        const auto& t = std::get<GpuStorage>(target);
+        const auto& vc = std::get<GpuStorage>(valid_count);
+        const auto& g = std::get<GpuStorage>(grad);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto full_shape = gpu::to_mlx_shape(input_shape);
+        auto t_shape = full_shape;
+        t_shape[1] = 1;
+        auto t_idx = ::mlx::core::reshape(::mlx::core::astype(*t.arr, ::mlx::core::int64), t_shape);
+        auto ig_mask = class_ignore_mask(t_idx, ignore_index);
+        auto safe_t = safe_class_indices(t_idx, ig_mask);
+
+        auto c_range = ::mlx::core::astype(
+            ::mlx::core::arange(0, static_cast<int>(input_shape[1]), 1), ::mlx::core::int64);
+        ::mlx::core::Shape c_shape(full_shape.size(), 1);
+        c_shape[1] = static_cast<int>(input_shape[1]);
+        auto c_idx = ::mlx::core::reshape(c_range, c_shape);
+        auto onehot = ::mlx::core::astype(::mlx::core::equal(c_idx, t_idx), mlx_dt);
+        auto neg_onehot = ::mlx::core::negative(onehot);
+        auto w_gather = class_weight_gather(weight, safe_t, t_shape, mlx_dt);
+        w_gather = ::mlx::core::multiply(w_gather, ::mlx::core::astype(ig_mask, mlx_dt));
+        auto w_full = ::mlx::core::broadcast_to(w_gather, full_shape);
+        auto scaled = class_scaled_grad(*g.arr, *vc.arr, t_shape, reduction);
+        auto scaled_full = ::mlx::core::broadcast_to(scaled, full_shape);
+        auto dx = ::mlx::core::multiply(::mlx::core::multiply(neg_onehot, w_full), scaled_full);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)};
     }
 
     CpuStorage to_cpu(const Storage& a, const Shape& shape) override {
@@ -1319,8 +1429,8 @@ private:
             return values;
         auto sum = ::mlx::core::sum(values, /*keepdims=*/false);
         if (reduction == 1)
-            return ::mlx::core::divide(sum, gpu::mlx_scalar(static_cast<double>(values.size()),
-                                                           values.dtype()));
+            return ::mlx::core::divide(
+                sum, gpu::mlx_scalar(static_cast<double>(values.size()), values.dtype()));
         return sum;
     }
 
@@ -1331,6 +1441,67 @@ private:
         if (reduction == 1)
             return ::mlx::core::divide(grad, gpu::mlx_scalar(static_cast<double>(numel), dt));
         return grad;
+    }
+
+    ::mlx::core::array class_target_indices(const ::mlx::core::array& target,
+                                            const Shape& target_shape) {
+        auto t_shape = gpu::to_mlx_shape(target_shape);
+        t_shape.insert(t_shape.begin() + 1, 1);
+        return ::mlx::core::reshape(::mlx::core::astype(target, ::mlx::core::int64), t_shape);
+    }
+
+    ::mlx::core::array class_ignore_mask(const ::mlx::core::array& target_idx, int ignore_index) {
+        auto ignore = ::mlx::core::astype(::mlx::core::array(ignore_index), ::mlx::core::int64);
+        return ::mlx::core::not_equal(target_idx, ignore);
+    }
+
+    ::mlx::core::array safe_class_indices(const ::mlx::core::array& target_idx,
+                                          const ::mlx::core::array& keep_mask) {
+        auto zero = ::mlx::core::astype(::mlx::core::array(0), ::mlx::core::int64);
+        return ::mlx::core::where(keep_mask, target_idx, zero);
+    }
+
+    ::mlx::core::array class_weight_gather(const Storage* weight,
+                                           const ::mlx::core::array& safe_t,
+                                           const ::mlx::core::Shape& shape,
+                                           ::mlx::core::Dtype dt) {
+        if (weight) {
+            const auto& w = std::get<GpuStorage>(*weight);
+            return ::mlx::core::take(*w.arr, safe_t);
+        }
+        return ::mlx::core::broadcast_to(gpu::mlx_scalar(1.0, dt), shape);
+    }
+
+    ::mlx::core::array class_valid_count(const ::mlx::core::array& keep_mask_dt,
+                                         ::mlx::core::Dtype dt) {
+        auto valid = ::mlx::core::sum(keep_mask_dt, /*keepdims=*/false);
+        return ::mlx::core::maximum(valid, gpu::mlx_scalar(1.0, dt));
+    }
+
+    Storage reduce_class_loss(const ::mlx::core::array& values,
+                              const ::mlx::core::array& valid_count,
+                              Dtype dt,
+                              int reduction) {
+        if (reduction == 0)
+            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(values), dt)};
+        auto sum = ::mlx::core::sum(values, /*keepdims=*/false);
+        if (reduction == 1)
+            sum = ::mlx::core::divide(sum, valid_count);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(sum), dt)};
+    }
+
+    ::mlx::core::array class_scaled_grad(const ::mlx::core::array& grad,
+                                         const ::mlx::core::array& valid_count,
+                                         const ::mlx::core::Shape& target_axis_shape,
+                                         int reduction) {
+        ::mlx::core::array scaled = grad;
+        if (reduction == 1)
+            scaled = ::mlx::core::divide(scaled, valid_count);
+        if (reduction != 0)
+            return ::mlx::core::broadcast_to(scaled, target_axis_shape);
+        auto grad_shape = scaled.shape();
+        grad_shape.insert(grad_shape.begin() + 1, 1);
+        return ::mlx::core::reshape(scaled, grad_shape);
     }
 
     template <class Fn>

@@ -62,6 +62,12 @@ struct ReduceOpts {
     bool keepdims = false;
 };
 
+struct ClassLossForwardResult {
+    Storage output;
+    Storage saved_aux;
+    Storage valid_count;
+};
+
 // -----------------------------------------------------------------------
 // IBackend
 // -----------------------------------------------------------------------
@@ -92,16 +98,10 @@ public:
     virtual Storage mul(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage div(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage pow(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
-    virtual Storage bitwise_binary(const Storage& a,
-                                   const Storage& b,
-                                   const Shape& shape,
-                                   Dtype dt,
-                                   int op) = 0;
-    virtual Storage compare_binary(const Storage& a,
-                                   const Storage& b,
-                                   const Shape& shape,
-                                   Dtype dt,
-                                   int op) = 0;
+    virtual Storage bitwise_binary(
+        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) = 0;
+    virtual Storage compare_binary(
+        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) = 0;
     virtual Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage minimum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
 
@@ -146,11 +146,8 @@ public:
     virtual Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) = 0;
     virtual Storage softplus(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage elu(const Storage& a, const Shape& shape, Dtype dt, double alpha) = 0;
-    virtual Storage elu_backward(const Storage& a,
-                                 const Storage& grad,
-                                 const Shape& shape,
-                                 Dtype dt,
-                                 double alpha) = 0;
+    virtual Storage elu_backward(
+        const Storage& a, const Storage& grad, const Shape& shape, Dtype dt, double alpha) = 0;
     virtual Storage selu(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage selu_backward(const Storage& a,
                                   const Storage& grad,
@@ -199,19 +196,14 @@ public:
     virtual Storage cumsum(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
     virtual Storage cumprod(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
     virtual Storage softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
-    virtual Storage softmax_backward(const Storage& z,
-                                     const Storage& grad_out,
-                                     const Shape& shape,
-                                     int axis,
-                                     Dtype dt) = 0;
+    virtual Storage softmax_backward(
+        const Storage& z, const Storage& grad_out, const Shape& shape, int axis, Dtype dt) = 0;
     virtual Storage reverse_along_axis(const Storage& a,
                                        const Shape& shape,
                                        int axis,
                                        Dtype dt) = 0;
     virtual Storage trace(const Storage& a, const Shape& shape, Dtype dt) = 0;
-    virtual Storage trace_backward(const Storage& grad_out,
-                                   const Shape& input_shape,
-                                   Dtype dt) = 0;
+    virtual Storage trace_backward(const Storage& grad_out, const Shape& input_shape, Dtype dt) = 0;
     virtual std::vector<Storage> meshgrid(const std::vector<Storage>& xs,
                                           const Shape& out_shape,
                                           Dtype dt,
@@ -221,11 +213,8 @@ public:
                                  const Shape& shape,
                                  Dtype dt,
                                  bool true_branch) = 0;
-    virtual Storage masked_fill(const Storage& a,
-                                const Storage& mask,
-                                const Shape& shape,
-                                Dtype dt,
-                                double value) = 0;
+    virtual Storage masked_fill(
+        const Storage& a, const Storage& mask, const Shape& shape, Dtype dt, double value) = 0;
     virtual Storage gather(const Storage& a,
                            const Storage& indices,
                            const Shape& input_shape,
@@ -240,12 +229,8 @@ public:
                                     int axis,
                                     Dtype index_dtype,
                                     Dtype dt) = 0;
-    virtual Storage diagonal(const Storage& a,
-                             const Shape& input_shape,
-                             int offset,
-                             int axis1,
-                             int axis2,
-                             Dtype dt) = 0;
+    virtual Storage diagonal(
+        const Storage& a, const Shape& input_shape, int offset, int axis1, int axis2, Dtype dt) = 0;
     virtual Storage diagonal_backward(const Storage& grad,
                                       const Shape& input_shape,
                                       const Shape& output_shape,
@@ -282,11 +267,8 @@ public:
                           const Shape& input_shape,
                           int axis,
                           Dtype dt) = 0;
-    virtual std::vector<Storage> split_equal(const Storage& a,
-                                             const Shape& shape,
-                                             int axis,
-                                             std::int64_t num_splits,
-                                             Dtype dt) = 0;
+    virtual std::vector<Storage> split_equal(
+        const Storage& a, const Shape& shape, int axis, std::int64_t num_splits, Dtype dt) = 0;
     virtual std::vector<Storage> split_at(const Storage& a,
                                           const Shape& shape,
                                           int axis,
@@ -311,12 +293,8 @@ public:
                                                     Dtype dt,
                                                     bool descending) = 0;
     virtual Storage argsort(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
-    virtual Storage arg_reduce_index(const Storage& a,
-                                     const Shape& shape,
-                                     int axis,
-                                     bool keepdims,
-                                     Dtype dt,
-                                     bool is_min) = 0;
+    virtual Storage arg_reduce_index(
+        const Storage& a, const Shape& shape, int axis, bool keepdims, Dtype dt, bool is_min) = 0;
     virtual Storage scatter_add_axis(const Storage& grad,
                                      const Storage& indices,
                                      const Shape& output_shape,
@@ -339,11 +317,8 @@ public:
                               const Shape& dst_shape,
                               Dtype dt) = 0;
 
-    virtual Storage repeat(const Storage& a,
-                           const Shape& shape,
-                           Dtype dt,
-                           std::int64_t repeats,
-                           int axis) = 0;
+    virtual Storage repeat(
+        const Storage& a, const Shape& shape, Dtype dt, std::int64_t repeats, int axis) = 0;
 
     virtual Storage tile(const Storage& a,
                          const Shape& shape,
@@ -363,7 +338,8 @@ public:
 
     virtual Storage pow_scalar(const Storage& a, const Shape& shape, Dtype dt, double exp) = 0;
     virtual Storage rpow_scalar(const Storage& a, const Shape& shape, Dtype dt, double base) = 0;
-    virtual Storage clip(const Storage& a, const Shape& shape, Dtype dt, double min_v, double max_v) = 0;
+    virtual Storage clip(
+        const Storage& a, const Shape& shape, Dtype dt, double min_v, double max_v) = 0;
 
     virtual Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) = 0;
 
@@ -423,6 +399,41 @@ public:
                                                           const Shape& shape,
                                                           Dtype dt,
                                                           int reduction) = 0;
+
+    virtual ClassLossForwardResult cross_entropy_loss(const Storage& input,
+                                                      const Storage& target,
+                                                      const Storage* weight,
+                                                      const Shape& input_shape,
+                                                      const Shape& target_shape,
+                                                      Dtype dt,
+                                                      double eps,
+                                                      int ignore_index,
+                                                      int reduction) = 0;
+    virtual Storage cross_entropy_backward(const Storage& saved_softmax,
+                                           const Storage& target,
+                                           const Storage* weight,
+                                           const Storage& valid_count,
+                                           const Storage& grad,
+                                           const Shape& input_shape,
+                                           Dtype dt,
+                                           int ignore_index,
+                                           int reduction) = 0;
+    virtual ClassLossForwardResult nll_loss(const Storage& input,
+                                            const Storage& target,
+                                            const Storage* weight,
+                                            const Shape& input_shape,
+                                            const Shape& target_shape,
+                                            Dtype dt,
+                                            int ignore_index,
+                                            int reduction) = 0;
+    virtual Storage nll_loss_backward(const Storage& target,
+                                      const Storage* weight,
+                                      const Storage& valid_count,
+                                      const Storage& grad,
+                                      const Shape& input_shape,
+                                      Dtype dt,
+                                      int ignore_index,
+                                      int reduction) = 0;
 
     virtual CpuStorage to_cpu(const Storage& a, const Shape& shape) = 0;
 };
