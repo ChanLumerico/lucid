@@ -1,16 +1,12 @@
 #include "View.h"
 
-#include <cstring>
 #include <variant>
 #include <vector>
-
-#include <mlx/ops.h>
 
 #include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
-#include "../../backend/gpu/MlxBridge.h"
-#include "../../core/Allocator.h"
+#include "../../backend/Dispatcher.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -21,30 +17,13 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
-#include "Contiguous.h"          // contiguous_op for non-contig fallback
 
 namespace lucid {
 
-const OpSchema ViewBackward::schema_v1{"view", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, /*internal=*/true};
+const OpSchema ViewBackward::schema_v1{"view", 1,  AmpPolicy::KeepInput, true, "", -1,
+                                       1,      {}, /*internal=*/true};
 
 namespace {
-
-CpuStorage allocate_like(const Shape& shape, Dtype dt) {
-    CpuStorage out;
-    out.dtype = dt;
-    out.nbytes = shape_numel(shape) * dtype_size(dt);
-    out.ptr = allocate_aligned_bytes(out.nbytes);
-    return out;
-}
-
-// Copy raw bytes — same buffer, same layout (contiguous source, contiguous
-// destination), only metadata changes. Used by reshape/squeeze/unsqueeze.
-CpuStorage clone_for_view(const CpuStorage& src, const Shape& out_shape, Dtype dt) {
-    auto out = allocate_like(out_shape, dt);
-    if (out.nbytes > 0)
-        std::memcpy(out.ptr.get(), src.ptr.get(), out.nbytes);
-    return out;
-}
 
 // Handle a `reshape` shape with one optional `-1` placeholder.
 Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_t>& new_shape) {
@@ -87,20 +66,10 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
     Validator::input(a, std::string(op_name) + ".a").non_null();
     OpScopeFull scope{op_name, a->device(), a->dtype(), out_shape};
 
-    TensorImplPtr out;
-    if (a->device() == Device::GPU) {
-        // GPU: MLX reshape is lazy; it produces a view internally.
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        auto raw = ::mlx::core::reshape(*ga.arr, gpu::to_mlx_shape(out_shape));
-        out = std::make_shared<TensorImpl>(Storage{gpu::wrap_mlx_array(std::move(raw), a->dtype())},
-                                           out_shape, a->dtype(), a->device(),
-                                           /*requires_grad=*/false);
-    } else {
-        // CPU: metadata-only view when contiguous; materialise first if not.
-        const TensorImplPtr& base = a->is_contiguous() ? a : contiguous_op(a);
-        Stride new_stride = contiguous_stride(out_shape, dtype_size(a->dtype()));
-        out = TensorImpl::make_view(base, out_shape, std::move(new_stride), /*offset_bytes=*/0);
-    }
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .reshape(a->storage(), a->shape(), out_shape, a->dtype());
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
+                                            a->device(), /*requires_grad=*/false);
 
     kernel::NaryKernel<ViewBackward, 1>::wire_autograd({a}, out, /*save_ins=*/false);
     return out;
@@ -111,15 +80,9 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
 std::vector<Storage> ViewBackward::apply(Storage grad_out) {
     // dx layout = input_shape (contiguous). For both CPU and GPU, the inverse
     // is just a reshape back to the original shape.
-    if (device_ == Device::GPU) {
-        const auto& gg = std::get<GpuStorage>(grad_out);
-        auto out = ::mlx::core::reshape(*gg.arr, gpu::to_mlx_shape(input_shapes_[0]));
-        out = ::mlx::core::contiguous(out);
-        return {Storage{gpu::wrap_mlx_array(std::move(out), dtype_)}};
-    }
-    const auto& g_cpu = std::get<CpuStorage>(grad_out);
-    auto out_cpu = clone_for_view(g_cpu, input_shapes_[0], dtype_);
-    return {Storage{std::move(out_cpu)}};
+    auto out = backend::Dispatcher::for_device(device_).reshape(grad_out, out_shape_,
+                                                                input_shapes_[0], dtype_);
+    return {std::move(out)};
 }
 
 // ---------------- reshape ----------------
