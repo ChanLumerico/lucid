@@ -2582,6 +2582,28 @@ public:
         return {Storage{std::move(dx)}, Storage{std::move(dW)}, Storage{std::move(db)}};
     }
 
+    Storage linalg_norm(const Storage& a,
+                        const Shape& shape,
+                        double ord,
+                        const std::vector<int>& axes,
+                        bool keepdims,
+                        Dtype dt) override {
+        Shape out_shape = reduced_norm_shape(shape, axes, keepdims);
+        const std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
+        const auto& cs = std::get<CpuStorage>(a);
+        if (dt == Dtype::F32) {
+            norm_typed(reinterpret_cast<const float*>(cs.ptr.get()),
+                       reinterpret_cast<float*>(ptr.get()), shape, axes, ord, out_shape);
+        } else if (dt == Dtype::F64) {
+            norm_typed(reinterpret_cast<const double*>(cs.ptr.get()),
+                       reinterpret_cast<double*>(ptr.get()), shape, axes, ord, out_shape);
+        } else {
+            ErrorBuilder("cpu_backend::linalg_norm").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, out_nbytes, dt}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
@@ -3888,6 +3910,137 @@ private:
                                   reinterpret_cast<double*>(db.ptr.get()), M, N);
         else
             ErrorBuilder("cpu_backend::linear_backward").not_implemented("dtype not supported");
+    }
+
+    static Shape reduced_norm_shape(const Shape& shape,
+                                    const std::vector<int>& axes,
+                                    bool keepdims) {
+        if (axes.empty()) {
+            if (keepdims)
+                return Shape(shape.size(), 1);
+            return Shape{};
+        }
+        std::vector<bool> mask(shape.size(), false);
+        for (int axis : axes) {
+            const int wrapped = axis < 0 ? axis + static_cast<int>(shape.size()) : axis;
+            mask[static_cast<std::size_t>(wrapped)] = true;
+        }
+        Shape out;
+        for (std::size_t d = 0; d < shape.size(); ++d) {
+            if (mask[d]) {
+                if (keepdims)
+                    out.push_back(1);
+            } else {
+                out.push_back(shape[d]);
+            }
+        }
+        return out;
+    }
+
+    template <typename T, typename Fn>
+    static void norm_elementwise_loop(const T* in,
+                                      const Shape& shape,
+                                      const std::vector<bool>& reduce_mask,
+                                      const Shape& out_shape,
+                                      Fn fn) {
+        const std::size_t nd = shape.size();
+        Stride in_stride(nd), out_stride(out_shape.size());
+        if (nd > 0) {
+            in_stride[nd - 1] = 1;
+            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(nd) - 2; i >= 0; --i)
+                in_stride[static_cast<std::size_t>(i)] =
+                    in_stride[static_cast<std::size_t>(i) + 1] *
+                    shape[static_cast<std::size_t>(i) + 1];
+        }
+        if (!out_shape.empty()) {
+            const std::size_t ond = out_shape.size();
+            out_stride[ond - 1] = 1;
+            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(ond) - 2; i >= 0; --i)
+                out_stride[static_cast<std::size_t>(i)] =
+                    out_stride[static_cast<std::size_t>(i) + 1] *
+                    out_shape[static_cast<std::size_t>(i) + 1];
+        }
+
+        std::vector<std::int64_t> coord(nd, 0);
+        const std::size_t in_numel = shape_numel(shape);
+        for (std::size_t f = 0; f < in_numel; ++f) {
+            std::size_t in_flat = 0;
+            std::size_t out_flat = 0;
+            std::size_t out_axis = 0;
+            for (std::size_t d = 0; d < nd; ++d) {
+                in_flat +=
+                    static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
+                if (!reduce_mask[d]) {
+                    out_flat += static_cast<std::size_t>(coord[d]) *
+                                static_cast<std::size_t>(out_stride[out_axis]);
+                    ++out_axis;
+                }
+            }
+            fn(in[in_flat], out_flat);
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nd) - 1; d >= 0; --d) {
+                if (++coord[static_cast<std::size_t>(d)] < shape[static_cast<std::size_t>(d)])
+                    break;
+                coord[static_cast<std::size_t>(d)] = 0;
+            }
+        }
+    }
+
+    template <typename T>
+    static void norm_typed(const T* in,
+                           T* out,
+                           const Shape& shape,
+                           const std::vector<int>& axes,
+                           double ord,
+                           const Shape& out_shape) {
+        std::vector<bool> reduce_mask(shape.size(), false);
+        if (axes.empty()) {
+            for (std::size_t i = 0; i < shape.size(); ++i)
+                reduce_mask[i] = true;
+        } else {
+            for (int axis : axes) {
+                const int wrapped = axis < 0 ? axis + static_cast<int>(shape.size()) : axis;
+                reduce_mask[static_cast<std::size_t>(wrapped)] = true;
+            }
+        }
+        const std::size_t out_numel = std::max<std::size_t>(1, shape_numel(out_shape));
+        if (std::isinf(ord)) {
+            const bool positive = ord > 0;
+            std::vector<T> acc(out_numel, positive ? T{0} : std::numeric_limits<T>::infinity());
+            norm_elementwise_loop<T>(in, shape, reduce_mask, out_shape, [&](T v, std::size_t o) {
+                const T av = std::abs(v);
+                acc[o] = positive ? std::max(acc[o], av) : std::min(acc[o], av);
+            });
+            std::memcpy(out, acc.data(), out_numel * sizeof(T));
+            return;
+        }
+        if (ord == 0.0) {
+            std::vector<T> acc(out_numel, T{0});
+            norm_elementwise_loop<T>(in, shape, reduce_mask, out_shape, [&](T v, std::size_t o) {
+                if (v != T{0})
+                    acc[o] += T{1};
+            });
+            std::memcpy(out, acc.data(), out_numel * sizeof(T));
+            return;
+        }
+        std::vector<T> acc(out_numel, T{0});
+        norm_elementwise_loop<T>(in, shape, reduce_mask, out_shape, [&](T v, std::size_t o) {
+            const T av = std::abs(v);
+            if (ord == 2.0)
+                acc[o] += v * v;
+            else if (ord == 1.0)
+                acc[o] += av;
+            else
+                acc[o] += std::pow(av, static_cast<T>(ord));
+        });
+        if (ord == 2.0) {
+            for (std::size_t i = 0; i < out_numel; ++i)
+                acc[i] = std::sqrt(acc[i]);
+        } else if (ord != 1.0) {
+            const T inv_ord = static_cast<T>(1.0 / ord);
+            for (std::size_t i = 0; i < out_numel; ++i)
+                acc[i] = std::pow(acc[i], inv_ord);
+        }
+        std::memcpy(out, acc.data(), out_numel * sizeof(T));
     }
 
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {

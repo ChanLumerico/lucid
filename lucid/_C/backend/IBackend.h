@@ -323,6 +323,12 @@ public:
                                                  const Shape& weight_shape,
                                                  const Shape& bias_shape,
                                                  Dtype dt) = 0;
+    virtual Storage linalg_norm(const Storage& a,
+                                const Shape& shape,
+                                double ord,
+                                const std::vector<int>& axes,
+                                bool keepdims,
+                                Dtype dt) = 0;
 
     // ---- Broadcast / cast --------------------------------------------
 

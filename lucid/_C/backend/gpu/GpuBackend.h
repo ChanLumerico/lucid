@@ -14,6 +14,7 @@
 #include <stdexcept>
 
 #include <mlx/array.h>
+#include <mlx/linalg.h>
 #include <mlx/ops.h>
 
 #include "../../core/ErrorBuilder.h"
@@ -1010,6 +1011,20 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(db), dt)}};
     }
 
+    Storage linalg_norm(const Storage& a,
+                        const Shape& /*shape*/,
+                        double ord,
+                        const std::vector<int>& axes,
+                        bool keepdims,
+                        Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        std::optional<std::vector<int>> axis_opt;
+        if (!axes.empty())
+            axis_opt = axes;
+        auto raw = ::mlx::core::linalg::norm(*ga.arr, ord, axis_opt, keepdims, k_linalg_stream);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(raw), dt)};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
@@ -1458,6 +1473,8 @@ public:
 
 private:
     // ---- Helpers -------------------------------------------------------
+
+    inline static const ::mlx::core::Device k_linalg_stream{::mlx::core::Device::cpu};
 
     ::mlx::core::array take_descending_top_indices(const ::mlx::core::array& idx,
                                                    int axis,
