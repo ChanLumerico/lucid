@@ -97,6 +97,11 @@ public:
                                    const Shape& shape,
                                    Dtype dt,
                                    int op) = 0;
+    virtual Storage compare_binary(const Storage& a,
+                                   const Storage& b,
+                                   const Shape& shape,
+                                   Dtype dt,
+                                   int op) = 0;
     virtual Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage minimum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
 

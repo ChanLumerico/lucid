@@ -93,6 +93,28 @@ public:
         });
     }
 
+    Storage compare_binary(const Storage& a,
+                           const Storage& b,
+                           const Shape& shape,
+                           Dtype /*dt*/,
+                           int op) override {
+        return mlx_binary(a, b, shape, Dtype::Bool, [op](auto& x, auto& y) {
+            if (op == 0)
+                return ::mlx::core::equal(x, y);
+            if (op == 1)
+                return ::mlx::core::not_equal(x, y);
+            if (op == 2)
+                return ::mlx::core::greater(x, y);
+            if (op == 3)
+                return ::mlx::core::greater_equal(x, y);
+            if (op == 4)
+                return ::mlx::core::less(x, y);
+            if (op == 5)
+                return ::mlx::core::less_equal(x, y);
+            ErrorBuilder("gpu_backend::compare_binary").fail("unknown op");
+        });
+    }
+
     Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
         return mlx_binary(a, b, shape, dt,
                           [](auto& x, auto& y) { return ::mlx::core::maximum(x, y); });

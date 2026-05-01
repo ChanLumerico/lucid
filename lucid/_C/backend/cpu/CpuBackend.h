@@ -213,6 +213,65 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage compare_binary(const Storage& a,
+                           const Storage& b,
+                           const Shape& shape,
+                           Dtype dt,
+                           int op) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const auto& cb = std::get<CpuStorage>(b);
+        const std::size_t n = shape_numel(shape);
+        auto ptr = allocate_aligned_bytes(n, Device::CPU);
+        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+
+        auto run = [&](const auto* lhs, const auto* rhs) {
+            for (std::size_t i = 0; i < n; ++i) {
+                bool out;
+                if (op == 0)
+                    out = lhs[i] == rhs[i];
+                else if (op == 1)
+                    out = lhs[i] != rhs[i];
+                else if (op == 2)
+                    out = lhs[i] > rhs[i];
+                else if (op == 3)
+                    out = lhs[i] >= rhs[i];
+                else if (op == 4)
+                    out = lhs[i] < rhs[i];
+                else if (op == 5)
+                    out = lhs[i] <= rhs[i];
+                else
+                    ErrorBuilder("cpu_backend::compare_binary").fail("unknown op");
+                dst[i] = out ? 1u : 0u;
+            }
+        };
+
+        if (dt == Dtype::F32) {
+            run(reinterpret_cast<const float*>(ca.ptr.get()),
+                reinterpret_cast<const float*>(cb.ptr.get()));
+        } else if (dt == Dtype::F64) {
+            run(reinterpret_cast<const double*>(ca.ptr.get()),
+                reinterpret_cast<const double*>(cb.ptr.get()));
+        } else if (dt == Dtype::I32) {
+            run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::int32_t*>(cb.ptr.get()));
+        } else if (dt == Dtype::I64) {
+            run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cb.ptr.get()));
+        } else if (dt == Dtype::I16) {
+            run(reinterpret_cast<const std::int16_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::int16_t*>(cb.ptr.get()));
+        } else if (dt == Dtype::I8) {
+            run(reinterpret_cast<const std::int8_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::int8_t*>(cb.ptr.get()));
+        } else if (dt == Dtype::Bool) {
+            run(reinterpret_cast<const std::uint8_t*>(ca.ptr.get()),
+                reinterpret_cast<const std::uint8_t*>(cb.ptr.get()));
+        } else {
+            ErrorBuilder("cpu_backend::compare_binary").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, n, Dtype::Bool}};
+    }
+
     Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
         return binary_op(
             a, b, shape, dt,
