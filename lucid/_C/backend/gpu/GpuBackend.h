@@ -1072,6 +1072,12 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage linalg_pinv(const Storage& a, const Shape& /*shape*/, Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto out = ::mlx::core::linalg::pinv(*ga.arr, k_linalg_stream);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
