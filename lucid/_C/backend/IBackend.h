@@ -360,6 +360,11 @@ public:
                                   const Shape& q_shape,
                                   const Shape& r_shape,
                                   Dtype dt) = 0;
+    virtual StoragePair linalg_eig(const Storage& a,
+                                   const Shape& shape,
+                                   const Shape& values_shape,
+                                   const Shape& vectors_shape,
+                                   Dtype dt) = 0;
 
     // ---- Broadcast / cast --------------------------------------------
 

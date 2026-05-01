@@ -2921,6 +2921,52 @@ public:
         return {Storage{CpuStorage{q_ptr, q_nbytes, dt}}, Storage{CpuStorage{r_ptr, r_nbytes, dt}}};
     }
 
+    StoragePair linalg_eig(const Storage& a,
+                           const Shape& shape,
+                           const Shape& values_shape,
+                           const Shape& vectors_shape,
+                           Dtype dt) override {
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(shape, /*mat_dims=*/2);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        const std::size_t per_w = static_cast<std::size_t>(n);
+        const std::size_t values_nbytes = shape_numel(values_shape) * dtype_size(dt);
+        const std::size_t vectors_nbytes = shape_numel(vectors_shape) * dtype_size(dt);
+        auto values_ptr = allocate_aligned_bytes(values_nbytes, Device::CPU);
+        auto vectors_ptr = allocate_aligned_bytes(vectors_nbytes, Device::CPU);
+        const auto& cs = std::get<CpuStorage>(a);
+
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
+            auto* w_p = reinterpret_cast<float*>(values_ptr.get());
+            auto* v_p = reinterpret_cast<float*>(vectors_ptr.get());
+            std::vector<float> wr(n), wi(n);
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_eig_f32(in_p + b * per_mat, n, wr.data(), wi.data(), v_p + b * per_mat,
+                                    &info);
+                check_lapack_info(info, "eig");
+                std::memcpy(w_p + b * per_w, wr.data(), per_w * sizeof(float));
+            }
+        } else if (dt == Dtype::F64) {
+            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* w_p = reinterpret_cast<double*>(values_ptr.get());
+            auto* v_p = reinterpret_cast<double*>(vectors_ptr.get());
+            std::vector<double> wr(n), wi(n);
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_eig_f64(in_p + b * per_mat, n, wr.data(), wi.data(), v_p + b * per_mat,
+                                    &info);
+                check_lapack_info(info, "eig");
+                std::memcpy(w_p + b * per_w, wr.data(), per_w * sizeof(double));
+            }
+        } else {
+            ErrorBuilder("cpu_backend::linalg_eig").not_implemented("dtype not supported");
+        }
+
+        return {Storage{CpuStorage{values_ptr, values_nbytes, dt}},
+                Storage{CpuStorage{vectors_ptr, vectors_nbytes, dt}}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
