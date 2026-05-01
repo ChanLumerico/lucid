@@ -1025,6 +1025,15 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(raw), dt)};
     }
 
+    Storage linalg_cholesky(const Storage& a,
+                            const Shape& /*shape*/,
+                            bool upper,
+                            Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto out = ::mlx::core::linalg::cholesky(*ga.arr, upper, k_linalg_stream);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,

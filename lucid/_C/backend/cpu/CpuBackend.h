@@ -20,6 +20,7 @@
 #include "../Dispatcher.h"
 #include "../IBackend.h"
 #include "Blas.h"
+#include "Lapack.h"
 #include "Reduce.h"
 #include "Shape.h"
 #include "Vdsp.h"
@@ -2604,6 +2605,34 @@ public:
         return Storage{CpuStorage{ptr, out_nbytes, dt}};
     }
 
+    Storage linalg_cholesky(const Storage& a, const Shape& shape, bool upper, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
+        if (cs.nbytes > 0)
+            std::memcpy(ptr.get(), cs.ptr.get(), cs.nbytes);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(shape, /*mat_dims=*/2);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        const bool lower = !upper;
+        int info = 0;
+        if (dt == Dtype::F32) {
+            auto* p = reinterpret_cast<float*>(ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_cholesky_f32(p + b * per_mat, n, lower, &info);
+                check_lapack_info(info, "cholesky");
+            }
+        } else if (dt == Dtype::F64) {
+            auto* p = reinterpret_cast<double*>(ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_cholesky_f64(p + b * per_mat, n, lower, &info);
+                check_lapack_info(info, "cholesky");
+            }
+        } else {
+            ErrorBuilder("cpu_backend::linalg_cholesky").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, cs.nbytes, dt}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
@@ -4041,6 +4070,20 @@ private:
                 acc[i] = std::pow(acc[i], inv_ord);
         }
         std::memcpy(out, acc.data(), out_numel * sizeof(T));
+    }
+
+    static std::int64_t leading_matrix_batch_count(const Shape& shape, std::size_t mat_dims) {
+        std::int64_t batch = 1;
+        for (std::size_t i = 0; i + mat_dims < shape.size(); ++i)
+            batch *= shape[i];
+        return batch;
+    }
+
+    static void check_lapack_info(int info, const char* op) {
+        if (info < 0)
+            ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info));
+        if (info > 0)
+            ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")");
     }
 
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {
