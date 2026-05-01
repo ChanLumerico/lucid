@@ -2708,6 +2708,109 @@ public:
                 Storage{CpuStorage{dgamma_ptr, dgamma_nbytes, dt}}};
     }
 
+    std::vector<Storage> layer_norm_forward(const Storage& x,
+                                            const Storage& gamma,
+                                            const Storage& beta,
+                                            std::size_t outer,
+                                            std::size_t normalized_size,
+                                            double eps,
+                                            const Shape& /*x_shape*/,
+                                            Dtype dt) override {
+        const std::size_t y_nbytes = outer * normalized_size * dtype_size(dt);
+        const std::size_t saved_nbytes = outer * dtype_size(dt);
+        auto y_ptr = allocate_aligned_bytes(y_nbytes, Device::CPU);
+        auto mean_ptr = allocate_aligned_bytes(saved_nbytes, Device::CPU);
+        auto rstd_ptr = allocate_aligned_bytes(saved_nbytes, Device::CPU);
+        const auto& x_cpu = std::get<CpuStorage>(x);
+        const auto& g_cpu = std::get<CpuStorage>(gamma);
+        const auto& b_cpu = std::get<CpuStorage>(beta);
+
+        if (outer * normalized_size > 0) {
+            if (dt == Dtype::F32) {
+                cpu::layer_norm_forward_f32(
+                    reinterpret_cast<const float*>(x_cpu.ptr.get()),
+                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                    reinterpret_cast<const float*>(b_cpu.ptr.get()),
+                    reinterpret_cast<float*>(y_ptr.get()), reinterpret_cast<float*>(mean_ptr.get()),
+                    reinterpret_cast<float*>(rstd_ptr.get()), outer, normalized_size, eps);
+            } else if (dt == Dtype::F64) {
+                cpu::layer_norm_forward_f64(reinterpret_cast<const double*>(x_cpu.ptr.get()),
+                                            reinterpret_cast<const double*>(g_cpu.ptr.get()),
+                                            reinterpret_cast<const double*>(b_cpu.ptr.get()),
+                                            reinterpret_cast<double*>(y_ptr.get()),
+                                            reinterpret_cast<double*>(mean_ptr.get()),
+                                            reinterpret_cast<double*>(rstd_ptr.get()), outer,
+                                            normalized_size, eps);
+            } else {
+                ErrorBuilder("cpu_backend::layer_norm_forward")
+                    .not_implemented("dtype not supported");
+            }
+        }
+        return {Storage{CpuStorage{y_ptr, y_nbytes, dt}},
+                Storage{CpuStorage{mean_ptr, saved_nbytes, dt}},
+                Storage{CpuStorage{rstd_ptr, saved_nbytes, dt}}};
+    }
+
+    std::vector<Storage> layer_norm_backward(const Storage& x,
+                                             const Storage& gamma,
+                                             const Storage& saved_mean,
+                                             const Storage& saved_rstd,
+                                             const Storage& grad,
+                                             std::size_t outer,
+                                             std::size_t normalized_size,
+                                             const Shape& /*x_shape*/,
+                                             const Shape& /*gamma_shape*/,
+                                             const Shape& /*beta_shape*/,
+                                             Dtype dt) override {
+        const std::size_t dx_nbytes = outer * normalized_size * dtype_size(dt);
+        const std::size_t param_nbytes = normalized_size * dtype_size(dt);
+        auto dx_ptr = allocate_aligned_bytes(dx_nbytes, Device::CPU);
+        auto dgamma_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
+        auto dbeta_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
+
+        if (outer * normalized_size > 0) {
+            const auto& x_cpu = std::get<CpuStorage>(x);
+            const auto& gamma_cpu = std::get<CpuStorage>(gamma);
+            const auto& mean_cpu = std::get<CpuStorage>(saved_mean);
+            const auto& rstd_cpu = std::get<CpuStorage>(saved_rstd);
+            const auto& g_cpu = std::get<CpuStorage>(grad);
+            if (dt == Dtype::F32) {
+                cpu::layer_norm_backward_f32(reinterpret_cast<const float*>(x_cpu.ptr.get()),
+                                             reinterpret_cast<const float*>(gamma_cpu.ptr.get()),
+                                             reinterpret_cast<const float*>(mean_cpu.ptr.get()),
+                                             reinterpret_cast<const float*>(rstd_cpu.ptr.get()),
+                                             reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                                             reinterpret_cast<float*>(dx_ptr.get()),
+                                             reinterpret_cast<float*>(dgamma_ptr.get()),
+                                             reinterpret_cast<float*>(dbeta_ptr.get()), outer,
+                                             normalized_size);
+            } else if (dt == Dtype::F64) {
+                cpu::layer_norm_backward_f64(reinterpret_cast<const double*>(x_cpu.ptr.get()),
+                                             reinterpret_cast<const double*>(gamma_cpu.ptr.get()),
+                                             reinterpret_cast<const double*>(mean_cpu.ptr.get()),
+                                             reinterpret_cast<const double*>(rstd_cpu.ptr.get()),
+                                             reinterpret_cast<const double*>(g_cpu.ptr.get()),
+                                             reinterpret_cast<double*>(dx_ptr.get()),
+                                             reinterpret_cast<double*>(dgamma_ptr.get()),
+                                             reinterpret_cast<double*>(dbeta_ptr.get()), outer,
+                                             normalized_size);
+            } else {
+                ErrorBuilder("cpu_backend::layer_norm_backward")
+                    .not_implemented("dtype not supported");
+            }
+        } else {
+            if (dx_nbytes)
+                std::memset(dx_ptr.get(), 0, dx_nbytes);
+            if (param_nbytes) {
+                std::memset(dgamma_ptr.get(), 0, param_nbytes);
+                std::memset(dbeta_ptr.get(), 0, param_nbytes);
+            }
+        }
+        return {Storage{CpuStorage{dx_ptr, dx_nbytes, dt}},
+                Storage{CpuStorage{dgamma_ptr, param_nbytes, dt}},
+                Storage{CpuStorage{dbeta_ptr, param_nbytes, dt}}};
+    }
+
     Storage linalg_norm(const Storage& a,
                         const Shape& shape,
                         double ord,

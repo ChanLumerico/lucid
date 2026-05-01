@@ -1076,6 +1076,77 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dgamma), dt)}};
     }
 
+    std::vector<Storage> layer_norm_forward(const Storage& x,
+                                            const Storage& gamma,
+                                            const Storage& beta,
+                                            std::size_t outer,
+                                            std::size_t normalized_size,
+                                            double eps,
+                                            const Shape& x_shape,
+                                            Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gg = std::get<GpuStorage>(gamma);
+        const auto& gb = std::get<GpuStorage>(beta);
+        ::mlx::core::Shape flat_x{static_cast<int>(outer), static_cast<int>(normalized_size)};
+        ::mlx::core::Shape flat_g{1, static_cast<int>(normalized_size)};
+        auto x_2d = ::mlx::core::reshape(*gx.arr, flat_x);
+        auto g_2d = ::mlx::core::reshape(*gg.arr, flat_g);
+        auto b_2d = ::mlx::core::reshape(*gb.arr, flat_g);
+        auto mean = ::mlx::core::mean(x_2d, std::vector<int>{1}, /*keepdims=*/true);
+        auto centered = ::mlx::core::subtract(x_2d, mean);
+        auto var = ::mlx::core::mean(::mlx::core::square(centered), std::vector<int>{1},
+                                     /*keepdims=*/true);
+        auto rstd =
+            ::mlx::core::rsqrt(::mlx::core::add(var, gpu::mlx_scalar(eps, gpu::to_mlx_dtype(dt))));
+        auto xnorm = ::mlx::core::multiply(centered, rstd);
+        auto y_2d = ::mlx::core::add(::mlx::core::multiply(xnorm, g_2d), b_2d);
+        auto y = ::mlx::core::reshape(y_2d, gpu::to_mlx_shape(x_shape));
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(y), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(mean), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(rstd), dt)}};
+    }
+
+    std::vector<Storage> layer_norm_backward(const Storage& x,
+                                             const Storage& gamma,
+                                             const Storage& saved_mean,
+                                             const Storage& saved_rstd,
+                                             const Storage& grad,
+                                             std::size_t outer,
+                                             std::size_t normalized_size,
+                                             const Shape& x_shape,
+                                             const Shape& gamma_shape,
+                                             const Shape& beta_shape,
+                                             Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gg = std::get<GpuStorage>(gamma);
+        const auto& gm = std::get<GpuStorage>(saved_mean);
+        const auto& gr = std::get<GpuStorage>(saved_rstd);
+        const auto& ggrad = std::get<GpuStorage>(grad);
+        ::mlx::core::Shape flat_x{static_cast<int>(outer), static_cast<int>(normalized_size)};
+        ::mlx::core::Shape flat_g{1, static_cast<int>(normalized_size)};
+        auto x_2d = ::mlx::core::reshape(*gx.arr, flat_x);
+        auto grad_2d = ::mlx::core::reshape(*ggrad.arr, flat_x);
+        auto gamma_2d = ::mlx::core::reshape(*gg.arr, flat_g);
+        auto centered = ::mlx::core::subtract(x_2d, *gm.arr);
+        auto xnorm = ::mlx::core::multiply(centered, *gr.arr);
+        auto dbeta_2d = ::mlx::core::sum(grad_2d, std::vector<int>{0}, /*keepdims=*/false);
+        auto dgamma_2d = ::mlx::core::sum(::mlx::core::multiply(grad_2d, xnorm),
+                                          std::vector<int>{0}, /*keepdims=*/false);
+        auto gx_scaled = ::mlx::core::multiply(grad_2d, gamma_2d);
+        auto mean1 = ::mlx::core::mean(gx_scaled, std::vector<int>{1}, /*keepdims=*/true);
+        auto mean2 = ::mlx::core::mean(::mlx::core::multiply(gx_scaled, xnorm), std::vector<int>{1},
+                                       /*keepdims=*/true);
+        auto dx_2d = ::mlx::core::multiply(
+            *gr.arr, ::mlx::core::subtract(::mlx::core::subtract(gx_scaled, mean1),
+                                           ::mlx::core::multiply(xnorm, mean2)));
+        auto dx = ::mlx::core::reshape(dx_2d, gpu::to_mlx_shape(x_shape));
+        auto dgamma = ::mlx::core::reshape(dgamma_2d, gpu::to_mlx_shape(gamma_shape));
+        auto dbeta = ::mlx::core::reshape(dbeta_2d, gpu::to_mlx_shape(beta_shape));
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dgamma), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dbeta), dt)}};
+    }
+
     Storage linalg_norm(const Storage& a,
                         const Shape& /*shape*/,
                         double ord,
