@@ -331,6 +331,11 @@ public:
                                 Dtype dt) = 0;
     virtual Storage linalg_cholesky(const Storage& a, const Shape& shape, bool upper, Dtype dt) = 0;
     virtual Storage linalg_inv(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage linalg_solve(const Storage& a,
+                                 const Storage& b,
+                                 const Shape& a_shape,
+                                 const Shape& b_shape,
+                                 Dtype dt) = 0;
 
     // ---- Broadcast / cast --------------------------------------------
 

@@ -2660,6 +2660,48 @@ public:
         return Storage{CpuStorage{ptr, cs.nbytes, dt}};
     }
 
+    Storage linalg_solve(const Storage& a,
+                         const Storage& b,
+                         const Shape& a_shape,
+                         const Shape& b_shape,
+                         Dtype dt) override {
+        const auto& a_cpu = std::get<CpuStorage>(a);
+        const auto& b_cpu = std::get<CpuStorage>(b);
+        auto out_ptr = allocate_aligned_bytes(b_cpu.nbytes, Device::CPU);
+        if (b_cpu.nbytes > 0)
+            std::memcpy(out_ptr.get(), b_cpu.ptr.get(), b_cpu.nbytes);
+
+        const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
+        const bool b_is_vec = (b_shape.size() == a_shape.size() - 1);
+        const int nrhs = b_is_vec ? 1 : static_cast<int>(b_shape[b_shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(a_shape, /*mat_dims=*/2);
+        const std::size_t a_per = static_cast<std::size_t>(n) * n;
+        const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
+        int info = 0;
+        if (dt == Dtype::F32) {
+            std::vector<float> A_local(a_per);
+            const auto* a_p = reinterpret_cast<const float*>(a_cpu.ptr.get());
+            auto* x_p = reinterpret_cast<float*>(out_ptr.get());
+            for (std::int64_t bi = 0; bi < batch; ++bi) {
+                std::memcpy(A_local.data(), a_p + bi * a_per, a_per * sizeof(float));
+                cpu::lapack_solve_f32(A_local.data(), x_p + bi * b_per, n, nrhs, &info);
+                check_lapack_info(info, "solve");
+            }
+        } else if (dt == Dtype::F64) {
+            std::vector<double> A_local(a_per);
+            const auto* a_p = reinterpret_cast<const double*>(a_cpu.ptr.get());
+            auto* x_p = reinterpret_cast<double*>(out_ptr.get());
+            for (std::int64_t bi = 0; bi < batch; ++bi) {
+                std::memcpy(A_local.data(), a_p + bi * a_per, a_per * sizeof(double));
+                cpu::lapack_solve_f64(A_local.data(), x_p + bi * b_per, n, nrhs, &info);
+                check_lapack_info(info, "solve");
+            }
+        } else {
+            ErrorBuilder("cpu_backend::linalg_solve").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,

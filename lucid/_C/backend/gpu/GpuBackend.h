@@ -1040,6 +1040,17 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
+    Storage linalg_solve(const Storage& a,
+                         const Storage& b,
+                         const Shape& /*a_shape*/,
+                         const Shape& /*b_shape*/,
+                         Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        const auto& gb = std::get<GpuStorage>(b);
+        auto out = ::mlx::core::linalg::solve(*ga.arr, *gb.arr, k_linalg_stream);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
