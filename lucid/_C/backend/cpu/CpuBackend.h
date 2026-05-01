@@ -2510,6 +2510,78 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage linear(const Storage& x,
+                   const Storage& weight,
+                   const Storage& bias,
+                   const Shape& x_shape,
+                   const Shape& weight_shape,
+                   const Shape& out_shape,
+                   Dtype dt) override {
+        const auto [M, K] = flatten_linear_x(x_shape);
+        const std::size_t N = static_cast<std::size_t>(weight_shape[0]);
+        CpuStorage out{allocate_aligned_bytes(M * N * dtype_size(dt), Device::CPU),
+                       M * N * dtype_size(dt), dt};
+        if (M > 0 && N > 0 && K > 0) {
+            MatmulOpts opts;
+            opts.transA = false;
+            opts.transB = true;
+            opts.M = static_cast<int>(M);
+            opts.K = static_cast<int>(K);
+            opts.N = static_cast<int>(N);
+            opts.batch = 1;
+            out = std::get<CpuStorage>(matmul(x, weight, opts, dt));
+        } else if (out.nbytes) {
+            std::memset(out.ptr.get(), 0, out.nbytes);
+        }
+        if (M > 0 && N > 0)
+            add_linear_bias(out, std::get<CpuStorage>(bias), M, N, dt);
+        (void)out_shape;
+        return Storage{std::move(out)};
+    }
+
+    std::vector<Storage> linear_backward(const Storage& grad,
+                                         const Storage& x,
+                                         const Storage& weight,
+                                         const Shape& x_shape,
+                                         const Shape& weight_shape,
+                                         const Shape& bias_shape,
+                                         Dtype dt) override {
+        const auto [M, K] = flatten_linear_x(x_shape);
+        const std::size_t N = static_cast<std::size_t>(weight_shape[0]);
+        const std::size_t elem = dtype_size(dt);
+        CpuStorage dx{allocate_aligned_bytes(M * K * elem, Device::CPU), M * K * elem, dt};
+        CpuStorage dW{allocate_aligned_bytes(N * K * elem, Device::CPU), N * K * elem, dt};
+        CpuStorage db{allocate_aligned_bytes(shape_numel(bias_shape) * elem, Device::CPU),
+                      shape_numel(bias_shape) * elem, dt};
+
+        if (M > 0 && N > 0 && K > 0) {
+            MatmulOpts dx_opts;
+            dx_opts.M = static_cast<int>(M);
+            dx_opts.K = static_cast<int>(N);
+            dx_opts.N = static_cast<int>(K);
+            dx_opts.batch = 1;
+            dx = std::get<CpuStorage>(matmul(grad, weight, dx_opts, dt));
+
+            MatmulOpts dW_opts;
+            dW_opts.transA = true;
+            dW_opts.M = static_cast<int>(N);
+            dW_opts.K = static_cast<int>(M);
+            dW_opts.N = static_cast<int>(K);
+            dW_opts.batch = 1;
+            dW = std::get<CpuStorage>(matmul(grad, x, dW_opts, dt));
+
+            sum_linear_rows(std::get<CpuStorage>(grad), db, M, N, dt);
+        } else {
+            if (dx.nbytes)
+                std::memset(dx.ptr.get(), 0, dx.nbytes);
+            if (dW.nbytes)
+                std::memset(dW.ptr.get(), 0, dW.nbytes);
+            if (db.nbytes)
+                std::memset(db.ptr.get(), 0, db.nbytes);
+        }
+        return {Storage{std::move(dx)}, Storage{std::move(dW)}, Storage{std::move(db)}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
@@ -3767,6 +3839,55 @@ private:
             return Storage{make_cpu_scalar(sum, dt)};
         }
         ErrorBuilder("cpu_backend::class_loss_reduce").not_implemented("dtype not supported");
+    }
+
+    static std::pair<std::size_t, std::size_t> flatten_linear_x(const Shape& x_shape) {
+        std::size_t M = 1;
+        for (std::size_t d = 0; d + 1 < x_shape.size(); ++d)
+            M *= static_cast<std::size_t>(x_shape[d]);
+        return {M, static_cast<std::size_t>(x_shape.back())};
+    }
+
+    template <typename T>
+    static void add_linear_bias_typed(T* y, const T* b, std::size_t M, std::size_t N) {
+        for (std::size_t m = 0; m < M; ++m) {
+            for (std::size_t n = 0; n < N; ++n)
+                y[m * N + n] += b[n];
+        }
+    }
+
+    static void add_linear_bias(
+        CpuStorage& y, const CpuStorage& bias, std::size_t M, std::size_t N, Dtype dt) {
+        if (dt == Dtype::F32)
+            add_linear_bias_typed(reinterpret_cast<float*>(y.ptr.get()),
+                                  reinterpret_cast<const float*>(bias.ptr.get()), M, N);
+        else if (dt == Dtype::F64)
+            add_linear_bias_typed(reinterpret_cast<double*>(y.ptr.get()),
+                                  reinterpret_cast<const double*>(bias.ptr.get()), M, N);
+        else
+            ErrorBuilder("cpu_backend::linear").not_implemented("dtype not supported");
+    }
+
+    template <typename T>
+    static void sum_linear_rows_typed(const T* grad, T* db, std::size_t M, std::size_t N) {
+        for (std::size_t n = 0; n < N; ++n)
+            db[n] = T{};
+        for (std::size_t m = 0; m < M; ++m) {
+            for (std::size_t n = 0; n < N; ++n)
+                db[n] += grad[m * N + n];
+        }
+    }
+
+    static void sum_linear_rows(
+        const CpuStorage& grad, CpuStorage& db, std::size_t M, std::size_t N, Dtype dt) {
+        if (dt == Dtype::F32)
+            sum_linear_rows_typed(reinterpret_cast<const float*>(grad.ptr.get()),
+                                  reinterpret_cast<float*>(db.ptr.get()), M, N);
+        else if (dt == Dtype::F64)
+            sum_linear_rows_typed(reinterpret_cast<const double*>(grad.ptr.get()),
+                                  reinterpret_cast<double*>(db.ptr.get()), M, N);
+        else
+            ErrorBuilder("cpu_backend::linear_backward").not_implemented("dtype not supported");
     }
 
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {

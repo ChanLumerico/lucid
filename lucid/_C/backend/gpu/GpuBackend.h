@@ -957,6 +957,59 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    Storage linear(const Storage& x,
+                   const Storage& weight,
+                   const Storage& bias,
+                   const Shape& /*x_shape*/,
+                   const Shape& /*weight_shape*/,
+                   const Shape& out_shape,
+                   Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gw = std::get<GpuStorage>(weight);
+        const auto& gb = std::get<GpuStorage>(bias);
+        if (shape_numel(out_shape) == 0) {
+            auto out = ::mlx::core::zeros(gpu::to_mlx_shape(out_shape), gpu::to_mlx_dtype(dt));
+            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+        }
+        auto out = ::mlx::core::add(::mlx::core::matmul(*gx.arr, ::mlx::core::transpose(*gw.arr)),
+                                    *gb.arr);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
+    std::vector<Storage> linear_backward(const Storage& grad,
+                                         const Storage& x,
+                                         const Storage& weight,
+                                         const Shape& x_shape,
+                                         const Shape& weight_shape,
+                                         const Shape& bias_shape,
+                                         Dtype dt) override {
+        const auto& gg = std::get<GpuStorage>(grad);
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gw = std::get<GpuStorage>(weight);
+        const std::size_t M = linear_batch(x_shape);
+        const std::size_t K = static_cast<std::size_t>(x_shape.back());
+        const std::size_t N = static_cast<std::size_t>(weight_shape[0]);
+        if (M == 0 || N == 0 || K == 0) {
+            auto dx = ::mlx::core::zeros(gpu::to_mlx_shape(x_shape), gpu::to_mlx_dtype(dt));
+            auto dW = ::mlx::core::zeros(gpu::to_mlx_shape(weight_shape), gpu::to_mlx_dtype(dt));
+            auto db = ::mlx::core::zeros(gpu::to_mlx_shape(bias_shape), gpu::to_mlx_dtype(dt));
+            return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
+                    Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dW), dt)},
+                    Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(db), dt)}};
+        }
+        ::mlx::core::Shape flat_x{static_cast<int>(M), static_cast<int>(K)};
+        ::mlx::core::Shape flat_g{static_cast<int>(M), static_cast<int>(N)};
+        auto g_2d = ::mlx::core::reshape(*gg.arr, flat_g);
+        auto x_2d = ::mlx::core::reshape(*gx.arr, flat_x);
+        auto dx_flat = ::mlx::core::matmul(g_2d, *gw.arr);
+        auto dx = ::mlx::core::reshape(dx_flat, gpu::to_mlx_shape(x_shape));
+        auto dW = ::mlx::core::matmul(::mlx::core::transpose(g_2d), x_2d);
+        auto db = ::mlx::core::sum(g_2d, std::vector<int>{0}, /*keepdims=*/false);
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dW), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(db), dt)}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
@@ -1502,6 +1555,13 @@ private:
         auto grad_shape = scaled.shape();
         grad_shape.insert(grad_shape.begin() + 1, 1);
         return ::mlx::core::reshape(scaled, grad_shape);
+    }
+
+    static std::size_t linear_batch(const Shape& x_shape) {
+        std::size_t M = 1;
+        for (std::size_t d = 0; d + 1 < x_shape.size(); ++d)
+            M *= static_cast<std::size_t>(x_shape[d]);
+        return M;
     }
 
     template <class Fn>

@@ -309,6 +309,20 @@ public:
                            const Storage& b,
                            const MatmulOpts& opts,
                            Dtype dt) = 0;
+    virtual Storage linear(const Storage& x,
+                           const Storage& weight,
+                           const Storage& bias,
+                           const Shape& x_shape,
+                           const Shape& weight_shape,
+                           const Shape& out_shape,
+                           Dtype dt) = 0;
+    virtual std::vector<Storage> linear_backward(const Storage& grad,
+                                                 const Storage& x,
+                                                 const Storage& weight,
+                                                 const Shape& x_shape,
+                                                 const Shape& weight_shape,
+                                                 const Shape& bias_shape,
+                                                 Dtype dt) = 0;
 
     // ---- Broadcast / cast --------------------------------------------
 
