@@ -68,6 +68,11 @@ struct ClassLossForwardResult {
     Storage valid_count;
 };
 
+struct StoragePair {
+    Storage first;
+    Storage second;
+};
+
 // -----------------------------------------------------------------------
 // IBackend
 // -----------------------------------------------------------------------
@@ -350,6 +355,11 @@ public:
                                         Dtype dt) = 0;
     virtual Storage linalg_pinv(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage linalg_det(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual StoragePair linalg_qr(const Storage& a,
+                                  const Shape& shape,
+                                  const Shape& q_shape,
+                                  const Shape& r_shape,
+                                  Dtype dt) = 0;
 
     // ---- Broadcast / cast --------------------------------------------
 

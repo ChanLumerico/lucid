@@ -1122,6 +1122,17 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(det_a), dt)};
     }
 
+    StoragePair linalg_qr(const Storage& a,
+                          const Shape& /*shape*/,
+                          const Shape& /*q_shape*/,
+                          const Shape& /*r_shape*/,
+                          Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto [q, r] = ::mlx::core::linalg::qr(*ga.arr, k_linalg_stream);
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(q), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(r), dt)}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,

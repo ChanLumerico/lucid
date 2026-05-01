@@ -2876,6 +2876,51 @@ public:
         return Storage{CpuStorage{ptr, out_nbytes, dt}};
     }
 
+    StoragePair linalg_qr(const Storage& a,
+                          const Shape& shape,
+                          const Shape& q_shape,
+                          const Shape& r_shape,
+                          Dtype dt) override {
+        const int m = static_cast<int>(shape[shape.size() - 2]);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const int k = std::min(m, n);
+        const std::int64_t batch = leading_matrix_batch_count(shape, /*mat_dims=*/2);
+        const std::size_t in_per = static_cast<std::size_t>(m) * n;
+        const std::size_t q_per = static_cast<std::size_t>(m) * k;
+        const std::size_t r_per = static_cast<std::size_t>(k) * n;
+
+        const std::size_t q_nbytes = shape_numel(q_shape) * dtype_size(dt);
+        const std::size_t r_nbytes = shape_numel(r_shape) * dtype_size(dt);
+        auto q_ptr = allocate_aligned_bytes(q_nbytes, Device::CPU);
+        auto r_ptr = allocate_aligned_bytes(r_nbytes, Device::CPU);
+        const auto& cs = std::get<CpuStorage>(a);
+
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
+            auto* q_p = reinterpret_cast<float*>(q_ptr.get());
+            auto* r_p = reinterpret_cast<float*>(r_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_qr_f32(in_p + b * in_per, m, n, q_p + b * q_per, r_p + b * r_per,
+                                   &info);
+                check_lapack_info(info, "qr");
+            }
+        } else if (dt == Dtype::F64) {
+            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* q_p = reinterpret_cast<double*>(q_ptr.get());
+            auto* r_p = reinterpret_cast<double*>(r_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                cpu::lapack_qr_f64(in_p + b * in_per, m, n, q_p + b * q_per, r_p + b * r_per,
+                                   &info);
+                check_lapack_info(info, "qr");
+            }
+        } else {
+            ErrorBuilder("cpu_backend::linalg_qr").not_implemented("dtype not supported");
+        }
+
+        return {Storage{CpuStorage{q_ptr, q_nbytes, dt}}, Storage{CpuStorage{r_ptr, r_nbytes, dt}}};
+    }
+
     // ---- Broadcast / cast -------------------------------------------
 
     Storage broadcast(const Storage& a,
