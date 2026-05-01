@@ -950,9 +950,9 @@ public:
         ::mlx::core::array a_arr = *ga.arr;
         ::mlx::core::array b_arr = *gb.arr;
         if (opts.transA)
-            a_arr = ::mlx::core::transpose(a_arr);
+            a_arr = ::mlx::core::swapaxes(a_arr, -2, -1);
         if (opts.transB)
-            b_arr = ::mlx::core::transpose(b_arr);
+            b_arr = ::mlx::core::swapaxes(b_arr, -2, -1);
         auto result = ::mlx::core::matmul(a_arr, b_arr);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
