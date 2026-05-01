@@ -22,6 +22,7 @@
 #include "../IBackend.h"
 #include "Blas.h"
 #include "Lapack.h"
+#include "Norm.h"
 #include "Reduce.h"
 #include "Shape.h"
 #include "Vdsp.h"
@@ -2620,6 +2621,91 @@ public:
                 std::memset(db.ptr.get(), 0, db.nbytes);
         }
         return {Storage{std::move(dx)}, Storage{std::move(dW)}, Storage{std::move(db)}};
+    }
+
+    StoragePair rms_norm_forward(const Storage& x,
+                                 const Storage& gamma,
+                                 std::size_t outer,
+                                 std::size_t normalized_size,
+                                 double eps,
+                                 const Shape& /*x_shape*/,
+                                 Dtype dt) override {
+        const std::size_t y_nbytes = outer * normalized_size * dtype_size(dt);
+        const std::size_t rstd_nbytes = outer * dtype_size(dt);
+        auto y_ptr = allocate_aligned_bytes(y_nbytes, Device::CPU);
+        auto rstd_ptr = allocate_aligned_bytes(rstd_nbytes, Device::CPU);
+        const auto& x_cpu = std::get<CpuStorage>(x);
+        const auto& g_cpu = std::get<CpuStorage>(gamma);
+
+        if (outer * normalized_size > 0) {
+            if (dt == Dtype::F32) {
+                cpu::rms_norm_forward_f32(reinterpret_cast<const float*>(x_cpu.ptr.get()),
+                                          reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                                          reinterpret_cast<float*>(y_ptr.get()),
+                                          reinterpret_cast<float*>(rstd_ptr.get()), outer,
+                                          normalized_size, eps);
+            } else if (dt == Dtype::F64) {
+                cpu::rms_norm_forward_f64(reinterpret_cast<const double*>(x_cpu.ptr.get()),
+                                          reinterpret_cast<const double*>(g_cpu.ptr.get()),
+                                          reinterpret_cast<double*>(y_ptr.get()),
+                                          reinterpret_cast<double*>(rstd_ptr.get()), outer,
+                                          normalized_size, eps);
+            } else {
+                ErrorBuilder("cpu_backend::rms_norm_forward")
+                    .not_implemented("dtype not supported");
+            }
+        }
+        return {Storage{CpuStorage{y_ptr, y_nbytes, dt}},
+                Storage{CpuStorage{rstd_ptr, rstd_nbytes, dt}}};
+    }
+
+    StoragePair rms_norm_backward(const Storage& x,
+                                  const Storage& gamma,
+                                  const Storage& saved_rstd,
+                                  const Storage& grad,
+                                  std::size_t outer,
+                                  std::size_t normalized_size,
+                                  const Shape& /*x_shape*/,
+                                  const Shape& /*gamma_shape*/,
+                                  Dtype dt) override {
+        const std::size_t dx_nbytes = outer * normalized_size * dtype_size(dt);
+        const std::size_t dgamma_nbytes = normalized_size * dtype_size(dt);
+        auto dx_ptr = allocate_aligned_bytes(dx_nbytes, Device::CPU);
+        auto dgamma_ptr = allocate_aligned_bytes(dgamma_nbytes, Device::CPU);
+
+        if (outer * normalized_size > 0) {
+            const auto& x_cpu = std::get<CpuStorage>(x);
+            const auto& gamma_cpu = std::get<CpuStorage>(gamma);
+            const auto& rstd_cpu = std::get<CpuStorage>(saved_rstd);
+            const auto& grad_cpu = std::get<CpuStorage>(grad);
+            if (dt == Dtype::F32) {
+                cpu::rms_norm_backward_f32(reinterpret_cast<const float*>(x_cpu.ptr.get()),
+                                           reinterpret_cast<const float*>(gamma_cpu.ptr.get()),
+                                           reinterpret_cast<const float*>(rstd_cpu.ptr.get()),
+                                           reinterpret_cast<const float*>(grad_cpu.ptr.get()),
+                                           reinterpret_cast<float*>(dx_ptr.get()),
+                                           reinterpret_cast<float*>(dgamma_ptr.get()), outer,
+                                           normalized_size);
+            } else if (dt == Dtype::F64) {
+                cpu::rms_norm_backward_f64(reinterpret_cast<const double*>(x_cpu.ptr.get()),
+                                           reinterpret_cast<const double*>(gamma_cpu.ptr.get()),
+                                           reinterpret_cast<const double*>(rstd_cpu.ptr.get()),
+                                           reinterpret_cast<const double*>(grad_cpu.ptr.get()),
+                                           reinterpret_cast<double*>(dx_ptr.get()),
+                                           reinterpret_cast<double*>(dgamma_ptr.get()), outer,
+                                           normalized_size);
+            } else {
+                ErrorBuilder("cpu_backend::rms_norm_backward")
+                    .not_implemented("dtype not supported");
+            }
+        } else {
+            if (dx_nbytes)
+                std::memset(dx_ptr.get(), 0, dx_nbytes);
+            if (dgamma_nbytes)
+                std::memset(dgamma_ptr.get(), 0, dgamma_nbytes);
+        }
+        return {Storage{CpuStorage{dx_ptr, dx_nbytes, dt}},
+                Storage{CpuStorage{dgamma_ptr, dgamma_nbytes, dt}}};
     }
 
     Storage linalg_norm(const Storage& a,

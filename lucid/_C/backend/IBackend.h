@@ -336,6 +336,22 @@ public:
                                                  const Shape& weight_shape,
                                                  const Shape& bias_shape,
                                                  Dtype dt) = 0;
+    virtual StoragePair rms_norm_forward(const Storage& x,
+                                         const Storage& gamma,
+                                         std::size_t outer,
+                                         std::size_t normalized_size,
+                                         double eps,
+                                         const Shape& x_shape,
+                                         Dtype dt) = 0;
+    virtual StoragePair rms_norm_backward(const Storage& x,
+                                          const Storage& gamma,
+                                          const Storage& saved_rstd,
+                                          const Storage& grad,
+                                          std::size_t outer,
+                                          std::size_t normalized_size,
+                                          const Shape& x_shape,
+                                          const Shape& gamma_shape,
+                                          Dtype dt) = 0;
     virtual Storage linalg_norm(const Storage& a,
                                 const Shape& shape,
                                 double ord,
