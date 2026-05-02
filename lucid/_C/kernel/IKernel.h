@@ -13,6 +13,8 @@
 //
 // Layer: kernel/. Depends on core/ only.
 
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -33,14 +35,34 @@ struct KernelPolicy {
 };
 
 /// Abstract root interface. Every kernel is ultimately an IKernel.
-/// Forward/backward signatures live on the family-specific base classes
-/// (BinaryKernel, UnaryKernel, etc.) because they depend on input arity.
+///
+/// Two-phase design:
+///   compute(inputs) — forward pass, type-erased Storage API.
+///                     Default throws; concrete kernels override for
+///                     deferred / scheduled dispatch (profiling, tracing,
+///                     future JIT/graph-capture use-cases).
+///                     In the current eager-mode path the primary entry
+///                     point is the arity-specific static forward() on each
+///                     *Backward class; compute() is the introspection API.
+///   apply(grad)     — backward pass; pure-virtual, always overridden.
+///
+/// Family-specific bases (BinaryKernel, UnaryKernel, NaryKernel, …) add
+/// typed forward signatures and grad_formula() helpers on top of this root.
 class IKernel {
 public:
     virtual ~IKernel() = default;
 
     /// Op name, for error messages and profiling. Backed by schema_v1.name.
     virtual std::string_view name() const noexcept = 0;
+
+    /// Forward pass — type-erased Storage vector API (Phase 3.1).
+    /// Default implementation throws std::logic_error.  Override this in
+    /// any kernel that participates in deferred / graph-capture dispatch.
+    /// Eager-mode callers should use the concrete static forward() instead.
+    virtual Storage compute(const std::vector<Storage>& /*inputs*/) {
+        throw std::logic_error(std::string(name()) +
+                               ": compute() not implemented — use the concrete static forward()");
+    }
 
     /// Backward pass: given incoming gradient, produce input gradients.
     /// Concrete implementation in each backward class's apply().

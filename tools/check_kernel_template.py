@@ -18,28 +18,43 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent / "lucid/_C"
 
-KERNEL_PATTERNS = {
-    "bfunc": re.compile(r"BinaryKernel<|BinaryOp<"),
-    "ufunc": re.compile(r"UnaryKernel<|UnaryOp<"),
-}
-# Accepted bases for any op file
-ACCEPTED = re.compile(
-    r"NaryKernel<|VariadicKernel<|ReduceKernel<|FuncOp<"
-    r"|BinaryKernel<|BinaryOp<|UnaryKernel<|UnaryOp<"
+# Any recognised kernel-family base.
+# FuncOp / ReduceOp are valid alternatives even inside bfunc / ufunc for ops
+# that don't fit the pure element-wise pattern (e.g. matmul, softmax, reduce).
+# The one hard invariant: no class may inherit raw AutogradNode<> directly.
+_ANY_KERNEL = re.compile(
+    r"BinaryKernel<|BinaryOp<"
+    r"|UnaryKernel<|UnaryOp<"
+    r"|NaryKernel<|VariadicKernel<"
+    r"|ReduceKernel<|ReduceOp<"
+    r"|FuncOp<"
 )
+
+KERNEL_PATTERNS = {
+    "bfunc": _ANY_KERNEL,   # element-wise OR complex binary (e.g. matmul)
+    "ufunc": _ANY_KERNEL,   # element-wise OR reduce / shape (e.g. softmax, permute)
+}
+# Same set accepted for all other dirs
+ACCEPTED = _ANY_KERNEL
+
+# Matches "class [MACRO...] ClassName [: ...]" — handles LUCID_API and similar macros
+# between the `class` keyword and the actual class name.
+_CLASS_RE = re.compile(r"class\s+(?:\w+\s+)*(\w*Backward\w*)\s*[:{]")
+
 
 def check_dir(subdir: str, pattern: re.Pattern) -> list[str]:
     violations = []
     for path in sorted((ROOT / subdir).rglob("*.h")):
         text = path.read_text()
-        # find all Backward class declarations
-        for m in re.finditer(r"class\s+(\w*Backward\w*)\s*[:{]", text):
+        for m in _CLASS_RE.finditer(text):
             cls = m.group(1)
-            # Look for the inheritance line following the class declaration
-            snippet = text[m.start():m.start()+300]
+            snippet = text[m.start():m.start() + 300]
             if not pattern.search(snippet):
-                violations.append(f"{path.relative_to(ROOT)}:{cls}: does not use {subdir} kernel template")
+                violations.append(
+                    f"{path.relative_to(ROOT)}:{cls}: does not use {subdir} kernel template"
+                )
     return violations
+
 
 def main() -> int:
     errors: list[str] = []
@@ -48,13 +63,13 @@ def main() -> int:
     for subdir, pat in KERNEL_PATTERNS.items():
         errors.extend(check_dir(f"ops/{subdir}", pat))
 
-    # For other dirs: just ensure no raw AutogradNode without alias
+    # For other dirs: flag raw AutogradNode without a kernel alias
     for subdir in ["ops/gfunc", "ops/utils", "ops/linalg", "nn"]:
         for path in sorted((ROOT / subdir).rglob("*.h")):
             text = path.read_text()
-            for m in re.finditer(r"class\s+(\w*Backward\w*)\s*[:{]", text):
+            for m in _CLASS_RE.finditer(text):
                 cls = m.group(1)
-                snippet = text[m.start():m.start()+300]
+                snippet = text[m.start():m.start() + 300]
                 if re.search(r"AutogradNode<", snippet) and not ACCEPTED.search(snippet):
                     errors.append(
                         f"{path.relative_to(ROOT)}:{cls}: raw AutogradNode without kernel template"
@@ -66,11 +81,11 @@ def main() -> int:
         print(f"\n{len(errors)} kernel template violation(s).", file=sys.stderr)
         return 1
 
-    # Count total classes checked
     total = sum(
-        1 for sub in ["ops/bfunc","ops/ufunc","ops/gfunc","ops/utils","ops/linalg","nn"]
+        1
+        for sub in ["ops/bfunc", "ops/ufunc", "ops/gfunc", "ops/utils", "ops/linalg", "nn"]
         for p in (ROOT / sub).rglob("*.h")
-        for _ in re.finditer(r"class\s+\w*Backward\w*\s*[:{]", p.read_text())
+        for _ in _CLASS_RE.finditer(p.read_text())
     )
     print(f"Kernel template check passed — {total} Backward class(es) verified.")
     return 0
