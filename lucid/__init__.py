@@ -15,4 +15,16 @@ if _actual != _EXPECTED_ABI:
         f"but loaded .so reports ABI {_actual}. Rebuild the C++ extension."
     )
 
-del _actual
+# Re-export the engine surface at the lucid.* namespace level.
+from lucid._C.engine import (  # noqa: F401, E402
+    TensorImpl,
+    Device,
+    Dtype,
+    NoGradGuard,
+    grad_enabled,
+    set_grad_enabled,
+    engine_backward,
+    FunctionCtx,
+    _PythonBackwardNode,
+    _register_python_backward_node,
+)

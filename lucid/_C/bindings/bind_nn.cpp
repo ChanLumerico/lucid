@@ -1,8 +1,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "../backend/Dispatcher.h"
+#include "../backend/IBackend.h"
 #include "../core/Dtype.h"
 #include "../core/Generator.h"
+#include "../core/Shape.h"
 #include "../core/TensorImpl.h"
 #include "../nn/AdaptivePool.h"
 #include "../nn/Attention.h"
@@ -283,6 +286,114 @@ void register_nn(py::module_& m) {
           py::arg("bias") = TensorImplPtr{},
           "Learned bilinear layer: y = x1 W x2 + b. "
           "x1: (..., D1), x2: (..., D2), W: (Dout, D1, D2), b: (Dout,).");
+
+    // ---- LSTM (Phase 15.3) --------------------------------------------------
+    //
+    // Python signature:
+    //   nn.lstm_forward(input, h0, c0, weights, hidden_size,
+    //                   num_layers=1, batch_first=False,
+    //                   bidirectional=False, has_bias=True)
+    //     → (output, h_n, c_n)  as TensorImpl
+    //
+    // `input`   : TensorImpl (seq_len, batch, input_size) or (batch, seq_len, I)
+    // `h0`, `c0`: TensorImpl or None  (zeros if None)
+    // `weights` : list of TensorImpl — [wih, whh, bih, bhh] per layer/direction
+    //
+    m.def("lstm_forward",
+          [](const TensorImplPtr& input,
+             py::object            h0_obj,
+             py::object            c0_obj,
+             const std::vector<TensorImplPtr>& weight_tensors,
+             int hidden_size,
+             int num_layers,
+             bool batch_first,
+             bool bidirectional,
+             bool has_bias) -> py::tuple {
+              if (!input)
+                  throw std::invalid_argument("lstm_forward: null input");
+
+              const auto& in_shape = input->shape();
+              if (in_shape.size() < 2)
+                  throw std::invalid_argument("lstm_forward: input must be at least 2-D");
+
+              const int seq_len   = batch_first
+                  ? static_cast<int>(in_shape[1])
+                  : static_cast<int>(in_shape[0]);
+              const int batch     = batch_first
+                  ? static_cast<int>(in_shape[0])
+                  : static_cast<int>(in_shape[1]);
+              const int input_size = static_cast<int>(in_shape.back());
+              const int num_dirs  = bidirectional ? 2 : 1;
+
+              const Dtype dt     = input->dtype();
+              const Device dev   = input->device();
+
+              // Build zero h0, c0 if not provided.
+              auto make_zeros = [&](int rows) -> TensorImplPtr {
+                  Shape s{static_cast<std::int64_t>(rows), static_cast<std::int64_t>(batch),
+                          static_cast<std::int64_t>(hidden_size)};
+                  auto st = backend::Dispatcher::for_device(dev).zeros(s, dt);
+                  return std::make_shared<TensorImpl>(std::move(st), s, dt, dev, false);
+              };
+              TensorImplPtr h0 = h0_obj.is_none() ? make_zeros(num_layers * num_dirs)
+                                                   : h0_obj.cast<TensorImplPtr>();
+              TensorImplPtr c0 = c0_obj.is_none() ? make_zeros(num_layers * num_dirs)
+                                                   : c0_obj.cast<TensorImplPtr>();
+
+              // Convert weight TensorImplPtr list to Storage list.
+              std::vector<Storage> w_storages;
+              w_storages.reserve(weight_tensors.size());
+              for (const auto& wt : weight_tensors) {
+                  if (!wt) throw std::invalid_argument("lstm_forward: null weight tensor");
+                  w_storages.push_back(wt->storage());
+              }
+
+              backend::IBackend::LstmOpts opts;
+              opts.input_size   = input_size;
+              opts.hidden_size  = hidden_size;
+              opts.num_layers   = num_layers;
+              opts.seq_len      = seq_len;
+              opts.batch_size   = batch;
+              opts.batch_first  = batch_first;
+              opts.bidirectional = bidirectional;
+              opts.has_bias     = has_bias;
+
+              Shape out_shape{static_cast<std::int64_t>(seq_len),
+                              static_cast<std::int64_t>(batch),
+                              static_cast<std::int64_t>(num_dirs * hidden_size)};
+
+              auto results = backend::Dispatcher::for_device(dev).lstm_forward(
+                  input->storage(), h0->storage(), c0->storage(),
+                  w_storages, opts, out_shape, dt);
+
+              if (results.size() < 3)
+                  throw std::runtime_error("lstm_forward: backend returned < 3 outputs");
+
+              Shape hn_shape{static_cast<std::int64_t>(num_layers * num_dirs),
+                             static_cast<std::int64_t>(batch),
+                             static_cast<std::int64_t>(hidden_size)};
+
+              auto out_t = std::make_shared<TensorImpl>(
+                  std::move(results[0]), out_shape, dt, dev, false);
+              auto hn_t  = std::make_shared<TensorImpl>(
+                  std::move(results[1]), hn_shape, dt, dev, false);
+              auto cn_t  = std::make_shared<TensorImpl>(
+                  std::move(results[2]), hn_shape, dt, dev, false);
+
+              return py::make_tuple(out_t, hn_t, cn_t);
+          },
+          py::arg("input"),
+          py::arg("h0")           = py::none(),
+          py::arg("c0")           = py::none(),
+          py::arg("weights"),
+          py::arg("hidden_size"),
+          py::arg("num_layers")   = 1,
+          py::arg("batch_first")  = false,
+          py::arg("bidirectional") = false,
+          py::arg("has_bias")     = true,
+          "BNNS-accelerated LSTM forward (single-layer, F32, non-bidirectional fast path).\n"
+          "Returns (output, h_n, c_n) as TensorImpl.\n"
+          "weights = [weight_ih (4H×I), weight_hh (4H×H), bias_ih (4H), bias_hh (4H)].");
 }
 
 }  // namespace lucid::bindings

@@ -2,6 +2,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "../backend/Dispatcher.h"
 #include "../core/Device.h"
 #include "../core/Dtype.h"
 #include "../core/GradMode.h"
@@ -80,6 +81,22 @@ void register_tensor_impl(py::module_& m) {
         .def("grad_as_python", &TensorImpl::grad_as_python)
         .def("copy_from", &TensorImpl::copy_from)
         .def("zero_grad", &TensorImpl::zero_grad);
+
+    // Phase 9: expose to_shared_storage so Python code can move a tensor into
+    // MTLResourceStorageModeShared memory (zero-copy Metal kernel access).
+    m.def("to_shared_storage",
+          [](const std::shared_ptr<TensorImpl>& t) -> std::shared_ptr<TensorImpl> {
+              if (!t) throw std::invalid_argument("to_shared_storage: null tensor");
+              auto& be = backend::Dispatcher::for_device(t->device());
+              Storage shared = be.to_shared_storage(t->storage(), t->shape());
+              return std::make_shared<TensorImpl>(
+                  std::move(shared), t->shape(), t->dtype(), t->device(),
+                  t->requires_grad());
+          },
+          py::arg("tensor"),
+          "Convert a tensor's storage to MTLResourceStorageModeShared.\n"
+          "The returned tensor shares physical DRAM with the GPU — "
+          "pass it to _run_metal_kernel for zero-copy custom Metal kernels.");
 }
 
 }  // namespace lucid::bindings
