@@ -1474,6 +1474,17 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(v), dt)}};
     }
 
+    StoragePair linalg_eigh(const Storage& a,
+                            const Shape& /*shape*/,
+                            const Shape& /*values_shape*/,
+                            const Shape& /*vectors_shape*/,
+                            Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto [w, v] = ::mlx::core::linalg::eigh(*ga.arr, "L", k_linalg_stream);
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(w), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(v), dt)}};
+    }
+
     std::vector<Storage> linalg_svd(const Storage& a,
                                     const Shape& /*shape*/,
                                     bool compute_uv,

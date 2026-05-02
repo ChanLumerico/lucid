@@ -454,6 +454,15 @@ public:
                                    const Shape& values_shape,
                                    const Shape& vectors_shape,
                                    Dtype dt) = 0;
+
+    // Symmetric/Hermitian eigendecomposition.
+    // Returns {eigenvalues (real, ascending), eigenvectors}.
+    // Input must be symmetric; works on CPU (LAPACK ssyev/dsyev) and GPU (MLX eigh).
+    virtual StoragePair linalg_eigh(const Storage& a,
+                                    const Shape& shape,
+                                    const Shape& values_shape,
+                                    const Shape& vectors_shape,
+                                    Dtype dt) = 0;
     virtual std::vector<Storage> linalg_svd(const Storage& a,
                                             const Shape& shape,
                                             bool compute_uv,
@@ -1223,6 +1232,46 @@ public:
         (void)opts;  (void)out_shape;    (void)dt;
         ErrorBuilder("IBackend::lstm_forward").not_implemented(
             "LSTM not supported on this backend");
+        return {};
+    }
+
+    // ---- LSTM training forward (saves gates + cells for BPTT) ---------------
+    //
+    // Returns {output, h_n, c_n, gates_all, cells_all} where:
+    //   gates_all : (T, B, 4H) — raw gate pre-activations (IFGO order)
+    //   cells_all : (T+1, B, H) — cell states at t=0..T (t=0 is c0)
+    //
+    // Only needed when requires_grad=True. Default throws NotImplemented.
+    virtual std::vector<Storage> lstm_forward_train(const Storage& input,
+                                                    const Storage& h0,
+                                                    const Storage& c0,
+                                                    const std::vector<Storage>& weights,
+                                                    const LstmOpts& opts,
+                                                    Dtype dt) {
+        (void)input; (void)h0; (void)c0; (void)weights; (void)opts; (void)dt;
+        ErrorBuilder("IBackend::lstm_forward_train").not_implemented(
+            "LSTM training not supported on this backend");
+        return {};
+    }
+
+    // ---- LSTM backward (BPTT) -----------------------------------------------
+    //
+    // Returns {dX, dh0, dc0, dWih, dWhh, dBih, dBhh}.
+    virtual std::vector<Storage> lstm_backward(const Storage& grad_output,
+                                               const Storage& grad_hn,
+                                               const Storage& grad_cn,
+                                               const Storage& input,
+                                               const Storage& h0,
+                                               const std::vector<Storage>& weights,
+                                               const Storage& gates_all,
+                                               const Storage& cells_all,
+                                               const LstmOpts& opts,
+                                               Dtype dt) {
+        (void)grad_output; (void)grad_hn; (void)grad_cn;
+        (void)input; (void)h0; (void)weights;
+        (void)gates_all; (void)cells_all; (void)opts; (void)dt;
+        ErrorBuilder("IBackend::lstm_backward").not_implemented(
+            "LSTM backward not supported on this backend");
         return {};
     }
 };

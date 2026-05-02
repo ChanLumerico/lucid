@@ -3373,6 +3373,42 @@ public:
                 Storage{CpuStorage{vectors_ptr, vectors_nbytes, dt}}};
     }
 
+    StoragePair linalg_eigh(const Storage& a,
+                            const Shape& shape,
+                            const Shape& values_shape,
+                            const Shape& vectors_shape,
+                            Dtype dt) override {
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        const std::size_t per_w   = static_cast<std::size_t>(n);
+        const std::size_t w_nb = shape_numel(values_shape)  * dtype_size(dt);
+        const std::size_t v_nb = shape_numel(vectors_shape) * dtype_size(dt);
+        auto w_ptr = allocate_aligned_bytes(w_nb, Device::CPU);
+        auto v_ptr = allocate_aligned_bytes(v_nb, Device::CPU);
+        const auto& cs = std::get<CpuStorage>(a);
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const auto* in = reinterpret_cast<const float*>(cs.ptr.get());
+            auto*       wp = reinterpret_cast<float*>(w_ptr.get());
+            auto*       vp = reinterpret_cast<float*>(v_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b)
+                cpu::lapack_eigh_f32(in + b * per_mat, n, wp + b * per_w, vp + b * per_mat, &info);
+            check_lapack_info(info, "eigh");
+        } else if (dt == Dtype::F64) {
+            const auto* in = reinterpret_cast<const double*>(cs.ptr.get());
+            auto*       wp = reinterpret_cast<double*>(w_ptr.get());
+            auto*       vp = reinterpret_cast<double*>(v_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b)
+                cpu::lapack_eigh_f64(in + b * per_mat, n, wp + b * per_w, vp + b * per_mat, &info);
+            check_lapack_info(info, "eigh");
+        } else {
+            ErrorBuilder("cpu_backend::linalg_eigh").not_implemented("dtype not supported");
+        }
+        return {Storage{CpuStorage{w_ptr, w_nb, dt}},
+                Storage{CpuStorage{v_ptr, v_nb, dt}}};
+    }
+
     std::vector<Storage> linalg_svd(const Storage& a,
                                     const Shape& shape,
                                     bool compute_uv,
@@ -9686,6 +9722,263 @@ private:
         }
 #endif  // __APPLE__
         return IBackend::lstm_forward(input, h0, c0, weights, opts, out_shape, dt);
+    }
+
+    // ---- LSTM training forward (BLAS — saves gates + cells for BPTT) --------
+    //
+    // Runs a step-by-step BLAS LSTM forward and saves all intermediate gate
+    // activations and cell states needed for backpropagation-through-time.
+    // Gate order: [input(i), forget(f), cell(g), output(o)] — PyTorch convention.
+    //
+    // Returns {output, h_n, c_n, gates_all(T,B,4H), cells_all(T+1,B,H)}.
+    //
+    std::vector<Storage> lstm_forward_train(const Storage& input,
+                                            const Storage& h0,
+                                            const Storage& c0,
+                                            const std::vector<Storage>& weights,
+                                            const LstmOpts& opts,
+                                            Dtype dt) override {
+        if (dt != Dtype::F32 || weights.size() < 4)
+            return IBackend::lstm_forward_train(input, h0, c0, weights, opts, dt);
+
+        const int T = opts.seq_len, B = opts.batch_size;
+        const int I = opts.input_size, H = opts.hidden_size;
+        const int fH = 4 * H;
+
+        const auto& x_s  = std::get<CpuStorage>(input);
+        const auto& h0_s = std::get<CpuStorage>(h0);
+        const auto& c0_s = std::get<CpuStorage>(c0);
+        const auto& wih_s = std::get<CpuStorage>(weights[0]);
+        const auto& whh_s = std::get<CpuStorage>(weights[1]);
+        const auto& bih_s = std::get<CpuStorage>(weights[2]);
+        const auto& bhh_s = std::get<CpuStorage>(weights[3]);
+
+        const float* Xp   = reinterpret_cast<const float*>(x_s.ptr.get());
+        const float* h0p  = reinterpret_cast<const float*>(h0_s.ptr.get());
+        const float* c0p  = reinterpret_cast<const float*>(c0_s.ptr.get());
+        const float* Wih  = reinterpret_cast<const float*>(wih_s.ptr.get());
+        const float* Whh  = reinterpret_cast<const float*>(whh_s.ptr.get());
+        const float* Bih  = reinterpret_cast<const float*>(bih_s.ptr.get());
+        const float* Bhh  = reinterpret_cast<const float*>(bhh_s.ptr.get());
+
+        // Allocate outputs
+        CpuStorage out_s = alloc_cpu(static_cast<std::size_t>(T) * B * H, dt);
+        CpuStorage hn_s  = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
+        CpuStorage cn_s  = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
+        CpuStorage gates_s = alloc_cpu(static_cast<std::size_t>(T) * B * fH, dt);
+        // cells_all: t=0 is c0, t=1..T are the computed cells
+        CpuStorage cells_s = alloc_cpu(static_cast<std::size_t>(T + 1) * B * H, dt);
+
+        float* Yp     = reinterpret_cast<float*>(out_s.ptr.get());
+        float* Hnp    = reinterpret_cast<float*>(hn_s.ptr.get());
+        float* Cnp    = reinterpret_cast<float*>(cn_s.ptr.get());
+        float* Gates  = reinterpret_cast<float*>(gates_s.ptr.get());
+        float* Cells  = reinterpret_cast<float*>(cells_s.ptr.get());
+
+        // cells_all[0] = c0
+        std::memcpy(Cells, c0p, static_cast<std::size_t>(B) * H * sizeof(float));
+
+        // Fused bias: bih + bhh
+        std::vector<float> bias_fused(static_cast<std::size_t>(fH));
+        for (int k = 0; k < fH; ++k) bias_fused[static_cast<std::size_t>(k)] = Bih[k] + Bhh[k];
+
+        // Working h: start with h0
+        std::vector<float> h_prev(static_cast<std::size_t>(B) * H);
+        std::memcpy(h_prev.data(), h0p, static_cast<std::size_t>(B) * H * sizeof(float));
+
+        std::vector<float> raw(static_cast<std::size_t>(B) * fH);
+
+        for (int t = 0; t < T; ++t) {
+            const float* xt = Xp + t * B * I;
+            float* gt = Gates + t * B * fH;
+            float* ct = Cells + (t + 1) * B * H;   // cells_all[t+1]
+            float* yt = Yp + t * B * H;
+            const float* ct_prev = Cells + t * B * H; // cells_all[t]
+
+            // raw = xt @ Wih^T + h_prev @ Whh^T  (B, fH)
+            // xt: (B, I), Wih: (fH, I) → raw = xt * Wih^T
+            cpu::sgemm(false, true, B, fH, I, 1.0f, xt, I, Wih, I, 0.0f, raw.data(), fH);
+            // += h_prev @ Whh^T
+            cpu::sgemm(false, true, B, fH, H, 1.0f, h_prev.data(), H, Whh, H, 1.0f, raw.data(), fH);
+            // += bias
+            for (int b = 0; b < B; ++b)
+                for (int k = 0; k < fH; ++k)
+                    raw[static_cast<std::size_t>(b * fH + k)] += bias_fused[static_cast<std::size_t>(k)];
+
+            // Compute gates and store in gt (B, fH)
+            for (int b = 0; b < B; ++b) {
+                float* rb = raw.data() + b * fH;
+                float* gb = gt + b * fH;
+                // i = sigmoid(raw[0:H]), f = sigmoid(raw[H:2H])
+                // g = tanh(raw[2H:3H]), o = sigmoid(raw[3H:4H])
+                for (int k = 0; k < H; ++k) gb[k]         = 1.0f / (1.0f + std::exp(-rb[k]));
+                for (int k = 0; k < H; ++k) gb[H + k]     = 1.0f / (1.0f + std::exp(-rb[H + k]));
+                for (int k = 0; k < H; ++k) gb[2 * H + k] = std::tanh(rb[2 * H + k]);
+                for (int k = 0; k < H; ++k) gb[3 * H + k] = 1.0f / (1.0f + std::exp(-rb[3 * H + k]));
+
+                // c[t] = f * c_prev + i * g
+                const float* cp = ct_prev + b * H;
+                float* cnb = ct + b * H;
+                float* ynb = yt + b * H;
+                for (int k = 0; k < H; ++k)
+                    cnb[k] = gb[H + k] * cp[k] + gb[k] * gb[2 * H + k];
+                // h[t] = o * tanh(c[t])
+                for (int k = 0; k < H; ++k)
+                    ynb[k] = gb[3 * H + k] * std::tanh(cnb[k]);
+                // update h_prev
+                std::memcpy(h_prev.data() + b * H, ynb, static_cast<std::size_t>(H) * sizeof(float));
+            }
+        }
+        // h_n = h_prev, c_n = cells_all[T]
+        std::memcpy(Hnp, h_prev.data(), static_cast<std::size_t>(B) * H * sizeof(float));
+        std::memcpy(Cnp, Cells + T * B * H, static_cast<std::size_t>(B) * H * sizeof(float));
+
+        return {Storage{std::move(out_s)}, Storage{std::move(hn_s)}, Storage{std::move(cn_s)},
+                Storage{std::move(gates_s)}, Storage{std::move(cells_s)}};
+    }
+
+    // ---- LSTM backward (BPTT) -----------------------------------------------
+    //
+    // Returns {dX, dh0, dc0, dWih, dWhh, dBih, dBhh}.
+    //
+    std::vector<Storage> lstm_backward(const Storage& grad_output,
+                                       const Storage& grad_hn,
+                                       const Storage& grad_cn,
+                                       const Storage& input,
+                                       const Storage& h0,
+                                       const std::vector<Storage>& weights,
+                                       const Storage& gates_all,
+                                       const Storage& cells_all,
+                                       const LstmOpts& opts,
+                                       Dtype dt) override {
+        if (dt != Dtype::F32 || weights.size() < 4)
+            return IBackend::lstm_backward(grad_output, grad_hn, grad_cn,
+                                          input, h0, weights,
+                                          gates_all, cells_all, opts, dt);
+
+        const int T = opts.seq_len, B = opts.batch_size;
+        const int I = opts.input_size, H = opts.hidden_size;
+        const int fH = 4 * H;
+
+        const float* dY    = reinterpret_cast<const float*>(std::get<CpuStorage>(grad_output).ptr.get());
+        const float* dHn   = reinterpret_cast<const float*>(std::get<CpuStorage>(grad_hn).ptr.get());
+        const float* dCn   = reinterpret_cast<const float*>(std::get<CpuStorage>(grad_cn).ptr.get());
+        const float* Xp    = reinterpret_cast<const float*>(std::get<CpuStorage>(input).ptr.get());
+        const float* H0p   = reinterpret_cast<const float*>(std::get<CpuStorage>(h0).ptr.get());
+        const float* Wih   = reinterpret_cast<const float*>(std::get<CpuStorage>(weights[0]).ptr.get());
+        const float* Whh   = reinterpret_cast<const float*>(std::get<CpuStorage>(weights[1]).ptr.get());
+        const float* Gates = reinterpret_cast<const float*>(std::get<CpuStorage>(gates_all).ptr.get());
+        const float* Cells = reinterpret_cast<const float*>(std::get<CpuStorage>(cells_all).ptr.get());
+
+        CpuStorage dX_s   = alloc_cpu(static_cast<std::size_t>(T) * B * I, dt);
+        CpuStorage dH0_s  = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
+        CpuStorage dC0_s  = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
+        CpuStorage dWih_s = alloc_cpu(static_cast<std::size_t>(fH) * I, dt);
+        CpuStorage dWhh_s = alloc_cpu(static_cast<std::size_t>(fH) * H, dt);
+        CpuStorage dBih_s = alloc_cpu(static_cast<std::size_t>(fH), dt);
+        CpuStorage dBhh_s = alloc_cpu(static_cast<std::size_t>(fH), dt);
+
+        float* dXp   = reinterpret_cast<float*>(dX_s.ptr.get());
+        float* dH0p  = reinterpret_cast<float*>(dH0_s.ptr.get());
+        float* dC0p  = reinterpret_cast<float*>(dC0_s.ptr.get());
+        float* dWih  = reinterpret_cast<float*>(dWih_s.ptr.get());
+        float* dWhh  = reinterpret_cast<float*>(dWhh_s.ptr.get());
+        float* dBih  = reinterpret_cast<float*>(dBih_s.ptr.get());
+        float* dBhh  = reinterpret_cast<float*>(dBhh_s.ptr.get());
+
+        std::memset(dXp,  0, static_cast<std::size_t>(T) * B * I * sizeof(float));
+        std::memset(dWih, 0, static_cast<std::size_t>(fH) * I * sizeof(float));
+        std::memset(dWhh, 0, static_cast<std::size_t>(fH) * H * sizeof(float));
+        std::memset(dBih, 0, static_cast<std::size_t>(fH) * sizeof(float));
+        std::memset(dBhh, 0, static_cast<std::size_t>(fH) * sizeof(float));
+
+        // Running grad accumulators (start from terminal gradients)
+        std::vector<float> dh_next(static_cast<std::size_t>(B) * H);
+        std::vector<float> dc_next(static_cast<std::size_t>(B) * H);
+        std::memcpy(dh_next.data(), dHn, static_cast<std::size_t>(B) * H * sizeof(float));
+        std::memcpy(dc_next.data(), dCn, static_cast<std::size_t>(B) * H * sizeof(float));
+
+        std::vector<float> d_gates(static_cast<std::size_t>(B) * fH);
+        std::vector<float> h_prev_local(static_cast<std::size_t>(B) * H);
+
+        for (int t = T - 1; t >= 0; --t) {
+            const float* gt = Gates + t * B * fH;
+            const float* ct = Cells + (t + 1) * B * H;  // c[t]
+            const float* ct_prev = Cells + t * B * H;    // c[t-1]
+            const float* xt = Xp + t * B * I;
+            float* dxt = dXp + t * B * I;
+
+            // h_prev = h[t-1]:
+            //   t==0 → h0
+            //   t>0  → o[t-1] * tanh(c[t])  (reconstruct from saved gates+cells)
+            //   cells_all[t] == c[t-1] (index offset: cells_all[0]=c0, cells_all[t]=c[t])
+            if (t == 0) {
+                std::memcpy(h_prev_local.data(), H0p,
+                            static_cast<std::size_t>(B) * H * sizeof(float));
+            } else {
+                const float* o_prev   = Gates + (t - 1) * B * fH + 3 * H; // o gate at t-1 (row-major, stride fH per batch)
+                const float* c_t_prev = Cells + t * B * H;                  // c[t-1] = cells_all[t]
+                for (int b = 0; b < B; ++b) {
+                    for (int k = 0; k < H; ++k) {
+                        h_prev_local[static_cast<std::size_t>(b * H + k)] =
+                            o_prev[b * fH + k] * std::tanh(c_t_prev[b * H + k]);
+                    }
+                }
+            }
+
+            for (int b = 0; b < B; ++b) {
+                const float* gb   = gt + b * fH;
+                const float* ctb  = ct + b * H;
+                const float* cpb  = ct_prev + b * H;
+                float* dg = d_gates.data() + b * fH;
+
+                // dh = dy[t] + dh_next
+                // dc = dh * o * (1 - tanh²(c)) + dc_next
+                for (int k = 0; k < H; ++k) {
+                    float dh_k = dY[t * B * H + b * H + k] + dh_next[static_cast<std::size_t>(b * H + k)];
+                    float tanh_c = std::tanh(ctb[k]);
+                    float dc_k = dh_k * gb[3 * H + k] * (1.0f - tanh_c * tanh_c)
+                                 + dc_next[static_cast<std::size_t>(b * H + k)];
+                    // do: sigmoid'(o) = o*(1-o)
+                    dg[3 * H + k] = dh_k * tanh_c * gb[3 * H + k] * (1.0f - gb[3 * H + k]);
+                    // df: sigmoid'(f) = f*(1-f), dc_f = dc * c_prev
+                    dg[H + k] = dc_k * cpb[k] * gb[H + k] * (1.0f - gb[H + k]);
+                    // di: sigmoid'(i) = i*(1-i), dc_i = dc * g
+                    dg[k] = dc_k * gb[2 * H + k] * gb[k] * (1.0f - gb[k]);
+                    // dg: tanh'(g) = 1 - g², dc_g = dc * i
+                    dg[2 * H + k] = dc_k * gb[k] * (1.0f - gb[2 * H + k] * gb[2 * H + k]);
+                    // propagate cell grad: dc_prev = dc * f
+                    dc_next[static_cast<std::size_t>(b * H + k)] = dc_k * gb[H + k];
+                }
+            }
+
+            // dX[t] = d_gates @ Wih  (B, fH) @ (fH, I)
+            cpu::sgemm(false, false, B, I, fH, 1.0f, d_gates.data(), fH, Wih, I, 0.0f, dxt, I);
+
+            // dh_next = d_gates @ Whh  (B, fH) @ (fH, H)
+            cpu::sgemm(false, false, B, H, fH, 1.0f, d_gates.data(), fH, Whh, H, 0.0f, dh_next.data(), H);
+
+            // dWih += d_gates^T @ X[t]  (fH, B) @ (B, I)
+            cpu::sgemm(true, false, fH, I, B, 1.0f, d_gates.data(), fH, xt, I, 1.0f, dWih, I);
+
+            // dWhh += d_gates^T @ H_prev  (fH, B) @ (B, H)
+            cpu::sgemm(true, false, fH, H, B, 1.0f, d_gates.data(), fH, h_prev_local.data(), H, 1.0f, dWhh, H);
+
+            // dBias: sum over batch
+            for (int b = 0; b < B; ++b)
+                for (int k = 0; k < fH; ++k) {
+                    dBih[k] += d_gates[static_cast<std::size_t>(b * fH + k)];
+                    dBhh[k] += d_gates[static_cast<std::size_t>(b * fH + k)];
+                }
+        }
+
+        std::memcpy(dH0p, dh_next.data(), static_cast<std::size_t>(B) * H * sizeof(float));
+        std::memcpy(dC0p, dc_next.data(), static_cast<std::size_t>(B) * H * sizeof(float));
+
+        return {Storage{std::move(dX_s)},  Storage{std::move(dH0_s)},
+                Storage{std::move(dC0_s)}, Storage{std::move(dWih_s)},
+                Storage{std::move(dWhh_s)}, Storage{std::move(dBih_s)},
+                Storage{std::move(dBhh_s)}};
     }
 
     // ---- Op Fusion (Phase 19) -----------------------------------------------

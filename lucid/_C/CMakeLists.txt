@@ -203,6 +203,7 @@ lucid_object_library(
     ops/linalg/MatrixPower.cpp
     ops/linalg/Pinv.cpp
     ops/linalg/Eig.cpp
+    ops/linalg/Eigh.cpp
     nn/Linear.cpp
     nn/Dropout.cpp
     nn/LayerNorm.cpp
@@ -216,6 +217,7 @@ lucid_object_library(
     nn/NormExt.cpp
     nn/Loss.cpp
     nn/Attention.cpp
+    nn/LSTM.cpp
     nn/Embedding.cpp
     nn/Spatial.cpp
     nn/Interpolate.cpp

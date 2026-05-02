@@ -6,6 +6,7 @@
 #include "../ops/linalg/Cholesky.h"
 #include "../ops/linalg/Det.h"
 #include "../ops/linalg/Eig.h"
+#include "../ops/linalg/Eigh.h"
 #include "../ops/linalg/Inv.h"
 #include "../ops/linalg/MatrixPower.h"
 #include "../ops/linalg/Norm.h"
@@ -50,6 +51,18 @@ void register_linalg(py::module_& m) {
             return py::make_tuple(r[0], r[1]);
         },
         py::arg("a"));
+
+    m.def(
+        "eigh",
+        [](const TensorImplPtr& a) {
+            auto r = eigh_op(a);
+            return py::make_tuple(r[0], r[1]);
+        },
+        py::arg("a"),
+        "Symmetric/Hermitian eigendecomposition.\n"
+        "Returns (eigenvalues, eigenvectors) with eigenvalues sorted ascending.\n"
+        "Input must be a real symmetric square matrix.\n"
+        "CPU: LAPACK ssyev/dsyev.  GPU: mlx::core::linalg::eigh.");
 }
 
 }  // namespace lucid::bindings
