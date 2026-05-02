@@ -41,10 +41,10 @@ inline std::size_t cpu_numel(const TensorImpl& t) {
 }
 
 inline GpuStorage& gpu_get(Storage& s) {
-    return std::get<GpuStorage>(s);
+    return storage_gpu(s);
 }
 inline const GpuStorage& gpu_get(const Storage& s) {
-    return std::get<GpuStorage>(s);
+    return storage_gpu(s);
 }
 
 inline ::mlx::core::array mlx_scalar(double x, Dtype dt) {

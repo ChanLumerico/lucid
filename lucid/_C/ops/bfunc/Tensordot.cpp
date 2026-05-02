@@ -92,7 +92,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     if (device == Device::GPU) {
         auto out_storage = backend::Dispatcher::for_device(device).tensordot(
             a->storage(), b->storage(), a->shape(), b->shape(), Shape{}, axes_a, axes_b, dt);
-        const auto& gs = std::get<GpuStorage>(out_storage);
+        const auto& gs = storage_gpu(out_storage);
         Shape out_shape;
         for (auto d : gs.arr->shape())
             out_shape.push_back(static_cast<std::int64_t>(d));
@@ -136,7 +136,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
             }
         }
         Shape src_shape = t->shape();
-        const auto& cs = std::get<CpuStorage>(t->storage());
+        const auto& cs = storage_cpu(t->storage());
         auto& be = backend::Dispatcher::for_device(Device::CPU);
         CpuStorage dst = be.permute_cpu(cs, src_shape, perm, dt);
         return std::tuple<CpuStorage, std::vector<std::int64_t>, std::int64_t>{

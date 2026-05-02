@@ -169,19 +169,19 @@ void Adam::update_one(std::size_t slot_idx,
         ++step_count_;
 
     if (param->device() == Device::GPU) {
-        auto& pg = std::get<GpuStorage>(param->mutable_storage());
-        const auto& gg = std::get<GpuStorage>(grad);
-        auto& mg = std::get<GpuStorage>(m_[slot_idx]);
-        auto& vg = std::get<GpuStorage>(v_[slot_idx]);
+        auto& pg = storage_gpu(param->mutable_storage());
+        const auto& gg = storage_gpu(grad);
+        auto& mg = storage_gpu(m_[slot_idx]);
+        auto& vg = storage_gpu(v_[slot_idx]);
         adam_step_gpu(pg, gg, mg, vg, param->dtype(), lr_, beta1_, beta2_, eps_, weight_decay_,
                       /*decoupled_wd=*/false, step_count_);
         pg.bump_version();
         return;
     }
-    auto& pc = std::get<CpuStorage>(param->mutable_storage());
-    const auto& gc = std::get<CpuStorage>(grad);
-    auto& mc = std::get<CpuStorage>(m_[slot_idx]);
-    auto& vc = std::get<CpuStorage>(v_[slot_idx]);
+    auto& pc = storage_cpu(param->mutable_storage());
+    const auto& gc = storage_cpu(grad);
+    auto& mc = storage_cpu(m_[slot_idx]);
+    auto& vc = storage_cpu(v_[slot_idx]);
     const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
     switch (param->dtype()) {
         case Dtype::F32:
@@ -250,19 +250,19 @@ void AdamW::update_one(std::size_t slot_idx,
     if (slot_idx == 0)
         ++step_count_;
     if (param->device() == Device::GPU) {
-        auto& pg = std::get<GpuStorage>(param->mutable_storage());
-        const auto& gg = std::get<GpuStorage>(grad);
-        auto& mg = std::get<GpuStorage>(m_[slot_idx]);
-        auto& vg = std::get<GpuStorage>(v_[slot_idx]);
+        auto& pg = storage_gpu(param->mutable_storage());
+        const auto& gg = storage_gpu(grad);
+        auto& mg = storage_gpu(m_[slot_idx]);
+        auto& vg = storage_gpu(v_[slot_idx]);
         adam_step_gpu(pg, gg, mg, vg, param->dtype(), lr_, beta1_, beta2_, eps_, weight_decay_,
                       /*decoupled_wd=*/true, step_count_);
         pg.bump_version();
         return;
     }
-    auto& pc = std::get<CpuStorage>(param->mutable_storage());
-    const auto& gc = std::get<CpuStorage>(grad);
-    auto& mc = std::get<CpuStorage>(m_[slot_idx]);
-    auto& vc = std::get<CpuStorage>(v_[slot_idx]);
+    auto& pc = storage_cpu(param->mutable_storage());
+    const auto& gc = storage_cpu(grad);
+    auto& mc = storage_cpu(m_[slot_idx]);
+    auto& vc = storage_cpu(v_[slot_idx]);
     const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
     switch (param->dtype()) {
         case Dtype::F32:
@@ -362,7 +362,7 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
+    auto& p_cpu = storage_cpu(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* M = cpu_ptr<T>(m_[i]);
@@ -473,7 +473,7 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
+    auto& p_cpu = storage_cpu(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* M = cpu_ptr<T>(m_[i]);

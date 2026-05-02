@@ -134,11 +134,11 @@ void SGD::update_one(std::size_t slot_idx,
                      std::shared_ptr<TensorImpl>& param,
                      const Storage& grad) {
     if (param->device() == Device::GPU) {
-        auto& param_g = std::get<GpuStorage>(param->mutable_storage());
-        const auto& grad_g = std::get<GpuStorage>(grad);
+        auto& param_g = storage_gpu(param->mutable_storage());
+        const auto& grad_g = storage_gpu(grad);
         GpuStorage* moment_g = nullptr;
         if (momentum_ != 0.0) {
-            moment_g = &std::get<GpuStorage>(moment_[slot_idx]);
+            moment_g = &storage_gpu(moment_[slot_idx]);
         }
         // The function expects a non-null reference even when momentum=0;
         // gate at the kernel level instead.
@@ -149,11 +149,11 @@ void SGD::update_one(std::size_t slot_idx,
         return;
     }
 
-    auto& param_cpu = std::get<CpuStorage>(param->mutable_storage());
-    const auto& grad_cpu = std::get<CpuStorage>(grad);
+    auto& param_cpu = storage_cpu(param->mutable_storage());
+    const auto& grad_cpu = storage_cpu(grad);
     CpuStorage* moment_cpu = nullptr;
     if (momentum_ != 0.0) {
-        moment_cpu = &std::get<CpuStorage>(moment_[slot_idx]);
+        moment_cpu = &storage_cpu(moment_[slot_idx]);
     }
     const std::size_t numel = param_cpu.nbytes / dtype_size(param->dtype());
 
@@ -216,8 +216,8 @@ void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) 
         const auto& gp = gpu_get(p->storage());
         gpu_replace(gpu_get(ax_[i]), ::mlx::core::copy(*gp.arr), p->dtype());
     } else {
-        const auto& pc = std::get<CpuStorage>(p->mutable_storage());
-        auto& ac = std::get<CpuStorage>(ax_[i]);
+        const auto& pc = storage_cpu(p->mutable_storage());
+        auto& ac = storage_cpu(ax_[i]);
         std::memcpy(ac.ptr.get(), pc.ptr.get(), pc.nbytes);
     }
 }
@@ -256,7 +256,7 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
+    auto& p_cpu = storage_cpu(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* M = (momentum_ != 0.0) ? cpu_ptr<T>(moment_[i]) : nullptr;

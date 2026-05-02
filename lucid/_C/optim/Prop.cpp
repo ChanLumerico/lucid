@@ -87,7 +87,7 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
+    auto& p_cpu = storage_cpu(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* SQ = cpu_ptr<T>(square_avg_[i]);
@@ -203,7 +203,7 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
+    auto& p_cpu = storage_cpu(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* PV = cpu_ptr<T>(prev_grad_[i]);

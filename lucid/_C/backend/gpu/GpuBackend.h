@@ -38,6 +38,10 @@ public:
 
     // ---- Memory -------------------------------------------------------
 
+    Storage from_cpu(CpuStorage cpu, const Shape& shape) override {
+        return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
+    }
+
     Storage zeros(const Shape& shape, Dtype dt) override {
         auto arr = ::mlx::core::zeros(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(arr), dt)};

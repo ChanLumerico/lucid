@@ -36,7 +36,7 @@ CpuStorage to_cpu(const TensorImplPtr& a) {
 // which loses precision.
 Storage to_device_storage(CpuStorage&& cpu, Device target_device, const Shape& shape) {
     if (target_device == Device::GPU && cpu.dtype != Dtype::F64) {
-        return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
+        return backend::Dispatcher::for_device(Device::GPU).from_cpu(cpu, shape);
     }
     return Storage{std::move(cpu)};
 }
@@ -97,15 +97,15 @@ std::vector<TensorImplPtr> histogram_op(
     Device out_dev = pick_out_device(a->device(), Dtype::F64);
     // counts_storage is always CpuStorage (F64); upload to GPU if needed.
     auto final_counts_storage =
-        to_device_storage(std::get<CpuStorage>(std::move(counts_storage)), out_dev, counts_shape);
+        to_device_storage(std::move(storage_cpu(counts_storage)), out_dev, counts_shape);
     auto counts_t =
         fresh(std::move(final_counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
     auto edges = build_edges(lo, hi, bins);
     // edges share the dtype/device convention with counts.
     if (out_dev == Device::GPU) {
-        edges = fresh(
-            Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(edges->storage()), edges->shape())},
-            edges->shape(), Dtype::F64, Device::GPU);
+        edges = fresh(backend::Dispatcher::for_device(Device::GPU)
+                          .from_cpu(storage_cpu(edges->storage()), edges->shape()),
+                      edges->shape(), Dtype::F64, Device::GPU);
     }
     return {counts_t, edges};
 }
@@ -169,8 +169,8 @@ std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
     Shape edge_shape{bins_a + 1 + bins_b + 1};
     auto edges = allocate_cpu(edge_shape, Dtype::F64);
     auto* edst = reinterpret_cast<double*>(edges.ptr.get());
-    std::memcpy(edst, std::get<CpuStorage>(ea->storage()).ptr.get(), (bins_a + 1) * sizeof(double));
-    std::memcpy(edst + (bins_a + 1), std::get<CpuStorage>(eb->storage()).ptr.get(),
+    std::memcpy(edst, storage_cpu(ea->storage()).ptr.get(), (bins_a + 1) * sizeof(double));
+    std::memcpy(edst + (bins_a + 1), storage_cpu(eb->storage()).ptr.get(),
                 (bins_b + 1) * sizeof(double));
     auto edges_storage = to_device_storage(std::move(edges), out_dev, edge_shape);
     auto edges_t = fresh(std::move(edges_storage), std::move(edge_shape), Dtype::F64, out_dev);

@@ -339,10 +339,7 @@ Storage bernoulli_mask_storage_shape(
         default:
             ErrorBuilder("bernoulli_mask").not_implemented("dtype not supported (F32/F64)");
     }
-    if (device == Device::GPU) {
-        return Storage{gpu::upload_cpu_to_gpu(out, shape)};
-    }
-    return Storage{std::move(out)};
+    return backend::Dispatcher::for_device(device).from_cpu(std::move(out), shape);
 }
 
 Storage bernoulli_mask_storage(
@@ -456,10 +453,7 @@ Storage random_uniform_storage(
         default:
             ErrorBuilder("random_uniform").not_implemented("dtype not supported (F32/F64)");
     }
-    if (device == Device::GPU) {
-        return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
-    }
-    return Storage{std::move(cpu)};
+    return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }
 
 Storage random_normal_storage(
@@ -476,10 +470,7 @@ Storage random_normal_storage(
         default:
             ErrorBuilder("random_normal").not_implemented("dtype not supported (F32/F64)");
     }
-    if (device == Device::GPU) {
-        return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
-    }
-    return Storage{std::move(cpu)};
+    return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }
 
 Storage random_bernoulli_storage(
@@ -507,10 +498,7 @@ Storage random_bernoulli_storage(
         default:
             ErrorBuilder("random_bernoulli").not_implemented("dtype not supported (F32/F64)");
     }
-    if (device == Device::GPU) {
-        return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
-    }
-    return Storage{std::move(cpu)};
+    return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }
 
 Storage random_randint_storage(const Shape& shape,
@@ -535,10 +523,7 @@ Storage random_randint_storage(const Shape& shape,
         default:
             ErrorBuilder("random_randint").not_implemented("dtype not supported (I32/I64)");
     }
-    if (device == Device::GPU) {
-        return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
-    }
-    return Storage{std::move(cpu)};
+    return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }
 
 }  // namespace lucid

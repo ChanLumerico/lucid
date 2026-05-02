@@ -154,9 +154,8 @@ std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
     }
 
     if (device == Device::GPU) {
-        auto gpu = gpu::upload_cpu_to_gpu(cpu, shape);
-        return std::make_shared<TensorImpl>(Storage{std::move(gpu)}, std::move(shape), dtype,
-                                            device, requires_grad);
+        return std::make_shared<TensorImpl>(Storage{gpu::upload_cpu_to_gpu(cpu, shape)},
+                                            std::move(shape), dtype, device, requires_grad);
     }
     return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, std::move(shape), dtype, device,
                                         requires_grad);

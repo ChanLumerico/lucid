@@ -130,4 +130,26 @@ inline Dtype storage_dtype(const Storage& s) noexcept {
     return s.index() == 0 ? std::get<0>(s).dtype : std::get<1>(s).dtype;
 }
 
+// --------------------------------------------------------------------------- //
+// Typed accessors — preferred over raw std::get<> at call sites.
+// These make the intent explicit and allow future storage-type refactoring
+// without touching every call site.
+// --------------------------------------------------------------------------- //
+
+/// Return the CpuStorage inside s.  Undefined behaviour if s holds GpuStorage.
+inline const CpuStorage& storage_cpu(const Storage& s) noexcept {
+    return std::get<CpuStorage>(s);
+}
+inline CpuStorage& storage_cpu(Storage& s) noexcept {
+    return std::get<CpuStorage>(s);
+}
+
+/// Return the GpuStorage inside s.  Undefined behaviour if s holds CpuStorage.
+inline const GpuStorage& storage_gpu(const Storage& s) noexcept {
+    return std::get<GpuStorage>(s);
+}
+inline GpuStorage& storage_gpu(Storage& s) noexcept {
+    return std::get<GpuStorage>(s);
+}
+
 }  // namespace lucid

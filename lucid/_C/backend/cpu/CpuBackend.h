@@ -47,6 +47,10 @@ public:
 
     // ---- Memory -------------------------------------------------------
 
+    Storage from_cpu(CpuStorage cpu, const Shape& /*shape*/) override {
+        return Storage{std::move(cpu)};
+    }
+
     Storage zeros(const Shape& shape, Dtype dt) override {
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);

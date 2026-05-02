@@ -72,7 +72,7 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
+    auto& p_cpu = storage_cpu(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* M = cpu_ptr<T>(m_[i]);
@@ -161,7 +161,7 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
+    auto& p_cpu = storage_cpu(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* SS = cpu_ptr<T>(sum_sq_grad_[i]);
@@ -232,7 +232,7 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
+    auto& p_cpu = storage_cpu(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* SQ = cpu_ptr<T>(sq_avg_[i]);

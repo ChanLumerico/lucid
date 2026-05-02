@@ -86,6 +86,14 @@ public:
 
     // ---- Memory -------------------------------------------------------
 
+    /// Wrap a CPU buffer as this backend's native Storage.
+    /// CpuBackend: returns Storage{cpu} as-is.
+    /// GpuBackend: uploads cpu to GPU and returns Storage{GpuStorage}.
+    /// Use this instead of raw gpu::upload_cpu_to_gpu() at call sites that
+    /// already have a device token (avoids direct MlxBridge dependency outside
+    /// the backend layer).
+    virtual Storage from_cpu(CpuStorage cpu, const Shape& shape) = 0;
+
     /// Allocate a zero-filled tensor.
     virtual Storage zeros(const Shape& shape, Dtype dt) = 0;
 

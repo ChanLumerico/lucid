@@ -56,7 +56,7 @@ inline const ::mlx::core::Device kMlxLinalgStream{::mlx::core::Device::cpu};
 inline ::mlx::core::array as_mlx_array_gpu(const TensorImplPtr& t) {
     if (t->device() != Device::GPU)
         ErrorBuilder("as_mlx_array_gpu").fail("not a GPU tensor");
-    const auto& g = std::get<GpuStorage>(t->storage());
+    const auto& g = storage_gpu(t->storage());
     return *g.arr;
 }
 

@@ -68,7 +68,7 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         auto out_storage = backend::Dispatcher::for_device(device).inner(a->storage(), b->storage(),
                                                                          sa, sb, out_shape, dt);
         // For GPU, inner() returns storage with shape embedded in MLX array.
-        const auto& gs = std::get<GpuStorage>(out_storage);
+        const auto& gs = storage_gpu(out_storage);
         Shape actual_shape;
         for (auto d : gs.arr->shape())
             actual_shape.push_back(static_cast<std::int64_t>(d));

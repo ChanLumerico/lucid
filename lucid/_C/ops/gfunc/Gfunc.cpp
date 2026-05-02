@@ -8,7 +8,6 @@
 
 #include "../../autograd/Helpers.h"
 #include "../../backend/Dispatcher.h"
-#include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -123,11 +122,8 @@ TensorImplPtr arange_op(
         default:
             ErrorBuilder("arange").not_implemented("dtype not supported");
     }
-    if (device == Device::GPU) {
-        auto gpuSt = gpu::upload_cpu_to_gpu(cpu, shape);
-        return finalize(Storage{std::move(gpuSt)}, shape, dt, device, requires_grad);
-    }
-    return finalize(Storage{std::move(cpu)}, shape, dt, device, requires_grad);
+    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
+                    dt, device, requires_grad);
 }
 
 // ----------------------------------------------------------------------------
@@ -170,11 +166,8 @@ TensorImplPtr linspace_op(
         default:
             ErrorBuilder("linspace").not_implemented("dtype not supported");
     }
-    if (device == Device::GPU) {
-        auto gpuSt = gpu::upload_cpu_to_gpu(cpu, shape);
-        return finalize(Storage{std::move(gpuSt)}, shape, dt, device, requires_grad);
-    }
-    return finalize(Storage{std::move(cpu)}, shape, dt, device, requires_grad);
+    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
+                    dt, device, requires_grad);
 }
 
 // ----------------------------------------------------------------------------

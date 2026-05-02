@@ -271,7 +271,7 @@ TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const 
         cond->storage(), x->storage(), y->storage(), x->shape(), dt);
     Shape out_shape;
     if (device == Device::GPU) {
-        const auto& gs = std::get<GpuStorage>(out_storage);
+        const auto& gs = storage_gpu(out_storage);
         out_shape = mlx_shape_to_lucid(gs.arr->shape());
     } else {
         out_shape = x->shape();
