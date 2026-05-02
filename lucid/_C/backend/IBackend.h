@@ -578,6 +578,319 @@ public:
                                       int reduction) = 0;
 
     virtual CpuStorage to_cpu(const Storage& a, const Shape& shape) = 0;
+
+    // ---- Attention --------------------------------------------------------
+
+    /// Scaled dot-product attention forward.
+    /// Returns {output_storage, weights_storage}.
+    /// attn_mask may be nullptr (no mask). mask_dtype is only meaningful when
+    /// attn_mask != nullptr.
+    virtual std::vector<Storage> sdpa_forward(
+        const Storage& q,
+        const Storage& k,
+        const Storage& v,
+        const Storage* attn_mask,  // nullptr if no mask
+        const Shape& q_shape,
+        const Shape& k_shape,
+        const Shape& v_shape,
+        Dtype mask_dtype,          // dtype of attn_mask; ignored when attn_mask==nullptr
+        std::size_t mask_numel,    // numel of mask; ignored when attn_mask==nullptr
+        double scale,
+        bool is_causal,
+        Dtype dt) = 0;
+
+    /// Scaled dot-product attention backward.
+    /// Returns {dQ, dK, dV}.
+    virtual std::vector<Storage> sdpa_backward(
+        const Storage& grad_out,
+        const Storage& q,
+        const Storage& k,
+        const Storage& v,
+        const Storage& saved_weights,
+        const Shape& q_shape,
+        const Shape& k_shape,
+        const Shape& v_shape,
+        double scale,
+        Dtype dt) = 0;
+
+    // ---- Transposed convolution ------------------------------------------
+
+    /// N-D transposed convolution forward (N = 1, 2, or 3).
+    /// stride/pad/opad/kernel_shape are length-N arrays; dilation is currently
+    /// always 1 and reserved for future use.
+    virtual Storage conv_transpose_nd_forward(
+        const Storage& x,
+        const Storage& W,
+        const Storage& b,
+        int B,
+        int Cin,
+        int Cout,
+        const int* S,   // input spatial dims, length N
+        const int* K,   // kernel spatial dims, length N
+        const int* O,   // output spatial dims, length N
+        const int* stride,
+        const int* pad,
+        const int* opad,
+        int N,
+        const Shape& out_shape,
+        Dtype dt) = 0;
+
+    /// N-D transposed convolution backward.
+    /// Returns {dx, dW, db}.
+    virtual std::vector<Storage> conv_transpose_nd_backward(
+        const Storage& grad_out,
+        const Storage& x,
+        const Storage& W,
+        int B,
+        int Cin,
+        int Cout,
+        const int* S,
+        const int* K,
+        const int* O,
+        const int* stride,
+        const int* pad,
+        int N,
+        Dtype dt) = 0;
+
+    // ---- Convolution (N-D) -------------------------------------------
+
+    struct ConvNdOpts {
+        int N;            ///< spatial dims (1, 2, or 3)
+        int groups;
+        int stride[3];    ///< length N, rest 0
+        int pad[3];       ///< length N
+        int dilation[3];  ///< length N
+    };
+
+    /// N-D convolution forward: x[B,Cin,S...] * W[Cout,Cin/g,K...] + b[Cout] -> out[B,Cout,O...]
+    virtual Storage conv_nd_forward(
+        const Storage& x, const Storage& W, const Storage& b,
+        int B, int Cin, int Cout, int Cin_g, int Cout_g,
+        const int* S, const int* K, const int* O,
+        const ConvNdOpts& opts,
+        const Shape& out_shape, Dtype dt) = 0;
+
+    /// Backward for conv_nd: grad_out -> {dx[B,Cin,S...], dW[Cout,Cin/g,K...], db[Cout]}
+    virtual std::vector<Storage> conv_nd_backward(
+        const Storage& grad_out, const Storage& x, const Storage& W,
+        int B, int Cin, int Cout, int Cin_g, int Cout_g,
+        const int* S, const int* K, const int* O,
+        const ConvNdOpts& opts, Dtype dt) = 0;
+
+    /// Unfold forward: x[B,C,S...] -> out[B, C*K_total, O_total]
+    virtual Storage unfold_forward(
+        const Storage& x,
+        int B, int C,
+        const std::vector<int>& S, const std::vector<int>& K, const std::vector<int>& O,
+        const std::vector<int>& stride, const std::vector<int>& pad,
+        const std::vector<int>& dilation,
+        const Shape& out_shape, Dtype dt) = 0;
+
+    /// Unfold backward: grad_out[B, C*K_total, O_total] -> dx[B,C,S...]
+    virtual Storage unfold_backward(
+        const Storage& grad_out,
+        int B, int C,
+        const std::vector<int>& S, const std::vector<int>& K, const std::vector<int>& O,
+        const std::vector<int>& stride, const std::vector<int>& pad,
+        const std::vector<int>& dilation,
+        Dtype dt) = 0;
+
+    // ---- Dropout helpers ---------------------------------------------
+
+    /// Expand a (B,C,1,...,1) or (B,1,...,1) mask to full x_shape and multiply element-wise.
+    /// Returns {expanded_mask, y}.
+    virtual std::pair<Storage, Storage> expand_and_multiply(
+        const Storage& mask, const Storage& x,
+        const Shape& mask_shape, const Shape& x_shape, Dtype dt) = 0;
+
+    /// DropBlock forward: given a pre-sampled Bernoulli seed storage (flat, shape x_shape),
+    /// apply spatial dilation (block_size x block_size max-pool), compute keep = scale*(1-dilated),
+    /// and multiply with x. Returns keep_mask (same shape as x).
+    virtual Storage drop_block_mask(
+        const Storage& seed, double drop_prob, std::int64_t block_size,
+        const Shape& x_shape, Dtype dt) = 0;
+
+    // ---- Embedding -------------------------------------------------------
+
+    /// Embedding forward: gather rows of weight table indexed by indices.
+    /// Returns output storage of shape out_shape (indices_shape ++ [D]).
+    virtual Storage embedding_forward(const Storage& weight,
+                                      const Storage& indices,
+                                      const Shape& weight_shape,
+                                      const Shape& indices_shape,
+                                      const Shape& out_shape,
+                                      int padding_idx,
+                                      Dtype dt) = 0;
+
+    /// Embedding backward: scatter-add gradients to weight rows.
+    /// Returns dW storage of shape weight_shape.
+    virtual Storage embedding_backward(const Storage& grad_out,
+                                       const Storage& indices,
+                                       const Shape& weight_shape,
+                                       const Shape& indices_shape,
+                                       int padding_idx,
+                                       Dtype dt) = 0;
+
+    /// Sinusoidal positional embedding: shape [seq_len, embed_dim].
+    virtual Storage sinusoidal_pos_embedding(std::int64_t seq_len,
+                                             std::int64_t embed_dim,
+                                             Dtype dt) = 0;
+
+    /// RoPE forward.  position_ids is a 1-D index storage or nullptr (sequential).
+    /// Returns {out, saved_cos, saved_sin}.
+    virtual std::vector<Storage> rope_forward(const Storage& x,
+                                              const Storage* position_ids,
+                                              const Shape& x_shape,
+                                              bool interleaved,
+                                              Dtype pos_dtype,
+                                              Dtype dt) = 0;
+
+    /// RoPE backward.  Returns dx.
+    virtual Storage rope_backward(const Storage& grad_out,
+                                  const Storage& saved_cos,
+                                  const Storage& saved_sin,
+                                  const Shape& x_shape,
+                                  bool interleaved,
+                                  Dtype dt) = 0;
+
+    // ---- Pooling ---------------------------------------------------------
+
+    struct PoolOpts {
+        int K[3];      ///< kernel sizes (unused dims are 0)
+        int stride[3]; ///< effective strides (after default-stride resolution)
+        int pad[3];    ///< padding
+        int N;         ///< spatial dims (1, 2, or 3)
+    };
+
+    /// Max pool forward.  Returns {output, argmax_indices (I32)}.
+    virtual std::vector<Storage> max_pool_nd_forward(const Storage& x,
+                                                     const Shape& x_shape,
+                                                     const Shape& out_shape,
+                                                     const PoolOpts& opts,
+                                                     Dtype dt) = 0;
+
+    /// Max pool backward.  Returns dx.
+    virtual Storage max_pool_nd_backward(const Storage& grad_out,
+                                         const Storage& saved_argmax,
+                                         const Shape& x_shape,
+                                         const Shape& out_shape,
+                                         const PoolOpts& opts,
+                                         Dtype dt) = 0;
+
+    /// Average pool forward.  Returns output.
+    virtual Storage avg_pool_nd_forward(const Storage& x,
+                                        const Shape& x_shape,
+                                        const Shape& out_shape,
+                                        const PoolOpts& opts,
+                                        Dtype dt) = 0;
+
+    /// Average pool backward.  Returns dx.
+    virtual Storage avg_pool_nd_backward(const Storage& grad_out,
+                                         const Shape& x_shape,
+                                         const Shape& out_shape,
+                                         const PoolOpts& opts,
+                                         Dtype dt) = 0;
+
+    // ---- BatchNorm eval (inference mode) ---------------------------------
+
+    /// Forward: out = gamma*(x-mean)*rsqrt(var+eps)+beta. Returns {out, rstd}.
+    virtual std::vector<Storage> batch_norm_eval_forward(
+        const Storage& x, const Storage& mean, const Storage& var,
+        const Storage& gamma, const Storage& beta,
+        const Shape& x_shape, int C, int spatial, double eps, Dtype dt) = 0;
+
+    /// Backward. Returns {dx, dmean, dvar, dgamma, dbeta}.
+    virtual std::vector<Storage> batch_norm_eval_backward(
+        const Storage& x, const Storage& mean, const Storage& gamma,
+        const Storage& rstd, const Storage& grad_out,
+        const Shape& x_shape, int C, int spatial, Dtype dt) = 0;
+
+    // ---- Lp-normalize ----------------------------------------------------
+
+    /// Lp-normalize along axis. Returns {out, saved_norm}.
+    virtual std::vector<Storage> lp_normalize_forward(
+        const Storage& x, const Shape& x_shape,
+        double ord, int axis, double eps, Dtype dt) = 0;
+
+    /// Backward. Returns dx.
+    virtual Storage lp_normalize_backward(
+        const Storage& x, const Storage& saved_norm, const Storage& grad_out,
+        const Shape& x_shape, double ord, int axis, Dtype dt) = 0;
+
+    // ---- Global response normalization (GRN, ConvNeXt-v2) ---------------
+
+    /// Forward. Returns {out, saved_sq_mean, saved_gx}.
+    virtual std::vector<Storage> global_response_norm_forward(
+        const Storage& x, const Storage& gamma, const Storage& beta,
+        const Shape& x_shape, double eps, Dtype dt) = 0;
+
+    /// Backward. Returns {dx, dgamma, dbeta}.
+    virtual std::vector<Storage> global_response_norm_backward(
+        const Storage& x, const Storage& gamma, const Storage& beta,
+        const Storage& saved_Nx, const Storage& grad_out,
+        const Shape& x_shape, double eps, Dtype dt) = 0;
+
+    // ---- Interpolation ---------------------------------------------------
+
+    /// Bilinear 2D interpolation forward.
+    virtual Storage interpolate_bilinear_forward(
+        const Storage& input, const Shape& in_shape,
+        int H_out, int W_out, bool align_corners, Dtype dt) = 0;
+
+    /// Bilinear 2D interpolation backward. Returns grad_input.
+    virtual Storage interpolate_bilinear_backward(
+        const Storage& grad_out, const Shape& in_shape,
+        int H_out, int W_out, bool align_corners, Dtype dt) = 0;
+
+    /// Trilinear 3D interpolation forward.
+    virtual Storage interpolate_trilinear_forward(
+        const Storage& input, const Shape& in_shape,
+        int D_out, int H_out, int W_out, bool align_corners, Dtype dt) = 0;
+
+    /// Trilinear 3D interpolation backward. Returns grad_input.
+    virtual Storage interpolate_trilinear_backward(
+        const Storage& grad_out, const Shape& in_shape,
+        int D_out, int H_out, int W_out, bool align_corners, Dtype dt) = 0;
+
+    // ---- Spatial transforms ---------------------------------------------
+
+    /// Affine grid forward: theta [N,2,3] → grid [N,H,W,2].
+    virtual Storage affine_grid_forward(
+        const Storage& theta, int N, int H, int W,
+        bool align_corners, Dtype dt) = 0;
+
+    /// Affine grid backward. Returns d_theta.
+    virtual Storage affine_grid_backward(
+        const Storage& grad_grid, int N, int H, int W,
+        bool align_corners, Dtype dt) = 0;
+
+    /// Grid sample forward (bilinear, mode/padding_mode flags).
+    virtual Storage grid_sample_forward(
+        const Storage& input, const Storage& grid,
+        const Shape& in_shape, const Shape& grid_shape,
+        int mode, int padding_mode, bool align_corners, Dtype dt) = 0;
+
+    /// Grid sample backward. Returns {d_input, d_grid}.
+    virtual std::vector<Storage> grid_sample_backward(
+        const Storage& grad_out, const Storage& input, const Storage& grid,
+        const Shape& in_shape, const Shape& grid_shape,
+        int mode, int padding_mode, bool align_corners, Dtype dt) = 0;
+
+    // ---- Vision ---------------------------------------------------------
+
+    /// Bilinear layer forward: y = x1 @ W @ x2^T + b. Returns out.
+    virtual Storage bilinear_layer_forward(
+        const Storage& x1, const Storage& x2, const Storage& weight,
+        const Storage& bias, bool has_bias,
+        const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
+        Dtype dt) = 0;
+
+    /// Bilinear layer backward. Returns {dx1, dx2, dW, db}.
+    virtual std::vector<Storage> bilinear_layer_backward(
+        const Storage& grad_out, const Storage& x1, const Storage& x2,
+        const Storage& weight,
+        const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
+        bool has_bias, Dtype dt) = 0;
 };
 
 }  // namespace backend

@@ -1928,10 +1928,995 @@ public:
         return gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape);
     }
 
+    // ---- Attention --------------------------------------------------------
+
+    std::vector<Storage> sdpa_forward(
+        const Storage& q,
+        const Storage& k,
+        const Storage& v,
+        const Storage* attn_mask,
+        const Shape& q_shape,
+        const Shape& k_shape,
+        const Shape& v_shape,
+        Dtype mask_dtype,
+        std::size_t mask_numel,
+        double scale,
+        bool is_causal,
+        Dtype dt) override {
+        (void)k_shape; (void)v_shape; (void)mask_numel;
+
+        const auto& gQ = std::get<GpuStorage>(q);
+        const auto& gK = std::get<GpuStorage>(k);
+        const auto& gV = std::get<GpuStorage>(v);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+
+        // Flatten leading dims to get Lq, Lk from shape args.
+        const std::size_t Lq = static_cast<std::size_t>(q_shape[q_shape.size() - 2]);
+        const std::size_t Lk = static_cast<std::size_t>(k_shape[k_shape.size() - 2]);
+        (void)Lq; (void)Lk;
+
+        auto k_t = ::mlx::core::swapaxes(*gK.arr, -2, -1);
+        auto scores = ::mlx::core::matmul(*gQ.arr, k_t);
+        auto scale_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(scale)), mlx_dt);
+        scores = ::mlx::core::multiply(scores, scale_arr);
+
+        auto neg_inf = ::mlx::core::astype(
+            ::mlx::core::array(-std::numeric_limits<float>::infinity()), mlx_dt);
+        if (attn_mask) {
+            const auto& gM = std::get<GpuStorage>(*attn_mask);
+            if (mask_dtype == Dtype::Bool) {
+                scores = ::mlx::core::where(*gM.arr, neg_inf, scores);
+            } else {
+                scores = ::mlx::core::add(scores, *gM.arr);
+            }
+        }
+        if (is_causal) {
+            const int lq = static_cast<int>(q_shape[q_shape.size() - 2]);
+            const int lk = static_cast<int>(k_shape[k_shape.size() - 2]);
+            auto mask = ::mlx::core::triu(
+                ::mlx::core::ones({lq, lk}, ::mlx::core::bool_), /*k=*/1);
+            scores = ::mlx::core::where(mask, neg_inf, scores);
+        }
+        auto weights = ::mlx::core::softmax(scores, std::vector<int>{-1}, /*precise=*/true);
+        auto output  = ::mlx::core::matmul(weights, *gV.arr);
+
+        return {Storage{gpu::wrap_mlx_array(std::move(weights), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(output),  dt)}};
+    }
+
+    std::vector<Storage> sdpa_backward(
+        const Storage& grad_out,
+        const Storage& q,
+        const Storage& k,
+        const Storage& v,
+        const Storage& saved_weights,
+        const Shape& /*q_shape*/,
+        const Shape& /*k_shape*/,
+        const Shape& /*v_shape*/,
+        double scale,
+        Dtype dt) override {
+
+        const auto& gQ = std::get<GpuStorage>(q);
+        const auto& gK = std::get<GpuStorage>(k);
+        const auto& gV = std::get<GpuStorage>(v);
+        const auto& gW = std::get<GpuStorage>(saved_weights);
+        const auto& gG = std::get<GpuStorage>(grad_out);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+
+        auto scale_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(scale)), mlx_dt);
+
+        // dV = W^T @ dout
+        auto W_t = ::mlx::core::swapaxes(*gW.arr, -2, -1);
+        auto dV  = ::mlx::core::matmul(W_t, *gG.arr);
+
+        // dweights = dout @ V^T
+        auto V_t = ::mlx::core::swapaxes(*gV.arr, -2, -1);
+        auto dW  = ::mlx::core::matmul(*gG.arr, V_t);
+
+        // softmax backward
+        auto wdw      = ::mlx::core::multiply(*gW.arr, dW);
+        auto sum_wdw  = ::mlx::core::sum(wdw, std::vector<int>{-1}, /*keepdims=*/true);
+        auto dscores  = ::mlx::core::multiply(*gW.arr, ::mlx::core::subtract(dW, sum_wdw));
+
+        // dQ = scale * dscores @ K
+        auto dQ = ::mlx::core::multiply(scale_arr, ::mlx::core::matmul(dscores, *gK.arr));
+
+        // dK = scale * dscores^T @ Q
+        auto dscores_t = ::mlx::core::swapaxes(dscores, -2, -1);
+        auto dK = ::mlx::core::multiply(scale_arr, ::mlx::core::matmul(dscores_t, *gQ.arr));
+
+        return {Storage{gpu::wrap_mlx_array(std::move(dQ), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dK), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dV), dt)}};
+    }
+
+    // ---- Transposed convolution ------------------------------------------
+
+    Storage conv_transpose_nd_forward(
+        const Storage& x,
+        const Storage& W,
+        const Storage& b,
+        int /*B*/,
+        int /*Cin*/,
+        int Cout,
+        const int* /*S*/,
+        const int* /*K*/,
+        const int* /*O*/,
+        const int* stride,
+        const int* pad,
+        const int* opad,
+        int N,
+        const Shape& /*out_shape*/,
+        Dtype dt) override {
+
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gW = std::get<GpuStorage>(W);
+        const auto& gb = std::get<GpuStorage>(b);
+
+        auto x_nhwc = ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N));
+        auto W_nhwc = ::mlx::core::transpose(*gW.arr, gpu_w_to_mlx_transpose_perm(N));
+        auto y_nhwc = gpu_mlx_conv_transpose(x_nhwc, W_nhwc, stride, pad, opad, N);
+
+        ::mlx::core::Shape b_brd(N + 2, 1);
+        b_brd[N + 1] = static_cast<::mlx::core::ShapeElem>(Cout);
+        auto b_view = ::mlx::core::reshape(*gb.arr, b_brd);
+        y_nhwc = ::mlx::core::add(y_nhwc, b_view);
+        auto y = ::mlx::core::contiguous(::mlx::core::transpose(y_nhwc, gpu_nhwc_to_nchw_perm(N)));
+        return Storage{gpu::wrap_mlx_array(std::move(y), dt)};
+    }
+
+    std::vector<Storage> conv_transpose_nd_backward(
+        const Storage& grad_out,
+        const Storage& x,
+        const Storage& W,
+        int /*B*/,
+        int Cin,
+        int Cout,
+        const int* S,
+        const int* K,
+        const int* /*O*/,
+        const int* stride,
+        const int* pad,
+        int N,
+        Dtype dt) override {
+
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gW = std::get<GpuStorage>(W);
+        const auto& gG = std::get<GpuStorage>(grad_out);
+
+        // db = sum(grad, axes={0, 2..N+1})
+        std::vector<int> db_axes;
+        db_axes.reserve(N + 1);
+        db_axes.push_back(0);
+        for (int i = 0; i < N; ++i) db_axes.push_back(2 + i);
+        auto db = ::mlx::core::sum(*gG.arr, db_axes, false);
+
+        // dx = regular conv(grad, W_perm, stride, pad)
+        std::vector<int> w_dx_perm;
+        w_dx_perm.push_back(0);
+        for (int i = 0; i < N; ++i) w_dx_perm.push_back(2 + i);
+        w_dx_perm.push_back(1);
+        auto grad_nhwc = ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N));
+        auto W_dx_nhwc = ::mlx::core::transpose(*gW.arr, w_dx_perm);
+        auto dx_nhwc   = gpu_mlx_conv(grad_nhwc, W_dx_nhwc, stride, pad, N);
+        auto dx = ::mlx::core::contiguous(::mlx::core::transpose(dx_nhwc, gpu_nhwc_to_nchw_perm(N)));
+
+        // dW via conv_general
+        std::vector<int> perm_axes;
+        perm_axes.push_back(1);
+        for (int i = 0; i < N; ++i) perm_axes.push_back(2 + i);
+        perm_axes.push_back(0);
+        auto g_perm = ::mlx::core::transpose(*gG.arr, perm_axes);
+        auto x_perm = ::mlx::core::transpose(*gx.arr, perm_axes);
+        std::vector<int> conv_stride(N, 1);
+        std::vector<int> conv_pad(N), conv_kdil(N), conv_idil(N, 1);
+        for (int i = 0; i < N; ++i) {
+            conv_pad[i]  = pad[i];
+            conv_kdil[i] = stride[i];
+        }
+        auto dW_perm = ::mlx::core::conv_general(g_perm, x_perm, conv_stride, conv_pad,
+                                                 conv_pad, conv_kdil, conv_idil);
+        // Crop to (Co, *K, Ci) and permute to (Cin, Cout, *K).
+        using SE = ::mlx::core::ShapeElem;
+        ::mlx::core::Shape crop_lo(N + 2, 0);
+        ::mlx::core::Shape crop_hi;
+        crop_hi.push_back(static_cast<SE>(Cout));
+        for (int i = 0; i < N; ++i) crop_hi.push_back(static_cast<SE>(K[i]));
+        crop_hi.push_back(static_cast<SE>(Cin));
+        dW_perm = ::mlx::core::slice(dW_perm, crop_lo, crop_hi);
+        std::vector<int> dW_back;
+        dW_back.push_back(N + 1);
+        dW_back.push_back(0);
+        for (int i = 0; i < N; ++i) dW_back.push_back(1 + i);
+        auto dW = ::mlx::core::contiguous(::mlx::core::transpose(dW_perm, dW_back));
+
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dW), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
+    }
+
+    // ---- Expand-and-multiply (dropout helpers) ----------------------------
+
+    std::pair<Storage, Storage> expand_and_multiply(
+        const Storage& mask, const Storage& x,
+        const Shape& mask_shape, const Shape& x_shape, Dtype dt) override {
+        (void)mask_shape;
+        const auto& gm = std::get<GpuStorage>(mask);
+        const auto& gx = std::get<GpuStorage>(x);
+        auto full_mask = ::mlx::core::broadcast_to(*gm.arr, gpu::to_mlx_shape(x_shape));
+        auto out = ::mlx::core::multiply(full_mask, *gx.arr);
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(full_mask), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)}};
+    }
+
+    /// DropBlock keep-mask: seed (flat x_shape) → scale*(1-dilated) mask.
+    Storage drop_block_mask(
+        const Storage& seed, double drop_prob, std::int64_t block_size,
+        const Shape& x_shape, Dtype dt) override {
+        const auto& sg = std::get<GpuStorage>(seed);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        const int K = static_cast<int>(block_size);
+        const int pad_sz = K / 2;
+        const int B = static_cast<int>(x_shape[0]);
+        const int C = static_cast<int>(x_shape[1]);
+        const int H = static_cast<int>(x_shape[2]);
+        const int W = static_cast<int>(x_shape[3]);
+        auto seed_4d = ::mlx::core::reshape(*sg.arr, ::mlx::core::Shape{B, C, H, W});
+        auto seed_pad = ::mlx::core::pad(
+            seed_4d,
+            std::vector<std::pair<int, int>>{{0, 0}, {0, 0}, {pad_sz, pad_sz}, {pad_sz, pad_sz}},
+            ::mlx::core::array(0.0f, mlx_dt));
+        ::mlx::core::array dilated = ::mlx::core::zeros({B, C, H, W}, mlx_dt);
+        for (int dy = 0; dy < K; ++dy) {
+            for (int dx = 0; dx < K; ++dx) {
+                auto s = ::mlx::core::slice(seed_pad, {0, 0, dy, dx}, {B, C, dy + H, dx + W});
+                dilated = (dy == 0 && dx == 0) ? s : ::mlx::core::maximum(dilated, s);
+            }
+        }
+        auto scale_v = ::mlx::core::array(static_cast<float>(1.0 / (1.0 - drop_prob)), mlx_dt);
+        auto keep = ::mlx::core::multiply(
+            scale_v, ::mlx::core::subtract(::mlx::core::array(1.0f, mlx_dt), dilated));
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(keep), dt)};
+    }
+
+    // ---- Embedding -------------------------------------------------------
+
+    Storage embedding_forward(const Storage& weight,
+                              const Storage& indices,
+                              const Shape& weight_shape,
+                              const Shape& indices_shape,
+                              const Shape& out_shape,
+                              int padding_idx,
+                              Dtype dt) override {
+        (void)weight_shape; (void)indices_shape; (void)out_shape;
+        const auto& gw = std::get<GpuStorage>(weight);
+        const auto& gi = std::get<GpuStorage>(indices);
+        auto idx = ::mlx::core::astype(*gi.arr, ::mlx::core::int64);
+        auto out = ::mlx::core::take(*gw.arr, idx, /*axis=*/0);
+        if (padding_idx >= 0) {
+            auto pad_v = ::mlx::core::astype(::mlx::core::array(padding_idx), ::mlx::core::int64);
+            auto mask = ::mlx::core::not_equal(idx, pad_v);
+            auto mask_dt = ::mlx::core::astype(mask, gpu::to_mlx_dtype(dt));
+            auto mask_shape_v = mask_dt.shape();
+            mask_shape_v.push_back(1);
+            mask_dt = ::mlx::core::reshape(mask_dt, mask_shape_v);
+            out = ::mlx::core::multiply(out, mask_dt);
+        }
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
+    }
+
+    Storage embedding_backward(const Storage& grad_out,
+                               const Storage& indices,
+                               const Shape& weight_shape,
+                               const Shape& indices_shape,
+                               int padding_idx,
+                               Dtype dt) override {
+        const std::int64_t N = weight_shape[0];
+        const std::int64_t D = weight_shape[1];
+        const std::size_t M = 1;
+        std::size_t M_total = 1;
+        for (auto d : indices_shape) M_total *= static_cast<std::size_t>(d);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        const auto& gi = std::get<GpuStorage>(indices);
+        auto idx_flat = ::mlx::core::reshape(
+            ::mlx::core::astype(*gi.arr, ::mlx::core::int64),
+            {static_cast<int>(M_total)});
+        auto grad_flat = ::mlx::core::reshape(*gg.arr,
+            {static_cast<int>(M_total), static_cast<int>(D)});
+        if (padding_idx >= 0) {
+            auto pad_v = ::mlx::core::astype(::mlx::core::array(padding_idx), ::mlx::core::int64);
+            auto mask = ::mlx::core::not_equal(idx_flat, pad_v);
+            auto mask_dt = ::mlx::core::astype(mask, mlx_dt);
+            auto mask_b = ::mlx::core::reshape(mask_dt, {static_cast<int>(M_total), 1});
+            grad_flat = ::mlx::core::multiply(grad_flat, mask_b);
+        }
+        auto idx_col = ::mlx::core::reshape(idx_flat, {static_cast<int>(M_total), 1});
+        auto arange_n = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, static_cast<int>(N), 1), ::mlx::core::int64),
+            {1, static_cast<int>(N)});
+        auto onehot = ::mlx::core::astype(::mlx::core::equal(arange_n, idx_col), mlx_dt);
+        auto onehot_t = ::mlx::core::transpose(onehot);
+        auto dW = ::mlx::core::matmul(onehot_t, grad_flat);
+        return Storage{gpu::wrap_mlx_array(std::move(dW), dt)};
+        (void)M;
+    }
+
+    Storage sinusoidal_pos_embedding(std::int64_t seq_len,
+                                     std::int64_t embed_dim,
+                                     Dtype dt) override {
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        const int L = static_cast<int>(seq_len);
+        const int D = static_cast<int>(embed_dim);
+        const int Dh = D / 2;
+        Shape out_shape{seq_len, embed_dim};
+        if (L * D == 0) {
+            auto z = ::mlx::core::zeros(gpu::to_mlx_shape(out_shape), mlx_dt);
+            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(z), dt)};
+        }
+        auto pos = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, L, 1), mlx_dt), {L, 1});
+        auto k_arr = ::mlx::core::astype(::mlx::core::arange(0, Dh, 1), mlx_dt);
+        const float inv_d = static_cast<float>(-std::log(10000.0) / static_cast<double>(D));
+        auto two_inv_d = ::mlx::core::astype(::mlx::core::array(2.0f * inv_d), mlx_dt);
+        auto theta = ::mlx::core::exp(::mlx::core::multiply(two_inv_d, k_arr));
+        auto theta_row = ::mlx::core::reshape(theta, {1, Dh});
+        auto angle = ::mlx::core::matmul(pos, theta_row);
+        auto sin_t = ::mlx::core::sin(angle);
+        auto cos_t = ::mlx::core::cos(angle);
+        auto sin_e = ::mlx::core::expand_dims(sin_t, -1);
+        auto cos_e = ::mlx::core::expand_dims(cos_t, -1);
+        auto stacked = ::mlx::core::concatenate(
+            std::vector<::mlx::core::array>{sin_e, cos_e}, -1);
+        auto out = ::mlx::core::reshape(stacked, {L, 2 * Dh});
+        if (D % 2 != 0) {
+            auto pad_col = ::mlx::core::zeros({L, 1}, mlx_dt);
+            out = ::mlx::core::concatenate(
+                std::vector<::mlx::core::array>{out, pad_col}, -1);
+        }
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
+    std::vector<Storage> rope_forward(const Storage& x,
+                                      const Storage* position_ids,
+                                      const Shape& x_shape,
+                                      bool interleaved,
+                                      Dtype pos_dtype,
+                                      Dtype dt) override {
+        (void)pos_dtype;
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        const std::size_t ndim = x_shape.size();
+        const int L = static_cast<int>(x_shape[ndim - 2]);
+        const int D = static_cast<int>(x_shape.back());
+        const int Dh = D / 2;
+        auto in_shape = gpu::to_mlx_shape(x_shape);
+        ::mlx::core::array pos_arr{0};
+        if (position_ids) {
+            const auto& gp = std::get<GpuStorage>(*position_ids);
+            pos_arr = ::mlx::core::astype(*gp.arr, mlx_dt);
+        } else {
+            pos_arr = ::mlx::core::astype(::mlx::core::arange(0, L, 1), mlx_dt);
+        }
+        pos_arr = ::mlx::core::reshape(pos_arr, {L, 1});
+        const float coef = static_cast<float>(-2.0 * std::log(10000.0) / static_cast<double>(D));
+        auto k_arr = ::mlx::core::astype(::mlx::core::arange(0, Dh, 1), mlx_dt);
+        auto theta = ::mlx::core::exp(
+            ::mlx::core::multiply(::mlx::core::astype(::mlx::core::array(coef), mlx_dt), k_arr));
+        auto angle = ::mlx::core::matmul(pos_arr, ::mlx::core::reshape(theta, {1, Dh}));
+        auto cos_t = ::mlx::core::cos(angle);
+        auto sin_t = ::mlx::core::sin(angle);
+        ::mlx::core::Shape cos_b_shape;
+        for (std::size_t i = 0; i + 2 < ndim; ++i) cos_b_shape.push_back(1);
+        cos_b_shape.push_back(L);
+        cos_b_shape.push_back(Dh);
+        auto cos_b = ::mlx::core::reshape(cos_t, cos_b_shape);
+        auto sin_b = ::mlx::core::reshape(sin_t, cos_b_shape);
+        ::mlx::core::array out_arr{0};
+        if (interleaved) {
+            ::mlx::core::Shape x_shape_p = in_shape;
+            x_shape_p.pop_back(); x_shape_p.push_back(Dh); x_shape_p.push_back(2);
+            auto x_re = ::mlx::core::reshape(*gx.arr, x_shape_p);
+            auto idx0 = ::mlx::core::astype(::mlx::core::array(0), ::mlx::core::int64);
+            auto idx1 = ::mlx::core::astype(::mlx::core::array(1), ::mlx::core::int64);
+            auto xe = ::mlx::core::take(x_re, idx0, -1);
+            auto xo = ::mlx::core::take(x_re, idx1, -1);
+            auto out_e = ::mlx::core::subtract(::mlx::core::multiply(xe, cos_b),
+                                               ::mlx::core::multiply(xo, sin_b));
+            auto out_o = ::mlx::core::add(::mlx::core::multiply(xo, cos_b),
+                                          ::mlx::core::multiply(xe, sin_b));
+            auto oe = ::mlx::core::expand_dims(out_e, -1);
+            auto oo = ::mlx::core::expand_dims(out_o, -1);
+            out_arr = ::mlx::core::reshape(
+                ::mlx::core::concatenate(std::vector<::mlx::core::array>{oe, oo}, -1), in_shape);
+        } else {
+            auto i1 = ::mlx::core::astype(::mlx::core::arange(0, Dh, 1), ::mlx::core::int64);
+            auto i2 = ::mlx::core::astype(::mlx::core::arange(Dh, D, 1), ::mlx::core::int64);
+            auto xa = ::mlx::core::take(*gx.arr, i1, -1);
+            auto xb = ::mlx::core::take(*gx.arr, i2, -1);
+            auto oa = ::mlx::core::subtract(::mlx::core::multiply(xa, cos_b),
+                                            ::mlx::core::multiply(xb, sin_b));
+            auto ob = ::mlx::core::add(::mlx::core::multiply(xb, cos_b),
+                                       ::mlx::core::multiply(xa, sin_b));
+            out_arr = ::mlx::core::concatenate(std::vector<::mlx::core::array>{oa, ob}, -1);
+        }
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out_arr), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(cos_t), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(sin_t), dt)}};
+    }
+
+    Storage rope_backward(const Storage& grad_out,
+                          const Storage& saved_cos,
+                          const Storage& saved_sin,
+                          const Shape& x_shape,
+                          bool interleaved,
+                          Dtype dt) override {
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        const auto& cs = std::get<GpuStorage>(saved_cos);
+        const auto& ss = std::get<GpuStorage>(saved_sin);
+        const std::size_t ndim = x_shape.size();
+        const int L = static_cast<int>(x_shape[ndim - 2]);
+        const int D = static_cast<int>(x_shape.back());
+        const int Dh = D / 2;
+        auto in_shape = gpu::to_mlx_shape(x_shape);
+        ::mlx::core::Shape cos_b_shape;
+        for (std::size_t i = 0; i + 2 < ndim; ++i) cos_b_shape.push_back(1);
+        cos_b_shape.push_back(L); cos_b_shape.push_back(Dh);
+        auto cos_b = ::mlx::core::reshape(*cs.arr, cos_b_shape);
+        auto sin_b = ::mlx::core::reshape(*ss.arr, cos_b_shape);
+        ::mlx::core::array out_arr{0};
+        if (interleaved) {
+            ::mlx::core::Shape g_shape = in_shape;
+            g_shape.pop_back(); g_shape.push_back(Dh); g_shape.push_back(2);
+            auto g_re = ::mlx::core::reshape(*gg.arr, g_shape);
+            auto idx0 = ::mlx::core::astype(::mlx::core::array(0), ::mlx::core::int64);
+            auto idx1 = ::mlx::core::astype(::mlx::core::array(1), ::mlx::core::int64);
+            auto ge = ::mlx::core::take(g_re, idx0, -1);
+            auto go = ::mlx::core::take(g_re, idx1, -1);
+            auto dxe = ::mlx::core::add(::mlx::core::multiply(cos_b, ge),
+                                        ::mlx::core::multiply(sin_b, go));
+            auto dxo = ::mlx::core::subtract(::mlx::core::multiply(cos_b, go),
+                                             ::mlx::core::multiply(sin_b, ge));
+            auto de = ::mlx::core::expand_dims(dxe, -1);
+            auto do_ = ::mlx::core::expand_dims(dxo, -1);
+            out_arr = ::mlx::core::reshape(
+                ::mlx::core::concatenate(std::vector<::mlx::core::array>{de, do_}, -1), in_shape);
+        } else {
+            auto i1 = ::mlx::core::astype(::mlx::core::arange(0, Dh, 1), ::mlx::core::int64);
+            auto i2 = ::mlx::core::astype(::mlx::core::arange(Dh, D, 1), ::mlx::core::int64);
+            auto ga = ::mlx::core::take(*gg.arr, i1, -1);
+            auto gb = ::mlx::core::take(*gg.arr, i2, -1);
+            auto dxa = ::mlx::core::add(::mlx::core::multiply(cos_b, ga),
+                                        ::mlx::core::multiply(sin_b, gb));
+            auto dxb = ::mlx::core::subtract(::mlx::core::multiply(cos_b, gb),
+                                             ::mlx::core::multiply(sin_b, ga));
+            out_arr = ::mlx::core::concatenate(std::vector<::mlx::core::array>{dxa, dxb}, -1);
+        }
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out_arr), dt)};
+    }
+
+    // ---- Pooling ---------------------------------------------------------
+
+    std::vector<Storage> max_pool_nd_forward(const Storage& x,
+                                             const Shape& x_shape,
+                                             const Shape& out_shape,
+                                             const PoolOpts& opts,
+                                             Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const int N = opts.N;
+        const int B = static_cast<int>(x_shape[0]);
+        const int C = static_cast<int>(x_shape[1]);
+        int S[3], O[3], K[3], stride[3], Sp[3];
+        int K_total = 1;
+        for (int i = 0; i < N; ++i) {
+            S[i] = static_cast<int>(x_shape[2 + i]);
+            O[i] = static_cast<int>(out_shape[2 + i]);
+            K[i] = opts.K[i]; stride[i] = opts.stride[i];
+            Sp[i] = S[i] + 2 * opts.pad[i];
+            K_total *= K[i];
+        }
+        ::mlx::core::array neg_inf(-std::numeric_limits<double>::infinity(),
+                                   gpu::to_mlx_dtype(dt));
+        std::vector<std::pair<int, int>> pad_widths;
+        pad_widths.emplace_back(0, 0); pad_widths.emplace_back(0, 0);
+        for (int i = 0; i < N; ++i) pad_widths.emplace_back(opts.pad[i], opts.pad[i]);
+        auto x_pad = ::mlx::core::pad(*gx.arr, pad_widths, neg_inf);
+        auto wins = gpu_build_window_view(x_pad, B, C, Sp, O, K, stride, N);
+        std::vector<int> kernel_axes;
+        for (int i = 0; i < N; ++i) kernel_axes.push_back(2 + N + i);
+        auto y = ::mlx::core::max(wins, kernel_axes, false);
+        ::mlx::core::Shape flat_win;
+        flat_win.push_back(B); flat_win.push_back(C);
+        for (int i = 0; i < N; ++i) flat_win.push_back(O[i]);
+        flat_win.push_back(K_total);
+        auto wins_flat = ::mlx::core::reshape(wins, flat_win);
+        auto argmax = ::mlx::core::astype(
+            ::mlx::core::argmax(wins_flat, 2 + N, false), ::mlx::core::int32);
+        return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(argmax), Dtype::I32)}};
+    }
+
+    Storage max_pool_nd_backward(const Storage& grad_out,
+                                 const Storage& saved_argmax,
+                                 const Shape& x_shape,
+                                 const Shape& out_shape,
+                                 const PoolOpts& opts,
+                                 Dtype dt) override {
+        const auto& gG = std::get<GpuStorage>(grad_out);
+        const auto& gA = std::get<GpuStorage>(saved_argmax);
+        const int N = opts.N;
+        const int B = static_cast<int>(x_shape[0]);
+        const int C = static_cast<int>(x_shape[1]);
+        int S[3], O[3], Sp[3];
+        for (int i = 0; i < N; ++i) {
+            S[i] = static_cast<int>(x_shape[2 + i]);
+            O[i] = static_cast<int>(out_shape[2 + i]);
+            Sp[i] = S[i] + 2 * opts.pad[i];
+        }
+        int K_suffix[4]; K_suffix[N] = 1;
+        for (int i = N - 1; i >= 0; --i) K_suffix[i] = K_suffix[i + 1] * opts.K[i];
+        using SE = ::mlx::core::ShapeElem;
+        const auto idt = ::mlx::core::int32;
+        auto compute_ih = [&](int i) -> ::mlx::core::array {
+            auto div_a = ::mlx::core::array(static_cast<std::int32_t>(K_suffix[i + 1]), idt);
+            auto mod_a = ::mlx::core::array(static_cast<std::int32_t>(opts.K[i]), idt);
+            auto ki = ::mlx::core::remainder(::mlx::core::floor_divide(*gA.arr, div_a), mod_a);
+            ::mlx::core::Shape rs(N + 2, 1); rs[2 + i] = static_cast<SE>(O[i]);
+            auto o_r = ::mlx::core::reshape(::mlx::core::arange(0, O[i], 1, idt), rs);
+            return ::mlx::core::add(
+                ::mlx::core::multiply(o_r, ::mlx::core::array(static_cast<std::int32_t>(opts.stride[i]), idt)), ki);
+        };
+        ::mlx::core::array flat_idx = compute_ih(0);
+        for (int i = 1; i < N; ++i)
+            flat_idx = ::mlx::core::add(
+                ::mlx::core::multiply(flat_idx, ::mlx::core::array(static_cast<std::int32_t>(Sp[i]), idt)),
+                compute_ih(i));
+        ::mlx::core::Shape full_O; full_O.push_back(B); full_O.push_back(C);
+        for (int i = 0; i < N; ++i) full_O.push_back(O[i]);
+        flat_idx = ::mlx::core::broadcast_to(flat_idx, full_O);
+        const SE BC = static_cast<SE>(B) * static_cast<SE>(C);
+        std::int64_t Sp_total = 1;
+        for (int i = 0; i < N; ++i) Sp_total *= Sp[i];
+        auto idx_2d = ::mlx::core::reshape(flat_idx, {BC, static_cast<SE>(x_shape[2])});
+        auto g_2d = ::mlx::core::reshape(*gG.arr, {BC, static_cast<SE>(out_shape[2])});
+        auto zero_pad = ::mlx::core::zeros({BC, static_cast<SE>(Sp_total)},
+                                           gpu::to_mlx_dtype(dt));
+        // Recompute O_total for actual reshape.
+        std::int64_t O_total = 1;
+        for (int i = 0; i < N; ++i) O_total *= O[i];
+        auto idx_2d_flat = ::mlx::core::reshape(flat_idx, {BC, static_cast<SE>(O_total)});
+        auto g_2d_flat  = ::mlx::core::reshape(*gG.arr, {BC, static_cast<SE>(O_total)});
+        auto dx_pad_2d = ::mlx::core::scatter_add_axis(zero_pad, idx_2d_flat, g_2d_flat, 1);
+        ::mlx::core::Shape full_Sp; full_Sp.push_back(B); full_Sp.push_back(C);
+        for (int i = 0; i < N; ++i) full_Sp.push_back(Sp[i]);
+        auto dx_pad = ::mlx::core::reshape(dx_pad_2d, full_Sp);
+        ::mlx::core::Shape crop_lo(N + 2, 0), crop_hi;
+        crop_hi.push_back(B); crop_hi.push_back(C);
+        for (int i = 0; i < N; ++i) {
+            crop_lo[2 + i] = static_cast<SE>(opts.pad[i]);
+            crop_hi.push_back(static_cast<SE>(opts.pad[i] + S[i]));
+        }
+        auto dx = ::mlx::core::slice(dx_pad, crop_lo, crop_hi);
+        return Storage{gpu::wrap_mlx_array(std::move(dx), dt)};
+        (void)idx_2d; (void)g_2d;
+    }
+
+    Storage avg_pool_nd_forward(const Storage& x,
+                                const Shape& x_shape,
+                                const Shape& out_shape,
+                                const PoolOpts& opts,
+                                Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const int N = opts.N;
+        const int B = static_cast<int>(x_shape[0]);
+        const int C = static_cast<int>(x_shape[1]);
+        int S[3], O[3], K[3], stride[3], Sp[3];
+        for (int i = 0; i < N; ++i) {
+            S[i] = static_cast<int>(x_shape[2 + i]);
+            O[i] = static_cast<int>(out_shape[2 + i]);
+            K[i] = opts.K[i]; stride[i] = opts.stride[i];
+            Sp[i] = S[i] + 2 * opts.pad[i];
+        }
+        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+        std::vector<std::pair<int, int>> pad_widths;
+        pad_widths.emplace_back(0, 0); pad_widths.emplace_back(0, 0);
+        for (int i = 0; i < N; ++i) pad_widths.emplace_back(opts.pad[i], opts.pad[i]);
+        auto x_pad = ::mlx::core::pad(*gx.arr, pad_widths, zero);
+        auto wins = gpu_build_window_view(x_pad, B, C, Sp, O, K, stride, N);
+        std::vector<int> kernel_axes;
+        for (int i = 0; i < N; ++i) kernel_axes.push_back(2 + N + i);
+        auto y = ::mlx::core::mean(wins, kernel_axes, false);
+        return Storage{gpu::wrap_mlx_array(std::move(y), dt)};
+    }
+
+    Storage avg_pool_nd_backward(const Storage& grad_out,
+                                 const Shape& x_shape,
+                                 const Shape& out_shape,
+                                 const PoolOpts& opts,
+                                 Dtype dt) override {
+        const auto& gG = std::get<GpuStorage>(grad_out);
+        const int N = opts.N;
+        const int B = static_cast<int>(x_shape[0]);
+        const int C = static_cast<int>(x_shape[1]);
+        int S[3], O[3], Sp[3];
+        int K_total = 1;
+        for (int i = 0; i < N; ++i) {
+            S[i] = static_cast<int>(x_shape[2 + i]);
+            O[i] = static_cast<int>(out_shape[2 + i]);
+            Sp[i] = S[i] + 2 * opts.pad[i];
+            K_total *= opts.K[i];
+        }
+        using SE = ::mlx::core::ShapeElem;
+        const auto idt = ::mlx::core::int32;
+        auto inv_K = ::mlx::core::array(1.0 / static_cast<double>(K_total),
+                                        gpu::to_mlx_dtype(dt));
+        ::mlx::core::Shape g_with_k; g_with_k.push_back(B); g_with_k.push_back(C);
+        for (int i = 0; i < N; ++i) g_with_k.push_back(O[i]);
+        g_with_k.push_back(1);
+        auto g_exp = ::mlx::core::multiply(::mlx::core::reshape(*gG.arr, g_with_k), inv_K);
+        ::mlx::core::Shape full_k = g_with_k; full_k[N + 2] = static_cast<SE>(K_total);
+        auto updates = ::mlx::core::broadcast_to(g_exp, full_k);
+        ::mlx::core::Shape kr_shape(N + 3, 1); kr_shape[N + 2] = static_cast<SE>(K_total);
+        auto k_range = ::mlx::core::reshape(::mlx::core::arange(0, K_total, 1, idt), kr_shape);
+        int K_suffix[4]; K_suffix[N] = 1;
+        for (int i = N - 1; i >= 0; --i) K_suffix[i] = K_suffix[i + 1] * opts.K[i];
+        auto compute_ih = [&](int i) -> ::mlx::core::array {
+            auto div_a = ::mlx::core::array(static_cast<std::int32_t>(K_suffix[i + 1]), idt);
+            auto mod_a = ::mlx::core::array(static_cast<std::int32_t>(opts.K[i]), idt);
+            auto ki = ::mlx::core::remainder(::mlx::core::floor_divide(k_range, div_a), mod_a);
+            ::mlx::core::Shape rs(N + 3, 1); rs[2 + i] = static_cast<SE>(O[i]);
+            auto o_r = ::mlx::core::reshape(::mlx::core::arange(0, O[i], 1, idt), rs);
+            return ::mlx::core::add(
+                ::mlx::core::multiply(o_r, ::mlx::core::array(static_cast<std::int32_t>(opts.stride[i]), idt)), ki);
+        };
+        ::mlx::core::array flat_idx = compute_ih(0);
+        for (int i = 1; i < N; ++i)
+            flat_idx = ::mlx::core::add(
+                ::mlx::core::multiply(flat_idx, ::mlx::core::array(static_cast<std::int32_t>(Sp[i]), idt)),
+                compute_ih(i));
+        flat_idx = ::mlx::core::broadcast_to(flat_idx, full_k);
+        const SE BC = static_cast<SE>(B) * static_cast<SE>(C);
+        std::int64_t Sp_total = 1;
+        for (int i = 0; i < N; ++i) Sp_total *= Sp[i];
+        std::int64_t O_total = 1;
+        for (int i = 0; i < N; ++i) O_total *= O[i];
+        auto idx_2d = ::mlx::core::reshape(flat_idx, {BC, static_cast<SE>(O_total * K_total)});
+        auto upd_2d = ::mlx::core::reshape(updates, {BC, static_cast<SE>(O_total * K_total)});
+        auto zero_pad = ::mlx::core::zeros({BC, static_cast<SE>(Sp_total)}, gpu::to_mlx_dtype(dt));
+        auto dx_pad_2d = ::mlx::core::scatter_add_axis(zero_pad, idx_2d, upd_2d, 1);
+        ::mlx::core::Shape full_Sp; full_Sp.push_back(B); full_Sp.push_back(C);
+        for (int i = 0; i < N; ++i) full_Sp.push_back(Sp[i]);
+        auto dx_pad = ::mlx::core::reshape(dx_pad_2d, full_Sp);
+        ::mlx::core::Shape crop_lo(N + 2, 0), crop_hi;
+        crop_hi.push_back(B); crop_hi.push_back(C);
+        for (int i = 0; i < N; ++i) {
+            crop_lo[2 + i] = static_cast<SE>(opts.pad[i]);
+            crop_hi.push_back(static_cast<SE>(opts.pad[i] + S[i]));
+        }
+        auto dx = ::mlx::core::slice(dx_pad, crop_lo, crop_hi);
+        return Storage{gpu::wrap_mlx_array(std::move(dx), dt)};
+    }
+
+    // ---- N-D convolution -------------------------------------------------
+
+    Storage conv_nd_forward(
+        const Storage& x, const Storage& W, const Storage& b,
+        int B, int Cin, int Cout, int Cin_g, int Cout_g,
+        const int* S, const int* K, const int* O,
+        const ConvNdOpts& opts,
+        const Shape& out_shape, Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gW = std::get<GpuStorage>(W);
+        const auto& gb = std::get<GpuStorage>(b);
+        (void)Cin; (void)Cout; (void)Cin_g; (void)Cout_g; (void)S; (void)K; (void)O; (void)B;
+        const int N = opts.N;
+        std::vector<int> sv(opts.stride, opts.stride + N);
+        std::vector<int> pv(opts.pad, opts.pad + N);
+        std::vector<int> dv(opts.dilation, opts.dilation + N);
+        std::vector<int> idv(N, 1);
+        auto x_nhwc = ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N));
+        auto W_nhwc = ::mlx::core::transpose(*gW.arr, gpu_nchw_to_nhwc_perm(N));
+        auto y_nhwc = ::mlx::core::conv_general(x_nhwc, W_nhwc, sv, pv, pv, dv, idv,
+                                                opts.groups, false);
+        int Cout_local = static_cast<int>(out_shape[1]);
+        ::mlx::core::Shape b_brd(N + 2, 1); b_brd[N + 1] = Cout_local;
+        y_nhwc = ::mlx::core::add(y_nhwc, ::mlx::core::reshape(*gb.arr, b_brd));
+        auto y = ::mlx::core::contiguous(::mlx::core::transpose(y_nhwc, gpu_nhwc_to_nchw_perm(N)));
+        return Storage{gpu::wrap_mlx_array(std::move(y), dt)};
+    }
+
+    std::vector<Storage> conv_nd_backward(
+        const Storage& grad_out, const Storage& x, const Storage& W,
+        int B, int Cin, int Cout, int Cin_g, int Cout_g,
+        const int* S, const int* K, const int* O,
+        const ConvNdOpts& opts, Dtype dt) override {
+        const auto& gG = std::get<GpuStorage>(grad_out);
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gW = std::get<GpuStorage>(W);
+        (void)B; (void)Cin; (void)Cout; (void)Cin_g; (void)Cout_g;
+        const int N = opts.N;
+        std::vector<int> sv(opts.stride, opts.stride + N);
+        std::vector<int> pv(opts.pad, opts.pad + N);
+        std::vector<int> dv(opts.dilation, opts.dilation + N);
+        // db = sum over batch + spatial axes
+        std::vector<int> db_axes; db_axes.push_back(0);
+        for (int i = 0; i < N; ++i) db_axes.push_back(2 + i);
+        auto db = ::mlx::core::sum(*gG.arr, db_axes, false);
+        // dx via transposed conv
+        std::vector<int> opad(N);
+        for (int i = 0; i < N; ++i)
+            opad[i] = S[i] + (K[i] - 1) * dv[i] - 1 - (O[i] - 1) * sv[i] - pv[i];
+        auto grad_nhwc = ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N));
+        std::vector<int> W_t_perm = gpu_w_to_transpose_perm(N);
+        auto W_t_nhwc = ::mlx::core::transpose(*gW.arr, W_t_perm);
+        std::vector<int> ones_n(N, 1);
+        auto dx_nhwc = ::mlx::core::conv_general(grad_nhwc, W_t_nhwc, ones_n, pv, opad,
+                                                 dv, sv, opts.groups, true);
+        auto dx = ::mlx::core::contiguous(::mlx::core::transpose(dx_nhwc, gpu_nhwc_to_nchw_perm(N)));
+        // dW via strided conv_general trick
+        std::vector<int> perm;
+        perm.push_back(1);
+        for (int i = 0; i < N; ++i) perm.push_back(2 + i);
+        perm.push_back(0);
+        auto x_perm = ::mlx::core::transpose(*gx.arr, perm);
+        auto g_perm = ::mlx::core::transpose(*gG.arr, perm);
+        std::vector<int> conv_s(N, 1);
+        auto dW_perm = ::mlx::core::conv_general(x_perm, g_perm, conv_s, pv, pv, sv, dv,
+                                                  opts.groups, false);
+        ::mlx::core::Shape crop_lo(N + 2, 0), crop_hi;
+        crop_hi.push_back(Cin_g);
+        for (int i = 0; i < N; ++i) crop_hi.push_back(K[i]);
+        crop_hi.push_back(Cout);
+        dW_perm = ::mlx::core::slice(dW_perm, crop_lo, crop_hi);
+        std::vector<int> dW_back; dW_back.push_back(N + 1); dW_back.push_back(0);
+        for (int i = 0; i < N; ++i) dW_back.push_back(1 + i);
+        auto dW = ::mlx::core::contiguous(::mlx::core::transpose(dW_perm, dW_back));
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dW), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
+    }
+
+    Storage unfold_forward(
+        const Storage& x,
+        int B, int C,
+        const std::vector<int>& S, const std::vector<int>& K, const std::vector<int>& O,
+        const std::vector<int>& stride, const std::vector<int>& pad,
+        const std::vector<int>& dilation,
+        const Shape& out_shape, Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const int N = static_cast<int>(S.size());
+        int S_total = 1;
+        for (int d : S) S_total *= d;
+        ::mlx::core::Shape composite;
+        composite.push_back(B); composite.push_back(C);
+        for (int i = 0; i < N; ++i) composite.push_back(K[i]);
+        for (int i = 0; i < N; ++i) composite.push_back(O[i]);
+        const auto i32 = ::mlx::core::int32;
+        ::mlx::core::Shape b_shape(composite.size(), 1); b_shape[0] = B;
+        auto b_idx = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, B, 1), i32), b_shape);
+        ::mlx::core::Shape c_shape(composite.size(), 1); c_shape[1] = C;
+        auto c_idx = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, C, 1), i32), c_shape);
+        std::optional<::mlx::core::array> valid_opt;
+        std::vector<::mlx::core::array> in_d_clipped;
+        for (int d = 0; d < N; ++d) {
+            auto k_arr = ::mlx::core::astype(::mlx::core::arange(0, K[d], 1), i32);
+            auto o_arr = ::mlx::core::astype(::mlx::core::arange(0, O[d], 1), i32);
+            ::mlx::core::Shape ks(composite.size(), 1); ks[2 + d] = K[d];
+            ::mlx::core::Shape os(composite.size(), 1); os[2 + N + d] = O[d];
+            k_arr = ::mlx::core::reshape(k_arr, ks);
+            o_arr = ::mlx::core::reshape(o_arr, os);
+            auto sd = ::mlx::core::array(stride[d], i32);
+            auto dd = ::mlx::core::array(dilation[d], i32);
+            auto pd = ::mlx::core::array(pad[d], i32);
+            auto in_d = ::mlx::core::subtract(
+                ::mlx::core::add(::mlx::core::multiply(sd, o_arr),
+                                 ::mlx::core::multiply(dd, k_arr)), pd);
+            auto zero_i = ::mlx::core::array(0, i32);
+            auto cap_i = ::mlx::core::array(S[d] - 1, i32);
+            auto v = ::mlx::core::logical_and(
+                ::mlx::core::greater_equal(in_d, zero_i), ::mlx::core::less_equal(in_d, cap_i));
+            valid_opt = valid_opt.has_value() ? ::mlx::core::logical_and(*valid_opt, v) : v;
+            in_d_clipped.push_back(
+                ::mlx::core::clip(in_d, std::optional<::mlx::core::array>(zero_i),
+                                  std::optional<::mlx::core::array>(cap_i)));
+        }
+        auto valid = *valid_opt;
+        auto flat = ::mlx::core::add(
+            ::mlx::core::multiply(b_idx, ::mlx::core::array(C * S_total, i32)),
+            ::mlx::core::multiply(c_idx, ::mlx::core::array(S_total, i32)));
+        for (int d = 0; d < N; ++d) {
+            int trailing = 1;
+            for (int e = d + 1; e < N; ++e) trailing *= S[e];
+            flat = ::mlx::core::add(flat,
+                ::mlx::core::multiply(in_d_clipped[d], ::mlx::core::array(trailing, i32)));
+        }
+        flat = ::mlx::core::broadcast_to(flat, composite);
+        auto x_flat = ::mlx::core::reshape(*gx.arr, {B * C * S_total});
+        auto sampled = ::mlx::core::take(x_flat, flat);
+        int K_total = 1; for (int k : K) K_total *= k;
+        int O_total = 1; for (int o : O) O_total *= o;
+        auto valid_b = ::mlx::core::astype(
+            ::mlx::core::broadcast_to(valid, composite), gpu::to_mlx_dtype(dt));
+        auto masked = ::mlx::core::multiply(sampled, valid_b);
+        auto reshaped = ::mlx::core::reshape(masked, {B, C * K_total, O_total});
+        return Storage{gpu::wrap_mlx_array(std::move(reshaped), dt)};
+        (void)out_shape;
+    }
+
+    Storage unfold_backward(
+        const Storage& grad_out,
+        int B, int C,
+        const std::vector<int>& S, const std::vector<int>& K, const std::vector<int>& O,
+        const std::vector<int>& stride, const std::vector<int>& pad,
+        const std::vector<int>& dilation,
+        Dtype dt) override {
+        // Route through unfold_forward on the transposed problem: scatter gradients.
+        // GPU unfold backward: scatter-add from (B, C*K_total, O_total) → (B, C, *S).
+        // Reuse the same index computation from unfold_forward, then scatter_add.
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        const int N = static_cast<int>(S.size());
+        int S_total = 1; for (int d : S) S_total *= d;
+        int K_total = 1; for (int k : K) K_total *= k;
+        int O_total = 1; for (int o : O) O_total *= o;
+        ::mlx::core::Shape composite;
+        composite.push_back(B); composite.push_back(C);
+        for (int i = 0; i < N; ++i) composite.push_back(K[i]);
+        for (int i = 0; i < N; ++i) composite.push_back(O[i]);
+        const auto i32 = ::mlx::core::int32;
+        ::mlx::core::Shape b_shape(composite.size(), 1); b_shape[0] = B;
+        auto b_idx = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, B, 1), i32), b_shape);
+        ::mlx::core::Shape c_shape(composite.size(), 1); c_shape[1] = C;
+        auto c_idx = ::mlx::core::reshape(
+            ::mlx::core::astype(::mlx::core::arange(0, C, 1), i32), c_shape);
+        std::optional<::mlx::core::array> valid_opt;
+        std::vector<::mlx::core::array> in_d_clipped;
+        for (int d = 0; d < N; ++d) {
+            auto k_arr = ::mlx::core::astype(::mlx::core::arange(0, K[d], 1), i32);
+            auto o_arr = ::mlx::core::astype(::mlx::core::arange(0, O[d], 1), i32);
+            ::mlx::core::Shape ks(composite.size(), 1); ks[2 + d] = K[d];
+            ::mlx::core::Shape os(composite.size(), 1); os[2 + N + d] = O[d];
+            k_arr = ::mlx::core::reshape(k_arr, ks);
+            o_arr = ::mlx::core::reshape(o_arr, os);
+            auto sd = ::mlx::core::array(stride[d], i32);
+            auto dd = ::mlx::core::array(dilation[d], i32);
+            auto pd = ::mlx::core::array(pad[d], i32);
+            auto in_d = ::mlx::core::subtract(
+                ::mlx::core::add(::mlx::core::multiply(sd, o_arr),
+                                 ::mlx::core::multiply(dd, k_arr)), pd);
+            auto zero_i = ::mlx::core::array(0, i32);
+            auto cap_i = ::mlx::core::array(S[d] - 1, i32);
+            auto v = ::mlx::core::logical_and(
+                ::mlx::core::greater_equal(in_d, zero_i), ::mlx::core::less_equal(in_d, cap_i));
+            valid_opt = valid_opt.has_value() ? ::mlx::core::logical_and(*valid_opt, v) : v;
+            in_d_clipped.push_back(
+                ::mlx::core::clip(in_d, std::optional<::mlx::core::array>(zero_i),
+                                  std::optional<::mlx::core::array>(cap_i)));
+        }
+        auto valid = *valid_opt;
+        auto flat = ::mlx::core::add(
+            ::mlx::core::multiply(b_idx, ::mlx::core::array(C * S_total, i32)),
+            ::mlx::core::multiply(c_idx, ::mlx::core::array(S_total, i32)));
+        for (int d = 0; d < N; ++d) {
+            int trailing = 1;
+            for (int e = d + 1; e < N; ++e) trailing *= S[e];
+            flat = ::mlx::core::add(flat,
+                ::mlx::core::multiply(in_d_clipped[d], ::mlx::core::array(trailing, i32)));
+        }
+        flat = ::mlx::core::broadcast_to(flat, composite);
+        // Apply valid mask to gradients
+        auto valid_b = ::mlx::core::astype(
+            ::mlx::core::broadcast_to(valid, composite), gpu::to_mlx_dtype(dt));
+        // grad_out is (B, C*K_total, O_total); reshape to composite shape
+        auto g_comp = ::mlx::core::reshape(*gg.arr, composite);
+        g_comp = ::mlx::core::multiply(g_comp, valid_b);
+        // Scatter-add: dx_flat[flat[i]] += g_comp[i]
+        auto flat_2d = ::mlx::core::reshape(flat, {B * C * K_total * O_total});
+        auto g_flat = ::mlx::core::reshape(g_comp, {B * C * K_total * O_total});
+        auto dx_flat = ::mlx::core::zeros({B * C * S_total},
+                                          gpu::to_mlx_dtype(dt));
+        auto flat_2d_i64 = ::mlx::core::astype(flat_2d, ::mlx::core::int64);
+        dx_flat = ::mlx::core::scatter_add_axis(
+            dx_flat, ::mlx::core::reshape(flat_2d_i64, {B * C * K_total * O_total, 1}),
+            ::mlx::core::reshape(g_flat, {B * C * K_total * O_total, 1}), 0);
+        auto dx = ::mlx::core::reshape(dx_flat, {B, C, S_total});
+        // Reshape back to (B, C, *S)
+        ::mlx::core::Shape s_shape; s_shape.push_back(B); s_shape.push_back(C);
+        for (int d : S) s_shape.push_back(d);
+        dx = ::mlx::core::reshape(dx_flat, s_shape);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)};
+    }
+
 private:
     // ---- Helpers -------------------------------------------------------
 
     inline static const ::mlx::core::Device k_linalg_stream{::mlx::core::Device::cpu};
+
+    // ---- N-D conv permutation helpers (runtime N = 1/2/3) ---------------
+
+    static std::vector<int> gpu_nchw_to_nhwc_perm(int N) {
+        std::vector<int> p; p.reserve(N + 2);
+        p.push_back(0);
+        for (int i = 0; i < N; ++i) p.push_back(2 + i);
+        p.push_back(1);
+        return p;
+    }
+
+    static std::vector<int> gpu_nhwc_to_nchw_perm(int N) {
+        std::vector<int> p; p.reserve(N + 2);
+        p.push_back(0); p.push_back(N + 1);
+        for (int i = 0; i < N; ++i) p.push_back(1 + i);
+        return p;
+    }
+
+    // W for ConvTranspose: (Cin, Cout, *K) → (Cout, *K, Cin) = [1, 2..N+1, 0]
+    static std::vector<int> gpu_w_to_mlx_transpose_perm(int N) {
+        std::vector<int> p; p.push_back(1);
+        for (int i = 0; i < N; ++i) p.push_back(2 + i);
+        p.push_back(0);
+        return p;
+    }
+
+    // W for ConvNd backward transpose: (Cout, Cin/g, *K) → (Cin/g, *K, Cout) = [1, 2..N+1, 0]
+    static std::vector<int> gpu_w_to_transpose_perm(int N) {
+        std::vector<int> p; p.push_back(1);
+        for (int i = 0; i < N; ++i) p.push_back(2 + i);
+        p.push_back(0);
+        return p;
+    }
+
+    static ::mlx::core::array gpu_mlx_conv_transpose(
+        const ::mlx::core::array& x_nhwc, const ::mlx::core::array& W_nhwc,
+        const int* stride, const int* pad, const int* opad, int N) {
+        if (N == 1)
+            return ::mlx::core::conv_transpose1d(x_nhwc, W_nhwc, stride[0], pad[0], 1, opad[0]);
+        if (N == 2)
+            return ::mlx::core::conv_transpose2d(
+                x_nhwc, W_nhwc,
+                std::pair<int, int>{stride[0], stride[1]},
+                std::pair<int, int>{pad[0], pad[1]},
+                std::pair<int, int>{opad[0], opad[1]});
+        return ::mlx::core::conv_transpose3d(
+            x_nhwc, W_nhwc,
+            std::tuple<int, int, int>{stride[0], stride[1], stride[2]},
+            std::tuple<int, int, int>{pad[0], pad[1], pad[2]},
+            std::tuple<int, int, int>{opad[0], opad[1], opad[2]});
+    }
+
+    static ::mlx::core::array gpu_mlx_conv(
+        const ::mlx::core::array& x_nhwc, const ::mlx::core::array& W_nhwc,
+        const int* stride, const int* pad, int N) {
+        if (N == 1) return ::mlx::core::conv1d(x_nhwc, W_nhwc, stride[0], pad[0]);
+        if (N == 2) return ::mlx::core::conv2d(x_nhwc, W_nhwc,
+            std::pair<int, int>{stride[0], stride[1]},
+            std::pair<int, int>{pad[0], pad[1]});
+        return ::mlx::core::conv3d(x_nhwc, W_nhwc,
+            std::tuple<int, int, int>{stride[0], stride[1], stride[2]},
+            std::tuple<int, int, int>{pad[0], pad[1], pad[2]});
+    }
+
+    static ::mlx::core::array gpu_build_window_view(
+        const ::mlx::core::array& padded, int B, int C,
+        const int* Sp, const int* O, const int* K, const int* stride, int N) {
+        using SE = ::mlx::core::ShapeElem;
+        using SS = std::int64_t;
+        ::mlx::core::Shape windowed;
+        windowed.reserve(2 + 2 * N);
+        windowed.push_back(B); windowed.push_back(C);
+        for (int i = 0; i < N; ++i) windowed.push_back(static_cast<SE>(O[i]));
+        for (int i = 0; i < N; ++i) windowed.push_back(static_cast<SE>(K[i]));
+        SS suffix[4]; suffix[N] = 1;
+        for (int i = N - 1; i >= 0; --i) suffix[i] = suffix[i + 1] * static_cast<SS>(Sp[i]);
+        ::mlx::core::Strides strides_v;
+        strides_v.reserve(2 + 2 * N);
+        strides_v.push_back(static_cast<SS>(C) * suffix[0]);
+        strides_v.push_back(suffix[0]);
+        for (int i = 0; i < N; ++i) strides_v.push_back(static_cast<SS>(stride[i]) * suffix[i + 1]);
+        for (int i = 0; i < N; ++i) strides_v.push_back(suffix[i + 1]);
+        return ::mlx::core::as_strided(padded, windowed, strides_v, 0);
+    }
 
     ::mlx::core::array take_descending_top_indices(const ::mlx::core::array& idx,
                                                    int axis,
@@ -2081,6 +3066,291 @@ private:
             }
         }
         return ((n - cycles) % 2 == 0) ? 1.0f : -1.0f;
+    }
+
+    // ---- BatchNorm eval --------------------------------------------------
+
+    std::vector<Storage> batch_norm_eval_forward(
+        const Storage& x, const Storage& mean, const Storage& var,
+        const Storage& gamma, const Storage& beta,
+        const Shape& x_shape, int C, int /*spatial*/, double eps, Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gm = std::get<GpuStorage>(mean);
+        const auto& gv = std::get<GpuStorage>(var);
+        const auto& gg = std::get<GpuStorage>(gamma);
+        const auto& gb = std::get<GpuStorage>(beta);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto eps_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(eps)), mlx_dt);
+        auto rstd = ::mlx::core::rsqrt(::mlx::core::add(*gv.arr, eps_arr));
+        ::mlx::core::Shape b_shape(x_shape.size(), 1);
+        b_shape[1] = C;
+        auto m_b = ::mlx::core::reshape(*gm.arr, b_shape);
+        auto r_b = ::mlx::core::reshape(rstd, b_shape);
+        auto g_b = ::mlx::core::reshape(*gg.arr, b_shape);
+        auto bb_b = ::mlx::core::reshape(*gb.arr, b_shape);
+        auto y = ::mlx::core::add(
+            ::mlx::core::multiply(g_b,
+                ::mlx::core::multiply(::mlx::core::subtract(*gx.arr, m_b), r_b)), bb_b);
+        return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(rstd), dt)}};
+    }
+
+    std::vector<Storage> batch_norm_eval_backward(
+        const Storage& x, const Storage& mean, const Storage& gamma,
+        const Storage& rstd, const Storage& grad_out,
+        const Shape& x_shape, int C, int /*spatial*/, Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gm = std::get<GpuStorage>(mean);
+        const auto& gg = std::get<GpuStorage>(gamma);
+        const auto& rs = std::get<GpuStorage>(rstd);
+        const auto& go = std::get<GpuStorage>(grad_out);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        ::mlx::core::Shape b_shape(x_shape.size(), 1);
+        b_shape[1] = C;
+        auto m_b = ::mlx::core::reshape(*gm.arr, b_shape);
+        auto r_b = ::mlx::core::reshape(*rs.arr, b_shape);
+        auto g_b = ::mlx::core::reshape(*gg.arr, b_shape);
+        auto x_minus_m = ::mlx::core::subtract(*gx.arr, m_b);
+        auto dx = ::mlx::core::multiply(::mlx::core::multiply(g_b, r_b), *go.arr);
+        std::vector<int> reduce_axes;
+        for (std::size_t i = 0; i < x_shape.size(); ++i)
+            if (i != 1) reduce_axes.push_back(static_cast<int>(i));
+        auto sum_g = ::mlx::core::sum(*go.arr, reduce_axes, false);
+        auto xm_g  = ::mlx::core::multiply(x_minus_m, *go.arr);
+        auto sum_xm_g = ::mlx::core::sum(xm_g, reduce_axes, false);
+        auto db = sum_g;
+        auto dg = ::mlx::core::multiply(sum_xm_g, *rs.arr);
+        auto dm = ::mlx::core::negative(
+            ::mlx::core::multiply(*gg.arr, ::mlx::core::multiply(*rs.arr, sum_g)));
+        auto half = ::mlx::core::astype(::mlx::core::array(-0.5f), mlx_dt);
+        auto r3 = ::mlx::core::multiply(*rs.arr, ::mlx::core::multiply(*rs.arr, *rs.arr));
+        auto dv = ::mlx::core::multiply(
+            half, ::mlx::core::multiply(*gg.arr, ::mlx::core::multiply(r3, sum_xm_g)));
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dm), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dv), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dg), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
+    }
+
+    // ---- Lp-normalize ---------------------------------------------------
+
+    std::vector<Storage> lp_normalize_forward(
+        const Storage& x, const Shape& x_shape, double ord, int axis,
+        double eps, Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto abs_x = ::mlx::core::abs(*gx.arr);
+        auto ord_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(ord)), mlx_dt);
+        auto inv_ord = ::mlx::core::astype(::mlx::core::array(static_cast<float>(1.0/ord)), mlx_dt);
+        auto pow_x = ::mlx::core::power(abs_x, ord_arr);
+        auto sum_p = ::mlx::core::sum(pow_x, std::vector<int>{axis}, true);
+        auto N = ::mlx::core::power(sum_p, inv_ord);
+        auto eps_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(eps)), mlx_dt);
+        auto N_clip = ::mlx::core::maximum(N, eps_arr);
+        auto saved_norm = N_clip;  // keep copy for saved_norm
+        auto y = ::mlx::core::divide(*gx.arr, N_clip);
+        return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(saved_norm), dt)}};
+    }
+
+    Storage lp_normalize_backward(
+        const Storage& x, const Storage& saved_norm, const Storage& grad_out,
+        const Shape& /*x_shape*/, double ord, int axis, Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gn = std::get<GpuStorage>(saved_norm);
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        auto proj = ::mlx::core::sum(::mlx::core::multiply(*gg.arr, *gx.arr),
+                                     std::vector<int>{axis}, true);
+        auto first = ::mlx::core::divide(*gg.arr, *gn.arr);
+        auto sign_x = ::mlx::core::sign(*gx.arr);
+        auto abs_x = ::mlx::core::abs(*gx.arr);
+        auto ord_m1 = ::mlx::core::astype(
+            ::mlx::core::array(static_cast<float>(ord-1.0)), mlx_dt);
+        auto ord_p1 = ::mlx::core::astype(
+            ::mlx::core::array(static_cast<float>(ord+1.0)), mlx_dt);
+        auto abs_pm1 = ::mlx::core::power(abs_x, ord_m1);
+        auto N_pp1   = ::mlx::core::power(*gn.arr, ord_p1);
+        auto second  = ::mlx::core::divide(
+            ::mlx::core::multiply(::mlx::core::multiply(sign_x, abs_pm1), proj), N_pp1);
+        auto dx = ::mlx::core::subtract(first, second);
+        return Storage{gpu::wrap_mlx_array(std::move(dx), dt)};
+    }
+
+    // ---- Global response normalization -----------------------------------
+
+    std::vector<Storage> global_response_norm_forward(
+        const Storage& x, const Storage& gamma, const Storage& beta,
+        const Shape& x_shape, double eps, Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gg = std::get<GpuStorage>(gamma);
+        const auto& gb = std::get<GpuStorage>(beta);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        const int C = static_cast<int>(x_shape[1]);
+        const int B = static_cast<int>(x_shape[0]);
+        auto x_sq = ::mlx::core::multiply(*gx.arr, *gx.arr);
+        auto G_sq = ::mlx::core::sum(x_sq, std::vector<int>{2, 3}, true);
+        auto G = ::mlx::core::sqrt(G_sq);
+        auto m = ::mlx::core::mean(G, std::vector<int>{1}, true);
+        auto eps_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(eps)), mlx_dt);
+        auto denom = ::mlx::core::add(m, eps_arr);
+        auto Nx = ::mlx::core::divide(G, denom);
+        auto g_b = ::mlx::core::reshape(*gg.arr, {1, C, 1, 1});
+        auto bb_b = ::mlx::core::reshape(*gb.arr, {1, C, 1, 1});
+        auto y = ::mlx::core::add(
+            ::mlx::core::multiply(g_b, ::mlx::core::multiply(*gx.arr, Nx)),
+            ::mlx::core::multiply(bb_b, *gx.arr));
+        auto Nx_flat = ::mlx::core::reshape(Nx, {B, C});
+        return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(Nx_flat), dt)}};
+    }
+
+    std::vector<Storage> global_response_norm_backward(
+        const Storage& x, const Storage& gamma, const Storage& beta,
+        const Storage& saved_Nx, const Storage& grad_out,
+        const Shape& x_shape, double eps, Dtype dt) override {
+        const auto& gx = std::get<GpuStorage>(x);
+        const auto& gg = std::get<GpuStorage>(gamma);
+        const auto& gnx = std::get<GpuStorage>(saved_Nx);
+        const auto& go = std::get<GpuStorage>(grad_out);
+        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        const int B = static_cast<int>(x_shape[0]);
+        const int C = static_cast<int>(x_shape[1]);
+        auto x_sq = ::mlx::core::multiply(*gx.arr, *gx.arr);
+        auto G_sq = ::mlx::core::sum(x_sq, std::vector<int>{2, 3}, true);
+        auto G = ::mlx::core::sqrt(G_sq);
+        auto m_b = ::mlx::core::mean(G, std::vector<int>{1}, true);
+        auto eps_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(eps)), mlx_dt);
+        auto denom = ::mlx::core::add(m_b, eps_arr);
+        auto Nx = ::mlx::core::reshape(*gnx.arr, {B, C, 1, 1});
+        auto g_b = ::mlx::core::reshape(*gg.arr, {1, C, 1, 1});
+        auto gx_prod = ::mlx::core::multiply(*go.arr, *gx.arr);
+        auto db = ::mlx::core::sum(gx_prod, std::vector<int>{0, 2, 3}, false);
+        auto gxN = ::mlx::core::multiply(gx_prod, Nx);
+        auto dg = ::mlx::core::sum(gxN, std::vector<int>{0, 2, 3}, false);
+        auto sum_gx = ::mlx::core::sum(gx_prod, std::vector<int>{2, 3}, true);
+        auto A = ::mlx::core::multiply(g_b, sum_gx);
+        auto AG = ::mlx::core::multiply(A, G);
+        auto inner_sum = ::mlx::core::sum(AG, std::vector<int>{1}, true);
+        auto C_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(C)), mlx_dt);
+        auto denom_sq = ::mlx::core::multiply(denom, denom);
+        auto second = ::mlx::core::divide(inner_sum, ::mlx::core::multiply(denom_sq, C_arr));
+        auto dG = ::mlx::core::subtract(::mlx::core::divide(A, denom), second);
+        auto eps_g = ::mlx::core::astype(::mlx::core::array(1e-12f), mlx_dt);
+        auto G_safe = ::mlx::core::maximum(G, eps_g);
+        auto dG_term = ::mlx::core::divide(::mlx::core::multiply(dG, *gx.arr), G_safe);
+        // dx = γ·N·g + β·g + dG·x/G
+        const auto& gb = std::get<GpuStorage>(beta);
+        auto bb_b = ::mlx::core::reshape(*gb.arr, {1, C, 1, 1});
+        auto dx = ::mlx::core::add(
+            ::mlx::core::add(::mlx::core::multiply(::mlx::core::multiply(g_b, Nx), *go.arr),
+                             ::mlx::core::multiply(bb_b, *go.arr)),
+            dG_term);
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dg), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
+    }
+
+    // ---- Interpolation stubs (forward-only for now) ----------------------
+
+    Storage interpolate_bilinear_forward(
+        const Storage& input, const Shape& in_shape,
+        int H_out, int W_out, bool align_corners, Dtype dt) override {
+        ErrorBuilder("gpu::interpolate_bilinear_forward").not_implemented(
+            "not yet routed through GpuBackend");
+        (void)input; (void)in_shape; (void)H_out; (void)W_out; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage interpolate_bilinear_backward(
+        const Storage& grad_out, const Shape& in_shape,
+        int H_out, int W_out, bool align_corners, Dtype dt) override {
+        // No MLX backward for interpolate; fall back to CPU via to_cpu.
+        // The op file should handle this case. Return stub.
+        ErrorBuilder("gpu::interpolate_bilinear_backward").not_implemented("not yet in GpuBackend");
+        (void)grad_out; (void)in_shape; (void)H_out; (void)W_out; (void)align_corners; (void)dt;
+        return Storage{};  // unreachable
+    }
+
+    Storage interpolate_trilinear_forward(
+        const Storage& input, const Shape& in_shape,
+        int D_out, int H_out, int W_out, bool align_corners, Dtype dt) override {
+        ErrorBuilder("gpu::interpolate_trilinear_forward").not_implemented("not yet in GpuBackend");
+        (void)input; (void)in_shape; (void)D_out; (void)H_out; (void)W_out;
+        (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage interpolate_trilinear_backward(
+        const Storage& grad_out, const Shape& in_shape,
+        int D_out, int H_out, int W_out, bool align_corners, Dtype dt) override {
+        ErrorBuilder("gpu::interpolate_trilinear_backward").not_implemented("");
+        (void)grad_out; (void)in_shape; (void)D_out; (void)H_out; (void)W_out;
+        (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    // ---- Spatial transforms stubs ----------------------------------------
+
+    Storage affine_grid_forward(
+        const Storage& theta, int N, int H, int W,
+        bool align_corners, Dtype dt) override {
+        ErrorBuilder("gpu::affine_grid_forward").not_implemented("not yet in GpuBackend");
+        (void)theta; (void)N; (void)H; (void)W; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage affine_grid_backward(
+        const Storage& grad_grid, int N, int H, int W,
+        bool align_corners, Dtype dt) override {
+        ErrorBuilder("gpu::affine_grid_backward").not_implemented("");
+        (void)grad_grid; (void)N; (void)H; (void)W; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage grid_sample_forward(
+        const Storage& input, const Storage& grid,
+        const Shape& in_shape, const Shape& grid_shape,
+        int mode, int padding_mode, bool align_corners, Dtype dt) override {
+        ErrorBuilder("gpu::grid_sample_forward").not_implemented("not yet in GpuBackend");
+        (void)input; (void)grid; (void)in_shape; (void)grid_shape;
+        (void)mode; (void)padding_mode; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    std::vector<Storage> grid_sample_backward(
+        const Storage& grad_out, const Storage& input, const Storage& grid,
+        const Shape& in_shape, const Shape& grid_shape,
+        int mode, int padding_mode, bool align_corners, Dtype dt) override {
+        ErrorBuilder("gpu::grid_sample_backward").not_implemented("");
+        (void)grad_out; (void)input; (void)grid; (void)in_shape; (void)grid_shape;
+        (void)mode; (void)padding_mode; (void)align_corners; (void)dt;
+        return {};
+    }
+
+    // ---- Vision stubs ---------------------------------------------------
+
+    Storage bilinear_layer_forward(
+        const Storage& x1, const Storage& x2, const Storage& weight,
+        const Storage& bias, bool has_bias,
+        const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
+        Dtype dt) override {
+        ErrorBuilder("gpu::bilinear_layer_forward").not_implemented("not yet in GpuBackend");
+        (void)x1; (void)x2; (void)weight; (void)bias; (void)has_bias;
+        (void)x1_shape; (void)x2_shape; (void)w_shape; (void)dt;
+        return Storage{};
+    }
+
+    std::vector<Storage> bilinear_layer_backward(
+        const Storage& grad_out, const Storage& x1, const Storage& x2,
+        const Storage& weight,
+        const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
+        bool has_bias, Dtype dt) override {
+        ErrorBuilder("gpu::bilinear_layer_backward").not_implemented("");
+        (void)grad_out; (void)x1; (void)x2; (void)weight;
+        (void)x1_shape; (void)x2_shape; (void)w_shape; (void)has_bias; (void)dt;
+        return {};
     }
 };
 

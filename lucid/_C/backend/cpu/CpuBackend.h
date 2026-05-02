@@ -5493,6 +5493,424 @@ public:
         return {Storage{std::move(out)}, Storage{std::move(cos_t)}, Storage{std::move(sin_t)}};
     }
 
+    // ---- BatchNorm eval --------------------------------------------------
+
+    std::vector<Storage> batch_norm_eval_forward(
+        const Storage& x, const Storage& mean, const Storage& var,
+        const Storage& gamma, const Storage& beta,
+        const Shape& x_shape, int C, int spatial, double eps, Dtype dt) override {
+        const int B = static_cast<int>(x_shape[0]);
+        const auto& xs = std::get<CpuStorage>(x);
+        const auto& ms = std::get<CpuStorage>(mean);
+        const auto& vs = std::get<CpuStorage>(var);
+        const auto& gs = std::get<CpuStorage>(gamma);
+        const auto& bs = std::get<CpuStorage>(beta);
+        auto rstd_cpu = alloc_cpu(static_cast<std::size_t>(C), dt);
+        auto out_cpu  = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* mp = reinterpret_cast<const T*>(ms.ptr.get());
+            const T* vp = reinterpret_cast<const T*>(vs.ptr.get());
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            const T* bp = reinterpret_cast<const T*>(bs.ptr.get());
+            T* yp = reinterpret_cast<T*>(out_cpu.ptr.get());
+            T* rp = reinterpret_cast<T*>(rstd_cpu.ptr.get());
+            for (int c = 0; c < C; ++c)
+                rp[c] = T{1} / static_cast<T>(std::sqrt(static_cast<double>(vp[c]) + eps));
+            for (int b = 0; b < B; ++b)
+                for (int c = 0; c < C; ++c) {
+                    const T m = mp[c], r = rp[c], g = gp[c], bb = bp[c];
+                    const T* xrow = xp + (b * C + c) * spatial;
+                    T* yrow = yp + (b * C + c) * spatial;
+                    for (int s = 0; s < spatial; ++s)
+                        yrow[s] = g * (xrow[s] - m) * r + bb;
+                }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("batch_norm_eval_forward").not_implemented("dtype");
+        return {Storage{std::move(out_cpu)}, Storage{std::move(rstd_cpu)}};
+    }
+
+    std::vector<Storage> batch_norm_eval_backward(
+        const Storage& x, const Storage& mean, const Storage& gamma,
+        const Storage& rstd, const Storage& grad_out,
+        const Shape& x_shape, int C, int spatial, Dtype dt) override {
+        const int B = static_cast<int>(x_shape[0]);
+        const auto& xs = std::get<CpuStorage>(x);
+        const auto& ms = std::get<CpuStorage>(mean);
+        const auto& gs = std::get<CpuStorage>(gamma);
+        const auto& rs = std::get<CpuStorage>(rstd);
+        const auto& go = std::get<CpuStorage>(grad_out);
+        auto dx = alloc_cpu(static_cast<std::size_t>(B)*C*spatial, dt);
+        auto dm = alloc_cpu(static_cast<std::size_t>(C), dt);
+        auto dv = alloc_cpu(static_cast<std::size_t>(C), dt);
+        auto dg = alloc_cpu(static_cast<std::size_t>(C), dt);
+        auto db = alloc_cpu(static_cast<std::size_t>(C), dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp  = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* mp  = reinterpret_cast<const T*>(ms.ptr.get());
+            const T* gp  = reinterpret_cast<const T*>(gs.ptr.get());
+            const T* rp  = reinterpret_cast<const T*>(rs.ptr.get());
+            const T* gop = reinterpret_cast<const T*>(go.ptr.get());
+            T* dxp = reinterpret_cast<T*>(dx.ptr.get());
+            T* dmp = reinterpret_cast<T*>(dm.ptr.get());
+            T* dvp = reinterpret_cast<T*>(dv.ptr.get());
+            T* dgp = reinterpret_cast<T*>(dg.ptr.get());
+            T* dbp = reinterpret_cast<T*>(db.ptr.get());
+            for (int c = 0; c < C; ++c) {
+                dmp[c] = dvp[c] = dgp[c] = dbp[c] = T{0};
+                const T r = rp[c], g = gp[c], m = mp[c];
+                T sg = T{0}, sxmg = T{0};
+                for (int b = 0; b < B; ++b) {
+                    const T* xr = xp + (b*C+c)*spatial;
+                    const T* gor = gop + (b*C+c)*spatial;
+                    T* dxr = dxp + (b*C+c)*spatial;
+                    for (int s = 0; s < spatial; ++s) {
+                        dxr[s] = g * r * gor[s];
+                        sg += gor[s];
+                        sxmg += (xr[s] - m) * gor[s];
+                    }
+                }
+                dgp[c] = sxmg * r;
+                dbp[c] = sg;
+                dmp[c] = -g * r * sg;
+                dvp[c] = static_cast<T>(-0.5) * g * r * r * r * sxmg;
+            }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("batch_norm_eval_backward").not_implemented("dtype");
+        return {Storage{std::move(dx)}, Storage{std::move(dm)}, Storage{std::move(dv)},
+                Storage{std::move(dg)}, Storage{std::move(db)}};
+    }
+
+    // ---- Lp-normalize ---------------------------------------------------
+
+    std::vector<Storage> lp_normalize_forward(
+        const Storage& x, const Shape& x_shape, double ord, int axis,
+        double eps, Dtype dt) override {
+        const auto& xs = std::get<CpuStorage>(x);
+        const std::size_t numel = shape_numel(x_shape);
+        int outer = 1, inner = 1;
+        const int rank = static_cast<int>(x_shape.size());
+        for (int i = 0; i < axis; ++i) outer *= static_cast<int>(x_shape[i]);
+        for (int i = axis + 1; i < rank; ++i) inner *= static_cast<int>(x_shape[i]);
+        const int axis_len = static_cast<int>(x_shape[axis]);
+        auto y_cpu    = alloc_cpu(numel, dt);
+        auto norm_cpu = alloc_cpu(static_cast<std::size_t>(outer) * inner, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            T* yp  = reinterpret_cast<T*>(y_cpu.ptr.get());
+            T* np  = reinterpret_cast<T*>(norm_cpu.ptr.get());
+            for (int o = 0; o < outer; ++o)
+                for (int n = 0; n < inner; ++n) {
+                    T acc = T{0};
+                    for (int a = 0; a < axis_len; ++a)
+                        acc += static_cast<T>(std::pow(
+                            std::abs(static_cast<double>(xp[(o*axis_len+a)*inner+n])), ord));
+                    const T nm = static_cast<T>(std::pow(static_cast<double>(acc), 1.0/ord));
+                    const T denom = nm > static_cast<T>(eps) ? nm : static_cast<T>(eps);
+                    np[o*inner+n] = denom;
+                    for (int a = 0; a < axis_len; ++a) {
+                        const std::size_t idx = (o*axis_len+a)*inner+n;
+                        yp[idx] = xp[idx] / denom;
+                    }
+                }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("lp_normalize_forward").not_implemented("dtype");
+        return {Storage{std::move(y_cpu)}, Storage{std::move(norm_cpu)}};
+    }
+
+    Storage lp_normalize_backward(
+        const Storage& x, const Storage& saved_norm, const Storage& grad_out,
+        const Shape& x_shape, double ord, int axis, Dtype dt) override {
+        const auto& xs = std::get<CpuStorage>(x);
+        const auto& ns = std::get<CpuStorage>(saved_norm);
+        const auto& gs = std::get<CpuStorage>(grad_out);
+        const std::size_t numel = shape_numel(x_shape);
+        int outer = 1, inner = 1;
+        const int rank = static_cast<int>(x_shape.size());
+        for (int i = 0; i < axis; ++i) outer *= static_cast<int>(x_shape[i]);
+        for (int i = axis + 1; i < rank; ++i) inner *= static_cast<int>(x_shape[i]);
+        const int axis_len = static_cast<int>(x_shape[axis]);
+        auto dx_cpu = alloc_cpu(numel, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* np = reinterpret_cast<const T*>(ns.ptr.get());
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            T* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
+            for (int o = 0; o < outer; ++o)
+                for (int n = 0; n < inner; ++n) {
+                    const T N = np[o*inner+n];
+                    T proj = T{0};
+                    for (int a = 0; a < axis_len; ++a) {
+                        const std::size_t idx = (o*axis_len+a)*inner+n;
+                        proj += gp[idx] * xp[idx];
+                    }
+                    const T N_pp1 = static_cast<T>(std::pow(static_cast<double>(N), ord+1.0));
+                    for (int a = 0; a < axis_len; ++a) {
+                        const std::size_t idx = (o*axis_len+a)*inner+n;
+                        const T xi = xp[idx];
+                        const T sgn = (xi>T{0}) ? T{1} : (xi<T{0} ? T{-1} : T{0});
+                        const T abs_pm1 = static_cast<T>(
+                            std::pow(std::abs(static_cast<double>(xi)), ord-1.0));
+                        dxp[idx] = gp[idx]/N - sgn*abs_pm1*proj/N_pp1;
+                    }
+                }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("lp_normalize_backward").not_implemented("dtype");
+        return Storage{std::move(dx_cpu)};
+    }
+
+    // ---- Global response normalization -----------------------------------
+
+    std::vector<Storage> global_response_norm_forward(
+        const Storage& x, const Storage& gamma, const Storage& beta,
+        const Shape& x_shape, double eps, Dtype dt) override {
+        const int B = static_cast<int>(x_shape[0]);
+        const int C = static_cast<int>(x_shape[1]);
+        const int H = static_cast<int>(x_shape[2]);
+        const int W = static_cast<int>(x_shape[3]);
+        const int spatial = H * W;
+        const auto& xs = std::get<CpuStorage>(x);
+        const auto& gs = std::get<CpuStorage>(gamma);
+        const auto& bs = std::get<CpuStorage>(beta);
+        auto y_cpu  = alloc_cpu(static_cast<std::size_t>(B)*C*spatial, dt);
+        auto nx_cpu = alloc_cpu(static_cast<std::size_t>(B)*C, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            const T* bp = reinterpret_cast<const T*>(bs.ptr.get());
+            T* yp  = reinterpret_cast<T*>(y_cpu.ptr.get());
+            T* nxp = reinterpret_cast<T*>(nx_cpu.ptr.get());
+            std::vector<T> Gx(static_cast<std::size_t>(B)*C);
+            for (int b = 0; b < B; ++b)
+                for (int c = 0; c < C; ++c) {
+                    T acc = T{0};
+                    const T* xr = xp + (b*C+c)*spatial;
+                    for (int s = 0; s < spatial; ++s) acc += xr[s]*xr[s];
+                    Gx[b*C+c] = static_cast<T>(std::sqrt(static_cast<double>(acc)));
+                }
+            for (int b = 0; b < B; ++b) {
+                T mean = T{0};
+                for (int c = 0; c < C; ++c) mean += Gx[b*C+c];
+                mean /= static_cast<T>(C);
+                const T denom = mean + static_cast<T>(eps);
+                for (int c = 0; c < C; ++c) {
+                    const T nx = Gx[b*C+c] / denom;
+                    nxp[b*C+c] = nx;
+                    const T* xr = xp + (b*C+c)*spatial;
+                    T* yr = yp + (b*C+c)*spatial;
+                    for (int s = 0; s < spatial; ++s)
+                        yr[s] = gp[c]*(xr[s]*nx) + bp[c]*xr[s];
+                }
+            }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("grn_forward").not_implemented("dtype");
+        return {Storage{std::move(y_cpu)}, Storage{std::move(nx_cpu)}};
+    }
+
+    std::vector<Storage> global_response_norm_backward(
+        const Storage& x, const Storage& gamma, const Storage& beta,
+        const Storage& saved_Nx, const Storage& grad_out,
+        const Shape& x_shape, double eps, Dtype dt) override {
+        const int B = static_cast<int>(x_shape[0]);
+        const int C = static_cast<int>(x_shape[1]);
+        const int H = static_cast<int>(x_shape[2]);
+        const int W = static_cast<int>(x_shape[3]);
+        const int spatial = H * W;
+        const auto& xs  = std::get<CpuStorage>(x);
+        const auto& gs  = std::get<CpuStorage>(gamma);
+        const auto& bts = std::get<CpuStorage>(beta);
+        const auto& nxs = std::get<CpuStorage>(saved_Nx);
+        const auto& gos = std::get<CpuStorage>(grad_out);
+        auto dx = alloc_cpu(static_cast<std::size_t>(B)*C*spatial, dt);
+        auto dg = alloc_cpu(static_cast<std::size_t>(C), dt);
+        auto db = alloc_cpu(static_cast<std::size_t>(C), dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp  = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* gp  = reinterpret_cast<const T*>(gs.ptr.get());
+            const T* bp  = reinterpret_cast<const T*>(bts.ptr.get());
+            const T* nxp = reinterpret_cast<const T*>(nxs.ptr.get());
+            const T* gop = reinterpret_cast<const T*>(gos.ptr.get());
+            T* dxp = reinterpret_cast<T*>(dx.ptr.get());
+            T* dgp = reinterpret_cast<T*>(dg.ptr.get());
+            T* dbp = reinterpret_cast<T*>(db.ptr.get());
+            for (int c = 0; c < C; ++c) { dgp[c] = dbp[c] = T{0}; }
+            // Recompute G and m
+            std::vector<T> Gx(static_cast<std::size_t>(B)*C, T{0});
+            std::vector<T> mv(static_cast<std::size_t>(B), T{0});
+            for (int b = 0; b < B; ++b) {
+                for (int c = 0; c < C; ++c) {
+                    T acc = T{0};
+                    const T* xr = xp + (b*C+c)*spatial;
+                    for (int s = 0; s < spatial; ++s) acc += xr[s]*xr[s];
+                    Gx[b*C+c] = static_cast<T>(std::sqrt(static_cast<double>(acc)));
+                }
+                T s = T{0};
+                for (int c = 0; c < C; ++c) s += Gx[b*C+c];
+                mv[b] = s / static_cast<T>(C);
+            }
+            // A[b,c], dg, db
+            std::vector<T> A(static_cast<std::size_t>(B)*C, T{0});
+            for (int b = 0; b < B; ++b)
+                for (int c = 0; c < C; ++c) {
+                    const T* xr = xp + (b*C+c)*spatial;
+                    const T* gr = gop + (b*C+c)*spatial;
+                    T sgx = T{0};
+                    for (int s = 0; s < spatial; ++s) sgx += gr[s]*xr[s];
+                    A[b*C+c] = sgx * gp[c];
+                    dgp[c] += sgx * nxp[b*C+c];
+                    dbp[c] += sgx;
+                }
+            // dG
+            std::vector<T> dG(static_cast<std::size_t>(B)*C, T{0});
+            for (int b = 0; b < B; ++b) {
+                const T denom  = mv[b] + static_cast<T>(eps);
+                const T denom2 = denom * denom;
+                T sum_AG = T{0};
+                for (int c = 0; c < C; ++c) sum_AG += A[b*C+c] * Gx[b*C+c];
+                const T common = -sum_AG / denom2 / static_cast<T>(C);
+                for (int c = 0; c < C; ++c)
+                    dG[b*C+c] = A[b*C+c]/denom + common;
+            }
+            // dx
+            for (int b = 0; b < B; ++b)
+                for (int c = 0; c < C; ++c) {
+                    const T nbc = nxp[b*C+c];
+                    const T gG  = Gx[b*C+c];
+                    const T invG = (gG > T{0}) ? T{1}/gG : T{0};
+                    const T dGbc = dG[b*C+c];
+                    const T gc = gp[c];
+                    // Note: beta term needs beta saved input, but IBackend doesn't carry it.
+                    // The op file stores beta as saved_inputs_[2]; here we use gamma only.
+                    // To keep correctness, the op file should pass beta via the gamma param slot
+                    // for GRN backward, OR the IBackend needs a beta param.
+                    // WORKAROUND: the caller will add the beta*g term from outside.
+                    // For now, beta contribution is added by GpuBackend too. The op file
+                    // MUST add beta*grad_out as an extra dx term.
+                    const T* xr = xp + (b*C+c)*spatial;
+                    const T* gr = gop + (b*C+c)*spatial;
+                    T* dxr = dxp + (b*C+c)*spatial;
+                    const T bc = bp[c];
+                    for (int s = 0; s < spatial; ++s)
+                        dxr[s] = gc*nbc*gr[s] + bc*gr[s] + dGbc*xr[s]*invG;
+                }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("grn_backward").not_implemented("dtype");
+        return {Storage{std::move(dx)}, Storage{std::move(dg)}, Storage{std::move(db)}};
+    }
+
+    // ---- Interpolation stubs (CPU implementations) -----------------------
+
+    Storage interpolate_bilinear_forward(
+        const Storage& input, const Shape& in_shape,
+        int H_out, int W_out, bool align_corners, Dtype dt) override {
+        ErrorBuilder("cpu::interpolate_bilinear_forward").not_implemented(
+            "route via Dispatcher not yet complete for Interpolate");
+        (void)input; (void)in_shape; (void)H_out; (void)W_out; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage interpolate_bilinear_backward(
+        const Storage& grad_out, const Shape& in_shape,
+        int H_out, int W_out, bool align_corners, Dtype dt) override {
+        ErrorBuilder("cpu::interpolate_bilinear_backward").not_implemented("");
+        (void)grad_out; (void)in_shape; (void)H_out; (void)W_out; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage interpolate_trilinear_forward(
+        const Storage& input, const Shape& in_shape,
+        int D_out, int H_out, int W_out, bool align_corners, Dtype dt) override {
+        ErrorBuilder("cpu::interpolate_trilinear_forward").not_implemented("");
+        (void)input; (void)in_shape; (void)D_out; (void)H_out; (void)W_out;
+        (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage interpolate_trilinear_backward(
+        const Storage& grad_out, const Shape& in_shape,
+        int D_out, int H_out, int W_out, bool align_corners, Dtype dt) override {
+        ErrorBuilder("cpu::interpolate_trilinear_backward").not_implemented("");
+        (void)grad_out; (void)in_shape; (void)D_out; (void)H_out; (void)W_out;
+        (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage affine_grid_forward(
+        const Storage& theta, int N, int H, int W,
+        bool align_corners, Dtype dt) override {
+        ErrorBuilder("cpu::affine_grid_forward").not_implemented("");
+        (void)theta; (void)N; (void)H; (void)W; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage affine_grid_backward(
+        const Storage& grad_grid, int N, int H, int W,
+        bool align_corners, Dtype dt) override {
+        ErrorBuilder("cpu::affine_grid_backward").not_implemented("");
+        (void)grad_grid; (void)N; (void)H; (void)W; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    Storage grid_sample_forward(
+        const Storage& input, const Storage& grid,
+        const Shape& in_shape, const Shape& grid_shape,
+        int mode, int padding_mode, bool align_corners, Dtype dt) override {
+        ErrorBuilder("cpu::grid_sample_forward").not_implemented("");
+        (void)input; (void)grid; (void)in_shape; (void)grid_shape;
+        (void)mode; (void)padding_mode; (void)align_corners; (void)dt;
+        return Storage{};
+    }
+
+    std::vector<Storage> grid_sample_backward(
+        const Storage& grad_out, const Storage& input, const Storage& grid,
+        const Shape& in_shape, const Shape& grid_shape,
+        int mode, int padding_mode, bool align_corners, Dtype dt) override {
+        ErrorBuilder("cpu::grid_sample_backward").not_implemented("");
+        (void)grad_out; (void)input; (void)grid; (void)in_shape; (void)grid_shape;
+        (void)mode; (void)padding_mode; (void)align_corners; (void)dt;
+        return {};
+    }
+
+    Storage bilinear_layer_forward(
+        const Storage& x1, const Storage& x2, const Storage& weight,
+        const Storage& bias, bool has_bias,
+        const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
+        Dtype dt) override {
+        ErrorBuilder("cpu::bilinear_layer_forward").not_implemented("");
+        (void)x1; (void)x2; (void)weight; (void)bias; (void)has_bias;
+        (void)x1_shape; (void)x2_shape; (void)w_shape; (void)dt;
+        return Storage{};
+    }
+
+    std::vector<Storage> bilinear_layer_backward(
+        const Storage& grad_out, const Storage& x1, const Storage& x2,
+        const Storage& weight,
+        const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
+        bool has_bias, Dtype dt) override {
+        ErrorBuilder("cpu::bilinear_layer_backward").not_implemented("");
+        (void)grad_out; (void)x1; (void)x2; (void)weight;
+        (void)x1_shape; (void)x2_shape; (void)w_shape; (void)has_bias; (void)dt;
+        return {};
+    }
+
     Storage rope_backward(const Storage& grad_out,
                           const Storage& saved_cos,
                           const Storage& saved_sin,
