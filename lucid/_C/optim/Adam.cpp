@@ -175,6 +175,7 @@ void Adam::update_one(std::size_t slot_idx,
         auto& vg = std::get<GpuStorage>(v_[slot_idx]);
         adam_step_gpu(pg, gg, mg, vg, param->dtype(), lr_, beta1_, beta2_, eps_, weight_decay_,
                       /*decoupled_wd=*/false, step_count_);
+        pg.bump_version();
         return;
     }
     auto& pc = std::get<CpuStorage>(param->mutable_storage());
@@ -202,6 +203,7 @@ void Adam::update_one(std::size_t slot_idx,
         default:
             ErrorBuilder("Adam").not_implemented("dtype not supported (F32/F64)");
     }
+    pc.bump_version();
 }
 
 // ============================================================
@@ -254,6 +256,7 @@ void AdamW::update_one(std::size_t slot_idx,
         auto& vg = std::get<GpuStorage>(v_[slot_idx]);
         adam_step_gpu(pg, gg, mg, vg, param->dtype(), lr_, beta1_, beta2_, eps_, weight_decay_,
                       /*decoupled_wd=*/true, step_count_);
+        pg.bump_version();
         return;
     }
     auto& pc = std::get<CpuStorage>(param->mutable_storage());
@@ -281,6 +284,7 @@ void AdamW::update_one(std::size_t slot_idx,
         default:
             ErrorBuilder("AdamW").not_implemented("dtype not supported (F32/F64)");
     }
+    pc.bump_version();
 }
 
 // =====================================================================
@@ -354,9 +358,11 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
                                            ::mlx::core::divide(new_m, denom));
         auto new_p = ::mlx::core::subtract(::mlx::core::subtract(*pg.arr, term1), term2);
         gpu_replace(pg, std::move(new_p), dt);
+        pg.bump_version();
         return;
     }
     const std::size_t n = cpu_numel(*p);
+    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* M = cpu_ptr<T>(m_[i]);
@@ -381,11 +387,12 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
+        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
+        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("NAdam").not_implemented("dtype not supported");
+    p_cpu.bump_version();
 }
 
 // =====================================================================
@@ -462,9 +469,11 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
                 ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(mlx_scalar(lr_, dt), m_hat));
             gpu_replace(pg, std::move(new_p), dt);
         }
+        pg.bump_version();
         return;
     }
     const std::size_t n = cpu_numel(*p);
+    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* M = cpu_ptr<T>(m_[i]);
@@ -495,11 +504,12 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
+        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
+        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("RAdam").not_implemented("dtype not supported");
+    p_cpu.bump_version();
 }
 
 }  // namespace lucid

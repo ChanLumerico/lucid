@@ -145,6 +145,7 @@ void SGD::update_one(std::size_t slot_idx,
         GpuStorage dummy_moment;
         sgd_step_gpu(param_g, grad_g, moment_g ? *moment_g : dummy_moment, param->dtype(), lr_,
                      momentum_, dampening_, weight_decay_, nesterov_);
+        param_g.bump_version();
         return;
     }
 
@@ -174,6 +175,7 @@ void SGD::update_one(std::size_t slot_idx,
         default:
             ErrorBuilder("SGD").not_implemented("dtype not supported (F32/F64)");
     }
+    param_cpu.bump_version();
 }
 
 // =====================================================================
@@ -250,9 +252,11 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
                 ::mlx::core::multiply(mlx_scalar(lambd_, dt), *ag.arr));
             gpu_replace(ag, std::move(new_ax), dt);
         }
+        gpu_get(p->mutable_storage()).bump_version();
         return;
     }
     const std::size_t n = cpu_numel(*p);
+    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* M = (momentum_ != 0.0) ? cpu_ptr<T>(moment_[i]) : nullptr;
@@ -278,11 +282,12 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
+        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
+        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("ASGD").not_implemented("dtype not supported");
+    p_cpu.bump_version();
 }
 
 }  // namespace lucid

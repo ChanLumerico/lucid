@@ -36,10 +36,19 @@ echo "==> Doxygen coverage"
 echo "==> Op template conformance"
 "$PYTHON_BIN" tools/check_op_template.py
 
+echo "==> Kernel template coverage"
+"$PYTHON_BIN" tools/check_kernel_template.py
+
+echo "==> Storage API compliance"
+"$PYTHON_BIN" tools/check_storage_api.py
+
 echo "==> Compile commands"
 ./scripts/build_compile_commands.sh
 
 echo "==> Format + clang-tidy"
 tools/check_format.sh --tidy
+
+echo "==> Publish gate"
+./scripts/ci_publish.sh
 
 echo "==> ci_full: green"

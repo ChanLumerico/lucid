@@ -68,9 +68,11 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
         auto denom = ::mlx::core::add(new_u, mlx_scalar(eps_, dt));
         auto update = ::mlx::core::multiply(step_size, ::mlx::core::divide(new_m, denom));
         gpu_replace(pg, ::mlx::core::subtract(*pg.arr, update), dt);
+        pg.bump_version();
         return;
     }
     const std::size_t n = cpu_numel(*p);
+    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* M = cpu_ptr<T>(m_[i]);
@@ -93,11 +95,12 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
+        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
+        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("Adamax").not_implemented("dtype not supported");
+    p_cpu.bump_version();
 }
 
 // =====================================================================
@@ -154,9 +157,11 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         auto denom = ::mlx::core::add(::mlx::core::sqrt(new_ss), mlx_scalar(eps_, dt));
         auto update = ::mlx::core::multiply(mlx_scalar(lr_, dt), ::mlx::core::divide(g, denom));
         gpu_replace(pg, ::mlx::core::subtract(*pg.arr, update), dt);
+        pg.bump_version();
         return;
     }
     const std::size_t n = cpu_numel(*p);
+    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* SS = cpu_ptr<T>(sum_sq_grad_[i]);
@@ -172,11 +177,12 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
+        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
+        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("Adagrad").not_implemented("dtype not supported");
+    p_cpu.bump_version();
 }
 
 // =====================================================================
@@ -222,9 +228,11 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
         gpu_replace(
             pg, ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(mlx_scalar(lr_, dt), update)),
             dt);
+        pg.bump_version();
         return;
     }
     const std::size_t n = cpu_numel(*p);
+    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* SQ = cpu_ptr<T>(sq_avg_[i]);
@@ -245,11 +253,12 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
+        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
+        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("Adadelta").not_implemented("dtype not supported");
+    p_cpu.bump_version();
 }
 
 }  // namespace lucid

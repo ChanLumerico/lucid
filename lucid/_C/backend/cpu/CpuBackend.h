@@ -30,6 +30,10 @@
 #include "Vdsp.h"
 #include "Vforce.h"
 
+#ifdef __APPLE__
+#include <Accelerate/Accelerate.h>
+#endif
+
 namespace lucid {
 namespace backend {
 
@@ -4863,6 +4867,93 @@ public:
         const auto& x_cpu = std::get<CpuStorage>(x);
         const auto& W_cpu = std::get<CpuStorage>(W);
         const auto& b_cpu = std::get<CpuStorage>(b);
+
+#ifdef __APPLE__
+        // BNNS fast path: N==2, F32, dilation=1x1, no groups
+        if (N == 2 && dt == Dtype::F32 && opts.dilation[0] == 1 && opts.dilation[1] == 1 &&
+            opts.groups == 1) {
+            const int H_in = S[0], W_in = S[1];
+            const int KH = K[0], KW = K[1];
+            const int OH = O[0], OW = O[1];
+            const int stride_h = opts.stride[0], stride_w = opts.stride[1];
+            const int pad_h = opts.pad[0], pad_w = opts.pad[1];
+
+            const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get());
+            const float* wp = reinterpret_cast<const float*>(W_cpu.ptr.get());
+            const float* bp = reinterpret_cast<const float*>(b_cpu.ptr.get());
+            float* yp = reinterpret_cast<float*>(out_cpu.ptr.get());
+
+            // Input descriptor: CHW layout
+            BNNSNDArrayDescriptor in_desc = {};
+            in_desc.layout = BNNSDataLayoutImageCHW;
+            in_desc.size[0] = static_cast<std::size_t>(W_in);
+            in_desc.size[1] = static_cast<std::size_t>(H_in);
+            in_desc.size[2] = static_cast<std::size_t>(Cin);
+            in_desc.data_type = BNNSDataTypeFloat32;
+            in_desc.data = nullptr;  // set at apply time
+
+            // Weight descriptor: OIHW layout
+            BNNSNDArrayDescriptor w_desc = {};
+            w_desc.layout = BNNSDataLayoutConvolutionWeightsOIHW;
+            w_desc.size[0] = static_cast<std::size_t>(KW);
+            w_desc.size[1] = static_cast<std::size_t>(KH);
+            w_desc.size[2] = static_cast<std::size_t>(Cin);
+            w_desc.size[3] = static_cast<std::size_t>(Cout);
+            w_desc.data_type = BNNSDataTypeFloat32;
+            w_desc.data = const_cast<float*>(wp);
+
+            // Bias descriptor: 1D vector of length Cout
+            BNNSNDArrayDescriptor b_desc = {};
+            b_desc.layout = BNNSDataLayout1DLastMajor;
+            b_desc.size[0] = static_cast<std::size_t>(Cout);
+            b_desc.data_type = BNNSDataTypeFloat32;
+            b_desc.data = const_cast<float*>(bp);
+
+            // Output descriptor: CHW layout
+            BNNSNDArrayDescriptor out_desc = {};
+            out_desc.layout = BNNSDataLayoutImageCHW;
+            out_desc.size[0] = static_cast<std::size_t>(OW);
+            out_desc.size[1] = static_cast<std::size_t>(OH);
+            out_desc.size[2] = static_cast<std::size_t>(Cout);
+            out_desc.data_type = BNNSDataTypeFloat32;
+            out_desc.data = nullptr;  // set at apply time
+
+            // Layer parameters
+            BNNSLayerParametersConvolution conv_params = {};
+            conv_params.i_desc = in_desc;
+            conv_params.w_desc = w_desc;
+            conv_params.o_desc = out_desc;
+            conv_params.bias = b_desc;
+            conv_params.x_stride = static_cast<std::size_t>(stride_w);
+            conv_params.y_stride = static_cast<std::size_t>(stride_h);
+            conv_params.x_padding = static_cast<std::size_t>(pad_w);
+            conv_params.y_padding = static_cast<std::size_t>(pad_h);
+            conv_params.x_dilation_stride = 1;
+            conv_params.y_dilation_stride = 1;
+            conv_params.groups = 1;
+            BNNSActivation act = {};
+            act.function = BNNSActivationFunctionIdentity;
+            conv_params.activation = act;
+
+            BNNSFilter filter = BNNSFilterCreateLayerConvolution(&conv_params, nullptr);
+            if (filter) {
+                // Use single-sample loop: BNNSFilterApplyBatch crashes on macOS 26
+                // with large inputs (deprecated API regression).
+                const std::size_t in_per_sample = static_cast<std::size_t>(Cin) * H_in * W_in;
+                const std::size_t out_per_sample = static_cast<std::size_t>(Cout) * OH * OW;
+                int ret = 0;
+                for (int bi = 0; bi < B && ret == 0; ++bi) {
+                    ret =
+                        BNNSFilterApply(filter, xp + bi * in_per_sample, yp + bi * out_per_sample);
+                }
+                BNNSFilterDestroy(filter);
+                if (ret == 0) {
+                    return Storage{std::move(out_cpu)};
+                }
+            }
+            // Fall through to im2col if BNNS failed
+        }
+#endif  // __APPLE__
 
         for (int bi = 0; bi < B; ++bi) {
             for (int g = 0; g < opts.groups; ++g) {

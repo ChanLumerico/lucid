@@ -83,9 +83,11 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         auto new_p =
             ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(mlx_scalar(lr_, dt), update));
         gpu_replace(pg, std::move(new_p), dt);
+        pg.bump_version();
         return;
     }
     const std::size_t n = cpu_numel(*p);
+    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* SQ = cpu_ptr<T>(square_avg_[i]);
@@ -118,11 +120,12 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
+        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
+        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("RMSprop").not_implemented("dtype not supported");
+    p_cpu.bump_version();
 }
 
 // =====================================================================
@@ -196,9 +199,11 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         auto new_p =
             ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(::mlx::core::sign(eff_g), new_ss));
         gpu_replace(pg, std::move(new_p), dt);
+        pg.bump_version();
         return;
     }
     const std::size_t n = cpu_numel(*p);
+    auto& p_cpu = std::get<CpuStorage>(p->mutable_storage());
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* PV = cpu_ptr<T>(prev_grad_[i]);
@@ -226,11 +231,12 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         }
     };
     if (dt == Dtype::F32)
-        step_cpu(cpu_ptr<float>(p->mutable_storage()), cpu_cptr<float>(grad));
+        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
     else if (dt == Dtype::F64)
-        step_cpu(cpu_ptr<double>(p->mutable_storage()), cpu_cptr<double>(grad));
+        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
     else
         ErrorBuilder("Rprop").not_implemented("dtype not supported");
+    p_cpu.bump_version();
 }
 
 }  // namespace lucid
