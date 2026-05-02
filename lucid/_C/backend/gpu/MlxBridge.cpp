@@ -11,6 +11,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/MemoryStats.h"
+#include "MetalAllocator.h"  // Phase 9.3: zero-copy upload via shared memory
 
 namespace lucid::gpu {
 
@@ -158,6 +159,42 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
     out.dtype = dtype;
     out.nbytes = arr.nbytes();
     out.arr = make_tracked(new ::mlx::core::array(std::move(arr)), out.nbytes);
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9.3: zero-copy upload via Metal shared memory
+// ---------------------------------------------------------------------------
+//
+// When a SharedStorage was allocated through MetalAllocator::allocate_shared,
+// its cpu_ptr IS the Metal buffer contents pointer and mtl_handle holds the
+// retained id<MTLBuffer>.  We can build an MLX array that refers to this
+// buffer without a host-to-device copy by using the "external" array ctor
+// with a deleter that keeps the Metal buffer alive.
+//
+GpuStorage shared_storage_to_gpu(const SharedStorage& sh, const Shape& shape) {
+    if (!sh.cpu_ptr || sh.nbytes == 0)
+        ErrorBuilder("shared_storage_to_gpu").fail("SharedStorage is empty");
+
+    auto mlx_shape = to_mlx_shape(shape);
+    auto mlx_dt    = to_mlx_dtype(sh.dtype);
+
+    // The owner shared_ptr keeps the MetalBuffer alive for the lifetime of
+    // the MLX array.  We capture it by value in the deleter.
+    auto owner_tok = sh.owner;
+    ::mlx::core::array external(
+        sh.cpu_ptr, std::move(mlx_shape), mlx_dt,
+        [owner_tok = std::move(owner_tok)](void* /*p*/) mutable {
+            owner_tok.reset();
+        });
+
+    // mlx::core::array built from an external pointer is zero-copy when the
+    // buffer is already Metal-mapped; MLX recognizes the page-aligned shared
+    // memory and avoids an extra copy on its first eval().
+    GpuStorage out;
+    out.dtype  = sh.dtype;
+    out.nbytes = sh.nbytes;
+    out.arr = make_tracked(new ::mlx::core::array(std::move(external)), out.nbytes);
     return out;
 }
 

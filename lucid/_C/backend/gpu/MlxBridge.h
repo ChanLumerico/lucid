@@ -44,7 +44,13 @@ Dtype from_mlx_dtype(::mlx::core::Dtype dt);
 // MLX may attempt to use the buffer without a copy, so we keep the
 // CpuStorage shared_ptr alive via a deleter closure. Shape is copied.
 /// Upload cpu to gpu.
+/// If cpu was allocated through MetalAllocator::allocate_shared, MLX wraps the
+/// existing Metal buffer without a copy (Phase 9.3 zero-copy path).
 LUCID_API GpuStorage upload_cpu_to_gpu(const CpuStorage& cpu, const Shape& shape);
+
+/// Phase 9.3: promote a SharedStorage directly to GpuStorage with zero copy.
+/// The returned GpuStorage shares the same physical memory as the input.
+LUCID_API GpuStorage shared_storage_to_gpu(const SharedStorage& sh, const Shape& shape);
 
 // Download a GPU array back to a freshly-allocated CpuStorage. Calls
 // `arr.eval()` first so subsequent reads are safe. Result is C-contiguous.

@@ -23,11 +23,13 @@
 
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "../core/Device.h"
 #include "../core/Dtype.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Shape.h"
 #include "../core/Storage.h"
 
@@ -1113,6 +1115,116 @@ public:
                                        const Shape& input_shape,
                                        Dtype input_dtype,
                                        std::size_t& numel_out) = 0;
+
+    // ---- Op Fusion (Phase 19) -----------------------------------------------
+
+    /// Fused linear + ReLU (SGEMM + threshold) — CPU: BLAS + vDSP; GPU: MLX lazy.
+    /// Returns Storage of shape `out_shape` = {M, N}.
+    /// Default: throws NotImplemented; override in backends that support fusion.
+    virtual Storage fused_linear_relu_forward(const Storage& x,
+                                              const Storage& w,
+                                              const Storage& b,
+                                              const Shape&   out_shape,
+                                              Dtype          dt) {
+        (void)x; (void)w; (void)b; (void)out_shape; (void)dt;
+        ErrorBuilder("IBackend::fused_linear_relu_forward")
+            .not_implemented("fused linear+relu not implemented on this backend");
+        return {};
+    }
+
+    /// Fused linear + GELU.
+    virtual Storage fused_linear_gelu_forward(const Storage& x,
+                                              const Storage& w,
+                                              const Storage& b,
+                                              const Shape&   out_shape,
+                                              Dtype          dt) {
+        (void)x; (void)w; (void)b; (void)out_shape; (void)dt;
+        ErrorBuilder("IBackend::fused_linear_gelu_forward")
+            .not_implemented("fused linear+gelu not implemented on this backend");
+        return {};
+    }
+
+    // ---- Metal Shader Escape Hatch (Phase 18) -------------------------------
+
+    /// Execute an arbitrary Metal compute kernel from MSL source.
+    ///
+    /// `kernel_source` : MSL shader text containing `function_name`.
+    /// `inputs`        : tensors bound as read-only buffers (indices 0..N-1).
+    /// `output_shape`  : shape of the single output tensor.
+    /// `output_dtype`  : element type of the output tensor.
+    /// `grid`          : threadgroups per grid  {X, Y, Z}.
+    /// `threads`       : threads per threadgroup {X, Y, Z}.
+    ///
+    /// The output is bound as the last MTLBuffer slot (index N).
+    /// Default implementation throws NotImplemented; override on GPU backends.
+    virtual Storage run_custom_metal_kernel(
+        const std::string&                      kernel_source,
+        const std::string&                      function_name,
+        const std::vector<Storage>&             inputs,
+        const Shape&                            output_shape,
+        Dtype                                   output_dtype,
+        const std::array<std::size_t, 3>&       grid,
+        const std::array<std::size_t, 3>&       threads) {
+        (void)kernel_source; (void)function_name; (void)inputs;
+        (void)output_shape;  (void)output_dtype;
+        (void)grid;          (void)threads;
+        ErrorBuilder("IBackend::run_custom_metal_kernel")
+            .not_implemented("Metal kernel execution is only supported on the GPU backend");
+        return {};
+    }
+
+    // ---- Unified memory (Phase 9.3) ----------------------------------------
+
+    /// Promote `src` to a SharedStorage (Metal unified-memory buffer) if the
+    /// backend supports it.  Default implementation is a no-op that returns
+    /// the original Storage unchanged — safe for any backend that doesn't
+    /// implement shared memory.
+    virtual Storage to_shared_storage(const Storage& src, const Shape& /*shape*/) {
+        return src;
+    }
+
+    // ---- LSTM (Phase 15.3) -----------------------------------------------
+
+    /// Options bundle for LSTM forward.
+    struct LstmOpts {
+        int input_size  = 0;
+        int hidden_size = 0;
+        int num_layers  = 1;
+        int seq_len     = 1;
+        int batch_size  = 1;
+        bool batch_first    = false;
+        bool bidirectional  = false;
+        bool has_bias       = true;
+    };
+
+    /// LSTM forward pass.
+    ///
+    /// `input` shape:   (seq_len, batch, input_size)  [or transposed if batch_first]
+    /// `h0`    shape:   (num_layers * num_directions, batch, hidden_size)
+    /// `c0`    shape:   (num_layers * num_directions, batch, hidden_size)
+    /// `weights` layout per layer (with bias, 2 dirs):
+    ///   [weight_ih (4H x I), weight_hh (4H x H), bias_ih (4H), bias_hh (4H)]
+    ///   repeated for each layer and direction.
+    ///
+    /// Returns {output, h_n, c_n} with shapes:
+    ///   output: (seq_len, batch, num_directions * hidden_size)
+    ///   h_n:    (num_layers * num_directions, batch, hidden_size)
+    ///   c_n:    (num_layers * num_directions, batch, hidden_size)
+    ///
+    /// Default implementation throws NotImplemented; override in device backends.
+    virtual std::vector<Storage> lstm_forward(const Storage& input,
+                                              const Storage& h0,
+                                              const Storage& c0,
+                                              const std::vector<Storage>& weights,
+                                              const LstmOpts& opts,
+                                              const Shape& out_shape,
+                                              Dtype dt) {
+        (void)input; (void)h0; (void)c0; (void)weights;
+        (void)opts;  (void)out_shape;    (void)dt;
+        ErrorBuilder("IBackend::lstm_forward").not_implemented(
+            "LSTM not supported on this backend");
+        return {};
+    }
 };
 
 }  // namespace backend

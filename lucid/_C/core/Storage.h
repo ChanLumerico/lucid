@@ -111,7 +111,51 @@ struct GpuStorage {
     std::uint64_t get_version() const noexcept { return version->load(std::memory_order_relaxed); }
 };
 
-using Storage = std::variant<CpuStorage, GpuStorage>;
+// Phase 9.2 — SharedStorage: Apple Silicon unified-memory buffer.
+//
+// On Apple Silicon the CPU and GPU share the same physical DRAM. A
+// MTLBuffer allocated with MTLResourceStorageModeShared gives a single
+// region that is directly accessible from both sides without any memcpy.
+//
+// cpu_ptr   : the Metal buffer's `contents` pointer (CPU-readable/writable).
+// mtl_handle: opaque id<MTLBuffer> retained by the MetalAllocator layer.
+// owner     : shared_ptr<void> RAII guard; drop to release the Metal buffer.
+//
+// cpu_view() fabricates a lightweight CpuStorage view over cpu_ptr so that
+// existing CPU-only paths (accumulate_into, numpy export, copy_from) can
+// reuse SharedStorage data without extra copies.
+struct SharedStorage {
+    void*       cpu_ptr    = nullptr;
+    void*       mtl_handle = nullptr;  ///< id<MTLBuffer> (retained via owner)
+    std::size_t nbytes     = 0;
+    Dtype       dtype      = Dtype::F32;
+    std::shared_ptr<VersionCounter> version = std::make_shared<VersionCounter>(0);
+    std::shared_ptr<void>           owner;  ///< keeps Metal buffer alive
+
+    void bump_version() const noexcept {
+        version->fetch_add(1, std::memory_order_relaxed);
+    }
+    std::uint64_t get_version() const noexcept {
+        return version->load(std::memory_order_relaxed);
+    }
+
+    /// Return a CpuStorage that aliases cpu_ptr.  The owner token ensures the
+    /// Metal buffer stays alive while the returned CpuStorage is live.
+    CpuStorage cpu_view() const {
+        auto tok = owner;  // copy keeps Metal buffer alive for the view's lifetime
+        auto ptr = std::shared_ptr<std::byte[]>(
+            static_cast<std::byte*>(cpu_ptr),
+            [tok = std::move(tok)](std::byte*) mutable { tok.reset(); });
+        // CpuStorage 3-arg ctor: (ptr, nbytes, dtype).  Then share the same
+        // VersionCounter so mutations via either handle are visible to the other.
+        CpuStorage cv(std::move(ptr), nbytes, dtype);
+        cv.version = version;
+        return cv;
+    }
+};
+
+// Three-way variant: CPU heap | MLX GPU array | Metal unified-memory buffer.
+using Storage = std::variant<CpuStorage, GpuStorage, SharedStorage>;
 
 // --------------------------------------------------------------------------- //
 // Storage free-function helpers — avoid repeated std::visit boilerplate.
@@ -123,11 +167,25 @@ inline bool storage_is_cpu(const Storage& s) noexcept {
 inline bool storage_is_gpu(const Storage& s) noexcept {
     return s.index() == 1;
 }
+/// True when the Storage wraps a Metal shared-memory buffer (Phase 9.2).
+inline bool storage_is_metal_shared(const Storage& s) noexcept {
+    return s.index() == 2;
+}
 inline std::size_t storage_nbytes(const Storage& s) noexcept {
-    return s.index() == 0 ? std::get<0>(s).nbytes : std::get<1>(s).nbytes;
+    switch (s.index()) {
+        case 0: return std::get<0>(s).nbytes;
+        case 1: return std::get<1>(s).nbytes;
+        case 2: return std::get<2>(s).nbytes;
+        default: return 0;
+    }
 }
 inline Dtype storage_dtype(const Storage& s) noexcept {
-    return s.index() == 0 ? std::get<0>(s).dtype : std::get<1>(s).dtype;
+    switch (s.index()) {
+        case 0: return std::get<0>(s).dtype;
+        case 1: return std::get<1>(s).dtype;
+        case 2: return std::get<2>(s).dtype;
+        default: return Dtype::F32;
+    }
 }
 
 // --------------------------------------------------------------------------- //
@@ -150,6 +208,14 @@ inline const GpuStorage& storage_gpu(const Storage& s) noexcept {
 }
 inline GpuStorage& storage_gpu(Storage& s) noexcept {
     return std::get<GpuStorage>(s);
+}
+
+/// Return the SharedStorage inside s.  Undefined behaviour otherwise.
+inline const SharedStorage& storage_metal_shared(const Storage& s) noexcept {
+    return std::get<SharedStorage>(s);
+}
+inline SharedStorage& storage_metal_shared(Storage& s) noexcept {
+    return std::get<SharedStorage>(s);
 }
 
 }  // namespace lucid

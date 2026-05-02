@@ -10,6 +10,7 @@
 
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
+#include "FusionPass.h"  // Phase 19: op-fusion before backward
 #include "Helpers.h"
 #include "Node.h"
 
@@ -94,6 +95,12 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     if (storage_is_empty(seed)) {
         seed = make_ones_storage(root->shape(), root->dtype(), root->device());
     }
+
+    // Phase 19: run fusion pass on the backward graph before executing it.
+    // This detects linear+activation and SDPA chains and replaces them with
+    // fused backward nodes where available.  The call is a no-op when no
+    // patterns are found, so it is safe to always run.
+    run_fusion_pass(root->grad_fn().get());
 
     // Topological order, root first.
     auto order = topo_order(root->grad_fn());

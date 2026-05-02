@@ -2,6 +2,8 @@
 #include <pybind11/stl.h>
 
 #include "../autograd/AccumulateGrad.h"
+#include "../autograd/CustomFunction.h"  // Phase 12: PythonBackwardNode
+#include "../autograd/FusionPass.h"      // Phase 19: FusionPass
 #include "../autograd/Engine.h"
 #include "../autograd/Node.h"
 #include "../core/TensorImpl.h"
@@ -26,6 +28,21 @@ void register_autograd(py::module_& m) {
         },
         py::arg("root"), py::arg("retain_graph") = false,
         "Run backward starting at `root` with an implicit ones_like seed.");
+
+    // Phase 12: Custom autograd — FunctionCtx, PythonBackwardNode, apply helper.
+    lucid::register_custom_function(m);
+
+    // Phase 19: FusionPass — expose run_fusion_pass for Python-level invocation.
+    m.def("_run_fusion_pass",
+          [](std::shared_ptr<TensorImpl> root) -> int {
+              if (!root || !root->grad_fn())
+                  return 0;
+              return lucid::run_fusion_pass(root->grad_fn().get());
+          },
+          py::arg("root"),
+          "Run the op-fusion pass on the backward graph rooted at `root`. "
+          "Returns the number of fusion patterns detected. "
+          "Called automatically by Engine::backward(); exposed here for testing.");
 }
 
 }  // namespace lucid::bindings

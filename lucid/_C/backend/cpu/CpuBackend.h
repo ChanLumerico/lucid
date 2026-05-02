@@ -4873,14 +4873,23 @@ public:
         const auto& b_cpu = std::get<CpuStorage>(b);
 
 #ifdef __APPLE__
-        // BNNS fast path: N==2, F32, dilation=1x1, no groups
-        if (N == 2 && dt == Dtype::F32 && opts.dilation[0] == 1 && opts.dilation[1] == 1 &&
-            opts.groups == 1) {
-            const int H_in = S[0], W_in = S[1];
-            const int KH = K[0], KW = K[1];
-            const int OH = O[0], OW = O[1];
-            const int stride_h = opts.stride[0], stride_w = opts.stride[1];
-            const int pad_h = opts.pad[0], pad_w = opts.pad[1];
+        // BNNS fast path: N==1 or N==2, F32, dilation=1x1, no groups.
+        // For N==1 (1-D conv), the input is reshaped as if W=1, H=L so the
+        // same BNNS convolution descriptor works without code duplication.
+        if ((N == 1 || N == 2) && dt == Dtype::F32 && opts.dilation[0] == 1 &&
+            (N == 1 || opts.dilation[1] == 1) && opts.groups == 1) {
+            // Map 1-D spatial dimensions to 2-D (H=L, W=1) so the rest of
+            // the code is identical for both N==1 and N==2.
+            const int H_in = S[0];
+            const int W_in = (N == 2) ? S[1] : 1;
+            const int KH = K[0];
+            const int KW = (N == 2) ? K[1] : 1;
+            const int OH = O[0];
+            const int OW = (N == 2) ? O[1] : 1;
+            const int stride_h = opts.stride[0];
+            const int stride_w = (N == 2) ? opts.stride[1] : 1;
+            const int pad_h = opts.pad[0];
+            const int pad_w = (N == 2) ? opts.pad[1] : 0;
 
             const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get());
             const float* wp = reinterpret_cast<const float*>(W_cpu.ptr.get());
@@ -8026,6 +8035,94 @@ private:
                                             int channels,
                                             int spatial,
                                             double eps) {
+#ifdef __APPLE__
+        // ---------------------------------------------------------------
+        // BNNS fast path (Phase 15.2)
+        //
+        // BNNSFilterCreateLayerNormalization(BNNSBatchNorm) fuses mean,
+        // variance, normalize, scale, and shift into a single AMX-backed
+        // kernel pass.  We capture the per-channel batch statistics by
+        // setting momentum=1 and providing a scratch moving_mean/variance
+        // descriptor: after the call those buffers contain the exact batch
+        // mean and batch variance needed for backward.
+        // ---------------------------------------------------------------
+        {
+            // Describe one sample as (C, spatial, 1) in BNNSDataLayoutImageCHW.
+            BNNSNDArrayDescriptor i_desc = {};
+            i_desc.layout    = BNNSDataLayoutImageCHW;
+            i_desc.size[0]   = static_cast<std::size_t>(spatial);  // W = spatial
+            i_desc.size[1]   = 1;                                   // H = 1
+            i_desc.size[2]   = static_cast<std::size_t>(channels);  // C
+            i_desc.data_type = BNNSDataTypeFloat32;
+            i_desc.data      = nullptr;  // supplied at apply time
+
+            BNNSNDArrayDescriptor o_desc = i_desc;  // same shape
+
+            // gamma / beta: 1-D vectors of length 'channels'.
+            BNNSNDArrayDescriptor gamma_desc = {};
+            gamma_desc.layout    = BNNSDataLayout1DLastMajor;
+            gamma_desc.size[0]   = static_cast<std::size_t>(channels);
+            gamma_desc.data_type = BNNSDataTypeFloat32;
+            gamma_desc.data      = const_cast<float*>(gamma);
+
+            BNNSNDArrayDescriptor beta_desc = {};
+            beta_desc.layout    = BNNSDataLayout1DLastMajor;
+            beta_desc.size[0]   = static_cast<std::size_t>(channels);
+            beta_desc.data_type = BNNSDataTypeFloat32;
+            beta_desc.data      = const_cast<float*>(beta);
+
+            // moving_mean / moving_variance: written by BNNS when training=true.
+            // With momentum=1 they equal the batch mean / variance after the call.
+            BNNSNDArrayDescriptor mm_desc = {};
+            mm_desc.layout    = BNNSDataLayout1DLastMajor;
+            mm_desc.size[0]   = static_cast<std::size_t>(channels);
+            mm_desc.data_type = BNNSDataTypeFloat32;
+            mm_desc.data      = mean_per_c;  // write batch mean here
+
+            // Allocate a temporary var buffer (mean_per_c is reused for var
+            // temporarily then converted to rstd; we use the caller's rstd_per_c
+            // buffer for the variance).
+            BNNSNDArrayDescriptor mv_desc = mm_desc;
+            mv_desc.data = rstd_per_c;  // temporarily holds batch variance
+
+            BNNSLayerParametersNormalization norm_params = {};
+            norm_params.i_desc               = i_desc;
+            norm_params.o_desc               = o_desc;
+            norm_params.gamma_desc           = gamma_desc;
+            norm_params.beta_desc            = beta_desc;
+            norm_params.moving_mean_desc     = mm_desc;
+            norm_params.moving_variance_desc = mv_desc;
+            norm_params.momentum             = 1.0f;  // batch_stat → moving buf
+            norm_params.epsilon              = static_cast<float>(eps);
+            BNNSActivation act               = {};
+            act.function                     = BNNSActivationFunctionIdentity;
+            norm_params.activation           = act;
+
+            BNNSFilter filter = BNNSFilterCreateLayerNormalization(
+                BNNSBatchNorm, &norm_params, nullptr);
+            if (filter) {
+                const std::size_t sample_elems =
+                    static_cast<std::size_t>(channels) * spatial;
+                int ret = BNNSNormalizationFilterApplyBatch(
+                    filter,
+                    static_cast<std::size_t>(batch),
+                    x, sample_elems,
+                    y, sample_elems,
+                    /*training=*/true);
+                BNNSFilterDestroy(filter);
+                if (ret == 0) {
+                    // rstd_per_c currently holds batch variance; convert to rstd.
+                    const float eps_f = static_cast<float>(eps);
+                    for (int c = 0; c < channels; ++c)
+                        rstd_per_c[c] = 1.0f / std::sqrt(rstd_per_c[c] + eps_f);
+                    // mean_per_c already holds batch mean (written by BNNS).
+                    return;
+                }
+                // Fall through to vDSP path on BNNS failure.
+            }
+        }
+#endif  // __APPLE__
+
         const std::size_t S = static_cast<std::size_t>(spatial);
         const float inv_M = 1.0f / static_cast<float>(batch * spatial);
         for (int c = 0; c < channels; ++c) {
@@ -9384,6 +9481,329 @@ private:
             ++row;
         }
         return out;
+    }
+
+    // ---- LSTM (Phase 15.3) -----------------------------------------------
+    //
+    // Uses BNNSDirectApplyLSTMBatchTrainingCaching for F32 on Apple platforms.
+    // This path handles single-layer, non-bidirectional, seq-first (batch_first=false)
+    // LSTM with a bias.  Falls back to the default (throws NotImplemented) for
+    // configurations BNNS does not directly support.
+    //
+    // Weight layout expected (weights[0..3] for layer 0):
+    //   [0] weight_ih: (4*hidden_size, input_size)  — row-major
+    //   [1] weight_hh: (4*hidden_size, hidden_size) — row-major
+    //   [2] bias_ih:   (4*hidden_size,)
+    //   [3] bias_hh:   (4*hidden_size,)
+    // Gate order: i, f, g, o  (same as PyTorch).
+    // ---- Phase 15.3: LSTM via BNNSDirectApplyLSTMBatchTrainingCaching --------
+    //
+    // Verified against Accelerate headers (macOS 11+):
+    //
+    //   BNNSLayerParametersLSTM fields:
+    //     input_size, hidden_size, batch_size, num_layers, seq_len, dropout,
+    //     lstm_flags, sequence_descriptor,
+    //     input_descriptor  (BNNSLSTMDataDescriptor: data_desc / hidden_desc / cell_state_desc)
+    //     output_descriptor (BNNSLSTMDataDescriptor: data_desc / hidden_desc / cell_state_desc)
+    //     input_gate, forget_gate, candidate_gate, output_gate  (BNNSLSTMGateDescriptor)
+    //     hidden_activation
+    //
+    //   BNNSLSTMGateDescriptor fields:
+    //     iw_desc[2], hw_desc, cw_desc, b_desc, activation
+    //
+    //   BNNSLSTMDataDescriptor fields:
+    //     data_desc, hidden_desc, cell_state_desc
+    //
+    // Weight layout (PyTorch convention, i/f/g/o gate order):
+    //   weights[0]: weight_ih  shape (4H, I)  — row-major: gate rows first
+    //   weights[1]: weight_hh  shape (4H, H)
+    //   weights[2]: bias_ih    shape (4H,)
+    //   weights[3]: bias_hh    shape (4H,)
+    //
+    // BNNS gate order: input(0), forget(1), candidate(2), output(3)
+    std::vector<Storage> lstm_forward(const Storage& input,
+                                      const Storage& h0,
+                                      const Storage& c0,
+                                      const std::vector<Storage>& weights,
+                                      const LstmOpts& opts,
+                                      const Shape& out_shape,
+                                      Dtype dt) override {
+#ifdef __APPLE__
+        if (dt == Dtype::F32 && !opts.bidirectional && opts.num_layers == 1 &&
+            opts.has_bias && weights.size() >= 4) {
+            const int T  = opts.seq_len;
+            const int B  = opts.batch_size;
+            const int I  = opts.input_size;
+            const int H  = opts.hidden_size;
+            const int fH = 4 * H;
+
+            const auto& x_cpu  = std::get<CpuStorage>(input);
+            const auto& h0_cpu = std::get<CpuStorage>(h0);
+            const auto& c0_cpu = std::get<CpuStorage>(c0);
+            const auto& wih    = std::get<CpuStorage>(weights[0]);  // (4H, I)
+            const auto& whh    = std::get<CpuStorage>(weights[1]);  // (4H, H)
+            const auto& bih    = std::get<CpuStorage>(weights[2]);  // (4H,)
+            const auto& bhh    = std::get<CpuStorage>(weights[3]);  // (4H,)
+
+            // Allocate outputs: y(T,B,H), h_n(B,H), c_n(B,H)
+            CpuStorage out_cpu = alloc_cpu(static_cast<std::size_t>(T) * B * H, dt);
+            CpuStorage hn_cpu  = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
+            CpuStorage cn_cpu  = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
+
+            // ── Gate descriptor builder ──────────────────────────────────────
+            // gate_idx: 0=input, 1=forget, 2=candidate, 3=output
+            // wih rows for gate g: [g*H .. (g+1)*H)
+            // whh rows for gate g: [g*H .. (g+1)*H)
+            // bias slice for gate g: [g*H .. (g+1)*H) (fused ih+hh)
+            CpuStorage bias_fused = alloc_cpu(static_cast<std::size_t>(fH), dt);
+            {
+                const float* bp = reinterpret_cast<const float*>(bih.ptr.get());
+                const float* bq = reinterpret_cast<const float*>(bhh.ptr.get());
+                float* dst = reinterpret_cast<float*>(bias_fused.ptr.get());
+                for (int k = 0; k < fH; ++k)
+                    dst[k] = bp[k] + bq[k];
+            }
+
+            float* wih_p  = reinterpret_cast<float*>(wih.ptr.get());
+            float* whh_p  = reinterpret_cast<float*>(whh.ptr.get());
+            float* bias_p = reinterpret_cast<float*>(bias_fused.ptr.get());
+
+            auto make_gate = [&](int g) -> BNNSLSTMGateDescriptor {
+                BNNSLSTMGateDescriptor gd = {};
+
+                // iw_desc[0]: input weights for this gate — shape (H, I) row-major
+                gd.iw_desc[0].layout    = BNNSDataLayoutRowMajorMatrix;
+                gd.iw_desc[0].size[0]   = static_cast<std::size_t>(I);  // inner dim
+                gd.iw_desc[0].size[1]   = static_cast<std::size_t>(H);  // outer dim
+                gd.iw_desc[0].data_type = BNNSDataTypeFloat32;
+                gd.iw_desc[0].data      = wih_p + g * H * I;
+
+                // hw_desc: hidden weights — shape (H, H) row-major
+                gd.hw_desc.layout    = BNNSDataLayoutRowMajorMatrix;
+                gd.hw_desc.size[0]   = static_cast<std::size_t>(H);
+                gd.hw_desc.size[1]   = static_cast<std::size_t>(H);
+                gd.hw_desc.data_type = BNNSDataTypeFloat32;
+                gd.hw_desc.data      = whh_p + g * H * H;
+
+                // b_desc: per-gate bias — shape (H,)
+                gd.b_desc.layout    = BNNSDataLayoutVector;
+                gd.b_desc.size[0]   = static_cast<std::size_t>(H);
+                gd.b_desc.data_type = BNNSDataTypeFloat32;
+                gd.b_desc.data      = bias_p + g * H;
+
+                return gd;
+            };
+
+            // ── Data descriptors ─────────────────────────────────────────────
+            // input_descriptor.data_desc: sequence input (T, B, I) → SNE layout
+            BNNSNDArrayDescriptor seq_in = {};
+            seq_in.layout    = BNNSDataLayoutSNE;
+            seq_in.size[0]   = static_cast<std::size_t>(I);
+            seq_in.size[1]   = static_cast<std::size_t>(B);
+            seq_in.size[2]   = static_cast<std::size_t>(T);
+            seq_in.data_type = BNNSDataTypeFloat32;
+            seq_in.data      = const_cast<float*>(
+                reinterpret_cast<const float*>(x_cpu.ptr.get()));
+
+            // output_descriptor.data_desc: sequence output (T, B, H) → SNE
+            BNNSNDArrayDescriptor seq_out = {};
+            seq_out.layout    = BNNSDataLayoutSNE;
+            seq_out.size[0]   = static_cast<std::size_t>(H);
+            seq_out.size[1]   = static_cast<std::size_t>(B);
+            seq_out.size[2]   = static_cast<std::size_t>(T);
+            seq_out.data_type = BNNSDataTypeFloat32;
+            seq_out.data      = reinterpret_cast<float*>(out_cpu.ptr.get());
+
+            // hidden / cell state: (B, H) stored as 2D (H, B)
+            BNNSNDArrayDescriptor h_desc = {};
+            h_desc.layout    = BNNSDataLayoutRowMajorMatrix;
+            h_desc.size[0]   = static_cast<std::size_t>(H);
+            h_desc.size[1]   = static_cast<std::size_t>(B);
+            h_desc.data_type = BNNSDataTypeFloat32;
+
+            BNNSNDArrayDescriptor h0_desc = h_desc;
+            h0_desc.data = const_cast<float*>(
+                reinterpret_cast<const float*>(h0_cpu.ptr.get()));
+
+            BNNSNDArrayDescriptor c0_desc = h_desc;
+            c0_desc.data = const_cast<float*>(
+                reinterpret_cast<const float*>(c0_cpu.ptr.get()));
+
+            BNNSNDArrayDescriptor hn_desc = h_desc;
+            hn_desc.data = reinterpret_cast<float*>(hn_cpu.ptr.get());
+
+            BNNSNDArrayDescriptor cn_desc = h_desc;
+            cn_desc.data = reinterpret_cast<float*>(cn_cpu.ptr.get());
+
+            // ── Build BNNSLayerParametersLSTM ────────────────────────────────
+            BNNSLayerParametersLSTM lstm_params = {};
+            lstm_params.input_size  = static_cast<std::size_t>(I);
+            lstm_params.hidden_size = static_cast<std::size_t>(H);
+            lstm_params.batch_size  = static_cast<std::size_t>(B);
+            lstm_params.num_layers  = 1;
+            lstm_params.seq_len     = static_cast<std::size_t>(T);
+            lstm_params.dropout     = 0.0f;
+            // BNNSLayerFlagsLSTMDefaultActivations: use default activations
+            // (sigmoid for i/f/o, tanh for g) — ignore gate descriptor activations
+            lstm_params.lstm_flags  = BNNSLayerFlagsLSTMDefaultActivations;
+
+            // input_descriptor  (BNNSLSTMDataDescriptor)
+            lstm_params.input_descriptor.data_desc       = seq_in;
+            lstm_params.input_descriptor.hidden_desc     = h0_desc;
+            lstm_params.input_descriptor.cell_state_desc = c0_desc;
+
+            // output_descriptor (BNNSLSTMDataDescriptor)
+            lstm_params.output_descriptor.data_desc       = seq_out;
+            lstm_params.output_descriptor.hidden_desc     = hn_desc;
+            lstm_params.output_descriptor.cell_state_desc = cn_desc;
+
+            // Gate assignment (PyTorch i/f/g/o → BNNS names)
+            lstm_params.input_gate     = make_gate(0);  // i
+            lstm_params.forget_gate    = make_gate(1);  // f
+            lstm_params.candidate_gate = make_gate(2);  // g
+            lstm_params.output_gate    = make_gate(3);  // o
+
+            // hidden_activation: default tanh (used when flags=DefaultActivations)
+            BNNSActivation hidden_act = {};
+            hidden_act.function = BNNSActivationFunctionTanh;
+            lstm_params.hidden_activation = hidden_act;
+
+            // ── Execute ──────────────────────────────────────────────────────
+            std::size_t cache_cap =
+                BNNSComputeLSTMTrainingCacheCapacity(&lstm_params);
+            std::vector<std::byte> cache_buf(cache_cap ? cache_cap : 1);
+            int ret = BNNSDirectApplyLSTMBatchTrainingCaching(
+                &lstm_params, nullptr,
+                cache_buf.data(), cache_cap);
+            if (ret == 0) {
+                return {Storage{std::move(out_cpu)},
+                        Storage{std::move(hn_cpu)},
+                        Storage{std::move(cn_cpu)}};
+            }
+            // Fall through to base-class NotImplemented on BNNS failure.
+        }
+#endif  // __APPLE__
+        return IBackend::lstm_forward(input, h0, c0, weights, opts, out_shape, dt);
+    }
+
+    // ---- Op Fusion (Phase 19) -----------------------------------------------
+    //
+    // fused_linear_relu_forward: BLAS SGEMM followed by vDSP threshold
+    //   (single pass through output buffer — avoids a second memory read).
+    //
+    // The fused path is used when FusionPass detects a linear→relu chain.
+    //
+    Storage fused_linear_relu_forward(const Storage& x,
+                                      const Storage& w,
+                                      const Storage& b,
+                                      const Shape&   out_shape,
+                                      Dtype          dt) override {
+        // Delegate to the standard linear forward then apply relu in-place.
+        // On Apple Silicon the BLAS SGEMM result stays hot in the L2/L3
+        // cache; the subsequent vDSP_vthres call hits cache instead of DRAM
+        // (saves ~1 memory-bandwidth pass vs separate relu op).
+        if (dt != Dtype::F32)
+            return IBackend::fused_linear_relu_forward(x, w, b, out_shape, dt);
+
+        // Reconstruct x_shape and weight_shape from storage sizes + out_shape.
+        // out_shape: (..., N)  →  M = product of all leading dims, N = last dim.
+        const std::size_t elem = dtype_size(dt);
+        std::size_t M = 1;
+        for (std::size_t i = 0; i + 1 < out_shape.size(); ++i)
+            M *= static_cast<std::size_t>(out_shape[i]);
+        const std::size_t N_out = static_cast<std::size_t>(out_shape.back());
+        const std::size_t K =
+            std::get<CpuStorage>(x).nbytes / (elem * (M > 0 ? M : 1));
+        const Shape x_shape      = {static_cast<std::int64_t>(M),
+                                    static_cast<std::int64_t>(K)};
+        const Shape weight_shape = {static_cast<std::int64_t>(N_out),
+                                    static_cast<std::int64_t>(K)};
+
+        // linear(...) via Dispatcher → get output storage.
+        Storage lin_out = linear(x, w, b, x_shape, weight_shape, out_shape, dt);
+
+        // Apply ReLU in-place: vDSP_vthres(y, 0, y, N) via vrelu_f32.
+#ifdef __APPLE__
+        {
+            auto& cpu = std::get<CpuStorage>(lin_out);
+            const std::size_t n = cpu.nbytes / sizeof(float);
+            float* p = reinterpret_cast<float*>(cpu.ptr.get());
+            cpu::vrelu_f32(p, p, n);
+        }
+#else
+        {
+            auto& cpu = std::get<CpuStorage>(lin_out);
+            const std::size_t n = cpu.nbytes / sizeof(float);
+            float* p = reinterpret_cast<float*>(cpu.ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                if (p[i] < 0.f)
+                    p[i] = 0.f;
+        }
+#endif
+        return lin_out;
+    }
+
+    // fused_linear_gelu_forward: BLAS SGEMM + vForce GELU approximation.
+    // GELU(x) ≈ 0.5 * x * (1 + tanh(sqrt(2/π) * (x + 0.044715*x^3)))
+    // The vForce tanh path is faster than a scalar loop at large N.
+    Storage fused_linear_gelu_forward(const Storage& x,
+                                      const Storage& w,
+                                      const Storage& b,
+                                      const Shape&   out_shape,
+                                      Dtype          dt) override {
+        if (dt != Dtype::F32)
+            return IBackend::fused_linear_gelu_forward(x, w, b, out_shape, dt);
+
+        // Reconstruct x_shape and weight_shape from storage sizes + out_shape.
+        const std::size_t elem_g = dtype_size(dt);
+        std::size_t M_g = 1;
+        for (std::size_t i = 0; i + 1 < out_shape.size(); ++i)
+            M_g *= static_cast<std::size_t>(out_shape[i]);
+        const std::size_t N_g = static_cast<std::size_t>(out_shape.back());
+        const std::size_t K_g =
+            std::get<CpuStorage>(x).nbytes / (elem_g * (M_g > 0 ? M_g : 1));
+        const Shape x_shape_g      = {static_cast<std::int64_t>(M_g),
+                                      static_cast<std::int64_t>(K_g)};
+        const Shape weight_shape_g = {static_cast<std::int64_t>(N_g),
+                                      static_cast<std::int64_t>(K_g)};
+
+        Storage lin_out = linear(x, w, b, x_shape_g, weight_shape_g, out_shape, dt);
+
+        // GELU in-place via vForce vvtanhf on the inner expression.
+#ifdef __APPLE__
+        {
+            auto& cpu = std::get<CpuStorage>(lin_out);
+            const int n = static_cast<int>(cpu.nbytes / sizeof(float));
+            float* p = reinterpret_cast<float*>(cpu.ptr.get());
+            // Scratch buffer for the tanh argument.
+            std::vector<float> scratch(static_cast<std::size_t>(n));
+            constexpr float kSqrt2OverPi = 0.7978845608f;
+            constexpr float kCoeff       = 0.044715f;
+            // scratch[i] = tanh(kSqrt2OverPi * (p[i] + kCoeff * p[i]^3))
+            for (int i = 0; i < n; ++i) {
+                const float xi = p[i];
+                scratch[static_cast<std::size_t>(i)] =
+                    kSqrt2OverPi * (xi + kCoeff * xi * xi * xi);
+            }
+            cpu::vtanh_f32(scratch.data(), scratch.data(), static_cast<std::size_t>(n));
+            for (int i = 0; i < n; ++i)
+                p[i] = 0.5f * p[i] * (1.f + scratch[static_cast<std::size_t>(i)]);
+        }
+#else
+        {
+            auto& cpu = std::get<CpuStorage>(lin_out);
+            const std::size_t n = cpu.nbytes / sizeof(float);
+            float* p = reinterpret_cast<float*>(cpu.ptr.get());
+            constexpr float kSqrt2OverPi = 0.7978845608f;
+            constexpr float kCoeff       = 0.044715f;
+            for (std::size_t i = 0; i < n; ++i) {
+                const float xi = p[i];
+                const float inner = kSqrt2OverPi * (xi + kCoeff * xi * xi * xi);
+                p[i] = 0.5f * xi * (1.f + std::tanh(inner));
+            }
+        }
+#endif
+        return lin_out;
     }
 };
 

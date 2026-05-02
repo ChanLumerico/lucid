@@ -8,7 +8,7 @@ if(NOT CMAKE_OSX_ARCHITECTURES)
     set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "Target Apple Silicon only" FORCE)
 endif()
 
-project(lucid_engine LANGUAGES CXX)
+project(lucid_engine LANGUAGES CXX OBJCXX)
 
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
     message(FATAL_ERROR "Lucid C++ engine supports macOS arm64 Apple Silicon only")
@@ -121,7 +121,16 @@ lucid_object_library(
     backend/cpu/Vforce.cpp)
 target_compile_options(lucid_backend_cpu PRIVATE -Wno-deprecated-declarations)
 
-lucid_object_library(lucid_backend_gpu backend/gpu/MlxBridge.cpp)
+# Phase 9.1 + 18: Objective-C++ files require ARC and the Metal framework.
+lucid_object_library(
+    lucid_backend_gpu
+    backend/gpu/MlxBridge.cpp
+    backend/gpu/MetalAllocator.mm
+    backend/gpu/MetalKernelRunner.mm)
+set_source_files_properties(
+    backend/gpu/MetalAllocator.mm
+    backend/gpu/MetalKernelRunner.mm
+    PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 
 lucid_object_library(lucid_backend_init backend/BackendInit.cpp)
 
@@ -130,7 +139,9 @@ lucid_object_library(
     autograd/Node.cpp
     autograd/Helpers.cpp
     autograd/AccumulateGrad.cpp
-    autograd/Engine.cpp)
+    autograd/Engine.cpp
+    autograd/CustomFunction.cpp    # Phase 12: PythonBackwardNode
+    autograd/FusionPass.cpp)       # Phase 19: Op Fusion pass
 
 lucid_object_library(
     lucid_ops
@@ -257,7 +268,9 @@ target_link_libraries(
     PRIVATE
         lucid_compile_options
         "${LUCID_MLX_LIBRARY}"
-        "-framework Accelerate")
+        "-framework Accelerate"
+        "-framework Metal"       # Phase 9.1: MetalAllocator
+        "-framework Foundation") # required by Metal on macOS
 if(APPLE)
     target_link_options(lucid_engine PRIVATE -undefined dynamic_lookup)
 endif()

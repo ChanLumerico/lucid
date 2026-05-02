@@ -184,6 +184,11 @@ py::object TensorImpl::data_as_python() const {
                               CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
                               return make_numpy_view(cpu, meta_.shape, meta_.stride);
                           },
+                          // Phase 9.2: SharedStorage exposes cpu_ptr as a zero-copy numpy view.
+                          [&](const SharedStorage& sh) -> py::object {
+                              CpuStorage v = sh.cpu_view();
+                              return make_numpy_view(v, meta_.shape, meta_.stride);
+                          },
                       },
                       storage_);
 }
@@ -199,6 +204,11 @@ py::object TensorImpl::grad_as_python() const {
                           [&](const GpuStorage& g) -> py::object {
                               CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
                               return make_numpy_view(cpu, meta_.shape, meta_.stride);
+                          },
+                          // Phase 9.2: grad may also be stored in a SharedStorage buffer.
+                          [&](const SharedStorage& sh) -> py::object {
+                              CpuStorage v = sh.cpu_view();
+                              return make_numpy_view(v, meta_.shape, meta_.stride);
                           },
                       },
                       *autograd_->grad);
@@ -235,6 +245,25 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                        }
                        auto cloned = ::mlx::core::copy(*src.arr);
                        dst.arr = gpu::wrap_mlx_array(std::move(cloned), dst.dtype).arr;
+                   },
+                   // Phase 9.2: SharedStorage copies via cpu_ptr.
+                   [&](SharedStorage& dst, const SharedStorage& src) {
+                       if (dst.nbytes != src.nbytes)
+                           ErrorBuilder("copy_from").fail("nbytes mismatch (SharedStorage)");
+                       if (dst.nbytes > 0)
+                           std::memcpy(dst.cpu_ptr, src.cpu_ptr, dst.nbytes);
+                   },
+                   [&](SharedStorage& dst, const CpuStorage& src) {
+                       if (dst.nbytes != src.nbytes)
+                           ErrorBuilder("copy_from").fail("nbytes mismatch (Shared←CPU)");
+                       if (dst.nbytes > 0)
+                           std::memcpy(dst.cpu_ptr, src.ptr.get(), dst.nbytes);
+                   },
+                   [&](CpuStorage& dst, const SharedStorage& src) {
+                       if (dst.nbytes != src.nbytes)
+                           ErrorBuilder("copy_from").fail("nbytes mismatch (CPU←Shared)");
+                       if (dst.nbytes > 0)
+                           std::memcpy(dst.ptr.get(), src.cpu_ptr, dst.nbytes);
                    },
                    [&](auto&, auto&) {
                        throw DeviceMismatch(std::string(device_name(meta_.device)),

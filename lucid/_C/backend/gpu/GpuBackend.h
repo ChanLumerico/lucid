@@ -24,6 +24,10 @@
 #include "../Dispatcher.h"
 #include "../IBackend.h"
 #include "MlxBridge.h"
+#include "MetalAllocator.h"     // Phase 9.3: unified memory allocation
+#include "MetalKernelRunner.h"  // Phase 18: custom Metal kernel dispatch
+
+#include <mlx/fast.h>           // Phase 19: mlx::core::fast::scaled_dot_product_attention
 
 namespace lucid {
 namespace backend {
@@ -1946,20 +1950,63 @@ public:
                                       double scale,
                                       bool is_causal,
                                       Dtype dt) override {
-        (void)k_shape;
-        (void)v_shape;
         (void)mask_numel;
 
         const auto& gQ = std::get<GpuStorage>(q);
         const auto& gK = std::get<GpuStorage>(k);
         const auto& gV = std::get<GpuStorage>(v);
+
+        // ---------------------------------------------------------------
+        // Phase 19 (SDPA GPU): Use mlx::core::fast::scaled_dot_product_attention
+        // when there is no custom mask (causal and no-mask are both supported).
+        // This path dispatches to a single fused Metal kernel instead of 4
+        // separate MLX ops (matmul + scale + softmax + matmul).
+        //
+        // Fallback to the manual path when a non-boolean custom mask is present
+        // (mlx::core::fast::sdpa only accepts a boolean/float mask via mask_mode,
+        // not an additive bias mask).
+        // ---------------------------------------------------------------
+        const bool has_custom_mask   = (attn_mask != nullptr);
+        const bool custom_mask_is_additive = has_custom_mask && (mask_dtype != Dtype::Bool);
+
+        if (!custom_mask_is_additive) {
+            const float scale_f = static_cast<float>(scale);
+
+            std::string mask_mode;
+            std::optional<::mlx::core::array> mlx_mask;
+            if (is_causal) {
+                mask_mode = "causal";
+            } else if (has_custom_mask) {
+                // Boolean mask: masked positions are True → treat as "ignore".
+                mask_mode = "";
+                const auto& gM = std::get<GpuStorage>(*attn_mask);
+                mlx_mask = *gM.arr;
+            }
+
+            ::mlx::core::array out = ::mlx::core::fast::scaled_dot_product_attention(
+                *gQ.arr, *gK.arr, *gV.arr,
+                scale_f,
+                mask_mode,
+                mlx_mask);
+
+            // fast::sdpa does not return attention weights; fabricate a dummy
+            // weights storage (1-element zeros) so the return shape matches the
+            // manual path (which returns {weights, output}).  Backward ignores
+            // the dummy weights and recomputes them.
+            auto dummy_w = ::mlx::core::zeros({1}, gpu::to_mlx_dtype(dt));
+            return {Storage{gpu::wrap_mlx_array(std::move(dummy_w),    dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(out),         dt)}};
+        }
+
+        // ---------------------------------------------------------------
+        // Fallback: manual 4-op path for additive bias masks.
+        // ---------------------------------------------------------------
         const auto mlx_dt = gpu::to_mlx_dtype(dt);
 
         // Flatten leading dims to get Lq, Lk from shape args.
         const std::size_t Lq = static_cast<std::size_t>(q_shape[q_shape.size() - 2]);
         const std::size_t Lk = static_cast<std::size_t>(k_shape[k_shape.size() - 2]);
-        (void)Lq;
-        (void)Lk;
+        (void)k_shape; (void)v_shape; (void)Lq; (void)Lk;
 
         auto k_t = ::mlx::core::swapaxes(*gK.arr, -2, -1);
         auto scores = ::mlx::core::matmul(*gQ.arr, k_t);
@@ -1970,23 +2017,14 @@ public:
             ::mlx::core::array(-std::numeric_limits<float>::infinity()), mlx_dt);
         if (attn_mask) {
             const auto& gM = std::get<GpuStorage>(*attn_mask);
-            if (mask_dtype == Dtype::Bool) {
-                scores = ::mlx::core::where(*gM.arr, neg_inf, scores);
-            } else {
-                scores = ::mlx::core::add(scores, *gM.arr);
-            }
-        }
-        if (is_causal) {
-            const int lq = static_cast<int>(q_shape[q_shape.size() - 2]);
-            const int lk = static_cast<int>(k_shape[k_shape.size() - 2]);
-            auto mask = ::mlx::core::triu(::mlx::core::ones({lq, lk}, ::mlx::core::bool_), /*k=*/1);
-            scores = ::mlx::core::where(mask, neg_inf, scores);
+            // Additive bias mask (non-boolean).
+            scores = ::mlx::core::add(scores, *gM.arr);
         }
         auto weights = ::mlx::core::softmax(scores, std::vector<int>{-1}, /*precise=*/true);
-        auto output = ::mlx::core::matmul(weights, *gV.arr);
+        auto output  = ::mlx::core::matmul(weights, *gV.arr);
 
         return {Storage{gpu::wrap_mlx_array(std::move(weights), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(output), dt)}};
+                Storage{gpu::wrap_mlx_array(std::move(output),  dt)}};
     }
 
     std::vector<Storage> sdpa_backward(const Storage& grad_out,
@@ -4961,6 +4999,76 @@ private:
         ErrorBuilder("gpu::nonzero_forward").not_implemented("call to_cpu() first");
         numel_out = 0;
         return CpuStorage{};
+    }
+
+    // ---- Phase 9.3: Unified Memory ----------------------------------------
+
+    /// Promote a CPU or GPU Storage to a Metal shared-memory SharedStorage.
+    ///
+    /// CPU path: allocate a Metal shared buffer, copy data, return SharedStorage.
+    /// GPU path: eval the MLX array, allocate shared buffer, copy.
+    /// SharedStorage input: returned unchanged (already shared).
+    ///
+    /// After this call the caller can pass the result to shared_storage_to_gpu()
+    /// for zero-copy GPU ops, or read it from the CPU via SharedStorage::cpu_view().
+    Storage to_shared_storage(const Storage& src, const Shape& shape) override {
+        if (storage_is_metal_shared(src))
+            return src;  // already shared — no-op
+
+        // Determine source byte pointer and size.
+        const std::byte* src_ptr = nullptr;
+        std::size_t      src_bytes = 0;
+        Dtype            src_dtype = Dtype::F32;
+
+        if (storage_is_cpu(src)) {
+            const auto& cs = storage_cpu(src);
+            src_ptr   = cs.ptr.get();
+            src_bytes = cs.nbytes;
+            src_dtype = cs.dtype;
+        } else {
+            // GPU: eval to get CPU-accessible data.
+            const auto& gs = storage_gpu(src);
+            if (!gs.arr) return src;
+            gs.arr->eval();
+            src_ptr   = reinterpret_cast<const std::byte*>(gs.arr->data<std::uint8_t>());
+            src_bytes = gs.nbytes;
+            src_dtype = gs.dtype;
+        }
+
+        if (!src_ptr || src_bytes == 0) return src;
+
+        // Allocate Metal shared buffer and copy data.
+        auto owned = gpu::make_metal_shared(src_bytes);
+        if (!owned.buf.cpu_ptr) return src;  // allocation failed — fall back
+
+        std::memcpy(owned.buf.cpu_ptr, src_ptr, src_bytes);
+
+        SharedStorage ss;
+        ss.cpu_ptr    = owned.buf.cpu_ptr;
+        ss.mtl_handle = owned.buf.mtl_handle;
+        ss.nbytes     = src_bytes;
+        ss.dtype      = src_dtype;
+        ss.owner      = std::move(owned.owner);
+        return Storage{std::move(ss)};
+    }
+
+    // ---- Phase 18: Metal Shader Escape Hatch --------------------------------
+
+    Storage run_custom_metal_kernel(
+        const std::string&                kernel_source,
+        const std::string&                function_name,
+        const std::vector<Storage>&       inputs,
+        const Shape&                      output_shape,
+        Dtype                             output_dtype,
+        const std::array<std::size_t, 3>& grid,
+        const std::array<std::size_t, 3>& threads) override {
+        auto k = gpu::compile_metal_kernel(kernel_source, function_name);
+        if (!k.is_valid()) {
+            ErrorBuilder("GpuBackend::run_custom_metal_kernel")
+                .fail("kernel compilation failed for function '" + function_name + "'");
+        }
+        gpu::KernelLaunchConfig cfg{grid, threads};
+        return gpu::run_metal_kernel(k, inputs, output_shape, output_dtype, cfg);
     }
 };
 

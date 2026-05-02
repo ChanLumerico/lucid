@@ -97,6 +97,20 @@ void accumulate_into(Storage& dst, const Storage& src) {
                        auto next = ::mlx::core::add(*d.arr, *s.arr);
                        d.arr = gpu::wrap_mlx_array(std::move(next), d.dtype).arr;
                    },
+                   // Phase 9.2: SharedStorage is CPU-accessible via cpu_view().
+                   [&](SharedStorage& d, const SharedStorage& s) {
+                       auto dv = d.cpu_view();
+                       auto sv = s.cpu_view();
+                       cpu_add_inplace(dv, sv);
+                   },
+                   [&](SharedStorage& d, const CpuStorage& s) {
+                       auto dv = d.cpu_view();
+                       cpu_add_inplace(dv, s);
+                   },
+                   [&](CpuStorage& d, const SharedStorage& s) {
+                       auto sv = s.cpu_view();
+                       cpu_add_inplace(d, sv);
+                   },
                    [&](auto&, auto&) {
                        throw DeviceMismatch("matching device", "mixed CPU/GPU", "accumulate_into");
                    },
