@@ -1,13 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — TensorImpl autograd metadata.
-// =====================================================================
-//
-// Kept separate from TensorMeta so Phase 2 can make non-grad tensors cheap and
-// Phase 2.5 can move versioning onto shared storage without changing the
-// public TensorImpl accessors again.
-
 #include <cstdint>
 #include <optional>
 

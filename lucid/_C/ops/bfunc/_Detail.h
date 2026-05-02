@@ -1,11 +1,5 @@
 #pragma once
 
-// =====================================================================
-// bfunc internal helpers — shared by Compare/Bitwise/Dot/Inner/Outer/Tensordot.
-// Not included by user code. Header-only inline functions to avoid linker
-// duplicates.
-// =====================================================================
-
 #include <cstring>
 #include <stdexcept>
 #include <variant>
@@ -22,9 +16,6 @@
 
 namespace lucid::bfunc_detail {
 
-// Re-exports of the canonical helpers in `core/Helpers.h`. The aliases
-// keep existing call sites (`bfunc_detail::allocate_cpu(...)`) working
-// while migration to the unqualified `lucid::helpers::` form proceeds.
 using ::lucid::helpers::allocate_cpu;
 using ::lucid::helpers::fresh;
 

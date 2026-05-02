@@ -1,21 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — VariadicKernel<Derived>: variable-input op base.
-// =====================================================================
-//
-// For ops whose input count is not known at compile time: concat, stack,
-// einsum, scatter, etc.
-//
-// Phase 3.4: adds `wire_autograd()` static helper so Derived::forward()
-// only needs to write validation + compute. The autograd wiring block
-// collapses to one call:
-//
-//   VariadicKernel<Derived>::wire_autograd(inputs, out);
-//   return out;
-//
-// Layer: kernel/. Depends on autograd/, core/.
-
 #include <cstddef>
 #include <memory>
 #include <string_view>
@@ -30,7 +14,7 @@
 #include "../core/Shape.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
-#include "BinaryKernel.h"  // detail::ensure_grad_fn
+#include "BinaryKernel.h"
 #include "IKernel.h"
 
 namespace lucid {
@@ -42,14 +26,8 @@ namespace kernel {
 template <class Derived>
 class VariadicKernel : public Node, public IKernel {
 public:
-    // ----------------------------------------------------------------
-    // Name
-    // ----------------------------------------------------------------
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
-    // ----------------------------------------------------------------
-    // Version checking — Engine calls this before apply().
-    // ----------------------------------------------------------------
     void validate_versions() override {
         for (std::size_t i = 0; i < input_tensors_v_.size(); ++i) {
             ::lucid::check_version_match(input_tensors_v_[i],
@@ -58,9 +36,6 @@ public:
         }
     }
 
-    // ----------------------------------------------------------------
-    // Saved state — populated by forward(), consumed by apply().
-    // ----------------------------------------------------------------
     std::vector<std::weak_ptr<TensorImpl>> input_tensors_v_;
     std::vector<Shape> input_shapes_v_;
     Shape out_shape_;
@@ -69,11 +44,6 @@ public:
     std::vector<Storage> saved_inputs_v_;
     Storage saved_output_;
 
-    // ----------------------------------------------------------------
-    // Phase 3.4: autograd wiring helper
-    // ----------------------------------------------------------------
-
-    /// Primary overload: wire using a pre-created (pre-populated) bwd node.
     static bool wire_autograd(std::shared_ptr<Derived> bwd,
                               const std::vector<TensorImplPtr>& inputs,
                               const TensorImplPtr& out,
@@ -112,7 +82,7 @@ public:
             bwd->input_tensors_v_.push_back(inp);
             if (save_ins && inp)
                 bwd->saved_inputs_v_.push_back(inp->storage());
-            edges.emplace_back(detail::ensure_grad_fn(inp), /*input_nr=*/0);
+            edges.emplace_back(detail::ensure_grad_fn(inp), 0);
             versions.push_back(inp ? inp->version() : 0);
         }
 
@@ -125,7 +95,6 @@ public:
         return true;
     }
 
-    /// Convenience overload: creates bwd internally (no extra fields).
     static bool wire_autograd(const std::vector<TensorImplPtr>& inputs,
                               const TensorImplPtr& out,
                               bool save_ins = true) {

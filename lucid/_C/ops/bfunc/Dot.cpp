@@ -15,7 +15,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../kernel/NaryKernel.h"
-#include "_BinaryOp.h"  // detail::ensure_grad_fn
+#include "_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -25,7 +25,6 @@ namespace {
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
-// Backward for 1-D × 1-D dot: da = b * grad, db = a * grad (grad is scalar).
 class Dot1DBackward : public AutogradNode<Dot1DBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -43,7 +42,6 @@ public:
     }
 };
 
-// Backward for 2-D × 2-D dot: da = grad @ b.T, db = a.T @ grad.
 class Dot2DBackward : public AutogradNode<Dot2DBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -87,16 +85,14 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
             n->saved_a_ = a->storage();
             n->saved_b_ = b->storage();
             n->numel_ = static_cast<std::size_t>(a->shape()[0]);
-            kernel::NaryKernel<Dot1DBackward, 2>::wire_autograd(std::move(n), {a, b}, out,
-                                                                /*save_ins=*/false);
+            kernel::NaryKernel<Dot1DBackward, 2>::wire_autograd(std::move(n), {a, b}, out, false);
         } else if (a->shape().size() == 2 && b->shape().size() == 2) {
             auto n = std::make_shared<Dot2DBackward>();
             n->saved_a_ = a->storage();
             n->saved_b_ = b->storage();
             n->a_shape_ = a->shape();
             n->b_shape_ = b->shape();
-            kernel::NaryKernel<Dot2DBackward, 2>::wire_autograd(std::move(n), {a, b}, out,
-                                                                /*save_ins=*/false);
+            kernel::NaryKernel<Dot2DBackward, 2>::wire_autograd(std::move(n), {a, b}, out, false);
         }
     };
 

@@ -23,13 +23,11 @@ using einops_detail::Token;
 
 namespace {
 
-// Resolve every axis name on the LHS into its concrete size, using
-// (a) the input shape, (b) supplied kwargs.
-std::map<std::string, std::int64_t> resolve_lhs_sizes(
-    const std::vector<Token>& lhs,
-    const Shape& in_shape,
-    const std::map<std::string, std::int64_t>& kwargs,
-    const char* op_name) {
+std::map<std::string, std::int64_t>
+resolve_lhs_sizes(const std::vector<Token>& lhs,
+                  const Shape& in_shape,
+                  const std::map<std::string, std::int64_t>& kwargs,
+                  const char* op_name) {
     if (lhs.size() != in_shape.size())
         ErrorBuilder(op_name).fail("lhs token count != input ndim");
     std::map<std::string, std::int64_t> sz;
@@ -67,7 +65,6 @@ std::map<std::string, std::int64_t> resolve_lhs_sizes(
                 ErrorBuilder(op_name).fail("group product mismatches input dim");
             }
         } else {
-            // literal
             if (tk.literal() != dim)
                 ErrorBuilder(op_name).fail("literal mismatches input dim");
         }
@@ -75,7 +72,6 @@ std::map<std::string, std::int64_t> resolve_lhs_sizes(
     return sz;
 }
 
-// Compute the merged group-shape that the rhs token tree describes.
 std::vector<std::int64_t> group_shape_merged(const std::vector<Token>& tokens,
                                              const std::map<std::string, std::int64_t>& sz) {
     std::vector<std::int64_t> out;
@@ -107,7 +103,7 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
     auto rhs = parse_side(rhs_str);
 
     auto sz = resolve_lhs_sizes(lhs, a->shape(), axes_lengths, "rearrange");
-    // Every name on rhs must resolve.
+
     for (const auto& n : flat_axes(rhs)) {
         if (sz.find(n) == sz.end()) {
             auto it = axes_lengths.find(n);
@@ -118,7 +114,6 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
         }
     }
 
-    // 1. reshape input → flat-lhs.
     auto flat_lhs = flat_axes(lhs);
     std::vector<std::int64_t> flat_lhs_shape(flat_lhs.size());
     for (std::size_t i = 0; i < flat_lhs.size(); ++i)
@@ -128,7 +123,6 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
     if (Shape(flat_lhs_shape.begin(), flat_lhs_shape.end()) != a->shape())
         cur = reshape_op(cur, flat_lhs_shape);
 
-    // 2. permute to flat-rhs order.
     auto flat_rhs = flat_axes(rhs);
     if (flat_lhs != flat_rhs) {
         std::vector<int> perm(flat_rhs.size());
@@ -148,7 +142,6 @@ TensorImplPtr einops_rearrange_op(const TensorImplPtr& a,
             cur = permute_op(cur, perm);
     }
 
-    // 3. reshape into rhs grouped/literal shape.
     auto rhs_shape = group_shape_merged(rhs, sz);
     if (Shape(rhs_shape.begin(), rhs_shape.end()) != cur->shape())
         cur = reshape_op(cur, rhs_shape);

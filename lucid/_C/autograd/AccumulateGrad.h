@@ -7,9 +7,6 @@
 
 namespace lucid {
 
-// Sentinel Node for leaf tensors. Never has next_edges. Its `apply()` writes
-// the incoming gradient into the leaf's `grad_storage_`, accumulating with any
-// existing gradient.
 class AccumulateGrad : public Node {
 public:
     explicit AccumulateGrad(std::weak_ptr<TensorImpl> leaf);

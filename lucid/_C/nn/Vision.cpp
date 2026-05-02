@@ -22,10 +22,6 @@
 
 namespace lucid {
 
-// =====================================================================
-// one_hot — no autograd; integer-indexed scatter.
-// =====================================================================
-
 TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_dtype) {
     Validator::input(input, "one_hot.input").non_null();
     if (num_classes <= 0)
@@ -41,10 +37,6 @@ TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_
                                         input->device(), false);
 }
 
-// =====================================================================
-// rotate — no autograd; nearest-neighbor sample with affine matrix.
-// =====================================================================
-
 TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy, double cx) {
     Validator::input(input, "rotate.input").non_null();
     if (input->shape().size() != 4)
@@ -58,20 +50,6 @@ TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy,
     return std::make_shared<TensorImpl>(std::move(out_storage), input->shape(), input->dtype(),
                                         input->device(), false);
 }
-
-// =====================================================================
-// bilinear (learned bilinear layer): y[..., k] = x1 W_k x2 + b_k
-// =====================================================================
-//
-// x1: [..., D1]   x2: [..., D2]   weight: [Dout, D1, D2]   bias: [Dout]
-// Forward:
-//   tmp = einsum("...i, k i j -> ...k j", x1, W)            # [..., Dout, D2]
-//   y   = einsum("...k j, ...j -> ...k", tmp, x2) + bias    # [..., Dout]
-// Backward (broadcast over batch dims; we collapse leading dims to a single B):
-//   dx1[k]  = sum_k dY[..., k] · W[k, :, :] · x2
-//   dx2[j]  = sum_k dY[..., k] · W[k, i, :]^T · x1[i] (per-element); explicit form below.
-//   dW[k,i,j] = sum_batch dY[..., k] · x1[i] · x2[j]
-//   db[k]   = sum_batch dY[..., k]
 
 const OpSchema BilinearLayerBackward::schema_v1{"bilinear_layer", 1, AmpPolicy::Promote, true};
 

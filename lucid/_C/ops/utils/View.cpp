@@ -16,16 +16,14 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 
 namespace lucid {
 
-const OpSchema ViewBackward::schema_v1{"view", 1,  AmpPolicy::KeepInput, true, "", -1,
-                                       1,      {}, /*internal=*/true};
+const OpSchema ViewBackward::schema_v1{"view", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, true};
 
 namespace {
 
-// Handle a `reshape` shape with one optional `-1` placeholder.
 Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_t>& new_shape) {
     const std::size_t in_numel = shape_numel(in_shape);
     Shape resolved;
@@ -38,7 +36,7 @@ Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_
                 ErrorBuilder("reshape").fail("only one -1 is allowed");
             }
             wildcard_pos = static_cast<int>(i);
-            resolved.push_back(0);  // placeholder
+            resolved.push_back(0);
         } else if (new_shape[i] < 0) {
             ErrorBuilder("reshape").fail("negative dim other than -1 is invalid");
         } else {
@@ -69,35 +67,30 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .reshape(a->storage(), a->shape(), out_shape, a->dtype());
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
-                                            a->device(), /*requires_grad=*/false);
+                                            a->device(), false);
 
-    kernel::NaryKernel<ViewBackward, 1>::wire_autograd({a}, out, /*save_ins=*/false);
+    kernel::NaryKernel<ViewBackward, 1>::wire_autograd({a}, out, false);
     return out;
 }
 
 }  // namespace
 
 std::vector<Storage> ViewBackward::apply(Storage grad_out) {
-    // dx layout = input_shape (contiguous). For both CPU and GPU, the inverse
-    // is just a reshape back to the original shape.
     auto out = backend::Dispatcher::for_device(device_).reshape(grad_out, out_shape_,
                                                                 input_shapes_[0], dtype_);
     return {std::move(out)};
 }
 
-// ---------------- reshape ----------------
 TensorImplPtr reshape_op(const TensorImplPtr& a, const std::vector<std::int64_t>& new_shape) {
     Validator::input(a, "reshape.a").non_null();
     Shape resolved = resolve_reshape_shape(a->shape(), new_shape);
     return build_view_output(a, std::move(resolved), "reshape");
 }
 
-// ---------------- squeeze ----------------
 TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
     Validator::input(a, "squeeze.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
     if (ndim == 0) {
-        // Squeezing a 0-d tensor on an axis — error per PyTorch semantics.
         ErrorBuilder("squeeze").index_error("axis out of range for 0-d tensor");
     }
     const int wrapped = dim < 0 ? dim + ndim : dim;
@@ -116,7 +109,6 @@ TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
     return build_view_output(a, std::move(new_shape), "squeeze");
 }
 
-// ---------------- squeeze_all ----------------
 TensorImplPtr squeeze_all_op(const TensorImplPtr& a) {
     Validator::input(a, "squeeze.a").non_null();
     Shape new_shape;
@@ -127,11 +119,10 @@ TensorImplPtr squeeze_all_op(const TensorImplPtr& a) {
     return build_view_output(a, std::move(new_shape), "squeeze");
 }
 
-// ---------------- unsqueeze ----------------
 TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim) {
     Validator::input(a, "unsqueeze.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
-    // unsqueeze allows dim in [-(ndim+1), ndim] — one beyond the end.
+
     const int wrapped = dim < 0 ? dim + ndim + 1 : dim;
     if (wrapped < 0 || wrapped > ndim) {
         ErrorBuilder("unsqueeze").index_error("axis out of range");

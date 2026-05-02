@@ -49,10 +49,6 @@ void validate_input(const TensorImplPtr& x, std::string_view op_name) {
 
 }  // namespace
 
-// =====================================================================
-// MaxPoolNd
-// =====================================================================
-
 template <int N>
 TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
                                             const int (&K)[N],
@@ -112,8 +108,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
     }
-    kernel::NaryKernel<MaxPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x}, out,
-                                                               /*save_ins=*/false);
+    kernel::NaryKernel<MaxPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x}, out, false);
     return out;
 }
 
@@ -130,10 +125,6 @@ std::vector<Storage> MaxPoolNdBackward<N>::apply(Storage grad_out) {
     return {be.max_pool_nd_backward(grad_out, this->saved_argmax_, this->input_shapes_[0],
                                     this->out_shape_, opts, this->dtype_)};
 }
-
-// =====================================================================
-// AvgPoolNd
-// =====================================================================
 
 template <int N>
 TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
@@ -189,8 +180,7 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
     }
-    kernel::NaryKernel<AvgPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x}, out,
-                                                               /*save_ins=*/false);
+    kernel::NaryKernel<AvgPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x}, out, false);
     return out;
 }
 
@@ -208,7 +198,6 @@ std::vector<Storage> AvgPoolNdBackward<N>::apply(Storage grad_out) {
                                     this->dtype_)};
 }
 
-// Explicit instantiations
 template class MaxPoolNdBackward<1>;
 template class MaxPoolNdBackward<2>;
 template class MaxPoolNdBackward<3>;
@@ -216,15 +205,14 @@ template class AvgPoolNdBackward<1>;
 template class AvgPoolNdBackward<2>;
 template class AvgPoolNdBackward<3>;
 
-// Factories
 TensorImplPtr max_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl) {
     int K[1]{KL};
     int s[1]{sl};
     int p[1]{pl};
     return MaxPool1dBackward::forward(x, K, s, p);
 }
-TensorImplPtr max_pool2d_op(
-    const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw) {
+TensorImplPtr
+max_pool2d_op(const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw) {
     int K[2]{KH, KW};
     int s[2]{sh, sw};
     int p[2]{ph, pw};
@@ -251,8 +239,8 @@ TensorImplPtr avg_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl) {
     int p[1]{pl};
     return AvgPool1dBackward::forward(x, K, s, p);
 }
-TensorImplPtr avg_pool2d_op(
-    const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw) {
+TensorImplPtr
+avg_pool2d_op(const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw) {
     int K[2]{KH, KW};
     int s[2]{sh, sw};
     int p[2]{ph, pw};

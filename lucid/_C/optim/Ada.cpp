@@ -16,10 +16,6 @@ namespace lucid {
 
 using namespace lucid::optim_detail;
 
-// =====================================================================
-// Adamax
-// =====================================================================
-
 Adamax::Adamax(std::vector<std::shared_ptr<TensorImpl>> p,
                double lr,
                double b1,
@@ -103,10 +99,6 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
     p_cpu.bump_version();
 }
 
-// =====================================================================
-// Adagrad
-// =====================================================================
-
 Adagrad::Adagrad(
     std::vector<std::shared_ptr<TensorImpl>> p, double lr, double eps, double wd, double init_acc)
     : Optimizer(std::move(p)),
@@ -184,10 +176,6 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         ErrorBuilder("Adagrad").not_implemented("dtype not supported");
     p_cpu.bump_version();
 }
-
-// =====================================================================
-// Adadelta
-// =====================================================================
 
 Adadelta::Adadelta(
     std::vector<std::shared_ptr<TensorImpl>> p, double lr, double rho, double eps, double wd)

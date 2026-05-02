@@ -1,29 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — Adam-family optimizers (mirrors lucid/optim/adam.py).
-// =====================================================================
-//
-// Contains:
-//   - Adam   (Kingma & Ba, 2014; with optional L2 weight decay)
-//   - AdamW  (decoupled weight decay; Loshchilov & Hutter 2017)
-//   - NAdam  (Nesterov-accelerated Adam, with momentum_decay schedule)
-//   - RAdam  (Rectified Adam; Liu et al. 2020)
-//
-// Adam formula:
-//     m ← β1·m + (1 − β1)·g           (first moment)
-//     v ← β2·v + (1 − β2)·g²          (second moment)
-//     m̂ ← m / (1 − β1^t)              (bias correction)
-//     v̂ ← v / (1 − β2^t)
-//     param ← param − lr · m̂ / (√v̂ + ε)
-//
-// AdamW: wd is applied directly to the parameter (not folded into g):
-//     param ← param · (1 − lr·wd) − lr · m̂ / (√v̂ + ε)
-//
-// State per parameter: two buffers (m, v) of the same shape as the
-// parameter, allocated lazily on first step. `step_count` is global per
-// optimizer (matches PyTorch behavior).
-
 #include <memory>
 #include <vector>
 
@@ -35,7 +11,6 @@ namespace lucid {
 
 class TensorImpl;
 
-/// Adam.
 class LUCID_API Adam : public Optimizer {
 public:
     Adam(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -44,8 +19,7 @@ public:
          double beta2 = 0.999,
          double eps = 1e-8,
          double weight_decay = 0.0,
-         /*decoupled wd =*/bool amsgrad = false);
-    // amsgrad is reserved for future support; Phase 4 does not use it.
+         bool amsgrad = false);
 
     void set_lr(double lr) override { lr_ = lr; }
     double lr() const override { return lr_; }
@@ -72,7 +46,6 @@ private:
     std::vector<Storage> v_;
 };
 
-/// AdamW.
 class LUCID_API AdamW : public Optimizer {
 public:
     AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -103,10 +76,6 @@ private:
     std::vector<Storage> v_;
 };
 
-// =====================================================================
-// NAdam — Nesterov-accelerated Adam (PyTorch parameterization)
-// =====================================================================
-/// NAdam.
 class LUCID_API NAdam : public Optimizer {
 public:
     NAdam(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -132,11 +101,6 @@ private:
     std::int64_t step_count_;
 };
 
-// =====================================================================
-// RAdam — Rectified Adam (Liu et al. 2020). Falls back to plain SGD-with-
-// momentum when the variance estimator is unstable (rho_t ≤ 5).
-// =====================================================================
-/// RAdam.
 class LUCID_API RAdam : public Optimizer {
 public:
     RAdam(std::vector<std::shared_ptr<TensorImpl>> params,

@@ -31,10 +31,6 @@ void axis_reduce(const T* in,
 
 }  // namespace
 
-// ---------- sum ----------
-// vDSP_sve handles inner=1 path optimally (sum-of-vector). When inner>1 we
-// fall back to the templated loop — still tight, no SIMD lost since vDSP
-// strided sve isn't materially faster.
 void sum_axis_f32(
     const float* in, float* out, std::size_t outer, std::size_t reduce_dim, std::size_t inner) {
     if (inner == 1) {
@@ -63,7 +59,6 @@ void sum_axis_f64(
                         [](double a, double b) { return a + b; });
 }
 
-// ---------- max / min ----------
 void max_axis_f32(
     const float* in, float* out, std::size_t outer, std::size_t reduce_dim, std::size_t inner) {
     constexpr float NEG_INF = -std::numeric_limits<float>::infinity();
@@ -92,7 +87,6 @@ void min_axis_f64(
                         [](double a, double b) { return a < b ? a : b; });
 }
 
-// ---------- prod ----------
 void prod_axis_f32(
     const float* in, float* out, std::size_t outer, std::size_t reduce_dim, std::size_t inner) {
     axis_reduce<float>(in, out, outer, reduce_dim, inner, 1.f,

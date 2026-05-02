@@ -17,7 +17,6 @@ namespace lucid {
 
 namespace {
 
-// Compute (outer, reduce_dim, inner) for reducing `axis` of `shape`.
 struct OIR {
     std::size_t outer;
     std::size_t reduce_dim;
@@ -33,8 +32,6 @@ OIR oir_for_axis(const Shape& shape, int axis) {
     return r;
 }
 
-// Apply a 1-axis reduce kernel to (in, in_shape) at `axis`, producing a
-// keepdims=False output. Returns the new buffer and the new shape.
 struct AxisResult {
     CpuStorage data;
     Shape shape;
@@ -60,22 +57,20 @@ AxisResult reduce_one_axis(const CpuStorage& in,
     r.data.ptr = allocate_aligned_bytes(r.data.nbytes);
 
     switch (dt) {
-        case Dtype::F32:
-            k32(reinterpret_cast<const float*>(in.ptr.get()),
-                reinterpret_cast<float*>(r.data.ptr.get()), oir.outer, oir.reduce_dim, oir.inner);
-            break;
-        case Dtype::F64:
-            k64(reinterpret_cast<const double*>(in.ptr.get()),
-                reinterpret_cast<double*>(r.data.ptr.get()), oir.outer, oir.reduce_dim, oir.inner);
-            break;
-        default:
-            ErrorBuilder(op_name).not_implemented("dtype not supported (F32/F64 only)");
+    case Dtype::F32:
+        k32(reinterpret_cast<const float*>(in.ptr.get()),
+            reinterpret_cast<float*>(r.data.ptr.get()), oir.outer, oir.reduce_dim, oir.inner);
+        break;
+    case Dtype::F64:
+        k64(reinterpret_cast<const double*>(in.ptr.get()),
+            reinterpret_cast<double*>(r.data.ptr.get()), oir.outer, oir.reduce_dim, oir.inner);
+        break;
+    default:
+        ErrorBuilder(op_name).not_implemented("dtype not supported (F32/F64 only)");
     }
     return r;
 }
 
-// Multi-axis reduction by sequential single-axis reduces in descending order.
-// Then inserts size-1 dims if `keepdims=true`.
 template <class Kernel32, class Kernel64>
 CpuStorage multi_axis_reduce(const CpuStorage& a,
                              const Shape& in_shape,
@@ -85,11 +80,9 @@ CpuStorage multi_axis_reduce(const CpuStorage& a,
                              Kernel32 k32,
                              Kernel64 k64,
                              const char* op_name) {
-    // axes already sorted ascending. Process descending so earlier axis
-    // indices stay valid as we shrink the shape.
     std::vector<int> ax_desc(axes.rbegin(), axes.rend());
 
-    CpuStorage current = a;  // shallow clone (shared_ptr)
+    CpuStorage current = a;
     Shape current_shape = in_shape;
     for (int ax : ax_desc) {
         auto r = reduce_one_axis(current, current_shape, ax, dt, k32, k64, op_name);
@@ -101,9 +94,7 @@ CpuStorage multi_axis_reduce(const CpuStorage& a,
         Shape kept = in_shape;
         for (int ax : axes)
             kept[ax] = 1;
-        // Data layout is identical to `current`; just swap the shape.
-        // (Caller stamps it on the result TensorImpl from out_shape derived
-        // from reduce_output_shape, so no further reshape needed here.)
+
         (void)kept;
     }
     return current;
@@ -111,7 +102,6 @@ CpuStorage multi_axis_reduce(const CpuStorage& a,
 
 }  // namespace
 
-// =================== Sum ===================
 const OpSchema SumBackward::schema_v1{"sum", 1, AmpPolicy::Promote, true};
 
 Storage SumBackward::grad_formula(const Storage& grad_out) {
@@ -125,7 +115,6 @@ TensorImplPtr sum_op(const TensorImplPtr& a, const std::vector<int>& axes, bool 
 }
 LUCID_REGISTER_OP(SumBackward)
 
-// =================== Mean ===================
 const OpSchema MeanBackward::schema_v1{"mean", 1, AmpPolicy::Promote, true};
 
 namespace {
@@ -151,7 +140,6 @@ TensorImplPtr mean_op(const TensorImplPtr& a, const std::vector<int>& axes, bool
 }
 LUCID_REGISTER_OP(MeanBackward)
 
-// =================== Prod ===================
 const OpSchema ProdBackward::schema_v1{"prod", 1, AmpPolicy::Promote, true};
 
 CpuStorage ProdBackward::cpu_kernel(const CpuStorage& a,
@@ -164,8 +152,6 @@ CpuStorage ProdBackward::cpu_kernel(const CpuStorage& a,
 }
 
 Storage ProdBackward::grad_formula(const Storage& grad_out) {
-    // dx = grad_out * (output / input) — broadcast first, then multiply.
-    // Note: undefined where input has zeros; matches PyTorch's basic prod.
     const std::size_t in_numel = shape_numel(this->full_input_shape_);
     Storage g_bcast =
         broadcast_back_for_reduce(grad_out, this->out_shape_, this->full_input_shape_,
@@ -183,25 +169,16 @@ TensorImplPtr prod_op(const TensorImplPtr& a, const std::vector<int>& axes, bool
 }
 LUCID_REGISTER_OP(ProdBackward)
 
-// =================== Max ===================
 const OpSchema MaxBackward::schema_v1{"max", 1, AmpPolicy::KeepInput, true};
 
 Storage MaxBackward::grad_formula(const Storage& grad_out) {
-    // 1. Broadcast saved output back to input shape (so each input position
-    //    sees the max value of its reduce-block).
     const std::size_t in_numel = shape_numel(this->full_input_shape_);
     Storage out_bcast =
         broadcast_back_for_reduce(this->saved_output_, this->out_shape_, this->full_input_shape_,
                                   this->reduce_axes_, this->keepdims_, this->dtype_, this->device_);
 
-    // 2. Mask = (input == out_bcast). Ties: every tied element receives g
-    //    (matches np.maximum.gradient distributing equally across ties; can
-    //    over-count gradient when ties exist — same trade-off as PyTorch's
-    //    autograd reduce_max gradient at ties).
     Storage mask_eq;
     {
-        // Use ge & le → both true → equal. Fast path: equal mask via two
-        // comparisons. We don't have eq_mask helper; emulate with ge && ge_swap.
         Storage ge_a = ge_mask_storage(this->saved_inputs_[0], out_bcast, in_numel, this->dtype_,
                                        this->device_);
         Storage ge_b = ge_mask_storage(out_bcast, this->saved_inputs_[0], in_numel, this->dtype_,
@@ -220,7 +197,6 @@ TensorImplPtr max_op(const TensorImplPtr& a, const std::vector<int>& axes, bool 
 }
 LUCID_REGISTER_OP(MaxBackward)
 
-// =================== Min ===================
 const OpSchema MinBackward::schema_v1{"min", 1, AmpPolicy::KeepInput, true};
 
 Storage MinBackward::grad_formula(const Storage& grad_out) {
@@ -246,14 +222,6 @@ TensorImplPtr min_op(const TensorImplPtr& a, const std::vector<int>& axes, bool 
     return MinBackward::forward(a, axes, keepdims);
 }
 LUCID_REGISTER_OP(MinBackward)
-
-// =====================================================================
-// GPU kernels for the reduce family (Phase 3.7.2).
-// =====================================================================
-//
-// MLX's reduce ops accept `(arr, axes, keepdims)` and return a single
-// array. We pass the axis vector through as-is (MLX accepts ascending
-// order, which matches what `normalize_axes` produces).
 
 namespace {
 template <class F>

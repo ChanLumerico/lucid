@@ -8,7 +8,6 @@
 
 namespace lucid {
 
-/// Eigendecomposition. Returns [eigenvalues, eigenvectors].
 LUCID_API std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a);
 
-}  // namespace lucid
+}

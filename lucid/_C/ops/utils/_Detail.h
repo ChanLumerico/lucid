@@ -1,10 +1,5 @@
 #pragma once
 
-// =====================================================================
-// utils internal helpers — shared by Concat/Repeat/Pad/Layout/Tri/Select/
-// Sort/Meshgrid. Header-only inline functions.
-// =====================================================================
-
 #include <cstring>
 #include <vector>
 
@@ -23,7 +18,6 @@
 
 namespace lucid::utils_detail {
 
-// Re-exports of the canonical helpers in `core/Helpers.h`.
 using ::lucid::gpu::mlx_shape_to_lucid;
 using ::lucid::helpers::allocate_cpu;
 using ::lucid::helpers::fresh;

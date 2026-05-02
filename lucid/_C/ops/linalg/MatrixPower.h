@@ -6,7 +6,6 @@
 
 namespace lucid {
 
-/// Matrix power.
 LUCID_API TensorImplPtr matrix_power_op(const TensorImplPtr& a, int n);
 
-}  // namespace lucid
+}

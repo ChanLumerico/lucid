@@ -21,8 +21,6 @@ Shape vec_to_shape(const std::vector<std::int64_t>& v) {
     return s;
 }
 
-// Resolve the optional Generator pybind argument: either an `eng.Generator`
-// or `None` (uses process-default generator).
 Generator* resolve_gen(py::object gen_obj) {
     if (gen_obj.is_none())
         return nullptr;
@@ -54,7 +52,6 @@ void register_random(py::module_& m) {
     m.def("set_deterministic", &Determinism::set_enabled, py::arg("value"));
     m.def("is_deterministic", &Determinism::is_enabled);
 
-    // ----- Random tensor ops -----
     m.def(
         "rand",
         [](std::vector<std::int64_t> shape, Dtype dt, Device device, py::object gen) {

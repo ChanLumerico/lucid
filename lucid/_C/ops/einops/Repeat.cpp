@@ -34,7 +34,6 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
     auto flat_lhs = flat_axes(lhs);
     auto flat_rhs = flat_axes(rhs);
 
-    // Step 1: rearrange to flat-lhs.
     std::string flat_lhs_str;
     for (std::size_t i = 0; i < flat_lhs.size(); ++i) {
         if (i)
@@ -43,8 +42,6 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
     }
     auto cur = einops_rearrange_op(a, lhs_str + " -> " + flat_lhs_str, axes_lengths);
 
-    // Step 2: collect axis sizes for every name on rhs (need either kwargs
-    // or already-known from lhs).
     std::map<std::string, std::int64_t> sz;
     for (std::size_t i = 0; i < flat_lhs.size(); ++i)
         sz[flat_lhs[i]] = cur->shape()[i];
@@ -57,7 +54,6 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
         }
     }
 
-    // Step 3: insert size-1 dims for new rhs axes (append at the end).
     std::vector<std::string> interim = flat_lhs;
     std::set<std::string> lhs_set(flat_lhs.begin(), flat_lhs.end());
     for (auto& n : flat_rhs) {
@@ -68,7 +64,6 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
         }
     }
 
-    // Step 4: permute interim → flat_rhs.
     if (interim != flat_rhs) {
         std::vector<int> perm(flat_rhs.size());
         for (std::size_t i = 0; i < flat_rhs.size(); ++i) {
@@ -88,14 +83,12 @@ TensorImplPtr einops_repeat_op(const TensorImplPtr& a,
             cur = permute_op(cur, perm);
     }
 
-    // Step 5: broadcast singleton axes to target sizes.
     Shape target_shape;
     for (auto& n : flat_rhs)
         target_shape.push_back(sz.at(n));
     if (cur->shape() != target_shape)
         cur = broadcast_to_op(cur, target_shape);
 
-    // Step 6: reshape into rhs grouped/literal layout.
     std::vector<std::int64_t> rhs_shape;
     for (auto& tk : rhs) {
         if (tk.is_name())

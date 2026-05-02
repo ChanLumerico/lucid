@@ -15,7 +15,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -30,7 +30,7 @@ Storage tri_storage(const Storage& input,
                     Device device,
                     int k,
                     bool upper,
-                    const char* /*name*/) {
+                    const char*) {
     return backend::Dispatcher::for_device(device).tri(input, shape, dt, k, upper);
 }
 
@@ -47,16 +47,15 @@ public:
     }
 };
 
-const OpSchema TriBackward::schema_v1{"tri", 1,  AmpPolicy::KeepInput, true, "", -1,
-                                      1,     {}, /*internal=*/true};
+const OpSchema TriBackward::schema_v1{"tri", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, true};
 
-TensorImplPtr attach_tri_grad(
-    const TensorImplPtr& a, TensorImplPtr out, int k, bool upper, const char* name) {
+TensorImplPtr
+attach_tri_grad(const TensorImplPtr& a, TensorImplPtr out, int k, bool upper, const char* name) {
     auto bwd = std::make_shared<TriBackward>();
     bwd->k_ = k;
     bwd->upper_ = upper;
     bwd->name_ = name;
-    kernel::NaryKernel<TriBackward, 1>::wire_autograd(std::move(bwd), {a}, out, /*save_ins=*/false);
+    kernel::NaryKernel<TriBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 
@@ -74,10 +73,10 @@ TensorImplPtr tri_dispatch(const TensorImplPtr& a, int k, bool upper, const char
 }  // namespace
 
 TensorImplPtr tril_op(const TensorImplPtr& a, int k) {
-    return tri_dispatch(a, k, /*upper=*/false, "tril");
+    return tri_dispatch(a, k, false, "tril");
 }
 TensorImplPtr triu_op(const TensorImplPtr& a, int k) {
-    return tri_dispatch(a, k, /*upper=*/true, "triu");
+    return tri_dispatch(a, k, true, "triu");
 }
 
 LUCID_REGISTER_OP(TriBackward)

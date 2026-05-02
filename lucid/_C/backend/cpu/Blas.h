@@ -1,32 +1,11 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — Accelerate BLAS wrappers (matmul / GEMV).
-// =====================================================================
-//
-// Apple Accelerate ships LAPACK + BLAS — on Apple Silicon it uses the AMX
-// coprocessor for FP32/FP64 matmul (10-100× faster than naive). All matrices
-// are row-major; transpose flags follow CBLAS convention.
-//
-// Phase 3.0 only declares the wrappers; the matmul op (Phase 3.1 linalg.h)
-// is the first consumer.
-//
-// Layer: backend/cpu/.
-
 #include <cstddef>
 
 #include "../../api.h"
 
 namespace lucid::backend::cpu {
 
-/// C = alpha * op(A) * op(B) + beta * C   (row-major, F32)
-///
-/// op(A) is A or A^T per `transA`. Sizes:
-///   op(A): M x K
-///   op(B): K x N
-///   C    : M x N
-///
-/// `lda`, `ldb`, `ldc` are leading dimensions in row-major (== row stride).
 LUCID_INTERNAL void sgemm(bool transA,
                           bool transB,
                           int M,
@@ -55,7 +34,6 @@ LUCID_INTERNAL void dgemm(bool transA,
                           double* C,
                           int ldc);
 
-/// y = alpha * op(A) * x + beta * y  (row-major, F32)
 LUCID_INTERNAL void sgemv(bool transA,
                           int M,
                           int N,

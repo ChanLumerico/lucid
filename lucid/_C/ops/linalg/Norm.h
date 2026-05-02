@@ -1,9 +1,5 @@
 #pragma once
 
-// =====================================================================
-// norm: Lp-norm reduction. Backward for L1 and L2.
-// =====================================================================
-
 #include <vector>
 
 #include "../../api.h"
@@ -15,7 +11,6 @@
 
 namespace lucid {
 
-/// Autograd backward node for Norm.
 class LUCID_API NormBackward : public FuncOp<NormBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -25,7 +20,6 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-/// Norm.
 LUCID_API TensorImplPtr norm_op(const TensorImplPtr& a,
                                 double ord,
                                 std::vector<int> axis,

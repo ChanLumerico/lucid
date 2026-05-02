@@ -28,10 +28,6 @@ Shape reduced_shape(const Shape& in, Reduction red) {
 
 }  // namespace
 
-// ===================================================================
-// MSE
-// ===================================================================
-
 const OpSchema MseLossBackward::schema_v1{"mse_loss", 1, AmpPolicy::ForceFP32, true};
 
 TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
@@ -77,10 +73,6 @@ TensorImplPtr mse_loss_op(const TensorImplPtr& input, const TensorImplPtr& targe
     return MseLossBackward::forward(input, target, static_cast<Reduction>(reduction));
 }
 LUCID_REGISTER_OP(MseLossBackward)
-
-// ===================================================================
-// BCE — input in [0, 1].  Slots: 0=input, 1=target, 2=weight (required).
-// ===================================================================
 
 const OpSchema BCELossBackward::schema_v1{"bce_loss", 1, AmpPolicy::ForceFP32, true};
 
@@ -134,16 +126,6 @@ TensorImplPtr bce_loss_op(const TensorImplPtr& input,
 }
 LUCID_REGISTER_OP(BCELossBackward)
 
-// ===================================================================
-// BCE with logits.  Slots: 0=input, 1=target, 2=weight, 3=pos_weight.
-//   l_i = max(x, 0) − x·y + log_weight · log1p(exp(−|x|))
-//   log_weight = (pos_weight − 1)·y + 1
-//   dL/dx = log_weight · sigm(x) − y
-//   dL/dy = −x + (pos_weight − 1) · log1p(exp(−|x|))
-//   dL/dw = l        (rec)
-//   dL/dpw = w · y · log1p(exp(−|x|))
-// ===================================================================
-
 const OpSchema BCEWithLogitsBackward::schema_v1{"bce_with_logits", 1, AmpPolicy::ForceFP32, true};
 
 TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
@@ -195,10 +177,6 @@ TensorImplPtr bce_with_logits_op(const TensorImplPtr& input,
                                           static_cast<Reduction>(reduction));
 }
 LUCID_REGISTER_OP(BCEWithLogitsBackward)
-
-// ===================================================================
-// Cross-entropy = LogSoftmax + NLL fused. Only `input` is in autograd.
-// ===================================================================
 
 const OpSchema CrossEntropyBackward::schema_v1{"cross_entropy_loss", 1, AmpPolicy::ForceFP32, true};
 
@@ -255,7 +233,7 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
             bwd->saved_weight_ = weight_or_null->storage();
         bwd->saved_valid_count_ = std::move(result.valid_count);
         kernel::NaryKernel<CrossEntropyBackward, 1>::wire_autograd(std::move(bwd), {input}, out,
-                                                                   /*save_ins=*/false);
+                                                                   false);
     }
     return out;
 }
@@ -278,10 +256,6 @@ TensorImplPtr cross_entropy_op(const TensorImplPtr& input,
                                          static_cast<Reduction>(reduction), eps, ignore_index);
 }
 LUCID_REGISTER_OP(CrossEntropyBackward)
-
-// ===================================================================
-// NLL — input is log-probabilities. Only `input` is differentiable.
-// ===================================================================
 
 const OpSchema NLLLossBackward::schema_v1{"nll_loss", 1, AmpPolicy::ForceFP32, true};
 
@@ -333,8 +307,7 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
         if (weight_or_null)
             bwd->saved_weight_ = weight_or_null->storage();
         bwd->saved_valid_count_ = std::move(result.valid_count);
-        kernel::NaryKernel<NLLLossBackward, 1>::wire_autograd(std::move(bwd), {input}, out,
-                                                              /*save_ins=*/false);
+        kernel::NaryKernel<NLLLossBackward, 1>::wire_autograd(std::move(bwd), {input}, out, false);
     }
     return out;
 }
@@ -356,10 +329,6 @@ TensorImplPtr nll_loss_op(const TensorImplPtr& input,
                                     static_cast<Reduction>(reduction), ignore_index);
 }
 LUCID_REGISTER_OP(NLLLossBackward)
-
-// ===================================================================
-// Huber loss
-// ===================================================================
 
 const OpSchema HuberLossBackward::schema_v1{"huber_loss", 1, AmpPolicy::ForceFP32, true};
 

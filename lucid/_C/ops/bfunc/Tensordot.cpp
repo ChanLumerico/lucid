@@ -25,8 +25,6 @@ using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
-// Build an einsum pattern equivalent to tensordot(a, b, axes_a, axes_b).
-// Contracted axes share a label; non-contracted axes get distinct labels.
 std::string tensordot_einsum_pattern(std::size_t na,
                                      std::size_t nb,
                                      const std::vector<int>& axes_a,
@@ -40,8 +38,8 @@ std::string tensordot_einsum_pattern(std::size_t na,
 
     std::string a_lhs(na, '?'), b_lhs(nb, '?'), rhs;
     char free = 'a';
-    char shared = 'A';  // contracted labels go in the upper-case alphabet
-    // First assign shared labels to contraction pairs, in axes_{a,b} order.
+    char shared = 'A';
+
     for (std::size_t i = 0; i < axes_a.size(); ++i) {
         int pa = norm(axes_a[i], na);
         int pb = norm(axes_b[i], nb);
@@ -49,7 +47,7 @@ std::string tensordot_einsum_pattern(std::size_t na,
         b_lhs[pb] = shared;
         ++shared;
     }
-    // Then assign free labels to non-contracted axes (in original order).
+
     for (std::size_t i = 0; i < na; ++i) {
         if (a_lhs[i] == '?') {
             a_lhs[i] = free;
@@ -77,9 +75,6 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     if (axes_a.size() != axes_b.size())
         ErrorBuilder("tensordot").fail("axes_a and axes_b must have equal length");
 
-    // Autograd-tracked path: dispatch through einsum so primitive op
-    // backwards stitch the gradient chain. Inference path keeps the native
-    // gemm-based fast path below.
     if (GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())) {
         return einsum_op(
             tensordot_einsum_pattern(a->shape().size(), b->shape().size(), axes_a, axes_b), {a, b});
@@ -143,8 +138,8 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
             std::move(dst), std::move(kept), contract_size};
     };
 
-    auto [a_cpu, a_kept, a_contract] = contract(a, axes_a, /*put_first=*/false);
-    auto [b_cpu, b_kept, b_contract] = contract(b, axes_b, /*put_first=*/true);
+    auto [a_cpu, a_kept, a_contract] = contract(a, axes_a, false);
+    auto [b_cpu, b_kept, b_contract] = contract(b, axes_b, true);
     if (a_contract != b_contract)
         ErrorBuilder("tensordot").fail("contracted dim sizes don't match");
 

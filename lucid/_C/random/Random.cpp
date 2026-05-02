@@ -19,8 +19,7 @@ inline Generator& resolve_gen(Generator* gen) {
 }
 
 inline TensorImplPtr finalize(Storage&& storage, Shape shape, Dtype dt, Device device) {
-    return std::make_shared<TensorImpl>(std::move(storage), std::move(shape), dt, device,
-                                        /*requires_grad=*/false);
+    return std::make_shared<TensorImpl>(std::move(storage), std::move(shape), dt, device, false);
 }
 
 }  // namespace
@@ -31,8 +30,8 @@ TensorImplPtr rand_op(const Shape& shape, Dtype dt, Device device, Generator* ge
     return finalize(std::move(s), shape, dt, device);
 }
 
-TensorImplPtr uniform_op(
-    const Shape& shape, double low, double high, Dtype dt, Device device, Generator* gen) {
+TensorImplPtr
+uniform_op(const Shape& shape, double low, double high, Dtype dt, Device device, Generator* gen) {
     if (high <= low)
         ErrorBuilder("uniform").fail("high must be > low");
     OpScopeFull scope{"uniform", device, dt, shape};
@@ -46,8 +45,8 @@ TensorImplPtr randn_op(const Shape& shape, Dtype dt, Device device, Generator* g
     return finalize(std::move(s), shape, dt, device);
 }
 
-TensorImplPtr normal_op(
-    const Shape& shape, double mean, double std, Dtype dt, Device device, Generator* gen) {
+TensorImplPtr
+normal_op(const Shape& shape, double mean, double std, Dtype dt, Device device, Generator* gen) {
     if (std < 0.0)
         ErrorBuilder("normal").fail("std must be >= 0");
     OpScopeFull scope{"normal", device, dt, shape};

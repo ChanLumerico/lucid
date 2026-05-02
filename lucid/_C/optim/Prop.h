@@ -1,13 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — Prop-family optimizers (mirrors lucid/optim/prop.py).
-// =====================================================================
-//
-// Contains:
-//   - RMSprop  (with optional centered variance + momentum)
-//   - Rprop    (resilient backprop; per-element step-size adaptation)
-
 #include <memory>
 #include <vector>
 
@@ -19,25 +11,6 @@ namespace lucid {
 
 class TensorImpl;
 
-// =====================================================================
-// RMSprop
-// =====================================================================
-//
-// Per-step:
-//   if wd != 0: g ← g + wd · param
-//   square_avg ← α · square_avg + (1 − α) · g²
-//   if centered:
-//     grad_avg ← α · grad_avg + (1 − α) · g
-//     avg ← square_avg − grad_avg²
-//   else:
-//     avg ← square_avg
-//   denom ← √avg + ε                        (PyTorch convention)
-//   if momentum > 0:
-//     buf ← momentum · buf + g / denom
-//     param ← param − lr · buf
-//   else:
-//     param ← param − lr · (g / denom)
-/// RMSprop.
 class LUCID_API RMSprop : public Optimizer {
 public:
     RMSprop(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -60,22 +33,10 @@ private:
     double lr_, alpha_, eps_, weight_decay_, momentum_;
     bool centered_;
     std::vector<Storage> square_avg_;
-    std::vector<Storage> grad_avg_;    // only if centered_
-    std::vector<Storage> moment_buf_;  // only if momentum_ != 0
+    std::vector<Storage> grad_avg_;
+    std::vector<Storage> moment_buf_;
 };
 
-// =====================================================================
-// Rprop — resilient backprop
-// =====================================================================
-//
-// Per-element step-size adapted by gradient sign:
-//   sign_change = grad · prev_grad
-//   step_size ← clip(step_size · η_+ where sign_change > 0
-//                    step_size · η_- where sign_change < 0,
-//                    step_min, step_max)
-//   grad ← 0 where sign_change < 0
-//   param ← param − sign(grad) · step_size
-/// Rprop.
 class LUCID_API Rprop : public Optimizer {
 public:
     Rprop(std::vector<std::shared_ptr<TensorImpl>> params,

@@ -11,7 +11,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -53,13 +53,11 @@ public:
 
 const OpSchema MeshgridBackward::schema_v1{"meshgrid", 1, AmpPolicy::KeepInput, true};
 
-TensorImplPtr attach_meshgrid_grad(const TensorImplPtr& input,
-                                   TensorImplPtr output,
-                                   int carry_axis) {
+TensorImplPtr
+attach_meshgrid_grad(const TensorImplPtr& input, TensorImplPtr output, int carry_axis) {
     auto bwd = std::make_shared<MeshgridBackward>();
     bwd->carry_axis_ = carry_axis;
-    kernel::NaryKernel<MeshgridBackward, 1>::wire_autograd(std::move(bwd), {input}, output,
-                                                           /*save_ins=*/false);
+    kernel::NaryKernel<MeshgridBackward, 1>::wire_autograd(std::move(bwd), {input}, output, false);
     return output;
 }
 

@@ -25,46 +25,45 @@ struct overloaded : Ts... {
 template <class... Ts>
 overloaded(Ts...) -> overloaded<Ts...>;
 
-// numpy dtype char/kind -> lucid Dtype.
 Dtype np_dtype_to_lucid(const py::dtype& d) {
     const char k = d.kind();
     const auto sz = static_cast<int>(d.itemsize());
     switch (k) {
-        case 'b':
-            return Dtype::Bool;
-        case 'i':
-            switch (sz) {
-                case 1:
-                    return Dtype::I8;
-                case 2:
-                    return Dtype::I16;
-                case 4:
-                    return Dtype::I32;
-                case 8:
-                    return Dtype::I64;
-            }
-            break;
-        case 'u':
-            throw DtypeMismatch("signed integer or float numpy dtype",
-                                std::string("uint") + std::to_string(sz * 8),
-                                "from_numpy: unsigned dtypes are not supported "
-                                "(cast to int / float explicitly)");
-        case 'f':
-            switch (sz) {
-                case 2:
-                    return Dtype::F16;
-                case 4:
-                    return Dtype::F32;
-                case 8:
-                    return Dtype::F64;
-            }
-            break;
-        case 'c':
-            if (sz == 8)
-                return Dtype::C64;
-            break;
-        default:
-            break;
+    case 'b':
+        return Dtype::Bool;
+    case 'i':
+        switch (sz) {
+        case 1:
+            return Dtype::I8;
+        case 2:
+            return Dtype::I16;
+        case 4:
+            return Dtype::I32;
+        case 8:
+            return Dtype::I64;
+        }
+        break;
+    case 'u':
+        throw DtypeMismatch("signed integer or float numpy dtype",
+                            std::string("uint") + std::to_string(sz * 8),
+                            "from_numpy: unsigned dtypes are not supported "
+                            "(cast to int / float explicitly)");
+    case 'f':
+        switch (sz) {
+        case 2:
+            return Dtype::F16;
+        case 4:
+            return Dtype::F32;
+        case 8:
+            return Dtype::F64;
+        }
+        break;
+    case 'c':
+        if (sz == 8)
+            return Dtype::C64;
+        break;
+    default:
+        break;
     }
     throw DtypeMismatch("supported numpy dtype",
                         std::string("kind='") + k + "',itemsize=" + std::to_string(sz),
@@ -73,24 +72,24 @@ Dtype np_dtype_to_lucid(const py::dtype& d) {
 
 py::dtype lucid_dtype_to_np(Dtype dt) {
     switch (dt) {
-        case Dtype::Bool:
-            return py::dtype("bool");
-        case Dtype::I8:
-            return py::dtype("int8");
-        case Dtype::I16:
-            return py::dtype("int16");
-        case Dtype::I32:
-            return py::dtype("int32");
-        case Dtype::I64:
-            return py::dtype("int64");
-        case Dtype::F16:
-            return py::dtype("float16");
-        case Dtype::F32:
-            return py::dtype("float32");
-        case Dtype::F64:
-            return py::dtype("float64");
-        case Dtype::C64:
-            return py::dtype("complex64");
+    case Dtype::Bool:
+        return py::dtype("bool");
+    case Dtype::I8:
+        return py::dtype("int8");
+    case Dtype::I16:
+        return py::dtype("int16");
+    case Dtype::I32:
+        return py::dtype("int32");
+    case Dtype::I64:
+        return py::dtype("int64");
+    case Dtype::F16:
+        return py::dtype("float16");
+    case Dtype::F32:
+        return py::dtype("float32");
+    case Dtype::F64:
+        return py::dtype("float64");
+    case Dtype::C64:
+        return py::dtype("complex64");
     }
     ErrorBuilder("lucid_dtype_to_np").fail("unknown Dtype");
 }
@@ -121,9 +120,8 @@ TensorImpl::TensorImpl(Storage storage, Shape shape, Dtype dtype, Device device,
     }
 }
 
-std::shared_ptr<TensorImpl> TensorImpl::from_numpy(py::array arr,
-                                                   Device device,
-                                                   bool requires_grad) {
+std::shared_ptr<TensorImpl>
+TensorImpl::from_numpy(py::array arr, Device device, bool requires_grad) {
     py::array_t<std::byte, py::array::c_style | py::array::forcecast> view =
         py::array_t<std::byte, py::array::c_style | py::array::forcecast>::ensure(arr);
     if (!arr) {
@@ -170,7 +168,6 @@ std::size_t TensorImpl::nbytes() const {
 }
 
 bool TensorImpl::is_contiguous() const {
-    // Strides are byte-strides; compare against the canonical byte-stride layout.
     Stride expected = contiguous_stride(meta_.shape, dtype_size(meta_.dtype));
     return expected == meta_.stride;
 }
@@ -184,7 +181,7 @@ py::object TensorImpl::data_as_python() const {
                               CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
                               return make_numpy_view(cpu, meta_.shape, meta_.stride);
                           },
-                          // Phase 9.2: SharedStorage exposes cpu_ptr as a zero-copy numpy view.
+
                           [&](const SharedStorage& sh) -> py::object {
                               CpuStorage v = sh.cpu_view();
                               return make_numpy_view(v, meta_.shape, meta_.stride);
@@ -205,7 +202,7 @@ py::object TensorImpl::grad_as_python() const {
                               CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
                               return make_numpy_view(cpu, meta_.shape, meta_.stride);
                           },
-                          // Phase 9.2: grad may also be stored in a SharedStorage buffer.
+
                           [&](const SharedStorage& sh) -> py::object {
                               CpuStorage v = sh.cpu_view();
                               return make_numpy_view(v, meta_.shape, meta_.stride);
@@ -246,7 +243,7 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                        auto cloned = ::mlx::core::copy(*src.arr);
                        dst.arr = gpu::wrap_mlx_array(std::move(cloned), dst.dtype).arr;
                    },
-                   // Phase 9.2: SharedStorage copies via cpu_ptr.
+
                    [&](SharedStorage& dst, const SharedStorage& src) {
                        if (dst.nbytes != src.nbytes)
                            ErrorBuilder("copy_from").fail("nbytes mismatch (SharedStorage)");
@@ -284,7 +281,7 @@ void TensorImpl::zero_grad() {
 bool TensorImpl::storage_is_shared() const noexcept {
     if (const auto* cpu = std::get_if<CpuStorage>(&storage_))
         return cpu->ptr.use_count() > 1;
-    return false;  // GPU storage shared via MLX CoW internally
+    return false;
 }
 
 std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorImpl>& base,
@@ -295,7 +292,7 @@ std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorIm
                                              base->meta_.device, false);
     view->meta_.stride = std::move(stride);
     view->offset_ = base->offset_ + offset_bytes;
-    // Propagate requires_grad if the base has it.
+
     if (base->requires_grad()) {
         view->set_requires_grad(true);
         view->set_leaf(base->is_leaf());

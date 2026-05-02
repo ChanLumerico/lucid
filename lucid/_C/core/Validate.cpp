@@ -91,14 +91,11 @@ Validator& Validator::square_2d() {
     return *this;
 }
 
-// ---------- Pair ---------- //
-
 Validator::Pair::Pair(const TensorImplPtr& a, const TensorImplPtr& b, std::string op)
     : a_(a), b_(b), op_(std::move(op)) {}
 
-Validator::Pair Validator::pair(const TensorImplPtr& a,
-                                const TensorImplPtr& b,
-                                std::string op_name) {
+Validator::Pair
+Validator::pair(const TensorImplPtr& a, const TensorImplPtr& b, std::string op_name) {
     return Pair(a, b, std::move(op_name));
 }
 

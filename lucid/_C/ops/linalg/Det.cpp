@@ -19,29 +19,24 @@
 
 namespace lucid {
 
-// ---------- Schema & backward ----------
-
 const OpSchema DetBackward::schema_v1{"det", 1, AmpPolicy::KeepInput};
 
 std::vector<Storage> DetBackward::apply(Storage grad_out) {
     NoGradGuard ng;
     using ::lucid::helpers::fresh;
-    // saved_inputs_[0]  = A (square input matrix)
-    // saved_output_     = det(A) scalar
+
     auto A = fresh(Storage{saved_inputs_[0]}, input_shapes_[0], dtype_, device_);
     auto ddet = fresh(std::move(grad_out), out_shape_, dtype_, device_);
     auto det_v = fresh(Storage{saved_output_}, out_shape_, dtype_, device_);
-    // dA = det(A) * ddet * A^{-T}
+
     auto inv_A = inv_op(A);
     auto inv_AT = mT_op(inv_A);
-    auto scale = mul_op(det_v, ddet);  // scalar * scalar = scalar
+    auto scale = mul_op(det_v, ddet);
     auto dA = mul_op(broadcast_to_op(scale, input_shapes_[0]), inv_AT);
     return {dA->storage()};
 }
 
 LUCID_REGISTER_OP(DetBackward)
-
-// ---------- Forward ----------
 
 TensorImplPtr det_op(const TensorImplPtr& a) {
     using namespace linalg_detail;

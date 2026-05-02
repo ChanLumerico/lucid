@@ -4,15 +4,11 @@
 
 namespace lucid {
 
-// --------------------------------------------------------------------------- //
-// ErrorContext — thread-local op-name stack.
-// --------------------------------------------------------------------------- //
-
 namespace {
 
 thread_local std::vector<std::string> tl_stack_;
 
-}  // namespace
+}
 
 void ErrorContext::push(std::string op_name) {
     tl_stack_.emplace_back(std::move(op_name));
@@ -39,10 +35,6 @@ void ErrorContext::reset() {
     tl_stack_.clear();
 }
 
-// --------------------------------------------------------------------------- //
-// ErrorContextGuard — RAII push/pop helper.
-// --------------------------------------------------------------------------- //
-
 ErrorContextGuard::ErrorContextGuard(std::string op_name) {
     ErrorContext::push(std::move(op_name));
 }
@@ -51,12 +43,7 @@ ErrorContextGuard::~ErrorContextGuard() {
     ErrorContext::pop();
 }
 
-// --------------------------------------------------------------------------- //
-// ErrorBuilder — chainable typed-throw helpers.
-// --------------------------------------------------------------------------- //
-
 std::string ErrorBuilder::format_with_context(const std::string& msg) const {
-    // "op: msg [trace=outer > inner]" when a trace exists, otherwise "op: msg".
     std::string out = op_;
     out += ": ";
     out += msg;

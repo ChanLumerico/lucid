@@ -1,13 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — SGD-family optimizers (mirrors lucid/optim/sgd.py).
-// =====================================================================
-//
-// Contains:
-//   - SGD   (vanilla / momentum / Nesterov / weight decay)
-//   - ASGD  (Averaged SGD — running average of params past `t0`)
-
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -20,20 +12,6 @@ namespace lucid {
 
 class TensorImpl;
 
-// =====================================================================
-// SGD
-// =====================================================================
-//
-//   SGD(params, lr, momentum=0, dampening=0, weight_decay=0, nesterov=False)
-//
-// Per-step update (matches PyTorch torch.optim.SGD):
-//   if weight_decay != 0:  g ← g + wd · param
-//   if momentum != 0:
-//     buf ← momentum · buf + (1 − dampening) · g       (init buf = g)
-//     if nesterov:  g ← g + momentum · buf
-//     else:         g ← buf
-//   param ← param − lr · g
-/// SGD.
 class LUCID_API SGD : public Optimizer {
 public:
     SGD(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -65,18 +43,6 @@ private:
     std::vector<Storage> moment_;
 };
 
-// =====================================================================
-// ASGD — Averaged SGD (Lucid Python flavor; not bit-equiv to PyTorch's
-// dynamic-eta variant)
-// =====================================================================
-//
-//   if wd != 0: g ← g + wd · param
-//   if mom != 0: buf ← mom · buf + g; g ← buf
-//   param ← param − lr · g
-//   if step >= t0:
-//     coef = 1 / (alpha · step + 1)
-//     ax ← (1 − coef) · ax + coef · param − lambd · ax
-/// ASGD.
 class LUCID_API ASGD : public Optimizer {
 public:
     ASGD(std::vector<std::shared_ptr<TensorImpl>> params,

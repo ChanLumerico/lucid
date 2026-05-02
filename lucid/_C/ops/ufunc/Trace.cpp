@@ -29,7 +29,7 @@ class TraceBackward : public AutogradNode<TraceBackward, 1> {
 public:
     static const OpSchema schema_v1;
 
-    Shape input_shape_;  // (M, N)
+    Shape input_shape_;
 
     std::vector<Storage> apply(Storage grad_out) override {
         return {backend::Dispatcher::for_device(device_).trace_backward(grad_out, input_shape_,
@@ -57,8 +57,7 @@ TensorImplPtr trace_op(const TensorImplPtr& a) {
     if (a->shape().size() == 2) {
         auto bwd = std::make_shared<TraceBackward>();
         bwd->input_shape_ = a->shape();
-        kernel::NaryKernel<TraceBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                            /*save_ins=*/false);
+        kernel::NaryKernel<TraceBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     }
     return out;
 }

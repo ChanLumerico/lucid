@@ -18,30 +18,27 @@ namespace lucid::gpu {
 
 ::mlx::core::Dtype to_mlx_dtype(Dtype dt) {
     switch (dt) {
-        case Dtype::Bool:
-            return ::mlx::core::bool_;
-        case Dtype::I8:
-            return ::mlx::core::int8;
-        case Dtype::I16:
-            return ::mlx::core::int16;
-        case Dtype::I32:
-            return ::mlx::core::int32;
-        case Dtype::I64:
-            return ::mlx::core::int64;
-        case Dtype::F16:
-            return ::mlx::core::float16;
-        case Dtype::F32:
-            return ::mlx::core::float32;
-        case Dtype::F64:
-            // MLX-Metal does not support float64 on the GPU. Reject early
-            // with a clear, actionable message rather than letting MLX raise
-            // a generic ValueError deep inside its eval() pipeline.
-            ErrorBuilder("to_mlx_dtype")
-                .not_implemented(
-                    "float64 is not supported on GPU (MLX-Metal limitation). "
-                    "Cast to float32 first, or keep the tensor on CPU.");
-        case Dtype::C64:
-            return ::mlx::core::complex64;
+    case Dtype::Bool:
+        return ::mlx::core::bool_;
+    case Dtype::I8:
+        return ::mlx::core::int8;
+    case Dtype::I16:
+        return ::mlx::core::int16;
+    case Dtype::I32:
+        return ::mlx::core::int32;
+    case Dtype::I64:
+        return ::mlx::core::int64;
+    case Dtype::F16:
+        return ::mlx::core::float16;
+    case Dtype::F32:
+        return ::mlx::core::float32;
+    case Dtype::F64:
+
+        ErrorBuilder("to_mlx_dtype")
+            .not_implemented("float64 is not supported on GPU (MLX-Metal limitation). "
+                             "Cast to float32 first, or keep the tensor on CPU.");
+    case Dtype::C64:
+        return ::mlx::core::complex64;
     }
     ErrorBuilder("to_mlx_dtype").fail("unknown Dtype");
 }
@@ -49,27 +46,27 @@ namespace lucid::gpu {
 Dtype from_mlx_dtype(::mlx::core::Dtype dt) {
     using V = ::mlx::core::Dtype::Val;
     switch (dt.val()) {
-        case V::bool_:
-            return Dtype::Bool;
-        case V::int8:
-            return Dtype::I8;
-        case V::int16:
-            return Dtype::I16;
-        case V::int32:
-            return Dtype::I32;
-        case V::int64:
-            return Dtype::I64;
-        case V::float16:
-            return Dtype::F16;
-        case V::float32:
-            return Dtype::F32;
-        case V::float64:
-            return Dtype::F64;
-        case V::complex64:
-            return Dtype::C64;
-        default:
-            ErrorBuilder("from_mlx_dtype")
-                .not_implemented("unsupported MLX dtype (uint*/bfloat16 not yet wired into Lucid)");
+    case V::bool_:
+        return Dtype::Bool;
+    case V::int8:
+        return Dtype::I8;
+    case V::int16:
+        return Dtype::I16;
+    case V::int32:
+        return Dtype::I32;
+    case V::int64:
+        return Dtype::I64;
+    case V::float16:
+        return Dtype::F16;
+    case V::float32:
+        return Dtype::F32;
+    case V::float64:
+        return Dtype::F64;
+    case V::complex64:
+        return Dtype::C64;
+    default:
+        ErrorBuilder("from_mlx_dtype")
+            .not_implemented("unsupported MLX dtype (uint*/bfloat16 not yet wired into Lucid)");
     }
 }
 
@@ -87,9 +84,7 @@ Dtype from_mlx_dtype(::mlx::core::Dtype dt) {
 }
 
 namespace {
-// All shared_ptr<mlx::core::array> instances built by this bridge use the
-// same deleter pattern: free the wrapped object and notify MemoryTracker.
-// Centralizing here avoids drift between upload/wrap call sites.
+
 std::shared_ptr<::mlx::core::array> make_tracked(::mlx::core::array* raw, std::size_t bytes) {
     if (bytes > 0) {
         MemoryTracker::track_alloc(bytes, Device::GPU);
@@ -104,48 +99,20 @@ std::shared_ptr<::mlx::core::array> make_tracked(::mlx::core::array* raw, std::s
 }  // namespace
 
 GpuStorage upload_cpu_to_gpu(const CpuStorage& cpu, const Shape& shape) {
-    // -----------------------------------------------------------------------
-    // Zero-copy path (Apple Unified Memory)
-    // -----------------------------------------------------------------------
-    // Large CpuStorage (> 4 MB) is allocated via mlx::core::allocator::malloc(),
-    // which returns a MTLResourceStorageModeShared buffer.  We hand this
-    // buffer directly to the mlx::core::array using the Buffer constructor,
-    // transferring ownership to MLX.  MLX's default deleter (allocator::free)
-    // runs after all pending Metal kernels complete, preventing use-after-free.
-    //
-    // Ownership transfer: the CpuStorage shared_ptr's deleter is replaced with
-    // a no-op (via a sentinel flag stored alongside the ptr) so it doesn't
-    // double-free the buffer after MLX takes ownership.  We achieve this by
-    // allocating a separate keepalive + sentinel that the CpuStorage deleter
-    // checks before calling allocator::free.
-    //
-    // Simpler approach used here: probe via make_buffer to confirm MLX
-    // ownership, then build a NEW mlx::core::array that borrows the buffer
-    // WITH a deleter that only decrements the CpuStorage refcount (no free).
-    // MLX will not free the buffer itself because we pass a custom deleter —
-    // the CpuStorage shared_ptr's existing deleter (allocator::free) handles
-    // the actual release once BOTH the MLX array AND all CPU references drop.
-    // -----------------------------------------------------------------------
     auto mlx_shape = to_mlx_shape(shape);
-    auto mlx_dt    = to_mlx_dtype(cpu.dtype);
+    auto mlx_dt = to_mlx_dtype(cpu.dtype);
 
-    // MLX takes (void*, Shape, Dtype, deleter). Capture the CpuStorage's
-    // shared_ptr by value into the deleter so the source buffer outlives
-    // the MLX array no matter how MLX uses it.
     auto keepalive = std::make_shared<std::shared_ptr<std::byte[]>>(cpu.ptr);
     void* raw = static_cast<void*>(cpu.ptr.get());
     ::mlx::core::array external(raw, std::move(mlx_shape), mlx_dt,
-                                [keepalive](void* /*p*/) mutable { keepalive.reset(); });
+                                [keepalive](void*) mutable { keepalive.reset(); });
 
-    // Copy into MLX-owned Metal memory. The void*-constructor builds an
-    // "external" array whose data is the host buffer; downstream MLX ops
-    // require MLX-owned contiguous memory for correct stride assumptions.
     auto owned = ::mlx::core::copy(external);
 
     GpuStorage out;
-    out.dtype  = cpu.dtype;
+    out.dtype = cpu.dtype;
     out.nbytes = cpu.nbytes;
-    out.arr    = make_tracked(new ::mlx::core::array(std::move(owned)), out.nbytes);
+    out.arr = make_tracked(new ::mlx::core::array(std::move(owned)), out.nbytes);
     return out;
 }
 
@@ -153,7 +120,7 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
     if (!gpu.arr) {
         ErrorBuilder("download_gpu_to_cpu").fail("null GPU array");
     }
-    // Force any pending compute graph to materialize before reading.
+
     gpu.arr->eval();
 
     const std::size_t total = shape_numel(shape) * dtype_size(gpu.dtype);
@@ -165,9 +132,6 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
     }
     out.ptr = allocate_aligned_bytes(total, Device::CPU);
 
-    // After eval(), MLX exposes a host-readable pointer via `data<T>()`. We
-    // use the byte form (data<uint8_t>) and memcpy. MLX guarantees this is
-    // contiguous in row-major after eval for arrays we constructed.
     const auto* src = gpu.arr->data<std::uint8_t>();
     std::memcpy(out.ptr.get(), src, total);
     return out;
@@ -181,37 +145,20 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
     return out;
 }
 
-// ---------------------------------------------------------------------------
-// Phase 9.3: zero-copy upload via Metal shared memory
-// ---------------------------------------------------------------------------
-//
-// When a SharedStorage was allocated through MetalAllocator::allocate_shared,
-// its cpu_ptr IS the Metal buffer contents pointer and mtl_handle holds the
-// retained id<MTLBuffer>.  We can build an MLX array that refers to this
-// buffer without a host-to-device copy by using the "external" array ctor
-// with a deleter that keeps the Metal buffer alive.
-//
 GpuStorage shared_storage_to_gpu(const SharedStorage& sh, const Shape& shape) {
     if (!sh.cpu_ptr || sh.nbytes == 0)
         ErrorBuilder("shared_storage_to_gpu").fail("SharedStorage is empty");
 
     auto mlx_shape = to_mlx_shape(shape);
-    auto mlx_dt    = to_mlx_dtype(sh.dtype);
+    auto mlx_dt = to_mlx_dtype(sh.dtype);
 
-    // The owner shared_ptr keeps the MetalBuffer alive for the lifetime of
-    // the MLX array.  We capture it by value in the deleter.
     auto owner_tok = sh.owner;
     ::mlx::core::array external(
         sh.cpu_ptr, std::move(mlx_shape), mlx_dt,
-        [owner_tok = std::move(owner_tok)](void* /*p*/) mutable {
-            owner_tok.reset();
-        });
+        [owner_tok = std::move(owner_tok)](void*) mutable { owner_tok.reset(); });
 
-    // mlx::core::array built from an external pointer is zero-copy when the
-    // buffer is already Metal-mapped; MLX recognizes the page-aligned shared
-    // memory and avoids an extra copy on its first eval().
     GpuStorage out;
-    out.dtype  = sh.dtype;
+    out.dtype = sh.dtype;
     out.nbytes = sh.nbytes;
     out.arr = make_tracked(new ::mlx::core::array(std::move(external)), out.nbytes);
     return out;

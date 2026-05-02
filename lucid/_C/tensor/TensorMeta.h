@@ -1,13 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — value-semantics tensor metadata.
-// =====================================================================
-//
-// Phase 2 introduces this as the stable shape/stride/dtype/device bundle that
-// TensorImpl will eventually own as `meta_`. It deliberately contains no
-// storage or autograd state.
-
 #include <cstddef>
 #include <utility>
 

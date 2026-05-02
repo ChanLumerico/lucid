@@ -1,25 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — LR schedulers (Phase 4).
-// =====================================================================
-//
-// A scheduler wraps an Optimizer and mutates its `lr_` between training
-// steps. Standard usage:
-//
-//     auto opt   = SGD(params, lr=0.1, momentum=0.9);
-//     auto sched = StepLR(opt, step_size=30, gamma=0.1);
-//     for (int epoch = 0; epoch < 100; ++epoch) {
-//         train_one_epoch(opt);
-//         sched.step();   // bumps internal epoch counter, sets opt.lr
-//     }
-//
-// All schedulers track the *initial* LR set at construction and compute
-// the current LR as a closed-form function of the epoch counter (so a
-// scheduler is restart-able from any epoch by setting the counter).
-//
-// Layer: optim/.
-
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -30,7 +10,6 @@ namespace lucid {
 
 class Optimizer;
 
-/// LRScheduler.
 class LUCID_API LRScheduler {
 public:
     explicit LRScheduler(Optimizer& opt);
@@ -39,15 +18,12 @@ public:
     LRScheduler(const LRScheduler&) = delete;
     LRScheduler& operator=(const LRScheduler&) = delete;
 
-    /// Advance the epoch counter by 1 and apply the new LR to the optimizer.
     void step();
 
-    /// Restore counter to a specific value (resume from checkpoint).
     void set_epoch(std::int64_t epoch);
     std::int64_t epoch() const { return epoch_; }
 
 protected:
-    /// Subclass implements the actual LR formula.
     virtual double compute_lr_at(std::int64_t epoch) const = 0;
 
     Optimizer& opt_;
@@ -55,7 +31,6 @@ protected:
     std::int64_t epoch_;
 };
 
-/// LR drops by `gamma` every `step_size` epochs.
 class LUCID_API StepLR : public LRScheduler {
 public:
     StepLR(Optimizer& opt, std::int64_t step_size, double gamma = 0.1);
@@ -68,7 +43,6 @@ private:
     double gamma_;
 };
 
-/// LR multiplied by `gamma^epoch` (smooth exponential decay).
 class LUCID_API ExponentialLR : public LRScheduler {
 public:
     ExponentialLR(Optimizer& opt, double gamma);
@@ -80,7 +54,6 @@ private:
     double gamma_;
 };
 
-/// LR drops by `gamma` at each milestone.
 class LUCID_API MultiStepLR : public LRScheduler {
 public:
     MultiStepLR(Optimizer& opt, std::vector<std::int64_t> milestones, double gamma = 0.1);
@@ -93,7 +66,6 @@ private:
     double gamma_;
 };
 
-/// Cosine annealing: lr(t) = eta_min + 0.5·(base − eta_min)·(1 + cos(πt/T_max)).
 class LUCID_API CosineAnnealingLR : public LRScheduler {
 public:
     CosineAnnealingLR(Optimizer& opt, std::int64_t T_max, double eta_min = 0.0);
@@ -106,9 +78,6 @@ private:
     double eta_min_;
 };
 
-/// LR = base_lr · lambda(epoch). The lambda is held as a std::function so
-/// the binding layer can pass a Python callable through. The function is
-/// invoked once per `step()` with the new epoch index.
 class LUCID_API LambdaLR : public LRScheduler {
 public:
     LambdaLR(Optimizer& opt, std::function<double(std::int64_t)> lr_lambda);
@@ -120,8 +89,6 @@ private:
     std::function<double(std::int64_t)> lr_lambda_;
 };
 
-/// PyTorch-style ReduceLROnPlateau. Unlike the others this one is metric-
-/// driven: `step(metric)` instead of `step()`. Mode is "min" or "max".
 class LUCID_API ReduceLROnPlateau {
 public:
     enum class Mode { Min, Max };
@@ -161,11 +128,6 @@ private:
     double last_lr_;
 };
 
-/// Cyclic LR (Smith 2017): triangular wave in (base_lr, max_lr) with
-/// period total_size = step_size_up + step_size_down. Modes:
-///   - Triangular   — fixed amplitude
-///   - Triangular2  — amplitude halves each cycle
-///   - ExpRange     — amplitude scales as gamma^step_count
 class LUCID_API CyclicLR : public LRScheduler {
 public:
     enum class Mode { Triangular, Triangular2, ExpRange };
@@ -188,9 +150,6 @@ private:
     double gamma_;
 };
 
-/// Noam scheduler (Attention-Is-All-You-Need): warmup then 1/sqrt(step) decay.
-///   lr = factor · model_size^{-0.5} · min(step^{-0.5}, step · warmup^{-1.5})
-/// The optimizer's base_lr is ignored — Noam computes an absolute LR.
 class LUCID_API NoamScheduler : public LRScheduler {
 public:
     NoamScheduler(Optimizer& opt,

@@ -1,23 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — ReduceKernel<Derived>: reduction op base.
-// =====================================================================
-//
-// Replaces `ops/ufunc/_ReduceOp.h::ReduceOp<Derived>`.
-//
-// Derived implements:
-//   1. `static const OpSchema schema_v1;`
-//   2. `static CpuStorage cpu_kernel(const CpuStorage&, const Shape& input_shape,
-//                                    const std::vector<int>& axes, bool keepdims, Dtype);`
-//   3. (optional) `static GpuStorage gpu_kernel(...);`
-//   4. `Storage grad_formula(const Storage& grad_out);`
-//
-// `ops/ufunc/_ReduceOp.h` re-exports as:
-//   template<class D> using ReduceOp = kernel::ReduceKernel<D>;
-//
-// Layer: kernel/. Depends on kernel/AutogradNode.h, autograd/, backend/, core/.
-
 #include <memory>
 #include <vector>
 
@@ -35,8 +17,8 @@
 #include "../core/Scope.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
-#include "BinaryKernel.h"  // detail::ensure_grad_fn
-#include "Contig.h"        // contiguous_op forward-decl
+#include "BinaryKernel.h"
+#include "Contig.h"
 #include "IKernel.h"
 
 namespace lucid {
@@ -66,19 +48,15 @@ public:
 
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
-    /// Reduce-specific saved state.
     std::vector<int> reduce_axes_;
     bool keepdims_ = false;
     Shape full_input_shape_;
 
-    static std::shared_ptr<TensorImpl> forward(const std::shared_ptr<TensorImpl>& a,
-                                               const std::vector<int>& axes_user,
-                                               bool keepdims);
+    static std::shared_ptr<TensorImpl>
+    forward(const std::shared_ptr<TensorImpl>& a, const std::vector<int>& axes_user, bool keepdims);
 
     std::vector<Storage> apply(Storage grad_out) override;
 };
-
-// ---------------- implementation ----------------
 
 template <class Derived>
 std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
@@ -87,7 +65,6 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     if (!a)
         ErrorBuilder(Derived::schema_v1.name).fail("null input tensor");
 
-    // Phase 5: determinism gate + AMP dtype resolution.
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
@@ -116,8 +93,8 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
                                                   a_ptr->shape(), axes, keepdims, eff_dt)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(),
-                                            /*requires_grad=*/false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
     if constexpr (!Derived::kHasGradient) {
@@ -136,7 +113,7 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
         bwd->device_ = a->device();
         bwd->input_tensors_ = {a};
         if constexpr (Derived::kSavesInput)
-            bwd->saved_inputs_ = {a_ptr->storage()};  // cast storage
+            bwd->saved_inputs_ = {a_ptr->storage()};
         if constexpr (Derived::kSavesOutput)
             bwd->saved_output_ = out->storage();
 
@@ -145,7 +122,7 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
         bwd->full_input_shape_ = a->shape();
 
         std::vector<Edge> edges;
-        edges.emplace_back(a_edge, /*input_nr=*/0);
+        edges.emplace_back(a_edge, 0);
         bwd->set_next_edges(std::move(edges));
         bwd->set_saved_versions({a->version()});
 

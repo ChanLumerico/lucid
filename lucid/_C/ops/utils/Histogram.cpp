@@ -23,17 +23,10 @@ namespace {
 using utils_detail::allocate_cpu;
 using utils_detail::fresh;
 
-// Materialize an input on CPU regardless of source device.
 CpuStorage to_cpu(const TensorImplPtr& a) {
     return backend::Dispatcher::for_device(a->device()).to_cpu(a->storage(), a->shape());
 }
 
-// Wrap a freshly-built CpuStorage as a Storage that lives on `target_device`,
-// uploading to GPU when feasible so the result tracks the input's device.
-// Histogram outputs are F64 (counts/density), which MLX-Metal does not
-// support, so when the user requests GPU we fall back to CPU here and
-// document the asymmetry — the alternative is silently downcasting to F32
-// which loses precision.
 Storage to_device_storage(CpuStorage&& cpu, Device target_device, const Shape& shape) {
     if (target_device == Device::GPU && cpu.dtype != Dtype::F64) {
         return backend::Dispatcher::for_device(Device::GPU).from_cpu(cpu, shape);
@@ -41,31 +34,27 @@ Storage to_device_storage(CpuStorage&& cpu, Device target_device, const Shape& s
     return Storage{std::move(cpu)};
 }
 
-// Pick the device for histogram outputs: GPU only when the dtype can live
-// on GPU (everything except F64).
 Device pick_out_device(Device requested, Dtype dt) {
     if (requested == Device::GPU && dt == Dtype::F64)
         return Device::CPU;
     return requested;
 }
 
-// Read element `i` from a CPU storage as double.
 double read_double(const CpuStorage& s, std::size_t i, Dtype dt) {
     switch (dt) {
-        case Dtype::F32:
-            return reinterpret_cast<const float*>(s.ptr.get())[i];
-        case Dtype::F64:
-            return reinterpret_cast<const double*>(s.ptr.get())[i];
-        case Dtype::I32:
-            return reinterpret_cast<const std::int32_t*>(s.ptr.get())[i];
-        case Dtype::I64:
-            return reinterpret_cast<const std::int64_t*>(s.ptr.get())[i];
-        default:
-            ErrorBuilder("histogram").not_implemented("dtype not supported");
+    case Dtype::F32:
+        return reinterpret_cast<const float*>(s.ptr.get())[i];
+    case Dtype::F64:
+        return reinterpret_cast<const double*>(s.ptr.get())[i];
+    case Dtype::I32:
+        return reinterpret_cast<const std::int32_t*>(s.ptr.get())[i];
+    case Dtype::I64:
+        return reinterpret_cast<const std::int64_t*>(s.ptr.get())[i];
+    default:
+        ErrorBuilder("histogram").not_implemented("dtype not supported");
     }
 }
 
-// Build linearly-spaced bin edges of length bins+1.
 TensorImplPtr build_edges(double lo, double hi, std::int64_t bins) {
     Shape sh{bins + 1};
     auto cpu = allocate_cpu(sh, Dtype::F64);
@@ -73,14 +62,14 @@ TensorImplPtr build_edges(double lo, double hi, std::int64_t bins) {
     const double step = (hi - lo) / static_cast<double>(bins);
     for (std::int64_t i = 0; i <= bins; ++i)
         dst[i] = lo + static_cast<double>(i) * step;
-    dst[bins] = hi;  // pin to exact endpoint
+    dst[bins] = hi;
     return fresh(Storage{std::move(cpu)}, std::move(sh), Dtype::F64, Device::CPU);
 }
 
 }  // namespace
 
-std::vector<TensorImplPtr> histogram_op(
-    const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
+std::vector<TensorImplPtr>
+histogram_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
     Validator::input(a, "histogram.a").non_null();
     if (bins <= 0)
         ErrorBuilder("histogram").fail("bins must be > 0");
@@ -95,13 +84,13 @@ std::vector<TensorImplPtr> histogram_op(
     Shape counts_shape{bins};
 
     Device out_dev = pick_out_device(a->device(), Dtype::F64);
-    // counts_storage is always CpuStorage (F64); upload to GPU if needed.
+
     auto final_counts_storage =
         to_device_storage(std::move(storage_cpu(counts_storage)), out_dev, counts_shape);
     auto counts_t =
         fresh(std::move(final_counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
     auto edges = build_edges(lo, hi, bins);
-    // edges share the dtype/device convention with counts.
+
     if (out_dev == Device::GPU) {
         edges = fresh(backend::Dispatcher::for_device(Device::GPU)
                           .from_cpu(storage_cpu(edges->storage()), edges->shape()),
@@ -163,7 +152,7 @@ std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
     Device out_dev = pick_out_device(a->device(), Dtype::F64);
     auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
     auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
-    // Pack edges as a (bins_a + bins_b + 2) flat tensor: [edges_a..., edges_b...]
+
     auto ea = build_edges(lo_a, hi_a, bins_a);
     auto eb = build_edges(lo_b, hi_b, bins_b);
     Shape edge_shape{bins_a + 1 + bins_b + 1};
@@ -243,7 +232,6 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
     auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
     auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
 
-    // Pack all edges sequentially.
     std::int64_t edge_total = 0;
     for (auto b_ : bins)
         edge_total += (b_ + 1);

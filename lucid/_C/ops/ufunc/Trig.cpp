@@ -4,7 +4,6 @@
 
 namespace lucid {
 
-// --------------- Sin ---------------
 const OpSchema SinBackward::schema_v1{"sin", 1, AmpPolicy::Promote, true};
 
 Storage SinBackward::grad_formula(const Storage& g) {
@@ -18,7 +17,6 @@ TensorImplPtr sin_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SinBackward)
 
-// --------------- Cos ---------------
 const OpSchema CosBackward::schema_v1{"cos", 1, AmpPolicy::Promote, true};
 
 Storage CosBackward::grad_formula(const Storage& g) {
@@ -33,12 +31,11 @@ TensorImplPtr cos_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(CosBackward)
 
-// --------------- Tan ---------------
 const OpSchema TanBackward::schema_v1{"tan", 1, AmpPolicy::Promote, true};
 
 Storage TanBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    // dx = g / cos²(x)
+
     Storage cosx = cos_storage(saved_inputs_[0], n, dtype_, device_);
     Storage cos_sq = square_storage(cosx, n, dtype_, device_);
     return divide_storages(g, cos_sq, n, dtype_, device_);
@@ -49,12 +46,11 @@ TensorImplPtr tan_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(TanBackward)
 
-// --------------- Asin ---------------
 const OpSchema AsinBackward::schema_v1{"arcsin", 1, AmpPolicy::Promote, true};
 
 Storage AsinBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    // dx = g / sqrt(1 - x²)
+
     Storage x_sq = square_storage(saved_inputs_[0], n, dtype_, device_);
     Storage one_min = mul_scalar_storage(x_sq, -1.0, n, dtype_, device_);
     Storage radicand = add_scalar_storage(one_min, 1.0, n, dtype_, device_);
@@ -67,7 +63,6 @@ TensorImplPtr arcsin_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(AsinBackward)
 
-// --------------- Acos ---------------
 const OpSchema AcosBackward::schema_v1{"arccos", 1, AmpPolicy::Promote, true};
 
 Storage AcosBackward::grad_formula(const Storage& g) {
@@ -85,12 +80,11 @@ TensorImplPtr arccos_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(AcosBackward)
 
-// --------------- Atan ---------------
 const OpSchema AtanBackward::schema_v1{"arctan", 1, AmpPolicy::Promote, true};
 
 Storage AtanBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    // dx = g / (1 + x²)
+
     Storage x_sq = square_storage(saved_inputs_[0], n, dtype_, device_);
     Storage denom = add_scalar_storage(x_sq, 1.0, n, dtype_, device_);
     return divide_storages(g, denom, n, dtype_, device_);

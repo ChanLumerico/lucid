@@ -21,14 +21,10 @@
 
 namespace lucid {
 
-// =====================================================================
-// affine_grid
-// =====================================================================
-
 const OpSchema AffineGridBackward::schema_v1{"affine_grid", 1, AmpPolicy::Promote, true};
 
-TensorImplPtr AffineGridBackward::forward(
-    const TensorImplPtr& theta, int N, int H, int W, bool align_corners) {
+TensorImplPtr
+AffineGridBackward::forward(const TensorImplPtr& theta, int N, int H, int W, bool align_corners) {
     if (!theta)
         ErrorBuilder("affine_grid").fail("null theta");
     if (theta->shape().size() != 3 || theta->shape()[0] != N || theta->shape()[1] != 2 ||
@@ -56,8 +52,7 @@ TensorImplPtr AffineGridBackward::forward(
     bwd->H_ = H;
     bwd->W_ = W;
     bwd->orig_theta_shape_ = theta->shape();
-    kernel::NaryKernel<AffineGridBackward, 1>::wire_autograd(std::move(bwd), {theta}, out,
-                                                             /*save_ins=*/false);
+    kernel::NaryKernel<AffineGridBackward, 1>::wire_autograd(std::move(bwd), {theta}, out, false);
     return out;
 }
 
@@ -70,10 +65,6 @@ TensorImplPtr affine_grid_op(const TensorImplPtr& theta, int N, int H, int W, bo
     return AffineGridBackward::forward(theta, N, H, W, align_corners);
 }
 LUCID_REGISTER_OP(AffineGridBackward)
-
-// =====================================================================
-// grid_sample
-// =====================================================================
 
 const OpSchema GridSampleBackward::schema_v1{"grid_sample", 1, AmpPolicy::Promote, true};
 

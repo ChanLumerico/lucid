@@ -40,8 +40,7 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     auto bwd = std::make_shared<SoftmaxBackward>();
     bwd->saved_output_ = result->storage();
     bwd->axis_ = wrapped;
-    kernel::NaryKernel<SoftmaxBackward, 1>::wire_autograd(std::move(bwd), {a}, result,
-                                                          /*save_ins=*/false);
+    kernel::NaryKernel<SoftmaxBackward, 1>::wire_autograd(std::move(bwd), {a}, result, false);
     return result;
 }
 

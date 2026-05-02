@@ -74,8 +74,7 @@ TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         bwd->saved_b_ = b->storage();
         bwd->M_ = a->shape()[0];
         bwd->N_ = b->shape()[0];
-        kernel::NaryKernel<OuterBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out,
-                                                            /*save_ins=*/false);
+        kernel::NaryKernel<OuterBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out, false);
     };
 
     const std::int64_t M = a->shape()[0];

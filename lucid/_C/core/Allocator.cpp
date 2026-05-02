@@ -13,31 +13,26 @@
 
 namespace lucid {
 
-// --------------------------------------------------------------------------
-// Phase 9.3: thread-local small-block pool.
-//
-// Strategy: 23 power-of-2 size classes [64B … 4MB]. Each class holds a
-// free-list of up to kMaxDepth raw blocks. Alloc: pop from free-list (no
-// syscall) or fall back to posix_memalign. Free: if block fits a class and
-// the list isn't full, push; otherwise std::free.
-// --------------------------------------------------------------------------
-
 namespace {
 
-constexpr std::size_t kMinClass   = kCpuAlignment;    // 64 B
-constexpr std::size_t kMaxClass   = 4 * 1024 * 1024;  // 4 MB
-constexpr std::size_t kMaxDepth   = 32;
+constexpr std::size_t kMinClass = kCpuAlignment;
+constexpr std::size_t kMaxClass = 4 * 1024 * 1024;
+constexpr std::size_t kMaxDepth = 32;
 constexpr std::size_t kNumClasses = 23;
 
 inline std::size_t round_up_pool(std::size_t n) noexcept {
     std::size_t s = kMinClass;
-    while (s < n) s <<= 1;
+    while (s < n)
+        s <<= 1;
     return s;
 }
 inline int class_index(std::size_t rounded) noexcept {
     int idx = 0;
     std::size_t s = kMinClass;
-    while (s < rounded && idx < static_cast<int>(kNumClasses) - 1) { s <<= 1; ++idx; }
+    while (s < rounded && idx < static_cast<int>(kNumClasses) - 1) {
+        s <<= 1;
+        ++idx;
+    }
     return idx;
 }
 
@@ -46,13 +41,18 @@ struct ThreadPool {
 
     void* pop(int cls) noexcept {
         auto& v = lists[static_cast<std::size_t>(cls)];
-        if (v.empty()) return nullptr;
-        void* p = v.back(); v.pop_back(); return p;
+        if (v.empty())
+            return nullptr;
+        void* p = v.back();
+        v.pop_back();
+        return p;
     }
     bool push(int cls, void* p) noexcept {
         auto& v = lists[static_cast<std::size_t>(cls)];
-        if (v.size() >= kMaxDepth) return false;
-        v.push_back(p); return true;
+        if (v.size() >= kMaxDepth)
+            return false;
+        v.push_back(p);
+        return true;
     }
     ~ThreadPool() {
         for (auto& v : lists)
@@ -95,11 +95,9 @@ std::shared_ptr<std::byte[]> allocate_aligned_bytes(std::size_t nbytes, Device d
         return std::shared_ptr<std::byte[]>(static_cast<std::byte*>(raw), deleter);
     }
 
-    // Large allocation or GPU: plain posix_memalign.
     if (::posix_memalign(&raw, kCpuAlignment, nbytes) != 0 || !raw) {
         const auto s = MemoryTracker::get_stats(device);
-        throw OutOfMemory(nbytes, s.current_bytes, s.peak_bytes,
-                          std::string(device_name(device)));
+        throw OutOfMemory(nbytes, s.current_bytes, s.peak_bytes, std::string(device_name(device)));
     }
     MemoryTracker::track_alloc(nbytes, device);
     auto deleter = [nbytes, device](std::byte* p) {

@@ -1,7 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-// Mirrors `lucid/linalg/`. One header per op for full per-op modularity.
 #include "../core/TensorImpl.h"
 #include "../ops/linalg/Cholesky.h"
 #include "../ops/linalg/Det.h"

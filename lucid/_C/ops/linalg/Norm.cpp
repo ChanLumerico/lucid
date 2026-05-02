@@ -25,8 +25,6 @@
 
 namespace lucid {
 
-// ---------- Schema & backward ----------
-
 const OpSchema NormBackward::schema_v1{"norm", 1, AmpPolicy::KeepInput};
 
 std::vector<Storage> NormBackward::apply(Storage grad_out) {
@@ -38,7 +36,6 @@ std::vector<Storage> NormBackward::apply(Storage grad_out) {
     auto N = fresh(Storage{saved_output_}, out_shape_, dtype_, device_);
     auto dN = fresh(std::move(grad_out), out_shape_, dtype_, device_);
 
-    // Expand a tensor from reduced out_shape_ back to input_shapes_[0].
     auto expand_back = [&](const TensorImplPtr& t) -> TensorImplPtr {
         if (keepdims_ || axis_.empty()) {
             return broadcast_to_op(t, input_shapes_[0]);
@@ -55,12 +52,10 @@ std::vector<Storage> NormBackward::apply(Storage grad_out) {
 
     TensorImplPtr dA;
     if (ord_ == 2.0) {
-        // dA = (a / clamp(n, eps)) * dn
         auto N_exp = expand_back(clip_op(N, 1e-12, 1e30));
         auto dN_exp = expand_back(dN);
         dA = mul_op(div_op(A, N_exp), dN_exp);
     } else if (ord_ == 1.0) {
-        // dA = sign(a) * dn
         dA = mul_op(sign_op(A), expand_back(dN));
     } else {
         ErrorBuilder("norm_backward")
@@ -71,14 +66,10 @@ std::vector<Storage> NormBackward::apply(Storage grad_out) {
 
 LUCID_REGISTER_OP(NormBackward)
 
-// ---------- Forward ----------
-
 namespace {
 
-// Reduce shape after collapsing `axes` (with keepdims).
 Shape reduced_shape(const Shape& sh, const std::vector<int>& axes, bool keepdims) {
     if (axes.empty()) {
-        // Empty axes → full reduction: scalar (or all-ones if keepdims).
         if (keepdims)
             return Shape(sh.size(), 1);
         return Shape{};

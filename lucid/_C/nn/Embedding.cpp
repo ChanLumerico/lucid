@@ -19,10 +19,6 @@
 
 namespace lucid {
 
-// =====================================================================
-// Embedding
-// =====================================================================
-
 const OpSchema EmbeddingBackward::schema_v1{"embedding", 1, AmpPolicy::Promote, true};
 
 TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
@@ -58,8 +54,7 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
     bwd->saved_indices_dtype_ = indices->dtype();
     bwd->padding_idx_ = padding_idx;
     bwd->weight_shape_ = weight->shape();
-    kernel::NaryKernel<EmbeddingBackward, 1>::wire_autograd(std::move(bwd), {weight}, out,
-                                                            /*save_ins=*/false);
+    kernel::NaryKernel<EmbeddingBackward, 1>::wire_autograd(std::move(bwd), {weight}, out, false);
     return out;
 }
 
@@ -69,16 +64,11 @@ std::vector<Storage> EmbeddingBackward::apply(Storage grad_out) {
                                   padding_idx_, dtype_)};
 }
 
-TensorImplPtr embedding_op(const TensorImplPtr& weight,
-                           const TensorImplPtr& indices,
-                           int padding_idx) {
+TensorImplPtr
+embedding_op(const TensorImplPtr& weight, const TensorImplPtr& indices, int padding_idx) {
     return EmbeddingBackward::forward(weight, indices, padding_idx);
 }
 LUCID_REGISTER_OP(EmbeddingBackward)
-
-// =====================================================================
-// Sinusoidal positional embedding — pure forward, no grad.
-// =====================================================================
 
 TensorImplPtr sinusoidal_pos_embedding_op(std::int64_t seq_len,
                                           std::int64_t embed_dim,
@@ -96,10 +86,6 @@ TensorImplPtr sinusoidal_pos_embedding_op(std::int64_t seq_len,
     Storage out_s = be.sinusoidal_pos_embedding(seq_len, embed_dim, dtype);
     return std::make_shared<TensorImpl>(std::move(out_s), out_shape, dtype, device, false);
 }
-
-// =====================================================================
-// Rotary positional embedding (RoPE).
-// =====================================================================
 
 const OpSchema RotaryPosEmbeddingBackward::schema_v1{"rotary_pos_embedding", 1,
                                                      AmpPolicy::ForceFP32, true};
@@ -127,7 +113,7 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
     auto& be = backend::Dispatcher::for_device(input->device());
     auto rope_out = be.rope_forward(input->storage(), pos_storage, input->shape(), interleaved,
                                     pos_dt, input->dtype());
-    // rope_out = {out, saved_cos, saved_sin}
+
     Storage out_storage = std::move(rope_out[0]);
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), input->shape(), input->dtype(),
@@ -140,7 +126,7 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
         bwd->interleaved_ = interleaved;
         bwd->orig_shape_ = input->shape();
         kernel::NaryKernel<RotaryPosEmbeddingBackward, 1>::wire_autograd(std::move(bwd), {input},
-                                                                         out, /*save_ins=*/false);
+                                                                         out, false);
     }
     return out;
 }

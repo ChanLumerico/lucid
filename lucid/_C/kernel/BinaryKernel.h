@@ -1,25 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — BinaryKernel<Derived>: 2-input element-wise base.
-// =====================================================================
-//
-// Replaces `ops/bfunc/_BinaryOp.h::BinaryOp<Derived>`. All element-wise
-// binary ops inherit from `kernel::BinaryKernel<Derived>`.
-//
-// Derived implements:
-//   1. `static const OpSchema schema_v1;`
-//   2. `static CpuStorage cpu_kernel(const CpuStorage&, const CpuStorage&,
-//                                    const Shape&, Dtype);`
-//   3. (optional) `static GpuStorage gpu_kernel(GpuStorage, GpuStorage, Shape, Dtype);`
-//   4. `std::pair<Storage, Storage> grad_formula(const Storage& grad_out);`
-//   5. (optional) `static constexpr bool kSavesInputs = false;`
-//
-// `ops/bfunc/_BinaryOp.h` now re-exports as backward-compat alias:
-//   template<class D> using BinaryOp = kernel::BinaryKernel<D>;
-//
-// Layer: kernel/. Depends on kernel/AutogradNode.h, autograd/, backend/, core/.
-
 #include <memory>
 #include <utility>
 #include <vector>
@@ -45,7 +25,7 @@
 #include "../core/Scope.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
-#include "Contig.h"  // contiguous_op forward-decl (impl in ops/utils/Contiguous.cpp)
+#include "Contig.h"
 #include "IKernel.h"
 
 namespace lucid {
@@ -57,15 +37,12 @@ concept HasGpuKernel = requires(GpuStorage a, GpuStorage b, Shape s, Dtype d) {
     { T::gpu_kernel(a, b, s, d) } -> std::same_as<GpuStorage>;
 };
 
-/// Phase 4.5: ops with this static method use Dispatcher instead of
-/// cpu_kernel/gpu_kernel — no device check in the call site.
 template <class T>
 concept HasBinaryDispatch =
     requires(backend::IBackend& be, Storage a, Storage b, Shape s, Dtype d) {
         { T::dispatch(be, a, b, s, d) } -> std::same_as<Storage>;
     };
 
-/// NumPy-style broadcast shape resolution. Returns Result<Shape> — no throw.
 inline Result<Shape> try_broadcast_shapes(const Shape& a, const Shape& b) {
     const std::size_t ra = a.size();
     const std::size_t rb = b.size();
@@ -92,11 +69,8 @@ inline Shape broadcast_shapes(const Shape& a, const Shape& b) {
     throw ShapeMismatch(a, b, "broadcast: incompatible shapes");
 }
 
-/// CPU broadcast-materialize: expand src along broadcast axes.
-inline CpuStorage broadcast_cpu(const CpuStorage& src,
-                                const Shape& src_shape,
-                                const Shape& out_shape,
-                                Dtype dt) {
+inline CpuStorage
+broadcast_cpu(const CpuStorage& src, const Shape& src_shape, const Shape& out_shape, Dtype dt) {
     const std::size_t ndim_out = out_shape.size();
     const std::size_t ndim_in = src_shape.size();
     Shape padded(ndim_out, 1);
@@ -131,32 +105,31 @@ inline CpuStorage broadcast_cpu(const CpuStorage& src,
         }
     };
     switch (dt) {
-        case Dtype::F32:
-            run(float{});
-            break;
-        case Dtype::F64:
-            run(double{});
-            break;
-        case Dtype::I32:
-            run(std::int32_t{});
-            break;
-        case Dtype::I64:
-            run(std::int64_t{});
-            break;
-        case Dtype::I16:
-            run(std::int16_t{});
-            break;
-        case Dtype::I8:
-        case Dtype::Bool:
-            run(std::uint8_t{});
-            break;
-        default:
-            ErrorBuilder("broadcast").not_implemented("dtype not supported");
+    case Dtype::F32:
+        run(float{});
+        break;
+    case Dtype::F64:
+        run(double{});
+        break;
+    case Dtype::I32:
+        run(std::int32_t{});
+        break;
+    case Dtype::I64:
+        run(std::int64_t{});
+        break;
+    case Dtype::I16:
+        run(std::int16_t{});
+        break;
+    case Dtype::I8:
+    case Dtype::Bool:
+        run(std::uint8_t{});
+        break;
+    default:
+        ErrorBuilder("broadcast").not_implemented("dtype not supported");
     }
     return out;
 }
 
-/// Attach (or reuse) an AccumulateGrad as grad_fn for a leaf tensor.
 inline std::shared_ptr<Node> ensure_grad_fn(const std::shared_ptr<TensorImpl>& t) {
     if (!t || !t->requires_grad())
         return nullptr;
@@ -169,16 +142,13 @@ inline std::shared_ptr<Node> ensure_grad_fn(const std::shared_ptr<TensorImpl>& t
     return nullptr;
 }
 
-/// Return `t` unchanged if it already has `dt`; otherwise cast storage through
-/// the registered backend. AMP casts are transparent to autograd: kernels save
-/// original tensor edges and versions, but compute with the cast storage.
 inline TensorImplPtr maybe_cast_for_kernel(const TensorImplPtr& t, Dtype dt) {
     if (!t || t->dtype() == dt)
         return t;
     auto& be = backend::Dispatcher::for_device(t->device());
     Storage cast_storage = be.cast(t->storage(), t->shape(), t->dtype(), dt);
     return std::make_shared<TensorImpl>(std::move(cast_storage), t->shape(), dt, t->device(),
-                                        /*requires_grad=*/false);
+                                        false);
 }
 
 }  // namespace detail
@@ -196,10 +166,8 @@ public:
     static constexpr bool kSavesInputs = true;
 
 protected:
-    /// Access the backend for the given device via Dispatcher (Phase 4).
     static backend::IBackend& backend_for(Device d) { return backend::Dispatcher::for_device(d); }
 
-    /// Materialize saved input k at out_shape_ (with broadcast if needed).
     Storage saved_input_broadcasted(std::size_t k) const {
         const Shape& src = this->input_shapes_[k];
         if (src == this->out_shape_)
@@ -215,8 +183,6 @@ protected:
     }
 };
 
-// ---------------- implementation ----------------
-
 template <class Derived>
 std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
                                                            const std::shared_ptr<TensorImpl>& b) {
@@ -231,7 +197,6 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
                              std::string(device_name(b->device())),
                              std::string(Derived::schema_v1.name));
 
-    // Phase 5: determinism gate + AMP dtype resolution.
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
@@ -249,9 +214,8 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, out_shape};
 
     Storage out_storage;
-    // Phase 4.5: prefer Dispatcher if Derived provides dispatch().
+
     if constexpr (detail::HasBinaryDispatch<Derived>) {
-        // Materialize broadcast inputs first (same as legacy CPU path).
         if (a_ptr->device() == Device::CPU) {
             const CpuStorage& a_raw = std::get<CpuStorage>(a_ptr->storage());
             const CpuStorage& b_raw = std::get<CpuStorage>(b_ptr->storage());
@@ -269,7 +233,6 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
             out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::CPU),
                                             Storage{*a_use}, Storage{*b_use}, out_shape, eff_dt);
         } else {
-            // GPU: broadcast via MLX then dispatch.
             const auto& ga = std::get<GpuStorage>(a_ptr->storage());
             const auto& gb = std::get<GpuStorage>(b_ptr->storage());
             ::mlx::core::array a_arr = (a_ptr->shape() == out_shape)
@@ -322,8 +285,8 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
         out_storage = Storage{Derived::cpu_kernel(*a_use, *b_use, out_shape, eff_dt)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(),
-                                            /*requires_grad=*/false);
+    auto out =
+        std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
     const bool needs_grad = GradMode::is_enabled() && (a->requires_grad() || b->requires_grad());
@@ -340,11 +303,11 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     bwd->device_ = a->device();
     bwd->input_tensors_ = {a, b};
     if constexpr (Derived::kSavesInputs)
-        bwd->saved_inputs_ = {a_ptr->storage(), b_ptr->storage()};  // cast storage
+        bwd->saved_inputs_ = {a_ptr->storage(), b_ptr->storage()};
 
     std::vector<Edge> edges;
-    edges.emplace_back(a_edge, /*input_nr=*/0);
-    edges.emplace_back(b_edge, /*input_nr=*/0);
+    edges.emplace_back(a_edge, 0);
+    edges.emplace_back(b_edge, 0);
     bwd->set_next_edges(std::move(edges));
     bwd->set_saved_versions({a->version(), b->version()});
 

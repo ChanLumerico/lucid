@@ -16,7 +16,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -25,7 +25,6 @@ namespace {
 
 using ufunc_detail::fresh;
 
-// VarBackward: dx = (2/N) * (x - mean) * broadcast(grad)
 class VarBackward : public AutogradNode<VarBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -35,7 +34,7 @@ public:
     bool keepdims_;
     std::int64_t count_;
     Storage saved_input_;
-    Storage saved_mean_;  // broadcast to input_shape_
+    Storage saved_mean_;
 
     std::vector<Storage> apply(Storage grad_out) override {
         const std::size_t n = shape_numel(input_shape_);
@@ -71,7 +70,7 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
         reduced = 1;
 
     if (GradMode::is_enabled() && a->requires_grad()) {
-        Shape mean_keepdims_shape = reduce_output_shape(a->shape(), axes, /*keepdims=*/true);
+        Shape mean_keepdims_shape = reduce_output_shape(a->shape(), axes, true);
         Storage mean_keepdims =
             be.reduce_mean(a->storage(), a->shape(), backend::ReduceOpts{axes, true}, dt);
         Storage mean_storage = be.broadcast(mean_keepdims, mean_keepdims_shape, a->shape(), dt);
@@ -83,8 +82,7 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
         bwd->count_ = static_cast<std::int64_t>(reduced);
         bwd->saved_input_ = a->storage();
         bwd->saved_mean_ = std::move(mean_storage);
-        kernel::NaryKernel<VarBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                          /*save_ins=*/false);
+        kernel::NaryKernel<VarBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     }
     return out;
 }

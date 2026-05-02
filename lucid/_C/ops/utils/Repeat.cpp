@@ -13,7 +13,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -53,15 +53,12 @@ public:
 
 const OpSchema TileBackward::schema_v1{"tile", 1, AmpPolicy::KeepInput, true};
 
-TensorImplPtr attach_repeat_grad(const TensorImplPtr& a,
-                                 TensorImplPtr out,
-                                 int axis,
-                                 std::int64_t repeats) {
+TensorImplPtr
+attach_repeat_grad(const TensorImplPtr& a, TensorImplPtr out, int axis, std::int64_t repeats) {
     auto bwd = std::make_shared<RepeatBackward>();
     bwd->axis_ = axis;
     bwd->repeats_ = repeats;
-    kernel::NaryKernel<RepeatBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                         /*save_ins=*/false);
+    kernel::NaryKernel<RepeatBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 
@@ -72,8 +69,7 @@ TensorImplPtr attach_tile_grad(const TensorImplPtr& a,
     auto bwd = std::make_shared<TileBackward>();
     bwd->padded_shape_ = std::move(padded_shape);
     bwd->reps_ = std::move(reps);
-    kernel::NaryKernel<TileBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                       /*save_ins=*/false);
+    kernel::NaryKernel<TileBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 

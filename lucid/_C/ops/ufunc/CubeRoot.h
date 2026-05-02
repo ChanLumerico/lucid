@@ -1,7 +1,5 @@
 #pragma once
 
-// Cube root: x^(1/3), grad = g/(3 * cbrt(x)^2)
-
 #include "../../api.h"
 #include "../../backend/IBackend.h"
 #include "../../core/AmpPolicy.h"
@@ -12,7 +10,6 @@
 
 namespace lucid {
 
-/// Autograd backward node for CubeRoot.
 class LUCID_API CubeRootBackward : public UnaryOp<CubeRootBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -24,7 +21,6 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-/// Cube root.
 LUCID_API TensorImplPtr cube_root_op(const TensorImplPtr& a);
 
 }  // namespace lucid

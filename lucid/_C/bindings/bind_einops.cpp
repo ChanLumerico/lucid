@@ -28,8 +28,6 @@ int parse_einops_reduction(const std::string& reduction) {
 }  // namespace
 
 void register_einops(py::module_& m) {
-    // einops-style ops live in the same engine namespace as the rest;
-    // Python wraps them as `lucid.ops.einops.{rearrange,reduce,repeat,einsum}`.
     m.def(
         "rearrange",
         [](const TensorImplPtr& a, const std::string& pattern,

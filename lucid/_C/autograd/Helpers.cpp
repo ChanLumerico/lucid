@@ -45,20 +45,20 @@ void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
     }
     const std::size_t n = dst.nbytes / dtype_size(dst.dtype);
     switch (dst.dtype) {
-        case Dtype::F32:
-            add_typed<float>(dst.ptr.get(), src.ptr.get(), n);
-            break;
-        case Dtype::F64:
-            add_typed<double>(dst.ptr.get(), src.ptr.get(), n);
-            break;
-        case Dtype::I32:
-            add_typed<std::int32_t>(dst.ptr.get(), src.ptr.get(), n);
-            break;
-        case Dtype::I64:
-            add_typed<std::int64_t>(dst.ptr.get(), src.ptr.get(), n);
-            break;
-        default:
-            ErrorBuilder("accumulate_into").not_implemented("dtype not yet supported in Phase 2");
+    case Dtype::F32:
+        add_typed<float>(dst.ptr.get(), src.ptr.get(), n);
+        break;
+    case Dtype::F64:
+        add_typed<double>(dst.ptr.get(), src.ptr.get(), n);
+        break;
+    case Dtype::I32:
+        add_typed<std::int32_t>(dst.ptr.get(), src.ptr.get(), n);
+        break;
+    case Dtype::I64:
+        add_typed<std::int64_t>(dst.ptr.get(), src.ptr.get(), n);
+        break;
+    default:
+        ErrorBuilder("accumulate_into").not_implemented("dtype not yet supported in Phase 2");
     }
 }
 
@@ -92,12 +92,11 @@ void accumulate_into(Storage& dst, const Storage& src) {
                            throw DtypeMismatch(std::string(dtype_name(d.dtype)),
                                                std::string(dtype_name(s.dtype)), "accumulate_into");
                        }
-                       // MLX is functional; we replace dst's array with `dst + src`.
-                       // Refcount drops on the previous array via the tracked deleter.
+
                        auto next = ::mlx::core::add(*d.arr, *s.arr);
                        d.arr = gpu::wrap_mlx_array(std::move(next), d.dtype).arr;
                    },
-                   // Phase 9.2: SharedStorage is CPU-accessible via cpu_view().
+
                    [&](SharedStorage& d, const SharedStorage& s) {
                        auto dv = d.cpu_view();
                        auto sv = s.cpu_view();
@@ -118,36 +117,31 @@ void accumulate_into(Storage& dst, const Storage& src) {
                dst, src);
 }
 
-// ----------------------------------------------------------------------
-// Storage-level math primitives (Phase 3.1+).
-// All paths route through backend::Dispatcher (Phase 4.6).
-// ----------------------------------------------------------------------
-
 Storage negate_storage(const Storage& s, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).neg(s, flat, dt);
 }
 
-Storage multiply_storages(
-    const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
+Storage
+multiply_storages(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).mul(a, b, flat, dt);
 }
 
-Storage divide_storages(
-    const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
+Storage
+divide_storages(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).div(a, b, flat, dt);
 }
 
-Storage add_storages(
-    const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
+Storage
+add_storages(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).add(a, b, flat, dt);
 }
 
-Storage subtract_storages(
-    const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
+Storage
+subtract_storages(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).sub(a, b, flat, dt);
 }
@@ -167,40 +161,40 @@ Storage log_storage(const Storage& s, std::size_t numel, Dtype dt, Device device
     return backend::Dispatcher::for_device(device).log(s, flat, dt);
 }
 
-Storage pow_storage(
-    const Storage& base, const Storage& expo, std::size_t numel, Dtype dt, Device device) {
+Storage
+pow_storage(const Storage& base, const Storage& expo, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).pow(base, expo, flat, dt);
 }
 
-Storage ge_mask_storage(
-    const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
+Storage
+ge_mask_storage(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).ge_mask(a, b, flat, dt);
 }
 
-Storage lt_mask_storage(
-    const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
+Storage
+lt_mask_storage(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).lt_mask(a, b, flat, dt);
 }
 
-Storage add_scalar_storage(
-    const Storage& s, double scalar, std::size_t numel, Dtype dt, Device device) {
+Storage
+add_scalar_storage(const Storage& s, double scalar, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).add_scalar(s, flat, dt, scalar);
 }
 
-Storage mul_scalar_storage(
-    const Storage& s, double scalar, std::size_t numel, Dtype dt, Device device) {
+Storage
+mul_scalar_storage(const Storage& s, double scalar, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).mul_scalar(s, flat, dt, scalar);
 }
 
-#define LUCID_UNARY_HELPER(NAME, BACKEND_METHOD)                                       \
-    Storage NAME##_storage(const Storage& s, std::size_t n, Dtype dt, Device device) { \
-        const Shape flat{static_cast<std::int64_t>(n)};                                \
-        return backend::Dispatcher::for_device(device).BACKEND_METHOD(s, flat, dt);    \
+#define LUCID_UNARY_HELPER(NAME, BACKEND_METHOD)                                                   \
+    Storage NAME##_storage(const Storage& s, std::size_t n, Dtype dt, Device device) {             \
+        const Shape flat{static_cast<std::int64_t>(n)};                                            \
+        return backend::Dispatcher::for_device(device).BACKEND_METHOD(s, flat, dt);                \
     }
 
 LUCID_UNARY_HELPER(exp, exp)
@@ -223,7 +217,6 @@ Storage tan_storage(const Storage& s, std::size_t numel, Dtype dt, Device device
     return backend::Dispatcher::for_device(device).tan(s, flat, dt);
 }
 
-// Sign: out[i] = (in[i] > 0) - (in[i] < 0). Scalar loop.
 Storage sign_storage(const Storage& s, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).sign(s, flat, dt);
@@ -235,22 +228,18 @@ Storage in_range_mask_storage(
     return backend::Dispatcher::for_device(device).in_range_mask(s, flat, dt, lo, hi);
 }
 
-// --------------------------- Version check (Phase 3.3.6 retrofit) ----------
-
 void check_version_match(const std::weak_ptr<TensorImpl>& live,
                          std::int64_t saved_version,
                          std::string_view op_name,
                          std::size_t input_idx) {
     auto t = live.lock();
     if (!t)
-        return;  // tensor freed; nothing to compare against
+        return;
     if (t->version() != saved_version) {
         throw VersionMismatch(saved_version, t->version(),
                               std::string(op_name) + " input " + std::to_string(input_idx));
     }
 }
-
-// --------------------------- Reduce-op helpers (Phase 3.3) ---------------
 
 std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
     std::vector<int> out;
@@ -301,7 +290,6 @@ Storage broadcast_back_for_reduce(const Storage& grad,
                                   bool keepdims,
                                   Dtype dt,
                                   Device device) {
-    // Validate that grad_shape matches the expected reduced shape.
     Shape expected_grad = reduce_output_shape(input_shape, axes, keepdims);
     if (grad_shape != expected_grad) {
         throw ShapeMismatch(expected_grad, grad_shape,
@@ -311,8 +299,8 @@ Storage broadcast_back_for_reduce(const Storage& grad,
         grad, grad_shape, input_shape, axes, keepdims, dt);
 }
 
-Storage leaky_mask_storage(
-    const Storage& s, double slope, std::size_t numel, Dtype dt, Device device) {
+Storage
+leaky_mask_storage(const Storage& s, double slope, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).leaky_mask(s, flat, dt, slope);
 }
@@ -335,23 +323,23 @@ Storage bernoulli_mask_storage_shape(
     out.nbytes = numel * dtype_size(dt);
     out.ptr = allocate_aligned_bytes(out.nbytes);
     switch (dt) {
-        case Dtype::F32: {
-            auto* q = reinterpret_cast<float*>(out.ptr.get());
-            const auto kp = static_cast<float>(keep_prob);
-            for (std::size_t i = 0; i < numel; ++i) {
-                q[i] = (gen.next_uniform_float() < kp) ? 1.f : 0.f;
-            }
-            break;
+    case Dtype::F32: {
+        auto* q = reinterpret_cast<float*>(out.ptr.get());
+        const auto kp = static_cast<float>(keep_prob);
+        for (std::size_t i = 0; i < numel; ++i) {
+            q[i] = (gen.next_uniform_float() < kp) ? 1.f : 0.f;
         }
-        case Dtype::F64: {
-            auto* q = reinterpret_cast<double*>(out.ptr.get());
-            for (std::size_t i = 0; i < numel; ++i) {
-                q[i] = (static_cast<double>(gen.next_uniform_float()) < keep_prob) ? 1.0 : 0.0;
-            }
-            break;
+        break;
+    }
+    case Dtype::F64: {
+        auto* q = reinterpret_cast<double*>(out.ptr.get());
+        for (std::size_t i = 0; i < numel; ++i) {
+            q[i] = (static_cast<double>(gen.next_uniform_float()) < keep_prob) ? 1.0 : 0.0;
         }
-        default:
-            ErrorBuilder("bernoulli_mask").not_implemented("dtype not supported (F32/F64)");
+        break;
+    }
+    default:
+        ErrorBuilder("bernoulli_mask").not_implemented("dtype not supported (F32/F64)");
     }
     return backend::Dispatcher::for_device(device).from_cpu(std::move(out), shape);
 }
@@ -368,13 +356,8 @@ Storage positive_mask_storage(const Storage& s, std::size_t numel, Dtype dt, Dev
     return backend::Dispatcher::for_device(device).positive_mask(s, flat, dt);
 }
 
-// ============================================================
-// Random storage helpers (Phase 3.8)
-// ============================================================
-
 namespace {
 
-// Fill a typed buffer with uniform [lo, hi) draws from a Philox generator.
 template <typename T>
 void fill_uniform(T* dst, std::size_t numel, double lo, double hi, Generator& gen) {
     const T span = static_cast<T>(hi - lo);
@@ -384,7 +367,6 @@ void fill_uniform(T* dst, std::size_t numel, double lo, double hi, Generator& ge
     }
 }
 
-// Box-Muller transform: pairs of uniform → pairs of standard normal.
 template <typename T>
 void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& gen) {
     const T m = static_cast<T>(mean);
@@ -393,7 +375,6 @@ void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& 
     constexpr T eps = static_cast<T>(1e-7);
     std::size_t i = 0;
     while (i + 1 < numel) {
-        // u1 ∈ [eps, 1) so log(u1) is finite.
         T u1 = static_cast<T>(gen.next_uniform_float());
         if (u1 < eps)
             u1 = eps;
@@ -405,7 +386,7 @@ void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& 
         dst[i + 1] = m + s * z1;
         i += 2;
     }
-    if (i < numel) {  // odd tail
+    if (i < numel) {
         T u1 = static_cast<T>(gen.next_uniform_float());
         if (u1 < eps)
             u1 = eps;
@@ -415,8 +396,6 @@ void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& 
     }
 }
 
-// Uniform integer in [low, high). Uses raw uint32 with modulo (slight bias
-// for non-power-of-2 ranges; acceptable for typical sizes).
 template <typename Int>
 void fill_randint(
     Int* dst, std::size_t numel, std::int64_t low, std::int64_t high, Generator& gen) {
@@ -432,7 +411,7 @@ void fill_randint(
         gen.next_uint32x4(buf);
         for (int k = 0; k < 4 && i < numel; ++k, ++i) {
             std::uint64_t r = buf[k];
-            // For ranges > 2^32, draw two u32 to extend.
+
             if (range > 0xFFFFFFFFull) {
                 std::uint32_t buf2[4];
                 gen.next_uint32x4(buf2);
@@ -458,14 +437,14 @@ Storage random_uniform_storage(
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
-        case Dtype::F32:
-            fill_uniform<float>(reinterpret_cast<float*>(cpu.ptr.get()), n, lo, hi, gen);
-            break;
-        case Dtype::F64:
-            fill_uniform<double>(reinterpret_cast<double*>(cpu.ptr.get()), n, lo, hi, gen);
-            break;
-        default:
-            ErrorBuilder("random_uniform").not_implemented("dtype not supported (F32/F64)");
+    case Dtype::F32:
+        fill_uniform<float>(reinterpret_cast<float*>(cpu.ptr.get()), n, lo, hi, gen);
+        break;
+    case Dtype::F64:
+        fill_uniform<double>(reinterpret_cast<double*>(cpu.ptr.get()), n, lo, hi, gen);
+        break;
+    default:
+        ErrorBuilder("random_uniform").not_implemented("dtype not supported (F32/F64)");
     }
     return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }
@@ -475,42 +454,42 @@ Storage random_normal_storage(
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
-        case Dtype::F32:
-            fill_normal<float>(reinterpret_cast<float*>(cpu.ptr.get()), n, mean, std, gen);
-            break;
-        case Dtype::F64:
-            fill_normal<double>(reinterpret_cast<double*>(cpu.ptr.get()), n, mean, std, gen);
-            break;
-        default:
-            ErrorBuilder("random_normal").not_implemented("dtype not supported (F32/F64)");
+    case Dtype::F32:
+        fill_normal<float>(reinterpret_cast<float*>(cpu.ptr.get()), n, mean, std, gen);
+        break;
+    case Dtype::F64:
+        fill_normal<double>(reinterpret_cast<double*>(cpu.ptr.get()), n, mean, std, gen);
+        break;
+    default:
+        ErrorBuilder("random_normal").not_implemented("dtype not supported (F32/F64)");
     }
     return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }
 
-Storage random_bernoulli_storage(
-    const Shape& shape, double p, Dtype dt, Device device, Generator& gen) {
+Storage
+random_bernoulli_storage(const Shape& shape, double p, Dtype dt, Device device, Generator& gen) {
     if (p < 0.0 || p > 1.0)
         ErrorBuilder("random_bernoulli").fail("p must be in [0, 1]");
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
-        case Dtype::F32: {
-            auto* q = reinterpret_cast<float*>(cpu.ptr.get());
-            const auto fp = static_cast<float>(p);
-            for (std::size_t i = 0; i < n; ++i) {
-                q[i] = (gen.next_uniform_float() < fp) ? 1.f : 0.f;
-            }
-            break;
+    case Dtype::F32: {
+        auto* q = reinterpret_cast<float*>(cpu.ptr.get());
+        const auto fp = static_cast<float>(p);
+        for (std::size_t i = 0; i < n; ++i) {
+            q[i] = (gen.next_uniform_float() < fp) ? 1.f : 0.f;
         }
-        case Dtype::F64: {
-            auto* q = reinterpret_cast<double*>(cpu.ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                q[i] = (static_cast<double>(gen.next_uniform_float()) < p) ? 1.0 : 0.0;
-            }
-            break;
+        break;
+    }
+    case Dtype::F64: {
+        auto* q = reinterpret_cast<double*>(cpu.ptr.get());
+        for (std::size_t i = 0; i < n; ++i) {
+            q[i] = (static_cast<double>(gen.next_uniform_float()) < p) ? 1.0 : 0.0;
         }
-        default:
-            ErrorBuilder("random_bernoulli").not_implemented("dtype not supported (F32/F64)");
+        break;
+    }
+    default:
+        ErrorBuilder("random_bernoulli").not_implemented("dtype not supported (F32/F64)");
     }
     return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }
@@ -526,16 +505,16 @@ Storage random_randint_storage(const Shape& shape,
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
-        case Dtype::I32:
-            fill_randint<std::int32_t>(reinterpret_cast<std::int32_t*>(cpu.ptr.get()), n, low, high,
-                                       gen);
-            break;
-        case Dtype::I64:
-            fill_randint<std::int64_t>(reinterpret_cast<std::int64_t*>(cpu.ptr.get()), n, low, high,
-                                       gen);
-            break;
-        default:
-            ErrorBuilder("random_randint").not_implemented("dtype not supported (I32/I64)");
+    case Dtype::I32:
+        fill_randint<std::int32_t>(reinterpret_cast<std::int32_t*>(cpu.ptr.get()), n, low, high,
+                                   gen);
+        break;
+    case Dtype::I64:
+        fill_randint<std::int64_t>(reinterpret_cast<std::int64_t*>(cpu.ptr.get()), n, low, high,
+                                   gen);
+        break;
+    default:
+        ErrorBuilder("random_randint").not_implemented("dtype not supported (I32/I64)");
     }
     return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }

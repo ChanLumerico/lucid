@@ -4,8 +4,6 @@ namespace lucid::backend::cpu {
 
 namespace {
 
-// ============================ 1D ============================
-
 template <typename T>
 void im2col_1d_typed(
     const T* x, T* cols, int C, int L, int KL, int OL, int stride_l, int pad_l, int dilation_l) {
@@ -37,8 +35,6 @@ void col2im_1d_typed(
         }
     }
 }
-
-// ============================ 2D ============================
 
 template <typename T>
 void im2col_typed(const T* x,
@@ -117,8 +113,6 @@ void col2im_typed(const T* cols,
         }
     }
 }
-
-// ============================ 3D ============================
 
 template <typename T>
 void im2col_3d_typed(const T* x,
@@ -228,8 +222,6 @@ void col2im_3d_typed(const T* cols,
 
 }  // namespace
 
-// ------------------------ 1D extern ------------------------
-
 void im2col_1d_f32(
     const float* x, float* cols, int C, int L, int KL, int OL, int sl, int pl, int dl) {
     im2col_1d_typed<float>(x, cols, C, L, KL, OL, sl, pl, dl);
@@ -246,8 +238,6 @@ void col2im_1d_f64(
     const double* cols, double* dx, int C, int L, int KL, int OL, int sl, int pl, int dl) {
     col2im_1d_typed<double>(cols, dx, C, L, KL, OL, sl, pl, dl);
 }
-
-// ------------------------ 2D extern ------------------------
 
 void im2col_f32(const float* x,
                 float* cols,
@@ -324,8 +314,6 @@ void col2im_f64(const double* cols,
     col2im_typed<double>(cols, dx, C, H, W, KH, KW, OH, OW, stride_h, stride_w, pad_h, pad_w,
                          dilation_h, dilation_w);
 }
-
-// ------------------------ 3D extern ------------------------
 
 void im2col_3d_f32(const float* x,
                    float* cols,

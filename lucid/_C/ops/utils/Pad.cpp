@@ -15,7 +15,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -52,7 +52,7 @@ TensorImplPtr attach_pad_grad(const TensorImplPtr& a,
                               std::vector<std::pair<std::int64_t, std::int64_t>> pad_width) {
     auto bwd = std::make_shared<PadBackward>();
     bwd->pad_width_ = std::move(pad_width);
-    kernel::NaryKernel<PadBackward, 1>::wire_autograd(std::move(bwd), {a}, out, /*save_ins=*/false);
+    kernel::NaryKernel<PadBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 

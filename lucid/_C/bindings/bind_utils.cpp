@@ -1,9 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "BindingGen.h"
-
-// Mirrors `lucid/_utils/`. Each header groups a small thematic set of ops.
 #include "../core/Shape.h"
 #include "../core/TensorImpl.h"
 #include "../ops/utils/Concat.h"
@@ -17,6 +14,7 @@
 #include "../ops/utils/Sort.h"
 #include "../ops/utils/Tri.h"
 #include "../ops/utils/View.h"
+#include "BindingGen.h"
 
 namespace py = pybind11;
 
@@ -31,7 +29,6 @@ Shape vec_to_shape(const std::vector<std::int64_t>& v) {
 }  // namespace
 
 void register_utils(py::module_& m) {
-    // ----- View family -----
     m.def("reshape", &reshape_op, py::arg("a"), py::arg("new_shape"),
           "Reshape — total numel must match. -1 wildcard supported.");
     m.def("squeeze", &squeeze_op, py::arg("a"), py::arg("dim"),
@@ -41,7 +38,6 @@ void register_utils(py::module_& m) {
           "Insert a size-1 dim at position `dim`.");
     bind_unary<ContiguousBackward>(m, &contiguous_op, "Force a contiguous copy.");
 
-    // ----- Concatenation / stacking / splitting -----
     m.def("concatenate", &concatenate_op, py::arg("arrays"), py::arg("axis") = 0);
     m.def("stack", &stack_op, py::arg("arrays"), py::arg("axis") = 0);
     m.def("hstack", &hstack_op, py::arg("arrays"));
@@ -56,7 +52,6 @@ void register_utils(py::module_& m) {
     m.def("chunk", &chunk_op, py::arg("a"), py::arg("chunks"), py::arg("axis") = 0);
     m.def("unbind", &unbind_op, py::arg("a"), py::arg("axis") = 0);
 
-    // ----- Repetition -----
     m.def("repeat", &repeat_op, py::arg("a"), py::arg("repeats"), py::arg("axis") = 0);
     m.def(
         "tile",
@@ -65,14 +60,12 @@ void register_utils(py::module_& m) {
         },
         py::arg("a"), py::arg("reps"));
 
-    // ----- Pad -----
     m.def(
         "pad",
         [](const TensorImplPtr& a, std::vector<std::pair<std::int64_t, std::int64_t>> pad_width,
            double constant) { return pad_op(a, std::move(pad_width), constant); },
         py::arg("a"), py::arg("pad_width"), py::arg("constant") = 0.0);
 
-    // ----- Layout transforms -----
     m.def("flatten", &flatten_op, py::arg("a"), py::arg("start_axis") = 0,
           py::arg("end_axis") = -1);
     m.def(
@@ -88,11 +81,9 @@ void register_utils(py::module_& m) {
         },
         py::arg("a"), py::arg("shape"));
 
-    // ----- Triangular -----
     m.def("tril", &tril_op, py::arg("a"), py::arg("k") = 0);
     m.def("triu", &triu_op, py::arg("a"), py::arg("k") = 0);
 
-    // ----- Selection / gathering -----
     m.def("where", &where_op, py::arg("cond"), py::arg("x"), py::arg("y"));
     m.def("masked_fill", &masked_fill_op, py::arg("a"), py::arg("mask"), py::arg("value"));
     m.def(
@@ -105,14 +96,13 @@ void register_utils(py::module_& m) {
     m.def("diagonal", &diagonal_op, py::arg("a"), py::arg("offset") = 0, py::arg("axis1") = -2,
           py::arg("axis2") = -1);
 
-    // ----- Sort / search -----
     m.def("sort", &sort_op, py::arg("a"), py::arg("axis") = -1);
     m.def("argsort", &argsort_op, py::arg("a"), py::arg("axis") = -1);
     m.def("argmax", &argmax_op, py::arg("a"), py::arg("axis") = -1, py::arg("keepdims") = false);
     m.def("argmin", &argmin_op, py::arg("a"), py::arg("axis") = -1, py::arg("keepdims") = false);
     m.def("nonzero", &nonzero_op, py::arg("a"));
     m.def("unique", &unique_op, py::arg("a"));
-    // Returns (values, indices) tuple — consistent with svd/qr/eig.
+
     m.def(
         "topk",
         [](const TensorImplPtr& a, std::int64_t k, int axis) {
@@ -121,10 +111,8 @@ void register_utils(py::module_& m) {
         },
         py::arg("a"), py::arg("k"), py::arg("axis") = -1);
 
-    // ----- Meshgrid -----
     m.def("meshgrid", &meshgrid_op, py::arg("arrays"), py::arg("indexing_xy") = false);
 
-    // ----- Aliases -----
     m.def("expand_dims", &unsqueeze_op, py::arg("a"), py::arg("axis"),
           "Insert a size-1 dim at position `axis` (alias for unsqueeze).");
     m.def(
@@ -135,7 +123,6 @@ void register_utils(py::module_& m) {
         },
         py::arg("a"), "Flatten to 1-D (alias for reshape(a, [-1])).");
 
-    // ----- Histogram -----
     m.def(
         "histogram",
         [](const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {

@@ -22,10 +22,6 @@
 
 namespace lucid {
 
-// =====================================================================
-// interpolate_bilinear (4-D)
-// =====================================================================
-
 const OpSchema InterpolateBilinearBackward::schema_v1{"interpolate_bilinear", 1, AmpPolicy::Promote,
                                                       true};
 
@@ -61,7 +57,7 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
         bwd->align_corners_ = align_corners;
         bwd->orig_shape_ = input->shape();
         kernel::NaryKernel<InterpolateBilinearBackward, 1>::wire_autograd(std::move(bwd), {input},
-                                                                          out, /*save_ins=*/false);
+                                                                          out, false);
     }
     return out;
 }
@@ -72,17 +68,11 @@ std::vector<Storage> InterpolateBilinearBackward::apply(Storage grad_out) {
                                              dtype_)};
 }
 
-TensorImplPtr interpolate_bilinear_op(const TensorImplPtr& input,
-                                      int H_out,
-                                      int W_out,
-                                      bool align_corners) {
+TensorImplPtr
+interpolate_bilinear_op(const TensorImplPtr& input, int H_out, int W_out, bool align_corners) {
     return InterpolateBilinearBackward::forward(input, H_out, W_out, align_corners);
 }
 LUCID_REGISTER_OP(InterpolateBilinearBackward)
-
-// =====================================================================
-// interpolate_trilinear (5-D)
-// =====================================================================
 
 const OpSchema InterpolateTrilinearBackward::schema_v1{"interpolate_trilinear", 1,
                                                        AmpPolicy::Promote, true};
@@ -114,7 +104,7 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
         bwd->align_corners_ = align_corners;
         bwd->orig_shape_ = input->shape();
         kernel::NaryKernel<InterpolateTrilinearBackward, 1>::wire_autograd(std::move(bwd), {input},
-                                                                           out, /*save_ins=*/false);
+                                                                           out, false);
     }
     return out;
 }
@@ -130,10 +120,6 @@ TensorImplPtr interpolate_trilinear_op(
     return InterpolateTrilinearBackward::forward(input, D_out, H_out, W_out, align_corners);
 }
 LUCID_REGISTER_OP(InterpolateTrilinearBackward)
-
-// =====================================================================
-// interpolate_nearest (no autograd: indices are non-differentiable).
-// =====================================================================
 
 TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, int W_out) {
     Validator::input(input, "interpolate_nearest.input").non_null();
@@ -151,10 +137,8 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
                                         input->device(), false);
 }
 
-TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
-                                        int D_out,
-                                        int H_out,
-                                        int W_out) {
+TensorImplPtr
+interpolate_nearest_3d_op(const TensorImplPtr& input, int D_out, int H_out, int W_out) {
     Validator::input(input, "interpolate_nearest_3d.input").non_null();
     if (input->shape().size() != 5)
         throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest_3d: 5-D input required");

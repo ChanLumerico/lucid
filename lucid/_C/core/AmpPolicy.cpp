@@ -9,12 +9,12 @@ namespace lucid {
 
 const char* amp_policy_name(AmpPolicy p) {
     switch (p) {
-        case AmpPolicy::Promote:
-            return "Promote";
-        case AmpPolicy::KeepInput:
-            return "KeepInput";
-        case AmpPolicy::ForceFP32:
-            return "ForceFP32";
+    case AmpPolicy::Promote:
+        return "Promote";
+    case AmpPolicy::KeepInput:
+        return "KeepInput";
+    case AmpPolicy::ForceFP32:
+        return "ForceFP32";
     }
     ErrorBuilder("amp_policy_name").fail("unknown AmpPolicy");
 }

@@ -22,9 +22,6 @@ namespace {
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
-// Build an einsum pattern equivalent to inner: contract last axis of a and b.
-// `a`'s leading axes use 'a','b',... and `b`'s use 'p','q',... ; contraction
-// uses 'z'. Each side may have up to 16 leading axes.
 std::string inner_einsum_pattern(std::size_t na, std::size_t nb) {
     std::string a_lhs, b_lhs, rhs;
     for (std::size_t i = 0; i + 1 < na; ++i) {
@@ -46,9 +43,7 @@ std::string inner_einsum_pattern(std::size_t na, std::size_t nb) {
 
 TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     validate_pair(a, b, "inner");
-    // Route autograd-tracked computations through einsum so the backward
-    // chain is well-formed via the primitive ops einsum is built on.
-    // Pure-inference calls keep the native fast path below.
+
     if (GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())) {
         return einsum_op(inner_einsum_pattern(a->shape().size(), b->shape().size()), {a, b});
     }
@@ -67,7 +62,7 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (device == Device::GPU) {
         auto out_storage = backend::Dispatcher::for_device(device).inner(a->storage(), b->storage(),
                                                                          sa, sb, out_shape, dt);
-        // For GPU, inner() returns storage with shape embedded in MLX array.
+
         const auto& gs = storage_gpu(out_storage);
         Shape actual_shape;
         for (auto d : gs.arr->shape())

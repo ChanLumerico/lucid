@@ -17,23 +17,14 @@ namespace lucid {
 
 namespace {
 
-// Compute fwd_fn(a, b), then overwrite a's storage with the result,
-// bump version, and return a. Shape/dtype/device must match.
-//
-// Copy-on-write: if a's CPU storage is shared with another view (use_count > 1),
-// the in-place op would silently mutate the shared buffer — which is wrong.
-// We fail fast here; users should call `.clone()` before in-place ops on views.
 template <typename Fn>
-TensorImplPtr inplace_apply(const TensorImplPtr& a,
-                            const TensorImplPtr& b,
-                            Fn&& fwd_fn,
-                            const char* name) {
+TensorImplPtr
+inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const char* name) {
     if (!a || !b)
         ErrorBuilder(name).fail("null input");
     if (a->storage_is_shared())
-        ErrorBuilder(name).fail(
-            "in-place op on a tensor that shares storage with a view — "
-            "call .clone() first or operate on the base tensor");
+        ErrorBuilder(name).fail("in-place op on a tensor that shares storage with a view — "
+                                "call .clone() first or operate on the base tensor");
     auto out = fwd_fn(a, b);
     if (out->shape() != a->shape())
         throw ShapeMismatch(a->shape(), out->shape(),

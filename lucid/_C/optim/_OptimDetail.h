@@ -1,19 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — internal optimizer helpers.
-// =====================================================================
-//
-// Shared inline helpers used by every optimizer .cpp:
-//   - typed CPU pointer extraction
-//   - GPU storage variant access
-//   - MLX scalar construction in the right dtype
-//   - in-place GpuStorage replacement (functional MLX semantics)
-//
-// Intentionally header-internal (not exposed by Optimizer.h) — only the
-// optimizer .cpp files include it. Filename prefix `_` signals that this
-// is an internal-only header.
-
 #include <cstddef>
 #include <utility>
 #include <variant>

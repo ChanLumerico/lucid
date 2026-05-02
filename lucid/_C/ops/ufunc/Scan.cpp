@@ -23,14 +23,13 @@ namespace {
 
 using ufunc_detail::fresh;
 
-// Reverse a Storage along `axis` (used by cumsum backward).
 Storage reverse_along_axis_storage(
     const Storage& s, const Shape& shape, int axis, Dtype dt, Device device) {
     return backend::Dispatcher::for_device(device).reverse_along_axis(s, shape, axis, dt);
 }
 
-Storage cumsum_storage_along(
-    const Storage& s, const Shape& shape, int axis, Dtype dt, Device device) {
+Storage
+cumsum_storage_along(const Storage& s, const Shape& shape, int axis, Dtype dt, Device device) {
     return backend::Dispatcher::for_device(device).cumsum(s, shape, axis, dt);
 }
 
@@ -49,15 +48,6 @@ public:
     }
 };
 
-// cumprod backward.
-//   y_k = x_0 * x_1 * ... * x_k
-//   dx_j = sum_{k >= j} (g_k * y_k) / x_j
-//        = reverse_cumsum(g * y)_j / x_j
-// We materialize this via:
-//   1. forward y = cumprod(x, axis)            (saved at forward time)
-//   2. p = g * y
-//   3. q = reverse_cumsum(p, axis)
-//   4. dx = q / x   (NaN at zeros — same convention as PyTorch)
 class CumprodBackward : public AutogradNode<CumprodBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -104,26 +94,24 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
 }  // namespace
 
 TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis) {
-    auto out = scan_dispatch(a, axis, /*is_prod=*/false, "cumsum");
+    auto out = scan_dispatch(a, axis, false, "cumsum");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
     auto bwd = std::make_shared<CumsumBackward>();
     bwd->input_shape_ = a->shape();
     bwd->axis_ = ax;
-    kernel::NaryKernel<CumsumBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                         /*save_ins=*/false);
+    kernel::NaryKernel<CumsumBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 
 TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis) {
-    auto out = scan_dispatch(a, axis, /*is_prod=*/true, "cumprod");
+    auto out = scan_dispatch(a, axis, true, "cumprod");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
     auto bwd = std::make_shared<CumprodBackward>();
     bwd->input_shape_ = a->shape();
     bwd->axis_ = ax;
     bwd->saved_x_ = a->storage();
     bwd->saved_y_ = out->storage();
-    kernel::NaryKernel<CumprodBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                          /*save_ins=*/false);
+    kernel::NaryKernel<CumprodBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 

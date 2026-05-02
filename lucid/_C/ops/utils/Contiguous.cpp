@@ -13,7 +13,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 
 namespace lucid {
 
@@ -21,7 +21,6 @@ const OpSchema ContiguousBackward::schema_v1{"contiguous", 1, AmpPolicy::KeepInp
 
 TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
     Validator::input(a, "contiguous.a").non_null();
-    // No contiguous guard here — that's the whole point of this op.
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
 
@@ -32,12 +31,11 @@ TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
     auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                                a->device(), false);
 
-    kernel::NaryKernel<ContiguousBackward, 1>::wire_autograd({a}, result, /*save_ins=*/false);
+    kernel::NaryKernel<ContiguousBackward, 1>::wire_autograd({a}, result, false);
     return result;
 }
 
 std::vector<Storage> ContiguousBackward::apply(Storage grad_out) {
-    // Identity backward: gradient passes through (cloned so engine owns it).
     return {clone_storage(grad_out, shape_numel(out_shape_), dtype_, device_)};
 }
 

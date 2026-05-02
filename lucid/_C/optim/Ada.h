@@ -1,14 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — Ada-family optimizers (mirrors lucid/optim/ada.py).
-// =====================================================================
-//
-// Contains:
-//   - Adamax    (Adam with infinity-norm exp_inf instead of L2 v)
-//   - Adagrad   (per-parameter accumulator of squared grads)
-//   - Adadelta  (parameter-free adaptive LR; Zeiler 2012)
-
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -21,14 +12,6 @@ namespace lucid {
 
 class TensorImpl;
 
-// =====================================================================
-// Adamax
-// =====================================================================
-//
-//   m ← β1 · m + (1 − β1) · g
-//   u ← max(β2 · u, |g|)
-//   param ← param − (lr / (1 − β1^t)) · m / (u + ε)
-/// Adamax.
 class LUCID_API Adamax : public Optimizer {
 public:
     Adamax(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -49,17 +32,10 @@ protected:
 private:
     double lr_, beta1_, beta2_, eps_, weight_decay_;
     std::vector<Storage> m_;
-    std::vector<Storage> u_;  // exp_inf
+    std::vector<Storage> u_;
     std::int64_t step_count_;
 };
 
-// =====================================================================
-// Adagrad
-// =====================================================================
-//
-//   sum_sq ← sum_sq + g²
-//   param ← param − lr · g / (√sum_sq + ε)
-/// Adagrad.
 class LUCID_API Adagrad : public Optimizer {
 public:
     Adagrad(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -81,15 +57,6 @@ private:
     std::vector<Storage> sum_sq_grad_;
 };
 
-// =====================================================================
-// Adadelta — parameter-free adaptive LR (Zeiler 2012)
-// =====================================================================
-//
-//   sq_avg ← ρ · sq_avg + (1 − ρ) · g²
-//   update = (√(acc + ε) / √(sq_avg + ε)) · g
-//   acc ← ρ · acc + (1 − ρ) · update²
-//   param ← param − lr · update
-/// Adadelta.
 class LUCID_API Adadelta : public Optimizer {
 public:
     Adadelta(std::vector<std::shared_ptr<TensorImpl>> params,

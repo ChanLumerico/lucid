@@ -15,7 +15,7 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
-#include "../ops/bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
 
@@ -23,8 +23,6 @@ const OpSchema LinearBackward::schema_v1{"linear", 1, AmpPolicy::Promote, true};
 
 namespace {
 
-// Flatten leading dims of x into a single batch axis. Returns (M, K) where
-// M = product of all but last dim, K = last dim.
 struct FlatX {
     std::size_t M;
     std::size_t K;
@@ -43,9 +41,8 @@ FlatX flatten_x(const Shape& x_shape) {
 
 }  // namespace
 
-TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
-                                      const TensorImplPtr& W,
-                                      const TensorImplPtr& b) {
+TensorImplPtr
+LinearBackward::forward(const TensorImplPtr& x, const TensorImplPtr& W, const TensorImplPtr& b) {
     Validator::input(x, "linear.x").non_null();
     Validator::input(W, "linear.W").non_null().ndim(2);
     Validator::input(b, "linear.b").non_null().ndim(1);
@@ -53,9 +50,9 @@ TensorImplPtr LinearBackward::forward(const TensorImplPtr& x,
     Validator::pair(x, b, "linear").same_dtype().same_device();
 
     const auto fx = flatten_x(x->shape());
-    const std::size_t M = fx.M;                                     // batch product
-    const std::size_t K = fx.K;                                     // in_features
-    const std::size_t N = static_cast<std::size_t>(W->shape()[0]);  // out_features
+    const std::size_t M = fx.M;
+    const std::size_t K = fx.K;
+    const std::size_t N = static_cast<std::size_t>(W->shape()[0]);
 
     if (W->shape()[1] != static_cast<std::int64_t>(K))
         throw ShapeMismatch(W->shape(), x->shape(), "linear: W.shape[1] != x.last_dim");

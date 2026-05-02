@@ -9,8 +9,7 @@
 
 namespace lucid {
 
-const OpSchema SubBackward::schema_v1{"sub", /*version=*/1, AmpPolicy::Promote,
-                                      /*deterministic=*/true};
+const OpSchema SubBackward::schema_v1{"sub", 1, AmpPolicy::Promote, true};
 
 std::pair<Storage, Storage> SubBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);

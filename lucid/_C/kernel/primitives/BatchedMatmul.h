@@ -1,21 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — kernel/primitives/BatchedMatmul.h
-// =====================================================================
-//
-// Primitive: N-D batched matrix multiply.
-//
-//   a [..., M, K] @ b [..., K, N] → out [..., M, N]
-//
-// Leading (batch) dimensions are broadcast-aligned via NumPy semantics.
-// Each batch slice is dispatched to backend::cpu::sgemm/dgemm (CPU) or
-// mlx::core::matmul (GPU).
-//
-// Used by: Matmul, Linear backward, Attention, BilinearLayer, MatrixPower.
-//
-// Layer: kernel/primitives/. Depends on backend/cpu/ (CPU path), core/.
-
 #include <cstddef>
 #include <vector>
 
@@ -26,23 +10,20 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Shape.h"
 #include "../../core/Storage.h"
-#include "../BinaryKernel.h"  // detail::try_broadcast_shapes
+#include "../BinaryKernel.h"
 
 namespace lucid {
 namespace kernel {
 namespace primitives {
 
-/// Planning result for an N-D batched matmul.
 struct NdMatmulInfo {
-    Shape out_shape;      ///< full output shape [..., M, N]
-    Shape a_bcast_shape;  ///< a broadcast shape [..., M, K]
-    Shape b_bcast_shape;  ///< b broadcast shape [..., K, N]
+    Shape out_shape;
+    Shape a_bcast_shape;
+    Shape b_bcast_shape;
     int M = 0, K = 0, N = 0;
-    std::size_t batch = 1;  ///< product of all leading dims
+    std::size_t batch = 1;
 };
 
-/// Compute the output/broadcast shapes for a @ b.
-/// Throws ShapeMismatch on incompatible shapes.
 inline NdMatmulInfo plan_nd_matmul(const Shape& a, const Shape& b) {
     if (a.size() < 2 || b.size() < 2)
         throw ShapeMismatch(a, b, "matmul: both operands must be ≥2-D");
@@ -85,9 +66,6 @@ inline NdMatmulInfo plan_nd_matmul(const Shape& a, const Shape& b) {
     return info;
 }
 
-/// CPU N-D batched matmul.
-/// `a` and `b` must already be broadcast-materialized to info.a_bcast_shape /
-/// info.b_bcast_shape respectively (use detail::broadcast_cpu if needed).
 inline CpuStorage cpu_matmul_nd(const CpuStorage& a,
                                 const CpuStorage& b,
                                 const NdMatmulInfo& info,

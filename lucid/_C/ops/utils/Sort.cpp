@@ -20,7 +20,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -60,20 +60,17 @@ public:
 };
 
 const OpSchema IndexScatterBackward::schema_v1{
-    "index_scatter", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, /*internal=*/true};
+    "index_scatter", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, true};
 
-TensorImplPtr attach_index_scatter_grad(const TensorImplPtr& a,
-                                        TensorImplPtr out,
-                                        Storage indices,
-                                        int axis) {
+TensorImplPtr
+attach_index_scatter_grad(const TensorImplPtr& a, TensorImplPtr out, Storage indices, int axis) {
     if (!differentiable_dtype(a->dtype()))
         return out;
     auto bwd = std::make_shared<IndexScatterBackward>();
     bwd->grad_shape_ = out->shape();
     bwd->indices_ = std::move(indices);
     bwd->axis_ = axis;
-    kernel::NaryKernel<IndexScatterBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                               /*save_ins=*/false);
+    kernel::NaryKernel<IndexScatterBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 
@@ -87,8 +84,7 @@ TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     Shape out_shape = a->shape();
     auto [values, indices] = backend::Dispatcher::for_device(device).sort_select(
-        a->storage(), a->shape(), out_shape, ax, dt,
-        /*descending=*/false);
+        a->storage(), a->shape(), out_shape, ax, dt, false);
     auto out = fresh(std::move(values), std::move(out_shape), dt, device);
     return attach_index_scatter_grad(a, std::move(out), std::move(indices), ax);
 }
@@ -104,8 +100,8 @@ TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
 }
 
 namespace {
-TensorImplPtr argext_dispatch(
-    const TensorImplPtr& a, int axis, bool keepdims, bool is_min, const char* name) {
+TensorImplPtr
+argext_dispatch(const TensorImplPtr& a, int axis, bool keepdims, bool is_min, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
     const Device device = a->device();
     OpScopeFull scope{name, device, a->dtype(), a->shape()};
@@ -122,20 +118,13 @@ TensorImplPtr argext_dispatch(
 }  // namespace
 
 TensorImplPtr argmax_op(const TensorImplPtr& a, int axis, bool keepdims) {
-    return argext_dispatch(a, axis, keepdims, /*is_min=*/false, "argmax");
+    return argext_dispatch(a, axis, keepdims, false, "argmax");
 }
 TensorImplPtr argmin_op(const TensorImplPtr& a, int axis, bool keepdims) {
-    return argext_dispatch(a, axis, keepdims, /*is_min=*/true, "argmin");
+    return argext_dispatch(a, axis, keepdims, true, "argmin");
 }
 
 TensorImplPtr nonzero_op(const TensorImplPtr& a) {
-    // Returns a 2-D tensor of shape (N, ndim) where N = number of non-zero
-    // elements. Each row is a multi-index into `a`. Matches numpy
-    // `np.nonzero` flattened-into-2D semantics.
-    //
-    // CPU-only op (data-dependent output length forces GPU sync; MLX has
-    // no equivalent primitive). Per convention, GPU input is accepted but
-    // the result lives on CPU — caller must `.gpu()` if they need it back.
     Validator::input(a, "nonzero.a").non_null();
     const std::size_t ndim = a->shape().size();
     OpScopeFull scope{"nonzero", a->device(), a->dtype(), a->shape()};
@@ -147,14 +136,10 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
                          .nonzero_forward(Storage{cpu}, a->shape(), a->dtype(), count);
 
     Shape out_shape{static_cast<std::int64_t>(count), static_cast<std::int64_t>(ndim)};
-    return fresh(Storage{std::move(out)}, std::move(out_shape), Dtype::I64, /*device=*/Device::CPU);
+    return fresh(Storage{std::move(out)}, std::move(out_shape), Dtype::I64, Device::CPU);
 }
 
 TensorImplPtr unique_op(const TensorImplPtr& a) {
-    // Sorted unique values across the flattened input.
-    //
-    // CPU-only op (variable-length output; MLX has no equivalent). Per
-    // convention, GPU input is accepted but result lives on CPU.
     Validator::input(a, "unique.a").non_null();
     const Dtype dt = a->dtype();
     OpScopeFull scope{"unique", a->device(), dt, a->shape()};
@@ -191,7 +176,7 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
         wrap(run(reinterpret_cast<const std::int64_t*>(cpu.ptr.get())));
     else
         ErrorBuilder("unique").not_implemented("dtype not supported");
-    return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, /*device=*/Device::CPU);
+    return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, Device::CPU);
 }
 
 std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int axis) {
@@ -205,8 +190,7 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
     Shape out_shape = a->shape();
     out_shape[static_cast<std::size_t>(ax)] = k;
     auto [values, indices] = backend::Dispatcher::for_device(device).sort_select(
-        a->storage(), a->shape(), out_shape, ax, dt,
-        /*descending=*/true);
+        a->storage(), a->shape(), out_shape, ax, dt, true);
     auto indices_out = fresh(std::move(indices), out_shape, Dtype::I32, device);
     auto values_out = fresh(std::move(values), out_shape, dt, device);
     values_out = attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);

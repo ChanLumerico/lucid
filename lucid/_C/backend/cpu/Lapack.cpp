@@ -13,26 +13,16 @@ namespace {
 
 using i32 = __CLPK_integer;
 
-// Out-of-place row→col transpose. Accelerate doesn't ship cblas_somatcopy;
-// use vDSP_mtrans which is the documented transpose primitive.
 inline void rowmajor_to_colmajor_f32(const float* src, float* dst, int rows, int cols) {
-    // src: row-major (rows × cols), strides (cols, 1)
-    // dst: col-major (rows × cols), strides (1, rows) — i.e. dst[i + j*rows]
-    // vDSP_mtrans treats input as (rows, cols) row-major and writes a
-    // physical transpose of shape (cols, rows) row-major. That same byte
-    // layout, interpreted as col-major (rows, cols), is what we want.
-    vDSP_mtrans(src, 1, dst, 1, /*rows_out=*/cols, /*cols_out=*/rows);
+    vDSP_mtrans(src, 1, dst, 1, cols, rows);
 }
 
 inline void rowmajor_to_colmajor_f64(const double* src, double* dst, int rows, int cols) {
     vDSP_mtransD(src, 1, dst, 1, cols, rows);
 }
 
-// Inverse direction: a buffer holding a col-major (rows × cols) matrix is
-// the same bytes as a row-major (cols × rows). Transposing that gives
-// row-major (rows × cols).
 inline void colmajor_to_rowmajor_f32(const float* src, float* dst, int rows, int cols) {
-    vDSP_mtrans(src, 1, dst, 1, /*rows_out=*/rows, /*cols_out=*/cols);
+    vDSP_mtrans(src, 1, dst, 1, rows, cols);
 }
 
 inline void colmajor_to_rowmajor_f64(const double* src, double* dst, int rows, int cols) {
@@ -41,7 +31,6 @@ inline void colmajor_to_rowmajor_f64(const double* src, double* dst, int rows, i
 
 }  // namespace
 
-// ----- exposed transpose helpers --------------------------------------- //
 void transpose_to_col_major_f32(const float* src, float* dst, int rows, int cols) {
     rowmajor_to_colmajor_f32(src, dst, rows, cols);
 }
@@ -58,8 +47,6 @@ void transpose_from_col_major_f64(const double* src, double* dst, int rows, int 
     colmajor_to_rowmajor_f64(src, dst, rows, cols);
 }
 
-// ----- inv / solve / lu ------------------------------------------------ //
-
 void lapack_inv_f32(float* A, int n, int* info_out) {
     std::vector<float> Ac(static_cast<std::size_t>(n) * n);
     rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
@@ -74,7 +61,6 @@ void lapack_inv_f32(float* A, int n, int* info_out) {
         return;
     }
 
-    // Workspace query.
     i32 lwork = -1;
     float wkopt;
     sgetri_(&N, Ac.data(), &lda, ipiv.data(), &wkopt, &lwork, &info);
@@ -165,9 +151,6 @@ namespace {
 
 template <typename T>
 void split_lu(const T* LU_col, int n, T* L_out, T* U_out) {
-    // LU_col is column-major n×n. Reshape into row-major; then split:
-    //   L: lower triangular with unit diagonal
-    //   U: upper triangular
     std::vector<T> LU_row(static_cast<std::size_t>(n) * n);
     if constexpr (std::is_same_v<T, float>)
         colmajor_to_rowmajor_f32(LU_col, LU_row.data(), n, n);
@@ -177,13 +160,13 @@ void split_lu(const T* LU_col, int n, T* L_out, T* U_out) {
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
             const T v = LU_row[i * n + j];
-            if (i > j) {  // strict lower
+            if (i > j) {
                 L_out[i * n + j] = v;
                 U_out[i * n + j] = T{0};
-            } else if (i < j) {  // strict upper
+            } else if (i < j) {
                 L_out[i * n + j] = T{0};
                 U_out[i * n + j] = v;
-            } else {  // diagonal
+            } else {
                 L_out[i * n + j] = T{1};
                 U_out[i * n + j] = v;
             }
@@ -208,7 +191,7 @@ void lapack_lu_f32(const float* A, int n, int* ipiv, float* L_out, float* U_out,
     for (int i = 0; i < n; ++i)
         ipiv[i] = ipiv_local[i];
     split_lu(Ac.data(), n, L_out, U_out);
-    *info_out = info;  // ≥0; positive means singular U[i][i]=0
+    *info_out = info;
 }
 
 void lapack_lu_f64(const double* A, int n, int* ipiv, double* L_out, double* U_out, int* info_out) {
@@ -229,16 +212,7 @@ void lapack_lu_f64(const double* A, int n, int* ipiv, double* L_out, double* U_o
     *info_out = info;
 }
 
-// ----- cholesky -------------------------------------------------------- //
-
 void lapack_cholesky_f32(float* A, int n, bool lower, int* info_out) {
-    // Symmetric input — col-major and row-major share the same bytes. We
-    // still do the round-trip transpose for symmetry with the rest of the
-    // wrappers; correctness requires `uplo` to match the desired output:
-    //   row-major lower L  →  uplo='L' (writes col-major lower; after
-    //                         the col→row transpose, that lands in
-    //                         row-major lower — which is L itself).
-    //   row-major upper U  →  uplo='U'.
     std::vector<float> Ac(static_cast<std::size_t>(n) * n);
     rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
 
@@ -251,7 +225,7 @@ void lapack_cholesky_f32(float* A, int n, bool lower, int* info_out) {
     }
 
     colmajor_to_rowmajor_f32(Ac.data(), A, n, n);
-    // Zero the unused triangle so callers don't see stale entries.
+
     if (lower) {
         for (int i = 0; i < n; ++i)
             for (int j = i + 1; j < n; ++j)
@@ -289,8 +263,6 @@ void lapack_cholesky_f64(double* A, int n, bool lower, int* info_out) {
     *info_out = 0;
 }
 
-// ----- QR (reduced) ---------------------------------------------------- //
-
 void lapack_qr_f32(const float* A, int m, int n, float* Q, float* R, int* info_out) {
     const int k = std::min(m, n);
     std::vector<float> Ac(static_cast<std::size_t>(m) * n);
@@ -312,14 +284,12 @@ void lapack_qr_f32(const float* A, int m, int n, float* Q, float* R, int* info_o
         return;
     }
 
-    // Extract R (k×n upper triangular) from Ac (m×n col-major).
     std::vector<float> R_row(static_cast<std::size_t>(k) * n, 0.0f);
     for (int i = 0; i < k; ++i)
         for (int j = i; j < n; ++j)
             R_row[i * n + j] = Ac[j * m + i];
     std::memcpy(R, R_row.data(), R_row.size() * sizeof(float));
 
-    // Build Q = orgqr(A) m×k. Need at least k columns of work area.
     i32 K = k;
     lwork = -1;
     sorgqr_(&M, &K, &K, Ac.data(), &lda, tau.data(), &wkopt, &lwork, &info);
@@ -333,7 +303,6 @@ void lapack_qr_f32(const float* A, int m, int n, float* Q, float* R, int* info_o
         return;
     }
 
-    // Copy first k columns of col-major (m×n) into row-major Q (m×k).
     for (int i = 0; i < m; ++i)
         for (int j = 0; j < k; ++j)
             Q[i * k + j] = Ac[j * m + i];
@@ -388,8 +357,6 @@ void lapack_qr_f64(const double* A, int m, int n, double* Q, double* R, int* inf
     *info_out = 0;
 }
 
-// ----- SVD ------------------------------------------------------------- //
-
 void lapack_svd_f32(const float* A,
                     int m,
                     int n,
@@ -425,11 +392,10 @@ void lapack_svd_f32(const float* A,
         return;
     }
 
-    // U: col-major (m, u_cols) → row-major
     colmajor_to_rowmajor_f32(Uc.data(), U_out, m, u_cols);
-    // S: vector — direct copy
+
     std::memcpy(S_out, Sv.data(), k * sizeof(float));
-    // Vt: col-major (vt_rows, n) → row-major
+
     colmajor_to_rowmajor_f32(Vtc.data(), Vt_out, vt_rows, n);
 
     *info_out = 0;
@@ -477,13 +443,11 @@ void lapack_svd_f64(const double* A,
     *info_out = 0;
 }
 
-// ----- Eigenvalues ----------------------------------------------------- //
-
 void lapack_eigh_f32(const float* A, int n, float* w, float* V_out, int* info_out) {
     std::vector<float> Ac(static_cast<std::size_t>(n) * n);
     rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
 
-    char jobz = 'V', uplo = 'L';  // 'L' on col-major == upper of row-major; symmetric so equivalent
+    char jobz = 'V', uplo = 'L';
     i32 N = n, lda = n, info = 0;
 
     i32 lwork = -1, liwork = -1;
@@ -501,9 +465,6 @@ void lapack_eigh_f32(const float* A, int n, float* w, float* V_out, int* info_ou
         return;
     }
 
-    // Eigenvectors: col-major (n,n) where each column is an eigenvector.
-    // To return row-major n×n with columns as eigenvectors (lucid convention),
-    // we copy col j of col-major → col j of row-major.
     for (int j = 0; j < n; ++j)
         for (int i = 0; i < n; ++i)
             V_out[i * n + j] = Ac[j * n + i];

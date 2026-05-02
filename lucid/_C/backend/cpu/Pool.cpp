@@ -155,8 +155,6 @@ void avg_pool2d_backward_typed(const T* g,
     }
 }
 
-// ============================ 1D ============================
-
 template <typename T>
 void max_pool1d_forward_typed(
     const T* x, T* y, std::int32_t* argmax, int B, int C, int L, int KL, int OL, int sl, int pl) {
@@ -245,8 +243,6 @@ void avg_pool1d_backward_typed(
         }
     }
 }
-
-// ============================ 3D ============================
 
 template <typename T>
 void max_pool3d_forward_typed(const T* x,
@@ -452,8 +448,6 @@ void avg_pool3d_backward_typed(const T* g,
 
 }  // namespace
 
-// ------------------------ 1D extern ------------------------
-
 void max_pool1d_forward_f32(const float* x,
                             float* y,
                             std::int32_t* a,
@@ -502,8 +496,6 @@ void avg_pool1d_backward_f64(
     const double* g, double* dx, int B, int C, int L, int KL, int OL, int sl, int pl) {
     avg_pool1d_backward_typed<double>(g, dx, B, C, L, KL, OL, sl, pl);
 }
-
-// ------------------------ 3D extern ------------------------
 
 void max_pool3d_forward_f32(const float* x,
                             float* y,

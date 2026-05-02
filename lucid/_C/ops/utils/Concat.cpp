@@ -21,7 +21,7 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../../kernel/VariadicKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -143,9 +143,8 @@ public:
 
 const OpSchema SplitSliceBackward::schema_v1{"split", 1, AmpPolicy::KeepInput, true};
 
-TensorImplPtr attach_concat_grad(const std::vector<TensorImplPtr>& xs,
-                                 TensorImplPtr out,
-                                 int axis) {
+TensorImplPtr
+attach_concat_grad(const std::vector<TensorImplPtr>& xs, TensorImplPtr out, int axis) {
     bool needs_grad = GradMode::is_enabled();
     if (needs_grad) {
         needs_grad = false;
@@ -229,8 +228,7 @@ TensorImplPtr attach_split_grad(const TensorImplPtr& a,
     bwd->axis_ = axis;
     bwd->offset_ = offset;
     bwd->squeeze_axis_ = squeeze_axis;
-    kernel::NaryKernel<SplitSliceBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                             /*save_ins=*/false);
+    kernel::NaryKernel<SplitSliceBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 
@@ -337,16 +335,14 @@ std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_spl
     std::int64_t off = 0;
     for (auto& piece_storage : pieces) {
         auto result = fresh(std::move(piece_storage), piece_shape, dt, device);
-        out.push_back(attach_split_grad(a, std::move(result), piece_shape, ax, off,
-                                        /*squeeze_axis=*/false));
+        out.push_back(attach_split_grad(a, std::move(result), piece_shape, ax, off, false));
         off += piece;
     }
     return out;
 }
 
-std::vector<TensorImplPtr> split_at_op(const TensorImplPtr& a,
-                                       std::vector<std::int64_t> indices,
-                                       int axis) {
+std::vector<TensorImplPtr>
+split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices, int axis) {
     Validator::input(a, "split_at.a").non_null();
     const Dtype dt = a->dtype();
     const Device device = a->device();
@@ -364,8 +360,7 @@ std::vector<TensorImplPtr> split_at_op(const TensorImplPtr& a,
             (piece_idx < indices.size()) ? indices[piece_idx] : a->shape()[ax];
         piece_shape[ax] = next - off;
         auto result = fresh(std::move(piece_storage), piece_shape, dt, device);
-        out.push_back(
-            attach_split_grad(a, std::move(result), piece_shape, ax, off, /*squeeze_axis=*/false));
+        out.push_back(attach_split_grad(a, std::move(result), piece_shape, ax, off, false));
         off = next;
         ++piece_idx;
     }
@@ -392,8 +387,7 @@ std::vector<TensorImplPtr> unbind_op(const TensorImplPtr& a, int axis) {
         auto reshaped = backend::Dispatcher::for_device(a->device())
                             .reshape(piece, slice_shape, out_shape, a->dtype());
         auto result = fresh(std::move(reshaped), out_shape, a->dtype(), a->device());
-        out.push_back(
-            attach_split_grad(a, std::move(result), slice_shape, ax, k, /*squeeze_axis=*/true));
+        out.push_back(attach_split_grad(a, std::move(result), slice_shape, ax, k, true));
     }
     return out;
 }

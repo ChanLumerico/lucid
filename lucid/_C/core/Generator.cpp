@@ -6,13 +6,9 @@ namespace lucid {
 
 namespace {
 
-// Philox-4x32-10 — D. E. Shaw / Salmon, Moraes, Dror, Shaw 2011.
-// "Parallel Random Numbers: As Easy as 1, 2, 3" — the same construction
-// PyTorch uses. We split the 64-bit key into two 32-bit lanes and the
-// 64-bit counter into four 32-bit input words.
 constexpr std::uint32_t PHILOX_M0 = 0xD2511F53u;
 constexpr std::uint32_t PHILOX_M1 = 0xCD9E8D57u;
-constexpr std::uint32_t PHILOX_W0 = 0x9E3779B9u;  // golden ratio
+constexpr std::uint32_t PHILOX_W0 = 0x9E3779B9u;
 constexpr std::uint32_t PHILOX_W1 = 0xBB67AE85u;
 
 inline void mulhilo32(std::uint32_t a, std::uint32_t b, std::uint32_t& hi, std::uint32_t& lo) {
@@ -80,8 +76,8 @@ void Generator::next_uint32x4(std::uint32_t out[4]) {
 float Generator::next_uniform_float() {
     std::uint32_t buf[4];
     next_uint32x4(buf);
-    // Use top 24 bits of buf[0] for fp32 mantissa precision.
-    const std::uint32_t mantissa = buf[0] >> 8;  // 24 bits
+
+    const std::uint32_t mantissa = buf[0] >> 8;
     return static_cast<float>(mantissa) * (1.0f / static_cast<float>(1u << 24));
 }
 

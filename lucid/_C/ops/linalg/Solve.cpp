@@ -17,31 +17,25 @@
 
 namespace lucid {
 
-// ---------- Schema & backward ----------
-
 const OpSchema SolveBackward::schema_v1{"solve", 1, AmpPolicy::KeepInput};
 
 std::vector<Storage> SolveBackward::apply(Storage grad_out) {
     NoGradGuard ng;
     using ::lucid::helpers::fresh;
-    // saved_inputs_[0] = A (square matrix)
-    // saved_inputs_[1] = B (rhs), not used directly
-    // saved_output_    = X (solution: AX = B)
+
     auto A = fresh(Storage{saved_inputs_[0]}, input_shapes_[0], dtype_, device_);
     auto dX = fresh(std::move(grad_out), out_shape_, dtype_, device_);
     auto X = fresh(Storage{saved_output_}, out_shape_, dtype_, device_);
-    // dB = solve(A^T, dX)
+
     auto AT = mT_op(A);
     auto dB = solve_op(AT, dX);
-    // dA = -dB @ X^T
+
     auto XT = mT_op(X);
     auto dA = neg_op(matmul_op(dB, XT));
     return {dA->storage(), dB->storage()};
 }
 
 LUCID_REGISTER_OP(SolveBackward)
-
-// ---------- Forward ----------
 
 TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     Validator::input(a, "solve.a").float_only().square_2d();

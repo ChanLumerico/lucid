@@ -6,8 +6,7 @@
 
 namespace lucid {
 
-const OpSchema CubeRootBackward::schema_v1{"cube_root", 1, AmpPolicy::ForceFP32,
-                                           /*deterministic=*/true};
+const OpSchema CubeRootBackward::schema_v1{"cube_root", 1, AmpPolicy::ForceFP32, true};
 
 Storage CubeRootBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);

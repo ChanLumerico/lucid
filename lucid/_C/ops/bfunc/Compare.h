@@ -1,28 +1,21 @@
 #pragma once
 
-// =====================================================================
-// Element-wise comparison ops (output dtype = Bool).
-// Mirrors the comparison classes in `lucid/_func/bfunc.py`.
-// Forward only — no autograd hookup.
-// =====================================================================
-
 #include "../../api.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
 
 namespace lucid {
 
-/// Equal.
 LUCID_API TensorImplPtr equal_op(const TensorImplPtr& a, const TensorImplPtr& b);
-/// Not equal.
+
 LUCID_API TensorImplPtr not_equal_op(const TensorImplPtr& a, const TensorImplPtr& b);
-/// Greater.
+
 LUCID_API TensorImplPtr greater_op(const TensorImplPtr& a, const TensorImplPtr& b);
-/// Greater equal.
+
 LUCID_API TensorImplPtr greater_equal_op(const TensorImplPtr& a, const TensorImplPtr& b);
-/// Less.
+
 LUCID_API TensorImplPtr less_op(const TensorImplPtr& a, const TensorImplPtr& b);
-/// Less equal.
+
 LUCID_API TensorImplPtr less_equal_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

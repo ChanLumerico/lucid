@@ -12,7 +12,6 @@ namespace lucid::backend::cpu {
 
 namespace {
 
-// F32 fast path using vDSP primitives.
 void layer_norm_forward_f32_fast(const float* x,
                                  const float* gamma,
                                  const float* beta,
@@ -23,24 +22,24 @@ void layer_norm_forward_f32_fast(const float* x,
                                  std::size_t N,
                                  double eps) {
     const float inv_N = 1.0f / static_cast<float>(N);
-    // Reuse a per-row scratch buffer for the centered values.
+
     std::vector<float> centered(N);
     for (std::size_t o = 0; o < outer; ++o) {
         const float* xb = x + o * N;
         float* yb = y + o * N;
-        // 1. mean via vDSP_meanv
+
         const float mean = vmean_f32(xb, N);
         saved_mean[o] = mean;
-        // 2. centered = x - mean
+
         const float neg_mean = -mean;
         vsadd_f32(xb, neg_mean, centered.data(), N);
-        // 3. variance = dot(centered, centered) / N
+
         const float var = vdotpr_f32(centered.data(), centered.data(), N) * inv_N;
         const float rstd = 1.0f / std::sqrt(var + static_cast<float>(eps));
         saved_rstd[o] = rstd;
-        // 4. xnorm = centered * rstd  (in-place on yb as scratch)
+
         vsmul_f32(centered.data(), rstd, yb, N);
-        // 5. y = gamma * xnorm + beta  (vDSP_vma: A*B + C)
+
         vmadd_f32(yb, gamma, beta, yb, N);
     }
 }
@@ -92,13 +91,8 @@ void layer_norm_backward(const T* x,
                          T* dbeta,
                          std::size_t outer,
                          std::size_t N) {
-    // dx per row uses the standard combined formula:
-    //   dx_i = (1/N) · rstd · [N · dxn_i - sum(dxn) - xn_i · sum(dxn · xn)]
-    // where dxn = γ · g, xn = (x - μ) · rstd.
     const T inv_N = T{1} / static_cast<T>(N);
 
-    // Initialize dγ, dβ accumulators (caller passes already-zeroed buffers,
-    // but we zero defensively in case).
     for (std::size_t i = 0; i < N; ++i) {
         dgamma[i] = T{};
         dbeta[i] = T{};
@@ -124,7 +118,7 @@ void layer_norm_backward(const T* x,
             const T xn_i = (xb[i] - m) * r;
             const T dxn_i = gamma[i] * gb[i];
             dxb[i] = inv_N * r * (static_cast<T>(N) * dxn_i - sum_dxn - xn_i * sum_dxn_xn);
-            // Accumulate dγ_i, dβ_i across rows.
+
             dgamma[i] += gb[i] * xn_i;
             dbeta[i] += gb[i];
         }
@@ -160,17 +154,6 @@ void rms_norm_backward(const T* x,
                        T* dgamma,
                        std::size_t outer,
                        std::size_t N) {
-    // dx_i = (1/rstd) ... wait, derive directly:
-    //
-    //   y_i  = γ_i x_i r            (r = 1/rms)
-    //   y_i  depends on x_j through r as well.
-    //   ∂L/∂x_i = γ_i g_i r - x_i · (1/(N·rms²)) · sum_j(γ_j g_j x_j) · r
-    //          = r · (γ_i g_i - x_i · r² · (1/N) · sum_j (γ_j g_j x_j))
-    //
-    // Equivalent form using dxn = γ · g:
-    //   dx_i = r · (dxn_i - x_i · r² · (1/N) · sum_j (dxn_j · x_j))
-    //
-    // dγ_i = sum_o (g_o,i · x_o,i · r_o)
     const T inv_N = T{1} / static_cast<T>(N);
     for (std::size_t i = 0; i < N; ++i)
         dgamma[i] = T{};
@@ -180,7 +163,6 @@ void rms_norm_backward(const T* x,
         const T* gb = g + o * N;
         const T r = saved_rstd[o];
 
-        // Pre-compute cross-sum: sum_j γ_j g_j x_j
         T cross = T{};
         for (std::size_t i = 0; i < N; ++i) {
             const T dxn_i = gamma[i] * gb[i];

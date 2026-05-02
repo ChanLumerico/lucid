@@ -17,9 +17,8 @@ namespace lucid {
 
 const OpSchema RMSNormBackward::schema_v1{"rms_norm", 1, AmpPolicy::ForceFP32, true};
 
-TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
-                                       const TensorImplPtr& gamma,
-                                       double eps) {
+TensorImplPtr
+RMSNormBackward::forward(const TensorImplPtr& x, const TensorImplPtr& gamma, double eps) {
     if (!x || !gamma)
         ErrorBuilder("rms_norm").fail("null input");
     if (x->dtype() != gamma->dtype())
@@ -29,7 +28,6 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(gamma->device())), "rms_norm");
 
-    // γ shape must match trailing dims of x.
     if (gamma->shape().size() > x->shape().size())
         throw ShapeMismatch(x->shape(), gamma->shape(), "rms_norm: γ has more dims than x");
     const std::size_t Dn = gamma->shape().size();
@@ -54,7 +52,7 @@ TensorImplPtr RMSNormBackward::forward(const TensorImplPtr& x,
     scope.set_flops(static_cast<std::int64_t>(outer * N) * 4);
 
     auto out = std::make_shared<TensorImpl>(std::move(forward.first), x->shape(), x->dtype(),
-                                            x->device(), /*requires_grad=*/false);
+                                            x->device(), false);
 
     auto bwd = std::make_shared<RMSNormBackward>();
     bwd->saved_rstd_ = std::move(forward.second);

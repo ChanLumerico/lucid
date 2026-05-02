@@ -1,16 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — element-wise exponential / logarithmic unary ops.
-// =====================================================================
-//
-//   exp(x)   = e^x         grad: e^x * g     [saves output  — exp(x) is `result`]
-//   log(x)   = ln(x)       grad: g / x       [saves input]
-//   log2(x)  = log₂(x)     grad: g / (x·ln2) [saves input]
-//   sqrt(x)  = √x          grad: 0.5·g / √x  [saves output]
-//
-// Layer: autograd/ops/unary/.
-
 #include <utility>
 
 #include "../../api.h"
@@ -23,7 +12,6 @@
 
 namespace lucid {
 
-/// Autograd backward node for Exp.
 class LUCID_API ExpBackward : public UnaryOp<ExpBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -35,7 +23,6 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-/// Autograd backward node for Log.
 class LUCID_API LogBackward : public UnaryOp<LogBackward> {
 public:
     static const OpSchema schema_v1;
@@ -45,7 +32,6 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-/// Autograd backward node for Log2.
 class LUCID_API Log2Backward : public UnaryOp<Log2Backward> {
 public:
     static const OpSchema schema_v1;
@@ -55,7 +41,6 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-/// Autograd backward node for Sqrt.
 class LUCID_API SqrtBackward : public UnaryOp<SqrtBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -67,13 +52,12 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-/// Exp.
 LUCID_API TensorImplPtr exp_op(const TensorImplPtr& a);
-/// Log.
+
 LUCID_API TensorImplPtr log_op(const TensorImplPtr& a);
-/// Log2.
+
 LUCID_API TensorImplPtr log2_op(const TensorImplPtr& a);
-/// Sqrt.
+
 LUCID_API TensorImplPtr sqrt_op(const TensorImplPtr& a);
 
 }  // namespace lucid

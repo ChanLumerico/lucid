@@ -7,7 +7,6 @@ namespace lucid::backend::cpu {
 
 namespace {
 
-// Compute element-stride (not byte-stride) for a contiguous shape.
 std::vector<std::int64_t> elem_strides(const std::vector<std::int64_t>& shape) {
     std::vector<std::int64_t> s(shape.size());
     if (shape.empty())
@@ -20,12 +19,6 @@ std::vector<std::int64_t> elem_strides(const std::vector<std::int64_t>& shape) {
     return s;
 }
 
-// Multi-dimensional copy with permuted output layout.
-//
-// We iterate over output flat indices and unravel into output multi-index;
-// the corresponding input multi-index is obtained by inverse-permutation
-// (input[d] = output[perm_inv[d]]). This is one read + one write per
-// element with no extra allocations on the hot path.
 template <typename T>
 void permute_typed(const T* in,
                    T* out,
@@ -33,12 +26,10 @@ void permute_typed(const T* in,
                    const std::vector<int>& perm) {
     const std::size_t ndim = in_shape.size();
     if (ndim == 0) {
-        // Scalar: just copy the single element.
         out[0] = in[0];
         return;
     }
 
-    // Build out_shape from in_shape via perm.
     std::vector<std::int64_t> out_shape(ndim);
     for (std::size_t d = 0; d < ndim; ++d)
         out_shape[d] = in_shape[static_cast<std::size_t>(perm[d])];
@@ -46,7 +37,6 @@ void permute_typed(const T* in,
     const auto in_strides = elem_strides(in_shape);
     const auto out_strides = elem_strides(out_shape);
 
-    // Total elements in output = total in input (permutation preserves numel).
     std::size_t numel = 1;
     for (auto d : out_shape)
         numel *= static_cast<std::size_t>(d);
@@ -55,7 +45,6 @@ void permute_typed(const T* in,
 
     std::vector<std::int64_t> out_idx(ndim);
     for (std::size_t flat = 0; flat < numel; ++flat) {
-        // Unravel `flat` against out_shape.
         std::size_t rem = flat;
         for (std::size_t d = 0; d < ndim; ++d) {
             const std::size_t s = static_cast<std::size_t>(out_strides[d]);
@@ -64,7 +53,7 @@ void permute_typed(const T* in,
             if (s)
                 rem -= k * s;
         }
-        // Map to input flat: in_idx[perm[d]] = out_idx[d].
+
         std::int64_t in_flat = 0;
         for (std::size_t d = 0; d < ndim; ++d) {
             in_flat += out_idx[d] * in_strides[static_cast<std::size_t>(perm[d])];

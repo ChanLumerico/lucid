@@ -24,40 +24,32 @@
 namespace lucid {
 
 const OpSchema DropoutBackward::schema_v1{
-    "dropout", 1, AmpPolicy::KeepInput,
-    /*deterministic=*/false,
+    "dropout", 1, AmpPolicy::KeepInput, false,
     "uses Generator-driven Bernoulli mask; reproducible only with explicit seed"};
 
-TensorImplPtr DropoutBackward::forward(const TensorImplPtr& a,
-                                       double p,
-                                       bool training,
-                                       Generator* gen) {
+TensorImplPtr
+DropoutBackward::forward(const TensorImplPtr& a, double p, bool training, Generator* gen) {
     Validator::input(a, "dropout.a").non_null();
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("dropout").fail("p must be in [0, 1)");
 
-    // Phase 5: throw if called without a seed under set_deterministic(True).
     if (training && p > 0.0 && gen == nullptr)
         check_schema_determinism(schema_v1);
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     const std::size_t numel = a->numel();
 
-    // Inference mode (or zero drop) → pure pass-through clone (so engine
-    // owns its own buffer; no graph wiring needed if !requires_grad).
     if (!training || p == 0.0) {
         Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
         auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
                                                 a->device(), false);
         auto bwd = std::make_shared<DropoutBackward>();
-        bwd->p_ = 0.0;  // identity backward
-        // mask_ is empty/uninitialized — apply() detects and short-circuits.
-        kernel::NaryKernel<DropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                              /*save_ins=*/false);
+        bwd->p_ = 0.0;
+
+        kernel::NaryKernel<DropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
         return out;
     }
 
-    // Training: sample Bernoulli(1-p) mask, y = x * mask / (1-p).
     Generator& g = gen ? *gen : default_generator();
     Storage mask = bernoulli_mask_storage_shape(1.0 - p, a->shape(), a->dtype(), a->device(), g);
     const double scale = 1.0 / (1.0 - p);
@@ -72,16 +64,15 @@ TensorImplPtr DropoutBackward::forward(const TensorImplPtr& a,
     {
         auto bwd = std::make_shared<DropoutBackward>();
         bwd->p_ = p;
-        bwd->mask_ = std::move(scaled_mask);  // already scaled by 1/(1-p)
-        kernel::NaryKernel<DropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                              /*save_ins=*/false);
+        bwd->mask_ = std::move(scaled_mask);
+        kernel::NaryKernel<DropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     }
     return out;
 }
 
 std::vector<Storage> DropoutBackward::apply(Storage grad_out) {
     const std::size_t numel = shape_numel(input_shapes_[0]);
-    // Inference / p=0 path: identity backward (mask_ is empty / default-constructed).
+
     if (device_ == Device::CPU) {
         auto* mask_cpu = std::get_if<CpuStorage>(&mask_);
         if (!mask_cpu || mask_cpu->nbytes == 0) {
@@ -102,13 +93,8 @@ TensorImplPtr dropout_op(const TensorImplPtr& a, double p, bool training, Genera
 
 LUCID_REGISTER_OP(DropoutBackward)
 
-// ===================================================================
-// Helpers shared by the dropout family
-// ===================================================================
-
 namespace {
 
-// Build a (B, C, 1, ..., 1) shape from an input shape.
 Shape channel_mask_shape(const Shape& in) {
     if (in.size() < 2) {
         ErrorBuilder("dropoutnd").fail("expected ndim >= 2, got" + std::to_string(in.size()));
@@ -119,7 +105,6 @@ Shape channel_mask_shape(const Shape& in) {
     return m;
 }
 
-// (B, 1, 1, ..., 1) shape from input.
 Shape sample_mask_shape(const Shape& in) {
     if (in.empty())
         ErrorBuilder("drop_path").fail("input must have ≥1 dim");
@@ -130,18 +115,12 @@ Shape sample_mask_shape(const Shape& in) {
 
 }  // namespace
 
-// ===================================================================
-// DropoutNd (channel-wise: dropout1d/2d/3d)
-// ===================================================================
-
 const OpSchema DropoutNdBackward::schema_v1{
-    "dropoutnd", 1, AmpPolicy::KeepInput, /*deterministic=*/false,
+    "dropoutnd", 1, AmpPolicy::KeepInput, false,
     "Bernoulli channel mask; reproducible only with explicit seed"};
 
-TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
-                                         double p,
-                                         bool training,
-                                         Generator* gen) {
+TensorImplPtr
+DropoutNdBackward::forward(const TensorImplPtr& a, double p, bool training, Generator* gen) {
     Validator::input(a, "dropoutnd.a").non_null();
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("dropoutnd").fail("p must be in [0, 1)");
@@ -158,12 +137,10 @@ TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
                                                 a->device(), false);
         auto bwd = std::make_shared<DropoutNdBackward>();
         bwd->p_ = 0.0;
-        kernel::NaryKernel<DropoutNdBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                                /*save_ins=*/false);
+        kernel::NaryKernel<DropoutNdBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
         return out;
     }
 
-    // Sample a (B, C, 1, 1, ...) Bernoulli mask (broadcast-shape).
     Shape mask_shape = channel_mask_shape(a->shape());
     const std::size_t mask_numel =
         static_cast<std::size_t>(mask_shape[0]) * static_cast<std::size_t>(mask_shape[1]);
@@ -184,9 +161,8 @@ TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
     {
         auto bwd = std::make_shared<DropoutNdBackward>();
         bwd->p_ = p;
-        bwd->mask_ = std::move(full_mask);  // full-shape, scaled
-        kernel::NaryKernel<DropoutNdBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                                /*save_ins=*/false);
+        bwd->mask_ = std::move(full_mask);
+        kernel::NaryKernel<DropoutNdBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     }
     return out;
 }
@@ -213,31 +189,18 @@ TensorImplPtr dropoutnd_op(const TensorImplPtr& a, double p, bool training, Gene
 
 LUCID_REGISTER_OP(DropoutNdBackward)
 
-// ===================================================================
-// AlphaDropout (SELU-friendly)
-// ===================================================================
-//
-// Following Klambauer et al. (2017) and the canonical PyTorch
-// implementation: keep_prob = 1-p, alpha' = -lambda * alpha. We build
-//   y = a · (x · mask + alpha' · (1 - mask)) + b
-// where  a = (keep_prob · (1 + p · alpha'²))^-0.5
-//        b = -a · p · alpha'
-// Backward: dx = a · mask · g  (the additive constant has no x dependence)
-
 namespace {
 constexpr double kSeluAlpha = 1.6732632423543772;
 constexpr double kSeluLambda = 1.0507009873554805;
-constexpr double kAlphaPrime = -kSeluLambda * kSeluAlpha;  // ≈ -1.7581
+constexpr double kAlphaPrime = -kSeluLambda * kSeluAlpha;
 }  // namespace
 
 const OpSchema AlphaDropoutBackward::schema_v1{
-    "alpha_dropout", 1, AmpPolicy::KeepInput, /*deterministic=*/false,
+    "alpha_dropout", 1, AmpPolicy::KeepInput, false,
     "Bernoulli mask + SELU rescaling; reproducible only with explicit seed"};
 
-TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
-                                            double p,
-                                            bool training,
-                                            Generator* gen) {
+TensorImplPtr
+AlphaDropoutBackward::forward(const TensorImplPtr& a, double p, bool training, Generator* gen) {
     Validator::input(a, "alpha_dropout.a").non_null();
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("alpha_dropout").fail("p must be in [0, 1)");
@@ -255,8 +218,7 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
         auto bwd = std::make_shared<AlphaDropoutBackward>();
         bwd->p_ = 0.0;
         bwd->a_coef_ = 1.0;
-        kernel::NaryKernel<AlphaDropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                                   /*save_ins=*/false);
+        kernel::NaryKernel<AlphaDropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
         return out;
     }
 
@@ -267,14 +229,13 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
     Generator& g = gen ? *gen : default_generator();
     Storage mask = bernoulli_mask_storage_shape(keep, a->shape(), a->dtype(), a->device(), g);
 
-    // x·mask
     Storage x_mask = multiply_storages(a->storage(), mask, numel, a->dtype(), a->device());
-    // (1 - mask)·alpha' = alpha' - alpha'·mask
+
     Storage alpha_mask = mul_scalar_storage(mask, kAlphaPrime, numel, a->dtype(), a->device());
     Storage neg_alpha_mask = mul_scalar_storage(alpha_mask, -1.0, numel, a->dtype(), a->device());
     Storage one_m_mask_ap =
         add_scalar_storage(neg_alpha_mask, kAlphaPrime, numel, a->dtype(), a->device());
-    // x·mask + (1 - mask)·alpha'
+
     Storage inner = add_storages(x_mask, one_m_mask_ap, numel, a->dtype(), a->device());
     Storage scaled = mul_scalar_storage(inner, a_coef, numel, a->dtype(), a->device());
     Storage y = add_scalar_storage(scaled, b_coef, numel, a->dtype(), a->device());
@@ -288,8 +249,7 @@ TensorImplPtr AlphaDropoutBackward::forward(const TensorImplPtr& a,
         bwd->p_ = p;
         bwd->a_coef_ = a_coef;
         bwd->mask_ = std::move(mask);
-        kernel::NaryKernel<AlphaDropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                                   /*save_ins=*/false);
+        kernel::NaryKernel<AlphaDropoutBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     }
     return out;
 }
@@ -307,7 +267,7 @@ std::vector<Storage> AlphaDropoutBackward::apply(Storage grad_out) {
             return {clone_storage(grad_out, numel, dtype_, device_)};
         }
     }
-    // dx = a_coef · mask · g
+
     Storage scaled_mask = mul_scalar_storage(mask_, a_coef_, numel, dtype_, device_);
     return {multiply_storages(grad_out, scaled_mask, numel, dtype_, device_)};
 }
@@ -318,12 +278,8 @@ TensorImplPtr alpha_dropout_op(const TensorImplPtr& a, double p, bool training, 
 
 LUCID_REGISTER_OP(AlphaDropoutBackward)
 
-// ===================================================================
-// DropBlock (4-D spatial structured dropout)
-// ===================================================================
-
 const OpSchema DropBlockBackward::schema_v1{
-    "drop_block", 1, AmpPolicy::KeepInput, /*deterministic=*/false,
+    "drop_block", 1, AmpPolicy::KeepInput, false,
     "Bernoulli + spatial dilation; reproducible only with explicit seed"};
 
 TensorImplPtr DropBlockBackward::forward(
@@ -362,8 +318,7 @@ TensorImplPtr DropBlockBackward::forward(
         auto bwd = std::make_shared<DropBlockBackward>();
         bwd->p_ = p;
         bwd->mask_ = std::move(keep_storage);
-        kernel::NaryKernel<DropBlockBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                                /*save_ins=*/false);
+        kernel::NaryKernel<DropBlockBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     }
     return out;
 }
@@ -380,18 +335,12 @@ TensorImplPtr drop_block_op(
 
 LUCID_REGISTER_OP(DropBlockBackward)
 
-// ===================================================================
-// DropPath (stochastic depth)
-// ===================================================================
-
 const OpSchema DropPathBackward::schema_v1{
-    "drop_path", 1, AmpPolicy::KeepInput, /*deterministic=*/false,
+    "drop_path", 1, AmpPolicy::KeepInput, false,
     "Per-sample Bernoulli; reproducible only with explicit seed"};
 
-TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
-                                        double p,
-                                        bool scale_by_keep,
-                                        Generator* gen) {
+TensorImplPtr
+DropPathBackward::forward(const TensorImplPtr& a, double p, bool scale_by_keep, Generator* gen) {
     Validator::input(a, "drop_path.a").non_null();
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("drop_path").fail("p must be in [0, 1)");
@@ -406,13 +355,13 @@ TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
         Storage clone = clone_storage(a->storage(), numel, a->dtype(), a->device());
         auto out = std::make_shared<TensorImpl>(std::move(clone), a->shape(), a->dtype(),
                                                 a->device(), false);
-        kernel::NaryKernel<DropPathBackward, 1>::wire_autograd({a}, out, /*save_ins=*/false);
+        kernel::NaryKernel<DropPathBackward, 1>::wire_autograd({a}, out, false);
         return out;
     }
 
     const double keep = 1.0 - p;
     const std::size_t B = static_cast<std::size_t>(a->shape()[0]);
-    Shape sshape = sample_mask_shape(a->shape());  // (B, 1, 1, ...)
+    Shape sshape = sample_mask_shape(a->shape());
     Generator& g = gen ? *gen : default_generator();
     Storage small = bernoulli_mask_storage_shape(keep, sshape, a->dtype(), a->device(), g);
     if (scale_by_keep && keep > 0.0) {
@@ -429,8 +378,7 @@ TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
     {
         auto bwd = std::make_shared<DropPathBackward>();
         bwd->mask_ = std::move(full_mask);
-        kernel::NaryKernel<DropPathBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                               /*save_ins=*/false);
+        kernel::NaryKernel<DropPathBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     }
     return out;
 }

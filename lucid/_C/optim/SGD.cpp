@@ -50,7 +50,6 @@ void SGD::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl
 
 namespace {
 
-// CPU SGD step (single buffer of length numel). All math in T.
 template <typename T>
 void sgd_step_cpu(T* param,
                   const T* grad,
@@ -85,8 +84,6 @@ void sgd_step_cpu(T* param,
     }
 }
 
-// GPU SGD step using MLX functional ops. Replaces param.storage_ and
-// moment.arr with new arrays each call (functional MLX semantics).
 void sgd_step_gpu(GpuStorage& param_g,
                   const GpuStorage& grad_g,
                   GpuStorage& moment_g,
@@ -112,10 +109,10 @@ void sgd_step_gpu(GpuStorage& param_g,
         }
         ::mlx::core::array m_arr(momentum, mdt);
         ::mlx::core::array dampening_arr(1.0 - dampening, mdt);
-        // buf ← momentum · buf + (1-damp) · g
+
         auto new_buf = ::mlx::core::add(::mlx::core::multiply(m_arr, *moment_g.arr),
                                         ::mlx::core::multiply(dampening_arr, g));
-        // Swap moment storage with new buffer.
+
         moment_g.arr = gpu::wrap_mlx_array(::mlx::core::array(new_buf), dt).arr;
 
         ::mlx::core::array eff_g =
@@ -140,8 +137,7 @@ void SGD::update_one(std::size_t slot_idx,
         if (momentum_ != 0.0) {
             moment_g = &storage_gpu(moment_[slot_idx]);
         }
-        // The function expects a non-null reference even when momentum=0;
-        // gate at the kernel level instead.
+
         GpuStorage dummy_moment;
         sgd_step_gpu(param_g, grad_g, moment_g ? *moment_g : dummy_moment, param->dtype(), lr_,
                      momentum_, dampening_, weight_decay_, nesterov_);
@@ -158,29 +154,24 @@ void SGD::update_one(std::size_t slot_idx,
     const std::size_t numel = param_cpu.nbytes / dtype_size(param->dtype());
 
     switch (param->dtype()) {
-        case Dtype::F32:
-            sgd_step_cpu<float>(
-                reinterpret_cast<float*>(param_cpu.ptr.get()),
-                reinterpret_cast<const float*>(grad_cpu.ptr.get()),
-                moment_cpu ? reinterpret_cast<float*>(moment_cpu->ptr.get()) : nullptr, numel, lr_,
-                momentum_, dampening_, weight_decay_, nesterov_);
-            break;
-        case Dtype::F64:
-            sgd_step_cpu<double>(
-                reinterpret_cast<double*>(param_cpu.ptr.get()),
-                reinterpret_cast<const double*>(grad_cpu.ptr.get()),
-                moment_cpu ? reinterpret_cast<double*>(moment_cpu->ptr.get()) : nullptr, numel, lr_,
-                momentum_, dampening_, weight_decay_, nesterov_);
-            break;
-        default:
-            ErrorBuilder("SGD").not_implemented("dtype not supported (F32/F64)");
+    case Dtype::F32:
+        sgd_step_cpu<float>(reinterpret_cast<float*>(param_cpu.ptr.get()),
+                            reinterpret_cast<const float*>(grad_cpu.ptr.get()),
+                            moment_cpu ? reinterpret_cast<float*>(moment_cpu->ptr.get()) : nullptr,
+                            numel, lr_, momentum_, dampening_, weight_decay_, nesterov_);
+        break;
+    case Dtype::F64:
+        sgd_step_cpu<double>(reinterpret_cast<double*>(param_cpu.ptr.get()),
+                             reinterpret_cast<const double*>(grad_cpu.ptr.get()),
+                             moment_cpu ? reinterpret_cast<double*>(moment_cpu->ptr.get())
+                                        : nullptr,
+                             numel, lr_, momentum_, dampening_, weight_decay_, nesterov_);
+        break;
+    default:
+        ErrorBuilder("SGD").not_implemented("dtype not supported (F32/F64)");
     }
     param_cpu.bump_version();
 }
-
-// =====================================================================
-// ASGD
-// =====================================================================
 
 ASGD::ASGD(std::vector<std::shared_ptr<TensorImpl>> p,
            double lr,
@@ -210,7 +201,7 @@ void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) 
     if (momentum_ != 0.0) {
         moment_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     }
-    // ax_ initialized to a clone of param.
+
     ax_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     if (p->device() == Device::GPU) {
         const auto& gp = gpu_get(p->storage());
@@ -245,7 +236,7 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
         if (step_[i] >= static_cast<std::int64_t>(t0_)) {
             const double coef = 1.0 / (alpha_ * step_[i] + 1.0);
             auto& ag = gpu_get(ax_[i]);
-            // ax = (1 − coef)·ax + coef·param − lambd·ax
+
             auto new_ax = ::mlx::core::subtract(
                 ::mlx::core::add(::mlx::core::multiply(mlx_scalar(1.0 - coef, dt), *ag.arr),
                                  ::mlx::core::multiply(mlx_scalar(coef, dt), *pg.arr)),

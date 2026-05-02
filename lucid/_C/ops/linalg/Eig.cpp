@@ -21,8 +21,8 @@ std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a) {
     OpScopeFull scope{"eig", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();
-    Shape wsh(sh.begin(), sh.end() - 1);  // (..., n)
-    Shape vsh = sh;                       // (..., n, n)
+    Shape wsh(sh.begin(), sh.end() - 1);
+    Shape vsh = sh;
     auto out = backend::Dispatcher::for_device(a->device())
                    .linalg_eig(a->storage(), sh, wsh, vsh, a->dtype());
     std::vector<TensorImplPtr> result;

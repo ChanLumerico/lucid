@@ -15,10 +15,6 @@ namespace lucid {
 
 using namespace lucid::optim_detail;
 
-// =====================================================================
-// RMSprop
-// =====================================================================
-
 RMSprop::RMSprop(std::vector<std::shared_ptr<TensorImpl>> p,
                  double lr,
                  double alpha,
@@ -70,7 +66,7 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
             gpu_replace(ga, ::mlx::core::array(new_ga), dt);
             avg = ::mlx::core::subtract(new_sq, ::mlx::core::square(new_ga));
         }
-        // PyTorch form: denom = sqrt(avg) + eps (eps OUTSIDE the sqrt).
+
         auto denom = ::mlx::core::add(::mlx::core::sqrt(avg), mlx_scalar(eps_, dt));
         ::mlx::core::array update = ::mlx::core::divide(g, denom);
         if (momentum_ != 0.0) {
@@ -109,7 +105,7 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
                 GA[k] = aT * GA[k] + omaT * g;
                 avg = SQ[k] - GA[k] * GA[k];
             }
-            // PyTorch form: denom = sqrt(avg) + eps (eps OUTSIDE the sqrt).
+
             const T denom = std::sqrt(avg) + epsT;
             T update = g / denom;
             if (MB) {
@@ -127,10 +123,6 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         ErrorBuilder("RMSprop").not_implemented("dtype not supported");
     p_cpu.bump_version();
 }
-
-// =====================================================================
-// Rprop
-// =====================================================================
 
 Rprop::Rprop(std::vector<std::shared_ptr<TensorImpl>> p,
              double lr,
@@ -151,7 +143,7 @@ void Rprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p)
     if (step_size_.size() < params_.size())
         step_size_.resize(params_.size());
     prev_grad_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
-    // step_size starts at lr_ everywhere → ones · lr.
+
     step_size_[i] = make_ones_storage(p->shape(), p->dtype(), p->device());
     if (p->device() == Device::GPU) {
         auto& s = gpu_get(step_size_[i]);
@@ -182,18 +174,17 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
 
         ::mlx::core::array sign_change = ::mlx::core::multiply(*gg.arr, *pv.arr);
         ::mlx::core::array zero_arr = mlx_scalar(0.0, dt);
-        // step_size = where(sign_change > 0, step_size · eta+, step_size)
+
         auto pos_mask = ::mlx::core::greater(sign_change, zero_arr);
         auto inc = ::mlx::core::multiply(mlx_scalar(eta_plus_, dt), *ss.arr);
         auto new_ss = ::mlx::core::where(pos_mask, inc, *ss.arr);
-        // step_size = where(sign_change < 0, step_size · eta-, step_size)
+
         auto neg_mask = ::mlx::core::less(sign_change, zero_arr);
         auto dec = ::mlx::core::multiply(mlx_scalar(eta_minus_, dt), new_ss);
         new_ss = ::mlx::core::where(neg_mask, dec, new_ss);
         new_ss = ::mlx::core::clip(new_ss, mlx_scalar(step_min_, dt), mlx_scalar(step_max_, dt));
         gpu_replace(ss, ::mlx::core::array(new_ss), dt);
 
-        // grad = where(sign_change < 0, 0, grad)
         auto eff_g = ::mlx::core::where(neg_mask, zero_arr, *gg.arr);
         gpu_replace(pv, ::mlx::core::array(eff_g), dt);
         auto new_p =

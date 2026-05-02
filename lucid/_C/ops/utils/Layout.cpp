@@ -21,9 +21,9 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
-#include "Contiguous.h"          // contiguous_op for non-contig inputs
-#include "View.h"                // reshape_op / ViewBackward
+#include "../bfunc/_BinaryOp.h"
+#include "Contiguous.h"
+#include "View.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -43,7 +43,6 @@ TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis) {
     if (s < 0 || e >= ndim || s > e)
         ErrorBuilder("flatten").fail("invalid axis range");
 
-    // Delegate to reshape_op so we inherit the ViewBackward autograd wiring.
     std::vector<std::int64_t> new_shape;
     for (int d = 0; d < s; ++d)
         new_shape.push_back(a->shape()[d]);
@@ -60,9 +59,6 @@ const OpSchema BroadcastBackward::schema_v1{"broadcast_to", 1, AmpPolicy::KeepIn
 
 namespace {
 
-// Sum `grad` (shape = output_shape) down to `input_shape` by reducing along
-// the broadcast axes. Handles right-aligned shape padding (PyTorch / NumPy
-// semantics).
 Storage reduce_broadcast(const Storage& grad,
                          const Shape& input_shape,
                          const Shape& output_shape,
@@ -87,13 +83,11 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
     OpScopeFull scope{"broadcast_to", device, dt, shape};
 
     auto build_with_grad = [&](Storage&& out_storage) {
-        auto out = std::make_shared<TensorImpl>(std::move(out_storage), shape, dt, device,
-                                                /*requires_grad=*/false);
+        auto out = std::make_shared<TensorImpl>(std::move(out_storage), shape, dt, device, false);
         auto bwd = std::make_shared<BroadcastBackward>();
         bwd->input_shape_ = a->shape();
         bwd->output_shape_ = shape;
-        kernel::NaryKernel<BroadcastBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                                /*save_ins=*/false);
+        kernel::NaryKernel<BroadcastBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
         return out;
     };
 

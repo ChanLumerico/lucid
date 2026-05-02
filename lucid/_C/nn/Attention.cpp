@@ -42,8 +42,8 @@ Shape build_output_shape(const Shape& q_shape, const Shape& v_shape) {
     out.reserve(q_shape.size());
     for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
         out.push_back(q_shape[i]);
-    out.push_back(q_shape[q_shape.size() - 2]);  // L_q
-    out.push_back(v_shape.back());               // d_v
+    out.push_back(q_shape[q_shape.size() - 2]);
+    out.push_back(v_shape.back());
     return out;
 }
 
@@ -96,8 +96,8 @@ ForwardCore run_forward(const TensorImplPtr& q,
     weights_shape.reserve(q->shape().size());
     for (std::size_t i = 0; i + 2 < q->shape().size(); ++i)
         weights_shape.push_back(q->shape()[i]);
-    weights_shape.push_back(q->shape()[q->shape().size() - 2]);  // L_q
-    weights_shape.push_back(k->shape()[k->shape().size() - 2]);  // L_k
+    weights_shape.push_back(q->shape()[q->shape().size() - 2]);
+    weights_shape.push_back(k->shape()[k->shape().size() - 2]);
 
     const Storage* mask_storage = attn_mask ? &attn_mask->storage() : nullptr;
     auto results =
@@ -154,13 +154,13 @@ TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
     return ScaledDotProductAttentionBackward::forward(q, k, v, attn_mask_or_null, scale, is_causal);
 }
 
-std::vector<TensorImplPtr> scaled_dot_product_attention_with_weights_op(
-    const TensorImplPtr& q,
-    const TensorImplPtr& k,
-    const TensorImplPtr& v,
-    const TensorImplPtr& attn_mask_or_null,
-    double scale,
-    bool is_causal) {
+std::vector<TensorImplPtr>
+scaled_dot_product_attention_with_weights_op(const TensorImplPtr& q,
+                                             const TensorImplPtr& k,
+                                             const TensorImplPtr& v,
+                                             const TensorImplPtr& attn_mask_or_null,
+                                             double scale,
+                                             bool is_causal) {
     auto core = run_forward(q, k, v, attn_mask_or_null, scale, is_causal);
 
     Shape weights_shape = core.weights_shape;

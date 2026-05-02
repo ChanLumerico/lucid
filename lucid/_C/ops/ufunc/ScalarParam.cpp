@@ -14,8 +14,6 @@
 
 namespace lucid {
 
-// =================== PowScalar : x ^ exp ===================
-
 const OpSchema PowScalarBackward::schema_v1{"pow_scalar", 1, AmpPolicy::ForceFP32, true};
 
 Storage PowScalarBackward::grad_formula(const Storage& g) {
@@ -47,13 +45,11 @@ TensorImplPtr pow_scalar_op(const TensorImplPtr& a, double exp) {
 }
 LUCID_REGISTER_OP(PowScalarBackward)
 
-// =================== RPowScalar : base ^ x ===================
-
 const OpSchema RPowScalarBackward::schema_v1{"rpow_scalar", 1, AmpPolicy::ForceFP32, true};
 
 Storage RPowScalarBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    // dx = ln(base) * base^x * g = ln(base) * output * g
+
     const double ln_base = std::log(base_);
     Storage scaled_out = mul_scalar_storage(saved_output_, ln_base, n, dtype_, device_);
     return multiply_storages(scaled_out, g, n, dtype_, device_);
@@ -72,8 +68,7 @@ TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
     auto bwd = std::make_shared<RPowScalarBackward>();
     bwd->saved_output_ = out->storage();
     bwd->base_ = base;
-    kernel::NaryKernel<RPowScalarBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                             /*save_ins=*/false);
+    kernel::NaryKernel<RPowScalarBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 
@@ -81,8 +76,6 @@ TensorImplPtr rpow_scalar_op(double base, const TensorImplPtr& a) {
     return RPowScalarBackward::forward(base, a);
 }
 LUCID_REGISTER_OP(RPowScalarBackward)
-
-// =================== Clip : clamp(x, lo, hi) ===================
 
 const OpSchema ClipBackward::schema_v1{"clip", 1, AmpPolicy::KeepInput, true};
 

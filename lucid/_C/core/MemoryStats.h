@@ -1,18 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — memory accounting.
-// =====================================================================
-//
-// MemoryTracker holds per-device atomic counters that the Allocator updates
-// on every alloc/free. Public API: `lucid.memory_stats(device)` and
-// `lucid.reset_peak_memory_stats(device)`.
-//
-// Threading: all counters are `std::atomic`. Peak update uses a lock-free
-// CAS loop that's monotone — peak only ever increases, until reset.
-//
-// Layer: core/.
-
 #include <atomic>
 #include <cstddef>
 
@@ -21,7 +8,6 @@
 
 namespace lucid {
 
-/// Snapshot of per-device allocation counters (current, peak, alloc count).
 struct LUCID_API MemoryStats {
     std::size_t current_bytes = 0;
     std::size_t peak_bytes = 0;
@@ -29,8 +15,6 @@ struct LUCID_API MemoryStats {
     std::size_t free_count = 0;
 };
 
-// Per-device counters; thread-safe. Updated by the Allocator on alloc/free.
-/// Thread-safe per-device memory accounting; updated by the allocator.
 class LUCID_API MemoryTracker {
 public:
     struct Counters {

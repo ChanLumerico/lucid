@@ -27,18 +27,18 @@ TensorImplPtr dispatch_reduce(const TensorImplPtr& x, const std::vector<int>& ax
     if (axes.empty())
         return x;
     switch (reduction) {
-        case 1:
-            return mean_op(x, axes, /*keepdims=*/false);
-        case 2:
-            return sum_op(x, axes, /*keepdims=*/false);
-        case 3:
-            return max_op(x, axes, /*keepdims=*/false);
-        case 4:
-            return min_op(x, axes, /*keepdims=*/false);
-        case 5:
-            return prod_op(x, axes, /*keepdims=*/false);
-        default:
-            ErrorBuilder("reduce").fail("unknown reduction code " + std::to_string(reduction));
+    case 1:
+        return mean_op(x, axes, false);
+    case 2:
+        return sum_op(x, axes, false);
+    case 3:
+        return max_op(x, axes, false);
+    case 4:
+        return min_op(x, axes, false);
+    case 5:
+        return prod_op(x, axes, false);
+    default:
+        ErrorBuilder("reduce").fail("unknown reduction code " + std::to_string(reduction));
     }
 }
 
@@ -59,7 +59,6 @@ TensorImplPtr einops_reduce_op(const TensorImplPtr& a,
     auto flat_rhs_v = flat_axes(rhs);
     std::set<std::string> flat_rhs(flat_rhs_v.begin(), flat_rhs_v.end());
 
-    // Step 1: rearrange lhs → flat-lhs canonical order via einops_rearrange_op.
     std::string flat_lhs_str;
     for (std::size_t i = 0; i < flat_lhs.size(); ++i) {
         if (i)
@@ -68,14 +67,12 @@ TensorImplPtr einops_reduce_op(const TensorImplPtr& a,
     }
     auto cur = einops_rearrange_op(a, lhs_str + " -> " + flat_lhs_str, axes_lengths);
 
-    // Step 2: reduce away axes that don't appear in rhs.
     std::vector<int> reduce_axes;
     for (std::size_t i = 0; i < flat_lhs.size(); ++i)
         if (flat_rhs.find(flat_lhs[i]) == flat_rhs.end())
             reduce_axes.push_back(static_cast<int>(i));
     cur = dispatch_reduce(cur, reduce_axes, reduction);
 
-    // Step 3: rearrange surviving flat axes → grouped rhs.
     std::vector<std::string> surviving;
     for (auto& n : flat_lhs)
         if (flat_rhs.find(n) != flat_rhs.end())

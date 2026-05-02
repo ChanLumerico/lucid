@@ -6,7 +6,6 @@
 
 namespace lucid {
 
-/// Cholesky.
 LUCID_API TensorImplPtr cholesky_op(const TensorImplPtr& a, bool upper = false);
 
-}  // namespace lucid
+}

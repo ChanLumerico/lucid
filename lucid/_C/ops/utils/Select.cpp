@@ -22,7 +22,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -35,9 +35,6 @@ using utils_detail::mlx_shape_to_lucid;
 using utils_detail::numel;
 using utils_detail::wrap_axis;
 
-// where_branch_cpu<T> removed: where_branch_storage routes through
-// Dispatcher, so the hand-written CPU template is unreachable dead code.
-
 Storage where_branch_storage(const Storage& grad,
                              const Storage& cond,
                              const Shape& shape,
@@ -46,9 +43,6 @@ Storage where_branch_storage(const Storage& grad,
                              bool true_branch) {
     return backend::Dispatcher::for_device(device).where_branch(grad, cond, shape, dt, true_branch);
 }
-
-// gather_backward_cpu_typed<T> removed: gather_backward_storage routes
-// through Dispatcher, so the hand-written CPU template is unreachable dead code.
 
 Storage gather_backward_storage(const Storage& grad,
                                 const Storage& indices,
@@ -61,9 +55,6 @@ Storage gather_backward_storage(const Storage& grad,
     return backend::Dispatcher::for_device(device).gather_backward(
         grad, indices, input_shape, output_shape, axis, index_dtype, dt);
 }
-
-// diagonal_backward_cpu_typed<T> removed: diagonal_backward_storage routes
-// through Dispatcher, so the hand-written CPU template is unreachable dead code.
 
 Storage diagonal_backward_storage(const Storage& grad,
                                   const Shape& input_shape,
@@ -215,9 +206,8 @@ TensorImplPtr attach_where_grad(const TensorImplPtr& cond,
     return out;
 }
 
-TensorImplPtr attach_masked_fill_grad(const TensorImplPtr& a,
-                                      const TensorImplPtr& mask,
-                                      TensorImplPtr out) {
+TensorImplPtr
+attach_masked_fill_grad(const TensorImplPtr& a, const TensorImplPtr& mask, TensorImplPtr out) {
     if (!GradMode::is_enabled() || !a->requires_grad())
         return out;
 
@@ -238,10 +228,9 @@ TensorImplPtr attach_masked_fill_grad(const TensorImplPtr& a,
 }
 
 template <class Derived>
-TensorImplPtr attach_unary_grad(const TensorImplPtr& a,
-                                TensorImplPtr out,
-                                std::shared_ptr<Derived> bwd) {
-    kernel::NaryKernel<Derived, 1>::wire_autograd(std::move(bwd), {a}, out, /*save_ins=*/false);
+TensorImplPtr
+attach_unary_grad(const TensorImplPtr& a, TensorImplPtr out, std::shared_ptr<Derived> bwd) {
+    kernel::NaryKernel<Derived, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 
@@ -294,9 +283,8 @@ TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, 
     return attach_masked_fill_grad(a, mask, std::move(result));
 }
 
-TensorImplPtr roll_op(const TensorImplPtr& a,
-                      std::vector<std::int64_t> shifts,
-                      std::vector<int> axes) {
+TensorImplPtr
+roll_op(const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<int> axes) {
     Validator::input(a, "roll.a").non_null();
     const Dtype dt = a->dtype();
     const Device device = a->device();

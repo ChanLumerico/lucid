@@ -6,7 +6,6 @@ namespace lucid::backend::cpu {
 
 namespace {
 
-// vDSP types: vDSP_Length is `unsigned long`, vDSP_Stride is `long`.
 inline vDSP_Length L(std::size_t n) {
     return static_cast<vDSP_Length>(n);
 }
@@ -18,8 +17,6 @@ void vadd_f32(const float* a, const float* b, float* out, std::size_t n) {
 }
 
 void vsub_f32(const float* a, const float* b, float* out, std::size_t n) {
-    // vDSP_vsub computes C = B - A (note the order). We swap so the wrapper
-    // reads naturally as out = a - b.
     vDSP_vsub(b, 1, a, 1, out, 1, L(n));
 }
 
@@ -28,7 +25,6 @@ void vmul_f32(const float* a, const float* b, float* out, std::size_t n) {
 }
 
 void vdiv_f32(const float* a, const float* b, float* out, std::size_t n) {
-    // vDSP_vdiv: C = A / B (where A is the second arg; see vDSP docs).
     vDSP_vdiv(b, 1, a, 1, out, 1, L(n));
 }
 
@@ -114,17 +110,12 @@ void vmin_f64(const double* a, const double* b, double* out, std::size_t n) {
     vDSP_vminD(a, 1, b, 1, out, 1, L(n));
 }
 
-// vDSP doesn't ship a comparison-mask kernel for two vectors. Scalar loops
-// below are simple and correct; if profiling shows hot spots we can replace
-// with NEON intrinsics.
 void vge_mask_f32(const float* a, const float* b, float* out, std::size_t n) {
     for (std::size_t i = 0; i < n; ++i)
         out[i] = (a[i] >= b[i]) ? 1.0f : 0.0f;
 }
 
 void vle_mask_f32(const float* a, const float* b, float* out, std::size_t n) {
-    // Strict-less so ties go only to the >= side — matches PyTorch min/max
-    // backward (no double-counting at equal values).
     for (std::size_t i = 0; i < n; ++i)
         out[i] = (a[i] < b[i]) ? 1.0f : 0.0f;
 }

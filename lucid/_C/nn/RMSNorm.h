@@ -1,18 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — RMSNorm.
-// =====================================================================
-//
-//   rms = √(mean(x²) + ε)
-//   y   = γ · x / rms
-//
-// Cheaper variant of LayerNorm — no mean subtraction, no β. Common in modern
-// LLMs (LLaMA, T5).
-//
-// Backward: returns (dx, dγ).
-// AMP policy: ForceFP32.
-
 #include <vector>
 
 #include "../api.h"
@@ -24,7 +11,6 @@
 
 namespace lucid {
 
-/// Autograd backward node for RMSNorm.
 class LUCID_API RMSNormBackward : public FuncOp<RMSNormBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -36,7 +22,6 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-/// Rms norm.
 LUCID_API TensorImplPtr rms_norm_op(const TensorImplPtr& x, const TensorImplPtr& gamma, double eps);
 
 }  // namespace lucid

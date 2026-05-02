@@ -1,25 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — UnaryKernel<Derived>: single-input element-wise base.
-// =====================================================================
-//
-// Replaces `ops/ufunc/_UnaryOp.h::UnaryOp<Derived>`.
-//
-// Derived implements:
-//   1. `static const OpSchema schema_v1;`
-//   2. `static CpuStorage cpu_kernel(const CpuStorage&, const Shape&, Dtype);`
-//   3. (optional) `static GpuStorage gpu_kernel(GpuStorage, Shape, Dtype);`
-//   4. `Storage grad_formula(const Storage& grad_out);`
-//   5. (optional) `static constexpr bool kSavesInput  = false;`
-//   6. (optional) `static constexpr bool kSavesOutput = true;`
-//   7. (optional) `static constexpr bool kHasGradient = false;`
-//
-// `ops/ufunc/_UnaryOp.h` re-exports as:
-//   template<class D> using UnaryOp = kernel::UnaryKernel<D>;
-//
-// Layer: kernel/. Depends on kernel/AutogradNode.h, autograd/, backend/, core/.
-
 #include <memory>
 #include <vector>
 
@@ -37,8 +17,8 @@
 #include "../core/Scope.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
-#include "BinaryKernel.h"  // detail::ensure_grad_fn, detail::HasUnaryGpuKernel
-#include "Contig.h"        // contiguous_op forward-decl
+#include "BinaryKernel.h"
+#include "Contig.h"
 #include "IKernel.h"
 
 namespace lucid {
@@ -71,14 +51,11 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-// ---------------- implementation ----------------
-
 template <class Derived>
 std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a) {
     if (!a)
         ErrorBuilder(Derived::schema_v1.name).fail("null input tensor");
 
-    // Phase 5: determinism gate + AMP dtype resolution.
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
@@ -105,7 +82,7 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
     }
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a_ptr->shape(), eff_dt,
-                                            a_ptr->device(), /*requires_grad=*/false);
+                                            a_ptr->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
     if constexpr (!Derived::kHasGradient) {
@@ -124,12 +101,12 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
         bwd->device_ = a->device();
         bwd->input_tensors_ = {a};
         if constexpr (Derived::kSavesInput)
-            bwd->saved_inputs_ = {a_ptr->storage()};  // cast storage
+            bwd->saved_inputs_ = {a_ptr->storage()};
         if constexpr (Derived::kSavesOutput)
             bwd->saved_output_ = out->storage();
 
         std::vector<Edge> edges;
-        edges.emplace_back(a_edge, /*input_nr=*/0);
+        edges.emplace_back(a_edge, 0);
         bwd->set_next_edges(std::move(edges));
         bwd->set_saved_versions({a->version()});
 

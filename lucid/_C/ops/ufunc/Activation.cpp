@@ -17,7 +17,6 @@
 
 namespace lucid {
 
-// =================== Relu ===================
 const OpSchema ReluBackward::schema_v1{"relu", 1, AmpPolicy::KeepInput, true};
 
 Storage ReluBackward::grad_formula(const Storage& g) {
@@ -31,12 +30,11 @@ TensorImplPtr relu_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(ReluBackward)
 
-// =================== Sigmoid ===================
 const OpSchema SigmoidBackward::schema_v1{"sigmoid", 1, AmpPolicy::Promote, true};
 
 Storage SigmoidBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    // dx = z (1 - z) g, z = saved output.
+
     Storage neg_z = mul_scalar_storage(saved_output_, -1.0, n, dtype_, device_);
     Storage one_m_z = add_scalar_storage(neg_z, 1.0, n, dtype_, device_);
     Storage z_omz = multiply_storages(saved_output_, one_m_z, n, dtype_, device_);
@@ -48,12 +46,11 @@ TensorImplPtr sigmoid_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SigmoidBackward)
 
-// =================== SiLU (Swish) ===================
 const OpSchema SiluBackward::schema_v1{"silu", 1, AmpPolicy::Promote, true};
 
 Storage SiluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    // dx = σ(x) · (1 + x(1 - σ(x)))
+
     Storage sx = sigmoid_storage(saved_inputs_[0], n, dtype_, device_);
     Storage neg_sx = mul_scalar_storage(sx, -1.0, n, dtype_, device_);
     Storage one_m_sx = add_scalar_storage(neg_sx, 1.0, n, dtype_, device_);
@@ -68,7 +65,6 @@ TensorImplPtr silu_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SiluBackward)
 
-// =================== GeLU ===================
 const OpSchema GeluBackward::schema_v1{"gelu", 1, AmpPolicy::ForceFP32, true};
 
 Storage GeluBackward::grad_formula(const Storage& g) {
@@ -81,11 +77,7 @@ TensorImplPtr gelu_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(GeluBackward)
 
-// =================== LeakyReLU (scalar param — custom forward) ===================
 const OpSchema LeakyReluBackward::schema_v1{"leaky_relu", 1, AmpPolicy::KeepInput, true};
-
-// LeakyReluBackward::cpu_kernel was removed: forward() routes through
-// Dispatcher (be.leaky_relu), so the cpu_kernel path is unreachable dead code.
 
 Storage LeakyReluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
@@ -114,7 +106,6 @@ TensorImplPtr leaky_relu_op(const TensorImplPtr& a, double slope) {
 }
 LUCID_REGISTER_OP(LeakyReluBackward)
 
-// =================== Softplus ===================
 const OpSchema SoftplusBackward::schema_v1{"softplus", 1, AmpPolicy::ForceFP32, true};
 
 Storage SoftplusBackward::grad_formula(const Storage& g) {
@@ -128,11 +119,7 @@ TensorImplPtr softplus_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SoftplusBackward)
 
-// =================== ELU (scalar param — custom forward) ===================
 const OpSchema EluBackward::schema_v1{"elu", 1, AmpPolicy::ForceFP32, true};
-
-// EluBackward::cpu_kernel was removed: forward() routes through
-// Dispatcher (be.elu), so the cpu_kernel path is unreachable dead code.
 
 Storage EluBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).elu_backward(saved_inputs_[0], g, out_shape_,
@@ -160,7 +147,6 @@ TensorImplPtr elu_op(const TensorImplPtr& a, double alpha) {
 }
 LUCID_REGISTER_OP(EluBackward)
 
-// =================== SELU ===================
 const OpSchema SeluBackward::schema_v1{"selu", 1, AmpPolicy::ForceFP32, true};
 
 Storage SeluBackward::grad_formula(const Storage& g) {
@@ -173,7 +159,6 @@ TensorImplPtr selu_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SeluBackward)
 
-// =================== Mish ===================
 const OpSchema MishBackward::schema_v1{"mish", 1, AmpPolicy::ForceFP32, true};
 
 Storage MishBackward::grad_formula(const Storage& g) {
@@ -186,7 +171,6 @@ TensorImplPtr mish_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(MishBackward)
 
-// =================== HardSigmoid ===================
 const OpSchema HardSigmoidBackward::schema_v1{"hard_sigmoid", 1, AmpPolicy::KeepInput, true};
 
 Storage HardSigmoidBackward::grad_formula(const Storage& g) {
@@ -199,7 +183,6 @@ TensorImplPtr hard_sigmoid_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(HardSigmoidBackward)
 
-// =================== HardSwish ===================
 const OpSchema HardSwishBackward::schema_v1{"hard_swish", 1, AmpPolicy::KeepInput, true};
 
 Storage HardSwishBackward::grad_formula(const Storage& g) {
@@ -212,7 +195,6 @@ TensorImplPtr hard_swish_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(HardSwishBackward)
 
-// =================== ReLU6 ===================
 const OpSchema Relu6Backward::schema_v1{"relu6", 1, AmpPolicy::KeepInput, true};
 
 Storage Relu6Backward::grad_formula(const Storage& g) {

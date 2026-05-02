@@ -34,7 +34,6 @@ TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* nam
 
 }  // namespace
 
-// -- Arith --
 TensorImplPtr neg_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &neg_op, "neg_");
 }
@@ -54,7 +53,6 @@ TensorImplPtr cube_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &cube_op, "cube_");
 }
 
-// -- Exponential / log --
 TensorImplPtr exp_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &exp_op, "exp_");
 }
@@ -68,7 +66,6 @@ TensorImplPtr sqrt_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &sqrt_op, "sqrt_");
 }
 
-// -- Trig --
 TensorImplPtr sin_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &sin_op, "sin_");
 }
@@ -88,7 +85,6 @@ TensorImplPtr arctan_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &arctan_op, "arctan_");
 }
 
-// -- Hyperbolic --
 TensorImplPtr sinh_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &sinh_op, "sinh_");
 }
@@ -99,7 +95,6 @@ TensorImplPtr tanh_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &tanh_op, "tanh_");
 }
 
-// -- Discrete --
 TensorImplPtr round_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &round_op, "round_");
 }
@@ -110,7 +105,6 @@ TensorImplPtr ceil_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &ceil_op, "ceil_");
 }
 
-// -- Scalar-parameterized --
 TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     Validator::input(a, "clip_.a").non_null();
     auto out = clip_op(a, lo, hi);

@@ -21,10 +21,6 @@
 
 namespace lucid {
 
-// ===================================================================
-// BatchNormEval (inference-only)
-// ===================================================================
-
 const OpSchema BatchNormEvalBackward::schema_v1{"batch_norm_eval", 1, AmpPolicy::ForceFP32, true};
 
 TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
@@ -92,16 +88,10 @@ TensorImplPtr batch_norm_eval_op(const TensorImplPtr& x,
 
 LUCID_REGISTER_OP(BatchNormEvalBackward)
 
-// ===================================================================
-// Lp Normalize
-// ===================================================================
-
 const OpSchema LpNormalizeBackward::schema_v1{"lp_normalize", 1, AmpPolicy::ForceFP32, true};
 
-TensorImplPtr LpNormalizeBackward::forward(const TensorImplPtr& x,
-                                           double ord,
-                                           int axis,
-                                           double eps) {
+TensorImplPtr
+LpNormalizeBackward::forward(const TensorImplPtr& x, double ord, int axis, double eps) {
     Validator::input(x, "lp_normalize.x").non_null();
     const int rank = static_cast<int>(x->shape().size());
     if (axis < 0)
@@ -140,10 +130,6 @@ TensorImplPtr lp_normalize_op(const TensorImplPtr& x, double ord, int axis, doub
 }
 
 LUCID_REGISTER_OP(LpNormalizeBackward)
-
-// ===================================================================
-// Global Response Norm (ConvNeXt-v2)
-// ===================================================================
 
 const OpSchema GlobalResponseNormBackward::schema_v1{"global_response_norm", 1,
                                                      AmpPolicy::ForceFP32, true};

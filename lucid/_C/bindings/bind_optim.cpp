@@ -15,7 +15,6 @@ namespace py = pybind11;
 namespace lucid::bindings {
 
 void register_optim(py::module_& m) {
-    // Optimizer base — exposed only for shared interface (zero_grad, step, lr).
     py::class_<Optimizer>(m, "Optimizer")
         .def("step", &Optimizer::step)
         .def("zero_grad", &Optimizer::zero_grad)
@@ -49,7 +48,6 @@ void register_optim(py::module_& m) {
              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 1e-2,
              "AdamW (decoupled weight decay, Loshchilov & Hutter 2017).");
 
-    // ----- Phase 4b: extended optimizer set -----
     py::class_<ASGD, Optimizer>(m, "ASGD").def(
         py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double, double,
                  double>(),
@@ -103,7 +101,6 @@ void register_optim(py::module_& m) {
              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
              "Adamax: Adam with infinity norm.");
 
-    // LR schedulers
     py::class_<LRScheduler>(m, "LRScheduler")
         .def("step", &LRScheduler::step)
         .def("set_epoch", &LRScheduler::set_epoch, py::arg("epoch"))
@@ -150,8 +147,6 @@ void register_optim(py::module_& m) {
              py::arg("model_size"), py::arg("warmup_steps"), py::arg("factor") = 1.0,
              py::keep_alive<1, 2>(), "Transformer-style warmup-then-decay schedule.");
 
-    // ReduceLROnPlateau is metric-driven (step(metric) signature),
-    // doesn't fit the LRScheduler base.
     py::class_<ReduceLROnPlateau> rlrp(m, "ReduceLROnPlateau");
     py::enum_<ReduceLROnPlateau::Mode>(rlrp, "Mode")
         .value("Min", ReduceLROnPlateau::Mode::Min)

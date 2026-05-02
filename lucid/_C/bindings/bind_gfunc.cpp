@@ -65,7 +65,6 @@ void register_gfunc(py::module_& m) {
 
     m.def("diag", &diag_op, py::arg("v"), py::arg("k") = 0);
 
-    // ----- _like family -----
     m.def("zeros_like", &zeros_like_op, py::arg("a"), py::arg("requires_grad") = false);
     m.def("ones_like", &ones_like_op, py::arg("a"), py::arg("requires_grad") = false);
     m.def("empty_like", &empty_like_op, py::arg("a"), py::arg("requires_grad") = false);

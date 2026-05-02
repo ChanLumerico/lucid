@@ -10,14 +10,9 @@ namespace py = pybind11;
 namespace lucid::bindings {
 
 void register_errors(py::module_& m) {
-    // Define a Python class hierarchy mirroring the C++ one. Each Python class
-    // inherits from `LucidError` (which inherits from RuntimeError) so user
-    // code can catch the base class or any specific subclass.
     static py::object lucid_error_cls =
         py::exception<LucidError>(m, "LucidError", PyExc_RuntimeError);
 
-    // Subclass exceptions — created via Python `type()` so they're real
-    // subclasses of LucidError, not flat aliases.
     auto make_subclass = [&](const char* name) {
         py::object cls =
             py::module_::import("builtins")
@@ -35,9 +30,6 @@ void register_errors(py::module_& m) {
     static py::object index_error_cls = make_subclass("IndexError");
     static py::object not_implemented_cls = make_subclass("NotImplementedError");
 
-    // Translator: order matters — most-derived classes first, base last,
-    // because pybind11 walks the registered translators in reverse insertion
-    // order. We register the base last so it's checked first.
     py::register_exception_translator([](std::exception_ptr p) {
         if (!p)
             return;

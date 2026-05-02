@@ -19,7 +19,6 @@ const OpSchema LayerNormBackward::schema_v1{"layer_norm", 1, AmpPolicy::ForceFP3
 
 namespace {
 
-// γ defines the normalized shape (last dims of x). Validate alignment.
 struct LayerNormShapes {
     std::size_t outer;
     std::size_t N;
@@ -76,7 +75,7 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
     scope.set_flops(static_cast<std::int64_t>(outer * N) * 5);
 
     auto out = std::make_shared<TensorImpl>(std::move(forward[0]), x->shape(), x->dtype(),
-                                            x->device(), /*requires_grad=*/false);
+                                            x->device(), false);
 
     auto bwd = std::make_shared<LayerNormBackward>();
     bwd->saved_mean_ = std::move(forward[1]);

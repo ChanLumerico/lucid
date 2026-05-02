@@ -20,11 +20,9 @@ void MemoryTracker::track_alloc(std::size_t nbytes, Device device) {
     const auto cur = c.current_bytes.fetch_add(nbytes, std::memory_order_relaxed) + nbytes;
     c.alloc_count.fetch_add(1, std::memory_order_relaxed);
 
-    // Bump peak monotonically — CAS loop, lock-free.
     auto peak = c.peak_bytes.load(std::memory_order_relaxed);
     while (cur > peak &&
            !c.peak_bytes.compare_exchange_weak(peak, cur, std::memory_order_relaxed)) {
-        // peak got refreshed by another thread; loop until stable.
     }
 }
 

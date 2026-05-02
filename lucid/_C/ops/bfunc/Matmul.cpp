@@ -16,15 +16,14 @@
 #include "../../core/TensorImpl.h"
 #include "../../kernel/NaryKernel.h"
 #include "../../kernel/primitives/BatchedMatmul.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 
 using lucid::kernel::primitives::NdMatmulInfo;
 using lucid::kernel::primitives::plan_nd_matmul;
 
 namespace lucid {
 
-const OpSchema MatmulBackward::schema_v1{"matmul", /*version=*/1, AmpPolicy::Promote,
-                                         /*deterministic=*/true};
+const OpSchema MatmulBackward::schema_v1{"matmul", 1, AmpPolicy::Promote, true};
 
 namespace {
 
@@ -52,10 +51,6 @@ Storage broadcast_for_matmul(const Storage& storage,
 }  // namespace
 
 std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
-    // For batched / broadcast matmul: dA = grad @ B^T, dB = A^T @ grad,
-    // each computed at the broadcast shape (info.a_bcast_shape /
-    // .b_bcast_shape) and then reduced back to the original input shapes
-    // via reduce_grad_to_shape (handles broadcast-undo).
     const auto info = plan_nd_matmul(input_shapes_[0], input_shapes_[1]);
 
     Storage a_use = broadcast_for_matmul(saved_inputs_[0], input_shapes_[0], info.a_bcast_shape,
@@ -63,7 +58,6 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
     Storage b_use = broadcast_for_matmul(saved_inputs_[1], input_shapes_[1], info.b_bcast_shape,
                                          dtype_, device_);
 
-    // Build the "a-shaped" backward result: grad @ B^T (per slice).
     NdMatmulInfo dA_info = info;
     dA_info.M = info.M;
     dA_info.N = info.K;
@@ -116,14 +110,11 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
         broadcast_for_matmul(a->storage(), a->shape(), info.a_bcast_shape, a->dtype(), a->device());
     Storage b_use =
         broadcast_for_matmul(b->storage(), b->shape(), info.b_bcast_shape, a->dtype(), a->device());
-    Storage out_storage =
-        backend::Dispatcher::for_device(a->device())
-            .matmul(a_use, b_use, matmul_opts(info, /*transA=*/false, /*transB=*/false),
-                    a->dtype());
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .matmul(a_use, b_use, matmul_opts(info, false, false), a->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), info.out_shape, a->dtype(),
-                                            a->device(),
-                                            /*requires_grad=*/false);
+                                            a->device(), false);
 
     kernel::NaryKernel<MatmulBackward, 2>::wire_autograd({a, b}, out);
     return out;

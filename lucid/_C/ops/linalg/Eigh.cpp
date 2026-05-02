@@ -21,12 +21,12 @@ std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a) {
     OpScopeFull scope{"eigh", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();
-    Shape wsh(sh.begin(), sh.end() - 1);  // eigenvalues: (..., n)
-    Shape vsh = sh;                       // eigenvectors: (..., n, n)
+    Shape wsh(sh.begin(), sh.end() - 1);
+    Shape vsh = sh;
 
     auto out = backend::Dispatcher::for_device(a->device())
                    .linalg_eigh(a->storage(), sh, wsh, vsh, a->dtype());
-    return {fresh(std::move(out.first),  wsh, a->dtype(), a->device()),
+    return {fresh(std::move(out.first), wsh, a->dtype(), a->device()),
             fresh(std::move(out.second), vsh, a->dtype(), a->device())};
 }
 

@@ -23,56 +23,39 @@ namespace {
 
 using helpers::allocate_cpu;
 
-inline TensorImplPtr finalize(
-    Storage&& storage, Shape shape, Dtype dt, Device device, bool requires_grad) {
+inline TensorImplPtr
+finalize(Storage&& storage, Shape shape, Dtype dt, Device device, bool requires_grad) {
     return std::make_shared<TensorImpl>(std::move(storage), std::move(shape), dt, device,
                                         requires_grad);
 }
 
 }  // namespace
 
-// ----------------------------------------------------------------------------
-// zeros
-// ----------------------------------------------------------------------------
 TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"zeros", device, dt, shape};
     auto s = make_zero_storage(shape, dt, device);
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
 
-// ----------------------------------------------------------------------------
-// ones
-// ----------------------------------------------------------------------------
 TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"ones", device, dt, shape};
     auto s = make_ones_storage(shape, dt, device);
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
 
-// ----------------------------------------------------------------------------
-// full
-// ----------------------------------------------------------------------------
-TensorImplPtr full_op(
-    const Shape& shape, double fill_value, Dtype dt, Device device, bool requires_grad) {
+TensorImplPtr
+full_op(const Shape& shape, double fill_value, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"full", device, dt, shape};
     auto s = backend::Dispatcher::for_device(device).full(shape, dt, fill_value);
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
 
-// ----------------------------------------------------------------------------
-// empty (allocates without zeroing — but we still zero on CPU for safety;
-//        callers shouldn't rely on garbage values)
-// ----------------------------------------------------------------------------
 TensorImplPtr empty_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"empty", device, dt, shape};
     auto s = make_zero_storage(shape, dt, device);
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
 
-// ----------------------------------------------------------------------------
-// eye(N, M, k): identity-like matrix of shape (N, M) with ones on the k-th
-// diagonal. Negative `k` is below the main diagonal, positive above.
-// ----------------------------------------------------------------------------
 TensorImplPtr eye_op(
     std::int64_t N, std::int64_t M, std::int64_t k, Dtype dt, Device device, bool requires_grad) {
     if (M <= 0)
@@ -85,11 +68,8 @@ TensorImplPtr eye_op(
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
 
-// ----------------------------------------------------------------------------
-// arange(start, stop, step) — Python/numpy semantics.
-// ----------------------------------------------------------------------------
-TensorImplPtr arange_op(
-    double start, double stop, double step, Dtype dt, Device device, bool requires_grad) {
+TensorImplPtr
+arange_op(double start, double stop, double step, Dtype dt, Device device, bool requires_grad) {
     if (step == 0.0)
         ErrorBuilder("arange").fail("step must be non-zero");
     const double diff = stop - start;
@@ -107,29 +87,25 @@ TensorImplPtr arange_op(
 
     auto cpu = allocate_cpu(shape, dt);
     switch (dt) {
-        case Dtype::F32:
-            compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
-            break;
-        case Dtype::F64:
-            compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
-            break;
-        case Dtype::I32:
-            compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::I64:
-            compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("arange").not_implemented("dtype not supported");
+    case Dtype::F32:
+        compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
+        break;
+    case Dtype::F64:
+        compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
+        break;
+    case Dtype::I32:
+        compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
+        break;
+    case Dtype::I64:
+        compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
+        break;
+    default:
+        ErrorBuilder("arange").not_implemented("dtype not supported");
     }
     return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
                     dt, device, requires_grad);
 }
 
-// ----------------------------------------------------------------------------
-// linspace(start, stop, num) — `num >= 1` and includes both endpoints when
-// `num >= 2`. For `num == 1` we return `[start]`.
-// ----------------------------------------------------------------------------
 TensorImplPtr linspace_op(
     double start, double stop, std::int64_t num, Dtype dt, Device device, bool requires_grad) {
     if (num < 0)
@@ -144,37 +120,32 @@ TensorImplPtr linspace_op(
             const double v = (num == 1) ? start : start + static_cast<double>(i) * step;
             p[i] = static_cast<T>(v);
         }
-        // Ensure exact endpoint hit despite FP step accumulation.
+
         if (num >= 2)
             p[num - 1] = static_cast<T>(stop);
     };
 
     auto cpu = allocate_cpu(shape, dt);
     switch (dt) {
-        case Dtype::F32:
-            compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
-            break;
-        case Dtype::F64:
-            compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
-            break;
-        case Dtype::I32:
-            compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::I64:
-            compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("linspace").not_implemented("dtype not supported");
+    case Dtype::F32:
+        compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
+        break;
+    case Dtype::F64:
+        compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
+        break;
+    case Dtype::I32:
+        compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
+        break;
+    case Dtype::I64:
+        compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
+        break;
+    default:
+        ErrorBuilder("linspace").not_implemented("dtype not supported");
     }
     return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
                     dt, device, requires_grad);
 }
 
-// ----------------------------------------------------------------------------
-// diag(v, k):
-//   1-D v of length L → 2-D matrix of shape (L+|k|, L+|k|) with v on diag k.
-//   2-D v of shape (M, N) → 1-D vector with the k-th diagonal extracted.
-// ----------------------------------------------------------------------------
 TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
     if (!v)
         ErrorBuilder("diag").fail("input is null");
@@ -187,13 +158,9 @@ TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
 
     Shape out_shape;
     auto s = backend::Dispatcher::for_device(device).diag(v->storage(), sh, k, dt, out_shape);
-    return std::make_shared<TensorImpl>(std::move(s), std::move(out_shape), dt, device,
-                                        /*requires_grad=*/false);
+    return std::make_shared<TensorImpl>(std::move(s), std::move(out_shape), dt, device, false);
 }
 
-// ----------------------------------------------------------------------------
-// `_like` family — shape/dtype/device-matched creation
-// ----------------------------------------------------------------------------
 TensorImplPtr zeros_like_op(const TensorImplPtr& a, bool requires_grad) {
     Validator::input(a, "zeros_like.a").non_null();
     return zeros_op(a->shape(), a->dtype(), a->device(), requires_grad);

@@ -82,7 +82,7 @@ void vtan_f64(const double* in, double* out, std::size_t n) {
 
 void vpow_f32(const float* base, const float* expo, float* out, std::size_t n) {
     int count = N(n);
-    // vvpowf signature: vvpowf(y, expo, base, &count) — y[i] = base[i] ^ expo[i].
+
     vvpowf(out, expo, base, &count);
 }
 
@@ -91,14 +91,14 @@ void vpow_f64(const double* base, const double* expo, double* out, std::size_t n
     vvpow(out, expo, base, &count);
 }
 
-#define LUCID_VFORCE_UNARY(NAME, F32, F64)                          \
-    void NAME##_f32(const float* in, float* out, std::size_t n) {   \
-        int c = N(n);                                               \
-        F32(out, in, &c);                                           \
-    }                                                               \
-    void NAME##_f64(const double* in, double* out, std::size_t n) { \
-        int c = N(n);                                               \
-        F64(out, in, &c);                                           \
+#define LUCID_VFORCE_UNARY(NAME, F32, F64)                                                         \
+    void NAME##_f32(const float* in, float* out, std::size_t n) {                                  \
+        int c = N(n);                                                                              \
+        F32(out, in, &c);                                                                          \
+    }                                                                                              \
+    void NAME##_f64(const double* in, double* out, std::size_t n) {                                \
+        int c = N(n);                                                                              \
+        F64(out, in, &c);                                                                          \
     }
 
 LUCID_VFORCE_UNARY(vasin, vvasinf, vvasin)
@@ -111,7 +111,7 @@ LUCID_VFORCE_UNARY(vfabs, vvfabsf, vvfabs)
 LUCID_VFORCE_UNARY(vrec, vvrecf, vvrec)
 LUCID_VFORCE_UNARY(vfloor, vvfloorf, vvfloor)
 LUCID_VFORCE_UNARY(vceil, vvceilf, vvceil)
-LUCID_VFORCE_UNARY(vround, vvnintf, vvnint)  // banker's round (half-to-even)
+LUCID_VFORCE_UNARY(vround, vvnintf, vvnint)
 
 #undef LUCID_VFORCE_UNARY
 

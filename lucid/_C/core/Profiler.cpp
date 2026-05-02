@@ -6,7 +6,7 @@ namespace lucid {
 
 namespace {
 thread_local Profiler* g_current = nullptr;
-}  // namespace
+}
 
 Profiler* current_profiler() {
     return g_current;
@@ -49,7 +49,7 @@ OpScope::OpScope(std::string_view name, Device device, Dtype dtype, Shape shape)
     if (sink_ && sink_->is_active()) {
         start_memory_bytes_ = MemoryTracker::get_stats(device).current_bytes;
     } else {
-        sink_ = nullptr;  // disable bookkeeping path
+        sink_ = nullptr;
     }
 }
 

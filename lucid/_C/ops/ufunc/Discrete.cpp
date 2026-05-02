@@ -4,7 +4,6 @@
 
 namespace lucid {
 
-// --------------- Round (banker's, half-to-even) ---------------
 const OpSchema RoundBackward::schema_v1{"round", 1, AmpPolicy::KeepInput, true};
 
 Storage RoundBackward::grad_formula(const Storage&) {
@@ -15,7 +14,6 @@ TensorImplPtr round_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(RoundBackward)
 
-// --------------- Floor ---------------
 const OpSchema FloorBackward::schema_v1{"floor", 1, AmpPolicy::KeepInput, true};
 
 Storage FloorBackward::grad_formula(const Storage&) {
@@ -26,7 +24,6 @@ TensorImplPtr floor_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(FloorBackward)
 
-// --------------- Ceil ---------------
 const OpSchema CeilBackward::schema_v1{"ceil", 1, AmpPolicy::KeepInput, true};
 
 Storage CeilBackward::grad_formula(const Storage&) {
@@ -37,7 +34,6 @@ TensorImplPtr ceil_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(CeilBackward)
 
-// --------------- Invert (bitwise NOT, integer-only) ---------------
 const OpSchema InvertBackward::schema_v1{"invert", 1, AmpPolicy::KeepInput, true};
 
 Storage InvertBackward::grad_formula(const Storage&) {

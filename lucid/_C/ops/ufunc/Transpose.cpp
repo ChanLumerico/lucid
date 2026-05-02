@@ -21,7 +21,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
-#include "../bfunc/_BinaryOp.h"  // detail::ensure_grad_fn
+#include "../bfunc/_BinaryOp.h"
 
 namespace lucid {
 
@@ -29,7 +29,6 @@ const OpSchema PermuteBackward::schema_v1{"permute", 1, AmpPolicy::KeepInput, tr
 
 namespace {
 
-// Validate / normalize a permutation. Returns sorted-ascending check vector.
 std::vector<int> validate_perm(const std::vector<int>& perm, int ndim) {
     if (static_cast<int>(perm.size()) != ndim) {
         ErrorBuilder("permute").fail("perm length must equal tensor ndim");
@@ -68,7 +67,6 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
     const int ndim = static_cast<int>(a->shape().size());
     const auto perm = validate_perm(perm_user, ndim);
 
-    // Compute output shape and adjusted strides (metadata-only view).
     Shape out_shape;
     Stride out_stride;
     out_shape.reserve(ndim);
@@ -80,10 +78,6 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), out_shape};
 
-    // Both paths physically materialise the permuted data so that downstream
-    // ops (matmul, conv, ...) can always assume contiguous row-major layout.
-    // GPU: MLX contiguous() materialises the lazy transpose in-place.
-    // CPU: permute_copy_<dtype> produces a fresh contiguous CpuStorage.
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .permute(a->storage(), a->shape(), perm, a->dtype());
     TensorImplPtr out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
@@ -91,14 +85,11 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
 
     auto bwd = std::make_shared<PermuteBackward>();
     bwd->perm_ = perm;
-    kernel::NaryKernel<PermuteBackward, 1>::wire_autograd(std::move(bwd), {a}, out,
-                                                          /*save_ins=*/false);
+    kernel::NaryKernel<PermuteBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 
 std::vector<Storage> PermuteBackward::apply(Storage grad_out) {
-    // dx = permute(g, inverse_perm). The gradient arrives in `out_shape_`;
-    // applying inverse_perm produces a buffer in `input_shapes_[0]` layout.
     const auto inv = inverse_perm(perm_);
     Storage dx =
         backend::Dispatcher::for_device(device_).permute(grad_out, out_shape_, inv, dtype_);
@@ -109,7 +100,6 @@ TensorImplPtr permute_op(const TensorImplPtr& a, const std::vector<int>& perm) {
     return PermuteBackward::forward(a, perm);
 }
 
-// transpose(t) / _T(t) — reverse all axes.
 TensorImplPtr transpose_op(const TensorImplPtr& a) {
     Validator::input(a, "transpose.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
@@ -123,7 +113,6 @@ TensorImplPtr T_op(const TensorImplPtr& a) {
     return transpose_op(a);
 }
 
-// _mT(t) — swap last two axes. Requires ndim >= 2.
 TensorImplPtr mT_op(const TensorImplPtr& a) {
     Validator::input(a, "mT.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
@@ -136,7 +125,6 @@ TensorImplPtr mT_op(const TensorImplPtr& a) {
     return PermuteBackward::forward(a, perm);
 }
 
-// swapaxes(t, a1, a2) — swap two specific axes.
 TensorImplPtr swapaxes_op(const TensorImplPtr& a, int axis1, int axis2) {
     Validator::input(a, "swapaxes.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());

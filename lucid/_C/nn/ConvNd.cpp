@@ -210,10 +210,6 @@ LUCID_REGISTER_OP(Conv1dBackward)
 LUCID_REGISTER_OP(Conv2dBackward)
 LUCID_REGISTER_OP(Conv3dBackward)
 
-// ===================================================================
-// Unfold (im2col exposed as a standalone op)
-// ===================================================================
-
 const OpSchema UnfoldBackward::schema_v1{"unfold", 1, AmpPolicy::KeepInput, true};
 
 TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,

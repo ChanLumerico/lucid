@@ -1,26 +1,5 @@
 #pragma once
 
-// =====================================================================
-// Lucid C++ engine — element-wise add (a + b).
-// =====================================================================
-//
-// First op rebuilt on the new BinaryOp<Derived> CRTP. The kernel calls
-// Apple Accelerate's vDSP_vadd (F32) / vDSP_vaddD (F64); integer paths use
-// scalar loops (vDSP doesn't ship integer add).
-//
-// @op           add
-// @schema_v     1
-// @inputs       (a: Tensor<T,*>, b: Tensor<T,*>)  T in {F32, F64, I32, I64}
-// @outputs      (c: Tensor<T,*>)
-// @amp_policy   Promote
-// @determinism  deterministic
-// @complexity   O(numel(out))
-//
-// Forward:  c[i] = a[i] + b[i]
-// Backward: dx = grad_out, dy = grad_out  (broadcast-back handled by base)
-//
-// Layer: autograd/ops/binary/.
-
 #include <utility>
 
 #include "../../api.h"
@@ -32,16 +11,12 @@
 
 namespace lucid {
 
-/// Autograd backward node for Add.
 class LUCID_API AddBackward : public BinaryOp<AddBackward> {
 public:
-    // Add doesn't need input *values* for backward — d(a+b)/da = 1, irrespective
-    // of a or b. Save metadata only (BinaryOp always saves shapes/dtype/device).
     static constexpr bool kSavesInputs = false;
 
     static const OpSchema schema_v1;
 
-    // Phase 4.5: dispatch through IBackend — no device check in call site.
     static Storage dispatch(
         backend::IBackend& be, const Storage& a, const Storage& b, const Shape& shape, Dtype dt) {
         return be.add(a, b, shape, dt);
@@ -50,7 +25,6 @@ public:
     std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
 };
 
-/// Public free function — pybind11 binds this.
 LUCID_API TensorImplPtr add_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

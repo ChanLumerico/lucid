@@ -8,10 +8,6 @@ namespace lucid {
 
 namespace {
 
-// Construct-on-first-use pattern — safe against static-init-order fiasco.
-// Guarded by a shared_mutex so concurrent readers (lookup/all) don't block
-// each other, while writers (register_op, called at static init) hold an
-// exclusive lock.
 struct Registry {
     std::map<std::string_view, const OpSchema*> map;
     mutable std::shared_mutex mu;
@@ -53,9 +49,6 @@ std::size_t OpRegistry::size() {
     return r.map.size();
 }
 
-// Schema hash: FNV-1a over (name, version, amp_policy, deterministic). Stable
-// across architectures because we use little-endian-equivalent byte order
-// into the hash regardless of host.
 std::uint64_t schema_hash(const OpSchema& s) {
     constexpr std::uint64_t kFnvOffset = 0xcbf29ce484222325ull;
     constexpr std::uint64_t kFnvPrime = 0x100000001b3ull;
@@ -68,7 +61,7 @@ std::uint64_t schema_hash(const OpSchema& s) {
 
     for (char c : s.name)
         mix(static_cast<std::uint8_t>(c));
-    mix(0);  // separator
+    mix(0);
     for (int i = 0; i < 4; ++i)
         mix(static_cast<std::uint8_t>((s.version >> (i * 8)) & 0xff));
     mix(static_cast<std::uint8_t>(s.amp_policy));

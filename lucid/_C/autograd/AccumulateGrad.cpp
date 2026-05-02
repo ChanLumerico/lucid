@@ -11,7 +11,6 @@ AccumulateGrad::AccumulateGrad(std::weak_ptr<TensorImpl> leaf) : leaf_(std::move
 std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
     auto t = leaf_.lock();
     if (!t) {
-        // Leaf was freed before backward finished. Silently drop.
         return {};
     }
     if (!t->requires_grad()) {

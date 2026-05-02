@@ -22,8 +22,6 @@ void LRScheduler::set_epoch(std::int64_t epoch) {
     opt_.set_lr(compute_lr_at(epoch_));
 }
 
-// ---------------- StepLR ----------------
-
 StepLR::StepLR(Optimizer& opt, std::int64_t step_size, double gamma)
     : LRScheduler(opt), step_size_(step_size), gamma_(gamma) {
     if (step_size_ <= 0)
@@ -34,14 +32,10 @@ double StepLR::compute_lr_at(std::int64_t epoch) const {
     return base_lr_ * std::pow(gamma_, static_cast<double>(k));
 }
 
-// ---------------- ExponentialLR ----------------
-
 ExponentialLR::ExponentialLR(Optimizer& opt, double gamma) : LRScheduler(opt), gamma_(gamma) {}
 double ExponentialLR::compute_lr_at(std::int64_t epoch) const {
     return base_lr_ * std::pow(gamma_, static_cast<double>(epoch));
 }
-
-// ---------------- MultiStepLR ----------------
 
 MultiStepLR::MultiStepLR(Optimizer& opt, std::vector<std::int64_t> milestones, double gamma)
     : LRScheduler(opt), milestones_(std::move(milestones)), gamma_(gamma) {
@@ -58,23 +52,17 @@ double MultiStepLR::compute_lr_at(std::int64_t epoch) const {
     return base_lr_ * std::pow(gamma_, static_cast<double>(hits));
 }
 
-// ---------------- CosineAnnealingLR ----------------
-
 CosineAnnealingLR::CosineAnnealingLR(Optimizer& opt, std::int64_t T_max, double eta_min)
     : LRScheduler(opt), T_max_(T_max), eta_min_(eta_min) {
     if (T_max_ <= 0)
         ErrorBuilder("CosineAnnealingLR").fail("T_max must be > 0");
 }
 double CosineAnnealingLR::compute_lr_at(std::int64_t epoch) const {
-    // Match PyTorch: the cosine continues past T_max (no clamp). User code
-    // that wants a hold at eta_min after T_max can wrap with min(...).
     constexpr double PI = 3.14159265358979323846;
     return eta_min_ +
            0.5 * (base_lr_ - eta_min_) *
                (1.0 + std::cos(PI * static_cast<double>(epoch) / static_cast<double>(T_max_)));
 }
-
-// ---------------- LambdaLR ----------------
 
 LambdaLR::LambdaLR(Optimizer& opt, std::function<double(std::int64_t)> lr_lambda)
     : LRScheduler(opt), lr_lambda_(std::move(lr_lambda)) {}
@@ -82,8 +70,6 @@ LambdaLR::LambdaLR(Optimizer& opt, std::function<double(std::int64_t)> lr_lambda
 double LambdaLR::compute_lr_at(std::int64_t epoch) const {
     return base_lr_ * lr_lambda_(epoch);
 }
-
-// ---------------- ReduceLROnPlateau ----------------
 
 ReduceLROnPlateau::ReduceLROnPlateau(Optimizer& opt,
                                      Mode mode,
@@ -145,8 +131,6 @@ void ReduceLROnPlateau::step(double metric) {
     }
 }
 
-// ---------------- CyclicLR ----------------
-
 CyclicLR::CyclicLR(Optimizer& opt,
                    double base_lr,
                    double max_lr,
@@ -173,20 +157,18 @@ double CyclicLR::compute_lr_at(std::int64_t epoch) const {
                               2.0 * cycle - 1.0);
     double scale = 1.0;
     switch (mode_) {
-        case Mode::Triangular:
-            scale = 1.0;
-            break;
-        case Mode::Triangular2:
-            scale = 1.0 / static_cast<double>(1ll << cycle);
-            break;
-        case Mode::ExpRange:
-            scale = std::pow(gamma_, static_cast<double>(epoch));
-            break;
+    case Mode::Triangular:
+        scale = 1.0;
+        break;
+    case Mode::Triangular2:
+        scale = 1.0 / static_cast<double>(1ll << cycle);
+        break;
+    case Mode::ExpRange:
+        scale = std::pow(gamma_, static_cast<double>(epoch));
+        break;
     }
     return base_lr_cyc_ + (max_lr_ - base_lr_cyc_) * std::max(0.0, 1.0 - x) * scale;
 }
-
-// ---------------- NoamScheduler ----------------
 
 NoamScheduler::NoamScheduler(Optimizer& opt,
                              std::int64_t model_size,

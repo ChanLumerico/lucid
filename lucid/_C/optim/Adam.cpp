@@ -38,7 +38,7 @@ void adam_step_cpu(T* param,
     const T epsT = static_cast<T>(eps);
     const T lrT = static_cast<T>(lr);
     const T wdT = static_cast<T>(weight_decay);
-    // Bias-correction factors (computed at fp64 then narrowed).
+
     const double bc1 = 1.0 - std::pow(beta1, static_cast<double>(step));
     const double bc2 = 1.0 - std::pow(beta2, static_cast<double>(step));
     const T inv_bc1 = static_cast<T>(1.0 / bc1);
@@ -47,10 +47,8 @@ void adam_step_cpu(T* param,
     for (std::size_t i = 0; i < numel; ++i) {
         T g = grad[i];
         if (decoupled_wd) {
-            // AdamW: apply wd directly to param ahead of moment update.
             param[i] -= lrT * wdT * param[i];
         } else if (weight_decay != 0.0) {
-            // Adam (L2): fold wd into the gradient.
             g += wdT * param[i];
         }
         m_buf[i] = b1T * m_buf[i] + omb1 * g;
@@ -117,10 +115,6 @@ void adam_step_gpu(GpuStorage& param_g,
 
 }  // namespace
 
-// ============================================================
-// Adam
-// ============================================================
-
 Adam::Adam(std::vector<std::shared_ptr<TensorImpl>> params,
            double lr,
            double beta1,
@@ -162,9 +156,6 @@ void Adam::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImp
 void Adam::update_one(std::size_t slot_idx,
                       std::shared_ptr<TensorImpl>& param,
                       const Storage& grad) {
-    // step_count is global per optimizer; bump once per `update_one` call
-    // for the first slot. We bump here to match PyTorch (per-step, not
-    // per-param) since Optimizer::step() iterates all params in one step.
     if (slot_idx == 0)
         ++step_count_;
 
@@ -174,7 +165,7 @@ void Adam::update_one(std::size_t slot_idx,
         auto& mg = storage_gpu(m_[slot_idx]);
         auto& vg = storage_gpu(v_[slot_idx]);
         adam_step_gpu(pg, gg, mg, vg, param->dtype(), lr_, beta1_, beta2_, eps_, weight_decay_,
-                      /*decoupled_wd=*/false, step_count_);
+                      false, step_count_);
         pg.bump_version();
         return;
     }
@@ -184,31 +175,23 @@ void Adam::update_one(std::size_t slot_idx,
     auto& vc = storage_cpu(v_[slot_idx]);
     const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
     switch (param->dtype()) {
-        case Dtype::F32:
-            adam_step_cpu<float>(reinterpret_cast<float*>(pc.ptr.get()),
-                                 reinterpret_cast<const float*>(gc.ptr.get()),
-                                 reinterpret_cast<float*>(mc.ptr.get()),
-                                 reinterpret_cast<float*>(vc.ptr.get()), numel, lr_, beta1_, beta2_,
-                                 eps_, weight_decay_,
-                                 /*decoupled_wd=*/false, step_count_);
-            break;
-        case Dtype::F64:
-            adam_step_cpu<double>(reinterpret_cast<double*>(pc.ptr.get()),
-                                  reinterpret_cast<const double*>(gc.ptr.get()),
-                                  reinterpret_cast<double*>(mc.ptr.get()),
-                                  reinterpret_cast<double*>(vc.ptr.get()), numel, lr_, beta1_,
-                                  beta2_, eps_, weight_decay_,
-                                  /*decoupled_wd=*/false, step_count_);
-            break;
-        default:
-            ErrorBuilder("Adam").not_implemented("dtype not supported (F32/F64)");
+    case Dtype::F32:
+        adam_step_cpu<float>(
+            reinterpret_cast<float*>(pc.ptr.get()), reinterpret_cast<const float*>(gc.ptr.get()),
+            reinterpret_cast<float*>(mc.ptr.get()), reinterpret_cast<float*>(vc.ptr.get()), numel,
+            lr_, beta1_, beta2_, eps_, weight_decay_, false, step_count_);
+        break;
+    case Dtype::F64:
+        adam_step_cpu<double>(
+            reinterpret_cast<double*>(pc.ptr.get()), reinterpret_cast<const double*>(gc.ptr.get()),
+            reinterpret_cast<double*>(mc.ptr.get()), reinterpret_cast<double*>(vc.ptr.get()), numel,
+            lr_, beta1_, beta2_, eps_, weight_decay_, false, step_count_);
+        break;
+    default:
+        ErrorBuilder("Adam").not_implemented("dtype not supported (F32/F64)");
     }
     pc.bump_version();
 }
-
-// ============================================================
-// AdamW
-// ============================================================
 
 AdamW::AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
              double lr,
@@ -255,7 +238,7 @@ void AdamW::update_one(std::size_t slot_idx,
         auto& mg = storage_gpu(m_[slot_idx]);
         auto& vg = storage_gpu(v_[slot_idx]);
         adam_step_gpu(pg, gg, mg, vg, param->dtype(), lr_, beta1_, beta2_, eps_, weight_decay_,
-                      /*decoupled_wd=*/true, step_count_);
+                      true, step_count_);
         pg.bump_version();
         return;
     }
@@ -265,31 +248,23 @@ void AdamW::update_one(std::size_t slot_idx,
     auto& vc = storage_cpu(v_[slot_idx]);
     const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
     switch (param->dtype()) {
-        case Dtype::F32:
-            adam_step_cpu<float>(reinterpret_cast<float*>(pc.ptr.get()),
-                                 reinterpret_cast<const float*>(gc.ptr.get()),
-                                 reinterpret_cast<float*>(mc.ptr.get()),
-                                 reinterpret_cast<float*>(vc.ptr.get()), numel, lr_, beta1_, beta2_,
-                                 eps_, weight_decay_,
-                                 /*decoupled_wd=*/true, step_count_);
-            break;
-        case Dtype::F64:
-            adam_step_cpu<double>(reinterpret_cast<double*>(pc.ptr.get()),
-                                  reinterpret_cast<const double*>(gc.ptr.get()),
-                                  reinterpret_cast<double*>(mc.ptr.get()),
-                                  reinterpret_cast<double*>(vc.ptr.get()), numel, lr_, beta1_,
-                                  beta2_, eps_, weight_decay_,
-                                  /*decoupled_wd=*/true, step_count_);
-            break;
-        default:
-            ErrorBuilder("AdamW").not_implemented("dtype not supported (F32/F64)");
+    case Dtype::F32:
+        adam_step_cpu<float>(
+            reinterpret_cast<float*>(pc.ptr.get()), reinterpret_cast<const float*>(gc.ptr.get()),
+            reinterpret_cast<float*>(mc.ptr.get()), reinterpret_cast<float*>(vc.ptr.get()), numel,
+            lr_, beta1_, beta2_, eps_, weight_decay_, true, step_count_);
+        break;
+    case Dtype::F64:
+        adam_step_cpu<double>(
+            reinterpret_cast<double*>(pc.ptr.get()), reinterpret_cast<const double*>(gc.ptr.get()),
+            reinterpret_cast<double*>(mc.ptr.get()), reinterpret_cast<double*>(vc.ptr.get()), numel,
+            lr_, beta1_, beta2_, eps_, weight_decay_, true, step_count_);
+        break;
+    default:
+        ErrorBuilder("AdamW").not_implemented("dtype not supported (F32/F64)");
     }
     pc.bump_version();
 }
-
-// =====================================================================
-// NAdam
-// =====================================================================
 
 NAdam::NAdam(std::vector<std::shared_ptr<TensorImpl>> p,
              double lr,
@@ -394,10 +369,6 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         ErrorBuilder("NAdam").not_implemented("dtype not supported");
     p_cpu.bump_version();
 }
-
-// =====================================================================
-// RAdam
-// =====================================================================
 
 RAdam::RAdam(std::vector<std::shared_ptr<TensorImpl>> p,
              double lr,

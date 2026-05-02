@@ -17,21 +17,19 @@ using bfunc_detail::validate_pair_eq_shape;
 
 bool is_integer_or_bool(Dtype dt) {
     switch (dt) {
-        case Dtype::Bool:
-        case Dtype::I8:
-        case Dtype::I16:
-        case Dtype::I32:
-        case Dtype::I64:
-            return true;
-        default:
-            return false;
+    case Dtype::Bool:
+    case Dtype::I8:
+    case Dtype::I16:
+    case Dtype::I32:
+    case Dtype::I64:
+        return true;
+    default:
+        return false;
     }
 }
 
-TensorImplPtr bit_dispatch(const TensorImplPtr& a,
-                           const TensorImplPtr& b,
-                           const char* name,
-                           int op) {
+TensorImplPtr
+bit_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
     validate_pair_eq_shape(a, b, name);
     if (!is_integer_or_bool(a->dtype()))
         ErrorBuilder(name).fail("dtype must be integer or bool");

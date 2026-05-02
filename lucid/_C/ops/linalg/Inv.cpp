@@ -18,25 +18,21 @@
 
 namespace lucid {
 
-// ---------- Schema & backward ----------
-
 const OpSchema InvBackward::schema_v1{"inv", 1, AmpPolicy::KeepInput};
 
 std::vector<Storage> InvBackward::apply(Storage grad_out) {
     NoGradGuard ng;
     using ::lucid::helpers::fresh;
-    // saved_output_ = B = inv(A)
+
     auto B = fresh(Storage{saved_output_}, out_shape_, dtype_, device_);
     auto dB = fresh(std::move(grad_out), out_shape_, dtype_, device_);
-    // dA = -(B^T @ dB @ B^T)
+
     auto Bt = mT_op(B);
     auto dA = neg_op(matmul_op(matmul_op(Bt, dB), Bt));
     return {dA->storage()};
 }
 
 LUCID_REGISTER_OP(InvBackward)
-
-// ---------- Forward ----------
 
 TensorImplPtr inv_op(const TensorImplPtr& a) {
     Validator::input(a, "inv.a").float_only().square_2d();
@@ -47,7 +43,7 @@ TensorImplPtr inv_op(const TensorImplPtr& a) {
     auto out = linalg_detail::fresh(std::move(out_storage), a->shape(), a->dtype(), a->device());
     auto bwd = std::make_shared<InvBackward>();
     bwd->saved_output_ = out->storage();
-    kernel::NaryKernel<InvBackward, 1>::wire_autograd(std::move(bwd), {a}, out, /*save_ins=*/false);
+    kernel::NaryKernel<InvBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;
 }
 

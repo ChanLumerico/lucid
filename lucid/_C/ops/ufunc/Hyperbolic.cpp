@@ -4,7 +4,6 @@
 
 namespace lucid {
 
-// --------------- Sinh ---------------
 const OpSchema SinhBackward::schema_v1{"sinh", 1, AmpPolicy::Promote, true};
 
 Storage SinhBackward::grad_formula(const Storage& g) {
@@ -18,7 +17,6 @@ TensorImplPtr sinh_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SinhBackward)
 
-// --------------- Cosh ---------------
 const OpSchema CoshBackward::schema_v1{"cosh", 1, AmpPolicy::Promote, true};
 
 Storage CoshBackward::grad_formula(const Storage& g) {
@@ -32,7 +30,6 @@ TensorImplPtr cosh_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(CoshBackward)
 
-// --------------- Tanh (dispatch-migrated) ---------------
 const OpSchema TanhBackward::schema_v1{"tanh", 1, AmpPolicy::Promote, true};
 
 Storage TanhBackward::grad_formula(const Storage& g) {

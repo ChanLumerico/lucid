@@ -7,7 +7,6 @@
 #include "../core/Generator.h"
 #include "../core/Shape.h"
 #include "../core/TensorImpl.h"
-#include "../nn/LSTM.h"
 #include "../nn/AdaptivePool.h"
 #include "../nn/Attention.h"
 #include "../nn/BatchNorm.h"
@@ -17,6 +16,7 @@
 #include "../nn/Embedding.h"
 #include "../nn/GroupNorm.h"
 #include "../nn/Interpolate.h"
+#include "../nn/LSTM.h"
 #include "../nn/LayerNorm.h"
 #include "../nn/Linear.h"
 #include "../nn/Loss.h"
@@ -196,8 +196,6 @@ void register_nn(py::module_& m) {
           py::arg("beta"), py::arg("eps") = 1e-6,
           "ConvNeXt-v2 GRN: gamma·(x·Nx) + beta·x with Nx = ||x||_2 / mean.");
 
-    // ---------- Loss kernels ----------
-    // reduction:  0 = None, 1 = Mean, 2 = Sum
     m.def("mse_loss", &mse_loss_op, py::arg("input"), py::arg("target"), py::arg("reduction") = 1,
           "MSE loss. reduction: 0=None, 1=Mean, 2=Sum.");
     m.def("bce_loss", &bce_loss_op, py::arg("input"), py::arg("target"),
@@ -217,7 +215,6 @@ void register_nn(py::module_& m) {
     m.def("huber_loss", &huber_loss_op, py::arg("input"), py::arg("target"), py::arg("delta") = 1.0,
           py::arg("reduction") = 1, "Huber loss with parameter `delta`.");
 
-    // ---------- Attention ----------
     m.def("scaled_dot_product_attention", &scaled_dot_product_attention_op, py::arg("query"),
           py::arg("key"), py::arg("value"), py::arg("attn_mask") = TensorImplPtr{},
           py::arg("scale"), py::arg("is_causal") = false,
@@ -237,7 +234,6 @@ void register_nn(py::module_& m) {
         "As scaled_dot_product_attention but also returns the attention "
         "weights (detached — used for visualization/inspection).");
 
-    // ---------- Embedding family ----------
     m.def("embedding", &embedding_op, py::arg("weight"), py::arg("indices"),
           py::arg("padding_idx") = -1,
           "Index-gather rows from weight ([N, D]) by indices. "
@@ -254,7 +250,6 @@ void register_nn(py::module_& m) {
           "derived from positions. interleaved=True uses (even, odd) pairs; "
           "False splits into two halves.");
 
-    // ---------- Spatial transformer ----------
     m.def("affine_grid", &affine_grid_op, py::arg("theta"), py::arg("N"), py::arg("H"),
           py::arg("W"), py::arg("align_corners") = true,
           "Builds a sampling grid from (N, 2, 3) affine matrices. "
@@ -265,7 +260,6 @@ void register_nn(py::module_& m) {
           "2-D grid sampling. mode: 0=bilinear, 1=nearest. "
           "padding_mode: 0=zeros, 1=border.");
 
-    // ---------- Interpolation family (Phase 6-9) ----------
     m.def("interpolate_bilinear", &interpolate_bilinear_op, py::arg("input"), py::arg("H_out"),
           py::arg("W_out"), py::arg("align_corners") = false,
           "2-D bilinear interpolation. Input: (N, C, H, W).");
@@ -277,7 +271,6 @@ void register_nn(py::module_& m) {
     m.def("interpolate_nearest_3d", &interpolate_nearest_3d_op, py::arg("input"), py::arg("D_out"),
           py::arg("H_out"), py::arg("W_out"), "3-D nearest-neighbor interpolation (no autograd).");
 
-    // ---------- Vision (Phase 6-9) ----------
     m.def("one_hot", &one_hot_op, py::arg("input"), py::arg("num_classes"),
           py::arg("dtype") = Dtype::I8,
           "One-hot encode integer indices. Output shape: input.shape + (C,).");
@@ -288,84 +281,60 @@ void register_nn(py::module_& m) {
           "Learned bilinear layer: y = x1 W x2 + b. "
           "x1: (..., D1), x2: (..., D2), W: (Dout, D1, D2), b: (Dout,).");
 
-    // ---- LSTM (Phase 15.3) --------------------------------------------------
-    //
-    // Python signature:
-    //   nn.lstm_forward(input, h0, c0, weights, hidden_size,
-    //                   num_layers=1, batch_first=False,
-    //                   bidirectional=False, has_bias=True)
-    //     → (output, h_n, c_n)  as TensorImpl
-    //
-    // `input`   : TensorImpl (seq_len, batch, input_size) or (batch, seq_len, I)
-    // `h0`, `c0`: TensorImpl or None  (zeros if None)
-    // `weights` : list of TensorImpl — [wih, whh, bih, bhh] per layer/direction
-    //
-    m.def("lstm_forward",
-          [](const TensorImplPtr& input,
-             py::object            h0_obj,
-             py::object            c0_obj,
-             const std::vector<TensorImplPtr>& weight_tensors,
-             int hidden_size,
-             int num_layers,
-             bool batch_first,
-             bool bidirectional,
-             bool has_bias) -> py::tuple {
-              if (!input)
-                  throw std::invalid_argument("lstm_forward: null input");
+    m.def(
+        "lstm_forward",
+        [](const TensorImplPtr& input, py::object h0_obj, py::object c0_obj,
+           const std::vector<TensorImplPtr>& weight_tensors, int hidden_size, int num_layers,
+           bool batch_first, bool bidirectional, bool has_bias) -> py::tuple {
+            if (!input)
+                throw std::invalid_argument("lstm_forward: null input");
 
-              const auto& in_shape = input->shape();
-              if (in_shape.size() < 2)
-                  throw std::invalid_argument("lstm_forward: input must be at least 2-D");
+            const auto& in_shape = input->shape();
+            if (in_shape.size() < 2)
+                throw std::invalid_argument("lstm_forward: input must be at least 2-D");
 
-              const int seq_len    = batch_first ? static_cast<int>(in_shape[1])
-                                                 : static_cast<int>(in_shape[0]);
-              const int batch      = batch_first ? static_cast<int>(in_shape[0])
-                                                 : static_cast<int>(in_shape[1]);
-              const int input_size = static_cast<int>(in_shape.back());
-              const int num_dirs   = bidirectional ? 2 : 1;
+            const int seq_len =
+                batch_first ? static_cast<int>(in_shape[1]) : static_cast<int>(in_shape[0]);
+            const int batch =
+                batch_first ? static_cast<int>(in_shape[0]) : static_cast<int>(in_shape[1]);
+            const int input_size = static_cast<int>(in_shape.back());
+            const int num_dirs = bidirectional ? 2 : 1;
 
-              const Dtype  dt  = input->dtype();
-              const Device dev = input->device();
+            const Dtype dt = input->dtype();
+            const Device dev = input->device();
 
-              auto make_zeros = [&](int rows) -> TensorImplPtr {
-                  Shape s{static_cast<std::int64_t>(rows),
-                          static_cast<std::int64_t>(batch),
-                          static_cast<std::int64_t>(hidden_size)};
-                  auto st = backend::Dispatcher::for_device(dev).zeros(s, dt);
-                  return std::make_shared<TensorImpl>(std::move(st), s, dt, dev, false);
-              };
-              TensorImplPtr h0 = h0_obj.is_none() ? make_zeros(num_layers * num_dirs)
-                                                   : h0_obj.cast<TensorImplPtr>();
-              TensorImplPtr c0 = c0_obj.is_none() ? make_zeros(num_layers * num_dirs)
-                                                   : c0_obj.cast<TensorImplPtr>();
+            auto make_zeros = [&](int rows) -> TensorImplPtr {
+                Shape s{static_cast<std::int64_t>(rows), static_cast<std::int64_t>(batch),
+                        static_cast<std::int64_t>(hidden_size)};
+                auto st = backend::Dispatcher::for_device(dev).zeros(s, dt);
+                return std::make_shared<TensorImpl>(std::move(st), s, dt, dev, false);
+            };
+            TensorImplPtr h0 =
+                h0_obj.is_none() ? make_zeros(num_layers * num_dirs) : h0_obj.cast<TensorImplPtr>();
+            TensorImplPtr c0 =
+                c0_obj.is_none() ? make_zeros(num_layers * num_dirs) : c0_obj.cast<TensorImplPtr>();
 
-              backend::IBackend::LstmOpts opts;
-              opts.input_size    = input_size;
-              opts.hidden_size   = hidden_size;
-              opts.num_layers    = num_layers;
-              opts.seq_len       = seq_len;
-              opts.batch_size    = batch;
-              opts.batch_first   = batch_first;
-              opts.bidirectional = bidirectional;
-              opts.has_bias      = has_bias;
+            backend::IBackend::LstmOpts opts;
+            opts.input_size = input_size;
+            opts.hidden_size = hidden_size;
+            opts.num_layers = num_layers;
+            opts.seq_len = seq_len;
+            opts.batch_size = batch;
+            opts.batch_first = batch_first;
+            opts.bidirectional = bidirectional;
+            opts.has_bias = has_bias;
 
-              // Use lstm_op — autograd-aware (BLAS training path when requires_grad).
-              auto results = lstm_op(input, h0, c0, weight_tensors, opts);
-              return py::make_tuple(results[0], results[1], results[2]);
-          },
-          py::arg("input"),
-          py::arg("h0")            = py::none(),
-          py::arg("c0")            = py::none(),
-          py::arg("weights"),
-          py::arg("hidden_size"),
-          py::arg("num_layers")    = 1,
-          py::arg("batch_first")   = false,
-          py::arg("bidirectional") = false,
-          py::arg("has_bias")      = true,
-          "LSTM forward with autograd support.\n"
-          "Inference (no requires_grad): uses BNNS fast path.\n"
-          "Training  (requires_grad=True): uses BLAS path + saves gates/cells for BPTT.\n"
-          "Returns (output, h_n, c_n). weights = [wih(4H,I), whh(4H,H), bih(4H), bhh(4H)].");
+            auto results = lstm_op(input, h0, c0, weight_tensors, opts);
+            return py::make_tuple(results[0], results[1], results[2]);
+        },
+        py::arg("input"), py::arg("h0") = py::none(), py::arg("c0") = py::none(),
+        py::arg("weights"), py::arg("hidden_size"), py::arg("num_layers") = 1,
+        py::arg("batch_first") = false, py::arg("bidirectional") = false,
+        py::arg("has_bias") = true,
+        "LSTM forward with autograd support.\n"
+        "Inference (no requires_grad): uses BNNS fast path.\n"
+        "Training  (requires_grad=True): uses BLAS path + saves gates/cells for BPTT.\n"
+        "Returns (output, h_n, c_n). weights = [wih(4H,I), whh(4H,H), bih(4H), bhh(4H)].");
 }
 
 }  // namespace lucid::bindings
