@@ -27,7 +27,6 @@ namespace lucid {
 
 namespace {
 
-using utils_detail::allocate_cpu;
 using utils_detail::fresh;
 using utils_detail::wrap_axis;
 
@@ -143,59 +142,11 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
 
     CpuStorage cpu = backend::Dispatcher::for_device(a->device()).to_cpu(a->storage(), a->shape());
 
-    const std::size_t n = shape_numel(a->shape());
-    std::vector<bool> mask(n, false);
-    auto check_nonzero = [&](const auto* p) {
-        for (std::size_t i = 0; i < n; ++i)
-            mask[i] = static_cast<double>(p[i]) != 0.0;
-    };
-    switch (a->dtype()) {
-        case Dtype::F32:
-            check_nonzero(reinterpret_cast<const float*>(cpu.ptr.get()));
-            break;
-        case Dtype::F64:
-            check_nonzero(reinterpret_cast<const double*>(cpu.ptr.get()));
-            break;
-        case Dtype::I32:
-            check_nonzero(reinterpret_cast<const std::int32_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::I64:
-            check_nonzero(reinterpret_cast<const std::int64_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::Bool:
-            check_nonzero(reinterpret_cast<const std::uint8_t*>(cpu.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("nonzero").not_implemented("dtype not supported");
-    }
-    // Count non-zeros and allocate (N, ndim) output.
     std::size_t count = 0;
-    for (auto m : mask)
-        if (m)
-            ++count;
-    Shape out_shape{static_cast<std::int64_t>(count), static_cast<std::int64_t>(ndim)};
-    auto out = allocate_cpu(out_shape, Dtype::I64);
-    auto* dst = reinterpret_cast<std::int64_t*>(out.ptr.get());
+    CpuStorage out = backend::Dispatcher::for_device(Device::CPU)
+                         .nonzero_forward(Storage{cpu}, a->shape(), a->dtype(), count);
 
-    // Build strides for unraveling flat index into multi-index.
-    Stride stride(ndim);
-    if (ndim > 0) {
-        stride.back() = 1;
-        for (std::ptrdiff_t d = (std::ptrdiff_t)ndim - 2; d >= 0; --d)
-            stride[d] = stride[d + 1] * a->shape()[d + 1];
-    }
-    std::size_t row = 0;
-    for (std::size_t flat = 0; flat < n; ++flat) {
-        if (!mask[flat])
-            continue;
-        std::size_t rem = flat;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            const std::int64_t coord = rem / static_cast<std::size_t>(stride[d]);
-            rem %= static_cast<std::size_t>(stride[d]);
-            dst[row * ndim + d] = coord;
-        }
-        ++row;
-    }
+    Shape out_shape{static_cast<std::int64_t>(count), static_cast<std::int64_t>(ndim)};
     return fresh(Storage{std::move(out)}, std::move(out_shape), Dtype::I64, /*device=*/Device::CPU);
 }
 

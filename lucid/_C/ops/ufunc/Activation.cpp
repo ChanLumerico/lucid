@@ -17,16 +17,6 @@
 
 namespace lucid {
 
-namespace {
-CpuStorage allocate_unary(const Shape& out_shape, Dtype dt) {
-    CpuStorage out;
-    out.dtype = dt;
-    out.nbytes = shape_numel(out_shape) * dtype_size(dt);
-    out.ptr = allocate_aligned_bytes(out.nbytes);
-    return out;
-}
-}  // namespace
-
 // =================== Relu ===================
 const OpSchema ReluBackward::schema_v1{"relu", 1, AmpPolicy::KeepInput, true};
 
@@ -94,33 +84,8 @@ LUCID_REGISTER_OP(GeluBackward)
 // =================== LeakyReLU (scalar param — custom forward) ===================
 const OpSchema LeakyReluBackward::schema_v1{"leaky_relu", 1, AmpPolicy::KeepInput, true};
 
-CpuStorage LeakyReluBackward::cpu_kernel(const CpuStorage& a,
-                                         const Shape& out_shape,
-                                         Dtype dt,
-                                         double slope) {
-    const std::size_t n = shape_numel(out_shape);
-    auto out = allocate_unary(out_shape, dt);
-    switch (dt) {
-        case Dtype::F32: {
-            auto* p = reinterpret_cast<const float*>(a.ptr.get());
-            auto* q = reinterpret_cast<float*>(out.ptr.get());
-            const auto fs = static_cast<float>(slope);
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] >= 0.f) ? p[i] : fs * p[i];
-            break;
-        }
-        case Dtype::F64: {
-            auto* p = reinterpret_cast<const double*>(a.ptr.get());
-            auto* q = reinterpret_cast<double*>(out.ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] >= 0.0) ? p[i] : slope * p[i];
-            break;
-        }
-        default:
-            ErrorBuilder("leaky_relu").not_implemented("dtype not supported");
-    }
-    return out;
-}
+// LeakyReluBackward::cpu_kernel was removed: forward() routes through
+// Dispatcher (be.leaky_relu), so the cpu_kernel path is unreachable dead code.
 
 Storage LeakyReluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
@@ -166,37 +131,8 @@ LUCID_REGISTER_OP(SoftplusBackward)
 // =================== ELU (scalar param — custom forward) ===================
 const OpSchema EluBackward::schema_v1{"elu", 1, AmpPolicy::ForceFP32, true};
 
-CpuStorage EluBackward::cpu_kernel(const CpuStorage& a,
-                                   const Shape& out_shape,
-                                   Dtype dt,
-                                   double alpha) {
-    const std::size_t n = shape_numel(out_shape);
-    auto out = allocate_unary(out_shape, dt);
-    switch (dt) {
-        case Dtype::F32: {
-            auto* p = reinterpret_cast<const float*>(a.ptr.get());
-            auto* q = reinterpret_cast<float*>(out.ptr.get());
-            const float fa = static_cast<float>(alpha);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = p[i];
-                q[i] = (x >= 0.f) ? x : fa * (std::exp(x) - 1.f);
-            }
-            break;
-        }
-        case Dtype::F64: {
-            auto* p = reinterpret_cast<const double*>(a.ptr.get());
-            auto* q = reinterpret_cast<double*>(out.ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = p[i];
-                q[i] = (x >= 0.0) ? x : alpha * (std::exp(x) - 1.0);
-            }
-            break;
-        }
-        default:
-            ErrorBuilder("elu").not_implemented("dtype not supported");
-    }
-    return out;
-}
+// EluBackward::cpu_kernel was removed: forward() routes through
+// Dispatcher (be.elu), so the cpu_kernel path is unreachable dead code.
 
 Storage EluBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).elu_backward(saved_inputs_[0], g, out_shape_,

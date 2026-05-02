@@ -4879,6 +4879,15 @@ private:
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
+    CpuStorage permute_cpu(const CpuStorage& /*src*/,
+                           const Shape& /*src_shape*/,
+                           const std::vector<int>& /*perm*/,
+                           Dtype /*dt*/) override {
+        ErrorBuilder("gpu::permute_cpu")
+            .not_implemented("GPU tensordot uses MLX einsum; this method is CPU-only");
+        return CpuStorage{};
+    }
+
     Storage tensordot(const Storage& a,
                       const Storage& b,
                       const Shape& /*a_shape*/,
@@ -4925,6 +4934,29 @@ private:
         if (nout != nin)
             out = ::mlx::core::reshape(out, gpu::to_mlx_shape(input_shape));
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
+    }
+
+    Storage histogram_forward(const Storage& /*input*/,
+                              const Shape& /*input_shape*/,
+                              Dtype /*input_dtype*/,
+                              double /*lo*/,
+                              double /*hi*/,
+                              std::int64_t /*bins*/,
+                              bool /*density*/) override {
+        // histogram always operates on CPU data; the caller already downloads
+        // GPU tensors via to_cpu() before calling this.
+        ErrorBuilder("gpu::histogram_forward")
+            .not_implemented("call to_cpu() first and dispatch to CPU");
+        return {};
+    }
+
+    CpuStorage nonzero_forward(const Storage& /*input*/,
+                               const Shape& /*input_shape*/,
+                               Dtype /*input_dtype*/,
+                               std::size_t& numel_out) override {
+        ErrorBuilder("gpu::nonzero_forward").not_implemented("call to_cpu() first");
+        numel_out = 0;
+        return CpuStorage{};
     }
 };
 

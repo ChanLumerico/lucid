@@ -35,23 +35,8 @@ using utils_detail::mlx_shape_to_lucid;
 using utils_detail::numel;
 using utils_detail::wrap_axis;
 
-template <typename T>
-CpuStorage where_branch_cpu(const CpuStorage& grad,
-                            const CpuStorage& cond,
-                            const Shape& shape,
-                            Dtype dt,
-                            bool true_branch) {
-    auto out = allocate_cpu(shape, dt);
-    const std::size_t n = numel(shape);
-    const auto* g = reinterpret_cast<const T*>(grad.ptr.get());
-    const auto* c = reinterpret_cast<const std::uint8_t*>(cond.ptr.get());
-    auto* dst = reinterpret_cast<T*>(out.ptr.get());
-    for (std::size_t i = 0; i < n; ++i) {
-        const bool take = c[i] != 0;
-        dst[i] = (take == true_branch) ? g[i] : T{};
-    }
-    return out;
-}
+// where_branch_cpu<T> removed: where_branch_storage routes through
+// Dispatcher, so the hand-written CPU template is unreachable dead code.
 
 Storage where_branch_storage(const Storage& grad,
                              const Storage& cond,
@@ -62,60 +47,8 @@ Storage where_branch_storage(const Storage& grad,
     return backend::Dispatcher::for_device(device).where_branch(grad, cond, shape, dt, true_branch);
 }
 
-template <typename T>
-CpuStorage gather_backward_cpu_typed(const CpuStorage& grad,
-                                     const CpuStorage& indices,
-                                     const Shape& input_shape,
-                                     const Shape& output_shape,
-                                     int axis,
-                                     Dtype index_dtype,
-                                     Dtype dt) {
-    auto out = allocate_cpu(input_shape, dt);
-    const std::size_t ndim = input_shape.size();
-    Stride input_stride(ndim), output_stride(ndim);
-    if (ndim > 0) {
-        input_stride.back() = 1;
-        output_stride.back() = 1;
-        for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-            input_stride[static_cast<std::size_t>(d)] =
-                input_stride[static_cast<std::size_t>(d) + 1] *
-                input_shape[static_cast<std::size_t>(d) + 1];
-            output_stride[static_cast<std::size_t>(d)] =
-                output_stride[static_cast<std::size_t>(d) + 1] *
-                output_shape[static_cast<std::size_t>(d) + 1];
-        }
-    }
-    auto load_idx = [&](std::size_t flat) -> std::int64_t {
-        if (index_dtype == Dtype::I32)
-            return reinterpret_cast<const std::int32_t*>(indices.ptr.get())[flat];
-        if (index_dtype == Dtype::I64)
-            return reinterpret_cast<const std::int64_t*>(indices.ptr.get())[flat];
-        ErrorBuilder("gather backward").not_implemented("indices dtype must be I32 or I64");
-    };
-
-    const auto* g = reinterpret_cast<const T*>(grad.ptr.get());
-    auto* dst = reinterpret_cast<T*>(out.ptr.get());
-    const std::size_t total = numel(output_shape);
-    std::vector<std::int64_t> coord(ndim, 0);
-    for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-        std::int64_t k = load_idx(out_flat);
-        if (k < 0)
-            k += input_shape[static_cast<std::size_t>(axis)];
-        std::size_t input_flat = 0;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
-            input_flat += static_cast<std::size_t>(c) * static_cast<std::size_t>(input_stride[d]);
-        }
-        dst[input_flat] += g[out_flat];
-        for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 1; d >= 0; --d) {
-            if (++coord[static_cast<std::size_t>(d)] < output_shape[static_cast<std::size_t>(d)]) {
-                break;
-            }
-            coord[static_cast<std::size_t>(d)] = 0;
-        }
-    }
-    return out;
-}
+// gather_backward_cpu_typed<T> removed: gather_backward_storage routes
+// through Dispatcher, so the hand-written CPU template is unreachable dead code.
 
 Storage gather_backward_storage(const Storage& grad,
                                 const Storage& indices,
@@ -129,74 +62,8 @@ Storage gather_backward_storage(const Storage& grad,
         grad, indices, input_shape, output_shape, axis, index_dtype, dt);
 }
 
-template <typename T>
-CpuStorage diagonal_backward_cpu_typed(const CpuStorage& grad,
-                                       const Shape& input_shape,
-                                       const Shape& output_shape,
-                                       int offset,
-                                       int axis1,
-                                       int axis2,
-                                       Dtype dt) {
-    auto out = allocate_cpu(input_shape, dt);
-    const std::size_t ndim = input_shape.size();
-    int a1 = axis1;
-    int a2 = axis2;
-    if (a1 > a2)
-        std::swap(a1, a2);
-
-    const std::int64_t M = input_shape[static_cast<std::size_t>(a1)];
-    const std::int64_t N = input_shape[static_cast<std::size_t>(a2)];
-    const std::int64_t r0 = (offset >= 0) ? 0 : -offset;
-    const std::int64_t c0 = (offset >= 0) ? offset : 0;
-    const std::int64_t L = std::max<std::int64_t>(0, std::min(M - r0, N - c0));
-
-    Stride input_stride(ndim);
-    if (ndim > 0) {
-        input_stride.back() = 1;
-        for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-            input_stride[static_cast<std::size_t>(d)] =
-                input_stride[static_cast<std::size_t>(d) + 1] *
-                input_shape[static_cast<std::size_t>(d) + 1];
-        }
-    }
-
-    std::vector<std::size_t> outer_dims;
-    for (std::size_t d = 0; d < ndim; ++d) {
-        if (static_cast<int>(d) != a1 && static_cast<int>(d) != a2)
-            outer_dims.push_back(d);
-    }
-    std::size_t outer_numel = 1;
-    for (auto d : outer_dims)
-        outer_numel *= static_cast<std::size_t>(input_shape[d]);
-
-    const auto* g = reinterpret_cast<const T*>(grad.ptr.get());
-    auto* dst = reinterpret_cast<T*>(out.ptr.get());
-    std::vector<std::int64_t> coord(ndim, 0);
-    for (std::size_t o = 0; o < outer_numel; ++o) {
-        std::size_t rem = o;
-        for (auto d : outer_dims) {
-            std::size_t prod = 1;
-            for (std::size_t e : outer_dims)
-                if (e > d)
-                    prod *= static_cast<std::size_t>(input_shape[e]);
-            coord[d] = static_cast<std::int64_t>(rem / prod);
-            rem %= prod;
-        }
-        for (std::int64_t i = 0; i < L; ++i) {
-            coord[static_cast<std::size_t>(a1)] = r0 + i;
-            coord[static_cast<std::size_t>(a2)] = c0 + i;
-            std::size_t input_flat = 0;
-            for (std::size_t d = 0; d < ndim; ++d)
-                input_flat +=
-                    static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(input_stride[d]);
-            const std::size_t grad_flat =
-                o * static_cast<std::size_t>(L) + static_cast<std::size_t>(i);
-            dst[input_flat] += g[grad_flat];
-        }
-    }
-    (void)output_shape;
-    return out;
-}
+// diagonal_backward_cpu_typed<T> removed: diagonal_backward_storage routes
+// through Dispatcher, so the hand-written CPU template is unreachable dead code.
 
 Storage diagonal_backward_storage(const Storage& grad,
                                   const Shape& input_shape,

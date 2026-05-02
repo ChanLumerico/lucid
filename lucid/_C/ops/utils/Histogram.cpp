@@ -89,32 +89,17 @@ std::vector<TensorImplPtr> histogram_op(
     OpScopeFull scope{"histogram", a->device(), a->dtype(), a->shape()};
 
     const auto cpu = to_cpu(a);
-    const std::size_t n = shape_numel(a->shape());
-    const double step = (hi - lo) / static_cast<double>(bins);
-
+    auto& cpu_be = backend::Dispatcher::for_device(Device::CPU);
+    Storage counts_storage =
+        cpu_be.histogram_forward(Storage{cpu}, a->shape(), a->dtype(), lo, hi, bins, density);
     Shape counts_shape{bins};
-    auto counts = allocate_cpu(counts_shape, Dtype::F64);
-    auto* dst = reinterpret_cast<double*>(counts.ptr.get());
-    std::memset(dst, 0, counts.nbytes);
-
-    for (std::size_t i = 0; i < n; ++i) {
-        const double v = read_double(cpu, i, a->dtype());
-        if (v < lo || v > hi)
-            continue;
-        std::int64_t bin = static_cast<std::int64_t>((v - lo) / step);
-        if (bin >= bins)
-            bin = bins - 1;  // include right edge
-        dst[bin] += 1.0;
-    }
-
-    if (density) {
-        for (std::int64_t i = 0; i < bins; ++i)
-            dst[i] /= (n * step);
-    }
 
     Device out_dev = pick_out_device(a->device(), Dtype::F64);
-    auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
-    auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
+    // counts_storage is always CpuStorage (F64); upload to GPU if needed.
+    auto final_counts_storage =
+        to_device_storage(std::get<CpuStorage>(std::move(counts_storage)), out_dev, counts_shape);
+    auto counts_t =
+        fresh(std::move(final_counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
     auto edges = build_edges(lo, hi, bins);
     // edges share the dtype/device convention with counts.
     if (out_dev == Device::GPU) {

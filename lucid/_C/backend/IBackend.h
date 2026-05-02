@@ -1060,6 +1060,15 @@ public:
                           const Shape& out_shape,
                           Dtype dt) = 0;
 
+    /// Permute a CPU storage by reordering its axes. Returns a new CpuStorage
+    /// with elements laid out in the permuted order (C-contiguous).
+    /// `src_shape` is the original shape; `perm[i]` gives which original axis
+    /// maps to output axis i. Result shape: src_shape[perm[0]], src_shape[perm[1]], ...
+    virtual CpuStorage permute_cpu(const CpuStorage& src,
+                                   const Shape& src_shape,
+                                   const std::vector<int>& perm,
+                                   Dtype dt) = 0;
+
     /// tensordot: general tensor contraction.
     virtual Storage tensordot(const Storage& a,
                               const Storage& b,
@@ -1079,6 +1088,23 @@ public:
                                      const Shape& input_shape,
                                      const Shape& output_shape,
                                      Dtype dt) = 0;
+
+    /// Histogram forward. Always operates on CPU (GPU input is downloaded first).
+    /// Returns a Storage of dtype F64 with shape {bins}.
+    virtual Storage histogram_forward(const Storage& input,
+                                      const Shape& input_shape,
+                                      Dtype input_dtype,
+                                      double lo,
+                                      double hi,
+                                      std::int64_t bins,
+                                      bool density) = 0;
+
+    /// Nonzero: returns flat indices of non-zero elements as CpuStorage of I64.
+    /// numel_out is set to the number of non-zero elements found.
+    virtual CpuStorage nonzero_forward(const Storage& input,
+                                       const Shape& input_shape,
+                                       Dtype input_dtype,
+                                       std::size_t& numel_out) = 0;
 };
 
 }  // namespace backend

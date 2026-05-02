@@ -1,6 +1,5 @@
 #include "Tensordot.h"
 
-#include <cstring>
 #include <numeric>
 #include <set>
 #include <string>
@@ -137,32 +136,9 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
             }
         }
         Shape src_shape = t->shape();
-        Shape dst_shape;
-        for (auto p : perm)
-            dst_shape.push_back(src_shape[p]);
         const auto& cs = std::get<CpuStorage>(t->storage());
-        auto dst = allocate_cpu(dst_shape, dt);
-        const std::size_t elem = dtype_size(dt);
-        Stride src_stride(nd);
-        if (nd > 0) {
-            src_stride.back() = 1;
-            for (std::ptrdiff_t d = (std::ptrdiff_t)nd - 2; d >= 0; --d)
-                src_stride[d] = src_stride[d + 1] * src_shape[d + 1];
-        }
-        const std::size_t total = shape_numel(dst_shape);
-        std::vector<std::int64_t> coord(nd, 0);
-        for (std::size_t f = 0; f < total; ++f) {
-            std::size_t src_flat = 0;
-            for (std::size_t d = 0; d < nd; ++d)
-                src_flat += static_cast<std::size_t>(coord[d]) *
-                            static_cast<std::size_t>(src_stride[perm[d]]);
-            std::memcpy(dst.ptr.get() + f * elem, cs.ptr.get() + src_flat * elem, elem);
-            for (std::ptrdiff_t d = (std::ptrdiff_t)nd - 1; d >= 0; --d) {
-                if (++coord[d] < dst_shape[d])
-                    break;
-                coord[d] = 0;
-            }
-        }
+        auto& be = backend::Dispatcher::for_device(Device::CPU);
+        CpuStorage dst = be.permute_cpu(cs, src_shape, perm, dt);
         return std::tuple<CpuStorage, std::vector<std::int64_t>, std::int64_t>{
             std::move(dst), std::move(kept), contract_size};
     };

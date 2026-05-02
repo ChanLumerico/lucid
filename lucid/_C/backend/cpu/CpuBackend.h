@@ -9145,6 +9145,44 @@ private:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    CpuStorage permute_cpu(const CpuStorage& src,
+                           const Shape& src_shape,
+                           const std::vector<int>& perm,
+                           Dtype dt) override {
+        const std::size_t nd = src_shape.size();
+        Shape dst_shape;
+        for (int p : perm)
+            dst_shape.push_back(src_shape[static_cast<std::size_t>(p)]);
+
+        const std::size_t total = shape_numel(dst_shape);
+        const std::size_t elem = dtype_size(dt);
+        std::size_t nb = total * elem;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+
+        // Build src strides (C-contiguous)
+        std::vector<std::size_t> src_stride(nd, 1);
+        for (std::ptrdiff_t d = (std::ptrdiff_t)nd - 2; d >= 0; --d)
+            src_stride[static_cast<std::size_t>(d)] =
+                src_stride[static_cast<std::size_t>(d) + 1] *
+                static_cast<std::size_t>(src_shape[static_cast<std::size_t>(d) + 1]);
+
+        std::vector<std::int64_t> coord(nd, 0);
+        for (std::size_t f = 0; f < total; ++f) {
+            std::size_t src_flat = 0;
+            for (std::size_t d = 0; d < nd; ++d)
+                src_flat += static_cast<std::size_t>(coord[d]) *
+                            src_stride[static_cast<std::size_t>(perm[d])];
+            std::memcpy(ptr.get() + f * elem, src.ptr.get() + src_flat * elem, elem);
+            // Advance coord
+            for (std::ptrdiff_t d = (std::ptrdiff_t)nd - 1; d >= 0; --d) {
+                if (++coord[static_cast<std::size_t>(d)] < dst_shape[static_cast<std::size_t>(d)])
+                    break;
+                coord[static_cast<std::size_t>(d)] = 0;
+            }
+        }
+        return CpuStorage{ptr, nb, dt};
+    }
+
     Storage tensordot(const Storage& /*a*/,
                       const Storage& /*b*/,
                       const Shape& /*a_shape*/,
@@ -9234,6 +9272,114 @@ private:
         else
             ErrorBuilder("cpu_backend::reduce_broadcast").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage histogram_forward(const Storage& input,
+                              const Shape& input_shape,
+                              Dtype input_dtype,
+                              double lo,
+                              double hi,
+                              std::int64_t bins,
+                              bool density) override {
+        const auto& cs = std::get<CpuStorage>(input);
+        const std::size_t n = shape_numel(input_shape);
+        const double step = (hi - lo) / static_cast<double>(bins);
+        CpuStorage counts = alloc_cpu(static_cast<std::size_t>(bins), Dtype::F64);
+        auto* dst = reinterpret_cast<double*>(counts.ptr.get());
+        std::memset(dst, 0, counts.nbytes);
+        auto read_val = [&](std::size_t i) -> double {
+            switch (input_dtype) {
+                case Dtype::F32:
+                    return static_cast<double>(reinterpret_cast<const float*>(cs.ptr.get())[i]);
+                case Dtype::F64:
+                    return reinterpret_cast<const double*>(cs.ptr.get())[i];
+                case Dtype::I32:
+                    return static_cast<double>(
+                        reinterpret_cast<const std::int32_t*>(cs.ptr.get())[i]);
+                case Dtype::I64:
+                    return static_cast<double>(
+                        reinterpret_cast<const std::int64_t*>(cs.ptr.get())[i]);
+                default:
+                    ErrorBuilder("cpu::histogram_forward").not_implemented("dtype");
+                    return 0.0;
+            }
+        };
+        for (std::size_t i = 0; i < n; ++i) {
+            const double v = read_val(i);
+            if (v < lo || v > hi)
+                continue;
+            std::int64_t bin = static_cast<std::int64_t>((v - lo) / step);
+            if (bin >= bins)
+                bin = bins - 1;
+            dst[bin] += 1.0;
+        }
+        if (density) {
+            for (std::int64_t i = 0; i < bins; ++i)
+                dst[i] /= (static_cast<double>(n) * step);
+        }
+        return Storage{std::move(counts)};
+    }
+
+    CpuStorage nonzero_forward(const Storage& input,
+                               const Shape& input_shape,
+                               Dtype input_dtype,
+                               std::size_t& numel_out) override {
+        const auto& cs = std::get<CpuStorage>(input);
+        const std::size_t n = shape_numel(input_shape);
+        const std::size_t ndim = input_shape.size();
+        std::vector<bool> mask(n, false);
+        auto check_nonzero = [&](const auto* p) {
+            for (std::size_t i = 0; i < n; ++i)
+                mask[i] = static_cast<double>(p[i]) != 0.0;
+        };
+        switch (input_dtype) {
+            case Dtype::F32:
+                check_nonzero(reinterpret_cast<const float*>(cs.ptr.get()));
+                break;
+            case Dtype::F64:
+                check_nonzero(reinterpret_cast<const double*>(cs.ptr.get()));
+                break;
+            case Dtype::I32:
+                check_nonzero(reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
+                break;
+            case Dtype::I64:
+                check_nonzero(reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
+                break;
+            case Dtype::Bool:
+                check_nonzero(reinterpret_cast<const std::uint8_t*>(cs.ptr.get()));
+                break;
+            default:
+                ErrorBuilder("cpu::nonzero_forward").not_implemented("dtype not supported");
+        }
+        std::size_t count = 0;
+        for (auto m : mask)
+            if (m)
+                ++count;
+        numel_out = count;
+        Shape out_shape{static_cast<std::int64_t>(count), static_cast<std::int64_t>(ndim)};
+        CpuStorage out = alloc_cpu(count * ndim, Dtype::I64);
+        auto* dst = reinterpret_cast<std::int64_t*>(out.ptr.get());
+        Stride stride(ndim);
+        if (ndim > 0) {
+            stride.back() = 1;
+            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d)
+                stride[static_cast<std::size_t>(d)] = stride[static_cast<std::size_t>(d) + 1] *
+                                                      input_shape[static_cast<std::size_t>(d) + 1];
+        }
+        std::size_t row = 0;
+        for (std::size_t flat = 0; flat < n; ++flat) {
+            if (!mask[flat])
+                continue;
+            std::size_t rem = flat;
+            for (std::size_t d = 0; d < ndim; ++d) {
+                const std::int64_t coord =
+                    static_cast<std::int64_t>(rem / static_cast<std::size_t>(stride[d]));
+                rem %= static_cast<std::size_t>(stride[d]);
+                dst[row * ndim + d] = coord;
+            }
+            ++row;
+        }
+        return out;
     }
 };
 
