@@ -42,8 +42,8 @@ Storage scatter_axis_add_storage(const Storage& grad,
                                  int axis,
                                  Dtype dt,
                                  Device device) {
-    return backend::Dispatcher::for_device(device)
-        .scatter_add_axis(grad, indices, input_shape, grad_shape, axis, dt);
+    return backend::Dispatcher::for_device(device).scatter_add_axis(grad, indices, input_shape,
+                                                                    grad_shape, axis, dt);
 }
 
 class IndexScatterBackward : public FuncOp<IndexScatterBackward, 1> {
@@ -60,7 +60,8 @@ public:
     }
 };
 
-const OpSchema IndexScatterBackward::schema_v1{"index_scatter", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, /*internal=*/true};
+const OpSchema IndexScatterBackward::schema_v1{
+    "index_scatter", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, /*internal=*/true};
 
 TensorImplPtr attach_index_scatter_grad(const TensorImplPtr& a,
                                         TensorImplPtr out,
@@ -86,9 +87,9 @@ TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
     OpScopeFull scope{"sort", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     Shape out_shape = a->shape();
-    auto [values, indices] = backend::Dispatcher::for_device(device)
-                                 .sort_select(a->storage(), a->shape(), out_shape, ax, dt,
-                                              /*descending=*/false);
+    auto [values, indices] = backend::Dispatcher::for_device(device).sort_select(
+        a->storage(), a->shape(), out_shape, ax, dt,
+        /*descending=*/false);
     auto out = fresh(std::move(values), std::move(out_shape), dt, device);
     return attach_index_scatter_grad(a, std::move(out), std::move(indices), ax);
 }
@@ -98,8 +99,8 @@ TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
     const Device device = a->device();
     OpScopeFull scope{"argsort", device, a->dtype(), a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
-    Storage out = backend::Dispatcher::for_device(device).argsort(a->storage(), a->shape(), ax,
-                                                                  a->dtype());
+    Storage out =
+        backend::Dispatcher::for_device(device).argsort(a->storage(), a->shape(), ax, a->dtype());
     return fresh(std::move(out), a->shape(), Dtype::I32, device);
 }
 
@@ -115,9 +116,8 @@ TensorImplPtr argext_dispatch(
         out_shape[ax] = 1;
     else
         out_shape.erase(out_shape.begin() + ax);
-    Storage out = backend::Dispatcher::for_device(device)
-                      .arg_reduce_index(a->storage(), a->shape(), ax, keepdims, a->dtype(),
-                                        is_min);
+    Storage out = backend::Dispatcher::for_device(device).arg_reduce_index(
+        a->storage(), a->shape(), ax, keepdims, a->dtype(), is_min);
     return fresh(std::move(out), std::move(out_shape), Dtype::I64, device);
 }
 }  // namespace
@@ -253,9 +253,9 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
         ErrorBuilder("topk").fail("k must be in (0, axis_size]");
     Shape out_shape = a->shape();
     out_shape[static_cast<std::size_t>(ax)] = k;
-    auto [values, indices] = backend::Dispatcher::for_device(device)
-                                 .sort_select(a->storage(), a->shape(), out_shape, ax, dt,
-                                              /*descending=*/true);
+    auto [values, indices] = backend::Dispatcher::for_device(device).sort_select(
+        a->storage(), a->shape(), out_shape, ax, dt,
+        /*descending=*/true);
     auto indices_out = fresh(std::move(indices), out_shape, Dtype::I32, device);
     auto values_out = fresh(std::move(values), out_shape, dt, device);
     values_out = attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);

@@ -27,8 +27,8 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
         ErrorBuilder("softmax").index_error("axis out of range");
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
-    Storage out_storage = backend::Dispatcher::for_device(a->device()).softmax(
-        a->storage(), a->shape(), wrapped, a->dtype());
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .softmax(a->storage(), a->shape(), wrapped, a->dtype());
 
     auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                                a->device(), false);

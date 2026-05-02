@@ -263,33 +263,28 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
                 a_use = &a_buf;
             }
             if (b_ptr->shape() != out_shape) {
-                b_buf =
-                    detail::broadcast_cpu(b_raw, b_ptr->shape(), out_shape, a_ptr->dtype());
+                b_buf = detail::broadcast_cpu(b_raw, b_ptr->shape(), out_shape, a_ptr->dtype());
                 b_use = &b_buf;
             }
             out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::CPU),
-                                            Storage{*a_use}, Storage{*b_use}, out_shape,
-                                            eff_dt);
+                                            Storage{*a_use}, Storage{*b_use}, out_shape, eff_dt);
         } else {
             // GPU: broadcast via MLX then dispatch.
             const auto& ga = std::get<GpuStorage>(a_ptr->storage());
             const auto& gb = std::get<GpuStorage>(b_ptr->storage());
-            ::mlx::core::array a_arr =
-                (a_ptr->shape() == out_shape)
-                    ? *ga.arr
-                    : ::mlx::core::contiguous(
-                          ::mlx::core::broadcast_to(*ga.arr, gpu::to_mlx_shape(out_shape)));
-            ::mlx::core::array b_arr =
-                (b_ptr->shape() == out_shape)
-                    ? *gb.arr
-                    : ::mlx::core::contiguous(
-                          ::mlx::core::broadcast_to(*gb.arr, gpu::to_mlx_shape(out_shape)));
+            ::mlx::core::array a_arr = (a_ptr->shape() == out_shape)
+                                           ? *ga.arr
+                                           : ::mlx::core::contiguous(::mlx::core::broadcast_to(
+                                                 *ga.arr, gpu::to_mlx_shape(out_shape)));
+            ::mlx::core::array b_arr = (b_ptr->shape() == out_shape)
+                                           ? *gb.arr
+                                           : ::mlx::core::contiguous(::mlx::core::broadcast_to(
+                                                 *gb.arr, gpu::to_mlx_shape(out_shape)));
             GpuStorage a_g, b_g;
             a_g.arr = std::make_shared<::mlx::core::array>(std::move(a_arr));
             b_g.arr = std::make_shared<::mlx::core::array>(std::move(b_arr));
             out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::GPU),
-                                            Storage{a_g}, Storage{b_g}, out_shape,
-                                            eff_dt);
+                                            Storage{a_g}, Storage{b_g}, out_shape, eff_dt);
         }
     } else if (a_ptr->device() == Device::GPU) {
         if constexpr (detail::HasGpuKernel<Derived>) {
@@ -327,8 +322,8 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
         out_storage = Storage{Derived::cpu_kernel(*a_use, *b_use, out_shape, eff_dt)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt,
-                                            a->device(), /*requires_grad=*/false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(),
+                                            /*requires_grad=*/false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
     const bool needs_grad = GradMode::is_enabled() && (a->requires_grad() || b->requires_grad());

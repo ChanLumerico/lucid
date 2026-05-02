@@ -35,7 +35,8 @@ TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_
     OpScopeFull scope{"one_hot", input->device(), out_dtype, out_shape};
 
     auto& be = backend::Dispatcher::for_device(input->device());
-    Storage out_storage = be.one_hot_forward(input->storage(), input->shape(), num_classes, out_dtype);
+    Storage out_storage =
+        be.one_hot_forward(input->storage(), input->shape(), num_classes, out_dtype);
     return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, out_dtype,
                                         input->device(), false);
 }
@@ -52,8 +53,8 @@ TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy,
     const double angle_rad_neg = -angle_deg * (M_PI / 180.0);
 
     auto& be = backend::Dispatcher::for_device(input->device());
-    Storage out_storage = be.rotate_forward(input->storage(), input->shape(),
-                                             angle_rad_neg, cx, cy, input->dtype());
+    Storage out_storage =
+        be.rotate_forward(input->storage(), input->shape(), angle_rad_neg, cx, cy, input->dtype());
     return std::make_shared<TensorImpl>(std::move(out_storage), input->shape(), input->dtype(),
                                         input->device(), false);
 }
@@ -134,9 +135,9 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
     Storage bias_storage = has_bias ? bias->storage() : Storage{CpuStorage{}};
 
     auto& be = backend::Dispatcher::for_device(x1->device());
-    Storage out_storage = be.bilinear_layer_forward(
-        x1->storage(), x2->storage(), weight->storage(), bias_storage, has_bias,
-        x1->shape(), x2->shape(), weight->shape(), x1->dtype());
+    Storage out_storage =
+        be.bilinear_layer_forward(x1->storage(), x2->storage(), weight->storage(), bias_storage,
+                                  has_bias, x1->shape(), x2->shape(), weight->shape(), x1->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, x1->dtype(),
                                             x1->device(), false);
@@ -157,9 +158,9 @@ std::vector<Storage> BilinearLayerBackward::apply(Storage grad_out) {
     const bool has_bias = !input_shapes_[3].empty();
 
     auto& be = backend::Dispatcher::for_device(device_);
-    return be.bilinear_layer_backward(
-        grad_out, saved_inputs_[0], saved_inputs_[1], saved_inputs_[2],
-        orig_x1_shape_, orig_x2_shape_, input_shapes_[2], has_bias, dtype_);
+    return be.bilinear_layer_backward(grad_out, saved_inputs_[0], saved_inputs_[1],
+                                      saved_inputs_[2], orig_x1_shape_, orig_x2_shape_,
+                                      input_shapes_[2], has_bias, dtype_);
 }
 
 TensorImplPtr bilinear_layer_op(const TensorImplPtr& x1,

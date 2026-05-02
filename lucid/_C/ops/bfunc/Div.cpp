@@ -12,7 +12,6 @@ namespace lucid {
 const OpSchema DivBackward::schema_v1{"div", /*version=*/1, AmpPolicy::Promote,
                                       /*deterministic=*/true};
 
-
 std::pair<Storage, Storage> DivBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
     // Broadcast saved inputs so all element-wise ops below are well-defined

@@ -84,11 +84,10 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
     // ops (matmul, conv, ...) can always assume contiguous row-major layout.
     // GPU: MLX contiguous() materialises the lazy transpose in-place.
     // CPU: permute_copy_<dtype> produces a fresh contiguous CpuStorage.
-    Storage out_storage =
-        backend::Dispatcher::for_device(a->device()).permute(a->storage(), a->shape(), perm,
-                                                             a->dtype());
-    TensorImplPtr out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape,
-                                                     a->dtype(), a->device(), false);
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .permute(a->storage(), a->shape(), perm, a->dtype());
+    TensorImplPtr out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
+                                                     a->device(), false);
 
     auto bwd = std::make_shared<PermuteBackward>();
     bwd->perm_ = perm;
@@ -101,8 +100,8 @@ std::vector<Storage> PermuteBackward::apply(Storage grad_out) {
     // dx = permute(g, inverse_perm). The gradient arrives in `out_shape_`;
     // applying inverse_perm produces a buffer in `input_shapes_[0]` layout.
     const auto inv = inverse_perm(perm_);
-    Storage dx = backend::Dispatcher::for_device(device_).permute(grad_out, out_shape_, inv,
-                                                                  dtype_);
+    Storage dx =
+        backend::Dispatcher::for_device(device_).permute(grad_out, out_shape_, inv, dtype_);
     return {std::move(dx)};
 }
 

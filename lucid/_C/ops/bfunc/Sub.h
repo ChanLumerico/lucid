@@ -36,8 +36,8 @@ public:
     static const OpSchema schema_v1;
 
     // Phase 4.5: dispatch through IBackend — no device check in call site.
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
-                            const Storage& b, const Shape& shape, Dtype dt) {
+    static Storage dispatch(
+        backend::IBackend& be, const Storage& a, const Storage& b, const Shape& shape, Dtype dt) {
         return be.sub(a, b, shape, dt);
     }
 

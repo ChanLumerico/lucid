@@ -272,8 +272,8 @@ public:
         inv_shifts.reserve(shifts_.size());
         for (auto s : shifts_)
             inv_shifts.push_back(-s);
-        return {backend::Dispatcher::for_device(device_).roll(
-            grad_out, out_shape_, dtype_, inv_shifts, axes_)};
+        return {backend::Dispatcher::for_device(device_).roll(grad_out, out_shape_, dtype_,
+                                                              inv_shifts, axes_)};
     }
 };
 
@@ -398,37 +398,18 @@ TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const 
     const Dtype dt = x->dtype();
     const Device device = x->device();
     OpScopeFull scope{"where", device, dt, x->shape()};
-    if (device == Device::GPU) {
-        const auto& gc = std::get<GpuStorage>(cond->storage());
-        const auto& gx = std::get<GpuStorage>(x->storage());
-        const auto& gy = std::get<GpuStorage>(y->storage());
-        auto out = ::mlx::core::where(*gc.arr, *gx.arr, *gy.arr);
-        Shape sh = mlx_shape_to_lucid(out.shape());
-        auto result =
-            fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(sh), dt, device);
-        return attach_where_grad(cond, x, y, std::move(result));
-    }
-    if (cond->shape() != x->shape() || x->shape() != y->shape())
+    if (device == Device::CPU && cond->shape() != x->shape())
         throw ShapeMismatch(x->shape(), y->shape(), "where (CPU same-shape)");
-    auto out_cpu = allocate_cpu(x->shape(), dt);
-    const std::size_t n = numel(x->shape());
-    const auto* c =
-        reinterpret_cast<const std::uint8_t*>(std::get<CpuStorage>(cond->storage()).ptr.get());
-    auto run = [&](auto* dst, const auto* xp, const auto* yp) {
-        for (std::size_t i = 0; i < n; ++i)
-            dst[i] = c[i] ? xp[i] : yp[i];
-    };
-    if (dt == Dtype::F32)
-        run(reinterpret_cast<float*>(out_cpu.ptr.get()),
-            reinterpret_cast<const float*>(std::get<CpuStorage>(x->storage()).ptr.get()),
-            reinterpret_cast<const float*>(std::get<CpuStorage>(y->storage()).ptr.get()));
-    else if (dt == Dtype::F64)
-        run(reinterpret_cast<double*>(out_cpu.ptr.get()),
-            reinterpret_cast<const double*>(std::get<CpuStorage>(x->storage()).ptr.get()),
-            reinterpret_cast<const double*>(std::get<CpuStorage>(y->storage()).ptr.get()));
-    else
-        ErrorBuilder("where").not_implemented("dtype not supported");
-    auto result = fresh(Storage{std::move(out_cpu)}, x->shape(), dt, device);
+    auto out_storage = backend::Dispatcher::for_device(device).where_op(
+        cond->storage(), x->storage(), y->storage(), x->shape(), dt);
+    Shape out_shape;
+    if (device == Device::GPU) {
+        const auto& gs = std::get<GpuStorage>(out_storage);
+        out_shape = mlx_shape_to_lucid(gs.arr->shape());
+    } else {
+        out_shape = x->shape();
+    }
+    auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
     return attach_where_grad(cond, x, y, std::move(result));
 }
 
@@ -440,9 +421,8 @@ TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, 
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"masked_fill", device, dt, a->shape()};
-    auto out_storage =
-        backend::Dispatcher::for_device(device).masked_fill(a->storage(), mask->storage(),
-                                                            a->shape(), dt, value);
+    auto out_storage = backend::Dispatcher::for_device(device).masked_fill(
+        a->storage(), mask->storage(), a->shape(), dt, value);
     auto result = fresh(std::move(out_storage), a->shape(), dt, device);
     return attach_masked_fill_grad(a, mask, std::move(result));
 }
@@ -536,8 +516,8 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
         out_shape.push_back(a->shape()[d]);
     }
     out_shape.push_back(L);
-    auto out_storage = backend::Dispatcher::for_device(device).diagonal(
-        a->storage(), a->shape(), offset, a1, a2, dt);
+    auto out_storage = backend::Dispatcher::for_device(device).diagonal(a->storage(), a->shape(),
+                                                                        offset, a1, a2, dt);
     auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
     auto bwd = std::make_shared<DiagonalBackward>();
     bwd->input_shapes_ = {a->shape()};

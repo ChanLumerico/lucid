@@ -29,8 +29,7 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
-                            const Shape& shape, Dtype dt) {
+    static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.exp(a, shape, dt);
     }
     Storage grad_formula(const Storage& g);
@@ -40,8 +39,7 @@ public:
 class LUCID_API LogBackward : public UnaryOp<LogBackward> {
 public:
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
-                            const Shape& shape, Dtype dt) {
+    static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.log(a, shape, dt);
     }
     Storage grad_formula(const Storage& g);
@@ -63,8 +61,7 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
-                            const Shape& shape, Dtype dt) {
+    static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.sqrt(a, shape, dt);
     }
     Storage grad_formula(const Storage& g);

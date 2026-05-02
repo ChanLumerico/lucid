@@ -1,6 +1,7 @@
 #include "ScalarParam.h"
 
 #include <cmath>
+
 #include "../../backend/Dispatcher.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -29,8 +30,8 @@ TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a, double exp) {
     Validator::input(a, "pow_scalar.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
-    Storage out_storage = backend::Dispatcher::for_device(a->device()).pow_scalar(
-        a->storage(), a->shape(), a->dtype(), exp);
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .pow_scalar(a->storage(), a->shape(), a->dtype(), exp);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()) * 11);
@@ -62,8 +63,8 @@ TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
     Validator::input(a, "rpow_scalar.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
-    Storage out_storage = backend::Dispatcher::for_device(a->device()).rpow_scalar(
-        a->storage(), a->shape(), a->dtype(), base);
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .rpow_scalar(a->storage(), a->shape(), a->dtype(), base);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()) * 11);
@@ -95,8 +96,8 @@ TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double
     Validator::input(a, "clip.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
-    Storage out_storage = backend::Dispatcher::for_device(a->device()).clip(
-        a->storage(), a->shape(), a->dtype(), min_v, max_v);
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .clip(a->storage(), a->shape(), a->dtype(), min_v, max_v);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));

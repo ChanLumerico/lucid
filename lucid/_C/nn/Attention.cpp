@@ -100,13 +100,12 @@ ForwardCore run_forward(const TensorImplPtr& q,
     weights_shape.push_back(k->shape()[k->shape().size() - 2]);  // L_k
 
     const Storage* mask_storage = attn_mask ? &attn_mask->storage() : nullptr;
-    auto results = backend::Dispatcher::for_device(q->device()).sdpa_forward(
-        q->storage(), k->storage(), v->storage(),
-        mask_storage,
-        q->shape(), k->shape(), v->shape(),
-        attn_mask ? attn_mask->dtype() : Dtype::F32,
-        attn_mask ? static_cast<std::size_t>(attn_mask->numel()) : std::size_t{0},
-        scale, is_causal, q->dtype());
+    auto results =
+        backend::Dispatcher::for_device(q->device())
+            .sdpa_forward(q->storage(), k->storage(), v->storage(), mask_storage, q->shape(),
+                          k->shape(), v->shape(), attn_mask ? attn_mask->dtype() : Dtype::F32,
+                          attn_mask ? static_cast<std::size_t>(attn_mask->numel()) : std::size_t{0},
+                          scale, is_causal, q->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(results[1]), out_shape, q->dtype(),
                                             q->device(), false);
@@ -115,9 +114,8 @@ ForwardCore run_forward(const TensorImplPtr& q,
                     static_cast<std::int64_t>(fq.L) * static_cast<std::int64_t>(fk.L) *
                     static_cast<std::int64_t>(fq.D + fv.D));
 
-    return ForwardCore{
-        std::move(out),       std::move(results[0]), fq.B, fq.L, fk.L, fq.D, fv.D,
-        std::move(out_shape), std::move(weights_shape)};
+    return ForwardCore{std::move(out),       std::move(results[0]),   fq.B, fq.L, fk.L, fq.D, fv.D,
+                       std::move(out_shape), std::move(weights_shape)};
 }
 
 }  // namespace
@@ -143,10 +141,8 @@ TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
 
 std::vector<Storage> ScaledDotProductAttentionBackward::apply(Storage grad_out) {
     return backend::Dispatcher::for_device(device_).sdpa_backward(
-        grad_out, saved_inputs_[0], saved_inputs_[1], saved_inputs_[2],
-        saved_weights_,
-        orig_q_shape_, orig_k_shape_, orig_v_shape_,
-        scale_, dtype_);
+        grad_out, saved_inputs_[0], saved_inputs_[1], saved_inputs_[2], saved_weights_,
+        orig_q_shape_, orig_k_shape_, orig_v_shape_, scale_, dtype_);
 }
 
 TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,

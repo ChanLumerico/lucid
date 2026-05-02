@@ -6,9 +6,8 @@
 #include <stdexcept>
 #include <variant>
 
-#include <mlx/ops.h>
-
 #include "../../autograd/Helpers.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -24,41 +23,6 @@ namespace lucid {
 namespace {
 
 using helpers::allocate_cpu;
-
-template <typename T>
-void fill_typed(std::byte* dst, std::size_t numel, T value) {
-    auto* p = reinterpret_cast<T*>(dst);
-    for (std::size_t i = 0; i < numel; ++i)
-        p[i] = value;
-}
-
-void fill_cpu(CpuStorage& s, std::size_t numel, double value) {
-    switch (s.dtype) {
-        case Dtype::Bool:
-            fill_typed<std::uint8_t>(s.ptr.get(), numel, value != 0.0 ? 1u : 0u);
-            break;
-        case Dtype::I8:
-            fill_typed<std::int8_t>(s.ptr.get(), numel, static_cast<std::int8_t>(value));
-            break;
-        case Dtype::I16:
-            fill_typed<std::int16_t>(s.ptr.get(), numel, static_cast<std::int16_t>(value));
-            break;
-        case Dtype::I32:
-            fill_typed<std::int32_t>(s.ptr.get(), numel, static_cast<std::int32_t>(value));
-            break;
-        case Dtype::I64:
-            fill_typed<std::int64_t>(s.ptr.get(), numel, static_cast<std::int64_t>(value));
-            break;
-        case Dtype::F32:
-            fill_typed<float>(s.ptr.get(), numel, static_cast<float>(value));
-            break;
-        case Dtype::F64:
-            fill_typed<double>(s.ptr.get(), numel, value);
-            break;
-        default:
-            ErrorBuilder("creation").not_implemented("dtype not supported for fill");
-    }
-}
 
 inline TensorImplPtr finalize(
     Storage&& storage, Shape shape, Dtype dt, Device device, bool requires_grad) {
@@ -92,31 +56,8 @@ TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires
 TensorImplPtr full_op(
     const Shape& shape, double fill_value, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"full", device, dt, shape};
-    if (device == Device::GPU) {
-        auto ones = ::mlx::core::ones(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
-        ::mlx::core::array scalar = [&]() {
-            switch (dt) {
-                case Dtype::F32:
-                    return ::mlx::core::array(static_cast<float>(fill_value));
-                case Dtype::F64:
-                    return ::mlx::core::array(fill_value, gpu::to_mlx_dtype(dt));
-                case Dtype::I32:
-                    return ::mlx::core::array(static_cast<int32_t>(fill_value));
-                case Dtype::I64:
-                    return ::mlx::core::array(static_cast<int64_t>(fill_value));
-                case Dtype::Bool:
-                    return ::mlx::core::array(fill_value != 0.0);
-                default:
-                    ErrorBuilder("full").not_implemented("GPU dtype not supported");
-            }
-        }();
-        auto out = ::mlx::core::multiply(ones, scalar);
-        return finalize(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, shape, dt, device,
-                        requires_grad);
-    }
-    auto cpu = allocate_cpu(shape, dt);
-    fill_cpu(cpu, shape_numel(shape), fill_value);
-    return finalize(Storage{std::move(cpu)}, shape, dt, device, requires_grad);
+    auto s = backend::Dispatcher::for_device(device).full(shape, dt, fill_value);
+    return finalize(std::move(s), shape, dt, device, requires_grad);
 }
 
 // ----------------------------------------------------------------------------
@@ -141,48 +82,8 @@ TensorImplPtr eye_op(
         ErrorBuilder("eye").fail("N and M must be >= 0");
     Shape shape{N, M};
     OpScopeFull scope{"eye", device, dt, shape};
-    if (device == Device::GPU) {
-        auto out = ::mlx::core::eye(static_cast<int>(N), static_cast<int>(M), static_cast<int>(k),
-                                    gpu::to_mlx_dtype(dt));
-        return finalize(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, shape, dt, device,
-                        requires_grad);
-    }
-    auto cpu = allocate_cpu(shape, dt);
-    auto set_one = [&](auto* p) {
-        using T = std::remove_pointer_t<decltype(p)>;
-        for (std::int64_t i = 0; i < N; ++i) {
-            const std::int64_t j = i + k;
-            if (j < 0 || j >= M)
-                continue;
-            p[i * M + j] = static_cast<T>(1);
-        }
-    };
-    switch (dt) {
-        case Dtype::Bool:
-            set_one(reinterpret_cast<std::uint8_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::I8:
-            set_one(reinterpret_cast<std::int8_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::I16:
-            set_one(reinterpret_cast<std::int16_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::I32:
-            set_one(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::I64:
-            set_one(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
-            break;
-        case Dtype::F32:
-            set_one(reinterpret_cast<float*>(cpu.ptr.get()));
-            break;
-        case Dtype::F64:
-            set_one(reinterpret_cast<double*>(cpu.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("eye").not_implemented("dtype not supported");
-    }
-    return finalize(Storage{std::move(cpu)}, shape, dt, device, requires_grad);
+    auto s = backend::Dispatcher::for_device(device).eye(N, M, k, dt);
+    return finalize(std::move(s), shape, dt, device, requires_grad);
 }
 
 // ----------------------------------------------------------------------------
@@ -205,27 +106,6 @@ TensorImplPtr arange_op(
         }
     };
 
-    if (device == Device::GPU) {
-        auto cpu = allocate_cpu(shape, dt);
-        switch (dt) {
-            case Dtype::F32:
-                compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
-                break;
-            case Dtype::F64:
-                compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
-                break;
-            case Dtype::I32:
-                compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
-                break;
-            case Dtype::I64:
-                compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
-                break;
-            default:
-                ErrorBuilder("arange").not_implemented("dtype not supported");
-        }
-        auto gpu = gpu::upload_cpu_to_gpu(cpu, shape);
-        return finalize(Storage{std::move(gpu)}, shape, dt, device, requires_grad);
-    }
     auto cpu = allocate_cpu(shape, dt);
     switch (dt) {
         case Dtype::F32:
@@ -242,6 +122,10 @@ TensorImplPtr arange_op(
             break;
         default:
             ErrorBuilder("arange").not_implemented("dtype not supported");
+    }
+    if (device == Device::GPU) {
+        auto gpuSt = gpu::upload_cpu_to_gpu(cpu, shape);
+        return finalize(Storage{std::move(gpuSt)}, shape, dt, device, requires_grad);
     }
     return finalize(Storage{std::move(cpu)}, shape, dt, device, requires_grad);
 }
@@ -287,8 +171,8 @@ TensorImplPtr linspace_op(
             ErrorBuilder("linspace").not_implemented("dtype not supported");
     }
     if (device == Device::GPU) {
-        auto gpu = gpu::upload_cpu_to_gpu(cpu, shape);
-        return finalize(Storage{std::move(gpu)}, shape, dt, device, requires_grad);
+        auto gpuSt = gpu::upload_cpu_to_gpu(cpu, shape);
+        return finalize(Storage{std::move(gpuSt)}, shape, dt, device, requires_grad);
     }
     return finalize(Storage{std::move(cpu)}, shape, dt, device, requires_grad);
 }
@@ -308,94 +192,10 @@ TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
         ErrorBuilder("diag").fail("input must be 1-D or 2-D");
     }
 
-    if (device == Device::GPU) {
-        const auto& gv = std::get<GpuStorage>(v->storage());
-        if (!gv.arr)
-            ErrorBuilder("diag").fail("null GPU input");
-        auto out = ::mlx::core::diag(*gv.arr, static_cast<int>(k));
-        Shape out_shape;
-        for (auto d : out.shape())
-            out_shape.push_back(static_cast<std::int64_t>(d));
-        return std::make_shared<TensorImpl>(Storage{gpu::wrap_mlx_array(std::move(out), dt)},
-                                            std::move(out_shape), dt, device,
-                                            /*requires_grad=*/false);
-    }
-
-    const auto& cv = std::get<CpuStorage>(v->storage());
-
-    if (sh.size() == 1) {
-        const std::int64_t L = sh[0];
-        const std::int64_t side = L + std::abs(k);
-        Shape out_shape{side, side};
-        auto cpu = allocate_cpu(out_shape, dt);
-        auto fill_diag = [&](auto* dst, const auto* src) {
-            using T = std::remove_pointer_t<decltype(dst)>;
-            for (std::int64_t i = 0; i < L; ++i) {
-                const std::int64_t row = (k >= 0) ? i : (i - k);
-                const std::int64_t col = (k >= 0) ? (i + k) : i;
-                dst[row * side + col] = static_cast<T>(src[i]);
-            }
-        };
-        switch (dt) {
-            case Dtype::F32:
-                fill_diag(reinterpret_cast<float*>(cpu.ptr.get()),
-                          reinterpret_cast<const float*>(cv.ptr.get()));
-                break;
-            case Dtype::F64:
-                fill_diag(reinterpret_cast<double*>(cpu.ptr.get()),
-                          reinterpret_cast<const double*>(cv.ptr.get()));
-                break;
-            case Dtype::I32:
-                fill_diag(reinterpret_cast<std::int32_t*>(cpu.ptr.get()),
-                          reinterpret_cast<const std::int32_t*>(cv.ptr.get()));
-                break;
-            case Dtype::I64:
-                fill_diag(reinterpret_cast<std::int64_t*>(cpu.ptr.get()),
-                          reinterpret_cast<const std::int64_t*>(cv.ptr.get()));
-                break;
-            default:
-                ErrorBuilder("diag").not_implemented("dtype not supported");
-        }
-        return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, std::move(out_shape), dt,
-                                            device, false);
-    }
-
-    // 2-D input → extract diagonal
-    const std::int64_t M = sh[0], N = sh[1];
-    const std::int64_t r0 = (k >= 0) ? 0 : -k;
-    const std::int64_t c0 = (k >= 0) ? k : 0;
-    const std::int64_t L = std::min(M - r0, N - c0);
-    const std::int64_t out_len = std::max<std::int64_t>(L, 0);
-    Shape out_shape{out_len};
-    auto cpu = allocate_cpu(out_shape, dt);
-    auto extract = [&](auto* dst, const auto* src) {
-        using T = std::remove_pointer_t<decltype(dst)>;
-        for (std::int64_t i = 0; i < out_len; ++i) {
-            dst[i] = static_cast<T>(src[(r0 + i) * N + (c0 + i)]);
-        }
-    };
-    switch (dt) {
-        case Dtype::F32:
-            extract(reinterpret_cast<float*>(cpu.ptr.get()),
-                    reinterpret_cast<const float*>(cv.ptr.get()));
-            break;
-        case Dtype::F64:
-            extract(reinterpret_cast<double*>(cpu.ptr.get()),
-                    reinterpret_cast<const double*>(cv.ptr.get()));
-            break;
-        case Dtype::I32:
-            extract(reinterpret_cast<std::int32_t*>(cpu.ptr.get()),
-                    reinterpret_cast<const std::int32_t*>(cv.ptr.get()));
-            break;
-        case Dtype::I64:
-            extract(reinterpret_cast<std::int64_t*>(cpu.ptr.get()),
-                    reinterpret_cast<const std::int64_t*>(cv.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("diag").not_implemented("dtype not supported");
-    }
-    return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, std::move(out_shape), dt, device,
-                                        false);
+    Shape out_shape;
+    auto s = backend::Dispatcher::for_device(device).diag(v->storage(), sh, k, dt, out_shape);
+    return std::make_shared<TensorImpl>(std::move(s), std::move(out_shape), dt, device,
+                                        /*requires_grad=*/false);
 }
 
 // ----------------------------------------------------------------------------

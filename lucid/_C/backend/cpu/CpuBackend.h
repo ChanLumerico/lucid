@@ -4370,20 +4370,18 @@ public:
 
     // ---- Attention --------------------------------------------------------
 
-    std::vector<Storage> sdpa_forward(
-        const Storage& q,
-        const Storage& k,
-        const Storage& v,
-        const Storage* attn_mask,
-        const Shape& q_shape,
-        const Shape& k_shape,
-        const Shape& v_shape,
-        Dtype mask_dtype,
-        std::size_t mask_numel,
-        double scale,
-        bool is_causal,
-        Dtype dt) override {
-
+    std::vector<Storage> sdpa_forward(const Storage& q,
+                                      const Storage& k,
+                                      const Storage& v,
+                                      const Storage* attn_mask,
+                                      const Shape& q_shape,
+                                      const Shape& k_shape,
+                                      const Shape& v_shape,
+                                      Dtype mask_dtype,
+                                      std::size_t mask_numel,
+                                      double scale,
+                                      bool is_causal,
+                                      Dtype dt) override {
         // Flatten leading dims.
         // q_shape: [..., Lq, Dk], k_shape: [..., Lk, Dk], v_shape: [..., Lk, Dv]
         std::size_t B = 1;
@@ -4395,10 +4393,10 @@ public:
         const std::size_t Dv = static_cast<std::size_t>(v_shape.back());
 
         const std::size_t weights_numel = B * Lq * Lk;
-        const std::size_t output_numel  = B * Lq * Dv;
+        const std::size_t output_numel = B * Lq * Dv;
 
         CpuStorage weights_cpu = alloc_cpu(weights_numel, dt);
-        CpuStorage output_cpu  = alloc_cpu(output_numel,  dt);
+        CpuStorage output_cpu = alloc_cpu(output_numel, dt);
 
         const auto& qs = std::get<CpuStorage>(q);
         const auto& ks = std::get<CpuStorage>(k);
@@ -4417,18 +4415,21 @@ public:
                         for (std::size_t bb = 0; bb < B; ++bb) {
                             T* sb = Wp_t + bb * pb;
                             for (std::size_t i = 0; i < pb; ++i)
-                                if (mp[i]) sb[i] = neg_inf;
+                                if (mp[i])
+                                    sb[i] = neg_inf;
                         }
                     } else {
                         for (std::size_t i = 0; i < B * pb; ++i)
-                            if (mp[i]) Wp_t[i] = neg_inf;
+                            if (mp[i])
+                                Wp_t[i] = neg_inf;
                     }
                 } else {
                     const auto* mp = reinterpret_cast<const T*>(ms.ptr.get());
                     if (mask_numel == pb) {
                         for (std::size_t bb = 0; bb < B; ++bb) {
                             T* sb = Wp_t + bb * pb;
-                            for (std::size_t i = 0; i < pb; ++i) sb[i] += mp[i];
+                            for (std::size_t i = 0; i < pb; ++i)
+                                sb[i] += mp[i];
                         }
                     } else {
                         for (std::size_t i = 0; i < B * pb; ++i)
@@ -4455,17 +4456,19 @@ public:
             const float sc = static_cast<float>(scale);
             // Step 1: scores = Q @ K^T * scale
             for (std::size_t b = 0; b < B; ++b)
-                cpu::sgemm(false, true,
-                    static_cast<int>(Lq), static_cast<int>(Lk), static_cast<int>(Dk),
-                    sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
-                    Kp + b * Lk * Dk, static_cast<int>(Dk),
-                    0.0f, Wp + b * Lq * Lk, static_cast<int>(Lk));
+                cpu::sgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
+                           static_cast<int>(Dk), sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
+                           Kp + b * Lk * Dk, static_cast<int>(Dk), 0.0f, Wp + b * Lq * Lk,
+                           static_cast<int>(Lk));
             apply_masks(Wp);
             // Step 2: softmax (F32 fast path)
             for (std::size_t r = 0; r < B * Lq; ++r) {
                 float* row = Wp + r * Lk;
                 const float m = cpu::vmaxval_f32(row, Lk);
-                if (!std::isfinite(m)) { std::memset(row, 0, Lk * sizeof(float)); continue; }
+                if (!std::isfinite(m)) {
+                    std::memset(row, 0, Lk * sizeof(float));
+                    continue;
+                }
                 cpu::vsadd_f32(row, -m, row, Lk);
                 cpu::vexp_f32(row, row, Lk);
                 const float s = cpu::vsum_f32(row, Lk);
@@ -4473,11 +4476,10 @@ public:
             }
             // Step 3: output = weights @ V
             for (std::size_t b = 0; b < B; ++b)
-                cpu::sgemm(false, false,
-                    static_cast<int>(Lq), static_cast<int>(Dv), static_cast<int>(Lk),
-                    1.0f, Wp + b * Lq * Lk, static_cast<int>(Lk),
-                    Vp + b * Lk * Dv, static_cast<int>(Dv),
-                    0.0f, Op + b * Lq * Dv, static_cast<int>(Dv));
+                cpu::sgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dv),
+                           static_cast<int>(Lk), 1.0f, Wp + b * Lq * Lk, static_cast<int>(Lk),
+                           Vp + b * Lk * Dv, static_cast<int>(Dv), 0.0f, Op + b * Lq * Dv,
+                           static_cast<int>(Dv));
         } else if (dt == Dtype::F64) {
             const double* Qp = reinterpret_cast<const double*>(qs.ptr.get());
             const double* Kp = reinterpret_cast<const double*>(ks.ptr.get());
@@ -4486,48 +4488,55 @@ public:
             double* Op = reinterpret_cast<double*>(output_cpu.ptr.get());
             const double sc = scale;
             for (std::size_t b = 0; b < B; ++b)
-                cpu::dgemm(false, true,
-                    static_cast<int>(Lq), static_cast<int>(Lk), static_cast<int>(Dk),
-                    sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
-                    Kp + b * Lk * Dk, static_cast<int>(Dk),
-                    0.0, Wp + b * Lq * Lk, static_cast<int>(Lk));
+                cpu::dgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
+                           static_cast<int>(Dk), sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
+                           Kp + b * Lk * Dk, static_cast<int>(Dk), 0.0, Wp + b * Lq * Lk,
+                           static_cast<int>(Lk));
             apply_masks(Wp);
             // softmax (scalar)
             for (std::size_t r = 0; r < B * Lq; ++r) {
                 double* row = Wp + r * Lk;
                 double m = row[0];
-                for (std::size_t j = 1; j < Lk; ++j) if (row[j] > m) m = row[j];
-                if (!std::isfinite(m)) { for (std::size_t j = 0; j < Lk; ++j) row[j] = 0.0; continue; }
+                for (std::size_t j = 1; j < Lk; ++j)
+                    if (row[j] > m)
+                        m = row[j];
+                if (!std::isfinite(m)) {
+                    for (std::size_t j = 0; j < Lk; ++j)
+                        row[j] = 0.0;
+                    continue;
+                }
                 double s = 0.0;
-                for (std::size_t j = 0; j < Lk; ++j) { row[j] = std::exp(row[j] - m); s += row[j]; }
+                for (std::size_t j = 0; j < Lk; ++j) {
+                    row[j] = std::exp(row[j] - m);
+                    s += row[j];
+                }
                 const double inv = s > 0.0 ? 1.0 / s : 0.0;
-                for (std::size_t j = 0; j < Lk; ++j) row[j] *= inv;
+                for (std::size_t j = 0; j < Lk; ++j)
+                    row[j] *= inv;
             }
             for (std::size_t b = 0; b < B; ++b)
-                cpu::dgemm(false, false,
-                    static_cast<int>(Lq), static_cast<int>(Dv), static_cast<int>(Lk),
-                    1.0, Wp + b * Lq * Lk, static_cast<int>(Lk),
-                    Vp + b * Lk * Dv, static_cast<int>(Dv),
-                    0.0, Op + b * Lq * Dv, static_cast<int>(Dv));
+                cpu::dgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dv),
+                           static_cast<int>(Lk), 1.0, Wp + b * Lq * Lk, static_cast<int>(Lk),
+                           Vp + b * Lk * Dv, static_cast<int>(Dv), 0.0, Op + b * Lq * Dv,
+                           static_cast<int>(Dv));
         } else {
-            ErrorBuilder("cpu_backend::sdpa_forward").not_implemented("dtype not supported (F32/F64 only)");
+            ErrorBuilder("cpu_backend::sdpa_forward")
+                .not_implemented("dtype not supported (F32/F64 only)");
         }
 
         return {Storage{std::move(weights_cpu)}, Storage{std::move(output_cpu)}};
     }
 
-    std::vector<Storage> sdpa_backward(
-        const Storage& grad_out,
-        const Storage& q,
-        const Storage& k,
-        const Storage& v,
-        const Storage& saved_weights,
-        const Shape& q_shape,
-        const Shape& k_shape,
-        const Shape& v_shape,
-        double scale,
-        Dtype dt) override {
-
+    std::vector<Storage> sdpa_backward(const Storage& grad_out,
+                                       const Storage& q,
+                                       const Storage& k,
+                                       const Storage& v,
+                                       const Storage& saved_weights,
+                                       const Shape& q_shape,
+                                       const Shape& k_shape,
+                                       const Shape& v_shape,
+                                       double scale,
+                                       Dtype dt) override {
         std::size_t B = 1;
         for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
             B *= static_cast<std::size_t>(q_shape[i]);
@@ -4546,12 +4555,14 @@ public:
         const auto& ws = std::get<CpuStorage>(saved_weights);
         const auto& gs = std::get<CpuStorage>(grad_out);
 
-        auto softmax_bwd = [&](auto* Wp_t, const auto* Gp_t, auto* out_t,
-                               std::size_t lq, std::size_t lk) {
+        auto softmax_bwd = [&](auto* Wp_t, const auto* Gp_t, auto* out_t, std::size_t lq,
+                               std::size_t lk) {
             using T = std::remove_pointer_t<decltype(Wp_t)>;
             std::vector<T> dw(lq * lk), ds(lq * lk);
             // inline: per-batch loop is in the callers
-            (void)lq; (void)lk; (void)out_t;
+            (void)lq;
+            (void)lk;
+            (void)out_t;
         };
         (void)softmax_bwd;
 
@@ -4580,81 +4591,86 @@ public:
 
                 if constexpr (std::is_same_v<T, float>) {
                     // dV = W^T @ G
-                    cpu::sgemm(true, false,
-                        static_cast<int>(Lk), static_cast<int>(Dv), static_cast<int>(Lq),
-                        1.0f, Wb, static_cast<int>(Lk), Gb, static_cast<int>(Dv), 0.0f, dVb, static_cast<int>(Dv));
+                    cpu::sgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dv),
+                               static_cast<int>(Lq), 1.0f, Wb, static_cast<int>(Lk), Gb,
+                               static_cast<int>(Dv), 0.0f, dVb, static_cast<int>(Dv));
                     // dweights = G @ V^T
-                    cpu::sgemm(false, true,
-                        static_cast<int>(Lq), static_cast<int>(Lk), static_cast<int>(Dv),
-                        1.0f, Gb, static_cast<int>(Dv), Vb, static_cast<int>(Dv), 0.0f, dweights.data(), static_cast<int>(Lk));
+                    cpu::sgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
+                               static_cast<int>(Dv), 1.0f, Gb, static_cast<int>(Dv), Vb,
+                               static_cast<int>(Dv), 0.0f, dweights.data(), static_cast<int>(Lk));
                     // softmax backward
                     for (std::size_t r = 0; r < Lq; ++r) {
                         const float* wr = Wb + r * Lk;
                         const float* dwr = dweights.data() + r * Lk;
                         float sum = 0.f;
-                        for (std::size_t j = 0; j < Lk; ++j) sum += wr[j] * dwr[j];
+                        for (std::size_t j = 0; j < Lk; ++j)
+                            sum += wr[j] * dwr[j];
                         float* dr = dscores.data() + r * Lk;
-                        for (std::size_t j = 0; j < Lk; ++j) dr[j] = wr[j] * (dwr[j] - sum);
+                        for (std::size_t j = 0; j < Lk; ++j)
+                            dr[j] = wr[j] * (dwr[j] - sum);
                     }
                     // dQ = sc * dscores @ K
-                    cpu::sgemm(false, false,
-                        static_cast<int>(Lq), static_cast<int>(Dk), static_cast<int>(Lk),
-                        sc, dscores.data(), static_cast<int>(Lk), Kb, static_cast<int>(Dk), 0.0f, dQb, static_cast<int>(Dk));
+                    cpu::sgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dk),
+                               static_cast<int>(Lk), sc, dscores.data(), static_cast<int>(Lk), Kb,
+                               static_cast<int>(Dk), 0.0f, dQb, static_cast<int>(Dk));
                     // dK = sc * dscores^T @ Q
-                    cpu::sgemm(true, false,
-                        static_cast<int>(Lk), static_cast<int>(Dk), static_cast<int>(Lq),
-                        sc, dscores.data(), static_cast<int>(Lk), Qb, static_cast<int>(Dk), 0.0f, dKb, static_cast<int>(Dk));
+                    cpu::sgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dk),
+                               static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk), Qb,
+                               static_cast<int>(Dk), 0.0f, dKb, static_cast<int>(Dk));
                 } else {
-                    cpu::dgemm(true, false,
-                        static_cast<int>(Lk), static_cast<int>(Dv), static_cast<int>(Lq),
-                        1.0, Wb, static_cast<int>(Lk), Gb, static_cast<int>(Dv), 0.0, dVb, static_cast<int>(Dv));
-                    cpu::dgemm(false, true,
-                        static_cast<int>(Lq), static_cast<int>(Lk), static_cast<int>(Dv),
-                        1.0, Gb, static_cast<int>(Dv), Vb, static_cast<int>(Dv), 0.0, dweights.data(), static_cast<int>(Lk));
+                    cpu::dgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dv),
+                               static_cast<int>(Lq), 1.0, Wb, static_cast<int>(Lk), Gb,
+                               static_cast<int>(Dv), 0.0, dVb, static_cast<int>(Dv));
+                    cpu::dgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
+                               static_cast<int>(Dv), 1.0, Gb, static_cast<int>(Dv), Vb,
+                               static_cast<int>(Dv), 0.0, dweights.data(), static_cast<int>(Lk));
                     for (std::size_t r = 0; r < Lq; ++r) {
                         const double* wr = Wb + r * Lk;
                         const double* dwr = dweights.data() + r * Lk;
                         double sum = 0.0;
-                        for (std::size_t j = 0; j < Lk; ++j) sum += wr[j] * dwr[j];
+                        for (std::size_t j = 0; j < Lk; ++j)
+                            sum += wr[j] * dwr[j];
                         double* dr = dscores.data() + r * Lk;
-                        for (std::size_t j = 0; j < Lk; ++j) dr[j] = wr[j] * (dwr[j] - sum);
+                        for (std::size_t j = 0; j < Lk; ++j)
+                            dr[j] = wr[j] * (dwr[j] - sum);
                     }
-                    cpu::dgemm(false, false,
-                        static_cast<int>(Lq), static_cast<int>(Dk), static_cast<int>(Lk),
-                        sc, dscores.data(), static_cast<int>(Lk), Kb, static_cast<int>(Dk), 0.0, dQb, static_cast<int>(Dk));
-                    cpu::dgemm(true, false,
-                        static_cast<int>(Lk), static_cast<int>(Dk), static_cast<int>(Lq),
-                        sc, dscores.data(), static_cast<int>(Lk), Qb, static_cast<int>(Dk), 0.0, dKb, static_cast<int>(Dk));
+                    cpu::dgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dk),
+                               static_cast<int>(Lk), sc, dscores.data(), static_cast<int>(Lk), Kb,
+                               static_cast<int>(Dk), 0.0, dQb, static_cast<int>(Dk));
+                    cpu::dgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dk),
+                               static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk), Qb,
+                               static_cast<int>(Dk), 0.0, dKb, static_cast<int>(Dk));
                 }
             }
         };
 
-        if (dt == Dtype::F32)      do_backward(float{});
-        else if (dt == Dtype::F64) do_backward(double{});
-        else ErrorBuilder("cpu_backend::sdpa_backward").not_implemented("dtype not supported");
+        if (dt == Dtype::F32)
+            do_backward(float{});
+        else if (dt == Dtype::F64)
+            do_backward(double{});
+        else
+            ErrorBuilder("cpu_backend::sdpa_backward").not_implemented("dtype not supported");
 
         return {Storage{std::move(dQ_cpu)}, Storage{std::move(dK_cpu)}, Storage{std::move(dV_cpu)}};
     }
 
     // ---- Transposed convolution ------------------------------------------
 
-    Storage conv_transpose_nd_forward(
-        const Storage& x,
-        const Storage& W,
-        const Storage& b,
-        int B,
-        int Cin,
-        int Cout,
-        const int* S,
-        const int* K,
-        const int* O,
-        const int* stride,
-        const int* pad,
-        const int* opad,
-        int N,
-        const Shape& out_shape,
-        Dtype dt) override {
-
+    Storage conv_transpose_nd_forward(const Storage& x,
+                                      const Storage& W,
+                                      const Storage& b,
+                                      int B,
+                                      int Cin,
+                                      int Cout,
+                                      const int* S,
+                                      const int* K,
+                                      const int* O,
+                                      const int* stride,
+                                      const int* pad,
+                                      const int* opad,
+                                      int N,
+                                      const Shape& out_shape,
+                                      Dtype dt) override {
         int S_total = 1, K_total = 1, O_total = 1;
         for (int i = 0; i < N; ++i) {
             S_total *= S[i];
@@ -4663,9 +4679,10 @@ public:
         }
         const int K_flat = Cout * K_total;
 
-        CpuStorage out_cpu  = alloc_cpu(static_cast<std::size_t>(B) * Cout * O_total, dt);
+        CpuStorage out_cpu = alloc_cpu(static_cast<std::size_t>(B) * Cout * O_total, dt);
         CpuStorage cols_cpu = alloc_cpu(static_cast<std::size_t>(K_flat) * S_total, dt);
-        if (out_cpu.nbytes) std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
+        if (out_cpu.nbytes)
+            std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
 
         const auto& x_cpu = std::get<CpuStorage>(x);
         const auto& W_cpu = std::get<CpuStorage>(W);
@@ -4673,61 +4690,64 @@ public:
 
         for (int bi = 0; bi < B; ++bi) {
             if (dt == Dtype::F32) {
-                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get())
-                                 + static_cast<std::size_t>(bi) * Cin * S_total;
+                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get()) +
+                                  static_cast<std::size_t>(bi) * Cin * S_total;
                 const float* Wp = reinterpret_cast<const float*>(W_cpu.ptr.get());
-                float*        cp = reinterpret_cast<float*>(cols_cpu.ptr.get());
-                float*        yp = reinterpret_cast<float*>(out_cpu.ptr.get())
-                                 + static_cast<std::size_t>(bi) * Cout * O_total;
-                cpu::sgemm(true, false, K_flat, S_total, Cin, 1.0f, Wp, K_flat, xp, S_total, 0.0f, cp, S_total);
+                float* cp = reinterpret_cast<float*>(cols_cpu.ptr.get());
+                float* yp = reinterpret_cast<float*>(out_cpu.ptr.get()) +
+                            static_cast<std::size_t>(bi) * Cout * O_total;
+                cpu::sgemm(true, false, K_flat, S_total, Cin, 1.0f, Wp, K_flat, xp, S_total, 0.0f,
+                           cp, S_total);
                 ctnd_col2im_f32(cp, yp, Cout, O, K, S, stride, pad, N);
                 {
                     const float* bp = reinterpret_cast<const float*>(b_cpu.ptr.get());
                     for (int c = 0; c < Cout; ++c) {
                         float* row = yp + static_cast<std::size_t>(c) * O_total;
                         const float bv = bp[c];
-                        for (int i = 0; i < O_total; ++i) row[i] += bv;
+                        for (int i = 0; i < O_total; ++i)
+                            row[i] += bv;
                     }
                 }
             } else if (dt == Dtype::F64) {
-                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get())
-                                  + static_cast<std::size_t>(bi) * Cin * S_total;
+                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get()) +
+                                   static_cast<std::size_t>(bi) * Cin * S_total;
                 const double* Wp = reinterpret_cast<const double*>(W_cpu.ptr.get());
-                double*        cp = reinterpret_cast<double*>(cols_cpu.ptr.get());
-                double*        yp = reinterpret_cast<double*>(out_cpu.ptr.get())
-                                  + static_cast<std::size_t>(bi) * Cout * O_total;
-                cpu::dgemm(true, false, K_flat, S_total, Cin, 1.0, Wp, K_flat, xp, S_total, 0.0, cp, S_total);
+                double* cp = reinterpret_cast<double*>(cols_cpu.ptr.get());
+                double* yp = reinterpret_cast<double*>(out_cpu.ptr.get()) +
+                             static_cast<std::size_t>(bi) * Cout * O_total;
+                cpu::dgemm(true, false, K_flat, S_total, Cin, 1.0, Wp, K_flat, xp, S_total, 0.0, cp,
+                           S_total);
                 ctnd_col2im_f64(cp, yp, Cout, O, K, S, stride, pad, N);
                 {
                     const double* bp = reinterpret_cast<const double*>(b_cpu.ptr.get());
                     for (int c = 0; c < Cout; ++c) {
                         double* row = yp + static_cast<std::size_t>(c) * O_total;
                         const double bv = bp[c];
-                        for (int i = 0; i < O_total; ++i) row[i] += bv;
+                        for (int i = 0; i < O_total; ++i)
+                            row[i] += bv;
                     }
                 }
             } else {
-                ErrorBuilder("cpu_backend::conv_transpose_nd_forward").not_implemented("dtype not supported (F32/F64)");
+                ErrorBuilder("cpu_backend::conv_transpose_nd_forward")
+                    .not_implemented("dtype not supported (F32/F64)");
             }
         }
         return Storage{std::move(out_cpu)};
     }
 
-    std::vector<Storage> conv_transpose_nd_backward(
-        const Storage& grad_out,
-        const Storage& x,
-        const Storage& W,
-        int B,
-        int Cin,
-        int Cout,
-        const int* S,
-        const int* K,
-        const int* O,
-        const int* stride,
-        const int* pad,
-        int N,
-        Dtype dt) override {
-
+    std::vector<Storage> conv_transpose_nd_backward(const Storage& grad_out,
+                                                    const Storage& x,
+                                                    const Storage& W,
+                                                    int B,
+                                                    int Cin,
+                                                    int Cout,
+                                                    const int* S,
+                                                    const int* K,
+                                                    const int* O,
+                                                    const int* stride,
+                                                    const int* pad,
+                                                    int N,
+                                                    Dtype dt) override {
         int S_total = 1, K_total = 1, O_total = 1;
         for (int i = 0; i < N; ++i) {
             S_total *= S[i];
@@ -4736,13 +4756,16 @@ public:
         }
         const int K_flat = Cout * K_total;
 
-        CpuStorage dx_cpu  = alloc_cpu(static_cast<std::size_t>(B) * Cin * S_total, dt);
-        CpuStorage dW_cpu  = alloc_cpu(static_cast<std::size_t>(Cin) * K_flat, dt);
-        CpuStorage db_cpu  = alloc_cpu(static_cast<std::size_t>(Cout), dt);
+        CpuStorage dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * Cin * S_total, dt);
+        CpuStorage dW_cpu = alloc_cpu(static_cast<std::size_t>(Cin) * K_flat, dt);
+        CpuStorage db_cpu = alloc_cpu(static_cast<std::size_t>(Cout), dt);
         CpuStorage cols_cpu = alloc_cpu(static_cast<std::size_t>(K_flat) * S_total, dt);
-        if (dx_cpu.nbytes) std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        if (dW_cpu.nbytes) std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
-        if (db_cpu.nbytes) std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
+        if (dx_cpu.nbytes)
+            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+        if (dW_cpu.nbytes)
+            std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
+        if (db_cpu.nbytes)
+            std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
 
         const auto& x_cpu = std::get<CpuStorage>(x);
         const auto& W_cpu = std::get<CpuStorage>(W);
@@ -4750,55 +4773,58 @@ public:
 
         for (int bi = 0; bi < B; ++bi) {
             if (dt == Dtype::F32) {
-                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get())
-                                 + static_cast<std::size_t>(bi) * Cin * S_total;
-                const float* gp = reinterpret_cast<const float*>(g_cpu.ptr.get())
-                                 + static_cast<std::size_t>(bi) * Cout * O_total;
-                float* dxp = reinterpret_cast<float*>(dx_cpu.ptr.get())
-                           + static_cast<std::size_t>(bi) * Cin * S_total;
-                float* cp  = reinterpret_cast<float*>(cols_cpu.ptr.get());
+                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get()) +
+                                  static_cast<std::size_t>(bi) * Cin * S_total;
+                const float* gp = reinterpret_cast<const float*>(g_cpu.ptr.get()) +
+                                  static_cast<std::size_t>(bi) * Cout * O_total;
+                float* dxp = reinterpret_cast<float*>(dx_cpu.ptr.get()) +
+                             static_cast<std::size_t>(bi) * Cin * S_total;
+                float* cp = reinterpret_cast<float*>(cols_cpu.ptr.get());
 
                 ctnd_im2col_f32(gp, cp, Cout, O, K, S, stride, pad, N);
                 cpu::sgemm(false, false, Cin, S_total, K_flat, 1.0f,
-                           reinterpret_cast<const float*>(W_cpu.ptr.get()), K_flat, cp, S_total, 0.0f, dxp, S_total);
-                cpu::sgemm(false, true, Cin, K_flat, S_total, 1.0f,
-                           xp, S_total, cp, S_total, 1.0f,
+                           reinterpret_cast<const float*>(W_cpu.ptr.get()), K_flat, cp, S_total,
+                           0.0f, dxp, S_total);
+                cpu::sgemm(false, true, Cin, K_flat, S_total, 1.0f, xp, S_total, cp, S_total, 1.0f,
                            reinterpret_cast<float*>(dW_cpu.ptr.get()), K_flat);
                 {
                     float* dbp = reinterpret_cast<float*>(db_cpu.ptr.get());
                     for (int co = 0; co < Cout; ++co) {
                         const float* row = gp + co * O_total;
                         float s = 0.f;
-                        for (int j = 0; j < O_total; ++j) s += row[j];
+                        for (int j = 0; j < O_total; ++j)
+                            s += row[j];
                         dbp[co] += s;
                     }
                 }
             } else if (dt == Dtype::F64) {
-                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get())
-                                  + static_cast<std::size_t>(bi) * Cin * S_total;
-                const double* gp = reinterpret_cast<const double*>(g_cpu.ptr.get())
-                                  + static_cast<std::size_t>(bi) * Cout * O_total;
-                double* dxp = reinterpret_cast<double*>(dx_cpu.ptr.get())
-                            + static_cast<std::size_t>(bi) * Cin * S_total;
-                double* cp  = reinterpret_cast<double*>(cols_cpu.ptr.get());
+                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get()) +
+                                   static_cast<std::size_t>(bi) * Cin * S_total;
+                const double* gp = reinterpret_cast<const double*>(g_cpu.ptr.get()) +
+                                   static_cast<std::size_t>(bi) * Cout * O_total;
+                double* dxp = reinterpret_cast<double*>(dx_cpu.ptr.get()) +
+                              static_cast<std::size_t>(bi) * Cin * S_total;
+                double* cp = reinterpret_cast<double*>(cols_cpu.ptr.get());
 
                 ctnd_im2col_f64(gp, cp, Cout, O, K, S, stride, pad, N);
                 cpu::dgemm(false, false, Cin, S_total, K_flat, 1.0,
-                           reinterpret_cast<const double*>(W_cpu.ptr.get()), K_flat, cp, S_total, 0.0, dxp, S_total);
-                cpu::dgemm(false, true, Cin, K_flat, S_total, 1.0,
-                           xp, S_total, cp, S_total, 1.0,
+                           reinterpret_cast<const double*>(W_cpu.ptr.get()), K_flat, cp, S_total,
+                           0.0, dxp, S_total);
+                cpu::dgemm(false, true, Cin, K_flat, S_total, 1.0, xp, S_total, cp, S_total, 1.0,
                            reinterpret_cast<double*>(dW_cpu.ptr.get()), K_flat);
                 {
                     double* dbp = reinterpret_cast<double*>(db_cpu.ptr.get());
                     for (int co = 0; co < Cout; ++co) {
                         const double* row = gp + co * O_total;
                         double s = 0.0;
-                        for (int j = 0; j < O_total; ++j) s += row[j];
+                        for (int j = 0; j < O_total; ++j)
+                            s += row[j];
                         dbp[co] += s;
                     }
                 }
             } else {
-                ErrorBuilder("cpu_backend::conv_transpose_nd_backward").not_implemented("dtype not supported");
+                ErrorBuilder("cpu_backend::conv_transpose_nd_backward")
+                    .not_implemented("dtype not supported");
             }
         }
         return {Storage{std::move(dx_cpu)}, Storage{std::move(dW_cpu)}, Storage{std::move(db_cpu)}};
@@ -4806,16 +4832,27 @@ public:
 
     // ---- N-D convolution -------------------------------------------------
 
-    Storage conv_nd_forward(
-        const Storage& x, const Storage& W, const Storage& b,
-        int B, int Cin, int Cout, int Cin_g, int Cout_g,
-        const int* S, const int* K, const int* O,
-        const IBackend::ConvNdOpts& opts,
-        const Shape& /*out_shape*/, Dtype dt) override {
-
+    Storage conv_nd_forward(const Storage& x,
+                            const Storage& W,
+                            const Storage& b,
+                            int B,
+                            int Cin,
+                            int Cout,
+                            int Cin_g,
+                            int Cout_g,
+                            const int* S,
+                            const int* K,
+                            const int* O,
+                            const IBackend::ConvNdOpts& opts,
+                            const Shape& /*out_shape*/,
+                            Dtype dt) override {
         const int N = opts.N;
         int O_total = 1, K_total = 1, S_total = 1;
-        for (int i = 0; i < N; ++i) { O_total *= O[i]; K_total *= K[i]; S_total *= S[i]; }
+        for (int i = 0; i < N; ++i) {
+            O_total *= O[i];
+            K_total *= K[i];
+            S_total *= S[i];
+        }
 
         const int K_flat = Cin_g * K_total;
         const int M_out = O_total;
@@ -4830,115 +4867,187 @@ public:
         for (int bi = 0; bi < B; ++bi) {
             for (int g = 0; g < opts.groups; ++g) {
                 if (dt == Dtype::F32) {
-                    const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) * S_total;
+                    const float* xp =
+                        reinterpret_cast<const float*>(x_cpu.ptr.get()) +
+                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
+                            S_total;
                     float* cp = reinterpret_cast<float*>(cols_cpu.ptr.get());
-                    const float* wp = reinterpret_cast<const float*>(W_cpu.ptr.get())
-                        + static_cast<std::size_t>(g) * W_per_group;
-                    float* yp = reinterpret_cast<float*>(out_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi) * Cout + static_cast<std::size_t>(g) * Cout_g) * O_total;
-                    conv_nd_im2col_f32(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation, N);
-                    cpu::sgemm(false, false, Cout_g, M_out, K_flat, 1.0f, wp, K_flat, cp, M_out, 0.0f, yp, M_out);
+                    const float* wp = reinterpret_cast<const float*>(W_cpu.ptr.get()) +
+                                      static_cast<std::size_t>(g) * W_per_group;
+                    float* yp = reinterpret_cast<float*>(out_cpu.ptr.get()) +
+                                (static_cast<std::size_t>(bi) * Cout +
+                                 static_cast<std::size_t>(g) * Cout_g) *
+                                    O_total;
+                    conv_nd_im2col_f32(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation,
+                                       N);
+                    cpu::sgemm(false, false, Cout_g, M_out, K_flat, 1.0f, wp, K_flat, cp, M_out,
+                               0.0f, yp, M_out);
                 } else if (dt == Dtype::F64) {
-                    const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) * S_total;
+                    const double* xp =
+                        reinterpret_cast<const double*>(x_cpu.ptr.get()) +
+                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
+                            S_total;
                     double* cp = reinterpret_cast<double*>(cols_cpu.ptr.get());
-                    const double* wp = reinterpret_cast<const double*>(W_cpu.ptr.get())
-                        + static_cast<std::size_t>(g) * W_per_group;
-                    double* yp = reinterpret_cast<double*>(out_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi) * Cout + static_cast<std::size_t>(g) * Cout_g) * O_total;
-                    conv_nd_im2col_f64(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation, N);
-                    cpu::dgemm(false, false, Cout_g, M_out, K_flat, 1.0, wp, K_flat, cp, M_out, 0.0, yp, M_out);
+                    const double* wp = reinterpret_cast<const double*>(W_cpu.ptr.get()) +
+                                       static_cast<std::size_t>(g) * W_per_group;
+                    double* yp = reinterpret_cast<double*>(out_cpu.ptr.get()) +
+                                 (static_cast<std::size_t>(bi) * Cout +
+                                  static_cast<std::size_t>(g) * Cout_g) *
+                                     O_total;
+                    conv_nd_im2col_f64(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation,
+                                       N);
+                    cpu::dgemm(false, false, Cout_g, M_out, K_flat, 1.0, wp, K_flat, cp, M_out, 0.0,
+                               yp, M_out);
                 } else {
-                    ErrorBuilder("cpu_backend::conv_nd_forward").not_implemented("dtype not supported (F32/F64)");
+                    ErrorBuilder("cpu_backend::conv_nd_forward")
+                        .not_implemented("dtype not supported (F32/F64)");
                 }
             }
             // add bias
             if (dt == Dtype::F32) {
-                float* yp = reinterpret_cast<float*>(out_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * Cout * O_total;
+                float* yp = reinterpret_cast<float*>(out_cpu.ptr.get()) +
+                            static_cast<std::size_t>(bi) * Cout * O_total;
                 const float* bp = reinterpret_cast<const float*>(b_cpu.ptr.get());
-                for (int c = 0; c < Cout; ++c) { const float bv = bp[c]; float* row = yp + c * O_total; for (int i = 0; i < O_total; ++i) row[i] += bv; }
+                for (int c = 0; c < Cout; ++c) {
+                    const float bv = bp[c];
+                    float* row = yp + c * O_total;
+                    for (int i = 0; i < O_total; ++i)
+                        row[i] += bv;
+                }
             } else if (dt == Dtype::F64) {
-                double* yp = reinterpret_cast<double*>(out_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * Cout * O_total;
+                double* yp = reinterpret_cast<double*>(out_cpu.ptr.get()) +
+                             static_cast<std::size_t>(bi) * Cout * O_total;
                 const double* bp = reinterpret_cast<const double*>(b_cpu.ptr.get());
-                for (int c = 0; c < Cout; ++c) { const double bv = bp[c]; double* row = yp + c * O_total; for (int i = 0; i < O_total; ++i) row[i] += bv; }
+                for (int c = 0; c < Cout; ++c) {
+                    const double bv = bp[c];
+                    double* row = yp + c * O_total;
+                    for (int i = 0; i < O_total; ++i)
+                        row[i] += bv;
+                }
             }
         }
         return Storage{std::move(out_cpu)};
     }
 
-    std::vector<Storage> conv_nd_backward(
-        const Storage& grad_out, const Storage& x, const Storage& W,
-        int B, int Cin, int Cout, int Cin_g, int Cout_g,
-        const int* S, const int* K, const int* O,
-        const IBackend::ConvNdOpts& opts, Dtype dt) override {
-
+    std::vector<Storage> conv_nd_backward(const Storage& grad_out,
+                                          const Storage& x,
+                                          const Storage& W,
+                                          int B,
+                                          int Cin,
+                                          int Cout,
+                                          int Cin_g,
+                                          int Cout_g,
+                                          const int* S,
+                                          const int* K,
+                                          const int* O,
+                                          const IBackend::ConvNdOpts& opts,
+                                          Dtype dt) override {
         const int N = opts.N;
         const int G = opts.groups;
         int O_total = 1, K_total = 1, S_total = 1;
-        for (int i = 0; i < N; ++i) { O_total *= O[i]; K_total *= K[i]; S_total *= S[i]; }
+        for (int i = 0; i < N; ++i) {
+            O_total *= O[i];
+            K_total *= K[i];
+            S_total *= S[i];
+        }
 
         const int K_flat = Cin_g * K_total;
         const int M_out = O_total;
         const int W_per_group = Cout_g * K_flat;
 
-        CpuStorage dx_cpu  = alloc_cpu(static_cast<std::size_t>(B) * Cin * S_total, dt);
-        CpuStorage dW_cpu  = alloc_cpu(static_cast<std::size_t>(Cout) * K_flat, dt);
-        CpuStorage db_cpu  = alloc_cpu(static_cast<std::size_t>(Cout), dt);
-        if (dx_cpu.nbytes)  std::memset(dx_cpu.ptr.get(),  0, dx_cpu.nbytes);
-        if (dW_cpu.nbytes)  std::memset(dW_cpu.ptr.get(),  0, dW_cpu.nbytes);
-        if (db_cpu.nbytes)  std::memset(db_cpu.ptr.get(),  0, db_cpu.nbytes);
-        CpuStorage cols_cpu     = alloc_cpu(static_cast<std::size_t>(K_flat) * M_out, dt);
+        CpuStorage dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * Cin * S_total, dt);
+        CpuStorage dW_cpu = alloc_cpu(static_cast<std::size_t>(Cout) * K_flat, dt);
+        CpuStorage db_cpu = alloc_cpu(static_cast<std::size_t>(Cout), dt);
+        if (dx_cpu.nbytes)
+            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+        if (dW_cpu.nbytes)
+            std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
+        if (db_cpu.nbytes)
+            std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
+        CpuStorage cols_cpu = alloc_cpu(static_cast<std::size_t>(K_flat) * M_out, dt);
         CpuStorage col_grad_cpu = alloc_cpu(static_cast<std::size_t>(K_flat) * M_out, dt);
 
-        const auto& x_cpu  = std::get<CpuStorage>(x);
-        const auto& W_cpu  = std::get<CpuStorage>(W);
-        const auto& g_cpu  = std::get<CpuStorage>(grad_out);
+        const auto& x_cpu = std::get<CpuStorage>(x);
+        const auto& W_cpu = std::get<CpuStorage>(W);
+        const auto& g_cpu = std::get<CpuStorage>(grad_out);
 
         for (int bi = 0; bi < B; ++bi) {
             for (int g = 0; g < G; ++g) {
                 if (dt == Dtype::F32) {
-                    const float* xp  = reinterpret_cast<const float*>(x_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi)*Cin + static_cast<std::size_t>(g)*Cin_g)*S_total;
-                    const float* gp  = reinterpret_cast<const float*>(g_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi)*Cout + static_cast<std::size_t>(g)*Cout_g)*O_total;
-                    float* dxp = reinterpret_cast<float*>(dx_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi)*Cin + static_cast<std::size_t>(g)*Cin_g)*S_total;
-                    const float* wp  = reinterpret_cast<const float*>(W_cpu.ptr.get())
-                        + static_cast<std::size_t>(g)*W_per_group;
-                    float* dwp = reinterpret_cast<float*>(dW_cpu.ptr.get())
-                        + static_cast<std::size_t>(g)*W_per_group;
-                    float* cp  = reinterpret_cast<float*>(cols_cpu.ptr.get());
+                    const float* xp =
+                        reinterpret_cast<const float*>(x_cpu.ptr.get()) +
+                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
+                            S_total;
+                    const float* gp = reinterpret_cast<const float*>(g_cpu.ptr.get()) +
+                                      (static_cast<std::size_t>(bi) * Cout +
+                                       static_cast<std::size_t>(g) * Cout_g) *
+                                          O_total;
+                    float* dxp =
+                        reinterpret_cast<float*>(dx_cpu.ptr.get()) +
+                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
+                            S_total;
+                    const float* wp = reinterpret_cast<const float*>(W_cpu.ptr.get()) +
+                                      static_cast<std::size_t>(g) * W_per_group;
+                    float* dwp = reinterpret_cast<float*>(dW_cpu.ptr.get()) +
+                                 static_cast<std::size_t>(g) * W_per_group;
+                    float* cp = reinterpret_cast<float*>(cols_cpu.ptr.get());
                     float* cgp = reinterpret_cast<float*>(col_grad_cpu.ptr.get());
-                    conv_nd_im2col_f32(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation, N);
-                    cpu::sgemm(false, true,  Cout_g, K_flat, M_out, 1.0f, gp, M_out, cp, M_out, 1.0f, dwp, K_flat);
-                    cpu::sgemm(true,  false, K_flat, M_out,  Cout_g, 1.0f, wp, K_flat, gp, M_out, 0.0f, cgp, M_out);
-                    conv_nd_col2im_f32(cgp, dxp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation, N);
-                    float* dbp = reinterpret_cast<float*>(db_cpu.ptr.get()) + static_cast<std::size_t>(g)*Cout_g;
-                    for (int co = 0; co < Cout_g; ++co) { const float* row = gp + co*O_total; float s = 0.f; for (int j = 0; j < O_total; ++j) s += row[j]; dbp[co] += s; }
+                    conv_nd_im2col_f32(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation,
+                                       N);
+                    cpu::sgemm(false, true, Cout_g, K_flat, M_out, 1.0f, gp, M_out, cp, M_out, 1.0f,
+                               dwp, K_flat);
+                    cpu::sgemm(true, false, K_flat, M_out, Cout_g, 1.0f, wp, K_flat, gp, M_out,
+                               0.0f, cgp, M_out);
+                    conv_nd_col2im_f32(cgp, dxp, Cin_g, S, K, O, opts.stride, opts.pad,
+                                       opts.dilation, N);
+                    float* dbp = reinterpret_cast<float*>(db_cpu.ptr.get()) +
+                                 static_cast<std::size_t>(g) * Cout_g;
+                    for (int co = 0; co < Cout_g; ++co) {
+                        const float* row = gp + co * O_total;
+                        float s = 0.f;
+                        for (int j = 0; j < O_total; ++j)
+                            s += row[j];
+                        dbp[co] += s;
+                    }
                 } else if (dt == Dtype::F64) {
-                    const double* xp  = reinterpret_cast<const double*>(x_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi)*Cin + static_cast<std::size_t>(g)*Cin_g)*S_total;
-                    const double* gp  = reinterpret_cast<const double*>(g_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi)*Cout + static_cast<std::size_t>(g)*Cout_g)*O_total;
-                    double* dxp = reinterpret_cast<double*>(dx_cpu.ptr.get())
-                        + (static_cast<std::size_t>(bi)*Cin + static_cast<std::size_t>(g)*Cin_g)*S_total;
-                    const double* wp  = reinterpret_cast<const double*>(W_cpu.ptr.get())
-                        + static_cast<std::size_t>(g)*W_per_group;
-                    double* dwp = reinterpret_cast<double*>(dW_cpu.ptr.get())
-                        + static_cast<std::size_t>(g)*W_per_group;
-                    double* cp  = reinterpret_cast<double*>(cols_cpu.ptr.get());
+                    const double* xp =
+                        reinterpret_cast<const double*>(x_cpu.ptr.get()) +
+                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
+                            S_total;
+                    const double* gp = reinterpret_cast<const double*>(g_cpu.ptr.get()) +
+                                       (static_cast<std::size_t>(bi) * Cout +
+                                        static_cast<std::size_t>(g) * Cout_g) *
+                                           O_total;
+                    double* dxp =
+                        reinterpret_cast<double*>(dx_cpu.ptr.get()) +
+                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
+                            S_total;
+                    const double* wp = reinterpret_cast<const double*>(W_cpu.ptr.get()) +
+                                       static_cast<std::size_t>(g) * W_per_group;
+                    double* dwp = reinterpret_cast<double*>(dW_cpu.ptr.get()) +
+                                  static_cast<std::size_t>(g) * W_per_group;
+                    double* cp = reinterpret_cast<double*>(cols_cpu.ptr.get());
                     double* cgp = reinterpret_cast<double*>(col_grad_cpu.ptr.get());
-                    conv_nd_im2col_f64(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation, N);
-                    cpu::dgemm(false, true,  Cout_g, K_flat, M_out, 1.0, gp, M_out, cp, M_out, 1.0, dwp, K_flat);
-                    cpu::dgemm(true,  false, K_flat, M_out,  Cout_g, 1.0, wp, K_flat, gp, M_out, 0.0, cgp, M_out);
-                    conv_nd_col2im_f64(cgp, dxp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation, N);
-                    double* dbp = reinterpret_cast<double*>(db_cpu.ptr.get()) + static_cast<std::size_t>(g)*Cout_g;
-                    for (int co = 0; co < Cout_g; ++co) { const double* row = gp + co*O_total; double s = 0.0; for (int j = 0; j < O_total; ++j) s += row[j]; dbp[co] += s; }
+                    conv_nd_im2col_f64(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation,
+                                       N);
+                    cpu::dgemm(false, true, Cout_g, K_flat, M_out, 1.0, gp, M_out, cp, M_out, 1.0,
+                               dwp, K_flat);
+                    cpu::dgemm(true, false, K_flat, M_out, Cout_g, 1.0, wp, K_flat, gp, M_out, 0.0,
+                               cgp, M_out);
+                    conv_nd_col2im_f64(cgp, dxp, Cin_g, S, K, O, opts.stride, opts.pad,
+                                       opts.dilation, N);
+                    double* dbp = reinterpret_cast<double*>(db_cpu.ptr.get()) +
+                                  static_cast<std::size_t>(g) * Cout_g;
+                    for (int co = 0; co < Cout_g; ++co) {
+                        const double* row = gp + co * O_total;
+                        double s = 0.0;
+                        for (int j = 0; j < O_total; ++j)
+                            s += row[j];
+                        dbp[co] += s;
+                    }
                 } else {
-                    ErrorBuilder("cpu_backend::conv_nd_backward").not_implemented("dtype not supported");
+                    ErrorBuilder("cpu_backend::conv_nd_backward")
+                        .not_implemented("dtype not supported");
                 }
             }
         }
@@ -4947,34 +5056,43 @@ public:
 
     // ---- Unfold (im2col as standalone op) --------------------------------
 
-    Storage unfold_forward(
-        const Storage& x,
-        int B, int C,
-        const std::vector<int>& S, const std::vector<int>& K, const std::vector<int>& O,
-        const std::vector<int>& stride, const std::vector<int>& pad,
-        const std::vector<int>& dilation,
-        const Shape& /*out_shape*/, Dtype dt) override {
-
+    Storage unfold_forward(const Storage& x,
+                           int B,
+                           int C,
+                           const std::vector<int>& S,
+                           const std::vector<int>& K,
+                           const std::vector<int>& O,
+                           const std::vector<int>& stride,
+                           const std::vector<int>& pad,
+                           const std::vector<int>& dilation,
+                           const Shape& /*out_shape*/,
+                           Dtype dt) override {
         const int N = static_cast<int>(K.size());
         int K_total = 1, O_total = 1, S_total = 1;
-        for (int i = 0; i < N; ++i) { K_total *= K[i]; O_total *= O[i]; S_total *= S[i]; }
+        for (int i = 0; i < N; ++i) {
+            K_total *= K[i];
+            O_total *= O[i];
+            S_total *= S[i];
+        }
 
         CpuStorage out_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * K_total * O_total, dt);
         const auto& x_cpu = std::get<CpuStorage>(x);
 
         for (int bi = 0; bi < B; ++bi) {
             if (dt == Dtype::F32) {
-                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * C * S_total;
-                float* yp = reinterpret_cast<float*>(out_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * C * K_total * O_total;
-                unfold_im2col_f32(xp, yp, C, S.data(), K.data(), O.data(), stride.data(), pad.data(), dilation.data(), N);
+                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get()) +
+                                  static_cast<std::size_t>(bi) * C * S_total;
+                float* yp = reinterpret_cast<float*>(out_cpu.ptr.get()) +
+                            static_cast<std::size_t>(bi) * C * K_total * O_total;
+                unfold_im2col_f32(xp, yp, C, S.data(), K.data(), O.data(), stride.data(),
+                                  pad.data(), dilation.data(), N);
             } else if (dt == Dtype::F64) {
-                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * C * S_total;
-                double* yp = reinterpret_cast<double*>(out_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * C * K_total * O_total;
-                unfold_im2col_f64(xp, yp, C, S.data(), K.data(), O.data(), stride.data(), pad.data(), dilation.data(), N);
+                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get()) +
+                                   static_cast<std::size_t>(bi) * C * S_total;
+                double* yp = reinterpret_cast<double*>(out_cpu.ptr.get()) +
+                             static_cast<std::size_t>(bi) * C * K_total * O_total;
+                unfold_im2col_f64(xp, yp, C, S.data(), K.data(), O.data(), stride.data(),
+                                  pad.data(), dilation.data(), N);
             } else {
                 ErrorBuilder("cpu_backend::unfold_forward").not_implemented("dtype not supported");
             }
@@ -4982,35 +5100,44 @@ public:
         return Storage{std::move(out_cpu)};
     }
 
-    Storage unfold_backward(
-        const Storage& grad_out,
-        int B, int C,
-        const std::vector<int>& S, const std::vector<int>& K, const std::vector<int>& O,
-        const std::vector<int>& stride, const std::vector<int>& pad,
-        const std::vector<int>& dilation,
-        Dtype dt) override {
-
+    Storage unfold_backward(const Storage& grad_out,
+                            int B,
+                            int C,
+                            const std::vector<int>& S,
+                            const std::vector<int>& K,
+                            const std::vector<int>& O,
+                            const std::vector<int>& stride,
+                            const std::vector<int>& pad,
+                            const std::vector<int>& dilation,
+                            Dtype dt) override {
         const int N = static_cast<int>(K.size());
         int K_total = 1, O_total = 1, S_total = 1;
-        for (int i = 0; i < N; ++i) { K_total *= K[i]; O_total *= O[i]; S_total *= S[i]; }
+        for (int i = 0; i < N; ++i) {
+            K_total *= K[i];
+            O_total *= O[i];
+            S_total *= S[i];
+        }
 
         CpuStorage dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * S_total, dt);
-        if (dx_cpu.nbytes) std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+        if (dx_cpu.nbytes)
+            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
         const auto& g_cpu = std::get<CpuStorage>(grad_out);
 
         for (int bi = 0; bi < B; ++bi) {
             if (dt == Dtype::F32) {
-                const float* gp = reinterpret_cast<const float*>(g_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * C * K_total * O_total;
-                float* dxp = reinterpret_cast<float*>(dx_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * C * S_total;
-                unfold_col2im_f32(gp, dxp, C, S.data(), K.data(), O.data(), stride.data(), pad.data(), dilation.data(), N);
+                const float* gp = reinterpret_cast<const float*>(g_cpu.ptr.get()) +
+                                  static_cast<std::size_t>(bi) * C * K_total * O_total;
+                float* dxp = reinterpret_cast<float*>(dx_cpu.ptr.get()) +
+                             static_cast<std::size_t>(bi) * C * S_total;
+                unfold_col2im_f32(gp, dxp, C, S.data(), K.data(), O.data(), stride.data(),
+                                  pad.data(), dilation.data(), N);
             } else if (dt == Dtype::F64) {
-                const double* gp = reinterpret_cast<const double*>(g_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * C * K_total * O_total;
-                double* dxp = reinterpret_cast<double*>(dx_cpu.ptr.get())
-                    + static_cast<std::size_t>(bi) * C * S_total;
-                unfold_col2im_f64(gp, dxp, C, S.data(), K.data(), O.data(), stride.data(), pad.data(), dilation.data(), N);
+                const double* gp = reinterpret_cast<const double*>(g_cpu.ptr.get()) +
+                                   static_cast<std::size_t>(bi) * C * K_total * O_total;
+                double* dxp = reinterpret_cast<double*>(dx_cpu.ptr.get()) +
+                              static_cast<std::size_t>(bi) * C * S_total;
+                unfold_col2im_f64(gp, dxp, C, S.data(), K.data(), O.data(), stride.data(),
+                                  pad.data(), dilation.data(), N);
             } else {
                 ErrorBuilder("cpu_backend::unfold_backward").not_implemented("dtype not supported");
             }
@@ -5020,16 +5147,16 @@ public:
 
     // ---- Dropout helpers -------------------------------------------------
 
-    std::pair<Storage, Storage> expand_and_multiply(
-        const Storage& mask, const Storage& x,
-        const Shape& mask_shape, const Shape& x_shape, Dtype dt) override {
-
+    std::pair<Storage, Storage> expand_and_multiply(const Storage& mask,
+                                                    const Storage& x,
+                                                    const Shape& mask_shape,
+                                                    const Shape& x_shape,
+                                                    Dtype dt) override {
         const std::size_t B_sz = static_cast<std::size_t>(x_shape[0]);
         // Determine if it's a channel mask (shape[1] > 1) or sample mask (shape[1] == 1)
         const bool is_channel_mask = (mask_shape.size() >= 2 && mask_shape[1] > 1);
-        const std::size_t C_sz = is_channel_mask
-            ? static_cast<std::size_t>(mask_shape[1])
-            : static_cast<std::size_t>(x_shape[1]);
+        const std::size_t C_sz = is_channel_mask ? static_cast<std::size_t>(mask_shape[1])
+                                                 : static_cast<std::size_t>(x_shape[1]);
         std::size_t spatial = 1;
         for (std::size_t i = 2; i < x_shape.size(); ++i)
             spatial *= static_cast<std::size_t>(x_shape[i]);
@@ -5038,7 +5165,7 @@ public:
         CpuStorage exp_out = alloc_cpu(numel, dt);
         const auto& m_cpu = std::get<CpuStorage>(mask);
         const auto& x_cpu = std::get<CpuStorage>(x);
-        CpuStorage y_out  = alloc_cpu(numel, dt);
+        CpuStorage y_out = alloc_cpu(numel, dt);
 
         if (is_channel_mask) {
             // (B, C, 1, ...) -> (B, C, S...)
@@ -5047,27 +5174,32 @@ public:
                 const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get());
                 float* ep = reinterpret_cast<float*>(exp_out.ptr.get());
                 float* yp = reinterpret_cast<float*>(y_out.ptr.get());
-                for (std::size_t b = 0; b < B_sz; ++b) for (std::size_t c = 0; c < C_sz; ++c) {
-                    const float v = mp[b * C_sz + c];
-                    for (std::size_t s = 0; s < spatial; ++s) {
-                        const std::size_t idx = (b * C_sz + c) * spatial + s;
-                        ep[idx] = v; yp[idx] = xp[idx] * v;
+                for (std::size_t b = 0; b < B_sz; ++b)
+                    for (std::size_t c = 0; c < C_sz; ++c) {
+                        const float v = mp[b * C_sz + c];
+                        for (std::size_t s = 0; s < spatial; ++s) {
+                            const std::size_t idx = (b * C_sz + c) * spatial + s;
+                            ep[idx] = v;
+                            yp[idx] = xp[idx] * v;
+                        }
                     }
-                }
             } else if (dt == Dtype::F64) {
                 const double* mp = reinterpret_cast<const double*>(m_cpu.ptr.get());
                 const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get());
                 double* ep = reinterpret_cast<double*>(exp_out.ptr.get());
                 double* yp = reinterpret_cast<double*>(y_out.ptr.get());
-                for (std::size_t b = 0; b < B_sz; ++b) for (std::size_t c = 0; c < C_sz; ++c) {
-                    const double v = mp[b * C_sz + c];
-                    for (std::size_t s = 0; s < spatial; ++s) {
-                        const std::size_t idx = (b * C_sz + c) * spatial + s;
-                        ep[idx] = v; yp[idx] = xp[idx] * v;
+                for (std::size_t b = 0; b < B_sz; ++b)
+                    for (std::size_t c = 0; c < C_sz; ++c) {
+                        const double v = mp[b * C_sz + c];
+                        for (std::size_t s = 0; s < spatial; ++s) {
+                            const std::size_t idx = (b * C_sz + c) * spatial + s;
+                            ep[idx] = v;
+                            yp[idx] = xp[idx] * v;
+                        }
                     }
-                }
             } else {
-                ErrorBuilder("cpu_backend::expand_and_multiply").not_implemented("dtype not supported");
+                ErrorBuilder("cpu_backend::expand_and_multiply")
+                    .not_implemented("dtype not supported");
             }
         } else {
             // (B, 1, ...) sample mask -> (B, C, S...)
@@ -5079,7 +5211,11 @@ public:
                 float* yp = reinterpret_cast<float*>(y_out.ptr.get());
                 for (std::size_t b = 0; b < B_sz; ++b) {
                     const float v = mp[b];
-                    for (std::size_t s = 0; s < per; ++s) { const std::size_t idx = b*per+s; ep[idx] = v; yp[idx] = xp[idx]*v; }
+                    for (std::size_t s = 0; s < per; ++s) {
+                        const std::size_t idx = b * per + s;
+                        ep[idx] = v;
+                        yp[idx] = xp[idx] * v;
+                    }
                 }
             } else if (dt == Dtype::F64) {
                 const double* mp = reinterpret_cast<const double*>(m_cpu.ptr.get());
@@ -5088,19 +5224,25 @@ public:
                 double* yp = reinterpret_cast<double*>(y_out.ptr.get());
                 for (std::size_t b = 0; b < B_sz; ++b) {
                     const double v = mp[b];
-                    for (std::size_t s = 0; s < per; ++s) { const std::size_t idx = b*per+s; ep[idx] = v; yp[idx] = xp[idx]*v; }
+                    for (std::size_t s = 0; s < per; ++s) {
+                        const std::size_t idx = b * per + s;
+                        ep[idx] = v;
+                        yp[idx] = xp[idx] * v;
+                    }
                 }
             } else {
-                ErrorBuilder("cpu_backend::expand_and_multiply").not_implemented("dtype not supported");
+                ErrorBuilder("cpu_backend::expand_and_multiply")
+                    .not_implemented("dtype not supported");
             }
         }
         return {Storage{std::move(exp_out)}, Storage{std::move(y_out)}};
     }
 
-    Storage drop_block_mask(
-        const Storage& seed, double drop_prob, std::int64_t block_size,
-        const Shape& x_shape, Dtype dt) override {
-
+    Storage drop_block_mask(const Storage& seed,
+                            double drop_prob,
+                            std::int64_t block_size,
+                            const Shape& x_shape,
+                            Dtype dt) override {
         const std::size_t B = static_cast<std::size_t>(x_shape[0]);
         const std::size_t C = static_cast<std::size_t>(x_shape[1]);
         const std::size_t H = static_cast<std::size_t>(x_shape[2]);
@@ -5116,47 +5258,63 @@ public:
         if (dt == Dtype::F32) {
             const float* sp = reinterpret_cast<const float*>(s_cpu.ptr.get());
             float* mp = reinterpret_cast<float*>(block_mask.ptr.get());
-            for (std::size_t b = 0; b < B; ++b) for (std::size_t c = 0; c < C; ++c) {
-                const float* s = sp + (b*C+c)*H*W;
-                float* m = mp + (b*C+c)*H*W;
-                for (std::size_t y = 0; y < H; ++y) for (std::size_t x = 0; x < W; ++x) {
-                    float mx = 0.f;
-                    for (std::int64_t dy = 0; dy < bsz; ++dy) {
-                        const std::int64_t yy = static_cast<std::int64_t>(y) + dy - pad_h;
-                        if (yy < 0 || yy >= static_cast<std::int64_t>(H)) continue;
-                        for (std::int64_t dx = 0; dx < bsz; ++dx) {
-                            const std::int64_t xx = static_cast<std::int64_t>(x) + dx - pad_h;
-                            if (xx < 0 || xx >= static_cast<std::int64_t>(W)) continue;
-                            const float v = s[yy*W+xx]; if (v > mx) mx = v;
+            for (std::size_t b = 0; b < B; ++b)
+                for (std::size_t c = 0; c < C; ++c) {
+                    const float* s = sp + (b * C + c) * H * W;
+                    float* m = mp + (b * C + c) * H * W;
+                    for (std::size_t y = 0; y < H; ++y)
+                        for (std::size_t x = 0; x < W; ++x) {
+                            float mx = 0.f;
+                            for (std::int64_t dy = 0; dy < bsz; ++dy) {
+                                const std::int64_t yy = static_cast<std::int64_t>(y) + dy - pad_h;
+                                if (yy < 0 || yy >= static_cast<std::int64_t>(H))
+                                    continue;
+                                for (std::int64_t dx = 0; dx < bsz; ++dx) {
+                                    const std::int64_t xx =
+                                        static_cast<std::int64_t>(x) + dx - pad_h;
+                                    if (xx < 0 || xx >= static_cast<std::int64_t>(W))
+                                        continue;
+                                    const float v = s[yy * W + xx];
+                                    if (v > mx)
+                                        mx = v;
+                                }
+                            }
+                            m[y * W + x] = mx;
                         }
-                    }
-                    m[y*W+x] = mx;
                 }
-            }
             const float fs = static_cast<float>(1.0 / (1.0 - drop_prob));
-            for (std::size_t i = 0; i < total; ++i) mp[i] = (1.f - mp[i]) * fs;
+            for (std::size_t i = 0; i < total; ++i)
+                mp[i] = (1.f - mp[i]) * fs;
         } else if (dt == Dtype::F64) {
             const double* sp = reinterpret_cast<const double*>(s_cpu.ptr.get());
             double* mp = reinterpret_cast<double*>(block_mask.ptr.get());
-            for (std::size_t b = 0; b < B; ++b) for (std::size_t c = 0; c < C; ++c) {
-                const double* s = sp + (b*C+c)*H*W;
-                double* m = mp + (b*C+c)*H*W;
-                for (std::size_t y = 0; y < H; ++y) for (std::size_t x = 0; x < W; ++x) {
-                    double mx = 0.0;
-                    for (std::int64_t dy = 0; dy < bsz; ++dy) {
-                        const std::int64_t yy = static_cast<std::int64_t>(y) + dy - pad_h;
-                        if (yy < 0 || yy >= static_cast<std::int64_t>(H)) continue;
-                        for (std::int64_t dx = 0; dx < bsz; ++dx) {
-                            const std::int64_t xx = static_cast<std::int64_t>(x) + dx - pad_h;
-                            if (xx < 0 || xx >= static_cast<std::int64_t>(W)) continue;
-                            const double v = s[yy*W+xx]; if (v > mx) mx = v;
+            for (std::size_t b = 0; b < B; ++b)
+                for (std::size_t c = 0; c < C; ++c) {
+                    const double* s = sp + (b * C + c) * H * W;
+                    double* m = mp + (b * C + c) * H * W;
+                    for (std::size_t y = 0; y < H; ++y)
+                        for (std::size_t x = 0; x < W; ++x) {
+                            double mx = 0.0;
+                            for (std::int64_t dy = 0; dy < bsz; ++dy) {
+                                const std::int64_t yy = static_cast<std::int64_t>(y) + dy - pad_h;
+                                if (yy < 0 || yy >= static_cast<std::int64_t>(H))
+                                    continue;
+                                for (std::int64_t dx = 0; dx < bsz; ++dx) {
+                                    const std::int64_t xx =
+                                        static_cast<std::int64_t>(x) + dx - pad_h;
+                                    if (xx < 0 || xx >= static_cast<std::int64_t>(W))
+                                        continue;
+                                    const double v = s[yy * W + xx];
+                                    if (v > mx)
+                                        mx = v;
+                                }
+                            }
+                            m[y * W + x] = mx;
                         }
-                    }
-                    m[y*W+x] = mx;
                 }
-            }
             const double scale = 1.0 / (1.0 - drop_prob);
-            for (std::size_t i = 0; i < total; ++i) mp[i] = (1.0 - mp[i]) * scale;
+            for (std::size_t i = 0; i < total; ++i)
+                mp[i] = (1.0 - mp[i]) * scale;
         } else {
             ErrorBuilder("cpu_backend::drop_block_mask").not_implemented("dtype not supported");
         }
@@ -5173,7 +5331,8 @@ public:
         const int N = opts.N;
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3]; int O_total = 1;
+        int S[3], O[3];
+        int O_total = 1;
         for (int i = 0; i < N; ++i) {
             S[i] = static_cast<int>(x_shape[2 + i]);
             O[i] = static_cast<int>(out_shape[2 + i]);
@@ -5188,18 +5347,39 @@ public:
             T* yp = reinterpret_cast<T*>(y_cpu.ptr.get());
             auto* ap = reinterpret_cast<std::int32_t*>(am_cpu.ptr.get());
             if constexpr (std::is_same_v<T, float>) {
-                if (N==1) cpu::max_pool1d_forward_f32(xp,yp,ap,B,C,S[0],opts.K[0],O[0],opts.stride[0],opts.pad[0]);
-                else if (N==2) cpu::max_pool2d_forward_f32(xp,yp,ap,B,C,S[0],S[1],opts.K[0],opts.K[1],O[0],O[1],opts.stride[0],opts.stride[1],opts.pad[0],opts.pad[1]);
-                else cpu::max_pool3d_forward_f32(xp,yp,ap,B,C,S[0],S[1],S[2],opts.K[0],opts.K[1],opts.K[2],O[0],O[1],O[2],opts.stride[0],opts.stride[1],opts.stride[2],opts.pad[0],opts.pad[1],opts.pad[2]);
+                if (N == 1)
+                    cpu::max_pool1d_forward_f32(xp, yp, ap, B, C, S[0], opts.K[0], O[0],
+                                                opts.stride[0], opts.pad[0]);
+                else if (N == 2)
+                    cpu::max_pool2d_forward_f32(xp, yp, ap, B, C, S[0], S[1], opts.K[0], opts.K[1],
+                                                O[0], O[1], opts.stride[0], opts.stride[1],
+                                                opts.pad[0], opts.pad[1]);
+                else
+                    cpu::max_pool3d_forward_f32(xp, yp, ap, B, C, S[0], S[1], S[2], opts.K[0],
+                                                opts.K[1], opts.K[2], O[0], O[1], O[2],
+                                                opts.stride[0], opts.stride[1], opts.stride[2],
+                                                opts.pad[0], opts.pad[1], opts.pad[2]);
             } else {
-                if (N==1) cpu::max_pool1d_forward_f64(xp,yp,ap,B,C,S[0],opts.K[0],O[0],opts.stride[0],opts.pad[0]);
-                else if (N==2) cpu::max_pool2d_forward_f64(xp,yp,ap,B,C,S[0],S[1],opts.K[0],opts.K[1],O[0],O[1],opts.stride[0],opts.stride[1],opts.pad[0],opts.pad[1]);
-                else cpu::max_pool3d_forward_f64(xp,yp,ap,B,C,S[0],S[1],S[2],opts.K[0],opts.K[1],opts.K[2],O[0],O[1],O[2],opts.stride[0],opts.stride[1],opts.stride[2],opts.pad[0],opts.pad[1],opts.pad[2]);
+                if (N == 1)
+                    cpu::max_pool1d_forward_f64(xp, yp, ap, B, C, S[0], opts.K[0], O[0],
+                                                opts.stride[0], opts.pad[0]);
+                else if (N == 2)
+                    cpu::max_pool2d_forward_f64(xp, yp, ap, B, C, S[0], S[1], opts.K[0], opts.K[1],
+                                                O[0], O[1], opts.stride[0], opts.stride[1],
+                                                opts.pad[0], opts.pad[1]);
+                else
+                    cpu::max_pool3d_forward_f64(xp, yp, ap, B, C, S[0], S[1], S[2], opts.K[0],
+                                                opts.K[1], opts.K[2], O[0], O[1], O[2],
+                                                opts.stride[0], opts.stride[1], opts.stride[2],
+                                                opts.pad[0], opts.pad[1], opts.pad[2]);
             }
         };
-        if (dt == Dtype::F32) dispatch(float{});
-        else if (dt == Dtype::F64) dispatch(double{});
-        else ErrorBuilder("max_pool_nd_forward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            dispatch(float{});
+        else if (dt == Dtype::F64)
+            dispatch(double{});
+        else
+            ErrorBuilder("max_pool_nd_forward").not_implemented("dtype");
         return {Storage{std::move(y_cpu)}, Storage{std::move(am_cpu)}};
     }
 
@@ -5212,35 +5392,49 @@ public:
         const int N = opts.N;
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3]; int S_total = 1, O_total = 1;
+        int S[3], O[3];
+        int S_total = 1, O_total = 1;
         for (int i = 0; i < N; ++i) {
             S[i] = static_cast<int>(x_shape[2 + i]);
             O[i] = static_cast<int>(out_shape[2 + i]);
-            S_total *= S[i]; O_total *= O[i];
+            S_total *= S[i];
+            O_total *= O[i];
         }
         (void)O_total;
         const auto& gc = std::get<CpuStorage>(grad_out);
         const auto& ac = std::get<CpuStorage>(saved_argmax);
         auto dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * S_total, dt);
-        if (dx_cpu.nbytes) std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+        if (dx_cpu.nbytes)
+            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
         auto dispatch = [&](auto tag) {
             using T = decltype(tag);
             const T* gp = reinterpret_cast<const T*>(gc.ptr.get());
             const auto* ap = reinterpret_cast<const std::int32_t*>(ac.ptr.get());
             T* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
             if constexpr (std::is_same_v<T, float>) {
-                if (N==1) cpu::max_pool1d_backward_f32(gp,ap,dxp,B,C,S[0],O[0]);
-                else if (N==2) cpu::max_pool2d_backward_f32(gp,ap,dxp,B,C,S[0],S[1],O[0],O[1]);
-                else cpu::max_pool3d_backward_f32(gp,ap,dxp,B,C,S[0],S[1],S[2],O[0],O[1],O[2]);
+                if (N == 1)
+                    cpu::max_pool1d_backward_f32(gp, ap, dxp, B, C, S[0], O[0]);
+                else if (N == 2)
+                    cpu::max_pool2d_backward_f32(gp, ap, dxp, B, C, S[0], S[1], O[0], O[1]);
+                else
+                    cpu::max_pool3d_backward_f32(gp, ap, dxp, B, C, S[0], S[1], S[2], O[0], O[1],
+                                                 O[2]);
             } else {
-                if (N==1) cpu::max_pool1d_backward_f64(gp,ap,dxp,B,C,S[0],O[0]);
-                else if (N==2) cpu::max_pool2d_backward_f64(gp,ap,dxp,B,C,S[0],S[1],O[0],O[1]);
-                else cpu::max_pool3d_backward_f64(gp,ap,dxp,B,C,S[0],S[1],S[2],O[0],O[1],O[2]);
+                if (N == 1)
+                    cpu::max_pool1d_backward_f64(gp, ap, dxp, B, C, S[0], O[0]);
+                else if (N == 2)
+                    cpu::max_pool2d_backward_f64(gp, ap, dxp, B, C, S[0], S[1], O[0], O[1]);
+                else
+                    cpu::max_pool3d_backward_f64(gp, ap, dxp, B, C, S[0], S[1], S[2], O[0], O[1],
+                                                 O[2]);
             }
         };
-        if (dt == Dtype::F32) dispatch(float{});
-        else if (dt == Dtype::F64) dispatch(double{});
-        else ErrorBuilder("max_pool_nd_backward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            dispatch(float{});
+        else if (dt == Dtype::F64)
+            dispatch(double{});
+        else
+            ErrorBuilder("max_pool_nd_backward").not_implemented("dtype");
         return Storage{std::move(dx_cpu)};
     }
 
@@ -5252,7 +5446,8 @@ public:
         const int N = opts.N;
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3]; int O_total = 1;
+        int S[3], O[3];
+        int O_total = 1;
         for (int i = 0; i < N; ++i) {
             S[i] = static_cast<int>(x_shape[2 + i]);
             O[i] = static_cast<int>(out_shape[2 + i]);
@@ -5265,18 +5460,39 @@ public:
             const T* xp = reinterpret_cast<const T*>(xc.ptr.get());
             T* yp = reinterpret_cast<T*>(y_cpu.ptr.get());
             if constexpr (std::is_same_v<T, float>) {
-                if (N==1) cpu::avg_pool1d_forward_f32(xp,yp,B,C,S[0],opts.K[0],O[0],opts.stride[0],opts.pad[0]);
-                else if (N==2) cpu::avg_pool2d_forward_f32(xp,yp,B,C,S[0],S[1],opts.K[0],opts.K[1],O[0],O[1],opts.stride[0],opts.stride[1],opts.pad[0],opts.pad[1]);
-                else cpu::avg_pool3d_forward_f32(xp,yp,B,C,S[0],S[1],S[2],opts.K[0],opts.K[1],opts.K[2],O[0],O[1],O[2],opts.stride[0],opts.stride[1],opts.stride[2],opts.pad[0],opts.pad[1],opts.pad[2]);
+                if (N == 1)
+                    cpu::avg_pool1d_forward_f32(xp, yp, B, C, S[0], opts.K[0], O[0], opts.stride[0],
+                                                opts.pad[0]);
+                else if (N == 2)
+                    cpu::avg_pool2d_forward_f32(xp, yp, B, C, S[0], S[1], opts.K[0], opts.K[1],
+                                                O[0], O[1], opts.stride[0], opts.stride[1],
+                                                opts.pad[0], opts.pad[1]);
+                else
+                    cpu::avg_pool3d_forward_f32(xp, yp, B, C, S[0], S[1], S[2], opts.K[0],
+                                                opts.K[1], opts.K[2], O[0], O[1], O[2],
+                                                opts.stride[0], opts.stride[1], opts.stride[2],
+                                                opts.pad[0], opts.pad[1], opts.pad[2]);
             } else {
-                if (N==1) cpu::avg_pool1d_forward_f64(xp,yp,B,C,S[0],opts.K[0],O[0],opts.stride[0],opts.pad[0]);
-                else if (N==2) cpu::avg_pool2d_forward_f64(xp,yp,B,C,S[0],S[1],opts.K[0],opts.K[1],O[0],O[1],opts.stride[0],opts.stride[1],opts.pad[0],opts.pad[1]);
-                else cpu::avg_pool3d_forward_f64(xp,yp,B,C,S[0],S[1],S[2],opts.K[0],opts.K[1],opts.K[2],O[0],O[1],O[2],opts.stride[0],opts.stride[1],opts.stride[2],opts.pad[0],opts.pad[1],opts.pad[2]);
+                if (N == 1)
+                    cpu::avg_pool1d_forward_f64(xp, yp, B, C, S[0], opts.K[0], O[0], opts.stride[0],
+                                                opts.pad[0]);
+                else if (N == 2)
+                    cpu::avg_pool2d_forward_f64(xp, yp, B, C, S[0], S[1], opts.K[0], opts.K[1],
+                                                O[0], O[1], opts.stride[0], opts.stride[1],
+                                                opts.pad[0], opts.pad[1]);
+                else
+                    cpu::avg_pool3d_forward_f64(xp, yp, B, C, S[0], S[1], S[2], opts.K[0],
+                                                opts.K[1], opts.K[2], O[0], O[1], O[2],
+                                                opts.stride[0], opts.stride[1], opts.stride[2],
+                                                opts.pad[0], opts.pad[1], opts.pad[2]);
             }
         };
-        if (dt == Dtype::F32) dispatch(float{});
-        else if (dt == Dtype::F64) dispatch(double{});
-        else ErrorBuilder("avg_pool_nd_forward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            dispatch(float{});
+        else if (dt == Dtype::F64)
+            dispatch(double{});
+        else
+            ErrorBuilder("avg_pool_nd_forward").not_implemented("dtype");
         return Storage{std::move(y_cpu)};
     }
 
@@ -5288,33 +5504,57 @@ public:
         const int N = opts.N;
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3]; int S_total = 1, O_total = 1;
+        int S[3], O[3];
+        int S_total = 1, O_total = 1;
         for (int i = 0; i < N; ++i) {
             S[i] = static_cast<int>(x_shape[2 + i]);
             O[i] = static_cast<int>(out_shape[2 + i]);
-            S_total *= S[i]; O_total *= O[i];
+            S_total *= S[i];
+            O_total *= O[i];
         }
         (void)O_total;
         const auto& gc = std::get<CpuStorage>(grad_out);
         auto dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * S_total, dt);
-        if (dx_cpu.nbytes) std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
+        if (dx_cpu.nbytes)
+            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
         auto dispatch = [&](auto tag) {
             using T = decltype(tag);
             const T* gp = reinterpret_cast<const T*>(gc.ptr.get());
             T* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
             if constexpr (std::is_same_v<T, float>) {
-                if (N==1) cpu::avg_pool1d_backward_f32(gp,dxp,B,C,S[0],opts.K[0],O[0],opts.stride[0],opts.pad[0]);
-                else if (N==2) cpu::avg_pool2d_backward_f32(gp,dxp,B,C,S[0],S[1],opts.K[0],opts.K[1],O[0],O[1],opts.stride[0],opts.stride[1],opts.pad[0],opts.pad[1]);
-                else cpu::avg_pool3d_backward_f32(gp,dxp,B,C,S[0],S[1],S[2],opts.K[0],opts.K[1],opts.K[2],O[0],O[1],O[2],opts.stride[0],opts.stride[1],opts.stride[2],opts.pad[0],opts.pad[1],opts.pad[2]);
+                if (N == 1)
+                    cpu::avg_pool1d_backward_f32(gp, dxp, B, C, S[0], opts.K[0], O[0],
+                                                 opts.stride[0], opts.pad[0]);
+                else if (N == 2)
+                    cpu::avg_pool2d_backward_f32(gp, dxp, B, C, S[0], S[1], opts.K[0], opts.K[1],
+                                                 O[0], O[1], opts.stride[0], opts.stride[1],
+                                                 opts.pad[0], opts.pad[1]);
+                else
+                    cpu::avg_pool3d_backward_f32(gp, dxp, B, C, S[0], S[1], S[2], opts.K[0],
+                                                 opts.K[1], opts.K[2], O[0], O[1], O[2],
+                                                 opts.stride[0], opts.stride[1], opts.stride[2],
+                                                 opts.pad[0], opts.pad[1], opts.pad[2]);
             } else {
-                if (N==1) cpu::avg_pool1d_backward_f64(gp,dxp,B,C,S[0],opts.K[0],O[0],opts.stride[0],opts.pad[0]);
-                else if (N==2) cpu::avg_pool2d_backward_f64(gp,dxp,B,C,S[0],S[1],opts.K[0],opts.K[1],O[0],O[1],opts.stride[0],opts.stride[1],opts.pad[0],opts.pad[1]);
-                else cpu::avg_pool3d_backward_f64(gp,dxp,B,C,S[0],S[1],S[2],opts.K[0],opts.K[1],opts.K[2],O[0],O[1],O[2],opts.stride[0],opts.stride[1],opts.stride[2],opts.pad[0],opts.pad[1],opts.pad[2]);
+                if (N == 1)
+                    cpu::avg_pool1d_backward_f64(gp, dxp, B, C, S[0], opts.K[0], O[0],
+                                                 opts.stride[0], opts.pad[0]);
+                else if (N == 2)
+                    cpu::avg_pool2d_backward_f64(gp, dxp, B, C, S[0], S[1], opts.K[0], opts.K[1],
+                                                 O[0], O[1], opts.stride[0], opts.stride[1],
+                                                 opts.pad[0], opts.pad[1]);
+                else
+                    cpu::avg_pool3d_backward_f64(gp, dxp, B, C, S[0], S[1], S[2], opts.K[0],
+                                                 opts.K[1], opts.K[2], O[0], O[1], O[2],
+                                                 opts.stride[0], opts.stride[1], opts.stride[2],
+                                                 opts.pad[0], opts.pad[1], opts.pad[2]);
             }
         };
-        if (dt == Dtype::F32) dispatch(float{});
-        else if (dt == Dtype::F64) dispatch(double{});
-        else ErrorBuilder("avg_pool_nd_backward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            dispatch(float{});
+        else if (dt == Dtype::F64)
+            dispatch(double{});
+        else
+            ErrorBuilder("avg_pool_nd_backward").not_implemented("dtype");
         return Storage{std::move(dx_cpu)};
     }
 
@@ -5330,8 +5570,10 @@ public:
         const std::int64_t N = weight_shape[0];
         const std::int64_t D = weight_shape[1];
         std::size_t M = 1;
-        for (auto d : indices_shape) M *= static_cast<std::size_t>(d);
-        (void)N; (void)out_shape;
+        for (auto d : indices_shape)
+            M *= static_cast<std::size_t>(d);
+        (void)N;
+        (void)out_shape;
         const auto& ws = std::get<CpuStorage>(weight);
         const auto& is = std::get<CpuStorage>(indices);
         auto out_cpu = alloc_cpu(M * static_cast<std::size_t>(D), dt);
@@ -5339,9 +5581,12 @@ public:
         auto read_idx = [&](std::size_t i) -> std::int64_t {
             const auto* ip = is.ptr.get();
             switch (is.dtype) {
-                case Dtype::I32: return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
-                case Dtype::I64: return reinterpret_cast<const std::int64_t*>(ip)[i];
-                default: return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
+                case Dtype::I32:
+                    return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
+                case Dtype::I64:
+                    return reinterpret_cast<const std::int64_t*>(ip)[i];
+                default:
+                    return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
             }
         };
         for (std::size_t i = 0; i < M; ++i) {
@@ -5366,7 +5611,8 @@ public:
         const std::int64_t N = weight_shape[0];
         const std::int64_t D = weight_shape[1];
         std::size_t M = 1;
-        for (auto d : indices_shape) M *= static_cast<std::size_t>(d);
+        for (auto d : indices_shape)
+            M *= static_cast<std::size_t>(d);
         const auto& gs = std::get<CpuStorage>(grad_out);
         const auto& is = std::get<CpuStorage>(indices);
         auto dW = alloc_cpu(static_cast<std::size_t>(N) * static_cast<std::size_t>(D), dt);
@@ -5374,25 +5620,31 @@ public:
         auto read_idx = [&](std::size_t i) -> std::int64_t {
             const auto* ip = is.ptr.get();
             switch (is.dtype) {
-                case Dtype::I32: return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
-                case Dtype::I64: return reinterpret_cast<const std::int64_t*>(ip)[i];
-                default: return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
+                case Dtype::I32:
+                    return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
+                case Dtype::I64:
+                    return reinterpret_cast<const std::int64_t*>(ip)[i];
+                default:
+                    return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
             }
         };
         const std::size_t row_bytes = static_cast<std::size_t>(D) * dtype_size(dt);
         for (std::size_t i = 0; i < M; ++i) {
             const std::int64_t id = read_idx(i);
-            if (padding_idx >= 0 && id == static_cast<std::int64_t>(padding_idx)) continue;
+            if (padding_idx >= 0 && id == static_cast<std::int64_t>(padding_idx))
+                continue;
             const std::byte* src = gs.ptr.get() + i * row_bytes;
             std::byte* dst = dW.ptr.get() + static_cast<std::size_t>(id) * row_bytes;
             if (dt == Dtype::F32) {
                 const float* sp = reinterpret_cast<const float*>(src);
                 float* dp = reinterpret_cast<float*>(dst);
-                for (std::int64_t d = 0; d < D; ++d) dp[d] += sp[d];
+                for (std::int64_t d = 0; d < D; ++d)
+                    dp[d] += sp[d];
             } else {
                 const double* sp = reinterpret_cast<const double*>(src);
                 double* dp = reinterpret_cast<double*>(dst);
-                for (std::int64_t d = 0; d < D; ++d) dp[d] += sp[d];
+                for (std::int64_t d = 0; d < D; ++d)
+                    dp[d] += sp[d];
             }
         }
         return Storage{std::move(dW)};
@@ -5405,23 +5657,27 @@ public:
         const std::size_t D = static_cast<std::size_t>(embed_dim);
         const std::size_t Dh = D / 2;
         auto out = alloc_cpu(L * D, dt);
-        if (L * D == 0) return Storage{std::move(out)};
+        if (L * D == 0)
+            return Storage{std::move(out)};
         const double inv_d = -std::log(10000.0) / static_cast<double>(D);
         auto run = [&](auto tag) {
             using T = decltype(tag);
             T* op = reinterpret_cast<T*>(out.ptr.get());
             for (std::size_t i = 0; i < L; ++i)
                 for (std::size_t k = 0; k < Dh; ++k) {
-                    const double angle = static_cast<double>(i) *
-                        std::exp(2.0 * static_cast<double>(k) * inv_d);
+                    const double angle =
+                        static_cast<double>(i) * std::exp(2.0 * static_cast<double>(k) * inv_d);
                     op[i * D + 2 * k] = static_cast<T>(std::sin(angle));
                     if (2 * k + 1 < D)
                         op[i * D + 2 * k + 1] = static_cast<T>(std::cos(angle));
                 }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("sinusoidal_pos_embedding").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("sinusoidal_pos_embedding").not_implemented("dtype");
         return Storage{std::move(out)};
     }
 
@@ -5447,9 +5703,11 @@ public:
         if (position_ids) {
             const auto& ps = std::get<CpuStorage>(*position_ids);
             for (std::size_t i = 0; i < L; ++i)
-                pos[i] = static_cast<double>(reinterpret_cast<const std::int64_t*>(ps.ptr.get())[i]);
+                pos[i] =
+                    static_cast<double>(reinterpret_cast<const std::int64_t*>(ps.ptr.get())[i]);
         } else {
-            for (std::size_t i = 0; i < L; ++i) pos[i] = static_cast<double>(i);
+            for (std::size_t i = 0; i < L; ++i)
+                pos[i] = static_cast<double>(i);
         }
         std::vector<double> theta(Dh);
         const double base = std::log(10000.0);
@@ -5481,24 +5739,33 @@ public:
                         }
                     } else {
                         for (std::size_t k = 0; k < Dh; ++k) {
-                            orow[k]      = xrow[k]      * crow[k] - xrow[k + Dh] * srow[k];
-                            orow[k + Dh] = xrow[k + Dh] * crow[k] + xrow[k]      * srow[k];
+                            orow[k] = xrow[k] * crow[k] - xrow[k + Dh] * srow[k];
+                            orow[k + Dh] = xrow[k + Dh] * crow[k] + xrow[k] * srow[k];
                         }
                     }
                 }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("rope_forward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("rope_forward").not_implemented("dtype");
         return {Storage{std::move(out)}, Storage{std::move(cos_t)}, Storage{std::move(sin_t)}};
     }
 
     // ---- BatchNorm eval --------------------------------------------------
 
-    std::vector<Storage> batch_norm_eval_forward(
-        const Storage& x, const Storage& mean, const Storage& var,
-        const Storage& gamma, const Storage& beta,
-        const Shape& x_shape, int C, int spatial, double eps, Dtype dt) override {
+    std::vector<Storage> batch_norm_eval_forward(const Storage& x,
+                                                 const Storage& mean,
+                                                 const Storage& var,
+                                                 const Storage& gamma,
+                                                 const Storage& beta,
+                                                 const Shape& x_shape,
+                                                 int C,
+                                                 int spatial,
+                                                 double eps,
+                                                 Dtype dt) override {
         const int B = static_cast<int>(x_shape[0]);
         const auto& xs = std::get<CpuStorage>(x);
         const auto& ms = std::get<CpuStorage>(mean);
@@ -5506,7 +5773,7 @@ public:
         const auto& gs = std::get<CpuStorage>(gamma);
         const auto& bs = std::get<CpuStorage>(beta);
         auto rstd_cpu = alloc_cpu(static_cast<std::size_t>(C), dt);
-        auto out_cpu  = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
@@ -5527,33 +5794,41 @@ public:
                         yrow[s] = g * (xrow[s] - m) * r + bb;
                 }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("batch_norm_eval_forward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("batch_norm_eval_forward").not_implemented("dtype");
         return {Storage{std::move(out_cpu)}, Storage{std::move(rstd_cpu)}};
     }
 
-    std::vector<Storage> batch_norm_eval_backward(
-        const Storage& x, const Storage& mean, const Storage& gamma,
-        const Storage& rstd, const Storage& grad_out,
-        const Shape& x_shape, int C, int spatial, Dtype dt) override {
+    std::vector<Storage> batch_norm_eval_backward(const Storage& x,
+                                                  const Storage& mean,
+                                                  const Storage& gamma,
+                                                  const Storage& rstd,
+                                                  const Storage& grad_out,
+                                                  const Shape& x_shape,
+                                                  int C,
+                                                  int spatial,
+                                                  Dtype dt) override {
         const int B = static_cast<int>(x_shape[0]);
         const auto& xs = std::get<CpuStorage>(x);
         const auto& ms = std::get<CpuStorage>(mean);
         const auto& gs = std::get<CpuStorage>(gamma);
         const auto& rs = std::get<CpuStorage>(rstd);
         const auto& go = std::get<CpuStorage>(grad_out);
-        auto dx = alloc_cpu(static_cast<std::size_t>(B)*C*spatial, dt);
+        auto dx = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
         auto dm = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto dv = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto dg = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto db = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp  = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* mp  = reinterpret_cast<const T*>(ms.ptr.get());
-            const T* gp  = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* rp  = reinterpret_cast<const T*>(rs.ptr.get());
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* mp = reinterpret_cast<const T*>(ms.ptr.get());
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            const T* rp = reinterpret_cast<const T*>(rs.ptr.get());
             const T* gop = reinterpret_cast<const T*>(go.ptr.get());
             T* dxp = reinterpret_cast<T*>(dx.ptr.get());
             T* dmp = reinterpret_cast<T*>(dm.ptr.get());
@@ -5565,9 +5840,9 @@ public:
                 const T r = rp[c], g = gp[c], m = mp[c];
                 T sg = T{0}, sxmg = T{0};
                 for (int b = 0; b < B; ++b) {
-                    const T* xr = xp + (b*C+c)*spatial;
-                    const T* gor = gop + (b*C+c)*spatial;
-                    T* dxr = dxp + (b*C+c)*spatial;
+                    const T* xr = xp + (b * C + c) * spatial;
+                    const T* gor = gop + (b * C + c) * spatial;
+                    T* dxr = dxp + (b * C + c) * spatial;
                     for (int s = 0; s < spatial; ++s) {
                         dxr[s] = g * r * gor[s];
                         sg += gor[s];
@@ -5580,64 +5855,82 @@ public:
                 dvp[c] = static_cast<T>(-0.5) * g * r * r * r * sxmg;
             }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("batch_norm_eval_backward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("batch_norm_eval_backward").not_implemented("dtype");
         return {Storage{std::move(dx)}, Storage{std::move(dm)}, Storage{std::move(dv)},
                 Storage{std::move(dg)}, Storage{std::move(db)}};
     }
 
     // ---- Lp-normalize ---------------------------------------------------
 
-    std::vector<Storage> lp_normalize_forward(
-        const Storage& x, const Shape& x_shape, double ord, int axis,
-        double eps, Dtype dt) override {
+    std::vector<Storage> lp_normalize_forward(const Storage& x,
+                                              const Shape& x_shape,
+                                              double ord,
+                                              int axis,
+                                              double eps,
+                                              Dtype dt) override {
         const auto& xs = std::get<CpuStorage>(x);
         const std::size_t numel = shape_numel(x_shape);
         int outer = 1, inner = 1;
         const int rank = static_cast<int>(x_shape.size());
-        for (int i = 0; i < axis; ++i) outer *= static_cast<int>(x_shape[i]);
-        for (int i = axis + 1; i < rank; ++i) inner *= static_cast<int>(x_shape[i]);
+        for (int i = 0; i < axis; ++i)
+            outer *= static_cast<int>(x_shape[i]);
+        for (int i = axis + 1; i < rank; ++i)
+            inner *= static_cast<int>(x_shape[i]);
         const int axis_len = static_cast<int>(x_shape[axis]);
-        auto y_cpu    = alloc_cpu(numel, dt);
+        auto y_cpu = alloc_cpu(numel, dt);
         auto norm_cpu = alloc_cpu(static_cast<std::size_t>(outer) * inner, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            T* yp  = reinterpret_cast<T*>(y_cpu.ptr.get());
-            T* np  = reinterpret_cast<T*>(norm_cpu.ptr.get());
+            T* yp = reinterpret_cast<T*>(y_cpu.ptr.get());
+            T* np = reinterpret_cast<T*>(norm_cpu.ptr.get());
             for (int o = 0; o < outer; ++o)
                 for (int n = 0; n < inner; ++n) {
                     T acc = T{0};
                     for (int a = 0; a < axis_len; ++a)
                         acc += static_cast<T>(std::pow(
-                            std::abs(static_cast<double>(xp[(o*axis_len+a)*inner+n])), ord));
-                    const T nm = static_cast<T>(std::pow(static_cast<double>(acc), 1.0/ord));
+                            std::abs(static_cast<double>(xp[(o * axis_len + a) * inner + n])),
+                            ord));
+                    const T nm = static_cast<T>(std::pow(static_cast<double>(acc), 1.0 / ord));
                     const T denom = nm > static_cast<T>(eps) ? nm : static_cast<T>(eps);
-                    np[o*inner+n] = denom;
+                    np[o * inner + n] = denom;
                     for (int a = 0; a < axis_len; ++a) {
-                        const std::size_t idx = (o*axis_len+a)*inner+n;
+                        const std::size_t idx = (o * axis_len + a) * inner + n;
                         yp[idx] = xp[idx] / denom;
                     }
                 }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("lp_normalize_forward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("lp_normalize_forward").not_implemented("dtype");
         return {Storage{std::move(y_cpu)}, Storage{std::move(norm_cpu)}};
     }
 
-    Storage lp_normalize_backward(
-        const Storage& x, const Storage& saved_norm, const Storage& grad_out,
-        const Shape& x_shape, double ord, int axis, Dtype dt) override {
+    Storage lp_normalize_backward(const Storage& x,
+                                  const Storage& saved_norm,
+                                  const Storage& grad_out,
+                                  const Shape& x_shape,
+                                  double ord,
+                                  int axis,
+                                  Dtype dt) override {
         const auto& xs = std::get<CpuStorage>(x);
         const auto& ns = std::get<CpuStorage>(saved_norm);
         const auto& gs = std::get<CpuStorage>(grad_out);
         const std::size_t numel = shape_numel(x_shape);
         int outer = 1, inner = 1;
         const int rank = static_cast<int>(x_shape.size());
-        for (int i = 0; i < axis; ++i) outer *= static_cast<int>(x_shape[i]);
-        for (int i = axis + 1; i < rank; ++i) inner *= static_cast<int>(x_shape[i]);
+        for (int i = 0; i < axis; ++i)
+            outer *= static_cast<int>(x_shape[i]);
+        for (int i = axis + 1; i < rank; ++i)
+            inner *= static_cast<int>(x_shape[i]);
         const int axis_len = static_cast<int>(x_shape[axis]);
         auto dx_cpu = alloc_cpu(numel, dt);
         auto run = [&](auto tag) {
@@ -5648,34 +5941,40 @@ public:
             T* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
             for (int o = 0; o < outer; ++o)
                 for (int n = 0; n < inner; ++n) {
-                    const T N = np[o*inner+n];
+                    const T N = np[o * inner + n];
                     T proj = T{0};
                     for (int a = 0; a < axis_len; ++a) {
-                        const std::size_t idx = (o*axis_len+a)*inner+n;
+                        const std::size_t idx = (o * axis_len + a) * inner + n;
                         proj += gp[idx] * xp[idx];
                     }
-                    const T N_pp1 = static_cast<T>(std::pow(static_cast<double>(N), ord+1.0));
+                    const T N_pp1 = static_cast<T>(std::pow(static_cast<double>(N), ord + 1.0));
                     for (int a = 0; a < axis_len; ++a) {
-                        const std::size_t idx = (o*axis_len+a)*inner+n;
+                        const std::size_t idx = (o * axis_len + a) * inner + n;
                         const T xi = xp[idx];
-                        const T sgn = (xi>T{0}) ? T{1} : (xi<T{0} ? T{-1} : T{0});
-                        const T abs_pm1 = static_cast<T>(
-                            std::pow(std::abs(static_cast<double>(xi)), ord-1.0));
-                        dxp[idx] = gp[idx]/N - sgn*abs_pm1*proj/N_pp1;
+                        const T sgn = (xi > T{0}) ? T{1} : (xi < T{0} ? T{-1} : T{0});
+                        const T abs_pm1 =
+                            static_cast<T>(std::pow(std::abs(static_cast<double>(xi)), ord - 1.0));
+                        dxp[idx] = gp[idx] / N - sgn * abs_pm1 * proj / N_pp1;
                     }
                 }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("lp_normalize_backward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("lp_normalize_backward").not_implemented("dtype");
         return Storage{std::move(dx_cpu)};
     }
 
     // ---- Global response normalization -----------------------------------
 
-    std::vector<Storage> global_response_norm_forward(
-        const Storage& x, const Storage& gamma, const Storage& beta,
-        const Shape& x_shape, double eps, Dtype dt) override {
+    std::vector<Storage> global_response_norm_forward(const Storage& x,
+                                                      const Storage& gamma,
+                                                      const Storage& beta,
+                                                      const Shape& x_shape,
+                                                      double eps,
+                                                      Dtype dt) override {
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
         const int H = static_cast<int>(x_shape[2]);
@@ -5684,116 +5983,131 @@ public:
         const auto& xs = std::get<CpuStorage>(x);
         const auto& gs = std::get<CpuStorage>(gamma);
         const auto& bs = std::get<CpuStorage>(beta);
-        auto y_cpu  = alloc_cpu(static_cast<std::size_t>(B)*C*spatial, dt);
-        auto nx_cpu = alloc_cpu(static_cast<std::size_t>(B)*C, dt);
+        auto y_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
+        auto nx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
             const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
             const T* bp = reinterpret_cast<const T*>(bs.ptr.get());
-            T* yp  = reinterpret_cast<T*>(y_cpu.ptr.get());
+            T* yp = reinterpret_cast<T*>(y_cpu.ptr.get());
             T* nxp = reinterpret_cast<T*>(nx_cpu.ptr.get());
-            std::vector<T> Gx(static_cast<std::size_t>(B)*C);
+            std::vector<T> Gx(static_cast<std::size_t>(B) * C);
             for (int b = 0; b < B; ++b)
                 for (int c = 0; c < C; ++c) {
                     T acc = T{0};
-                    const T* xr = xp + (b*C+c)*spatial;
-                    for (int s = 0; s < spatial; ++s) acc += xr[s]*xr[s];
-                    Gx[b*C+c] = static_cast<T>(std::sqrt(static_cast<double>(acc)));
+                    const T* xr = xp + (b * C + c) * spatial;
+                    for (int s = 0; s < spatial; ++s)
+                        acc += xr[s] * xr[s];
+                    Gx[b * C + c] = static_cast<T>(std::sqrt(static_cast<double>(acc)));
                 }
             for (int b = 0; b < B; ++b) {
                 T mean = T{0};
-                for (int c = 0; c < C; ++c) mean += Gx[b*C+c];
+                for (int c = 0; c < C; ++c)
+                    mean += Gx[b * C + c];
                 mean /= static_cast<T>(C);
                 const T denom = mean + static_cast<T>(eps);
                 for (int c = 0; c < C; ++c) {
-                    const T nx = Gx[b*C+c] / denom;
-                    nxp[b*C+c] = nx;
-                    const T* xr = xp + (b*C+c)*spatial;
-                    T* yr = yp + (b*C+c)*spatial;
+                    const T nx = Gx[b * C + c] / denom;
+                    nxp[b * C + c] = nx;
+                    const T* xr = xp + (b * C + c) * spatial;
+                    T* yr = yp + (b * C + c) * spatial;
                     for (int s = 0; s < spatial; ++s)
-                        yr[s] = gp[c]*(xr[s]*nx) + bp[c]*xr[s];
+                        yr[s] = gp[c] * (xr[s] * nx) + bp[c] * xr[s];
                 }
             }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("grn_forward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("grn_forward").not_implemented("dtype");
         return {Storage{std::move(y_cpu)}, Storage{std::move(nx_cpu)}};
     }
 
-    std::vector<Storage> global_response_norm_backward(
-        const Storage& x, const Storage& gamma, const Storage& beta,
-        const Storage& saved_Nx, const Storage& grad_out,
-        const Shape& x_shape, double eps, Dtype dt) override {
+    std::vector<Storage> global_response_norm_backward(const Storage& x,
+                                                       const Storage& gamma,
+                                                       const Storage& beta,
+                                                       const Storage& saved_Nx,
+                                                       const Storage& grad_out,
+                                                       const Shape& x_shape,
+                                                       double eps,
+                                                       Dtype dt) override {
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
         const int H = static_cast<int>(x_shape[2]);
         const int W = static_cast<int>(x_shape[3]);
         const int spatial = H * W;
-        const auto& xs  = std::get<CpuStorage>(x);
-        const auto& gs  = std::get<CpuStorage>(gamma);
+        const auto& xs = std::get<CpuStorage>(x);
+        const auto& gs = std::get<CpuStorage>(gamma);
         const auto& bts = std::get<CpuStorage>(beta);
         const auto& nxs = std::get<CpuStorage>(saved_Nx);
         const auto& gos = std::get<CpuStorage>(grad_out);
-        auto dx = alloc_cpu(static_cast<std::size_t>(B)*C*spatial, dt);
+        auto dx = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
         auto dg = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto db = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp  = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* gp  = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* bp  = reinterpret_cast<const T*>(bts.ptr.get());
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            const T* bp = reinterpret_cast<const T*>(bts.ptr.get());
             const T* nxp = reinterpret_cast<const T*>(nxs.ptr.get());
             const T* gop = reinterpret_cast<const T*>(gos.ptr.get());
             T* dxp = reinterpret_cast<T*>(dx.ptr.get());
             T* dgp = reinterpret_cast<T*>(dg.ptr.get());
             T* dbp = reinterpret_cast<T*>(db.ptr.get());
-            for (int c = 0; c < C; ++c) { dgp[c] = dbp[c] = T{0}; }
+            for (int c = 0; c < C; ++c) {
+                dgp[c] = dbp[c] = T{0};
+            }
             // Recompute G and m
-            std::vector<T> Gx(static_cast<std::size_t>(B)*C, T{0});
+            std::vector<T> Gx(static_cast<std::size_t>(B) * C, T{0});
             std::vector<T> mv(static_cast<std::size_t>(B), T{0});
             for (int b = 0; b < B; ++b) {
                 for (int c = 0; c < C; ++c) {
                     T acc = T{0};
-                    const T* xr = xp + (b*C+c)*spatial;
-                    for (int s = 0; s < spatial; ++s) acc += xr[s]*xr[s];
-                    Gx[b*C+c] = static_cast<T>(std::sqrt(static_cast<double>(acc)));
+                    const T* xr = xp + (b * C + c) * spatial;
+                    for (int s = 0; s < spatial; ++s)
+                        acc += xr[s] * xr[s];
+                    Gx[b * C + c] = static_cast<T>(std::sqrt(static_cast<double>(acc)));
                 }
                 T s = T{0};
-                for (int c = 0; c < C; ++c) s += Gx[b*C+c];
+                for (int c = 0; c < C; ++c)
+                    s += Gx[b * C + c];
                 mv[b] = s / static_cast<T>(C);
             }
             // A[b,c], dg, db
-            std::vector<T> A(static_cast<std::size_t>(B)*C, T{0});
+            std::vector<T> A(static_cast<std::size_t>(B) * C, T{0});
             for (int b = 0; b < B; ++b)
                 for (int c = 0; c < C; ++c) {
-                    const T* xr = xp + (b*C+c)*spatial;
-                    const T* gr = gop + (b*C+c)*spatial;
+                    const T* xr = xp + (b * C + c) * spatial;
+                    const T* gr = gop + (b * C + c) * spatial;
                     T sgx = T{0};
-                    for (int s = 0; s < spatial; ++s) sgx += gr[s]*xr[s];
-                    A[b*C+c] = sgx * gp[c];
-                    dgp[c] += sgx * nxp[b*C+c];
+                    for (int s = 0; s < spatial; ++s)
+                        sgx += gr[s] * xr[s];
+                    A[b * C + c] = sgx * gp[c];
+                    dgp[c] += sgx * nxp[b * C + c];
                     dbp[c] += sgx;
                 }
             // dG
-            std::vector<T> dG(static_cast<std::size_t>(B)*C, T{0});
+            std::vector<T> dG(static_cast<std::size_t>(B) * C, T{0});
             for (int b = 0; b < B; ++b) {
-                const T denom  = mv[b] + static_cast<T>(eps);
+                const T denom = mv[b] + static_cast<T>(eps);
                 const T denom2 = denom * denom;
                 T sum_AG = T{0};
-                for (int c = 0; c < C; ++c) sum_AG += A[b*C+c] * Gx[b*C+c];
+                for (int c = 0; c < C; ++c)
+                    sum_AG += A[b * C + c] * Gx[b * C + c];
                 const T common = -sum_AG / denom2 / static_cast<T>(C);
                 for (int c = 0; c < C; ++c)
-                    dG[b*C+c] = A[b*C+c]/denom + common;
+                    dG[b * C + c] = A[b * C + c] / denom + common;
             }
             // dx
             for (int b = 0; b < B; ++b)
                 for (int c = 0; c < C; ++c) {
-                    const T nbc = nxp[b*C+c];
-                    const T gG  = Gx[b*C+c];
-                    const T invG = (gG > T{0}) ? T{1}/gG : T{0};
-                    const T dGbc = dG[b*C+c];
+                    const T nbc = nxp[b * C + c];
+                    const T gG = Gx[b * C + c];
+                    const T invG = (gG > T{0}) ? T{1} / gG : T{0};
+                    const T dGbc = dG[b * C + c];
                     const T gc = gp[c];
                     // Note: beta term needs beta saved input, but IBackend doesn't carry it.
                     // The op file stores beta as saved_inputs_[2]; here we use gamma only.
@@ -5802,93 +6116,97 @@ public:
                     // WORKAROUND: the caller will add the beta*g term from outside.
                     // For now, beta contribution is added by GpuBackend too. The op file
                     // MUST add beta*grad_out as an extra dx term.
-                    const T* xr = xp + (b*C+c)*spatial;
-                    const T* gr = gop + (b*C+c)*spatial;
-                    T* dxr = dxp + (b*C+c)*spatial;
+                    const T* xr = xp + (b * C + c) * spatial;
+                    const T* gr = gop + (b * C + c) * spatial;
+                    T* dxr = dxp + (b * C + c) * spatial;
                     const T bc = bp[c];
                     for (int s = 0; s < spatial; ++s)
-                        dxr[s] = gc*nbc*gr[s] + bc*gr[s] + dGbc*xr[s]*invG;
+                        dxr[s] = gc * nbc * gr[s] + bc * gr[s] + dGbc * xr[s] * invG;
                 }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("grn_backward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("grn_backward").not_implemented("dtype");
         return {Storage{std::move(dx)}, Storage{std::move(dg)}, Storage{std::move(db)}};
     }
 
     // ---- Interpolation --------------------------------------------------
 
     Storage interpolate_nearest_2d_forward(
-        const Storage& input, const Shape& in_shape,
-        int H_out, int W_out, Dtype dt) override {
-        const int N    = static_cast<int>(in_shape[0]);
-        const int C    = static_cast<int>(in_shape[1]);
+        const Storage& input, const Shape& in_shape, int H_out, int W_out, Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
         const int H_in = static_cast<int>(in_shape[2]);
         const int W_in = static_cast<int>(in_shape[3]);
         const auto& xs = std::get<CpuStorage>(input);
-        auto out_cpu   = alloc_cpu(static_cast<std::size_t>(N) * C * H_out * W_out, dt);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * H_out * W_out, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
             for (int n = 0; n < N; ++n)
                 for (int c = 0; c < C; ++c) {
-                    const T* base  = xp + ((n * C + c) * H_in) * W_in;
-                    T*       obase = op  + ((n * C + c) * H_out) * W_out;
+                    const T* base = xp + ((n * C + c) * H_in) * W_in;
+                    T* obase = op + ((n * C + c) * H_out) * W_out;
                     for (int h = 0; h < H_out; ++h) {
-                        int yh = static_cast<int>(
-                            std::floor(static_cast<double>(h) * H_in / H_out));
+                        int yh =
+                            static_cast<int>(std::floor(static_cast<double>(h) * H_in / H_out));
                         yh = std::clamp(yh, 0, H_in - 1);
                         for (int w = 0; w < W_out; ++w) {
-                            int xw = static_cast<int>(
-                                std::floor(static_cast<double>(w) * W_in / W_out));
+                            int xw =
+                                static_cast<int>(std::floor(static_cast<double>(w) * W_in / W_out));
                             xw = std::clamp(xw, 0, W_in - 1);
                             obase[h * W_out + w] = base[yh * W_in + xw];
                         }
                     }
                 }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::interpolate_nearest_2d_forward")
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::interpolate_nearest_2d_forward")
                 .not_implemented("dtype must be F32/F64");
         return Storage{std::move(out_cpu)};
     }
 
-    Storage interpolate_nearest_3d_forward(
-        const Storage& input, const Shape& in_shape,
-        int D_out, int H_out, int W_out, Dtype dt) override {
-        const int N    = static_cast<int>(in_shape[0]);
-        const int C    = static_cast<int>(in_shape[1]);
+    Storage interpolate_nearest_3d_forward(const Storage& input,
+                                           const Shape& in_shape,
+                                           int D_out,
+                                           int H_out,
+                                           int W_out,
+                                           Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
         const int D_in = static_cast<int>(in_shape[2]);
         const int H_in = static_cast<int>(in_shape[3]);
         const int W_in = static_cast<int>(in_shape[4]);
         const auto& xs = std::get<CpuStorage>(input);
-        auto out_cpu = alloc_cpu(
-            static_cast<std::size_t>(N) * C * D_out * H_out * W_out, dt);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * D_out * H_out * W_out, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
             for (int n = 0; n < N; ++n)
                 for (int c = 0; c < C; ++c) {
-                    const T* base  = xp + (n * C + c) * D_in * H_in * W_in;
-                    T*       obase = op  + (n * C + c) * D_out * H_out * W_out;
+                    const T* base = xp + (n * C + c) * D_in * H_in * W_in;
+                    T* obase = op + (n * C + c) * D_out * H_out * W_out;
                     for (int d = 0; d < D_out; ++d) {
                         int dz = std::clamp(
-                            static_cast<int>(std::floor(
-                                static_cast<double>(d) * D_in / D_out)),
-                            0, D_in - 1);
+                            static_cast<int>(std::floor(static_cast<double>(d) * D_in / D_out)), 0,
+                            D_in - 1);
                         for (int h = 0; h < H_out; ++h) {
                             int yh = std::clamp(
-                                static_cast<int>(std::floor(
-                                    static_cast<double>(h) * H_in / H_out)),
+                                static_cast<int>(std::floor(static_cast<double>(h) * H_in / H_out)),
                                 0, H_in - 1);
                             for (int w = 0; w < W_out; ++w) {
-                                int xw = std::clamp(
-                                    static_cast<int>(std::floor(
-                                        static_cast<double>(w) * W_in / W_out)),
-                                    0, W_in - 1);
+                                int xw = std::clamp(static_cast<int>(std::floor(
+                                                        static_cast<double>(w) * W_in / W_out)),
+                                                    0, W_in - 1);
                                 obase[(d * H_out + h) * W_out + w] =
                                     base[(dz * H_in + yh) * W_in + xw];
                             }
@@ -5896,129 +6214,145 @@ public:
                     }
                 }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::interpolate_nearest_3d_forward")
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::interpolate_nearest_3d_forward")
                 .not_implemented("dtype must be F32/F64");
         return Storage{std::move(out_cpu)};
     }
 
-    Storage interpolate_bilinear_forward(
-        const Storage& input, const Shape& in_shape,
-        int H_out, int W_out, bool align_corners, Dtype dt) override {
-        const int N    = static_cast<int>(in_shape[0]);
-        const int C    = static_cast<int>(in_shape[1]);
+    Storage interpolate_bilinear_forward(const Storage& input,
+                                         const Shape& in_shape,
+                                         int H_out,
+                                         int W_out,
+                                         bool align_corners,
+                                         Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
         const int H_in = static_cast<int>(in_shape[2]);
         const int W_in = static_cast<int>(in_shape[3]);
         const auto& xs = std::get<CpuStorage>(input);
-        auto out_cpu   = alloc_cpu(
-            static_cast<std::size_t>(N) * C * H_out * W_out, dt);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * H_out * W_out, dt);
 
         auto src_coord_fn = [](int out_idx, int in_dim, int out_dim, bool align, auto T_tag) {
             using T = decltype(T_tag);
             if (align) {
-                if (out_dim <= 1) return T{0};
-                return static_cast<T>(out_idx)
-                    * static_cast<T>(in_dim - 1)
-                    / static_cast<T>(out_dim - 1);
+                if (out_dim <= 1)
+                    return T{0};
+                return static_cast<T>(out_idx) * static_cast<T>(in_dim - 1) /
+                       static_cast<T>(out_dim - 1);
             }
-            const T x = (static_cast<T>(out_idx) + T{0.5})
-                        * static_cast<T>(in_dim) / static_cast<T>(out_dim)
-                        - T{0.5};
+            const T x = (static_cast<T>(out_idx) + T{0.5}) * static_cast<T>(in_dim) /
+                            static_cast<T>(out_dim) -
+                        T{0.5};
             return x;
         };
 
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
-            const std::size_t in_chan  = static_cast<std::size_t>(H_in) * W_in;
+            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            const std::size_t in_chan = static_cast<std::size_t>(H_in) * W_in;
             const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
             for (int n = 0; n < N; ++n)
                 for (int c = 0; c < C; ++c) {
                     for (int h = 0; h < H_out; ++h) {
                         T iy = src_coord_fn(h, H_in, H_out, align_corners, T{});
-                        if (iy < T{0}) iy = T{0};
-                        if (iy > static_cast<T>(H_in - 1)) iy = static_cast<T>(H_in - 1);
+                        if (iy < T{0})
+                            iy = T{0};
+                        if (iy > static_cast<T>(H_in - 1))
+                            iy = static_cast<T>(H_in - 1);
                         int y0 = static_cast<int>(std::floor(iy));
                         int y1 = std::min(y0 + 1, H_in - 1);
                         const T dy = iy - static_cast<T>(y0);
                         for (int w = 0; w < W_out; ++w) {
                             T ix = src_coord_fn(w, W_in, W_out, align_corners, T{});
-                            if (ix < T{0}) ix = T{0};
-                            if (ix > static_cast<T>(W_in - 1)) ix = static_cast<T>(W_in - 1);
+                            if (ix < T{0})
+                                ix = T{0};
+                            if (ix > static_cast<T>(W_in - 1))
+                                ix = static_cast<T>(W_in - 1);
                             int x0 = static_cast<int>(std::floor(ix));
                             int x1 = std::min(x0 + 1, W_in - 1);
-                            const T dx  = ix - static_cast<T>(x0);
+                            const T dx = ix - static_cast<T>(x0);
                             const T w00 = (T{1} - dy) * (T{1} - dx);
                             const T w01 = (T{1} - dy) * dx;
                             const T w10 = dy * (T{1} - dx);
                             const T w11 = dy * dx;
                             const T* base = xp + (n * C + c) * in_chan;
                             op[(n * C + c) * out_chan + h * W_out + w] =
-                                base[y0 * W_in + x0] * w00 +
-                                base[y0 * W_in + x1] * w01 +
-                                base[y1 * W_in + x0] * w10 +
-                                base[y1 * W_in + x1] * w11;
+                                base[y0 * W_in + x0] * w00 + base[y0 * W_in + x1] * w01 +
+                                base[y1 * W_in + x0] * w10 + base[y1 * W_in + x1] * w11;
                         }
                     }
                 }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::interpolate_bilinear_forward")
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::interpolate_bilinear_forward")
                 .not_implemented("dtype must be F32/F64");
         return Storage{std::move(out_cpu)};
     }
 
-    Storage interpolate_bilinear_backward(
-        const Storage& grad_out, const Shape& in_shape,
-        int H_out, int W_out, bool align_corners, Dtype dt) override {
-        const int N    = static_cast<int>(in_shape[0]);
-        const int C    = static_cast<int>(in_shape[1]);
+    Storage interpolate_bilinear_backward(const Storage& grad_out,
+                                          const Shape& in_shape,
+                                          int H_out,
+                                          int W_out,
+                                          bool align_corners,
+                                          Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
         const int H_in = static_cast<int>(in_shape[2]);
         const int W_in = static_cast<int>(in_shape[3]);
         const auto& go = std::get<CpuStorage>(grad_out);
-        auto dx_cpu    = alloc_cpu(
-            static_cast<std::size_t>(N) * C * H_in * W_in, dt);
+        auto dx_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * H_in * W_in, dt);
 
         auto src_coord_fn = [](int out_idx, int in_dim, int out_dim, bool align, auto T_tag) {
             using T = decltype(T_tag);
             if (align) {
-                if (out_dim <= 1) return T{0};
-                return static_cast<T>(out_idx)
-                    * static_cast<T>(in_dim - 1)
-                    / static_cast<T>(out_dim - 1);
+                if (out_dim <= 1)
+                    return T{0};
+                return static_cast<T>(out_idx) * static_cast<T>(in_dim - 1) /
+                       static_cast<T>(out_dim - 1);
             }
-            const T x = (static_cast<T>(out_idx) + T{0.5})
-                        * static_cast<T>(in_dim) / static_cast<T>(out_dim)
-                        - T{0.5};
+            const T x = (static_cast<T>(out_idx) + T{0.5}) * static_cast<T>(in_dim) /
+                            static_cast<T>(out_dim) -
+                        T{0.5};
             return x;
         };
 
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* go_p = reinterpret_cast<const T*>(go.ptr.get());
-            T*       dx_p = reinterpret_cast<T*>(dx_cpu.ptr.get());
-            const std::size_t in_chan  = static_cast<std::size_t>(H_in) * W_in;
+            T* dx_p = reinterpret_cast<T*>(dx_cpu.ptr.get());
+            const std::size_t in_chan = static_cast<std::size_t>(H_in) * W_in;
             const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
             std::memset(dx_p, 0, sizeof(T) * static_cast<std::size_t>(N) * C * in_chan);
             for (int n = 0; n < N; ++n)
                 for (int c = 0; c < C; ++c) {
                     for (int h = 0; h < H_out; ++h) {
                         T iy = src_coord_fn(h, H_in, H_out, align_corners, T{});
-                        if (iy < T{0}) iy = T{0};
-                        if (iy > static_cast<T>(H_in - 1)) iy = static_cast<T>(H_in - 1);
+                        if (iy < T{0})
+                            iy = T{0};
+                        if (iy > static_cast<T>(H_in - 1))
+                            iy = static_cast<T>(H_in - 1);
                         int y0 = static_cast<int>(std::floor(iy));
                         int y1 = std::min(y0 + 1, H_in - 1);
                         const T dy = iy - static_cast<T>(y0);
                         for (int w = 0; w < W_out; ++w) {
                             T ix = src_coord_fn(w, W_in, W_out, align_corners, T{});
-                            if (ix < T{0}) ix = T{0};
-                            if (ix > static_cast<T>(W_in - 1)) ix = static_cast<T>(W_in - 1);
+                            if (ix < T{0})
+                                ix = T{0};
+                            if (ix > static_cast<T>(W_in - 1))
+                                ix = static_cast<T>(W_in - 1);
                             int x0 = static_cast<int>(std::floor(ix));
                             int x1 = std::min(x0 + 1, W_in - 1);
-                            const T dx  = ix - static_cast<T>(x0);
+                            const T dx = ix - static_cast<T>(x0);
                             const T w00 = (T{1} - dy) * (T{1} - dx);
                             const T w01 = (T{1} - dy) * dx;
                             const T w10 = dy * (T{1} - dx);
@@ -6033,49 +6367,61 @@ public:
                     }
                 }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::interpolate_bilinear_backward")
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::interpolate_bilinear_backward")
                 .not_implemented("dtype must be F32/F64");
         return Storage{std::move(dx_cpu)};
     }
 
-    Storage interpolate_trilinear_forward(
-        const Storage& input, const Shape& in_shape,
-        int D_out, int H_out, int W_out, bool align_corners, Dtype dt) override {
-        const int N    = static_cast<int>(in_shape[0]);
-        const int C    = static_cast<int>(in_shape[1]);
+    Storage interpolate_trilinear_forward(const Storage& input,
+                                          const Shape& in_shape,
+                                          int D_out,
+                                          int H_out,
+                                          int W_out,
+                                          bool align_corners,
+                                          Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
         const int D_in = static_cast<int>(in_shape[2]);
         const int H_in = static_cast<int>(in_shape[3]);
         const int W_in = static_cast<int>(in_shape[4]);
         const auto& xs = std::get<CpuStorage>(input);
-        auto out_cpu = alloc_cpu(
-            static_cast<std::size_t>(N) * C * D_out * H_out * W_out, dt);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * D_out * H_out * W_out, dt);
 
         auto src_coord_fn = [](int o, int in_n, int out_n, bool align, auto T_tag) {
             using T = decltype(T_tag);
             T v;
             if (align) {
-                if (out_n <= 1) { v = T{0}; }
-                else { v = static_cast<T>(o) * static_cast<T>(in_n - 1) / static_cast<T>(out_n - 1); }
+                if (out_n <= 1) {
+                    v = T{0};
+                } else {
+                    v = static_cast<T>(o) * static_cast<T>(in_n - 1) / static_cast<T>(out_n - 1);
+                }
             } else {
-                v = (static_cast<T>(o) + T{0.5}) * static_cast<T>(in_n) / static_cast<T>(out_n) - T{0.5};
+                v = (static_cast<T>(o) + T{0.5}) * static_cast<T>(in_n) / static_cast<T>(out_n) -
+                    T{0.5};
             }
-            if (v < T{0}) v = T{0};
-            if (v > static_cast<T>(in_n - 1)) v = static_cast<T>(in_n - 1);
+            if (v < T{0})
+                v = T{0};
+            if (v > static_cast<T>(in_n - 1))
+                v = static_cast<T>(in_n - 1);
             return v;
         };
 
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
-            const std::size_t in_chan  = static_cast<std::size_t>(D_in) * H_in * W_in;
+            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            const std::size_t in_chan = static_cast<std::size_t>(D_in) * H_in * W_in;
             const std::size_t out_chan = static_cast<std::size_t>(D_out) * H_out * W_out;
             for (int n = 0; n < N; ++n)
                 for (int c = 0; c < C; ++c) {
-                    const T* base  = xp + (n * C + c) * in_chan;
-                    T*       obase = op  + (n * C + c) * out_chan;
+                    const T* base = xp + (n * C + c) * in_chan;
+                    T* obase = op + (n * C + c) * out_chan;
                     for (int d = 0; d < D_out; ++d) {
                         T iz = src_coord_fn(d, D_in, D_out, align_corners, T{});
                         int z0 = static_cast<int>(std::floor(iz));
@@ -6092,73 +6438,85 @@ public:
                                 int x1 = std::min(x0 + 1, W_in - 1);
                                 const T dx = ix - static_cast<T>(x0);
                                 auto idx = [&](int z, int y, int x) -> std::size_t {
-                                    return static_cast<std::size_t>(z) * H_in * W_in
-                                         + static_cast<std::size_t>(y) * W_in + x;
+                                    return static_cast<std::size_t>(z) * H_in * W_in +
+                                           static_cast<std::size_t>(y) * W_in + x;
                                 };
-                                const T c000 = base[idx(z0,y0,x0)];
-                                const T c001 = base[idx(z0,y0,x1)];
-                                const T c010 = base[idx(z0,y1,x0)];
-                                const T c011 = base[idx(z0,y1,x1)];
-                                const T c100 = base[idx(z1,y0,x0)];
-                                const T c101 = base[idx(z1,y0,x1)];
-                                const T c110 = base[idx(z1,y1,x0)];
-                                const T c111 = base[idx(z1,y1,x1)];
-                                const T c00  = c000*(T{1}-dx) + c001*dx;
-                                const T c01  = c010*(T{1}-dx) + c011*dx;
-                                const T c10  = c100*(T{1}-dx) + c101*dx;
-                                const T c11  = c110*(T{1}-dx) + c111*dx;
-                                const T c0   = c00*(T{1}-dy) + c01*dy;
-                                const T c1   = c10*(T{1}-dy) + c11*dy;
-                                obase[d*H_out*W_out + h*W_out + w] =
-                                    c0*(T{1}-dz) + c1*dz;
+                                const T c000 = base[idx(z0, y0, x0)];
+                                const T c001 = base[idx(z0, y0, x1)];
+                                const T c010 = base[idx(z0, y1, x0)];
+                                const T c011 = base[idx(z0, y1, x1)];
+                                const T c100 = base[idx(z1, y0, x0)];
+                                const T c101 = base[idx(z1, y0, x1)];
+                                const T c110 = base[idx(z1, y1, x0)];
+                                const T c111 = base[idx(z1, y1, x1)];
+                                const T c00 = c000 * (T{1} - dx) + c001 * dx;
+                                const T c01 = c010 * (T{1} - dx) + c011 * dx;
+                                const T c10 = c100 * (T{1} - dx) + c101 * dx;
+                                const T c11 = c110 * (T{1} - dx) + c111 * dx;
+                                const T c0 = c00 * (T{1} - dy) + c01 * dy;
+                                const T c1 = c10 * (T{1} - dy) + c11 * dy;
+                                obase[d * H_out * W_out + h * W_out + w] =
+                                    c0 * (T{1} - dz) + c1 * dz;
                             }
                         }
                     }
                 }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::interpolate_trilinear_forward")
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::interpolate_trilinear_forward")
                 .not_implemented("dtype must be F32/F64");
         return Storage{std::move(out_cpu)};
     }
 
-    Storage interpolate_trilinear_backward(
-        const Storage& grad_out, const Shape& in_shape,
-        int D_out, int H_out, int W_out, bool align_corners, Dtype dt) override {
-        const int N    = static_cast<int>(in_shape[0]);
-        const int C    = static_cast<int>(in_shape[1]);
+    Storage interpolate_trilinear_backward(const Storage& grad_out,
+                                           const Shape& in_shape,
+                                           int D_out,
+                                           int H_out,
+                                           int W_out,
+                                           bool align_corners,
+                                           Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
         const int D_in = static_cast<int>(in_shape[2]);
         const int H_in = static_cast<int>(in_shape[3]);
         const int W_in = static_cast<int>(in_shape[4]);
         const auto& go = std::get<CpuStorage>(grad_out);
-        auto dx_cpu = alloc_cpu(
-            static_cast<std::size_t>(N) * C * D_in * H_in * W_in, dt);
+        auto dx_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * D_in * H_in * W_in, dt);
 
         auto src_coord_fn = [](int o, int in_n, int out_n, bool align, auto T_tag) {
             using T = decltype(T_tag);
             T v;
             if (align) {
-                if (out_n <= 1) { v = T{0}; }
-                else { v = static_cast<T>(o) * static_cast<T>(in_n - 1) / static_cast<T>(out_n - 1); }
+                if (out_n <= 1) {
+                    v = T{0};
+                } else {
+                    v = static_cast<T>(o) * static_cast<T>(in_n - 1) / static_cast<T>(out_n - 1);
+                }
             } else {
-                v = (static_cast<T>(o) + T{0.5}) * static_cast<T>(in_n) / static_cast<T>(out_n) - T{0.5};
+                v = (static_cast<T>(o) + T{0.5}) * static_cast<T>(in_n) / static_cast<T>(out_n) -
+                    T{0.5};
             }
-            if (v < T{0}) v = T{0};
-            if (v > static_cast<T>(in_n - 1)) v = static_cast<T>(in_n - 1);
+            if (v < T{0})
+                v = T{0};
+            if (v > static_cast<T>(in_n - 1))
+                v = static_cast<T>(in_n - 1);
             return v;
         };
 
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* go_p = reinterpret_cast<const T*>(go.ptr.get());
-            T*       dx_p = reinterpret_cast<T*>(dx_cpu.ptr.get());
-            const std::size_t in_chan  = static_cast<std::size_t>(D_in) * H_in * W_in;
+            T* dx_p = reinterpret_cast<T*>(dx_cpu.ptr.get());
+            const std::size_t in_chan = static_cast<std::size_t>(D_in) * H_in * W_in;
             const std::size_t out_chan = static_cast<std::size_t>(D_out) * H_out * W_out;
             std::memset(dx_p, 0, sizeof(T) * static_cast<std::size_t>(N) * C * in_chan);
             for (int n = 0; n < N; ++n)
                 for (int c = 0; c < C; ++c) {
-                    T*       base    = dx_p + (n * C + c) * in_chan;
+                    T* base = dx_p + (n * C + c) * in_chan;
                     const T* go_base = go_p + (n * C + c) * out_chan;
                     for (int d = 0; d < D_out; ++d) {
                         T iz = src_coord_fn(d, D_in, D_out, align_corners, T{});
@@ -6175,28 +6533,31 @@ public:
                                 int x0 = static_cast<int>(std::floor(ix));
                                 int x1 = std::min(x0 + 1, W_in - 1);
                                 const T dx = ix - static_cast<T>(x0);
-                                const T g  = go_base[d*H_out*W_out + h*W_out + w];
+                                const T g = go_base[d * H_out * W_out + h * W_out + w];
                                 auto add = [&](int z, int y, int x, T weight) {
-                                    base[static_cast<std::size_t>(z)*H_in*W_in +
-                                         static_cast<std::size_t>(y)*W_in + x] += g * weight;
+                                    base[static_cast<std::size_t>(z) * H_in * W_in +
+                                         static_cast<std::size_t>(y) * W_in + x] += g * weight;
                                 };
-                                const T omdx = T{1}-dx, omdy = T{1}-dy, omdz = T{1}-dz;
-                                add(z0,y0,x0, omdz*omdy*omdx);
-                                add(z0,y0,x1, omdz*omdy*dx);
-                                add(z0,y1,x0, omdz*dy*omdx);
-                                add(z0,y1,x1, omdz*dy*dx);
-                                add(z1,y0,x0, dz*omdy*omdx);
-                                add(z1,y0,x1, dz*omdy*dx);
-                                add(z1,y1,x0, dz*dy*omdx);
-                                add(z1,y1,x1, dz*dy*dx);
+                                const T omdx = T{1} - dx, omdy = T{1} - dy, omdz = T{1} - dz;
+                                add(z0, y0, x0, omdz * omdy * omdx);
+                                add(z0, y0, x1, omdz * omdy * dx);
+                                add(z0, y1, x0, omdz * dy * omdx);
+                                add(z0, y1, x1, omdz * dy * dx);
+                                add(z1, y0, x0, dz * omdy * omdx);
+                                add(z1, y0, x1, dz * omdy * dx);
+                                add(z1, y1, x0, dz * dy * omdx);
+                                add(z1, y1, x1, dz * dy * dx);
                             }
                         }
                     }
                 }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::interpolate_trilinear_backward")
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::interpolate_trilinear_backward")
                 .not_implemented("dtype must be F32/F64");
         return Storage{std::move(dx_cpu)};
     }
@@ -6204,49 +6565,47 @@ public:
     // ---- Spatial transforms ---------------------------------------------
 
     Storage affine_grid_forward(
-        const Storage& theta, int N, int H, int W,
-        bool align_corners, Dtype dt) override {
+        const Storage& theta, int N, int H, int W, bool align_corners, Dtype dt) override {
         const auto& th = std::get<CpuStorage>(theta);
         auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * H * W * 2, dt);
 
         auto x_norm_fn = [](int w, int W2, bool align, auto T_tag) {
             using T = decltype(T_tag);
             if (align)
-                return W2 > 1
-                    ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W2 - 1)
-                    : T{0};
+                return W2 > 1 ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W2 - 1) : T{0};
             return T{-1} + (T{2} * static_cast<T>(w) + T{1}) / static_cast<T>(W2);
         };
 
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* tp = reinterpret_cast<const T*>(th.ptr.get());
-            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
             for (int n = 0; n < N; ++n) {
-                const T t00 = tp[n*6+0], t01 = tp[n*6+1], t02 = tp[n*6+2];
-                const T t10 = tp[n*6+3], t11 = tp[n*6+4], t12 = tp[n*6+5];
+                const T t00 = tp[n * 6 + 0], t01 = tp[n * 6 + 1], t02 = tp[n * 6 + 2];
+                const T t10 = tp[n * 6 + 3], t11 = tp[n * 6 + 4], t12 = tp[n * 6 + 5];
                 for (int h = 0; h < H; ++h) {
                     const T y = x_norm_fn(h, H, align_corners, T{});
                     for (int w = 0; w < W; ++w) {
                         const T x = x_norm_fn(w, W, align_corners, T{});
                         const std::size_t base =
                             ((static_cast<std::size_t>(n) * H + h) * W + w) * 2;
-                        op[base + 0] = t00*x + t01*y + t02;
-                        op[base + 1] = t10*x + t11*y + t12;
+                        op[base + 0] = t00 * x + t01 * y + t02;
+                        op[base + 1] = t10 * x + t11 * y + t12;
                     }
                 }
             }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::affine_grid_forward")
-                .not_implemented("dtype must be F32/F64");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::affine_grid_forward").not_implemented("dtype must be F32/F64");
         return Storage{std::move(out_cpu)};
     }
 
     Storage affine_grid_backward(
-        const Storage& grad_grid, int N, int H, int W,
-        bool align_corners, Dtype dt) override {
+        const Storage& grad_grid, int N, int H, int W, bool align_corners, Dtype dt) override {
         const auto& gs = std::get<CpuStorage>(grad_grid);
         auto dtheta = alloc_cpu(static_cast<std::size_t>(N) * 2 * 3, dt);
         std::memset(dtheta.ptr.get(), 0, dtheta.nbytes);
@@ -6254,19 +6613,17 @@ public:
         auto x_norm_fn = [](int w, int W2, bool align, auto T_tag) {
             using T = decltype(T_tag);
             if (align)
-                return W2 > 1
-                    ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W2 - 1)
-                    : T{0};
+                return W2 > 1 ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W2 - 1) : T{0};
             return T{-1} + (T{2} * static_cast<T>(w) + T{1}) / static_cast<T>(W2);
         };
 
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            T*       dp = reinterpret_cast<T*>(dtheta.ptr.get());
+            T* dp = reinterpret_cast<T*>(dtheta.ptr.get());
             for (int n = 0; n < N; ++n) {
-                T s00=T{0}, s01=T{0}, s02=T{0};
-                T s10=T{0}, s11=T{0}, s12=T{0};
+                T s00 = T{0}, s01 = T{0}, s02 = T{0};
+                T s10 = T{0}, s11 = T{0}, s12 = T{0};
                 for (int h = 0; h < H; ++h) {
                     const T y = x_norm_fn(h, H, align_corners, T{});
                     for (int w = 0; w < W; ++w) {
@@ -6275,35 +6632,48 @@ public:
                             ((static_cast<std::size_t>(n) * H + h) * W + w) * 2;
                         const T gx = gp[base + 0];
                         const T gy = gp[base + 1];
-                        s00 += gx*x; s01 += gx*y; s02 += gx;
-                        s10 += gy*x; s11 += gy*y; s12 += gy;
+                        s00 += gx * x;
+                        s01 += gx * y;
+                        s02 += gx;
+                        s10 += gy * x;
+                        s11 += gy * y;
+                        s12 += gy;
                     }
                 }
-                dp[n*6+0]=s00; dp[n*6+1]=s01; dp[n*6+2]=s02;
-                dp[n*6+3]=s10; dp[n*6+4]=s11; dp[n*6+5]=s12;
+                dp[n * 6 + 0] = s00;
+                dp[n * 6 + 1] = s01;
+                dp[n * 6 + 2] = s02;
+                dp[n * 6 + 3] = s10;
+                dp[n * 6 + 4] = s11;
+                dp[n * 6 + 5] = s12;
             }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::affine_grid_backward")
-                .not_implemented("dtype must be F32/F64");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::affine_grid_backward").not_implemented("dtype must be F32/F64");
         return Storage{std::move(dtheta)};
     }
 
-    Storage grid_sample_forward(
-        const Storage& input, const Storage& grid,
-        const Shape& in_shape, const Shape& grid_shape,
-        int mode, int padding_mode, bool align_corners, Dtype dt) override {
-        const int N     = static_cast<int>(in_shape[0]);
-        const int C     = static_cast<int>(in_shape[1]);
-        const int H_in  = static_cast<int>(in_shape[2]);
-        const int W_in  = static_cast<int>(in_shape[3]);
+    Storage grid_sample_forward(const Storage& input,
+                                const Storage& grid,
+                                const Shape& in_shape,
+                                const Shape& grid_shape,
+                                int mode,
+                                int padding_mode,
+                                bool align_corners,
+                                Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
+        const int H_in = static_cast<int>(in_shape[2]);
+        const int W_in = static_cast<int>(in_shape[3]);
         const int H_out = static_cast<int>(grid_shape[1]);
         const int W_out = static_cast<int>(grid_shape[2]);
-        const auto& xs  = std::get<CpuStorage>(input);
-        const auto& gs  = std::get<CpuStorage>(grid);
-        auto out_cpu = alloc_cpu(
-            static_cast<std::size_t>(N) * C * H_out * W_out, dt);
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& gs = std::get<CpuStorage>(grid);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * H_out * W_out, dt);
 
         auto denorm_fn = [](auto g, int dim, bool align) {
             using T = decltype(g);
@@ -6316,98 +6686,102 @@ public:
             using T = decltype(tag);
             const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
             const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
-            const std::size_t in_chan  = static_cast<std::size_t>(H_in) * W_in;
+            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            const std::size_t in_chan = static_cast<std::size_t>(H_in) * W_in;
             const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
             for (int n = 0; n < N; ++n) {
                 for (int h = 0; h < H_out; ++h) {
                     for (int w = 0; w < W_out; ++w) {
                         const std::size_t gidx =
-                            ((static_cast<std::size_t>(n)*H_out+h)*W_out+w)*2;
-                        T ix = denorm_fn(gp[gidx+0], W_in, align_corners);
-                        T iy = denorm_fn(gp[gidx+1], H_in, align_corners);
+                            ((static_cast<std::size_t>(n) * H_out + h) * W_out + w) * 2;
+                        T ix = denorm_fn(gp[gidx + 0], W_in, align_corners);
+                        T iy = denorm_fn(gp[gidx + 1], H_in, align_corners);
                         if (mode == 1) {
-                            int ixr = static_cast<int>(
-                                std::nearbyint(static_cast<double>(ix)));
-                            int iyr = static_cast<int>(
-                                std::nearbyint(static_cast<double>(iy)));
+                            int ixr = static_cast<int>(std::nearbyint(static_cast<double>(ix)));
+                            int iyr = static_cast<int>(std::nearbyint(static_cast<double>(iy)));
                             bool oob = false;
                             if (padding_mode == 1) {
-                                ixr = std::clamp(ixr, 0, W_in-1);
-                                iyr = std::clamp(iyr, 0, H_in-1);
+                                ixr = std::clamp(ixr, 0, W_in - 1);
+                                iyr = std::clamp(iyr, 0, H_in - 1);
                             } else {
-                                if (ixr<0||ixr>W_in-1||iyr<0||iyr>H_in-1)
+                                if (ixr < 0 || ixr > W_in - 1 || iyr < 0 || iyr > H_in - 1)
                                     oob = true;
-                                ixr = std::clamp(ixr, 0, W_in-1);
-                                iyr = std::clamp(iyr, 0, H_in-1);
+                                ixr = std::clamp(ixr, 0, W_in - 1);
+                                iyr = std::clamp(iyr, 0, H_in - 1);
                             }
                             for (int c = 0; c < C; ++c) {
                                 T v = oob ? T{0}
-                                    : xp[((static_cast<std::size_t>(n)*C+c)*in_chan)
-                                         + iyr*W_in + ixr];
-                                op[((static_cast<std::size_t>(n)*C+c)*out_chan)
-                                   + h*W_out+w] = v;
+                                          : xp[((static_cast<std::size_t>(n) * C + c) * in_chan) +
+                                               iyr * W_in + ixr];
+                                op[((static_cast<std::size_t>(n) * C + c) * out_chan) + h * W_out +
+                                   w] = v;
                             }
                         } else {
                             if (padding_mode == 1) {
-                                ix = std::clamp<T>(ix, T{0},
-                                    static_cast<T>(W_in-1));
-                                iy = std::clamp<T>(iy, T{0},
-                                    static_cast<T>(H_in-1));
+                                ix = std::clamp<T>(ix, T{0}, static_cast<T>(W_in - 1));
+                                iy = std::clamp<T>(iy, T{0}, static_cast<T>(H_in - 1));
                             }
                             const T x0f = std::floor(ix);
                             const T y0f = std::floor(iy);
                             const int x0 = static_cast<int>(x0f);
                             const int y0 = static_cast<int>(y0f);
-                            const int x1 = x0+1, y1 = y0+1;
-                            const T wa = (static_cast<T>(x1)-ix)*(static_cast<T>(y1)-iy);
-                            const T wb = (static_cast<T>(x1)-ix)*(iy-static_cast<T>(y0));
-                            const T wc = (ix-static_cast<T>(x0))*(static_cast<T>(y1)-iy);
-                            const T wd = (ix-static_cast<T>(x0))*(iy-static_cast<T>(y0));
+                            const int x1 = x0 + 1, y1 = y0 + 1;
+                            const T wa = (static_cast<T>(x1) - ix) * (static_cast<T>(y1) - iy);
+                            const T wb = (static_cast<T>(x1) - ix) * (iy - static_cast<T>(y0));
+                            const T wc = (ix - static_cast<T>(x0)) * (static_cast<T>(y1) - iy);
+                            const T wd = (ix - static_cast<T>(x0)) * (iy - static_cast<T>(y0));
                             auto fetch = [&](int yi, int xi, int c) -> T {
                                 const bool oob =
-                                    (xi<0||xi>W_in-1||yi<0||yi>H_in-1);
-                                if (oob && padding_mode==0) return T{0};
-                                const int ycl = std::clamp(yi,0,H_in-1);
-                                const int xcl = std::clamp(xi,0,W_in-1);
-                                return xp[((static_cast<std::size_t>(n)*C+c)*in_chan)
-                                          + ycl*W_in+xcl];
+                                    (xi < 0 || xi > W_in - 1 || yi < 0 || yi > H_in - 1);
+                                if (oob && padding_mode == 0)
+                                    return T{0};
+                                const int ycl = std::clamp(yi, 0, H_in - 1);
+                                const int xcl = std::clamp(xi, 0, W_in - 1);
+                                return xp[((static_cast<std::size_t>(n) * C + c) * in_chan) +
+                                          ycl * W_in + xcl];
                             };
                             for (int c = 0; c < C; ++c) {
-                                const T Ia = fetch(y0,x0,c);
-                                const T Ib = fetch(y1,x0,c);
-                                const T Ic = fetch(y0,x1,c);
-                                const T Id = fetch(y1,x1,c);
-                                op[((static_cast<std::size_t>(n)*C+c)*out_chan)
-                                   +h*W_out+w] = Ia*wa+Ib*wb+Ic*wc+Id*wd;
+                                const T Ia = fetch(y0, x0, c);
+                                const T Ib = fetch(y1, x0, c);
+                                const T Ic = fetch(y0, x1, c);
+                                const T Id = fetch(y1, x1, c);
+                                op[((static_cast<std::size_t>(n) * C + c) * out_chan) + h * W_out +
+                                   w] = Ia * wa + Ib * wb + Ic * wc + Id * wd;
                             }
                         }
                     }
                 }
             }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::grid_sample_forward")
-                .not_implemented("dtype must be F32/F64");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::grid_sample_forward").not_implemented("dtype must be F32/F64");
         return Storage{std::move(out_cpu)};
     }
 
-    std::vector<Storage> grid_sample_backward(
-        const Storage& grad_out, const Storage& input, const Storage& grid,
-        const Shape& in_shape, const Shape& grid_shape,
-        int mode, int padding_mode, bool align_corners, Dtype dt) override {
-        const int N     = static_cast<int>(in_shape[0]);
-        const int C     = static_cast<int>(in_shape[1]);
-        const int H_in  = static_cast<int>(in_shape[2]);
-        const int W_in  = static_cast<int>(in_shape[3]);
+    std::vector<Storage> grid_sample_backward(const Storage& grad_out,
+                                              const Storage& input,
+                                              const Storage& grid,
+                                              const Shape& in_shape,
+                                              const Shape& grid_shape,
+                                              int mode,
+                                              int padding_mode,
+                                              bool align_corners,
+                                              Dtype dt) override {
+        const int N = static_cast<int>(in_shape[0]);
+        const int C = static_cast<int>(in_shape[1]);
+        const int H_in = static_cast<int>(in_shape[2]);
+        const int W_in = static_cast<int>(in_shape[3]);
         const int H_out = static_cast<int>(grid_shape[1]);
         const int W_out = static_cast<int>(grid_shape[2]);
-        const auto& xs  = std::get<CpuStorage>(input);
-        const auto& gs  = std::get<CpuStorage>(grid);
+        const auto& xs = std::get<CpuStorage>(input);
+        const auto& gs = std::get<CpuStorage>(grid);
         const auto& gout = std::get<CpuStorage>(grad_out);
-        auto dx = alloc_cpu(static_cast<std::size_t>(N)*C*H_in*W_in, dt);
-        auto dg = alloc_cpu(static_cast<std::size_t>(N)*H_out*W_out*2, dt);
+        auto dx = alloc_cpu(static_cast<std::size_t>(N) * C * H_in * W_in, dt);
+        auto dg = alloc_cpu(static_cast<std::size_t>(N) * H_out * W_out * 2, dt);
         std::memset(dx.ptr.get(), 0, dx.nbytes);
         std::memset(dg.ptr.get(), 0, dg.nbytes);
 
@@ -6419,56 +6793,68 @@ public:
         };
         auto denorm_grad_factor_fn = [](int dim, bool align, auto T_tag) {
             using T = decltype(T_tag);
-            return align ? static_cast<T>(dim-1)/T{2} : static_cast<T>(dim)/T{2};
+            return align ? static_cast<T>(dim - 1) / T{2} : static_cast<T>(dim) / T{2};
         };
 
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp  = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* gp  = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* op  = reinterpret_cast<const T*>(gout.ptr.get());
-            T*       dxp = reinterpret_cast<T*>(dx.ptr.get());
-            T*       dgp = reinterpret_cast<T*>(dg.ptr.get());
-            const std::size_t in_chan  = static_cast<std::size_t>(H_in)*W_in;
-            const std::size_t out_chan = static_cast<std::size_t>(H_out)*W_out;
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            const T* op = reinterpret_cast<const T*>(gout.ptr.get());
+            T* dxp = reinterpret_cast<T*>(dx.ptr.get());
+            T* dgp = reinterpret_cast<T*>(dg.ptr.get());
+            const std::size_t in_chan = static_cast<std::size_t>(H_in) * W_in;
+            const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
             const T sx = denorm_grad_factor_fn(W_in, align_corners, T{});
             const T sy = denorm_grad_factor_fn(H_in, align_corners, T{});
             for (int n = 0; n < N; ++n) {
                 for (int h = 0; h < H_out; ++h) {
                     for (int w = 0; w < W_out; ++w) {
                         const std::size_t gidx =
-                            ((static_cast<std::size_t>(n)*H_out+h)*W_out+w)*2;
-                        const T gx_norm = gp[gidx+0];
-                        const T gy_norm = gp[gidx+1];
+                            ((static_cast<std::size_t>(n) * H_out + h) * W_out + w) * 2;
+                        const T gx_norm = gp[gidx + 0];
+                        const T gy_norm = gp[gidx + 1];
                         T ix = denorm_fn(gx_norm, W_in, align_corners);
                         T iy = denorm_fn(gy_norm, H_in, align_corners);
-                        bool clipped_x=false, clipped_y=false;
-                        if (mode==0 && padding_mode==1) {
-                            if (ix<T{0}) { ix=T{0}; clipped_x=true; }
-                            if (ix>static_cast<T>(W_in-1)) { ix=static_cast<T>(W_in-1); clipped_x=true; }
-                            if (iy<T{0}) { iy=T{0}; clipped_y=true; }
-                            if (iy>static_cast<T>(H_in-1)) { iy=static_cast<T>(H_in-1); clipped_y=true; }
+                        bool clipped_x = false, clipped_y = false;
+                        if (mode == 0 && padding_mode == 1) {
+                            if (ix < T{0}) {
+                                ix = T{0};
+                                clipped_x = true;
+                            }
+                            if (ix > static_cast<T>(W_in - 1)) {
+                                ix = static_cast<T>(W_in - 1);
+                                clipped_x = true;
+                            }
+                            if (iy < T{0}) {
+                                iy = T{0};
+                                clipped_y = true;
+                            }
+                            if (iy > static_cast<T>(H_in - 1)) {
+                                iy = static_cast<T>(H_in - 1);
+                                clipped_y = true;
+                            }
                         }
-                        if (mode==1) {
-                            int ixr = static_cast<int>(
-                                std::nearbyint(static_cast<double>(ix)));
-                            int iyr = static_cast<int>(
-                                std::nearbyint(static_cast<double>(iy)));
+                        if (mode == 1) {
+                            int ixr = static_cast<int>(std::nearbyint(static_cast<double>(ix)));
+                            int iyr = static_cast<int>(std::nearbyint(static_cast<double>(iy)));
                             bool oob = false;
-                            if (padding_mode==1) {
-                                ixr=std::clamp(ixr,0,W_in-1);
-                                iyr=std::clamp(iyr,0,H_in-1);
+                            if (padding_mode == 1) {
+                                ixr = std::clamp(ixr, 0, W_in - 1);
+                                iyr = std::clamp(iyr, 0, H_in - 1);
                             } else {
-                                if (ixr<0||ixr>W_in-1||iyr<0||iyr>H_in-1)
-                                    oob=true;
-                                ixr=std::clamp(ixr,0,W_in-1);
-                                iyr=std::clamp(iyr,0,H_in-1);
+                                if (ixr < 0 || ixr > W_in - 1 || iyr < 0 || iyr > H_in - 1)
+                                    oob = true;
+                                ixr = std::clamp(ixr, 0, W_in - 1);
+                                iyr = std::clamp(iyr, 0, H_in - 1);
                             }
                             if (!oob) {
-                                for (int c=0; c<C; ++c) {
+                                for (int c = 0; c < C; ++c) {
                                     const T go =
-                                        op[((static_cast<std::size_t>(n)*C+c)*out_chan)+h*W_out+w];
-                                    dxp[((static_cast<std::size_t>(n)*C+c)*in_chan)+iyr*W_in+ixr]+=go;
+                                        op[((static_cast<std::size_t>(n) * C + c) * out_chan) +
+                                           h * W_out + w];
+                                    dxp[((static_cast<std::size_t>(n) * C + c) * in_chan) +
+                                        iyr * W_in + ixr] += go;
                                 }
                             }
                             continue;
@@ -6477,83 +6863,96 @@ public:
                         const T y0f = std::floor(iy);
                         const int x0 = static_cast<int>(x0f);
                         const int y0 = static_cast<int>(y0f);
-                        const int x1 = x0+1, y1 = y0+1;
-                        const T wa = (static_cast<T>(x1)-ix)*(static_cast<T>(y1)-iy);
-                        const T wb = (static_cast<T>(x1)-ix)*(iy-static_cast<T>(y0));
-                        const T wc = (ix-static_cast<T>(x0))*(static_cast<T>(y1)-iy);
-                        const T wd = (ix-static_cast<T>(x0))*(iy-static_cast<T>(y0));
-                        auto in_bounds = [&](int yi,int xi)->bool {
-                            return xi>=0&&xi<=W_in-1&&yi>=0&&yi<=H_in-1;
+                        const int x1 = x0 + 1, y1 = y0 + 1;
+                        const T wa = (static_cast<T>(x1) - ix) * (static_cast<T>(y1) - iy);
+                        const T wb = (static_cast<T>(x1) - ix) * (iy - static_cast<T>(y0));
+                        const T wc = (ix - static_cast<T>(x0)) * (static_cast<T>(y1) - iy);
+                        const T wd = (ix - static_cast<T>(x0)) * (iy - static_cast<T>(y0));
+                        auto in_bounds = [&](int yi, int xi) -> bool {
+                            return xi >= 0 && xi <= W_in - 1 && yi >= 0 && yi <= H_in - 1;
                         };
-                        auto fetch_for_dgrid = [&](int yi,int xi,int c)->T {
-                            const bool oob = !in_bounds(yi,xi);
-                            if (oob&&padding_mode==0) return T{0};
-                            const int ycl=std::clamp(yi,0,H_in-1);
-                            const int xcl=std::clamp(xi,0,W_in-1);
-                            return xp[((static_cast<std::size_t>(n)*C+c)*in_chan)+ycl*W_in+xcl];
+                        auto fetch_for_dgrid = [&](int yi, int xi, int c) -> T {
+                            const bool oob = !in_bounds(yi, xi);
+                            if (oob && padding_mode == 0)
+                                return T{0};
+                            const int ycl = std::clamp(yi, 0, H_in - 1);
+                            const int xcl = std::clamp(xi, 0, W_in - 1);
+                            return xp[((static_cast<std::size_t>(n) * C + c) * in_chan) +
+                                      ycl * W_in + xcl];
                         };
-                        auto scatter_dx = [&](int yi,int xi,int c,T contrib) {
-                            const bool oob = !in_bounds(yi,xi);
-                            if (oob&&padding_mode==0) return;
-                            const int ycl=std::clamp(yi,0,H_in-1);
-                            const int xcl=std::clamp(xi,0,W_in-1);
-                            dxp[((static_cast<std::size_t>(n)*C+c)*in_chan)+ycl*W_in+xcl]+=contrib;
+                        auto scatter_dx = [&](int yi, int xi, int c, T contrib) {
+                            const bool oob = !in_bounds(yi, xi);
+                            if (oob && padding_mode == 0)
+                                return;
+                            const int ycl = std::clamp(yi, 0, H_in - 1);
+                            const int xcl = std::clamp(xi, 0, W_in - 1);
+                            dxp[((static_cast<std::size_t>(n) * C + c) * in_chan) + ycl * W_in +
+                                xcl] += contrib;
                         };
-                        T dix_acc=T{0}, diy_acc=T{0};
-                        for (int c=0; c<C; ++c) {
-                            const T go =
-                                op[((static_cast<std::size_t>(n)*C+c)*out_chan)+h*W_out+w];
-                            scatter_dx(y0,x0,c,go*wa);
-                            scatter_dx(y1,x0,c,go*wb);
-                            scatter_dx(y0,x1,c,go*wc);
-                            scatter_dx(y1,x1,c,go*wd);
-                            const T Ia=fetch_for_dgrid(y0,x0,c);
-                            const T Ib=fetch_for_dgrid(y1,x0,c);
-                            const T Ic=fetch_for_dgrid(y0,x1,c);
-                            const T Id=fetch_for_dgrid(y1,x1,c);
-                            const T dy_t1=static_cast<T>(y1)-iy;
-                            const T dy_t2=iy-static_cast<T>(y0);
-                            const T dx_t1=static_cast<T>(x1)-ix;
-                            const T dx_t2=ix-static_cast<T>(x0);
-                            dix_acc+=go*((Ic-Ia)*dy_t1+(Id-Ib)*dy_t2);
-                            diy_acc+=go*((Ib-Ia)*dx_t1+(Id-Ic)*dx_t2);
+                        T dix_acc = T{0}, diy_acc = T{0};
+                        for (int c = 0; c < C; ++c) {
+                            const T go = op[((static_cast<std::size_t>(n) * C + c) * out_chan) +
+                                            h * W_out + w];
+                            scatter_dx(y0, x0, c, go * wa);
+                            scatter_dx(y1, x0, c, go * wb);
+                            scatter_dx(y0, x1, c, go * wc);
+                            scatter_dx(y1, x1, c, go * wd);
+                            const T Ia = fetch_for_dgrid(y0, x0, c);
+                            const T Ib = fetch_for_dgrid(y1, x0, c);
+                            const T Ic = fetch_for_dgrid(y0, x1, c);
+                            const T Id = fetch_for_dgrid(y1, x1, c);
+                            const T dy_t1 = static_cast<T>(y1) - iy;
+                            const T dy_t2 = iy - static_cast<T>(y0);
+                            const T dx_t1 = static_cast<T>(x1) - ix;
+                            const T dx_t2 = ix - static_cast<T>(x0);
+                            dix_acc += go * ((Ic - Ia) * dy_t1 + (Id - Ib) * dy_t2);
+                            diy_acc += go * ((Ib - Ia) * dx_t1 + (Id - Ic) * dx_t2);
                         }
-                        if (clipped_x) dix_acc=T{0};
-                        if (clipped_y) diy_acc=T{0};
-                        dgp[gidx+0]=dix_acc*sx;
-                        dgp[gidx+1]=diy_acc*sy;
+                        if (clipped_x)
+                            dix_acc = T{0};
+                        if (clipped_y)
+                            diy_acc = T{0};
+                        dgp[gidx + 0] = dix_acc * sx;
+                        dgp[gidx + 1] = diy_acc * sy;
                     }
                 }
             }
         };
-        if (dt == Dtype::F32)      run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::grid_sample_backward")
-                .not_implemented("dtype must be F32/F64");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::grid_sample_backward").not_implemented("dtype must be F32/F64");
         return {Storage{std::move(dx)}, Storage{std::move(dg)}};
     }
 
-    Storage bilinear_layer_forward(
-        const Storage& x1, const Storage& x2, const Storage& weight,
-        const Storage& bias, bool has_bias,
-        const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
-        Dtype dt) override {
+    Storage bilinear_layer_forward(const Storage& x1,
+                                   const Storage& x2,
+                                   const Storage& weight,
+                                   const Storage& bias,
+                                   bool has_bias,
+                                   const Shape& x1_shape,
+                                   const Shape& x2_shape,
+                                   const Shape& w_shape,
+                                   Dtype dt) override {
         std::size_t B = 1;
-        for (std::size_t i = 0; i + 1 < x1_shape.size(); ++i) B *= static_cast<std::size_t>(x1_shape[i]);
-        const std::size_t D1   = static_cast<std::size_t>(x1_shape.back());
-        const std::size_t D2   = static_cast<std::size_t>(x2_shape.back());
+        for (std::size_t i = 0; i + 1 < x1_shape.size(); ++i)
+            B *= static_cast<std::size_t>(x1_shape[i]);
+        const std::size_t D1 = static_cast<std::size_t>(x1_shape.back());
+        const std::size_t D2 = static_cast<std::size_t>(x2_shape.back());
         const std::size_t Dout = static_cast<std::size_t>(w_shape[0]);
         const auto& xs1 = std::get<CpuStorage>(x1);
         const auto& xs2 = std::get<CpuStorage>(x2);
-        const auto& ws  = std::get<CpuStorage>(weight);
+        const auto& ws = std::get<CpuStorage>(weight);
         const CpuStorage* bs = has_bias ? &std::get<CpuStorage>(bias) : nullptr;
         auto out_cpu = alloc_cpu(B * Dout, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* x1p = reinterpret_cast<const T*>(xs1.ptr.get());
             const T* x2p = reinterpret_cast<const T*>(xs2.ptr.get());
-            const T* wp  = reinterpret_cast<const T*>(ws.ptr.get());
-            const T* bp  = bs ? reinterpret_cast<const T*>(bs->ptr.get()) : nullptr;
+            const T* wp = reinterpret_cast<const T*>(ws.ptr.get());
+            const T* bp = bs ? reinterpret_cast<const T*>(bs->ptr.get()) : nullptr;
             T* yp = reinterpret_cast<T*>(out_cpu.ptr.get());
             for (std::size_t bi = 0; bi < B; ++bi) {
                 const T* x1b = x1p + bi * D1;
@@ -6564,77 +6963,91 @@ public:
                     T acc = T{0};
                     for (std::size_t i = 0; i < D1; ++i) {
                         T row = T{0};
-                        for (std::size_t j = 0; j < D2; ++j) row += Wk[i*D2+j] * x2b[j];
+                        for (std::size_t j = 0; j < D2; ++j)
+                            row += Wk[i * D2 + j] * x2b[j];
                         acc += x1b[i] * row;
                     }
                     yb[k] = acc + (bp ? bp[k] : T{0});
                 }
             }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::bilinear_layer_forward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::bilinear_layer_forward").not_implemented("dtype");
         return Storage{std::move(out_cpu)};
     }
 
-    std::vector<Storage> bilinear_layer_backward(
-        const Storage& grad_out, const Storage& x1, const Storage& x2,
-        const Storage& weight,
-        const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
-        bool has_bias, Dtype dt) override {
+    std::vector<Storage> bilinear_layer_backward(const Storage& grad_out,
+                                                 const Storage& x1,
+                                                 const Storage& x2,
+                                                 const Storage& weight,
+                                                 const Shape& x1_shape,
+                                                 const Shape& x2_shape,
+                                                 const Shape& w_shape,
+                                                 bool has_bias,
+                                                 Dtype dt) override {
         std::size_t B = 1;
-        for (std::size_t i = 0; i + 1 < x1_shape.size(); ++i) B *= static_cast<std::size_t>(x1_shape[i]);
-        const std::size_t D1   = static_cast<std::size_t>(x1_shape.back());
-        const std::size_t D2   = static_cast<std::size_t>(x2_shape.back());
+        for (std::size_t i = 0; i + 1 < x1_shape.size(); ++i)
+            B *= static_cast<std::size_t>(x1_shape[i]);
+        const std::size_t D1 = static_cast<std::size_t>(x1_shape.back());
+        const std::size_t D2 = static_cast<std::size_t>(x2_shape.back());
         const std::size_t Dout = static_cast<std::size_t>(w_shape[0]);
         const auto& xs1 = std::get<CpuStorage>(x1);
         const auto& xs2 = std::get<CpuStorage>(x2);
-        const auto& ws  = std::get<CpuStorage>(weight);
+        const auto& ws = std::get<CpuStorage>(weight);
         const auto& gys = std::get<CpuStorage>(grad_out);
-        auto dx1_cpu = alloc_cpu(B*D1, dt);
-        auto dx2_cpu = alloc_cpu(B*D2, dt);
-        auto dW_cpu  = alloc_cpu(Dout*D1*D2, dt);
-        auto db_cpu  = has_bias ? alloc_cpu(Dout, dt) : CpuStorage{};
+        auto dx1_cpu = alloc_cpu(B * D1, dt);
+        auto dx2_cpu = alloc_cpu(B * D2, dt);
+        auto dW_cpu = alloc_cpu(Dout * D1 * D2, dt);
+        auto db_cpu = has_bias ? alloc_cpu(Dout, dt) : CpuStorage{};
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* x1p = reinterpret_cast<const T*>(xs1.ptr.get());
             const T* x2p = reinterpret_cast<const T*>(xs2.ptr.get());
-            const T* wp  = reinterpret_cast<const T*>(ws.ptr.get());
+            const T* wp = reinterpret_cast<const T*>(ws.ptr.get());
             const T* gyp = reinterpret_cast<const T*>(gys.ptr.get());
             T* dx1p = reinterpret_cast<T*>(dx1_cpu.ptr.get());
             T* dx2p = reinterpret_cast<T*>(dx2_cpu.ptr.get());
-            T* dwp  = reinterpret_cast<T*>(dW_cpu.ptr.get());
-            T* dbp  = has_bias ? reinterpret_cast<T*>(db_cpu.ptr.get()) : nullptr;
-            std::memset(dx1p, 0, sizeof(T)*B*D1);
-            std::memset(dx2p, 0, sizeof(T)*B*D2);
-            std::memset(dwp, 0, sizeof(T)*Dout*D1*D2);
-            if (dbp) std::memset(dbp, 0, sizeof(T)*Dout);
+            T* dwp = reinterpret_cast<T*>(dW_cpu.ptr.get());
+            T* dbp = has_bias ? reinterpret_cast<T*>(db_cpu.ptr.get()) : nullptr;
+            std::memset(dx1p, 0, sizeof(T) * B * D1);
+            std::memset(dx2p, 0, sizeof(T) * B * D2);
+            std::memset(dwp, 0, sizeof(T) * Dout * D1 * D2);
+            if (dbp)
+                std::memset(dbp, 0, sizeof(T) * Dout);
             for (std::size_t bi = 0; bi < B; ++bi) {
-                const T* x1b = x1p + bi*D1;
-                const T* x2b = x2p + bi*D2;
-                const T* gb  = gyp + bi*Dout;
-                T* dx1b = dx1p + bi*D1;
-                T* dx2b = dx2p + bi*D2;
+                const T* x1b = x1p + bi * D1;
+                const T* x2b = x2p + bi * D2;
+                const T* gb = gyp + bi * Dout;
+                T* dx1b = dx1p + bi * D1;
+                T* dx2b = dx2p + bi * D2;
                 for (std::size_t k = 0; k < Dout; ++k) {
                     const T g = gb[k];
-                    if (dbp) dbp[k] += g;
-                    const T* Wk = wp + k*D1*D2;
-                    T* dWk = dwp + k*D1*D2;
+                    if (dbp)
+                        dbp[k] += g;
+                    const T* Wk = wp + k * D1 * D2;
+                    T* dWk = dwp + k * D1 * D2;
                     for (std::size_t i = 0; i < D1; ++i) {
                         T row = T{0};
                         for (std::size_t j = 0; j < D2; ++j) {
-                            row += Wk[i*D2+j] * x2b[j];
-                            dx2b[j] += g * x1b[i] * Wk[i*D2+j];
-                            dWk[i*D2+j] += g * x1b[i] * x2b[j];
+                            row += Wk[i * D2 + j] * x2b[j];
+                            dx2b[j] += g * x1b[i] * Wk[i * D2 + j];
+                            dWk[i * D2 + j] += g * x1b[i] * x2b[j];
                         }
                         dx1b[i] += g * row;
                     }
                 }
             }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::bilinear_layer_backward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::bilinear_layer_backward").not_implemented("dtype");
         std::vector<Storage> out;
         out.push_back(Storage{std::move(dx1_cpu)});
         out.push_back(Storage{std::move(dx2_cpu)});
@@ -6642,53 +7055,80 @@ public:
         if (has_bias)
             out.push_back(Storage{std::move(db_cpu)});
         else {
-            CpuStorage empty; empty.dtype = dt; empty.nbytes = 0;
+            CpuStorage empty;
+            empty.dtype = dt;
+            empty.nbytes = 0;
             out.push_back(Storage{std::move(empty)});
         }
         return out;
     }
 
-    Storage one_hot_forward(const Storage& indices, const Shape& indices_shape,
-                            int num_classes, Dtype out_dtype) override {
+    Storage one_hot_forward(const Storage& indices,
+                            const Shape& indices_shape,
+                            int num_classes,
+                            Dtype out_dtype) override {
         const std::size_t M = shape_numel(indices_shape);
         const auto& is_ = std::get<CpuStorage>(indices);
         auto out_cpu = alloc_cpu(M * static_cast<std::size_t>(num_classes), out_dtype);
         std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
         auto read_idx = [&](std::size_t i) -> std::int64_t {
             switch (is_.dtype) {
-                case Dtype::I8:   return reinterpret_cast<const std::int8_t*>(is_.ptr.get())[i];
-                case Dtype::I16:  return reinterpret_cast<const std::int16_t*>(is_.ptr.get())[i];
-                case Dtype::I32:  return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
-                case Dtype::I64:  return reinterpret_cast<const std::int64_t*>(is_.ptr.get())[i];
-                default:          return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
+                case Dtype::I8:
+                    return reinterpret_cast<const std::int8_t*>(is_.ptr.get())[i];
+                case Dtype::I16:
+                    return reinterpret_cast<const std::int16_t*>(is_.ptr.get())[i];
+                case Dtype::I32:
+                    return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
+                case Dtype::I64:
+                    return reinterpret_cast<const std::int64_t*>(is_.ptr.get())[i];
+                default:
+                    return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
             }
         };
         for (std::size_t i = 0; i < M; ++i) {
             const std::int64_t cls = read_idx(i);
-            if (cls < 0 || cls >= num_classes) continue;
+            if (cls < 0 || cls >= num_classes)
+                continue;
             const std::size_t pos = i * static_cast<std::size_t>(num_classes) + cls;
             switch (out_dtype) {
-                case Dtype::F32: reinterpret_cast<float*>(out_cpu.ptr.get())[pos] = 1.f; break;
-                case Dtype::F64: reinterpret_cast<double*>(out_cpu.ptr.get())[pos] = 1.0; break;
-                case Dtype::I8: case Dtype::Bool:
-                    reinterpret_cast<std::uint8_t*>(out_cpu.ptr.get())[pos] = 1; break;
-                case Dtype::I16: reinterpret_cast<std::int16_t*>(out_cpu.ptr.get())[pos] = 1; break;
-                case Dtype::I32: reinterpret_cast<std::int32_t*>(out_cpu.ptr.get())[pos] = 1; break;
-                case Dtype::I64: reinterpret_cast<std::int64_t*>(out_cpu.ptr.get())[pos] = 1; break;
-                default: ErrorBuilder("one_hot").not_implemented("out dtype not supported");
+                case Dtype::F32:
+                    reinterpret_cast<float*>(out_cpu.ptr.get())[pos] = 1.f;
+                    break;
+                case Dtype::F64:
+                    reinterpret_cast<double*>(out_cpu.ptr.get())[pos] = 1.0;
+                    break;
+                case Dtype::I8:
+                case Dtype::Bool:
+                    reinterpret_cast<std::uint8_t*>(out_cpu.ptr.get())[pos] = 1;
+                    break;
+                case Dtype::I16:
+                    reinterpret_cast<std::int16_t*>(out_cpu.ptr.get())[pos] = 1;
+                    break;
+                case Dtype::I32:
+                    reinterpret_cast<std::int32_t*>(out_cpu.ptr.get())[pos] = 1;
+                    break;
+                case Dtype::I64:
+                    reinterpret_cast<std::int64_t*>(out_cpu.ptr.get())[pos] = 1;
+                    break;
+                default:
+                    ErrorBuilder("one_hot").not_implemented("out dtype not supported");
             }
         }
         return Storage{std::move(out_cpu)};
     }
 
-    Storage rotate_forward(const Storage& input, const Shape& shape,
-                           double angle_rad_neg, double cx, double cy, Dtype dt) override {
+    Storage rotate_forward(const Storage& input,
+                           const Shape& shape,
+                           double angle_rad_neg,
+                           double cx,
+                           double cy,
+                           Dtype dt) override {
         const int N = static_cast<int>(shape[0]);
         const int C = static_cast<int>(shape[1]);
         const int H = static_cast<int>(shape[2]);
         const int W = static_cast<int>(shape[3]);
         const auto& xs = std::get<CpuStorage>(input);
-        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N)*C*H*W, dt);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * H * W, dt);
         const double cosv = std::cos(angle_rad_neg);
         const double sinv = std::sin(angle_rad_neg);
         auto run = [&](auto tag) {
@@ -6697,24 +7137,27 @@ public:
             T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
             for (int n = 0; n < N; ++n)
                 for (int ch = 0; ch < C; ++ch) {
-                    const T* base = xp + (n*C+ch)*H*W;
-                    T* obase = op + (n*C+ch)*H*W;
+                    const T* base = xp + (n * C + ch) * H * W;
+                    T* obase = op + (n * C + ch) * H * W;
                     for (int y = 0; y < H; ++y)
                         for (int x = 0; x < W; ++x) {
-                            const double xsd = cosv*(x-cx) - sinv*(y-cy) + cx;
-                            const double ysd = sinv*(x-cx) + cosv*(y-cy) + cy;
+                            const double xsd = cosv * (x - cx) - sinv * (y - cy) + cx;
+                            const double ysd = sinv * (x - cx) + cosv * (y - cy) + cy;
                             int xs2 = static_cast<int>(std::floor(xsd + 0.5));
                             int ys2 = static_cast<int>(std::floor(ysd + 0.5));
                             if (xs2 < 0 || xs2 >= W || ys2 < 0 || ys2 >= H)
-                                obase[y*W+x] = T{0};
+                                obase[y * W + x] = T{0};
                             else
-                                obase[y*W+x] = base[ys2*W+xs2];
+                                obase[y * W + x] = base[ys2 * W + xs2];
                         }
                 }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("cpu::rotate_forward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu::rotate_forward").not_implemented("dtype");
         return Storage{std::move(out_cpu)};
     }
 
@@ -6749,21 +7192,24 @@ public:
                     const T* srow = sp + i * Dh;
                     if (interleaved) {
                         for (std::size_t k = 0; k < Dh; ++k) {
-                            const T ge = grow[2*k], go = grow[2*k+1];
-                            drow[2*k]   = ge * crow[k] + go * srow[k];
-                            drow[2*k+1] = go * crow[k] - ge * srow[k];
+                            const T ge = grow[2 * k], go = grow[2 * k + 1];
+                            drow[2 * k] = ge * crow[k] + go * srow[k];
+                            drow[2 * k + 1] = go * crow[k] - ge * srow[k];
                         }
                     } else {
                         for (std::size_t k = 0; k < Dh; ++k) {
-                            drow[k]      = grow[k]      * crow[k] + grow[k+Dh] * srow[k];
-                            drow[k + Dh] = grow[k + Dh] * crow[k] - grow[k]    * srow[k];
+                            drow[k] = grow[k] * crow[k] + grow[k + Dh] * srow[k];
+                            drow[k + Dh] = grow[k + Dh] * crow[k] - grow[k] * srow[k];
                         }
                     }
                 }
         };
-        if (dt == Dtype::F32) run(float{});
-        else if (dt == Dtype::F64) run(double{});
-        else ErrorBuilder("rope_backward").not_implemented("dtype");
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("rope_backward").not_implemented("dtype");
         return Storage{std::move(dx)};
     }
 
@@ -6772,76 +7218,132 @@ private:
 
     // ---- Runtime-N im2col/col2im dispatchers (used by conv_nd & unfold) -
 
-    static void conv_nd_im2col_f32(const float* x, float* cols, int C,
-        const int* S, const int* K, const int* O,
-        const int* stride, const int* pad, const int* dilation, int N) {
+    static void conv_nd_im2col_f32(const float* x,
+                                   float* cols,
+                                   int C,
+                                   const int* S,
+                                   const int* K,
+                                   const int* O,
+                                   const int* stride,
+                                   const int* pad,
+                                   const int* dilation,
+                                   int N) {
         if (N == 1)
             cpu::im2col_1d_f32(x, cols, C, S[0], K[0], O[0], stride[0], pad[0], dilation[0]);
         else if (N == 2)
-            cpu::im2col_f32(x, cols, C, S[0], S[1], K[0], K[1], O[0], O[1],
-                            stride[0], stride[1], pad[0], pad[1], dilation[0], dilation[1]);
+            cpu::im2col_f32(x, cols, C, S[0], S[1], K[0], K[1], O[0], O[1], stride[0], stride[1],
+                            pad[0], pad[1], dilation[0], dilation[1]);
         else
-            cpu::im2col_3d_f32(x, cols, C, S[0], S[1], S[2], K[0], K[1], K[2],
-                               O[0], O[1], O[2], stride[0], stride[1], stride[2],
-                               pad[0], pad[1], pad[2], dilation[0], dilation[1], dilation[2]);
+            cpu::im2col_3d_f32(x, cols, C, S[0], S[1], S[2], K[0], K[1], K[2], O[0], O[1], O[2],
+                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dilation[0],
+                               dilation[1], dilation[2]);
     }
-    static void conv_nd_im2col_f64(const double* x, double* cols, int C,
-        const int* S, const int* K, const int* O,
-        const int* stride, const int* pad, const int* dilation, int N) {
+    static void conv_nd_im2col_f64(const double* x,
+                                   double* cols,
+                                   int C,
+                                   const int* S,
+                                   const int* K,
+                                   const int* O,
+                                   const int* stride,
+                                   const int* pad,
+                                   const int* dilation,
+                                   int N) {
         if (N == 1)
             cpu::im2col_1d_f64(x, cols, C, S[0], K[0], O[0], stride[0], pad[0], dilation[0]);
         else if (N == 2)
-            cpu::im2col_f64(x, cols, C, S[0], S[1], K[0], K[1], O[0], O[1],
-                            stride[0], stride[1], pad[0], pad[1], dilation[0], dilation[1]);
+            cpu::im2col_f64(x, cols, C, S[0], S[1], K[0], K[1], O[0], O[1], stride[0], stride[1],
+                            pad[0], pad[1], dilation[0], dilation[1]);
         else
-            cpu::im2col_3d_f64(x, cols, C, S[0], S[1], S[2], K[0], K[1], K[2],
-                               O[0], O[1], O[2], stride[0], stride[1], stride[2],
-                               pad[0], pad[1], pad[2], dilation[0], dilation[1], dilation[2]);
+            cpu::im2col_3d_f64(x, cols, C, S[0], S[1], S[2], K[0], K[1], K[2], O[0], O[1], O[2],
+                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dilation[0],
+                               dilation[1], dilation[2]);
     }
-    static void conv_nd_col2im_f32(const float* cols, float* dx, int C,
-        const int* S, const int* K, const int* O,
-        const int* stride, const int* pad, const int* dilation, int N) {
+    static void conv_nd_col2im_f32(const float* cols,
+                                   float* dx,
+                                   int C,
+                                   const int* S,
+                                   const int* K,
+                                   const int* O,
+                                   const int* stride,
+                                   const int* pad,
+                                   const int* dilation,
+                                   int N) {
         if (N == 1)
             cpu::col2im_1d_f32(cols, dx, C, S[0], K[0], O[0], stride[0], pad[0], dilation[0]);
         else if (N == 2)
-            cpu::col2im_f32(cols, dx, C, S[0], S[1], K[0], K[1], O[0], O[1],
-                            stride[0], stride[1], pad[0], pad[1], dilation[0], dilation[1]);
+            cpu::col2im_f32(cols, dx, C, S[0], S[1], K[0], K[1], O[0], O[1], stride[0], stride[1],
+                            pad[0], pad[1], dilation[0], dilation[1]);
         else
-            cpu::col2im_3d_f32(cols, dx, C, S[0], S[1], S[2], K[0], K[1], K[2],
-                               O[0], O[1], O[2], stride[0], stride[1], stride[2],
-                               pad[0], pad[1], pad[2], dilation[0], dilation[1], dilation[2]);
+            cpu::col2im_3d_f32(cols, dx, C, S[0], S[1], S[2], K[0], K[1], K[2], O[0], O[1], O[2],
+                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dilation[0],
+                               dilation[1], dilation[2]);
     }
-    static void conv_nd_col2im_f64(const double* cols, double* dx, int C,
-        const int* S, const int* K, const int* O,
-        const int* stride, const int* pad, const int* dilation, int N) {
+    static void conv_nd_col2im_f64(const double* cols,
+                                   double* dx,
+                                   int C,
+                                   const int* S,
+                                   const int* K,
+                                   const int* O,
+                                   const int* stride,
+                                   const int* pad,
+                                   const int* dilation,
+                                   int N) {
         if (N == 1)
             cpu::col2im_1d_f64(cols, dx, C, S[0], K[0], O[0], stride[0], pad[0], dilation[0]);
         else if (N == 2)
-            cpu::col2im_f64(cols, dx, C, S[0], S[1], K[0], K[1], O[0], O[1],
-                            stride[0], stride[1], pad[0], pad[1], dilation[0], dilation[1]);
+            cpu::col2im_f64(cols, dx, C, S[0], S[1], K[0], K[1], O[0], O[1], stride[0], stride[1],
+                            pad[0], pad[1], dilation[0], dilation[1]);
         else
-            cpu::col2im_3d_f64(cols, dx, C, S[0], S[1], S[2], K[0], K[1], K[2],
-                               O[0], O[1], O[2], stride[0], stride[1], stride[2],
-                               pad[0], pad[1], pad[2], dilation[0], dilation[1], dilation[2]);
+            cpu::col2im_3d_f64(cols, dx, C, S[0], S[1], S[2], K[0], K[1], K[2], O[0], O[1], O[2],
+                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dilation[0],
+                               dilation[1], dilation[2]);
     }
-    static void unfold_im2col_f32(const float* x, float* y, int C,
-        const int* S, const int* K, const int* O,
-        const int* stride, const int* pad, const int* dilation, int N) {
+    static void unfold_im2col_f32(const float* x,
+                                  float* y,
+                                  int C,
+                                  const int* S,
+                                  const int* K,
+                                  const int* O,
+                                  const int* stride,
+                                  const int* pad,
+                                  const int* dilation,
+                                  int N) {
         conv_nd_im2col_f32(x, y, C, S, K, O, stride, pad, dilation, N);
     }
-    static void unfold_im2col_f64(const double* x, double* y, int C,
-        const int* S, const int* K, const int* O,
-        const int* stride, const int* pad, const int* dilation, int N) {
+    static void unfold_im2col_f64(const double* x,
+                                  double* y,
+                                  int C,
+                                  const int* S,
+                                  const int* K,
+                                  const int* O,
+                                  const int* stride,
+                                  const int* pad,
+                                  const int* dilation,
+                                  int N) {
         conv_nd_im2col_f64(x, y, C, S, K, O, stride, pad, dilation, N);
     }
-    static void unfold_col2im_f32(const float* cols, float* dx, int C,
-        const int* S, const int* K, const int* O,
-        const int* stride, const int* pad, const int* dilation, int N) {
+    static void unfold_col2im_f32(const float* cols,
+                                  float* dx,
+                                  int C,
+                                  const int* S,
+                                  const int* K,
+                                  const int* O,
+                                  const int* stride,
+                                  const int* pad,
+                                  const int* dilation,
+                                  int N) {
         conv_nd_col2im_f32(cols, dx, C, S, K, O, stride, pad, dilation, N);
     }
-    static void unfold_col2im_f64(const double* cols, double* dx, int C,
-        const int* S, const int* K, const int* O,
-        const int* stride, const int* pad, const int* dilation, int N) {
+    static void unfold_col2im_f64(const double* cols,
+                                  double* dx,
+                                  int C,
+                                  const int* S,
+                                  const int* K,
+                                  const int* O,
+                                  const int* stride,
+                                  const int* pad,
+                                  const int* dilation,
+                                  int N) {
         conv_nd_col2im_f64(cols, dx, C, S, K, O, stride, pad, dilation, N);
     }
 
@@ -7895,64 +8397,752 @@ private:
         return CpuStorage{allocate_aligned_bytes(nb, Device::CPU), nb, dt};
     }
 
-    // im2col N-dispatch for float.
-    static void ctnd_im2col_f32(const float* src, float* cols, int C,
-                                const int* O, const int* K, const int* S,
-                                const int* stride, const int* pad, int N) {
+    // im2col for conv_transpose backward:
+    //   src is grad_out of shape [C, O...], so image L = O, patches OL = S.
+    static void ctnd_im2col_f32(const float* src,
+                                float* cols,
+                                int C,
+                                const int* O,
+                                const int* K,
+                                const int* S,
+                                const int* stride,
+                                const int* pad,
+                                int N) {
         if (N == 1)
-            cpu::im2col_1d_f32(src, cols, C, S[0], K[0], O[0], stride[0], pad[0], 1);
+            cpu::im2col_1d_f32(src, cols, C, O[0], K[0], S[0], stride[0], pad[0], 1);
         else if (N == 2)
-            cpu::im2col_f32(src, cols, C, S[0], S[1], K[0], K[1], O[0], O[1],
-                            stride[0], stride[1], pad[0], pad[1], 1, 1);
+            cpu::im2col_f32(src, cols, C, O[0], O[1], K[0], K[1], S[0], S[1], stride[0], stride[1],
+                            pad[0], pad[1], 1, 1);
         else
-            cpu::im2col_3d_f32(src, cols, C, S[0], S[1], S[2], K[0], K[1], K[2],
-                               O[0], O[1], O[2], stride[0], stride[1], stride[2],
-                               pad[0], pad[1], pad[2], 1, 1, 1);
+            cpu::im2col_3d_f32(src, cols, C, O[0], O[1], O[2], K[0], K[1], K[2], S[0], S[1], S[2],
+                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], 1, 1, 1);
     }
 
     // im2col N-dispatch for double.
-    static void ctnd_im2col_f64(const double* src, double* cols, int C,
-                                const int* O, const int* K, const int* S,
-                                const int* stride, const int* pad, int N) {
+    static void ctnd_im2col_f64(const double* src,
+                                double* cols,
+                                int C,
+                                const int* O,
+                                const int* K,
+                                const int* S,
+                                const int* stride,
+                                const int* pad,
+                                int N) {
         if (N == 1)
-            cpu::im2col_1d_f64(src, cols, C, S[0], K[0], O[0], stride[0], pad[0], 1);
+            cpu::im2col_1d_f64(src, cols, C, O[0], K[0], S[0], stride[0], pad[0], 1);
         else if (N == 2)
-            cpu::im2col_f64(src, cols, C, S[0], S[1], K[0], K[1], O[0], O[1],
-                            stride[0], stride[1], pad[0], pad[1], 1, 1);
+            cpu::im2col_f64(src, cols, C, O[0], O[1], K[0], K[1], S[0], S[1], stride[0], stride[1],
+                            pad[0], pad[1], 1, 1);
         else
-            cpu::im2col_3d_f64(src, cols, C, S[0], S[1], S[2], K[0], K[1], K[2],
-                               O[0], O[1], O[2], stride[0], stride[1], stride[2],
-                               pad[0], pad[1], pad[2], 1, 1, 1);
+            cpu::im2col_3d_f64(src, cols, C, O[0], O[1], O[2], K[0], K[1], K[2], S[0], S[1], S[2],
+                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], 1, 1, 1);
     }
 
     // col2im N-dispatch for float.
-    static void ctnd_col2im_f32(const float* cols, float* dst, int C,
-                                const int* O, const int* K, const int* S,
-                                const int* stride, const int* pad, int N) {
+    // col2im for conv_transpose:
+    //   L   = O  (output spatial — the image being reconstructed)
+    //   OL  = S  (input spatial  — number of col patches)
+    static void ctnd_col2im_f32(const float* cols,
+                                float* dst,
+                                int C,
+                                const int* O,
+                                const int* K,
+                                const int* S,
+                                const int* stride,
+                                const int* pad,
+                                int N) {
         if (N == 1)
-            cpu::col2im_1d_f32(cols, dst, C, S[0], K[0], O[0], stride[0], pad[0], 1);
+            cpu::col2im_1d_f32(cols, dst, C, O[0], K[0], S[0], stride[0], pad[0], 1);
         else if (N == 2)
-            cpu::col2im_f32(cols, dst, C, S[0], S[1], K[0], K[1], O[0], O[1],
-                            stride[0], stride[1], pad[0], pad[1], 1, 1);
+            cpu::col2im_f32(cols, dst, C, O[0], O[1], K[0], K[1], S[0], S[1], stride[0], stride[1],
+                            pad[0], pad[1], 1, 1);
         else
-            cpu::col2im_3d_f32(cols, dst, C, S[0], S[1], S[2], K[0], K[1], K[2],
-                               O[0], O[1], O[2], stride[0], stride[1], stride[2],
-                               pad[0], pad[1], pad[2], 1, 1, 1);
+            cpu::col2im_3d_f32(cols, dst, C, O[0], O[1], O[2], K[0], K[1], K[2], S[0], S[1], S[2],
+                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], 1, 1, 1);
     }
 
     // col2im N-dispatch for double.
-    static void ctnd_col2im_f64(const double* cols, double* dst, int C,
-                                const int* O, const int* K, const int* S,
-                                const int* stride, const int* pad, int N) {
+    static void ctnd_col2im_f64(const double* cols,
+                                double* dst,
+                                int C,
+                                const int* O,
+                                const int* K,
+                                const int* S,
+                                const int* stride,
+                                const int* pad,
+                                int N) {
         if (N == 1)
-            cpu::col2im_1d_f64(cols, dst, C, S[0], K[0], O[0], stride[0], pad[0], 1);
+            cpu::col2im_1d_f64(cols, dst, C, O[0], K[0], S[0], stride[0], pad[0], 1);
         else if (N == 2)
-            cpu::col2im_f64(cols, dst, C, S[0], S[1], K[0], K[1], O[0], O[1],
-                            stride[0], stride[1], pad[0], pad[1], 1, 1);
+            cpu::col2im_f64(cols, dst, C, O[0], O[1], K[0], K[1], S[0], S[1], stride[0], stride[1],
+                            pad[0], pad[1], 1, 1);
         else
-            cpu::col2im_3d_f64(cols, dst, C, S[0], S[1], S[2], K[0], K[1], K[2],
-                               O[0], O[1], O[2], stride[0], stride[1], stride[2],
-                               pad[0], pad[1], pad[2], 1, 1, 1);
+            cpu::col2im_3d_f64(cols, dst, C, O[0], O[1], O[2], K[0], K[1], K[2], S[0], S[1], S[2],
+                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], 1, 1, 1);
+    }
+
+    // ---- Autograd helper primitives (Phase 4.6) -------------------------
+
+    Storage ge_mask(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const auto& cb = std::get<CpuStorage>(b);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto run_f = [&](auto tag_a, auto tag_b, auto tag_out) {
+            using A = decltype(tag_a);
+            using B = decltype(tag_b);
+            using O = decltype(tag_out);
+            const A* ap = reinterpret_cast<const A*>(ca.ptr.get());
+            const B* bp = reinterpret_cast<const B*>(cb.ptr.get());
+            O* op = reinterpret_cast<O*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = (ap[i] >= bp[i]) ? O{1} : O{0};
+        };
+        if (dt == Dtype::F32)
+            run_f(float{}, float{}, float{});
+        else if (dt == Dtype::F64)
+            run_f(double{}, double{}, double{});
+        else
+            ErrorBuilder("cpu_backend::ge_mask").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage lt_mask(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const auto& cb = std::get<CpuStorage>(b);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto run_f = [&](auto tag_a, auto tag_b, auto tag_out) {
+            using A = decltype(tag_a);
+            using B = decltype(tag_b);
+            using O = decltype(tag_out);
+            const A* ap = reinterpret_cast<const A*>(ca.ptr.get());
+            const B* bp = reinterpret_cast<const B*>(cb.ptr.get());
+            O* op = reinterpret_cast<O*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = (ap[i] < bp[i]) ? O{1} : O{0};
+        };
+        if (dt == Dtype::F32)
+            run_f(float{}, float{}, float{});
+        else if (dt == Dtype::F64)
+            run_f(double{}, double{}, double{});
+        else
+            ErrorBuilder("cpu_backend::lt_mask").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage add_scalar(const Storage& a, const Shape& shape, Dtype dt, double scalar) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32)
+            cpu::vsadd_f32(reinterpret_cast<const float*>(ca.ptr.get()), static_cast<float>(scalar),
+                           reinterpret_cast<float*>(ptr.get()), n);
+        else if (dt == Dtype::F64)
+            cpu::vsadd_f64(reinterpret_cast<const double*>(ca.ptr.get()), scalar,
+                           reinterpret_cast<double*>(ptr.get()), n);
+        else
+            ErrorBuilder("cpu_backend::add_scalar").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage mul_scalar(const Storage& a, const Shape& shape, Dtype dt, double scalar) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32)
+            cpu::vsmul_f32(reinterpret_cast<const float*>(ca.ptr.get()), static_cast<float>(scalar),
+                           reinterpret_cast<float*>(ptr.get()), n);
+        else if (dt == Dtype::F64)
+            cpu::vsmul_f64(reinterpret_cast<const double*>(ca.ptr.get()), scalar,
+                           reinterpret_cast<double*>(ptr.get()), n);
+        else
+            ErrorBuilder("cpu_backend::mul_scalar").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage in_range_mask(
+        const Storage& a, const Shape& shape, Dtype dt, double lo, double hi) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
+            auto* q = reinterpret_cast<float*>(ptr.get());
+            const auto flo = static_cast<float>(lo), fhi = static_cast<float>(hi);
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = (p[i] >= flo && p[i] <= fhi) ? 1.f : 0.f;
+        } else if (dt == Dtype::F64) {
+            const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
+            auto* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = (p[i] >= lo && p[i] <= hi) ? 1.0 : 0.0;
+        } else {
+            ErrorBuilder("cpu_backend::in_range_mask").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage leaky_mask(const Storage& a, const Shape& shape, Dtype dt, double slope) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
+            auto* q = reinterpret_cast<float*>(ptr.get());
+            const float fs = static_cast<float>(slope);
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = (p[i] >= 0.f) ? 1.f : fs;
+        } else if (dt == Dtype::F64) {
+            const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
+            auto* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = (p[i] >= 0.0) ? 1.0 : slope;
+        } else {
+            ErrorBuilder("cpu_backend::leaky_mask").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage positive_mask(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
+            auto* q = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = (p[i] > 0.f) ? 1.f : 0.f;
+        } else if (dt == Dtype::F64) {
+            const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
+            auto* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                q[i] = (p[i] > 0.0) ? 1.0 : 0.0;
+        } else {
+            ErrorBuilder("cpu_backend::positive_mask").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage reduce_grad_to_shape(const Storage& grad,
+                                 const Shape& grad_shape,
+                                 const Shape& target_shape,
+                                 Dtype dt) override {
+        // Compute broadcast-reduce axes (right-aligned numpy semantics).
+        const std::size_t gn = grad_shape.size();
+        const std::size_t tn = target_shape.size();
+        if (grad_shape == target_shape) {
+            // Fast path: just clone.
+            const auto& src = std::get<CpuStorage>(grad);
+            std::size_t nb = src.nbytes;
+            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+            if (nb > 0)
+                std::memcpy(ptr.get(), src.ptr.get(), nb);
+            return Storage{CpuStorage{ptr, nb, dt}};
+        }
+        // Collect axes to reduce.
+        std::vector<std::size_t> axes;
+        const std::size_t lead = gn - tn;
+        for (std::size_t i = 0; i < lead; ++i)
+            axes.push_back(i);
+        for (std::size_t i = 0; i < tn; ++i) {
+            if (grad_shape[lead + i] != target_shape[i] && target_shape[i] == 1)
+                axes.push_back(lead + i);
+        }
+        const auto& src = std::get<CpuStorage>(grad);
+        std::size_t tnumel = shape_numel(target_shape);
+        std::size_t nb = tnumel * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        // Build strides for grad_shape.
+        Stride grad_stride(gn);
+        if (gn > 0) {
+            grad_stride[gn - 1] = 1;
+            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(gn) - 2; i >= 0; --i)
+                grad_stride[i] = grad_stride[i + 1] * grad_shape[i + 1];
+        }
+        Stride target_stride(tn);
+        if (tn > 0) {
+            target_stride[tn - 1] = 1;
+            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(tn) - 2; i >= 0; --i)
+                target_stride[i] = target_stride[i + 1] * target_shape[i + 1];
+        }
+        std::vector<bool> reduce_mask(gn, false);
+        for (auto a : axes)
+            reduce_mask[a] = true;
+
+        auto do_reduce = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const T* src_p = reinterpret_cast<const T*>(src.ptr.get());
+            T* dst_p = reinterpret_cast<T*>(ptr.get());
+            std::fill_n(dst_p, tnumel, T{});
+            const std::size_t gnumel = shape_numel(grad_shape);
+            for (std::size_t flat = 0; flat < gnumel; ++flat) {
+                std::size_t rem = flat;
+                std::size_t target_flat = 0;
+                for (std::size_t d = 0; d < gn; ++d) {
+                    const std::size_t coord = rem / static_cast<std::size_t>(grad_stride[d]);
+                    rem -= coord * static_cast<std::size_t>(grad_stride[d]);
+                    if (d < lead || reduce_mask[d])
+                        continue;
+                    target_flat += coord * static_cast<std::size_t>(target_stride[d - lead]);
+                }
+                dst_p[target_flat] += src_p[flat];
+            }
+        };
+        if (dt == Dtype::F32)
+            do_reduce(float{});
+        else if (dt == Dtype::F64)
+            do_reduce(double{});
+        else
+            ErrorBuilder("cpu_backend::reduce_grad_to_shape")
+                .not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage broadcast_back_for_reduce(const Storage& grad,
+                                      const Shape& grad_shape,
+                                      const Shape& input_shape,
+                                      const std::vector<int>& axes,
+                                      bool keepdims,
+                                      Dtype dt) override {
+        // Build kept_shape (input_shape with reduced axes set to 1).
+        Shape kept_shape = input_shape;
+        for (int a : axes)
+            kept_shape[a] = 1;
+        // Validate expected grad shape.
+        Shape expected_grad;
+        {
+            std::vector<bool> rm(input_shape.size(), false);
+            for (int a : axes)
+                rm[a] = true;
+            for (std::size_t i = 0; i < input_shape.size(); ++i) {
+                if (rm[i]) {
+                    if (keepdims)
+                        expected_grad.push_back(1);
+                } else
+                    expected_grad.push_back(input_shape[i]);
+            }
+        }
+        (void)grad_shape;
+        (void)expected_grad;  // validated by caller
+        const auto& g_cpu = std::get<CpuStorage>(grad);
+        std::size_t in_numel = shape_numel(input_shape);
+        std::size_t nb = in_numel * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+
+        auto do_bcast = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const T* gp = reinterpret_cast<const T*>(g_cpu.ptr.get());
+            T* dst = reinterpret_cast<T*>(ptr.get());
+            // For each position in input_shape, find the corresponding index in kept_shape.
+            const std::size_t nd = input_shape.size();
+            for (std::size_t flat = 0; flat < in_numel; ++flat) {
+                std::size_t kept_flat = 0;
+                std::size_t stride = 1;
+                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nd) - 1; d >= 0; --d) {
+                    std::size_t di = static_cast<std::size_t>(d);
+                    // compute coord for this dim using flat index
+                    std::size_t dstride = 1;
+                    for (std::size_t e = di + 1; e < nd; ++e)
+                        dstride *= static_cast<std::size_t>(input_shape[e]);
+                    std::size_t coord =
+                        (flat / dstride) % static_cast<std::size_t>(input_shape[di]);
+                    std::int64_t kd = kept_shape[di];
+                    std::int64_t ii = (kd == 1) ? 0 : static_cast<std::int64_t>(coord);
+                    kept_flat += static_cast<std::size_t>(ii) * stride;
+                    stride *= static_cast<std::size_t>(kd);
+                }
+                dst[flat] = gp[kept_flat];
+            }
+        };
+        if (dt == Dtype::F32)
+            do_bcast(float{});
+        else if (dt == Dtype::F64)
+            do_bcast(double{});
+        else
+            ErrorBuilder("cpu_backend::broadcast_back_for_reduce")
+                .not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    // ---- Creation helpers (Phase 4.6) -----------------------------------
+
+    Storage full(const Shape& shape, Dtype dt, double fill_value) override {
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto* p = ptr.get();
+        switch (dt) {
+            case Dtype::Bool: {
+                auto v = fill_value != 0.0 ? std::uint8_t{1} : std::uint8_t{0};
+                for (std::size_t i = 0; i < n; ++i)
+                    reinterpret_cast<std::uint8_t*>(p)[i] = v;
+                break;
+            }
+            case Dtype::I8: {
+                auto v = static_cast<std::int8_t>(fill_value);
+                for (std::size_t i = 0; i < n; ++i)
+                    reinterpret_cast<std::int8_t*>(p)[i] = v;
+                break;
+            }
+            case Dtype::I16: {
+                auto v = static_cast<std::int16_t>(fill_value);
+                for (std::size_t i = 0; i < n; ++i)
+                    reinterpret_cast<std::int16_t*>(p)[i] = v;
+                break;
+            }
+            case Dtype::I32: {
+                auto v = static_cast<std::int32_t>(fill_value);
+                for (std::size_t i = 0; i < n; ++i)
+                    reinterpret_cast<std::int32_t*>(p)[i] = v;
+                break;
+            }
+            case Dtype::I64: {
+                auto v = static_cast<std::int64_t>(fill_value);
+                for (std::size_t i = 0; i < n; ++i)
+                    reinterpret_cast<std::int64_t*>(p)[i] = v;
+                break;
+            }
+            case Dtype::F32: {
+                auto v = static_cast<float>(fill_value);
+                for (std::size_t i = 0; i < n; ++i)
+                    reinterpret_cast<float*>(p)[i] = v;
+                break;
+            }
+            case Dtype::F64: {
+                auto v = fill_value;
+                for (std::size_t i = 0; i < n; ++i)
+                    reinterpret_cast<double*>(p)[i] = v;
+                break;
+            }
+            default:
+                ErrorBuilder("cpu_backend::full").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage eye(std::int64_t N, std::int64_t M, std::int64_t k, Dtype dt) override {
+        Shape shape{N, M};
+        std::size_t nb = static_cast<std::size_t>(N * M) * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        std::memset(ptr.get(), 0, nb);
+        auto set_one = [&](auto* p) {
+            using T = std::remove_pointer_t<decltype(p)>;
+            for (std::int64_t i = 0; i < N; ++i) {
+                const std::int64_t j = i + k;
+                if (j < 0 || j >= M)
+                    continue;
+                p[i * M + j] = static_cast<T>(1);
+            }
+        };
+        switch (dt) {
+            case Dtype::Bool:
+                set_one(reinterpret_cast<std::uint8_t*>(ptr.get()));
+                break;
+            case Dtype::I8:
+                set_one(reinterpret_cast<std::int8_t*>(ptr.get()));
+                break;
+            case Dtype::I16:
+                set_one(reinterpret_cast<std::int16_t*>(ptr.get()));
+                break;
+            case Dtype::I32:
+                set_one(reinterpret_cast<std::int32_t*>(ptr.get()));
+                break;
+            case Dtype::I64:
+                set_one(reinterpret_cast<std::int64_t*>(ptr.get()));
+                break;
+            case Dtype::F32:
+                set_one(reinterpret_cast<float*>(ptr.get()));
+                break;
+            case Dtype::F64:
+                set_one(reinterpret_cast<double*>(ptr.get()));
+                break;
+            default:
+                ErrorBuilder("cpu_backend::eye").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage diag(const Storage& v,
+                 const Shape& v_shape,
+                 std::int64_t k,
+                 Dtype dt,
+                 Shape& out_shape) override {
+        const auto& cv = std::get<CpuStorage>(v);
+        const std::size_t elem = dtype_size(dt);
+        if (v_shape.size() == 1) {
+            const std::int64_t L = v_shape[0];
+            const std::int64_t side = L + std::abs(k);
+            out_shape = {side, side};
+            std::size_t nb = static_cast<std::size_t>(side * side) * elem;
+            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+            std::memset(ptr.get(), 0, nb);
+            auto fill = [&](auto* dst, const auto* src) {
+                using T = std::remove_pointer_t<decltype(dst)>;
+                for (std::int64_t i = 0; i < L; ++i) {
+                    const std::int64_t row = (k >= 0) ? i : (i - k);
+                    const std::int64_t col = (k >= 0) ? (i + k) : i;
+                    dst[row * side + col] = static_cast<T>(src[i]);
+                }
+            };
+            switch (dt) {
+                case Dtype::F32:
+                    fill(reinterpret_cast<float*>(ptr.get()),
+                         reinterpret_cast<const float*>(cv.ptr.get()));
+                    break;
+                case Dtype::F64:
+                    fill(reinterpret_cast<double*>(ptr.get()),
+                         reinterpret_cast<const double*>(cv.ptr.get()));
+                    break;
+                case Dtype::I32:
+                    fill(reinterpret_cast<std::int32_t*>(ptr.get()),
+                         reinterpret_cast<const std::int32_t*>(cv.ptr.get()));
+                    break;
+                case Dtype::I64:
+                    fill(reinterpret_cast<std::int64_t*>(ptr.get()),
+                         reinterpret_cast<const std::int64_t*>(cv.ptr.get()));
+                    break;
+                default:
+                    ErrorBuilder("cpu_backend::diag").not_implemented("dtype not supported");
+            }
+            return Storage{CpuStorage{ptr, nb, dt}};
+        }
+        // 2-D: extract diagonal
+        const std::int64_t Mv = v_shape[0], Nv = v_shape[1];
+        const std::int64_t r0 = (k >= 0) ? 0 : -k;
+        const std::int64_t c0 = (k >= 0) ? k : 0;
+        const std::int64_t Lv = std::min(Mv - r0, Nv - c0);
+        const std::int64_t out_len = std::max<std::int64_t>(Lv, 0);
+        out_shape = {out_len};
+        std::size_t nb = static_cast<std::size_t>(out_len) * elem;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto extract = [&](auto* dst, const auto* src) {
+            using T = std::remove_pointer_t<decltype(dst)>;
+            for (std::int64_t i = 0; i < out_len; ++i)
+                dst[i] = static_cast<T>(src[(r0 + i) * Nv + (c0 + i)]);
+        };
+        switch (dt) {
+            case Dtype::F32:
+                extract(reinterpret_cast<float*>(ptr.get()),
+                        reinterpret_cast<const float*>(cv.ptr.get()));
+                break;
+            case Dtype::F64:
+                extract(reinterpret_cast<double*>(ptr.get()),
+                        reinterpret_cast<const double*>(cv.ptr.get()));
+                break;
+            case Dtype::I32:
+                extract(reinterpret_cast<std::int32_t*>(ptr.get()),
+                        reinterpret_cast<const std::int32_t*>(cv.ptr.get()));
+                break;
+            case Dtype::I64:
+                extract(reinterpret_cast<std::int64_t*>(ptr.get()),
+                        reinterpret_cast<const std::int64_t*>(cv.ptr.get()));
+                break;
+            default:
+                ErrorBuilder("cpu_backend::diag").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage tri(const Storage& input, const Shape& shape, Dtype dt, int k, bool upper) override {
+        const auto& ca = std::get<CpuStorage>(input);
+        if (shape.size() < 2)
+            ErrorBuilder("cpu_backend::tri").fail("input must have ndim >= 2");
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::int64_t M = shape[shape.size() - 2];
+        const std::int64_t N = shape[shape.size() - 1];
+        std::size_t batch = 1;
+        for (std::size_t d = 0; d < shape.size() - 2; ++d)
+            batch *= static_cast<std::size_t>(shape[d]);
+        const std::size_t plane = static_cast<std::size_t>(M * N);
+        auto run = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const T* src = reinterpret_cast<const T*>(ca.ptr.get());
+            T* dst = reinterpret_cast<T*>(ptr.get());
+            for (std::size_t b = 0; b < batch; ++b)
+                for (std::int64_t i = 0; i < M; ++i)
+                    for (std::int64_t j = 0; j < N; ++j) {
+                        const std::size_t f = b * plane + static_cast<std::size_t>(i * N + j);
+                        dst[f] = (upper ? (j - i >= k) : (j - i <= k)) ? src[f] : T{};
+                    }
+        };
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu_backend::tri").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage floordiv(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const auto& cb = std::get<CpuStorage>(b);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * sizeof(std::int64_t);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto* dst = reinterpret_cast<std::int64_t*>(ptr.get());
+        auto run = [&](const auto* p, const auto* q) {
+            for (std::size_t i = 0; i < n; ++i)
+                dst[i] = static_cast<std::int64_t>(
+                    std::floor(static_cast<double>(p[i]) / static_cast<double>(q[i])));
+        };
+        switch (dt) {
+            case Dtype::F32:
+                run(reinterpret_cast<const float*>(ca.ptr.get()),
+                    reinterpret_cast<const float*>(cb.ptr.get()));
+                break;
+            case Dtype::F64:
+                run(reinterpret_cast<const double*>(ca.ptr.get()),
+                    reinterpret_cast<const double*>(cb.ptr.get()));
+                break;
+            case Dtype::I32:
+                run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
+                    reinterpret_cast<const std::int32_t*>(cb.ptr.get()));
+                break;
+            case Dtype::I64:
+                run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
+                    reinterpret_cast<const std::int64_t*>(cb.ptr.get()));
+                break;
+            default:
+                ErrorBuilder("cpu_backend::floordiv").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, Dtype::I64}};
+    }
+
+    Storage inner(const Storage& a,
+                  const Storage& b,
+                  const Shape& a_shape,
+                  const Shape& b_shape,
+                  const Shape& out_shape,
+                  Dtype dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const auto& cb = std::get<CpuStorage>(b);
+        const std::int64_t K = a_shape.back();
+        const std::size_t pa = shape_numel(Shape(a_shape.begin(), a_shape.end() - 1));
+        const std::size_t pb = shape_numel(Shape(b_shape.begin(), b_shape.end() - 1));
+        std::size_t n = shape_numel(out_shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto run = [&](auto* op, const auto* ap, const auto* bp) {
+            using T = std::remove_pointer_t<decltype(op)>;
+            for (std::size_t i = 0; i < pa; ++i)
+                for (std::size_t j = 0; j < pb; ++j) {
+                    T s{};
+                    for (std::int64_t k = 0; k < K; ++k)
+                        s = s + ap[i * K + k] * bp[j * K + k];
+                    op[i * pb + j] = s;
+                }
+        };
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(ca.ptr.get()),
+                reinterpret_cast<const float*>(cb.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()), reinterpret_cast<const double*>(ca.ptr.get()),
+                reinterpret_cast<const double*>(cb.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::inner").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage tensordot(const Storage& /*a*/,
+                      const Storage& /*b*/,
+                      const Shape& /*a_shape*/,
+                      const Shape& /*b_shape*/,
+                      const Shape& /*out_shape*/,
+                      const std::vector<int>& /*axes_a*/,
+                      const std::vector<int>& /*axes_b*/,
+                      Dtype /*dt*/) override {
+        // tensordot CPU path is implemented inline in Tensordot.cpp (complex permute+gemm).
+        // This should not be called; the CPU path in Tensordot.cpp does the work directly.
+        ErrorBuilder("cpu_backend::tensordot").not_implemented("not routed through backend");
+    }
+
+    Storage where_op(const Storage& cond,
+                     const Storage& x,
+                     const Storage& y,
+                     const Shape& shape,
+                     Dtype dt) override {
+        const auto& cc = std::get<CpuStorage>(cond);
+        const auto& cx = std::get<CpuStorage>(x);
+        const auto& cy = std::get<CpuStorage>(y);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const auto* c = reinterpret_cast<const std::uint8_t*>(cc.ptr.get());
+        auto run = [&](auto* dst, const auto* xp, const auto* yp) {
+            for (std::size_t i = 0; i < n; ++i)
+                dst[i] = c[i] ? xp[i] : yp[i];
+        };
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cx.ptr.get()),
+                reinterpret_cast<const float*>(cy.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()), reinterpret_cast<const double*>(cx.ptr.get()),
+                reinterpret_cast<const double*>(cy.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::where_op").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage reduce_broadcast(const Storage& grad,
+                             const Shape& input_shape,
+                             const Shape& output_shape,
+                             Dtype dt) override {
+        const std::size_t nout = output_shape.size();
+        const std::size_t nin = input_shape.size();
+        Shape padded(nout, 1);
+        std::copy(input_shape.begin(), input_shape.end(), padded.begin() + (nout - nin));
+        const auto& gc = std::get<CpuStorage>(grad);
+        std::size_t in_numel = shape_numel(input_shape);
+        std::size_t nb = in_numel * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        std::memset(ptr.get(), 0, nb);
+        // Strides for output_shape (row-major), with zero-stride for broadcast axes.
+        std::vector<std::size_t> in_str(nout, 0);
+        std::size_t s = 1;
+        for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
+            in_str[d] = (padded[d] == 1) ? 0 : s;
+            s *= static_cast<std::size_t>(padded[d]);
+        }
+        const std::size_t out_numel = shape_numel(output_shape);
+        auto run = [&](auto type_tag) {
+            using T = decltype(type_tag);
+            const T* gp = reinterpret_cast<const T*>(gc.ptr.get());
+            T* dp = reinterpret_cast<T*>(ptr.get());
+            std::vector<std::size_t> coord(nout, 0);
+            for (std::size_t f = 0; f < out_numel; ++f) {
+                std::size_t in_flat = 0;
+                for (std::size_t d = 0; d < nout; ++d)
+                    in_flat += coord[d] * in_str[d];
+                dp[in_flat] += gp[f];
+                for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
+                    if (++coord[d] < static_cast<std::size_t>(output_shape[d]))
+                        break;
+                    coord[d] = 0;
+                }
+            }
+        };
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else if (dt == Dtype::I32)
+            run(std::int32_t{});
+        else if (dt == Dtype::I64)
+            run(std::int64_t{});
+        else
+            ErrorBuilder("cpu_backend::reduce_broadcast").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
     }
 };
 

@@ -3,8 +3,7 @@
 #include <string>
 #include <variant>
 
-#include <mlx/ops.h>
-
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -20,7 +19,6 @@ namespace lucid {
 
 namespace {
 
-using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
@@ -59,50 +57,27 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     const Device device = a->device();
     OpScopeFull scope{"inner", device, dt, Shape{}};
 
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        const auto& gb = std::get<GpuStorage>(b->storage());
-        auto out = ::mlx::core::inner(*ga.arr, *gb.arr);
-        Shape out_shape;
-        for (auto d : out.shape())
-            out_shape.push_back(static_cast<std::int64_t>(d));
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(out_shape), dt,
-                     device);
-    }
-
     const auto& sa = a->shape();
     const auto& sb = b->shape();
     if (sa.empty() || sb.empty() || sa.back() != sb.back())
         throw ShapeMismatch(sa, sb, "inner");
-    const std::int64_t K = sa.back();
     Shape out_shape(sa.begin(), sa.end() - 1);
     out_shape.insert(out_shape.end(), sb.begin(), sb.end() - 1);
-    auto out_cpu = allocate_cpu(out_shape, dt);
-    const std::size_t pa = shape_numel(Shape(sa.begin(), sa.end() - 1));
-    const std::size_t pb = shape_numel(Shape(sb.begin(), sb.end() - 1));
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const auto& cb = std::get<CpuStorage>(b->storage());
-    auto run = [&](auto* op, const auto* ap, const auto* bp) {
-        using T = std::remove_pointer_t<decltype(op)>;
-        for (std::size_t i = 0; i < pa; ++i)
-            for (std::size_t j = 0; j < pb; ++j) {
-                T s{};
-                for (std::int64_t k = 0; k < K; ++k)
-                    s = s + ap[i * K + k] * bp[j * K + k];
-                op[i * pb + j] = s;
-            }
-    };
-    if (dt == Dtype::F32)
-        run(reinterpret_cast<float*>(out_cpu.ptr.get()),
-            reinterpret_cast<const float*>(ca.ptr.get()),
-            reinterpret_cast<const float*>(cb.ptr.get()));
-    else if (dt == Dtype::F64)
-        run(reinterpret_cast<double*>(out_cpu.ptr.get()),
-            reinterpret_cast<const double*>(ca.ptr.get()),
-            reinterpret_cast<const double*>(cb.ptr.get()));
-    else
-        ErrorBuilder("inner").not_implemented("dtype not supported");
-    return fresh(Storage{std::move(out_cpu)}, out_shape, dt, device);
+
+    if (device == Device::GPU) {
+        auto out_storage = backend::Dispatcher::for_device(device).inner(a->storage(), b->storage(),
+                                                                         sa, sb, out_shape, dt);
+        // For GPU, inner() returns storage with shape embedded in MLX array.
+        const auto& gs = std::get<GpuStorage>(out_storage);
+        Shape actual_shape;
+        for (auto d : gs.arr->shape())
+            actual_shape.push_back(static_cast<std::int64_t>(d));
+        return fresh(std::move(out_storage), std::move(actual_shape), dt, device);
+    }
+
+    auto out_storage = backend::Dispatcher::for_device(device).inner(a->storage(), b->storage(), sa,
+                                                                     sb, out_shape, dt);
+    return fresh(std::move(out_storage), out_shape, dt, device);
 }
 
 }  // namespace lucid

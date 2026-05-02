@@ -18,11 +18,11 @@
 #include <vector>
 
 #include "../../api.h"
+#include "../../backend/IBackend.h"
 #include "../../core/AmpPolicy.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
-#include "../../backend/IBackend.h"
 #include "_ReduceOp.h"
 
 namespace lucid {
@@ -33,9 +33,12 @@ public:
     // grad = broadcast(g, input_shape) — no input values needed.
     static constexpr bool kSavesInput = false;
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
+    static Storage dispatch(backend::IBackend& be,
+                            const Storage& a,
                             const Shape& in_shape,
-                            const std::vector<int>& axes, bool keepdims, Dtype dt) {
+                            const std::vector<int>& axes,
+                            bool keepdims,
+                            Dtype dt) {
         return be.reduce_sum(a, in_shape, {axes, keepdims}, dt);
     }
 
@@ -48,9 +51,12 @@ public:
     // grad = broadcast(g / N, input_shape) — no input values needed.
     static constexpr bool kSavesInput = false;
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
+    static Storage dispatch(backend::IBackend& be,
+                            const Storage& a,
                             const Shape& in_shape,
-                            const std::vector<int>& axes, bool keepdims, Dtype dt) {
+                            const std::vector<int>& axes,
+                            bool keepdims,
+                            Dtype dt) {
         return be.reduce_mean(a, in_shape, {axes, keepdims}, dt);
     }
 
@@ -81,9 +87,12 @@ class LUCID_API MaxBackward : public ReduceOp<MaxBackward> {
 public:
     static constexpr bool kSavesOutput = true;  // grad_formula uses saved_output_
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
+    static Storage dispatch(backend::IBackend& be,
+                            const Storage& a,
                             const Shape& in_shape,
-                            const std::vector<int>& axes, bool keepdims, Dtype dt) {
+                            const std::vector<int>& axes,
+                            bool keepdims,
+                            Dtype dt) {
         return be.reduce_max(a, in_shape, {axes, keepdims}, dt);
     }
 
@@ -95,9 +104,12 @@ class LUCID_API MinBackward : public ReduceOp<MinBackward> {
 public:
     static constexpr bool kSavesOutput = true;  // grad_formula uses saved_output_
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
+    static Storage dispatch(backend::IBackend& be,
+                            const Storage& a,
                             const Shape& in_shape,
-                            const std::vector<int>& axes, bool keepdims, Dtype dt) {
+                            const std::vector<int>& axes,
+                            bool keepdims,
+                            Dtype dt) {
         return be.reduce_min(a, in_shape, {axes, keepdims}, dt);
     }
 

@@ -12,7 +12,6 @@ namespace lucid {
 const OpSchema MinimumBackward::schema_v1{"minimum", /*version=*/1, AmpPolicy::Promote,
                                           /*deterministic=*/true};
 
-
 std::pair<Storage, Storage> MinimumBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
     // For min: dx = g * (a <= b), dy = g * (a > b).

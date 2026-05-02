@@ -47,8 +47,7 @@ void validate_input(const TensorImplPtr& x, std::string_view op_name) {
         throw ShapeMismatch(x->shape(), Shape{}, std::string(op_name) + ": x rank mismatch");
 }
 
-}  // namespace (helpers end here)
-
+}  // namespace
 
 // =====================================================================
 // MaxPoolNd
@@ -92,14 +91,14 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     backend::IBackend::PoolOpts opts{};
     opts.N = N;
     for (int i = 0; i < N; ++i) {
-        opts.K[i]      = K[i];
+        opts.K[i] = K[i];
         opts.stride[i] = stride[i];
-        opts.pad[i]    = pad[i];
+        opts.pad[i] = pad[i];
     }
     auto& be = backend::Dispatcher::for_device(x->device());
     auto pool_out = be.max_pool_nd_forward(x->storage(), x->shape(), out_shape, opts, x->dtype());
-    Storage out_storage    = std::move(pool_out[0]);
-    Storage saved_argmax   = std::move(pool_out[1]);
+    Storage out_storage = std::move(pool_out[0]);
+    Storage saved_argmax = std::move(pool_out[1]);
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
@@ -123,14 +122,13 @@ std::vector<Storage> MaxPoolNdBackward<N>::apply(Storage grad_out) {
     backend::IBackend::PoolOpts opts{};
     opts.N = N;
     for (int i = 0; i < N; ++i) {
-        opts.K[i]      = this->K_[i];
+        opts.K[i] = this->K_[i];
         opts.stride[i] = this->stride_[i];
-        opts.pad[i]    = this->pad_[i];
+        opts.pad[i] = this->pad_[i];
     }
     auto& be = backend::Dispatcher::for_device(this->device_);
-    return {be.max_pool_nd_backward(
-        grad_out, this->saved_argmax_,
-        this->input_shapes_[0], this->out_shape_, opts, this->dtype_)};
+    return {be.max_pool_nd_backward(grad_out, this->saved_argmax_, this->input_shapes_[0],
+                                    this->out_shape_, opts, this->dtype_)};
 }
 
 // =====================================================================
@@ -172,13 +170,13 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
     backend::IBackend::PoolOpts avg_opts{};
     avg_opts.N = N;
     for (int i = 0; i < N; ++i) {
-        avg_opts.K[i]      = K[i];
+        avg_opts.K[i] = K[i];
         avg_opts.stride[i] = stride[i];
-        avg_opts.pad[i]    = pad[i];
+        avg_opts.pad[i] = pad[i];
     }
     auto& avg_be = backend::Dispatcher::for_device(x->device());
-    Storage out_storage = avg_be.avg_pool_nd_forward(
-        x->storage(), x->shape(), out_shape, avg_opts, x->dtype());
+    Storage out_storage =
+        avg_be.avg_pool_nd_forward(x->storage(), x->shape(), out_shape, avg_opts, x->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
@@ -201,13 +199,13 @@ std::vector<Storage> AvgPoolNdBackward<N>::apply(Storage grad_out) {
     backend::IBackend::PoolOpts opts{};
     opts.N = N;
     for (int i = 0; i < N; ++i) {
-        opts.K[i]      = this->K_[i];
+        opts.K[i] = this->K_[i];
         opts.stride[i] = this->stride_[i];
-        opts.pad[i]    = this->pad_[i];
+        opts.pad[i] = this->pad_[i];
     }
     auto& be = backend::Dispatcher::for_device(this->device_);
-    return {be.avg_pool_nd_backward(
-        grad_out, this->input_shapes_[0], this->out_shape_, opts, this->dtype_)};
+    return {be.avg_pool_nd_backward(grad_out, this->input_shapes_[0], this->out_shape_, opts,
+                                    this->dtype_)};
 }
 
 // Explicit instantiations

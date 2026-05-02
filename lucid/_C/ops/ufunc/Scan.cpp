@@ -95,9 +95,9 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
         ErrorBuilder(name).fail("axis out of range");
     OpScopeFull scope{name, device, dt, sh};
 
-    Storage out_storage = is_prod
-                              ? backend::Dispatcher::for_device(device).cumprod(a->storage(), sh, ax, dt)
-                              : backend::Dispatcher::for_device(device).cumsum(a->storage(), sh, ax, dt);
+    Storage out_storage =
+        is_prod ? backend::Dispatcher::for_device(device).cumprod(a->storage(), sh, ax, dt)
+                : backend::Dispatcher::for_device(device).cumsum(a->storage(), sh, ax, dt);
     return fresh(std::move(out_storage), sh, dt, device);
 }
 

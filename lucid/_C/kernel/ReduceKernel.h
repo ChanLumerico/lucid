@@ -103,13 +103,11 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     Storage out_storage;
     if constexpr (detail::HasReduceDispatch<Derived>) {
         out_storage = Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()),
-                                        a_ptr->storage(), a_ptr->shape(), axes, keepdims,
-                                        eff_dt);
+                                        a_ptr->storage(), a_ptr->shape(), axes, keepdims, eff_dt);
     } else if (a_ptr->device() == Device::GPU) {
         if constexpr (detail::HasReduceGpuKernel<Derived>) {
-            out_storage =
-                Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()), a_ptr->shape(),
-                                            axes, keepdims, eff_dt)};
+            out_storage = Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()),
+                                                      a_ptr->shape(), axes, keepdims, eff_dt)};
         } else {
             ErrorBuilder(Derived::schema_v1.name).not_implemented("GPU kernel not yet implemented");
         }
@@ -118,8 +116,8 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
                                                   a_ptr->shape(), axes, keepdims, eff_dt)};
     }
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt,
-                                            a->device(), /*requires_grad=*/false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(),
+                                            /*requires_grad=*/false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
 
     if constexpr (!Derived::kHasGradient) {

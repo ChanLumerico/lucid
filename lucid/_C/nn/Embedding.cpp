@@ -19,7 +19,6 @@
 
 namespace lucid {
 
-
 // =====================================================================
 // Embedding
 // =====================================================================
@@ -46,10 +45,9 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
     OpScopeFull scope{schema_v1.name, weight->device(), weight->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(weight->device());
-    Storage out_storage = be.embedding_forward(
-        weight->storage(), indices->storage(),
-        weight->shape(), indices->shape(), out_shape,
-        padding_idx, weight->dtype());
+    Storage out_storage =
+        be.embedding_forward(weight->storage(), indices->storage(), weight->shape(),
+                             indices->shape(), out_shape, padding_idx, weight->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, weight->dtype(),
                                             weight->device(), false);
@@ -67,10 +65,8 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
 
 std::vector<Storage> EmbeddingBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
-    return {be.embedding_backward(
-        grad_out, saved_indices_,
-        weight_shape_, saved_indices_shape_,
-        padding_idx_, dtype_)};
+    return {be.embedding_backward(grad_out, saved_indices_, weight_shape_, saved_indices_shape_,
+                                  padding_idx_, dtype_)};
 }
 
 TensorImplPtr embedding_op(const TensorImplPtr& weight,
@@ -129,13 +125,13 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
     const Storage* pos_storage = position_ids_or_null ? &position_ids_or_null->storage() : nullptr;
     const Dtype pos_dt = position_ids_or_null ? position_ids_or_null->dtype() : Dtype::I64;
     auto& be = backend::Dispatcher::for_device(input->device());
-    auto rope_out = be.rope_forward(
-        input->storage(), pos_storage, input->shape(), interleaved, pos_dt, input->dtype());
+    auto rope_out = be.rope_forward(input->storage(), pos_storage, input->shape(), interleaved,
+                                    pos_dt, input->dtype());
     // rope_out = {out, saved_cos, saved_sin}
     Storage out_storage = std::move(rope_out[0]);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), input->shape(),
-                                            input->dtype(), input->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), input->shape(), input->dtype(),
+                                            input->device(), false);
 
     {
         auto bwd = std::make_shared<RotaryPosEmbeddingBackward>();
@@ -151,8 +147,7 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
 
 std::vector<Storage> RotaryPosEmbeddingBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
-    return {be.rope_backward(
-        grad_out, saved_cos_, saved_sin_, orig_shape_, interleaved_, dtype_)};
+    return {be.rope_backward(grad_out, saved_cos_, saved_sin_, orig_shape_, interleaved_, dtype_)};
 }
 
 TensorImplPtr rotary_pos_embedding_op(const TensorImplPtr& input,

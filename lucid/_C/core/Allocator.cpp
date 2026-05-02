@@ -29,22 +29,26 @@ namespace lucid {
 
 namespace {
 
-constexpr std::size_t kMinClass   = kCpuAlignment;          // 64 B
-constexpr std::size_t kMaxClass   = 256 * 1024;             // 256 KB
-constexpr std::size_t kMaxDepth   = 32;                     // blocks per class
-constexpr std::size_t kNumClasses = 23;                     // 64B…4MB (log2 range)
+constexpr std::size_t kMinClass = kCpuAlignment;  // 64 B
+constexpr std::size_t kMaxClass = 256 * 1024;     // 256 KB
+constexpr std::size_t kMaxDepth = 32;             // blocks per class
+constexpr std::size_t kNumClasses = 23;           // 64B…4MB (log2 range)
 
 // Round n up to the next power-of-2 >= kMinClass.
 inline std::size_t round_up_pool(std::size_t n) noexcept {
     std::size_t s = kMinClass;
-    while (s < n) s <<= 1;
+    while (s < n)
+        s <<= 1;
     return s;
 }
 
 inline int class_index(std::size_t rounded) noexcept {
     int idx = 0;
     std::size_t s = kMinClass;
-    while (s < rounded && idx < static_cast<int>(kNumClasses) - 1) { s <<= 1; ++idx; }
+    while (s < rounded && idx < static_cast<int>(kNumClasses) - 1) {
+        s <<= 1;
+        ++idx;
+    }
     return idx;
 }
 
@@ -54,7 +58,8 @@ struct ThreadPool {
 
     void* pop(int cls) noexcept {
         auto& v = lists[cls];
-        if (v.empty()) return nullptr;
+        if (v.empty())
+            return nullptr;
         void* p = v.back();
         v.pop_back();
         return p;
@@ -62,7 +67,8 @@ struct ThreadPool {
 
     bool push(int cls, void* p) noexcept {
         auto& v = lists[cls];
-        if (v.size() >= kMaxDepth) return false;
+        if (v.size() >= kMaxDepth)
+            return false;
         v.push_back(p);
         return true;
     }
@@ -114,8 +120,7 @@ std::shared_ptr<std::byte[]> allocate_aligned_bytes(std::size_t nbytes, Device d
     // Large allocation or GPU: fall back to posix_memalign.
     if (::posix_memalign(&raw, kCpuAlignment, nbytes) != 0 || !raw) {
         const auto s = MemoryTracker::get_stats(device);
-        throw OutOfMemory(nbytes, s.current_bytes, s.peak_bytes,
-                          std::string(device_name(device)));
+        throw OutOfMemory(nbytes, s.current_bytes, s.peak_bytes, std::string(device_name(device)));
     }
     MemoryTracker::track_alloc(nbytes, device);
     auto deleter = [nbytes, device](std::byte* p) {

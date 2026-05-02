@@ -44,8 +44,7 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
-                            const Shape& shape, Dtype dt) {
+    static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.tanh(a, shape, dt);
     }
     Storage grad_formula(const Storage& g);

@@ -30,9 +30,7 @@ namespace lucid::bindings {
 // ---- Unary: f(tensor) → tensor -----------------------------------------
 
 template <class BackwardNode>
-void bind_unary(py::module_& m,
-                TensorImplPtr (*fn)(const TensorImplPtr&),
-                const char* doc = "") {
+void bind_unary(py::module_& m, TensorImplPtr (*fn)(const TensorImplPtr&), const char* doc = "") {
     m.def(BackwardNode::schema_v1.name.data(), fn, py::arg("a"), doc);
 }
 
@@ -59,9 +57,7 @@ void bind_unary_extra(py::module_& m, Fn fn, PyArgs&&... extra_args) {
 
 template <class BackwardNode>
 void bind_reduce(py::module_& m,
-                 TensorImplPtr (*fn)(const TensorImplPtr&,
-                                    const std::vector<int>&,
-                                    bool),
+                 TensorImplPtr (*fn)(const TensorImplPtr&, const std::vector<int>&, bool),
                  const char* doc = "") {
     m.def(BackwardNode::schema_v1.name.data(), fn, py::arg("a"),
           py::arg("axes") = std::vector<int>{}, py::arg("keepdims") = false, doc);

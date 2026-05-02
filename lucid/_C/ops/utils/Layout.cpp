@@ -30,7 +30,6 @@ namespace lucid {
 
 namespace {
 
-using utils_detail::allocate_cpu;
 using utils_detail::fresh;
 using utils_detail::numel;
 
@@ -69,83 +68,8 @@ Storage reduce_broadcast(const Storage& grad,
                          const Shape& output_shape,
                          Dtype dt,
                          Device device) {
-    const std::size_t nout = output_shape.size();
-    const std::size_t nin = input_shape.size();
-    Shape padded(nout, 1);
-    std::copy(input_shape.begin(), input_shape.end(), padded.begin() + (nout - nin));
-
-    if (device == Device::GPU) {
-        const auto& gg = std::get<GpuStorage>(grad);
-        ::mlx::core::array out = *gg.arr;
-        // Sum along axes where padded[d] == 1 but output_shape[d] != 1.
-        std::vector<int> sum_axes;
-        for (std::size_t d = 0; d < nout; ++d) {
-            if (padded[d] == 1 && output_shape[d] != 1) {
-                sum_axes.push_back(static_cast<int>(d));
-            }
-        }
-        if (!sum_axes.empty())
-            out = ::mlx::core::sum(out, sum_axes, /*keepdims=*/true);
-        // Drop the leading singleton axes added by right-alignment.
-        if (nout != nin) {
-            out = ::mlx::core::reshape(out, gpu::to_mlx_shape(input_shape));
-        }
-        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
-    }
-
-    // CPU: reduce by accumulating into an `input_shape`-sized buffer.
-    const auto& gc = std::get<CpuStorage>(grad);
-    CpuStorage out;
-    out.dtype = dt;
-    out.nbytes = shape_numel(input_shape) * dtype_size(dt);
-    out.ptr = allocate_aligned_bytes(out.nbytes);
-    if (out.nbytes > 0)
-        std::memset(out.ptr.get(), 0, out.nbytes);
-
-    // Strides for `output_shape` (row-major) and for `padded` (used to map
-    // each output element back to an input element).
-    std::vector<std::size_t> in_str(nout, 0);
-    std::size_t s = 1;
-    for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
-        in_str[d] = (padded[d] == 1) ? 0 : s;
-        s *= static_cast<std::size_t>(padded[d]);
-    }
-    const std::size_t out_numel = shape_numel(output_shape);
-
-    auto run = [&](auto type_tag) {
-        using T = decltype(type_tag);
-        const T* gp = reinterpret_cast<const T*>(gc.ptr.get());
-        T* dp = reinterpret_cast<T*>(out.ptr.get());
-        std::vector<std::size_t> coord(nout, 0);
-        for (std::size_t f = 0; f < out_numel; ++f) {
-            std::size_t in_flat = 0;
-            for (std::size_t d = 0; d < nout; ++d)
-                in_flat += coord[d] * in_str[d];
-            dp[in_flat] += gp[f];
-            for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
-                if (++coord[d] < static_cast<std::size_t>(output_shape[d]))
-                    break;
-                coord[d] = 0;
-            }
-        }
-    };
-    switch (dt) {
-        case Dtype::F32:
-            run(float{});
-            break;
-        case Dtype::F64:
-            run(double{});
-            break;
-        case Dtype::I32:
-            run(std::int32_t{});
-            break;
-        case Dtype::I64:
-            run(std::int64_t{});
-            break;
-        default:
-            ErrorBuilder("broadcast backward").not_implemented("dtype not supported");
-    }
-    return Storage{std::move(out)};
+    return backend::Dispatcher::for_device(device).reduce_broadcast(grad, input_shape, output_shape,
+                                                                    dt);
 }
 
 }  // namespace
@@ -185,8 +109,8 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
             throw ShapeMismatch(shape, a_c->shape(), "broadcast_to");
     }
 
-    Storage out_storage = backend::Dispatcher::for_device(device).broadcast(
-        a_c->storage(), a_c->shape(), shape, dt);
+    Storage out_storage =
+        backend::Dispatcher::for_device(device).broadcast(a_c->storage(), a_c->shape(), shape, dt);
     return build_with_grad(std::move(out_storage));
 }
 

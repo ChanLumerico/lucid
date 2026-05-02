@@ -15,7 +15,10 @@ using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair_eq_shape;
 
-TensorImplPtr cmp_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
+TensorImplPtr cmp_dispatch(const TensorImplPtr& a,
+                           const TensorImplPtr& b,
+                           const char* name,
+                           int op) {
     validate_pair_eq_shape(a, b, name);
     OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
     Storage out = backend::Dispatcher::for_device(a->device())

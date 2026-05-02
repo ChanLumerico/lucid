@@ -51,10 +51,9 @@ concept HasUnaryGpuKernel = requires(GpuStorage a, Shape s, Dtype d) {
 };
 
 template <class T>
-concept HasUnaryDispatch =
-    requires(backend::IBackend& be, Storage a, Shape s, Dtype d) {
-        { T::dispatch(be, a, s, d) } -> std::same_as<Storage>;
-    };
+concept HasUnaryDispatch = requires(backend::IBackend& be, Storage a, Shape s, Dtype d) {
+    { T::dispatch(be, a, s, d) } -> std::same_as<Storage>;
+};
 
 }  // namespace detail
 
@@ -101,8 +100,8 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
             ErrorBuilder(Derived::schema_v1.name).not_implemented("GPU kernel not yet implemented");
         }
     } else {
-        out_storage = Storage{Derived::cpu_kernel(std::get<CpuStorage>(a_ptr->storage()),
-                                                  a_ptr->shape(), eff_dt)};
+        out_storage = Storage{
+            Derived::cpu_kernel(std::get<CpuStorage>(a_ptr->storage()), a_ptr->shape(), eff_dt)};
     }
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a_ptr->shape(), eff_dt,

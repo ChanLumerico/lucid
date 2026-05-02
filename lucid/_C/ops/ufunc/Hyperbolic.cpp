@@ -13,7 +13,9 @@ Storage SinhBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, cx, n, dtype_, device_);
 }
 
-TensorImplPtr sinh_op(const TensorImplPtr& a) { return SinhBackward::forward(a); }
+TensorImplPtr sinh_op(const TensorImplPtr& a) {
+    return SinhBackward::forward(a);
+}
 LUCID_REGISTER_OP(SinhBackward)
 
 // --------------- Cosh ---------------
@@ -25,7 +27,9 @@ Storage CoshBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, sx, n, dtype_, device_);
 }
 
-TensorImplPtr cosh_op(const TensorImplPtr& a) { return CoshBackward::forward(a); }
+TensorImplPtr cosh_op(const TensorImplPtr& a) {
+    return CoshBackward::forward(a);
+}
 LUCID_REGISTER_OP(CoshBackward)
 
 // --------------- Tanh (dispatch-migrated) ---------------
@@ -39,7 +43,9 @@ Storage TanhBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, one_minus, n, dtype_, device_);
 }
 
-TensorImplPtr tanh_op(const TensorImplPtr& a) { return TanhBackward::forward(a); }
+TensorImplPtr tanh_op(const TensorImplPtr& a) {
+    return TanhBackward::forward(a);
+}
 LUCID_REGISTER_OP(TanhBackward)
 
 }  // namespace lucid

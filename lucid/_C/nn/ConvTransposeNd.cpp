@@ -82,10 +82,10 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
                       out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin * K_total);
 
-    Storage out_storage = backend::Dispatcher::for_device(x->device()).conv_transpose_nd_forward(
-        x->storage(), W->storage(), b->storage(),
-        B, Cin, Cout, S, K, O, stride, pad, opad, N,
-        out_shape, x->dtype());
+    Storage out_storage =
+        backend::Dispatcher::for_device(x->device())
+            .conv_transpose_nd_forward(x->storage(), W->storage(), b->storage(), B, Cin, Cout, S, K,
+                                       O, stride, pad, opad, N, out_shape, x->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
@@ -113,9 +113,9 @@ std::vector<Storage> ConvTransposeNdBackward<N>::apply(Storage grad_out) {
         O[i] = static_cast<int>(this->out_shape_[2 + i]);
     }
 
-    return backend::Dispatcher::for_device(this->device_).conv_transpose_nd_backward(
-        grad_out, this->saved_inputs_[0], this->saved_inputs_[1],
-        B, Cin, Cout, S, K, O, this->stride_, this->pad_, N, this->dtype_);
+    return backend::Dispatcher::for_device(this->device_)
+        .conv_transpose_nd_backward(grad_out, this->saved_inputs_[0], this->saved_inputs_[1], B,
+                                    Cin, Cout, S, K, O, this->stride_, this->pad_, N, this->dtype_);
 }
 
 template class ConvTransposeNdBackward<1>;

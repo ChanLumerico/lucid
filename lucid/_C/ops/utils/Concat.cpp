@@ -104,8 +104,8 @@ public:
         for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
             auto piece = slice_axis_storage(grad_out, output_shape_, slice_shape, axis_,
                                             static_cast<std::int64_t>(i), dtype_, device_);
-            grads.push_back(backend::Dispatcher::for_device(device_).reshape(
-                piece, slice_shape, input_shape_, dtype_));
+            grads.push_back(backend::Dispatcher::for_device(device_).reshape(piece, slice_shape,
+                                                                             input_shape_, dtype_));
         }
         return grads;
     }
@@ -133,8 +133,8 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         Storage slice_grad = std::move(grad_out);
         if (squeeze_axis_) {
-            slice_grad = backend::Dispatcher::for_device(device_).reshape(
-                slice_grad, out_shape_, slice_shape_, dtype_);
+            slice_grad = backend::Dispatcher::for_device(device_).reshape(slice_grad, out_shape_,
+                                                                          slice_shape_, dtype_);
         }
         return {insert_axis_slice_storage(slice_grad, slice_shape_, input_shapes_[0], axis_,
                                           offset_, dtype_, device_)};
@@ -330,9 +330,8 @@ std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_spl
     const std::int64_t piece = a->shape()[ax] / num_splits;
     Shape piece_shape = a->shape();
     piece_shape[ax] = piece;
-    auto pieces =
-        backend::Dispatcher::for_device(device).split_equal(a->storage(), a->shape(), ax,
-                                                            num_splits, dt);
+    auto pieces = backend::Dispatcher::for_device(device).split_equal(a->storage(), a->shape(), ax,
+                                                                      num_splits, dt);
     std::vector<TensorImplPtr> out;
     out.reserve(pieces.size());
     std::int64_t off = 0;
@@ -390,8 +389,8 @@ std::vector<TensorImplPtr> unbind_op(const TensorImplPtr& a, int axis) {
     for (std::int64_t k = 0; k < a->shape()[ax]; ++k) {
         auto piece = slice_axis_storage(a->storage(), a->shape(), slice_shape, ax, k, a->dtype(),
                                         a->device());
-        auto reshaped = backend::Dispatcher::for_device(a->device()).reshape(
-            piece, slice_shape, out_shape, a->dtype());
+        auto reshaped = backend::Dispatcher::for_device(a->device())
+                            .reshape(piece, slice_shape, out_shape, a->dtype());
         auto result = fresh(std::move(reshaped), out_shape, a->dtype(), a->device());
         out.push_back(
             attach_split_grad(a, std::move(result), slice_shape, ax, k, /*squeeze_axis=*/true));

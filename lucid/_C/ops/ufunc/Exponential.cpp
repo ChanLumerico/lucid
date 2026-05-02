@@ -4,10 +4,8 @@
 
 namespace lucid {
 
-
 // --------------- Exp ---------------
 const OpSchema ExpBackward::schema_v1{"exp", 1, AmpPolicy::ForceFP32, true};
-
 
 Storage ExpBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
@@ -22,7 +20,6 @@ LUCID_REGISTER_OP(ExpBackward)
 
 // --------------- Log ---------------
 const OpSchema LogBackward::schema_v1{"log", 1, AmpPolicy::ForceFP32, true};
-
 
 Storage LogBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
@@ -52,7 +49,6 @@ LUCID_REGISTER_OP(Log2Backward)
 
 // --------------- Sqrt ---------------
 const OpSchema SqrtBackward::schema_v1{"sqrt", 1, AmpPolicy::Promote, true};
-
 
 Storage SqrtBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);

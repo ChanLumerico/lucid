@@ -14,14 +14,14 @@ namespace {
 
 // F32 fast path using vDSP primitives.
 void layer_norm_forward_f32_fast(const float* x,
-                                  const float* gamma,
-                                  const float* beta,
-                                  float* y,
-                                  float* saved_mean,
-                                  float* saved_rstd,
-                                  std::size_t outer,
-                                  std::size_t N,
-                                  double eps) {
+                                 const float* gamma,
+                                 const float* beta,
+                                 float* y,
+                                 float* saved_mean,
+                                 float* saved_rstd,
+                                 std::size_t outer,
+                                 std::size_t N,
+                                 double eps) {
     const float inv_N = 1.0f / static_cast<float>(N);
     // Reuse a per-row scratch buffer for the centered values.
     std::vector<float> centered(N);

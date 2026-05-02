@@ -12,7 +12,6 @@ namespace lucid {
 const OpSchema MaximumBackward::schema_v1{"maximum", /*version=*/1, AmpPolicy::Promote,
                                           /*deterministic=*/true};
 
-
 std::pair<Storage, Storage> MaximumBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
     Storage mask_a = ge_mask_storage(saved_inputs_[0], saved_inputs_[1], n, dtype_,

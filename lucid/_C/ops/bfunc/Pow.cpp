@@ -12,7 +12,6 @@ namespace lucid {
 const OpSchema PowBackward::schema_v1{"pow", /*version=*/1, AmpPolicy::ForceFP32,
                                       /*deterministic=*/true};
 
-
 std::pair<Storage, Storage> PowBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
     // Broadcast saved inputs so a/b are aligned with grad_out's shape.

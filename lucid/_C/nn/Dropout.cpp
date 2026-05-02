@@ -174,8 +174,8 @@ TensorImplPtr DropoutNdBackward::forward(const TensorImplPtr& a,
     Storage scaled_small =
         mul_scalar_storage(small_mask, scale, mask_numel, a->dtype(), a->device());
     auto& be = backend::Dispatcher::for_device(a->device());
-    auto [full_mask, y] = be.expand_and_multiply(
-        scaled_small, a->storage(), mask_shape, a->shape(), a->dtype());
+    auto [full_mask, y] =
+        be.expand_and_multiply(scaled_small, a->storage(), mask_shape, a->shape(), a->dtype());
 
     auto out =
         std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);
@@ -326,7 +326,6 @@ const OpSchema DropBlockBackward::schema_v1{
     "drop_block", 1, AmpPolicy::KeepInput, /*deterministic=*/false,
     "Bernoulli + spatial dilation; reproducible only with explicit seed"};
 
-
 TensorImplPtr DropBlockBackward::forward(
     const TensorImplPtr& a, std::int64_t block_size, double p, double eps, Generator* gen) {
     Validator::input(a, "drop_block.a").non_null();
@@ -420,8 +419,8 @@ TensorImplPtr DropPathBackward::forward(const TensorImplPtr& a,
         small = mul_scalar_storage(small, 1.0 / keep, B, a->dtype(), a->device());
     }
     auto& be = backend::Dispatcher::for_device(a->device());
-    auto [full_mask, y] = be.expand_and_multiply(
-        small, a->storage(), sshape, a->shape(), a->dtype());
+    auto [full_mask, y] =
+        be.expand_and_multiply(small, a->storage(), sshape, a->shape(), a->dtype());
 
     auto out =
         std::make_shared<TensorImpl>(std::move(y), a->shape(), a->dtype(), a->device(), false);

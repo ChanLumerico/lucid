@@ -28,7 +28,10 @@ bool is_integer_or_bool(Dtype dt) {
     }
 }
 
-TensorImplPtr bit_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
+TensorImplPtr bit_dispatch(const TensorImplPtr& a,
+                           const TensorImplPtr& b,
+                           const char* name,
+                           int op) {
     validate_pair_eq_shape(a, b, name);
     if (!is_integer_or_bool(a->dtype()))
         ErrorBuilder(name).fail("dtype must be integer or bool");

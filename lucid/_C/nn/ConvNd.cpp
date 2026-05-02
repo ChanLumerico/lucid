@@ -113,9 +113,8 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         opts.dilation[i] = dilation[i];
     }
     auto& be = backend::Dispatcher::for_device(x->device());
-    Storage out_storage = be.conv_nd_forward(
-        x->storage(), W->storage(), b->storage(),
-        B, Cin, Cout, Cin_g, Cout_g, S, K, O, opts, out_shape, x->dtype());
+    Storage out_storage = be.conv_nd_forward(x->storage(), W->storage(), b->storage(), B, Cin, Cout,
+                                             Cin_g, Cout_g, S, K, O, opts, out_shape, x->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
@@ -153,9 +152,8 @@ std::vector<Storage> ConvNdBackward<N>::apply(Storage grad_out) {
         opts.dilation[i] = this->dilation_[i];
     }
     auto& be = backend::Dispatcher::for_device(this->device_);
-    return be.conv_nd_backward(
-        grad_out, this->saved_inputs_[0], this->saved_inputs_[1],
-        B, Cin, Cout, Cin_g, Cout_g, S, K, O, opts, this->dtype_);
+    return be.conv_nd_backward(grad_out, this->saved_inputs_[0], this->saved_inputs_[1], B, Cin,
+                               Cout, Cin_g, Cout_g, S, K, O, opts, this->dtype_);
 }
 
 template class ConvNdBackward<1>;
@@ -258,10 +256,8 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(x->device());
-    Storage out_storage = be.unfold_forward(
-        x->storage(), B, C,
-        S, K, O,
-        stride, pad, dilation, out_shape, x->dtype());
+    Storage out_storage = be.unfold_forward(x->storage(), B, C, S, K, O, stride, pad, dilation,
+                                            out_shape, x->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
@@ -288,10 +284,7 @@ std::vector<Storage> UnfoldBackward::apply(Storage grad_out) {
         O[i] = (S[i] + 2 * pad_[i] - eff) / stride_[i] + 1;
     }
     auto& be = backend::Dispatcher::for_device(this->device_);
-    return {be.unfold_backward(
-        grad_out, B, C,
-        S, K, O,
-        stride_, pad_, dilation_, this->dtype_)};
+    return {be.unfold_backward(grad_out, B, C, S, K, O, stride_, pad_, dilation_, this->dtype_)};
 }
 
 TensorImplPtr unfold_op(const TensorImplPtr& x,

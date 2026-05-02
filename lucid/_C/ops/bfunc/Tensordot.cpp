@@ -6,8 +6,7 @@
 #include <string>
 #include <variant>
 
-#include <mlx/ops.h>
-
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -92,14 +91,13 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     OpScopeFull scope{"tensordot", device, dt, Shape{}};
 
     if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        const auto& gb = std::get<GpuStorage>(b->storage());
-        auto out = ::mlx::core::tensordot(*ga.arr, *gb.arr, axes_a, axes_b);
+        auto out_storage = backend::Dispatcher::for_device(device).tensordot(
+            a->storage(), b->storage(), a->shape(), b->shape(), Shape{}, axes_a, axes_b, dt);
+        const auto& gs = std::get<GpuStorage>(out_storage);
         Shape out_shape;
-        for (auto d : out.shape())
+        for (auto d : gs.arr->shape())
             out_shape.push_back(static_cast<std::int64_t>(d));
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dt)}, std::move(out_shape), dt,
-                     device);
+        return fresh(std::move(out_storage), std::move(out_shape), dt, device);
     }
 
     auto contract = [&](const TensorImplPtr& t, const std::vector<int>& axes_contract,

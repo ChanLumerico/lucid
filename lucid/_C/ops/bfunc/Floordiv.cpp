@@ -3,8 +3,7 @@
 #include <cmath>
 #include <variant>
 
-#include <mlx/ops.h>
-
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -18,7 +17,6 @@ namespace lucid {
 
 namespace {
 
-using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair_eq_shape;
 
@@ -30,55 +28,9 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     const Device device = a->device();
     OpScopeFull scope{"floordiv", device, dt, a->shape()};
 
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(a->storage());
-        const auto& gb = std::get<GpuStorage>(b->storage());
-        // mlx::floor_divide on integer inputs truncates toward zero, which
-        // disagrees with numpy/PyTorch (floor toward -∞) for negative
-        // numerators. Cast to float32, take the true floor, then cast back
-        // to int64 — matches the CPU branch's std::floor semantics.
-        auto a_f = ::mlx::core::astype(*ga.arr, ::mlx::core::float32);
-        auto b_f = ::mlx::core::astype(*gb.arr, ::mlx::core::float32);
-        auto q = ::mlx::core::floor(::mlx::core::divide(a_f, b_f));
-        auto out_i = ::mlx::core::astype(q, ::mlx::core::int64);
-        return fresh(Storage{gpu::wrap_mlx_array(std::move(out_i), Dtype::I64)}, a->shape(),
-                     Dtype::I64, device);
-    }
-
-    const auto& ca = std::get<CpuStorage>(a->storage());
-    const auto& cb = std::get<CpuStorage>(b->storage());
-    const std::size_t n = shape_numel(a->shape());
-    CpuStorage out;
-    out.dtype = Dtype::I64;
-    out.nbytes = n * sizeof(std::int64_t);
-    out.ptr = allocate_aligned_bytes(out.nbytes);
-    auto* dst = reinterpret_cast<std::int64_t*>(out.ptr.get());
-    auto run = [&](const auto* p, const auto* q) {
-        for (std::size_t i = 0; i < n; ++i)
-            dst[i] = static_cast<std::int64_t>(
-                std::floor(static_cast<double>(p[i]) / static_cast<double>(q[i])));
-    };
-    switch (dt) {
-        case Dtype::F32:
-            run(reinterpret_cast<const float*>(ca.ptr.get()),
-                reinterpret_cast<const float*>(cb.ptr.get()));
-            break;
-        case Dtype::F64:
-            run(reinterpret_cast<const double*>(ca.ptr.get()),
-                reinterpret_cast<const double*>(cb.ptr.get()));
-            break;
-        case Dtype::I32:
-            run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cb.ptr.get()));
-            break;
-        case Dtype::I64:
-            run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cb.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("floordiv").not_implemented("dtype not supported");
-    }
-    return fresh(Storage{std::move(out)}, a->shape(), Dtype::I64, device);
+    auto out_storage = backend::Dispatcher::for_device(device).floordiv(a->storage(), b->storage(),
+                                                                        a->shape(), dt);
+    return fresh(std::move(out_storage), a->shape(), Dtype::I64, device);
 }
 
 }  // namespace lucid

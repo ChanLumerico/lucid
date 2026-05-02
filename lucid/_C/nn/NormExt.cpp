@@ -52,11 +52,10 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
 
     auto& be = backend::Dispatcher::for_device(x->device());
-    auto fwd = be.batch_norm_eval_forward(
-        x->storage(), mean->storage(), var->storage(),
-        gamma->storage(), beta->storage(),
-        x->shape(), C, spatial, eps, x->dtype());
-    Storage out_storage  = std::move(fwd[0]);
+    auto fwd =
+        be.batch_norm_eval_forward(x->storage(), mean->storage(), var->storage(), gamma->storage(),
+                                   beta->storage(), x->shape(), C, spatial, eps, x->dtype());
+    Storage out_storage = std::move(fwd[0]);
     Storage rstd_storage = std::move(fwd[1]);
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
@@ -77,10 +76,9 @@ std::vector<Storage> BatchNormEvalBackward::apply(Storage grad_out) {
     for (std::size_t i = 2; i < xs.size(); ++i)
         spatial *= static_cast<int>(xs[i]);
     auto& be = backend::Dispatcher::for_device(this->device_);
-    return be.batch_norm_eval_backward(
-        this->saved_inputs_[0], this->saved_inputs_[1], this->saved_inputs_[3],
-        this->rstd_, grad_out,
-        xs, C, spatial, this->dtype_);
+    return be.batch_norm_eval_backward(this->saved_inputs_[0], this->saved_inputs_[1],
+                                       this->saved_inputs_[3], this->rstd_, grad_out, xs, C,
+                                       spatial, this->dtype_);
 }
 
 TensorImplPtr batch_norm_eval_op(const TensorImplPtr& x,
@@ -106,16 +104,16 @@ TensorImplPtr LpNormalizeBackward::forward(const TensorImplPtr& x,
                                            double eps) {
     Validator::input(x, "lp_normalize.x").non_null();
     const int rank = static_cast<int>(x->shape().size());
-    if (axis < 0) axis += rank;
+    if (axis < 0)
+        axis += rank;
     if (axis < 0 || axis >= rank)
         ErrorBuilder("lp_normalize").fail("axis out of range");
 
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
 
     auto& be = backend::Dispatcher::for_device(x->device());
-    auto fwd = be.lp_normalize_forward(
-        x->storage(), x->shape(), ord, axis, eps, x->dtype());
-    Storage y_storage    = std::move(fwd[0]);
+    auto fwd = be.lp_normalize_forward(x->storage(), x->shape(), ord, axis, eps, x->dtype());
+    Storage y_storage = std::move(fwd[0]);
     Storage norm_storage = std::move(fwd[1]);
 
     auto out = std::make_shared<TensorImpl>(std::move(y_storage), x->shape(), x->dtype(),
@@ -133,9 +131,8 @@ TensorImplPtr LpNormalizeBackward::forward(const TensorImplPtr& x,
 
 std::vector<Storage> LpNormalizeBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(this->device_);
-    return {be.lp_normalize_backward(
-        this->saved_inputs_[0], this->saved_norm_, grad_out,
-        this->out_shape_, ord_, axis_, this->dtype_)};
+    return {be.lp_normalize_backward(this->saved_inputs_[0], this->saved_norm_, grad_out,
+                                     this->out_shape_, ord_, axis_, this->dtype_)};
 }
 
 TensorImplPtr lp_normalize_op(const TensorImplPtr& x, double ord, int axis, double eps) {
@@ -168,10 +165,10 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
 
     auto& be = backend::Dispatcher::for_device(x->device());
-    auto fwd = be.global_response_norm_forward(
-        x->storage(), gamma->storage(), beta->storage(), x->shape(), eps, x->dtype());
+    auto fwd = be.global_response_norm_forward(x->storage(), gamma->storage(), beta->storage(),
+                                               x->shape(), eps, x->dtype());
     Storage out_storage = std::move(fwd[0]);
-    Storage nx_storage  = std::move(fwd[1]);
+    Storage nx_storage = std::move(fwd[1]);
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
                                             x->device(), false);
@@ -185,10 +182,9 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
 
 std::vector<Storage> GlobalResponseNormBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(this->device_);
-    return be.global_response_norm_backward(
-        this->saved_inputs_[0], this->saved_inputs_[1], this->saved_inputs_[2],
-        this->saved_Nx_, grad_out,
-        this->input_shapes_[0], eps_, this->dtype_);
+    return be.global_response_norm_backward(this->saved_inputs_[0], this->saved_inputs_[1],
+                                            this->saved_inputs_[2], this->saved_Nx_, grad_out,
+                                            this->input_shapes_[0], eps_, this->dtype_);
 }
 
 TensorImplPtr global_response_norm_op(const TensorImplPtr& x,

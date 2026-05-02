@@ -2,9 +2,8 @@
 
 #include <variant>
 
-#include <mlx/ops.h>
-
 #include "../../autograd/FuncOp.h"
+#include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -23,34 +22,7 @@ namespace lucid {
 
 namespace {
 
-using utils_detail::allocate_cpu;
 using utils_detail::fresh;
-
-template <typename T>
-CpuStorage tri_cpu(
-    const CpuStorage& input, const Shape& shape, Dtype dt, int k, bool upper, const char* name) {
-    if (shape.size() < 2)
-        ErrorBuilder(name).fail("input must have ndim >= 2");
-    auto out = allocate_cpu(shape, dt);
-    const auto* src = reinterpret_cast<const T*>(input.ptr.get());
-    auto* dst = reinterpret_cast<T*>(out.ptr.get());
-    const std::int64_t M = shape[shape.size() - 2];
-    const std::int64_t N = shape[shape.size() - 1];
-    std::size_t batch = 1;
-    for (std::size_t d = 0; d < shape.size() - 2; ++d)
-        batch *= static_cast<std::size_t>(shape[d]);
-    const std::size_t plane = static_cast<std::size_t>(M * N);
-    for (std::size_t b = 0; b < batch; ++b) {
-        for (std::int64_t i = 0; i < M; ++i) {
-            for (std::int64_t j = 0; j < N; ++j) {
-                const std::size_t f = b * plane + static_cast<std::size_t>(i * N + j);
-                const bool keep = upper ? (j - i >= k) : (j - i <= k);
-                dst[f] = keep ? src[f] : T{};
-            }
-        }
-    }
-    return out;
-}
 
 Storage tri_storage(const Storage& input,
                     const Shape& shape,
@@ -58,21 +30,8 @@ Storage tri_storage(const Storage& input,
                     Device device,
                     int k,
                     bool upper,
-                    const char* name) {
-    if (device == Device::GPU) {
-        const auto& ga = std::get<GpuStorage>(input);
-        auto out = upper ? ::mlx::core::triu(*ga.arr, k) : ::mlx::core::tril(*ga.arr, k);
-        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
-    }
-    const auto& ca = std::get<CpuStorage>(input);
-    switch (dt) {
-        case Dtype::F32:
-            return Storage{tri_cpu<float>(ca, shape, dt, k, upper, name)};
-        case Dtype::F64:
-            return Storage{tri_cpu<double>(ca, shape, dt, k, upper, name)};
-        default:
-            ErrorBuilder(name).not_implemented("dtype not supported");
-    }
+                    const char* /*name*/) {
+    return backend::Dispatcher::for_device(device).tri(input, shape, dt, k, upper);
 }
 
 class TriBackward : public FuncOp<TriBackward, 1> {
@@ -88,7 +47,8 @@ public:
     }
 };
 
-const OpSchema TriBackward::schema_v1{"tri", 1, AmpPolicy::KeepInput, true, "", -1, 1, {}, /*internal=*/true};
+const OpSchema TriBackward::schema_v1{"tri", 1,  AmpPolicy::KeepInput, true, "", -1,
+                                      1,     {}, /*internal=*/true};
 
 TensorImplPtr attach_tri_grad(
     const TensorImplPtr& a, TensorImplPtr out, int k, bool upper, const char* name) {

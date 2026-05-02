@@ -1,8 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "BindingGen.h"
-
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/Add.h"
 #include "../ops/bfunc/Bitwise.h"
@@ -20,6 +18,7 @@
 #include "../ops/bfunc/Pow.h"
 #include "../ops/bfunc/Sub.h"
 #include "../ops/bfunc/Tensordot.h"
+#include "BindingGen.h"
 
 namespace py = pybind11;
 

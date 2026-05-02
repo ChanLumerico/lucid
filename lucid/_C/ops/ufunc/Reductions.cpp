@@ -154,8 +154,11 @@ LUCID_REGISTER_OP(MeanBackward)
 // =================== Prod ===================
 const OpSchema ProdBackward::schema_v1{"prod", 1, AmpPolicy::Promote, true};
 
-CpuStorage ProdBackward::cpu_kernel(const CpuStorage& a, const Shape& in_shape,
-                                    const std::vector<int>& axes, bool keepdims, Dtype dt) {
+CpuStorage ProdBackward::cpu_kernel(const CpuStorage& a,
+                                    const Shape& in_shape,
+                                    const std::vector<int>& axes,
+                                    bool keepdims,
+                                    Dtype dt) {
     return multi_axis_reduce(a, in_shape, axes, keepdims, dt, backend::cpu::prod_axis_f32,
                              backend::cpu::prod_axis_f64, "prod");
 }

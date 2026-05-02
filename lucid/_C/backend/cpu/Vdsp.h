@@ -64,20 +64,20 @@ LUCID_INTERNAL void vge_mask_f64(const double* a, const double* b, double* out, 
 LUCID_INTERNAL void vle_mask_f64(const double* a, const double* b, double* out, std::size_t n);
 
 // reduction: scalar result
-LUCID_INTERNAL float  vsum_f32(const float*  in, std::size_t n);  // vDSP_sve
+LUCID_INTERNAL float vsum_f32(const float* in, std::size_t n);  // vDSP_sve
 LUCID_INTERNAL double vsum_f64(const double* in, std::size_t n);
-LUCID_INTERNAL float  vmean_f32(const float*  in, std::size_t n);  // vDSP_meanv
+LUCID_INTERNAL float vmean_f32(const float* in, std::size_t n);  // vDSP_meanv
 LUCID_INTERNAL double vmean_f64(const double* in, std::size_t n);
-LUCID_INTERNAL float  vmaxval_f32(const float*  in, std::size_t n);  // vDSP_maxv
+LUCID_INTERNAL float vmaxval_f32(const float* in, std::size_t n);  // vDSP_maxv
 LUCID_INTERNAL double vmaxval_f64(const double* in, std::size_t n);
-LUCID_INTERNAL float  vdotpr_f32(const float*  a, const float*  b, std::size_t n);  // vDSP_dotpr
+LUCID_INTERNAL float vdotpr_f32(const float* a, const float* b, std::size_t n);  // vDSP_dotpr
 LUCID_INTERNAL double vdotpr_f64(const double* a, const double* b, std::size_t n);
 
 // compound: out[i] = a[i]*b[i] + c[i]  (vDSP_vma)
-LUCID_INTERNAL void vmadd_f32(const float* a, const float* b, const float* c,
-                               float* out, std::size_t n);
-LUCID_INTERNAL void vmadd_f64(const double* a, const double* b, const double* c,
-                               double* out, std::size_t n);
+LUCID_INTERNAL void vmadd_f32(
+    const float* a, const float* b, const float* c, float* out, std::size_t n);
+LUCID_INTERNAL void vmadd_f64(
+    const double* a, const double* b, const double* c, double* out, std::size_t n);
 
 // Integer fallbacks (vDSP doesn't ship these natively; we use scalar loops
 // — they exist so the dispatch table is complete in Phase 3.0. Phase 3.1+

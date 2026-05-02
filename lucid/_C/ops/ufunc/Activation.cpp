@@ -82,8 +82,8 @@ LUCID_REGISTER_OP(SiluBackward)
 const OpSchema GeluBackward::schema_v1{"gelu", 1, AmpPolicy::ForceFP32, true};
 
 Storage GeluBackward::grad_formula(const Storage& g) {
-    return backend::Dispatcher::for_device(device_)
-        .gelu_backward(saved_inputs_[0], g, out_shape_, dtype_);
+    return backend::Dispatcher::for_device(device_).gelu_backward(saved_inputs_[0], g, out_shape_,
+                                                                  dtype_);
 }
 
 TensorImplPtr gelu_op(const TensorImplPtr& a) {
@@ -199,17 +199,16 @@ CpuStorage EluBackward::cpu_kernel(const CpuStorage& a,
 }
 
 Storage EluBackward::grad_formula(const Storage& g) {
-    return backend::Dispatcher::for_device(device_)
-        .elu_backward(saved_inputs_[0], g, out_shape_, dtype_, alpha_);
+    return backend::Dispatcher::for_device(device_).elu_backward(saved_inputs_[0], g, out_shape_,
+                                                                 dtype_, alpha_);
 }
 
 TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
     Validator::input(a, "elu.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
-    Storage out_storage =
-        backend::Dispatcher::for_device(a->device())
-            .elu(a->storage(), a->shape(), a->dtype(), alpha);
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .elu(a->storage(), a->shape(), a->dtype(), alpha);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                             a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
@@ -229,8 +228,8 @@ LUCID_REGISTER_OP(EluBackward)
 const OpSchema SeluBackward::schema_v1{"selu", 1, AmpPolicy::ForceFP32, true};
 
 Storage SeluBackward::grad_formula(const Storage& g) {
-    return backend::Dispatcher::for_device(device_)
-        .selu_backward(saved_inputs_[0], g, out_shape_, dtype_);
+    return backend::Dispatcher::for_device(device_).selu_backward(saved_inputs_[0], g, out_shape_,
+                                                                  dtype_);
 }
 
 TensorImplPtr selu_op(const TensorImplPtr& a) {
@@ -242,8 +241,8 @@ LUCID_REGISTER_OP(SeluBackward)
 const OpSchema MishBackward::schema_v1{"mish", 1, AmpPolicy::ForceFP32, true};
 
 Storage MishBackward::grad_formula(const Storage& g) {
-    return backend::Dispatcher::for_device(device_)
-        .mish_backward(saved_inputs_[0], g, out_shape_, dtype_);
+    return backend::Dispatcher::for_device(device_).mish_backward(saved_inputs_[0], g, out_shape_,
+                                                                  dtype_);
 }
 
 TensorImplPtr mish_op(const TensorImplPtr& a) {
@@ -255,8 +254,8 @@ LUCID_REGISTER_OP(MishBackward)
 const OpSchema HardSigmoidBackward::schema_v1{"hard_sigmoid", 1, AmpPolicy::KeepInput, true};
 
 Storage HardSigmoidBackward::grad_formula(const Storage& g) {
-    return backend::Dispatcher::for_device(device_)
-        .hard_sigmoid_backward(saved_inputs_[0], g, out_shape_, dtype_);
+    return backend::Dispatcher::for_device(device_).hard_sigmoid_backward(saved_inputs_[0], g,
+                                                                          out_shape_, dtype_);
 }
 
 TensorImplPtr hard_sigmoid_op(const TensorImplPtr& a) {
@@ -268,8 +267,8 @@ LUCID_REGISTER_OP(HardSigmoidBackward)
 const OpSchema HardSwishBackward::schema_v1{"hard_swish", 1, AmpPolicy::KeepInput, true};
 
 Storage HardSwishBackward::grad_formula(const Storage& g) {
-    return backend::Dispatcher::for_device(device_)
-        .hard_swish_backward(saved_inputs_[0], g, out_shape_, dtype_);
+    return backend::Dispatcher::for_device(device_).hard_swish_backward(saved_inputs_[0], g,
+                                                                        out_shape_, dtype_);
 }
 
 TensorImplPtr hard_swish_op(const TensorImplPtr& a) {

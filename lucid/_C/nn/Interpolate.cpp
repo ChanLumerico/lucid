@@ -41,13 +41,14 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
     const int C = static_cast<int>(input->shape()[1]);
     const int H_in = static_cast<int>(input->shape()[2]);
     const int W_in = static_cast<int>(input->shape()[3]);
-    (void)H_in; (void)W_in;
+    (void)H_in;
+    (void)W_in;
     Shape out_shape{N, C, H_out, W_out};
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(input->device());
-    Storage out_storage = be.interpolate_bilinear_forward(
-        input->storage(), input->shape(), H_out, W_out, align_corners, input->dtype());
+    Storage out_storage = be.interpolate_bilinear_forward(input->storage(), input->shape(), H_out,
+                                                          W_out, align_corners, input->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                             input->device(), false);
@@ -67,8 +68,8 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
 
 std::vector<Storage> InterpolateBilinearBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
-    return {be.interpolate_bilinear_backward(
-        grad_out, orig_shape_, H_out_, W_out_, align_corners_, dtype_)};
+    return {be.interpolate_bilinear_backward(grad_out, orig_shape_, H_out_, W_out_, align_corners_,
+                                             dtype_)};
 }
 
 TensorImplPtr interpolate_bilinear_op(const TensorImplPtr& input,
@@ -120,8 +121,8 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
 
 std::vector<Storage> InterpolateTrilinearBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
-    return {be.interpolate_trilinear_backward(
-        grad_out, orig_shape_, D_out_, H_out_, W_out_, align_corners_, dtype_)};
+    return {be.interpolate_trilinear_backward(grad_out, orig_shape_, D_out_, H_out_, W_out_,
+                                              align_corners_, dtype_)};
 }
 
 TensorImplPtr interpolate_trilinear_op(
@@ -144,8 +145,8 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
     OpScopeFull scope{"interpolate_nearest_2d", input->device(), input->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(input->device());
-    Storage out_storage = be.interpolate_nearest_2d_forward(
-        input->storage(), input->shape(), H_out, W_out, input->dtype());
+    Storage out_storage = be.interpolate_nearest_2d_forward(input->storage(), input->shape(), H_out,
+                                                            W_out, input->dtype());
     return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                         input->device(), false);
 }
@@ -163,8 +164,8 @@ TensorImplPtr interpolate_nearest_3d_op(const TensorImplPtr& input,
     OpScopeFull scope{"interpolate_nearest_3d", input->device(), input->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(input->device());
-    Storage out_storage = be.interpolate_nearest_3d_forward(
-        input->storage(), input->shape(), D_out, H_out, W_out, input->dtype());
+    Storage out_storage = be.interpolate_nearest_3d_forward(input->storage(), input->shape(), D_out,
+                                                            H_out, W_out, input->dtype());
     return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                         input->device(), false);
 }

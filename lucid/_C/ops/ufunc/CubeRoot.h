@@ -18,8 +18,7 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
-    static Storage dispatch(backend::IBackend& be, const Storage& a,
-                            const Shape& s, Dtype dt) {
+    static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.cube_root(a, s, dt);
     }
     Storage grad_formula(const Storage& g);

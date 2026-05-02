@@ -14,7 +14,6 @@ namespace lucid {
 const OpSchema AddBackward::schema_v1{"add", /*version=*/1, AmpPolicy::Promote,
                                       /*deterministic=*/true};
 
-
 std::pair<Storage, Storage> AddBackward::grad_formula(const Storage& grad_out) {
     // d(a+b)/da = 1, d(a+b)/db = 1. Both grads are exactly grad_out.
     // We clone so each downstream consumer owns its buffer (engine accumulates

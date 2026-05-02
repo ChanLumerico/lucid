@@ -41,8 +41,8 @@ TensorImplPtr AffineGridBackward::forward(
     OpScopeFull scope{schema_v1.name, theta->device(), theta->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(theta->device());
-    Storage out_storage = be.affine_grid_forward(
-        theta->storage(), N, H, W, align_corners, theta->dtype());
+    Storage out_storage =
+        be.affine_grid_forward(theta->storage(), N, H, W, align_corners, theta->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, theta->dtype(),
                                             theta->device(), false);
@@ -110,9 +110,9 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(input->device());
-    Storage out_storage = be.grid_sample_forward(
-        input->storage(), grid->storage(), input->shape(), grid->shape(),
-        mode, padding_mode, align_corners, input->dtype());
+    Storage out_storage =
+        be.grid_sample_forward(input->storage(), grid->storage(), input->shape(), grid->shape(),
+                               mode, padding_mode, align_corners, input->dtype());
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                             input->device(), false);
@@ -132,9 +132,8 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input,
 
 std::vector<Storage> GridSampleBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
-    return be.grid_sample_backward(
-        grad_out, saved_inputs_[0], saved_inputs_[1],
-        input_shape_, grid_shape_, mode_, padding_mode_, align_corners_, dtype_);
+    return be.grid_sample_backward(grad_out, saved_inputs_[0], saved_inputs_[1], input_shape_,
+                                   grid_shape_, mode_, padding_mode_, align_corners_, dtype_);
 }
 
 TensorImplPtr grid_sample_op(const TensorImplPtr& input,
