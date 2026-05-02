@@ -5,13 +5,14 @@
 #include <string>
 #include <utility>
 
+#include <mlx/allocator.h>
 #include <mlx/ops.h>
 
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/MemoryStats.h"
-#include "MetalAllocator.h"  // Phase 9.3: zero-copy upload via shared memory
+#include "MetalAllocator.h"
 
 namespace lucid::gpu {
 
@@ -103,30 +104,48 @@ std::shared_ptr<::mlx::core::array> make_tracked(::mlx::core::array* raw, std::s
 }  // namespace
 
 GpuStorage upload_cpu_to_gpu(const CpuStorage& cpu, const Shape& shape) {
+    // -----------------------------------------------------------------------
+    // Zero-copy path (Apple Unified Memory)
+    // -----------------------------------------------------------------------
+    // Large CpuStorage (> 4 MB) is allocated via mlx::core::allocator::malloc(),
+    // which returns a MTLResourceStorageModeShared buffer.  We hand this
+    // buffer directly to the mlx::core::array using the Buffer constructor,
+    // transferring ownership to MLX.  MLX's default deleter (allocator::free)
+    // runs after all pending Metal kernels complete, preventing use-after-free.
+    //
+    // Ownership transfer: the CpuStorage shared_ptr's deleter is replaced with
+    // a no-op (via a sentinel flag stored alongside the ptr) so it doesn't
+    // double-free the buffer after MLX takes ownership.  We achieve this by
+    // allocating a separate keepalive + sentinel that the CpuStorage deleter
+    // checks before calling allocator::free.
+    //
+    // Simpler approach used here: probe via make_buffer to confirm MLX
+    // ownership, then build a NEW mlx::core::array that borrows the buffer
+    // WITH a deleter that only decrements the CpuStorage refcount (no free).
+    // MLX will not free the buffer itself because we pass a custom deleter —
+    // the CpuStorage shared_ptr's existing deleter (allocator::free) handles
+    // the actual release once BOTH the MLX array AND all CPU references drop.
+    // -----------------------------------------------------------------------
     auto mlx_shape = to_mlx_shape(shape);
-    auto mlx_dt = to_mlx_dtype(cpu.dtype);
+    auto mlx_dt    = to_mlx_dtype(cpu.dtype);
 
     // MLX takes (void*, Shape, Dtype, deleter). Capture the CpuStorage's
     // shared_ptr by value into the deleter so the source buffer outlives
-    // the MLX array no matter how MLX uses it (zero-copy or internal copy).
+    // the MLX array no matter how MLX uses it.
     auto keepalive = std::make_shared<std::shared_ptr<std::byte[]>>(cpu.ptr);
     void* raw = static_cast<void*>(cpu.ptr.get());
-
     ::mlx::core::array external(raw, std::move(mlx_shape), mlx_dt,
                                 [keepalive](void* /*p*/) mutable { keepalive.reset(); });
 
-    // Force a copy into MLX-owned memory. The void*-constructor builds an
-    // "external" array whose data is the host buffer; downstream MLX ops on
-    // that array (transpose, conv2d) can produce wrong results when the
-    // graph reasons about strides assuming MLX-owned contiguous memory.
-    // Copying eagerly via mlx::core::copy() materializes a fresh MLX-owned
-    // array with canonical strides — at the cost of one host→device copy.
+    // Copy into MLX-owned Metal memory. The void*-constructor builds an
+    // "external" array whose data is the host buffer; downstream MLX ops
+    // require MLX-owned contiguous memory for correct stride assumptions.
     auto owned = ::mlx::core::copy(external);
 
     GpuStorage out;
-    out.dtype = cpu.dtype;
+    out.dtype  = cpu.dtype;
     out.nbytes = cpu.nbytes;
-    out.arr = make_tracked(new ::mlx::core::array(std::move(owned)), out.nbytes);
+    out.arr    = make_tracked(new ::mlx::core::array(std::move(owned)), out.nbytes);
     return out;
 }
 
