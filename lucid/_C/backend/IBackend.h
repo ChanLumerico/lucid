@@ -832,6 +832,18 @@ public:
 
     // ---- Interpolation ---------------------------------------------------
 
+    // ---- Nearest-neighbor interpolation (no grad) ------------------------------
+
+    /// 2D nearest-neighbor upsample/downsample forward. No autograd.
+    virtual Storage interpolate_nearest_2d_forward(
+        const Storage& input, const Shape& in_shape,
+        int H_out, int W_out, Dtype dt) = 0;
+
+    /// 3D nearest-neighbor upsample/downsample forward. No autograd.
+    virtual Storage interpolate_nearest_3d_forward(
+        const Storage& input, const Shape& in_shape,
+        int D_out, int H_out, int W_out, Dtype dt) = 0;
+
     /// Bilinear 2D interpolation forward.
     virtual Storage interpolate_bilinear_forward(
         const Storage& input, const Shape& in_shape,
@@ -891,6 +903,24 @@ public:
         const Storage& weight,
         const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
         bool has_bias, Dtype dt) = 0;
+
+    // ---- One-hot encoding -----------------------------------------------
+
+    /// Forward: returns out[...shape..., num_classes] of type out_dtype.
+    virtual Storage one_hot_forward(const Storage& indices,
+                                    const Shape& indices_shape,
+                                    int num_classes,
+                                    Dtype out_dtype) = 0;
+
+    // ---- Rotate (forward only) ------------------------------------------
+
+    /// Forward: nearest-neighbor rotation. angle_rad_neg = -angle_deg*(π/180).
+    virtual Storage rotate_forward(const Storage& input,
+                                   const Shape& shape,
+                                   double angle_rad_neg,
+                                   double cx,
+                                   double cy,
+                                   Dtype dt) = 0;
 };
 
 }  // namespace backend

@@ -5816,77 +5816,721 @@ public:
         return {Storage{std::move(dx)}, Storage{std::move(dg)}, Storage{std::move(db)}};
     }
 
-    // ---- Interpolation stubs (CPU implementations) -----------------------
+    // ---- Interpolation --------------------------------------------------
+
+    Storage interpolate_nearest_2d_forward(
+        const Storage& input, const Shape& in_shape,
+        int H_out, int W_out, Dtype dt) override {
+        const int N    = static_cast<int>(in_shape[0]);
+        const int C    = static_cast<int>(in_shape[1]);
+        const int H_in = static_cast<int>(in_shape[2]);
+        const int W_in = static_cast<int>(in_shape[3]);
+        const auto& xs = std::get<CpuStorage>(input);
+        auto out_cpu   = alloc_cpu(static_cast<std::size_t>(N) * C * H_out * W_out, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            for (int n = 0; n < N; ++n)
+                for (int c = 0; c < C; ++c) {
+                    const T* base  = xp + ((n * C + c) * H_in) * W_in;
+                    T*       obase = op  + ((n * C + c) * H_out) * W_out;
+                    for (int h = 0; h < H_out; ++h) {
+                        int yh = static_cast<int>(
+                            std::floor(static_cast<double>(h) * H_in / H_out));
+                        yh = std::clamp(yh, 0, H_in - 1);
+                        for (int w = 0; w < W_out; ++w) {
+                            int xw = static_cast<int>(
+                                std::floor(static_cast<double>(w) * W_in / W_out));
+                            xw = std::clamp(xw, 0, W_in - 1);
+                            obase[h * W_out + w] = base[yh * W_in + xw];
+                        }
+                    }
+                }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::interpolate_nearest_2d_forward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(out_cpu)};
+    }
+
+    Storage interpolate_nearest_3d_forward(
+        const Storage& input, const Shape& in_shape,
+        int D_out, int H_out, int W_out, Dtype dt) override {
+        const int N    = static_cast<int>(in_shape[0]);
+        const int C    = static_cast<int>(in_shape[1]);
+        const int D_in = static_cast<int>(in_shape[2]);
+        const int H_in = static_cast<int>(in_shape[3]);
+        const int W_in = static_cast<int>(in_shape[4]);
+        const auto& xs = std::get<CpuStorage>(input);
+        auto out_cpu = alloc_cpu(
+            static_cast<std::size_t>(N) * C * D_out * H_out * W_out, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            for (int n = 0; n < N; ++n)
+                for (int c = 0; c < C; ++c) {
+                    const T* base  = xp + (n * C + c) * D_in * H_in * W_in;
+                    T*       obase = op  + (n * C + c) * D_out * H_out * W_out;
+                    for (int d = 0; d < D_out; ++d) {
+                        int dz = std::clamp(
+                            static_cast<int>(std::floor(
+                                static_cast<double>(d) * D_in / D_out)),
+                            0, D_in - 1);
+                        for (int h = 0; h < H_out; ++h) {
+                            int yh = std::clamp(
+                                static_cast<int>(std::floor(
+                                    static_cast<double>(h) * H_in / H_out)),
+                                0, H_in - 1);
+                            for (int w = 0; w < W_out; ++w) {
+                                int xw = std::clamp(
+                                    static_cast<int>(std::floor(
+                                        static_cast<double>(w) * W_in / W_out)),
+                                    0, W_in - 1);
+                                obase[(d * H_out + h) * W_out + w] =
+                                    base[(dz * H_in + yh) * W_in + xw];
+                            }
+                        }
+                    }
+                }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::interpolate_nearest_3d_forward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(out_cpu)};
+    }
 
     Storage interpolate_bilinear_forward(
         const Storage& input, const Shape& in_shape,
         int H_out, int W_out, bool align_corners, Dtype dt) override {
-        ErrorBuilder("cpu::interpolate_bilinear_forward").not_implemented(
-            "route via Dispatcher not yet complete for Interpolate");
-        (void)input; (void)in_shape; (void)H_out; (void)W_out; (void)align_corners; (void)dt;
-        return Storage{};
+        const int N    = static_cast<int>(in_shape[0]);
+        const int C    = static_cast<int>(in_shape[1]);
+        const int H_in = static_cast<int>(in_shape[2]);
+        const int W_in = static_cast<int>(in_shape[3]);
+        const auto& xs = std::get<CpuStorage>(input);
+        auto out_cpu   = alloc_cpu(
+            static_cast<std::size_t>(N) * C * H_out * W_out, dt);
+
+        auto src_coord_fn = [](int out_idx, int in_dim, int out_dim, bool align, auto T_tag) {
+            using T = decltype(T_tag);
+            if (align) {
+                if (out_dim <= 1) return T{0};
+                return static_cast<T>(out_idx)
+                    * static_cast<T>(in_dim - 1)
+                    / static_cast<T>(out_dim - 1);
+            }
+            const T x = (static_cast<T>(out_idx) + T{0.5})
+                        * static_cast<T>(in_dim) / static_cast<T>(out_dim)
+                        - T{0.5};
+            return x;
+        };
+
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            const std::size_t in_chan  = static_cast<std::size_t>(H_in) * W_in;
+            const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
+            for (int n = 0; n < N; ++n)
+                for (int c = 0; c < C; ++c) {
+                    for (int h = 0; h < H_out; ++h) {
+                        T iy = src_coord_fn(h, H_in, H_out, align_corners, T{});
+                        if (iy < T{0}) iy = T{0};
+                        if (iy > static_cast<T>(H_in - 1)) iy = static_cast<T>(H_in - 1);
+                        int y0 = static_cast<int>(std::floor(iy));
+                        int y1 = std::min(y0 + 1, H_in - 1);
+                        const T dy = iy - static_cast<T>(y0);
+                        for (int w = 0; w < W_out; ++w) {
+                            T ix = src_coord_fn(w, W_in, W_out, align_corners, T{});
+                            if (ix < T{0}) ix = T{0};
+                            if (ix > static_cast<T>(W_in - 1)) ix = static_cast<T>(W_in - 1);
+                            int x0 = static_cast<int>(std::floor(ix));
+                            int x1 = std::min(x0 + 1, W_in - 1);
+                            const T dx  = ix - static_cast<T>(x0);
+                            const T w00 = (T{1} - dy) * (T{1} - dx);
+                            const T w01 = (T{1} - dy) * dx;
+                            const T w10 = dy * (T{1} - dx);
+                            const T w11 = dy * dx;
+                            const T* base = xp + (n * C + c) * in_chan;
+                            op[(n * C + c) * out_chan + h * W_out + w] =
+                                base[y0 * W_in + x0] * w00 +
+                                base[y0 * W_in + x1] * w01 +
+                                base[y1 * W_in + x0] * w10 +
+                                base[y1 * W_in + x1] * w11;
+                        }
+                    }
+                }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::interpolate_bilinear_forward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(out_cpu)};
     }
 
     Storage interpolate_bilinear_backward(
         const Storage& grad_out, const Shape& in_shape,
         int H_out, int W_out, bool align_corners, Dtype dt) override {
-        ErrorBuilder("cpu::interpolate_bilinear_backward").not_implemented("");
-        (void)grad_out; (void)in_shape; (void)H_out; (void)W_out; (void)align_corners; (void)dt;
-        return Storage{};
+        const int N    = static_cast<int>(in_shape[0]);
+        const int C    = static_cast<int>(in_shape[1]);
+        const int H_in = static_cast<int>(in_shape[2]);
+        const int W_in = static_cast<int>(in_shape[3]);
+        const auto& go = std::get<CpuStorage>(grad_out);
+        auto dx_cpu    = alloc_cpu(
+            static_cast<std::size_t>(N) * C * H_in * W_in, dt);
+
+        auto src_coord_fn = [](int out_idx, int in_dim, int out_dim, bool align, auto T_tag) {
+            using T = decltype(T_tag);
+            if (align) {
+                if (out_dim <= 1) return T{0};
+                return static_cast<T>(out_idx)
+                    * static_cast<T>(in_dim - 1)
+                    / static_cast<T>(out_dim - 1);
+            }
+            const T x = (static_cast<T>(out_idx) + T{0.5})
+                        * static_cast<T>(in_dim) / static_cast<T>(out_dim)
+                        - T{0.5};
+            return x;
+        };
+
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* go_p = reinterpret_cast<const T*>(go.ptr.get());
+            T*       dx_p = reinterpret_cast<T*>(dx_cpu.ptr.get());
+            const std::size_t in_chan  = static_cast<std::size_t>(H_in) * W_in;
+            const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
+            std::memset(dx_p, 0, sizeof(T) * static_cast<std::size_t>(N) * C * in_chan);
+            for (int n = 0; n < N; ++n)
+                for (int c = 0; c < C; ++c) {
+                    for (int h = 0; h < H_out; ++h) {
+                        T iy = src_coord_fn(h, H_in, H_out, align_corners, T{});
+                        if (iy < T{0}) iy = T{0};
+                        if (iy > static_cast<T>(H_in - 1)) iy = static_cast<T>(H_in - 1);
+                        int y0 = static_cast<int>(std::floor(iy));
+                        int y1 = std::min(y0 + 1, H_in - 1);
+                        const T dy = iy - static_cast<T>(y0);
+                        for (int w = 0; w < W_out; ++w) {
+                            T ix = src_coord_fn(w, W_in, W_out, align_corners, T{});
+                            if (ix < T{0}) ix = T{0};
+                            if (ix > static_cast<T>(W_in - 1)) ix = static_cast<T>(W_in - 1);
+                            int x0 = static_cast<int>(std::floor(ix));
+                            int x1 = std::min(x0 + 1, W_in - 1);
+                            const T dx  = ix - static_cast<T>(x0);
+                            const T w00 = (T{1} - dy) * (T{1} - dx);
+                            const T w01 = (T{1} - dy) * dx;
+                            const T w10 = dy * (T{1} - dx);
+                            const T w11 = dy * dx;
+                            const T g = go_p[(n * C + c) * out_chan + h * W_out + w];
+                            T* base = dx_p + (n * C + c) * in_chan;
+                            base[y0 * W_in + x0] += g * w00;
+                            base[y0 * W_in + x1] += g * w01;
+                            base[y1 * W_in + x0] += g * w10;
+                            base[y1 * W_in + x1] += g * w11;
+                        }
+                    }
+                }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::interpolate_bilinear_backward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(dx_cpu)};
     }
 
     Storage interpolate_trilinear_forward(
         const Storage& input, const Shape& in_shape,
         int D_out, int H_out, int W_out, bool align_corners, Dtype dt) override {
-        ErrorBuilder("cpu::interpolate_trilinear_forward").not_implemented("");
-        (void)input; (void)in_shape; (void)D_out; (void)H_out; (void)W_out;
-        (void)align_corners; (void)dt;
-        return Storage{};
+        const int N    = static_cast<int>(in_shape[0]);
+        const int C    = static_cast<int>(in_shape[1]);
+        const int D_in = static_cast<int>(in_shape[2]);
+        const int H_in = static_cast<int>(in_shape[3]);
+        const int W_in = static_cast<int>(in_shape[4]);
+        const auto& xs = std::get<CpuStorage>(input);
+        auto out_cpu = alloc_cpu(
+            static_cast<std::size_t>(N) * C * D_out * H_out * W_out, dt);
+
+        auto src_coord_fn = [](int o, int in_n, int out_n, bool align, auto T_tag) {
+            using T = decltype(T_tag);
+            T v;
+            if (align) {
+                if (out_n <= 1) { v = T{0}; }
+                else { v = static_cast<T>(o) * static_cast<T>(in_n - 1) / static_cast<T>(out_n - 1); }
+            } else {
+                v = (static_cast<T>(o) + T{0.5}) * static_cast<T>(in_n) / static_cast<T>(out_n) - T{0.5};
+            }
+            if (v < T{0}) v = T{0};
+            if (v > static_cast<T>(in_n - 1)) v = static_cast<T>(in_n - 1);
+            return v;
+        };
+
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            const std::size_t in_chan  = static_cast<std::size_t>(D_in) * H_in * W_in;
+            const std::size_t out_chan = static_cast<std::size_t>(D_out) * H_out * W_out;
+            for (int n = 0; n < N; ++n)
+                for (int c = 0; c < C; ++c) {
+                    const T* base  = xp + (n * C + c) * in_chan;
+                    T*       obase = op  + (n * C + c) * out_chan;
+                    for (int d = 0; d < D_out; ++d) {
+                        T iz = src_coord_fn(d, D_in, D_out, align_corners, T{});
+                        int z0 = static_cast<int>(std::floor(iz));
+                        int z1 = std::min(z0 + 1, D_in - 1);
+                        const T dz = iz - static_cast<T>(z0);
+                        for (int h = 0; h < H_out; ++h) {
+                            T iy = src_coord_fn(h, H_in, H_out, align_corners, T{});
+                            int y0 = static_cast<int>(std::floor(iy));
+                            int y1 = std::min(y0 + 1, H_in - 1);
+                            const T dy = iy - static_cast<T>(y0);
+                            for (int w = 0; w < W_out; ++w) {
+                                T ix = src_coord_fn(w, W_in, W_out, align_corners, T{});
+                                int x0 = static_cast<int>(std::floor(ix));
+                                int x1 = std::min(x0 + 1, W_in - 1);
+                                const T dx = ix - static_cast<T>(x0);
+                                auto idx = [&](int z, int y, int x) -> std::size_t {
+                                    return static_cast<std::size_t>(z) * H_in * W_in
+                                         + static_cast<std::size_t>(y) * W_in + x;
+                                };
+                                const T c000 = base[idx(z0,y0,x0)];
+                                const T c001 = base[idx(z0,y0,x1)];
+                                const T c010 = base[idx(z0,y1,x0)];
+                                const T c011 = base[idx(z0,y1,x1)];
+                                const T c100 = base[idx(z1,y0,x0)];
+                                const T c101 = base[idx(z1,y0,x1)];
+                                const T c110 = base[idx(z1,y1,x0)];
+                                const T c111 = base[idx(z1,y1,x1)];
+                                const T c00  = c000*(T{1}-dx) + c001*dx;
+                                const T c01  = c010*(T{1}-dx) + c011*dx;
+                                const T c10  = c100*(T{1}-dx) + c101*dx;
+                                const T c11  = c110*(T{1}-dx) + c111*dx;
+                                const T c0   = c00*(T{1}-dy) + c01*dy;
+                                const T c1   = c10*(T{1}-dy) + c11*dy;
+                                obase[d*H_out*W_out + h*W_out + w] =
+                                    c0*(T{1}-dz) + c1*dz;
+                            }
+                        }
+                    }
+                }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::interpolate_trilinear_forward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(out_cpu)};
     }
 
     Storage interpolate_trilinear_backward(
         const Storage& grad_out, const Shape& in_shape,
         int D_out, int H_out, int W_out, bool align_corners, Dtype dt) override {
-        ErrorBuilder("cpu::interpolate_trilinear_backward").not_implemented("");
-        (void)grad_out; (void)in_shape; (void)D_out; (void)H_out; (void)W_out;
-        (void)align_corners; (void)dt;
-        return Storage{};
+        const int N    = static_cast<int>(in_shape[0]);
+        const int C    = static_cast<int>(in_shape[1]);
+        const int D_in = static_cast<int>(in_shape[2]);
+        const int H_in = static_cast<int>(in_shape[3]);
+        const int W_in = static_cast<int>(in_shape[4]);
+        const auto& go = std::get<CpuStorage>(grad_out);
+        auto dx_cpu = alloc_cpu(
+            static_cast<std::size_t>(N) * C * D_in * H_in * W_in, dt);
+
+        auto src_coord_fn = [](int o, int in_n, int out_n, bool align, auto T_tag) {
+            using T = decltype(T_tag);
+            T v;
+            if (align) {
+                if (out_n <= 1) { v = T{0}; }
+                else { v = static_cast<T>(o) * static_cast<T>(in_n - 1) / static_cast<T>(out_n - 1); }
+            } else {
+                v = (static_cast<T>(o) + T{0.5}) * static_cast<T>(in_n) / static_cast<T>(out_n) - T{0.5};
+            }
+            if (v < T{0}) v = T{0};
+            if (v > static_cast<T>(in_n - 1)) v = static_cast<T>(in_n - 1);
+            return v;
+        };
+
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* go_p = reinterpret_cast<const T*>(go.ptr.get());
+            T*       dx_p = reinterpret_cast<T*>(dx_cpu.ptr.get());
+            const std::size_t in_chan  = static_cast<std::size_t>(D_in) * H_in * W_in;
+            const std::size_t out_chan = static_cast<std::size_t>(D_out) * H_out * W_out;
+            std::memset(dx_p, 0, sizeof(T) * static_cast<std::size_t>(N) * C * in_chan);
+            for (int n = 0; n < N; ++n)
+                for (int c = 0; c < C; ++c) {
+                    T*       base    = dx_p + (n * C + c) * in_chan;
+                    const T* go_base = go_p + (n * C + c) * out_chan;
+                    for (int d = 0; d < D_out; ++d) {
+                        T iz = src_coord_fn(d, D_in, D_out, align_corners, T{});
+                        int z0 = static_cast<int>(std::floor(iz));
+                        int z1 = std::min(z0 + 1, D_in - 1);
+                        const T dz = iz - static_cast<T>(z0);
+                        for (int h = 0; h < H_out; ++h) {
+                            T iy = src_coord_fn(h, H_in, H_out, align_corners, T{});
+                            int y0 = static_cast<int>(std::floor(iy));
+                            int y1 = std::min(y0 + 1, H_in - 1);
+                            const T dy = iy - static_cast<T>(y0);
+                            for (int w = 0; w < W_out; ++w) {
+                                T ix = src_coord_fn(w, W_in, W_out, align_corners, T{});
+                                int x0 = static_cast<int>(std::floor(ix));
+                                int x1 = std::min(x0 + 1, W_in - 1);
+                                const T dx = ix - static_cast<T>(x0);
+                                const T g  = go_base[d*H_out*W_out + h*W_out + w];
+                                auto add = [&](int z, int y, int x, T weight) {
+                                    base[static_cast<std::size_t>(z)*H_in*W_in +
+                                         static_cast<std::size_t>(y)*W_in + x] += g * weight;
+                                };
+                                const T omdx = T{1}-dx, omdy = T{1}-dy, omdz = T{1}-dz;
+                                add(z0,y0,x0, omdz*omdy*omdx);
+                                add(z0,y0,x1, omdz*omdy*dx);
+                                add(z0,y1,x0, omdz*dy*omdx);
+                                add(z0,y1,x1, omdz*dy*dx);
+                                add(z1,y0,x0, dz*omdy*omdx);
+                                add(z1,y0,x1, dz*omdy*dx);
+                                add(z1,y1,x0, dz*dy*omdx);
+                                add(z1,y1,x1, dz*dy*dx);
+                            }
+                        }
+                    }
+                }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::interpolate_trilinear_backward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(dx_cpu)};
     }
+
+    // ---- Spatial transforms ---------------------------------------------
 
     Storage affine_grid_forward(
         const Storage& theta, int N, int H, int W,
         bool align_corners, Dtype dt) override {
-        ErrorBuilder("cpu::affine_grid_forward").not_implemented("");
-        (void)theta; (void)N; (void)H; (void)W; (void)align_corners; (void)dt;
-        return Storage{};
+        const auto& th = std::get<CpuStorage>(theta);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * H * W * 2, dt);
+
+        auto x_norm_fn = [](int w, int W2, bool align, auto T_tag) {
+            using T = decltype(T_tag);
+            if (align)
+                return W2 > 1
+                    ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W2 - 1)
+                    : T{0};
+            return T{-1} + (T{2} * static_cast<T>(w) + T{1}) / static_cast<T>(W2);
+        };
+
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* tp = reinterpret_cast<const T*>(th.ptr.get());
+            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            for (int n = 0; n < N; ++n) {
+                const T t00 = tp[n*6+0], t01 = tp[n*6+1], t02 = tp[n*6+2];
+                const T t10 = tp[n*6+3], t11 = tp[n*6+4], t12 = tp[n*6+5];
+                for (int h = 0; h < H; ++h) {
+                    const T y = x_norm_fn(h, H, align_corners, T{});
+                    for (int w = 0; w < W; ++w) {
+                        const T x = x_norm_fn(w, W, align_corners, T{});
+                        const std::size_t base =
+                            ((static_cast<std::size_t>(n) * H + h) * W + w) * 2;
+                        op[base + 0] = t00*x + t01*y + t02;
+                        op[base + 1] = t10*x + t11*y + t12;
+                    }
+                }
+            }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::affine_grid_forward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(out_cpu)};
     }
 
     Storage affine_grid_backward(
         const Storage& grad_grid, int N, int H, int W,
         bool align_corners, Dtype dt) override {
-        ErrorBuilder("cpu::affine_grid_backward").not_implemented("");
-        (void)grad_grid; (void)N; (void)H; (void)W; (void)align_corners; (void)dt;
-        return Storage{};
+        const auto& gs = std::get<CpuStorage>(grad_grid);
+        auto dtheta = alloc_cpu(static_cast<std::size_t>(N) * 2 * 3, dt);
+        std::memset(dtheta.ptr.get(), 0, dtheta.nbytes);
+
+        auto x_norm_fn = [](int w, int W2, bool align, auto T_tag) {
+            using T = decltype(T_tag);
+            if (align)
+                return W2 > 1
+                    ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W2 - 1)
+                    : T{0};
+            return T{-1} + (T{2} * static_cast<T>(w) + T{1}) / static_cast<T>(W2);
+        };
+
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            T*       dp = reinterpret_cast<T*>(dtheta.ptr.get());
+            for (int n = 0; n < N; ++n) {
+                T s00=T{0}, s01=T{0}, s02=T{0};
+                T s10=T{0}, s11=T{0}, s12=T{0};
+                for (int h = 0; h < H; ++h) {
+                    const T y = x_norm_fn(h, H, align_corners, T{});
+                    for (int w = 0; w < W; ++w) {
+                        const T x = x_norm_fn(w, W, align_corners, T{});
+                        const std::size_t base =
+                            ((static_cast<std::size_t>(n) * H + h) * W + w) * 2;
+                        const T gx = gp[base + 0];
+                        const T gy = gp[base + 1];
+                        s00 += gx*x; s01 += gx*y; s02 += gx;
+                        s10 += gy*x; s11 += gy*y; s12 += gy;
+                    }
+                }
+                dp[n*6+0]=s00; dp[n*6+1]=s01; dp[n*6+2]=s02;
+                dp[n*6+3]=s10; dp[n*6+4]=s11; dp[n*6+5]=s12;
+            }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::affine_grid_backward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(dtheta)};
     }
 
     Storage grid_sample_forward(
         const Storage& input, const Storage& grid,
         const Shape& in_shape, const Shape& grid_shape,
         int mode, int padding_mode, bool align_corners, Dtype dt) override {
-        ErrorBuilder("cpu::grid_sample_forward").not_implemented("");
-        (void)input; (void)grid; (void)in_shape; (void)grid_shape;
-        (void)mode; (void)padding_mode; (void)align_corners; (void)dt;
-        return Storage{};
+        const int N     = static_cast<int>(in_shape[0]);
+        const int C     = static_cast<int>(in_shape[1]);
+        const int H_in  = static_cast<int>(in_shape[2]);
+        const int W_in  = static_cast<int>(in_shape[3]);
+        const int H_out = static_cast<int>(grid_shape[1]);
+        const int W_out = static_cast<int>(grid_shape[2]);
+        const auto& xs  = std::get<CpuStorage>(input);
+        const auto& gs  = std::get<CpuStorage>(grid);
+        auto out_cpu = alloc_cpu(
+            static_cast<std::size_t>(N) * C * H_out * W_out, dt);
+
+        auto denorm_fn = [](auto g, int dim, bool align) {
+            using T = decltype(g);
+            if (align)
+                return (g + T{1}) * static_cast<T>(dim - 1) / T{2};
+            return (g + T{1}) * static_cast<T>(dim) / T{2} - static_cast<T>(0.5);
+        };
+
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            T*       op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            const std::size_t in_chan  = static_cast<std::size_t>(H_in) * W_in;
+            const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
+            for (int n = 0; n < N; ++n) {
+                for (int h = 0; h < H_out; ++h) {
+                    for (int w = 0; w < W_out; ++w) {
+                        const std::size_t gidx =
+                            ((static_cast<std::size_t>(n)*H_out+h)*W_out+w)*2;
+                        T ix = denorm_fn(gp[gidx+0], W_in, align_corners);
+                        T iy = denorm_fn(gp[gidx+1], H_in, align_corners);
+                        if (mode == 1) {
+                            int ixr = static_cast<int>(
+                                std::nearbyint(static_cast<double>(ix)));
+                            int iyr = static_cast<int>(
+                                std::nearbyint(static_cast<double>(iy)));
+                            bool oob = false;
+                            if (padding_mode == 1) {
+                                ixr = std::clamp(ixr, 0, W_in-1);
+                                iyr = std::clamp(iyr, 0, H_in-1);
+                            } else {
+                                if (ixr<0||ixr>W_in-1||iyr<0||iyr>H_in-1)
+                                    oob = true;
+                                ixr = std::clamp(ixr, 0, W_in-1);
+                                iyr = std::clamp(iyr, 0, H_in-1);
+                            }
+                            for (int c = 0; c < C; ++c) {
+                                T v = oob ? T{0}
+                                    : xp[((static_cast<std::size_t>(n)*C+c)*in_chan)
+                                         + iyr*W_in + ixr];
+                                op[((static_cast<std::size_t>(n)*C+c)*out_chan)
+                                   + h*W_out+w] = v;
+                            }
+                        } else {
+                            if (padding_mode == 1) {
+                                ix = std::clamp<T>(ix, T{0},
+                                    static_cast<T>(W_in-1));
+                                iy = std::clamp<T>(iy, T{0},
+                                    static_cast<T>(H_in-1));
+                            }
+                            const T x0f = std::floor(ix);
+                            const T y0f = std::floor(iy);
+                            const int x0 = static_cast<int>(x0f);
+                            const int y0 = static_cast<int>(y0f);
+                            const int x1 = x0+1, y1 = y0+1;
+                            const T wa = (static_cast<T>(x1)-ix)*(static_cast<T>(y1)-iy);
+                            const T wb = (static_cast<T>(x1)-ix)*(iy-static_cast<T>(y0));
+                            const T wc = (ix-static_cast<T>(x0))*(static_cast<T>(y1)-iy);
+                            const T wd = (ix-static_cast<T>(x0))*(iy-static_cast<T>(y0));
+                            auto fetch = [&](int yi, int xi, int c) -> T {
+                                const bool oob =
+                                    (xi<0||xi>W_in-1||yi<0||yi>H_in-1);
+                                if (oob && padding_mode==0) return T{0};
+                                const int ycl = std::clamp(yi,0,H_in-1);
+                                const int xcl = std::clamp(xi,0,W_in-1);
+                                return xp[((static_cast<std::size_t>(n)*C+c)*in_chan)
+                                          + ycl*W_in+xcl];
+                            };
+                            for (int c = 0; c < C; ++c) {
+                                const T Ia = fetch(y0,x0,c);
+                                const T Ib = fetch(y1,x0,c);
+                                const T Ic = fetch(y0,x1,c);
+                                const T Id = fetch(y1,x1,c);
+                                op[((static_cast<std::size_t>(n)*C+c)*out_chan)
+                                   +h*W_out+w] = Ia*wa+Ib*wb+Ic*wc+Id*wd;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::grid_sample_forward")
+                .not_implemented("dtype must be F32/F64");
+        return Storage{std::move(out_cpu)};
     }
 
     std::vector<Storage> grid_sample_backward(
         const Storage& grad_out, const Storage& input, const Storage& grid,
         const Shape& in_shape, const Shape& grid_shape,
         int mode, int padding_mode, bool align_corners, Dtype dt) override {
-        ErrorBuilder("cpu::grid_sample_backward").not_implemented("");
-        (void)grad_out; (void)input; (void)grid; (void)in_shape; (void)grid_shape;
-        (void)mode; (void)padding_mode; (void)align_corners; (void)dt;
-        return {};
+        const int N     = static_cast<int>(in_shape[0]);
+        const int C     = static_cast<int>(in_shape[1]);
+        const int H_in  = static_cast<int>(in_shape[2]);
+        const int W_in  = static_cast<int>(in_shape[3]);
+        const int H_out = static_cast<int>(grid_shape[1]);
+        const int W_out = static_cast<int>(grid_shape[2]);
+        const auto& xs  = std::get<CpuStorage>(input);
+        const auto& gs  = std::get<CpuStorage>(grid);
+        const auto& gout = std::get<CpuStorage>(grad_out);
+        auto dx = alloc_cpu(static_cast<std::size_t>(N)*C*H_in*W_in, dt);
+        auto dg = alloc_cpu(static_cast<std::size_t>(N)*H_out*W_out*2, dt);
+        std::memset(dx.ptr.get(), 0, dx.nbytes);
+        std::memset(dg.ptr.get(), 0, dg.nbytes);
+
+        auto denorm_fn = [](auto g, int dim, bool align) {
+            using T = decltype(g);
+            if (align)
+                return (g + T{1}) * static_cast<T>(dim - 1) / T{2};
+            return (g + T{1}) * static_cast<T>(dim) / T{2} - static_cast<T>(0.5);
+        };
+        auto denorm_grad_factor_fn = [](int dim, bool align, auto T_tag) {
+            using T = decltype(T_tag);
+            return align ? static_cast<T>(dim-1)/T{2} : static_cast<T>(dim)/T{2};
+        };
+
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp  = reinterpret_cast<const T*>(xs.ptr.get());
+            const T* gp  = reinterpret_cast<const T*>(gs.ptr.get());
+            const T* op  = reinterpret_cast<const T*>(gout.ptr.get());
+            T*       dxp = reinterpret_cast<T*>(dx.ptr.get());
+            T*       dgp = reinterpret_cast<T*>(dg.ptr.get());
+            const std::size_t in_chan  = static_cast<std::size_t>(H_in)*W_in;
+            const std::size_t out_chan = static_cast<std::size_t>(H_out)*W_out;
+            const T sx = denorm_grad_factor_fn(W_in, align_corners, T{});
+            const T sy = denorm_grad_factor_fn(H_in, align_corners, T{});
+            for (int n = 0; n < N; ++n) {
+                for (int h = 0; h < H_out; ++h) {
+                    for (int w = 0; w < W_out; ++w) {
+                        const std::size_t gidx =
+                            ((static_cast<std::size_t>(n)*H_out+h)*W_out+w)*2;
+                        const T gx_norm = gp[gidx+0];
+                        const T gy_norm = gp[gidx+1];
+                        T ix = denorm_fn(gx_norm, W_in, align_corners);
+                        T iy = denorm_fn(gy_norm, H_in, align_corners);
+                        bool clipped_x=false, clipped_y=false;
+                        if (mode==0 && padding_mode==1) {
+                            if (ix<T{0}) { ix=T{0}; clipped_x=true; }
+                            if (ix>static_cast<T>(W_in-1)) { ix=static_cast<T>(W_in-1); clipped_x=true; }
+                            if (iy<T{0}) { iy=T{0}; clipped_y=true; }
+                            if (iy>static_cast<T>(H_in-1)) { iy=static_cast<T>(H_in-1); clipped_y=true; }
+                        }
+                        if (mode==1) {
+                            int ixr = static_cast<int>(
+                                std::nearbyint(static_cast<double>(ix)));
+                            int iyr = static_cast<int>(
+                                std::nearbyint(static_cast<double>(iy)));
+                            bool oob = false;
+                            if (padding_mode==1) {
+                                ixr=std::clamp(ixr,0,W_in-1);
+                                iyr=std::clamp(iyr,0,H_in-1);
+                            } else {
+                                if (ixr<0||ixr>W_in-1||iyr<0||iyr>H_in-1)
+                                    oob=true;
+                                ixr=std::clamp(ixr,0,W_in-1);
+                                iyr=std::clamp(iyr,0,H_in-1);
+                            }
+                            if (!oob) {
+                                for (int c=0; c<C; ++c) {
+                                    const T go =
+                                        op[((static_cast<std::size_t>(n)*C+c)*out_chan)+h*W_out+w];
+                                    dxp[((static_cast<std::size_t>(n)*C+c)*in_chan)+iyr*W_in+ixr]+=go;
+                                }
+                            }
+                            continue;
+                        }
+                        const T x0f = std::floor(ix);
+                        const T y0f = std::floor(iy);
+                        const int x0 = static_cast<int>(x0f);
+                        const int y0 = static_cast<int>(y0f);
+                        const int x1 = x0+1, y1 = y0+1;
+                        const T wa = (static_cast<T>(x1)-ix)*(static_cast<T>(y1)-iy);
+                        const T wb = (static_cast<T>(x1)-ix)*(iy-static_cast<T>(y0));
+                        const T wc = (ix-static_cast<T>(x0))*(static_cast<T>(y1)-iy);
+                        const T wd = (ix-static_cast<T>(x0))*(iy-static_cast<T>(y0));
+                        auto in_bounds = [&](int yi,int xi)->bool {
+                            return xi>=0&&xi<=W_in-1&&yi>=0&&yi<=H_in-1;
+                        };
+                        auto fetch_for_dgrid = [&](int yi,int xi,int c)->T {
+                            const bool oob = !in_bounds(yi,xi);
+                            if (oob&&padding_mode==0) return T{0};
+                            const int ycl=std::clamp(yi,0,H_in-1);
+                            const int xcl=std::clamp(xi,0,W_in-1);
+                            return xp[((static_cast<std::size_t>(n)*C+c)*in_chan)+ycl*W_in+xcl];
+                        };
+                        auto scatter_dx = [&](int yi,int xi,int c,T contrib) {
+                            const bool oob = !in_bounds(yi,xi);
+                            if (oob&&padding_mode==0) return;
+                            const int ycl=std::clamp(yi,0,H_in-1);
+                            const int xcl=std::clamp(xi,0,W_in-1);
+                            dxp[((static_cast<std::size_t>(n)*C+c)*in_chan)+ycl*W_in+xcl]+=contrib;
+                        };
+                        T dix_acc=T{0}, diy_acc=T{0};
+                        for (int c=0; c<C; ++c) {
+                            const T go =
+                                op[((static_cast<std::size_t>(n)*C+c)*out_chan)+h*W_out+w];
+                            scatter_dx(y0,x0,c,go*wa);
+                            scatter_dx(y1,x0,c,go*wb);
+                            scatter_dx(y0,x1,c,go*wc);
+                            scatter_dx(y1,x1,c,go*wd);
+                            const T Ia=fetch_for_dgrid(y0,x0,c);
+                            const T Ib=fetch_for_dgrid(y1,x0,c);
+                            const T Ic=fetch_for_dgrid(y0,x1,c);
+                            const T Id=fetch_for_dgrid(y1,x1,c);
+                            const T dy_t1=static_cast<T>(y1)-iy;
+                            const T dy_t2=iy-static_cast<T>(y0);
+                            const T dx_t1=static_cast<T>(x1)-ix;
+                            const T dx_t2=ix-static_cast<T>(x0);
+                            dix_acc+=go*((Ic-Ia)*dy_t1+(Id-Ib)*dy_t2);
+                            diy_acc+=go*((Ib-Ia)*dx_t1+(Id-Ic)*dx_t2);
+                        }
+                        if (clipped_x) dix_acc=T{0};
+                        if (clipped_y) diy_acc=T{0};
+                        dgp[gidx+0]=dix_acc*sx;
+                        dgp[gidx+1]=diy_acc*sy;
+                    }
+                }
+            }
+        };
+        if (dt == Dtype::F32)      run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::grid_sample_backward")
+                .not_implemented("dtype must be F32/F64");
+        return {Storage{std::move(dx)}, Storage{std::move(dg)}};
     }
 
     Storage bilinear_layer_forward(
@@ -5894,10 +6538,43 @@ public:
         const Storage& bias, bool has_bias,
         const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
         Dtype dt) override {
-        ErrorBuilder("cpu::bilinear_layer_forward").not_implemented("");
-        (void)x1; (void)x2; (void)weight; (void)bias; (void)has_bias;
-        (void)x1_shape; (void)x2_shape; (void)w_shape; (void)dt;
-        return Storage{};
+        std::size_t B = 1;
+        for (std::size_t i = 0; i + 1 < x1_shape.size(); ++i) B *= static_cast<std::size_t>(x1_shape[i]);
+        const std::size_t D1   = static_cast<std::size_t>(x1_shape.back());
+        const std::size_t D2   = static_cast<std::size_t>(x2_shape.back());
+        const std::size_t Dout = static_cast<std::size_t>(w_shape[0]);
+        const auto& xs1 = std::get<CpuStorage>(x1);
+        const auto& xs2 = std::get<CpuStorage>(x2);
+        const auto& ws  = std::get<CpuStorage>(weight);
+        const CpuStorage* bs = has_bias ? &std::get<CpuStorage>(bias) : nullptr;
+        auto out_cpu = alloc_cpu(B * Dout, dt);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* x1p = reinterpret_cast<const T*>(xs1.ptr.get());
+            const T* x2p = reinterpret_cast<const T*>(xs2.ptr.get());
+            const T* wp  = reinterpret_cast<const T*>(ws.ptr.get());
+            const T* bp  = bs ? reinterpret_cast<const T*>(bs->ptr.get()) : nullptr;
+            T* yp = reinterpret_cast<T*>(out_cpu.ptr.get());
+            for (std::size_t bi = 0; bi < B; ++bi) {
+                const T* x1b = x1p + bi * D1;
+                const T* x2b = x2p + bi * D2;
+                T* yb = yp + bi * Dout;
+                for (std::size_t k = 0; k < Dout; ++k) {
+                    const T* Wk = wp + k * D1 * D2;
+                    T acc = T{0};
+                    for (std::size_t i = 0; i < D1; ++i) {
+                        T row = T{0};
+                        for (std::size_t j = 0; j < D2; ++j) row += Wk[i*D2+j] * x2b[j];
+                        acc += x1b[i] * row;
+                    }
+                    yb[k] = acc + (bp ? bp[k] : T{0});
+                }
+            }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::bilinear_layer_forward").not_implemented("dtype");
+        return Storage{std::move(out_cpu)};
     }
 
     std::vector<Storage> bilinear_layer_backward(
@@ -5905,10 +6582,140 @@ public:
         const Storage& weight,
         const Shape& x1_shape, const Shape& x2_shape, const Shape& w_shape,
         bool has_bias, Dtype dt) override {
-        ErrorBuilder("cpu::bilinear_layer_backward").not_implemented("");
-        (void)grad_out; (void)x1; (void)x2; (void)weight;
-        (void)x1_shape; (void)x2_shape; (void)w_shape; (void)has_bias; (void)dt;
-        return {};
+        std::size_t B = 1;
+        for (std::size_t i = 0; i + 1 < x1_shape.size(); ++i) B *= static_cast<std::size_t>(x1_shape[i]);
+        const std::size_t D1   = static_cast<std::size_t>(x1_shape.back());
+        const std::size_t D2   = static_cast<std::size_t>(x2_shape.back());
+        const std::size_t Dout = static_cast<std::size_t>(w_shape[0]);
+        const auto& xs1 = std::get<CpuStorage>(x1);
+        const auto& xs2 = std::get<CpuStorage>(x2);
+        const auto& ws  = std::get<CpuStorage>(weight);
+        const auto& gys = std::get<CpuStorage>(grad_out);
+        auto dx1_cpu = alloc_cpu(B*D1, dt);
+        auto dx2_cpu = alloc_cpu(B*D2, dt);
+        auto dW_cpu  = alloc_cpu(Dout*D1*D2, dt);
+        auto db_cpu  = has_bias ? alloc_cpu(Dout, dt) : CpuStorage{};
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* x1p = reinterpret_cast<const T*>(xs1.ptr.get());
+            const T* x2p = reinterpret_cast<const T*>(xs2.ptr.get());
+            const T* wp  = reinterpret_cast<const T*>(ws.ptr.get());
+            const T* gyp = reinterpret_cast<const T*>(gys.ptr.get());
+            T* dx1p = reinterpret_cast<T*>(dx1_cpu.ptr.get());
+            T* dx2p = reinterpret_cast<T*>(dx2_cpu.ptr.get());
+            T* dwp  = reinterpret_cast<T*>(dW_cpu.ptr.get());
+            T* dbp  = has_bias ? reinterpret_cast<T*>(db_cpu.ptr.get()) : nullptr;
+            std::memset(dx1p, 0, sizeof(T)*B*D1);
+            std::memset(dx2p, 0, sizeof(T)*B*D2);
+            std::memset(dwp, 0, sizeof(T)*Dout*D1*D2);
+            if (dbp) std::memset(dbp, 0, sizeof(T)*Dout);
+            for (std::size_t bi = 0; bi < B; ++bi) {
+                const T* x1b = x1p + bi*D1;
+                const T* x2b = x2p + bi*D2;
+                const T* gb  = gyp + bi*Dout;
+                T* dx1b = dx1p + bi*D1;
+                T* dx2b = dx2p + bi*D2;
+                for (std::size_t k = 0; k < Dout; ++k) {
+                    const T g = gb[k];
+                    if (dbp) dbp[k] += g;
+                    const T* Wk = wp + k*D1*D2;
+                    T* dWk = dwp + k*D1*D2;
+                    for (std::size_t i = 0; i < D1; ++i) {
+                        T row = T{0};
+                        for (std::size_t j = 0; j < D2; ++j) {
+                            row += Wk[i*D2+j] * x2b[j];
+                            dx2b[j] += g * x1b[i] * Wk[i*D2+j];
+                            dWk[i*D2+j] += g * x1b[i] * x2b[j];
+                        }
+                        dx1b[i] += g * row;
+                    }
+                }
+            }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::bilinear_layer_backward").not_implemented("dtype");
+        std::vector<Storage> out;
+        out.push_back(Storage{std::move(dx1_cpu)});
+        out.push_back(Storage{std::move(dx2_cpu)});
+        out.push_back(Storage{std::move(dW_cpu)});
+        if (has_bias)
+            out.push_back(Storage{std::move(db_cpu)});
+        else {
+            CpuStorage empty; empty.dtype = dt; empty.nbytes = 0;
+            out.push_back(Storage{std::move(empty)});
+        }
+        return out;
+    }
+
+    Storage one_hot_forward(const Storage& indices, const Shape& indices_shape,
+                            int num_classes, Dtype out_dtype) override {
+        const std::size_t M = shape_numel(indices_shape);
+        const auto& is_ = std::get<CpuStorage>(indices);
+        auto out_cpu = alloc_cpu(M * static_cast<std::size_t>(num_classes), out_dtype);
+        std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
+        auto read_idx = [&](std::size_t i) -> std::int64_t {
+            switch (is_.dtype) {
+                case Dtype::I8:   return reinterpret_cast<const std::int8_t*>(is_.ptr.get())[i];
+                case Dtype::I16:  return reinterpret_cast<const std::int16_t*>(is_.ptr.get())[i];
+                case Dtype::I32:  return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
+                case Dtype::I64:  return reinterpret_cast<const std::int64_t*>(is_.ptr.get())[i];
+                default:          return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
+            }
+        };
+        for (std::size_t i = 0; i < M; ++i) {
+            const std::int64_t cls = read_idx(i);
+            if (cls < 0 || cls >= num_classes) continue;
+            const std::size_t pos = i * static_cast<std::size_t>(num_classes) + cls;
+            switch (out_dtype) {
+                case Dtype::F32: reinterpret_cast<float*>(out_cpu.ptr.get())[pos] = 1.f; break;
+                case Dtype::F64: reinterpret_cast<double*>(out_cpu.ptr.get())[pos] = 1.0; break;
+                case Dtype::I8: case Dtype::Bool:
+                    reinterpret_cast<std::uint8_t*>(out_cpu.ptr.get())[pos] = 1; break;
+                case Dtype::I16: reinterpret_cast<std::int16_t*>(out_cpu.ptr.get())[pos] = 1; break;
+                case Dtype::I32: reinterpret_cast<std::int32_t*>(out_cpu.ptr.get())[pos] = 1; break;
+                case Dtype::I64: reinterpret_cast<std::int64_t*>(out_cpu.ptr.get())[pos] = 1; break;
+                default: ErrorBuilder("one_hot").not_implemented("out dtype not supported");
+            }
+        }
+        return Storage{std::move(out_cpu)};
+    }
+
+    Storage rotate_forward(const Storage& input, const Shape& shape,
+                           double angle_rad_neg, double cx, double cy, Dtype dt) override {
+        const int N = static_cast<int>(shape[0]);
+        const int C = static_cast<int>(shape[1]);
+        const int H = static_cast<int>(shape[2]);
+        const int W = static_cast<int>(shape[3]);
+        const auto& xs = std::get<CpuStorage>(input);
+        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N)*C*H*W, dt);
+        const double cosv = std::cos(angle_rad_neg);
+        const double sinv = std::sin(angle_rad_neg);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
+            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
+            for (int n = 0; n < N; ++n)
+                for (int ch = 0; ch < C; ++ch) {
+                    const T* base = xp + (n*C+ch)*H*W;
+                    T* obase = op + (n*C+ch)*H*W;
+                    for (int y = 0; y < H; ++y)
+                        for (int x = 0; x < W; ++x) {
+                            const double xsd = cosv*(x-cx) - sinv*(y-cy) + cx;
+                            const double ysd = sinv*(x-cx) + cosv*(y-cy) + cy;
+                            int xs2 = static_cast<int>(std::floor(xsd + 0.5));
+                            int ys2 = static_cast<int>(std::floor(ysd + 0.5));
+                            if (xs2 < 0 || xs2 >= W || ys2 < 0 || ys2 >= H)
+                                obase[y*W+x] = T{0};
+                            else
+                                obase[y*W+x] = base[ys2*W+xs2];
+                        }
+                }
+        };
+        if (dt == Dtype::F32) run(float{});
+        else if (dt == Dtype::F64) run(double{});
+        else ErrorBuilder("cpu::rotate_forward").not_implemented("dtype");
+        return Storage{std::move(out_cpu)};
     }
 
     Storage rope_backward(const Storage& grad_out,
