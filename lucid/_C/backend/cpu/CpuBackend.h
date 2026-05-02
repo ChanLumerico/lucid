@@ -3643,7 +3643,9 @@ public:
                 dst[i] = v;
         };
         const std::size_t out_numel = shape_numel(out_shape);
-        if (constant != 0.0) {
+        if (constant == 0.0) {
+            std::memset(ptr.get(), 0, nb);
+        } else {
             switch (dt) {
                 case Dtype::F32:
                     fill(reinterpret_cast<float*>(ptr.get()), out_numel, constant);

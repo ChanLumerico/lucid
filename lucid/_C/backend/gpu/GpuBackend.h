@@ -2046,8 +2046,20 @@ public:
 
         auto scale_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(scale)), mlx_dt);
 
+        // When the forward used mlx::core::fast::scaled_dot_product_attention
+        // (Phase 19 fast path), saved_weights is a dummy scalar {1} — the
+        // fast kernel doesn't expose the attention probability matrix.
+        // Recompute W = softmax(Q @ K^T * scale) here so backward is correct.
+        ::mlx::core::array W_arr = *gW.arr;
+        if (W_arr.ndim() == 1) {
+            auto k_t = ::mlx::core::swapaxes(*gK.arr, -2, -1);
+            auto scores = ::mlx::core::multiply(
+                ::mlx::core::matmul(*gQ.arr, k_t), scale_arr);
+            W_arr = ::mlx::core::softmax(scores, std::vector<int>{-1}, /*precise=*/true);
+        }
+
         // dV = W^T @ dout
-        auto W_t = ::mlx::core::swapaxes(*gW.arr, -2, -1);
+        auto W_t = ::mlx::core::swapaxes(W_arr, -2, -1);
         auto dV = ::mlx::core::matmul(W_t, *gG.arr);
 
         // dweights = dout @ V^T
@@ -2055,9 +2067,9 @@ public:
         auto dW = ::mlx::core::matmul(*gG.arr, V_t);
 
         // softmax backward
-        auto wdw = ::mlx::core::multiply(*gW.arr, dW);
+        auto wdw = ::mlx::core::multiply(W_arr, dW);
         auto sum_wdw = ::mlx::core::sum(wdw, std::vector<int>{-1}, /*keepdims=*/true);
-        auto dscores = ::mlx::core::multiply(*gW.arr, ::mlx::core::subtract(dW, sum_wdw));
+        auto dscores = ::mlx::core::multiply(W_arr, ::mlx::core::subtract(dW, sum_wdw));
 
         // dQ = scale * dscores @ K
         auto dQ = ::mlx::core::multiply(scale_arr, ::mlx::core::matmul(dscores, *gK.arr));
