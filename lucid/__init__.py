@@ -60,7 +60,7 @@ __all__ = [
     "no_grad", "enable_grad", "is_grad_enabled", "set_grad_enabled",
     "inference_mode",
     "save", "load",
-    "nn", "optim", "autograd", "linalg", "metal", "backends",
+    "nn", "optim", "autograd", "linalg", "metal", "backends", "utils",
 ]
 
 
@@ -166,5 +166,11 @@ def __getattr__(name: str) -> object:
     if name in ("save", "load"):
         import lucid.serialization as _ser
         return getattr(_ser, name)
+
+    if name == "utils":
+        if "lucid.utils" in _sys.modules:
+            return _sys.modules["lucid.utils"]
+        import lucid.utils as _utils
+        return _utils
 
     raise AttributeError(f"module 'lucid' has no attribute '{name}'")

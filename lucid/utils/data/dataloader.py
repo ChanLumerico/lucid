@@ -1,0 +1,196 @@
+"""
+DataLoader and default_collate.
+"""
+
+from typing import Any, Callable, Iterator, TYPE_CHECKING
+import numpy as np
+
+from lucid.utils.data.dataset import Dataset, IterableDataset
+from lucid.utils.data.sampler import (
+    Sampler,
+    SequentialSampler,
+    RandomSampler,
+    BatchSampler,
+)
+
+if TYPE_CHECKING:
+    pass
+
+
+def default_collate(batch: list[Any]) -> Any:
+    """Collate a list of samples into a batched tensor or nested structure.
+
+    Handles: Tensor, np.ndarray, int, float, str, bytes, list, tuple, dict.
+    """
+    import lucid
+    from lucid._tensor.tensor import Tensor
+
+    elem = batch[0]
+
+    if isinstance(elem, Tensor):
+        return lucid.stack(batch, 0)
+
+    if isinstance(elem, np.ndarray):
+        return lucid.Tensor(np.stack(batch, axis=0))
+
+    if isinstance(elem, (int, float)):
+        arr = np.array(batch, dtype=np.float32 if isinstance(elem, float) else np.int64)
+        return lucid.Tensor(arr)
+
+    if isinstance(elem, (str, bytes)):
+        return batch  # return as list
+
+    if isinstance(elem, dict):
+        return {key: default_collate([d[key] for d in batch]) for key in elem}
+
+    if isinstance(elem, tuple) and hasattr(elem, "_fields"):
+        # NamedTuple
+        return type(elem)(*[default_collate([d[i] for d in batch]) for i in range(len(elem))])
+
+    if isinstance(elem, (list, tuple)):
+        collated = [default_collate([d[i] for d in batch]) for i in range(len(elem))]
+        return type(elem)(collated) if isinstance(elem, tuple) else collated
+
+    return batch
+
+
+class _SingleProcessDataLoaderIter:
+    """Single-process data loading iterator."""
+
+    def __init__(self, loader: DataLoader) -> None:
+        self._dataset = loader.dataset
+        self._collate_fn = loader.collate_fn
+        self._batch_sampler = loader.batch_sampler
+        self._iter = iter(self._batch_sampler)
+
+    def __iter__(self) -> _SingleProcessDataLoaderIter:
+        return self
+
+    def __next__(self) -> Any:
+        indices = next(self._iter)
+        batch = [self._dataset[i] for i in indices]
+        return self._collate_fn(batch)
+
+
+class DataLoader:
+    """Combines a dataset with a sampler and provides iteration over mini-batches.
+
+    Args:
+        dataset:         Dataset to load from.
+        batch_size:      Number of samples per batch (default: 1).
+        shuffle:         Shuffle at the start of each epoch (default: False).
+        sampler:         Custom sampler; mutually exclusive with shuffle.
+        batch_sampler:   Custom batch sampler; mutually exclusive with batch_size/shuffle/drop_last.
+        num_workers:     Number of worker processes (0 = single-process).
+        collate_fn:      Function to merge a list of samples into a batch.
+        pin_memory:      No-op on Apple Silicon (unified memory).
+        drop_last:       Drop the last incomplete batch (default: False).
+        timeout:         Timeout for collecting a batch (unused in single-process).
+        worker_init_fn:  Function called on each worker process (unused when num_workers=0).
+        generator:       Random generator for reproducibility.
+        prefetch_factor: Number of batches to prefetch per worker.
+        persistent_workers: Keep workers alive between epochs.
+    """
+
+    def __init__(
+        self,
+        dataset: Dataset,
+        batch_size: int = 1,
+        shuffle: bool | None = None,
+        sampler: Sampler | None = None,
+        batch_sampler: Sampler | None = None,
+        num_workers: int = 0,
+        collate_fn: Callable | None = None,
+        pin_memory: bool = False,
+        drop_last: bool = False,
+        timeout: float = 0.0,
+        worker_init_fn: Callable | None = None,
+        multiprocessing_context: Any = None,
+        generator: Any = None,
+        prefetch_factor: int = 2,
+        persistent_workers: bool = False,
+    ) -> None:
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.collate_fn = collate_fn or default_collate
+        self.pin_memory = pin_memory
+        self.drop_last = drop_last
+        self.timeout = timeout
+        self.worker_init_fn = worker_init_fn
+        self.generator = generator
+
+        if num_workers > 0:
+            import multiprocessing
+            # macOS requires spawn to avoid fork + MLX issues
+            ctx = multiprocessing.get_context("spawn")
+
+        if batch_sampler is not None:
+            if batch_size != 1 or shuffle or sampler is not None or drop_last:
+                raise ValueError(
+                    "batch_sampler is mutually exclusive with batch_size, "
+                    "shuffle, sampler, and drop_last."
+                )
+            self.batch_sampler = batch_sampler
+            self.batch_size = None  # type: ignore[assignment]
+        else:
+            if sampler is not None and shuffle:
+                raise ValueError("sampler and shuffle are mutually exclusive.")
+            if sampler is None:
+                if shuffle:
+                    sampler = RandomSampler(dataset, generator=generator)
+                else:
+                    sampler = SequentialSampler(dataset)
+            self.batch_sampler = BatchSampler(sampler, batch_size, drop_last)
+
+        self.sampler = sampler
+
+    def __iter__(self) -> Iterator[Any]:
+        if self.num_workers == 0:
+            yield from _SingleProcessDataLoaderIter(self)
+        else:
+            yield from self._multiprocess_iter()
+
+    def _multiprocess_iter(self) -> Iterator[Any]:
+        """Multi-process loading using spawn context (macOS safe)."""
+        import multiprocessing
+        ctx = multiprocessing.get_context("spawn")
+
+        indices_batches = list(self.batch_sampler)
+        chunk = max(1, len(indices_batches) // self.num_workers)
+
+        def _worker_fn(
+            batch_indices: list[list[int]],
+            result_queue: Any,
+            dataset: Dataset,
+            collate_fn: Callable,
+        ) -> None:
+            for indices in batch_indices:
+                batch = [dataset[i] for i in indices]
+                result_queue.put(collate_fn(batch))
+            result_queue.put(None)  # sentinel
+
+        result_queue: Any = ctx.Queue()
+        workers = []
+        for i in range(0, len(indices_batches), chunk):
+            chunk_batches = indices_batches[i: i + chunk]
+            p = ctx.Process(
+                target=_worker_fn,
+                args=(chunk_batches, result_queue, self.dataset, self.collate_fn),
+            )
+            p.start()
+            workers.append(p)
+
+        done_count = 0
+        while done_count < len(workers):
+            item = result_queue.get()
+            if item is None:
+                done_count += 1
+            else:
+                yield item
+
+        for p in workers:
+            p.join()
+
+    def __len__(self) -> int:
+        return len(self.batch_sampler)
