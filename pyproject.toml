@@ -27,6 +27,9 @@ docs = [
     "sphinx-autobuild",
 ]
 
+[tool.setuptools.package-data]
+lucid = ["py.typed"]
+
 [tool.pytest.ini_options]
 markers = [
     "parity: lucid<->torch numerical parity test",

@@ -114,4 +114,13 @@ def clone(x: Tensor) -> Tensor:
     return _wrap(_C_engine.contiguous(_unwrap(x)))
 
 
-__all__ = list(_FREE_FN_NAMES) + ["std", "log_softmax", "any", "all", "detach", "clone"]
+def clamp(x: Tensor, min: float | None = None, max: float | None = None) -> Tensor:
+    """Clamp all elements to [min, max]. Alias for clip."""
+    lo = min if min is not None else float('-inf')
+    hi = max if max is not None else float('inf')
+    return _wrap(_C_engine.clip(_unwrap(x), lo, hi))
+
+
+__all__ = list(_FREE_FN_NAMES) + [
+    "std", "log_softmax", "any", "all", "rsqrt", "detach", "clone", "clamp",
+]

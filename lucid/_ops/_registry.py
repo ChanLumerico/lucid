@@ -119,10 +119,10 @@ _REGISTRY: list[OpEntry] = [
     # ── shape / layout ─────────────────────────────────────────────────────
     OpEntry("reshape",    _R.reshape,    1, method_name="reshape",    free_fn_name="reshape",
             extra_kwargs=["shape"]),
-    OpEntry("squeeze",    _R.squeeze,    1, method_name="squeeze",
+    OpEntry("squeeze",    _R.squeeze,    1, method_name="squeeze",    free_fn_name="squeeze",
             extra_kwargs=["dim"]),
     OpEntry("squeeze_all",_R.squeeze_all,1, method_name="squeeze_all"),
-    OpEntry("unsqueeze",  _R.unsqueeze,  1, method_name="unsqueeze",
+    OpEntry("unsqueeze",  _R.unsqueeze,  1, method_name="unsqueeze",  free_fn_name="unsqueeze",
             extra_kwargs=["dim"]),
     OpEntry("flatten",    _R.flatten,    1, method_name="flatten",    free_fn_name="flatten",
             extra_kwargs=["start", "end"]),
@@ -133,7 +133,7 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["d0", "d1"]),  # positional: swapaxes(d0, d1)
     OpEntry("broadcast_to",_R.broadcast_to,1,method_name="broadcast_to",free_fn_name="broadcast_to",
             extra_kwargs=["shape"]),
-    OpEntry("expand",     _R.expand,     1, method_name="expand",
+    OpEntry("expand",     _R.expand,     1, method_name="expand",     free_fn_name="expand",
             extra_kwargs=["shape"]),
     OpEntry("expand_dims",_R.expand_dims,1, method_name="expand_dims",
             extra_kwargs=["axis"]),
@@ -164,7 +164,15 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("diagonal",  _R.diagonal,  1, method_name="diagonal",  free_fn_name="diagonal",
             extra_kwargs=["offset", "dim1", "dim2"]),
 
-    # ── comparison / masking ───────────────────────────────────────────────
+    # ── comparison ────────────────────────────────────────────────────────
+    OpEntry("equal",         _R.equal,         2, method_name=None, free_fn_name="equal"),
+    OpEntry("not_equal",     _R.not_equal,     2, method_name=None, free_fn_name="not_equal"),
+    OpEntry("greater",       _R.greater,       2, method_name=None, free_fn_name="greater"),
+    OpEntry("greater_equal", _R.greater_equal, 2, method_name=None, free_fn_name="greater_equal"),
+    OpEntry("less",          _R.less,          2, method_name=None, free_fn_name="less"),
+    OpEntry("less_equal",    _R.less_equal,    2, method_name=None, free_fn_name="less_equal"),
+
+    # ── masking ────────────────────────────────────────────────────────────
     OpEntry("where",       _R.where,       3, free_fn_name="where"),
     OpEntry("masked_fill", _R.masked_fill, 2, method_name="masked_fill", free_fn_name="masked_fill",
             extra_kwargs=["value"]),

@@ -21,27 +21,25 @@ class TestImportTime:
 
 
 class TestNamespaceIntegrity:
-    def test_no_builtin_shadowing(self):
+    def test_dtype_aliases_accessible(self):
         import lucid
-        # float, int, bool should NOT be in lucid's namespace as dtype aliases
-        # (they're only in lucid.dtypes)
-        assert not hasattr(lucid, "float") or lucid.float is builtins.float, \
-            "lucid.float should not shadow builtins.float"
+        # lucid.float / lucid.int / lucid.bool mirror torch.float / torch.int / torch.bool
+        assert lucid.float is lucid.float32, "lucid.float should be float32"
+        assert lucid.int is lucid.int32,     "lucid.int should be int32"
+        assert lucid.bool is lucid.bool_,    "lucid.bool should be bool_"
 
-    def test_bool_not_shadowed(self):
-        # After 'from lucid import *', bool should still be Python's bool
-        import lucid
-        ns: dict = {}
-        exec("from lucid import *", ns)
-        assert "bool" not in ns or ns["bool"] is builtins.bool, \
-            "'from lucid import *' shadows bool"
-
-    def test_float_not_shadowed(self):
+    def test_star_import_does_not_shadow_builtins(self):
+        # 'from lucid import *' must NOT bring float/int/bool into scope —
+        # they are module attributes (like torch.float) but excluded from __all__.
         import lucid
         ns: dict = {}
         exec("from lucid import *", ns)
         assert "float" not in ns or ns["float"] is builtins.float, \
             "'from lucid import *' shadows float"
+        assert "int" not in ns or ns["int"] is builtins.int, \
+            "'from lucid import *' shadows int"
+        assert "bool" not in ns or ns["bool"] is builtins.bool, \
+            "'from lucid import *' shadows bool"
 
     def test_dtypes_module(self):
         import lucid.dtypes as dt
@@ -52,7 +50,7 @@ class TestNamespaceIntegrity:
     def test_all_submodules_accessible(self):
         import lucid
         submodules = ["nn", "optim", "autograd", "linalg", "metal", "backends",
-                      "utils", "einops", "profiler", "amp"]
+                      "utils", "einops", "profiler", "amp", "testing"]
         for name in submodules:
             assert hasattr(lucid, name) or name in lucid.__all__, \
                 f"lucid.{name} not accessible"
