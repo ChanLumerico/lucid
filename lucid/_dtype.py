@@ -36,12 +36,9 @@ bool_: dtype = dtype("bool", _C_engine.Dtype.Bool, 1)
 complex64: dtype = dtype("complex64", _C_engine.Dtype.C64, 8)
 
 half: dtype = float16
-float: dtype = float32
 double: dtype = float64
 short: dtype = int16
-int: dtype = int32
 long: dtype = int64
-bool: dtype = bool_
 
 _ENGINE_TO_DTYPE: dict[_C_engine.Dtype, dtype] = {
     _C_engine.Dtype.F16: float16,

@@ -21,13 +21,11 @@ from lucid._dtype import (
     int16,
     int32,
     int64,
-    bool_ as bool,
+    bool_,
     complex64,
     half,
-    float as float,
     double,
     short,
-    int as int,
     long,
 )
 from lucid._device import device
@@ -43,8 +41,9 @@ __all__ = [
     "dtype",
     "float16", "float32", "float64", "bfloat16",
     "int8", "int16", "int32", "int64",
-    "bool", "complex64",
-    "half", "float", "double", "short", "int", "long",
+    "bool_", "complex64",
+    "half", "double", "short", "long",
+    "dtypes",
     "device",
     "set_default_dtype", "get_default_dtype",
     "set_default_device", "get_default_device",
@@ -172,5 +171,9 @@ def __getattr__(name: str) -> object:
             return _sys.modules["lucid.utils"]
         import lucid.utils as _utils
         return _utils
+
+    if name == "dtypes":
+        import lucid.dtypes as _dtypes
+        return _dtypes
 
     raise AttributeError(f"module 'lucid' has no attribute '{name}'")
