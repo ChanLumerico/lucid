@@ -77,23 +77,42 @@ class LSTM(Module):
         x: Any,
         hx: tuple[Any, Any] | None = None,
     ) -> tuple[Any, tuple[Any, Any]]:
-        # Collect weight parameters
-        weight_ih = self._parameters.get("weight_ih_l0")
-        weight_hh = self._parameters.get("weight_hh_l0")
-        bias_ih = self._parameters.get("bias_ih_l0")
-        bias_hh = self._parameters.get("bias_hh_l0")
+        h0_impl = _unwrap(hx[0]) if hx is not None else None
+        c0_impl = _unwrap(hx[1]) if hx is not None else None
 
-        assert weight_ih is not None and weight_hh is not None
-        bih = _unwrap(bias_ih) if bias_ih is not None else None
-        bhh = _unwrap(bias_hh) if bias_hh is not None else None
+        # Collect weights in order: [wih_l0, whh_l0, bih_l0, bhh_l0, ...]
+        weights = []
+        num_dirs = 2 if self.bidirectional else 1
+        for layer in range(self.num_layers):
+            for direction in range(num_dirs):
+                suffix = "_reverse" if direction == 1 else ""
+                weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
+                weights.append(_unwrap(self._parameters[f"weight_hh_l{layer}{suffix}"]))
+                if self.bias:
+                    weights.append(_unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"]))
+                    weights.append(_unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"]))
+
+        # Engine always expects/returns (T, B, H) — transpose if batch_first
+        x_impl = _unwrap(x)
+        if self.batch_first:
+            x_impl = _C_engine.permute(x_impl, [1, 0, 2])
 
         output_impl, h_n_impl, c_n_impl = _C_engine.nn.lstm_forward(
-            _unwrap(x),
-            _unwrap(weight_ih), _unwrap(weight_hh),
-            bih, bhh,
-            self.batch_first,
+            x_impl,
+            h0_impl, c0_impl,
+            weights,
+            self.hidden_size,
+            self.num_layers,
+            False,  # always seq-first to engine
+            self.bidirectional,
+            self.bias,
         )
-        return _wrap(output_impl), (_wrap(h_n_impl), _wrap(c_n_impl))
+
+        output = _wrap(output_impl)
+        if self.batch_first:
+            output = _wrap(_C_engine.permute(output._impl, [1, 0, 2]))
+
+        return output, (_wrap(h_n_impl), _wrap(c_n_impl))
 
     def extra_repr(self) -> str:
         return (f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
