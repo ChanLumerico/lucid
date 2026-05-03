@@ -77,4 +77,23 @@ TensorImplPtr sqrt_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SqrtBackward)
 
+// rsqrt — AmpPolicy::Promote so float64 inputs stay float64.
+const OpSchema RsqrtBackward::schema_v1{"rsqrt", 1, AmpPolicy::Promote, true};
+
+// dL/dx = dL/dy * (-0.5) * y^3  where y = rsqrt(x) = x^(-1/2).
+// Uses saved_output_ (y) to compute y^3 = y * y * y without re-running rsqrt.
+Storage RsqrtBackward::grad_formula(const Storage& g) {
+    const std::size_t n = shape_numel(out_shape_);
+    const Storage& y = saved_output_;
+    Storage y2 = multiply_storages(y, y, n, dtype_, device_);
+    Storage y3 = multiply_storages(y2, y, n, dtype_, device_);
+    Storage neg_half_y3 = mul_scalar_storage(y3, -0.5, n, dtype_, device_);
+    return multiply_storages(g, neg_half_y3, n, dtype_, device_);
+}
+
+TensorImplPtr rsqrt_op(const TensorImplPtr& a) {
+    return RsqrtBackward::forward(a);
+}
+LUCID_REGISTER_OP(RsqrtBackward)
+
 }  // namespace lucid

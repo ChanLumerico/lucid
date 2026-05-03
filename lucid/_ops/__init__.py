@@ -75,40 +75,6 @@ def _populate_free_fns() -> None:
 _populate_free_fns()
 
 
-# ── Python-level implementations ──────────────────────────────────────────
-
-
-def std(x: Tensor, axes: list[int] | None = None, keepdims: bool = False) -> Tensor:
-    """Standard deviation (sqrt of variance)."""
-    axes_ = axes if axes is not None else []
-    return _wrap(_C_engine.sqrt(_C_engine.var(_unwrap(x), axes_, keepdims)))
-
-
-def log_softmax(x: Tensor, axis: int = -1) -> Tensor:
-    """Numerically stable log-softmax."""
-    sm = _C_engine.softmax(_unwrap(x), axis)
-    return _wrap(_C_engine.log(sm))
-
-
-def any(x: Tensor) -> Tensor:
-    """Return True if any element is non-zero."""
-    val = bool(np.asarray(x._impl.data_as_python()).any())
-    arr = np.array(val)
-    return _wrap(_C_engine.TensorImpl(arr, _unwrap(x).device, False))
-
-
-def all(x: Tensor) -> Tensor:
-    """Return True if all elements are non-zero."""
-    val = bool(np.asarray(x._impl.data_as_python()).all())
-    arr = np.array(val)
-    return _wrap(_C_engine.TensorImpl(arr, _unwrap(x).device, False))
-
-
-def rsqrt(x: Tensor) -> Tensor:
-    """Reciprocal square root: 1 / sqrt(x)."""
-    return _wrap(_C_engine.reciprocal(_C_engine.sqrt(_unwrap(x))))
-
-
 def detach(x: Tensor) -> Tensor:
     """Return a new tensor detached from the autograd graph."""
     arr = np.ascontiguousarray(np.asarray(x._impl.data_as_python()))
@@ -128,13 +94,4 @@ def clamp(x: Tensor, min: float | None = None, max: float | None = None) -> Tens
     return _wrap(_C_engine.clip(_unwrap(x), lo, hi))
 
 
-__all__ = list(_FREE_FN_NAMES) + [
-    "std",
-    "log_softmax",
-    "any",
-    "all",
-    "rsqrt",
-    "detach",
-    "clone",
-    "clamp",
-]
+__all__ = list(_FREE_FN_NAMES) + ["detach", "clone", "clamp"]

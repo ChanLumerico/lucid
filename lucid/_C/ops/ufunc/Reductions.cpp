@@ -13,6 +13,9 @@
 
 #include "Reductions.h"
 
+#include "Exponential.h"
+#include "Var.h"
+
 #include <algorithm>
 #include <cstring>
 #include <vector>
@@ -290,6 +293,16 @@ GpuStorage ProdBackward::gpu_kernel(
     return gpu_reduce_apply(
         a, dt, [&axes, keepdims](const auto& x) { return ::mlx::core::prod(x, axes, keepdims); },
         "prod");
+}
+
+// std_op composes sqrt and var entry points so that the standard autograd graph
+// handles the gradient automatically via the chain rule:
+//   std = sqrt(var(x, axes, keepdims))
+// No new backward node is required; SqrtBackward and VarBackward cover it.
+TensorImplPtr std_op(const TensorImplPtr& a,
+                     const std::vector<int>& axes,
+                     bool keepdims) {
+    return sqrt_op(var_op(a, axes, keepdims));
 }
 
 }  // namespace lucid

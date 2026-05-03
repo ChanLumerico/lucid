@@ -41,4 +41,19 @@ public:
 
 LUCID_API TensorImplPtr softmax_op(const TensorImplPtr& a, int axis);
 
+// Backward node for numerically stable log-softmax along a single axis.
+//
+// Forward:  y = log_softmax(x, axis) = x - log(sum(exp(x), axis))  [stable]
+// Backward: dL/dx = dL/dy - exp(y) * sum(dL/dy, axis)
+//           where exp(y) = softmax(x), the probabilities.
+class LUCID_API LogSoftmaxBackward : public FuncOp<LogSoftmaxBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    int axis_ = -1;
+    static TensorImplPtr forward(const TensorImplPtr& a, int axis);
+    std::vector<Storage> apply(Storage grad_out) override;
+};
+
+LUCID_API TensorImplPtr log_softmax_op(const TensorImplPtr& a, int axis);
+
 }  // namespace lucid

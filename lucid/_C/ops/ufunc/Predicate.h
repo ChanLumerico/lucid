@@ -30,4 +30,9 @@ LUCID_API TensorImplPtr nan_to_num_op(
     double posinf_val = 3.4028234663852886e+38,
     double neginf_val = -3.4028234663852886e+38);
 
+// Full-tensor boolean reductions.  Output is a scalar Bool tensor.
+// No gradient is attached.
+LUCID_API TensorImplPtr any_op(const TensorImplPtr& a);
+LUCID_API TensorImplPtr all_op(const TensorImplPtr& a);
+
 }  // namespace lucid

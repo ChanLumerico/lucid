@@ -1223,6 +1223,58 @@ public:
         return Storage{CpuStorage{ptr, n, Dtype::Bool}};
     }
 
+    Storage any(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        auto ptr = allocate_aligned_bytes(1, Device::CPU);
+        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        bool found = false;
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n && !found; ++i) found = (p[i] != 0.f);
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n && !found; ++i) found = (p[i] != 0.0);
+        } else if (dt == Dtype::I32) {
+            const std::int32_t* p = reinterpret_cast<const std::int32_t*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n && !found; ++i) found = (p[i] != 0);
+        } else if (dt == Dtype::Bool) {
+            const std::uint8_t* p = reinterpret_cast<const std::uint8_t*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n && !found; ++i) found = (p[i] != 0u);
+        } else {
+            for (std::size_t i = 0; i < n && !found; ++i)
+                found = (reinterpret_cast<const std::uint8_t*>(cs.ptr.get())[i] != 0u);
+        }
+        dst[0] = found ? 1u : 0u;
+        return Storage{CpuStorage{ptr, 1, Dtype::Bool}};
+    }
+
+    Storage all(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        auto ptr = allocate_aligned_bytes(1, Device::CPU);
+        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        bool all_nz = true;
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n && all_nz; ++i) all_nz = (p[i] != 0.f);
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n && all_nz; ++i) all_nz = (p[i] != 0.0);
+        } else if (dt == Dtype::I32) {
+            const std::int32_t* p = reinterpret_cast<const std::int32_t*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n && all_nz; ++i) all_nz = (p[i] != 0);
+        } else if (dt == Dtype::Bool) {
+            const std::uint8_t* p = reinterpret_cast<const std::uint8_t*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n && all_nz; ++i) all_nz = (p[i] != 0u);
+        } else {
+            for (std::size_t i = 0; i < n && all_nz; ++i)
+                all_nz = (reinterpret_cast<const std::uint8_t*>(cs.ptr.get())[i] != 0u);
+        }
+        dst[0] = all_nz ? 1u : 0u;
+        return Storage{CpuStorage{ptr, 1, Dtype::Bool}};
+    }
+
     Storage nan_to_num(const Storage& a, const Shape& shape, Dtype dt,
                        double nan_val, double posinf_val, double neginf_val) override {
         const auto& cs = std::get<CpuStorage>(a);
@@ -1593,6 +1645,90 @@ public:
         else
             ErrorBuilder("cpu_backend::softmax_backward").not_implemented("dtype not supported");
 
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage log_softmax_backward(const Storage& y, const Storage& grad_out,
+                                  const Shape& shape, int axis, Dtype dt) override {
+        const auto& yc = std::get<CpuStorage>(y);
+        const auto& gc = std::get<CpuStorage>(grad_out);
+        std::size_t nb = gc.nbytes;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::size_t axis_dim = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
+            inner *= static_cast<std::size_t>(shape[d]);
+
+        auto kernel = [&](auto* dx, const auto* gy, const auto* g) {
+            using T = std::remove_pointer_t<decltype(dx)>;
+            for (std::size_t o = 0; o < outer; ++o) {
+                for (std::size_t i = 0; i < inner; ++i) {
+                    T sum_g = T(0);
+                    for (std::size_t r = 0; r < axis_dim; ++r)
+                        sum_g += g[o * axis_dim * inner + r * inner + i];
+                    for (std::size_t r = 0; r < axis_dim; ++r) {
+                        std::size_t idx = o * axis_dim * inner + r * inner + i;
+                        dx[idx] = g[idx] - std::exp(gy[idx]) * sum_g;
+                    }
+                }
+            }
+        };
+
+        if (dt == Dtype::F32)
+            kernel(reinterpret_cast<float*>(ptr.get()),
+                   reinterpret_cast<const float*>(yc.ptr.get()),
+                   reinterpret_cast<const float*>(gc.ptr.get()));
+        else if (dt == Dtype::F64)
+            kernel(reinterpret_cast<double*>(ptr.get()),
+                   reinterpret_cast<const double*>(yc.ptr.get()),
+                   reinterpret_cast<const double*>(gc.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::log_softmax_backward").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage log_softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t nb = cs.nbytes;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::size_t axis_dim = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
+            inner *= static_cast<std::size_t>(shape[d]);
+
+        auto kernel = [&](auto* out, const auto* in) {
+            using T = std::remove_pointer_t<decltype(out)>;
+            for (std::size_t o = 0; o < outer; ++o) {
+                for (std::size_t i = 0; i < inner; ++i) {
+                    const T* base = in + o * axis_dim * inner + i;
+                    T m = base[0];
+                    for (std::size_t r = 1; r < axis_dim; ++r) {
+                        T v = base[r * inner];
+                        if (v > m) m = v;
+                    }
+                    T s = T(0);
+                    for (std::size_t r = 0; r < axis_dim; ++r)
+                        s += std::exp(base[r * inner] - m);
+                    const T log_sum = m + std::log(s);
+                    T* obase = out + o * axis_dim * inner + i;
+                    for (std::size_t r = 0; r < axis_dim; ++r)
+                        obase[r * inner] = base[r * inner] - log_sum;
+                }
+            }
+        };
+
+        if (dt == Dtype::F32)
+            kernel(reinterpret_cast<float*>(ptr.get()),
+                   reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            kernel(reinterpret_cast<double*>(ptr.get()),
+                   reinterpret_cast<const double*>(cs.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::log_softmax").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 

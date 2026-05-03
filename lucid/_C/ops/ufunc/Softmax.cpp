@@ -8,6 +8,7 @@
 #include "Softmax.h"
 
 #include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
 #include "../../core/Error.h"
@@ -70,5 +71,48 @@ TensorImplPtr softmax_op(const TensorImplPtr& a, int axis) {
     return SoftmaxBackward::forward(a, axis);
 }
 LUCID_REGISTER_OP(SoftmaxBackward)
+
+// log_softmax — ForceFP32 for the same numerical stability reason as softmax.
+const OpSchema LogSoftmaxBackward::schema_v1{"log_softmax", 1, AmpPolicy::ForceFP32, true};
+
+// Forward: compute log_softmax via the numerically-stable backend,
+// save the log_softmax output for use in the backward pass.
+TensorImplPtr LogSoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
+    Validator::input(a, "log_softmax.a").non_null();
+
+    const int ndim = static_cast<int>(a->shape().size());
+    const int wrapped = axis < 0 ? axis + ndim : axis;
+    if (wrapped < 0 || wrapped >= ndim)
+        ErrorBuilder("log_softmax").index_error("axis out of range");
+
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    Storage out_storage = backend::Dispatcher::for_device(a->device())
+                              .log_softmax(a->storage(), a->shape(), wrapped, a->dtype());
+
+    auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
+                                               a->device(), false);
+    if (!GradMode::is_enabled() || !a->requires_grad())
+        return result;
+
+    auto bwd = std::make_shared<LogSoftmaxBackward>();
+    bwd->saved_output_ = result->storage();  // y = log_softmax(x)
+    bwd->axis_ = wrapped;
+    kernel::NaryKernel<LogSoftmaxBackward, 1>::wire_autograd(std::move(bwd), {a}, result, false);
+    return result;
+}
+
+// Backward: dL/dx = dL/dy - exp(y) * sum(dL/dy, axis)
+// where exp(y) = softmax(x) (probabilities).  Delegated to the backend so
+// that broadcasting (sum_g expanded back to input shape) is handled correctly.
+std::vector<Storage> LogSoftmaxBackward::apply(Storage grad_out) {
+    const Shape& shape = input_shapes_[0];
+    return {backend::Dispatcher::for_device(device_)
+                .log_softmax_backward(saved_output_, grad_out, shape, axis_, dtype_)};
+}
+
+TensorImplPtr log_softmax_op(const TensorImplPtr& a, int axis) {
+    return LogSoftmaxBackward::forward(a, axis);
+}
+LUCID_REGISTER_OP(LogSoftmaxBackward)
 
 }  // namespace lucid

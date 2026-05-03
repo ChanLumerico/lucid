@@ -30,6 +30,7 @@
 #include "../ops/ufunc/Inplace.h"
 #include "../ops/ufunc/Predicate.h"
 #include "../ops/ufunc/Reductions.h"
+#include "../ops/ufunc/Reductions.h"
 #include "../ops/ufunc/ScalarParam.h"
 #include "../ops/ufunc/Scan.h"
 #include "../ops/ufunc/Softmax.h"
@@ -91,7 +92,8 @@ void register_ufunc(py::module_& m) {
 
     // softmax is registered manually because its extra `axis` argument is
     // not captured by the plain bind_unary<> signature.
-    m.def("softmax", &softmax_op, py::arg("a"), py::arg("axis") = -1);
+    m.def("softmax",     &softmax_op,     py::arg("a"), py::arg("axis") = -1);
+    m.def("log_softmax", &log_softmax_op, py::arg("a"), py::arg("axis") = -1);
 
     // Scalar-parameter ops: base ** exp, base ** a, and clamp.
     m.def("pow_scalar", &pow_scalar_op, py::arg("a"), py::arg("exp"));
@@ -103,6 +105,7 @@ void register_ufunc(py::module_& m) {
     bind_unary<FloorBackward>(m, &floor_op);
     bind_unary<CeilBackward>(m, &ceil_op);
     bind_unary<InvertBackward>(m, &invert_op);
+    bind_unary<RsqrtBackward>(m, &rsqrt_op);
 
     // Reduction ops share the (a, axes=[], keepdims=False) signature; empty
     // axes means reduce over all dimensions.
@@ -123,6 +126,8 @@ void register_ufunc(py::module_& m) {
 
     m.def("var", &var_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
           py::arg("keepdims") = false, "Variance reduction (sample variance, ddof=0).");
+    m.def("std", &std_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
+          py::arg("keepdims") = false, "Standard deviation (sqrt of variance).");
     m.def("trace", &trace_op, py::arg("a"), "Sum of the main diagonal (last 2 axes).");
     m.def("cumsum", &cumsum_op, py::arg("a"), py::arg("axis") = -1);
     m.def("cumprod", &cumprod_op, py::arg("a"), py::arg("axis") = -1);
@@ -156,6 +161,8 @@ void register_ufunc(py::module_& m) {
     m.def("clip_", &clip_inplace_op, py::arg("a"), py::arg("min"), py::arg("max"));
 
     // Floating-point predicate ops (output is always bool).
+    m.def("any",     &any_op,     py::arg("a"));
+    m.def("all",     &all_op,     py::arg("a"));
     m.def("isinf",   &isinf_op,   py::arg("a"));
     m.def("isnan",   &isnan_op,   py::arg("a"));
     m.def("isfinite",&isfinite_op,py::arg("a"));

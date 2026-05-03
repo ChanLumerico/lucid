@@ -214,6 +214,19 @@ public:
     // ReLU clamped to [0, 6], used in MobileNet-style networks.
     virtual Storage relu6(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
+    // Numerically stable log-softmax along a single axis.
+    virtual Storage log_softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
+
+    // Backward pass for log_softmax:
+    //   dL/dx = dL/dy - exp(y) * sum(dL/dy, axis, keepdims=true)
+    // where y = log_softmax(x) is the saved forward output.
+    virtual Storage log_softmax_backward(
+        const Storage& y, const Storage& grad_out, const Shape& shape, int axis, Dtype dt) = 0;
+
+    // Boolean reductions — reduce the full tensor to a scalar bool.
+    virtual Storage any(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage all(const Storage& a, const Shape& shape, Dtype dt) = 0;
+
     // Floating-point predicate ops (output dtype is always Bool).
     virtual Storage isinf(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage isnan(const Storage& a, const Shape& shape, Dtype dt) = 0;

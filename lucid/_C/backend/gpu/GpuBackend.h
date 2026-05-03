@@ -512,6 +512,16 @@ public:
         });
     }
 
+    Storage any(const Storage& a, const Shape&, Dtype dt) override {
+        return mlx_unary(a, {}, Dtype::Bool,
+                         [](auto& x) { return ::mlx::core::any(x); });
+    }
+
+    Storage all(const Storage& a, const Shape&, Dtype dt) override {
+        return mlx_unary(a, {}, Dtype::Bool,
+                         [](auto& x) { return ::mlx::core::all(x); });
+    }
+
     Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, Dtype::Bool,
                          [](auto& x) { return ::mlx::core::isinf(x); });
@@ -608,6 +618,23 @@ public:
         auto sum_gz = ::mlx::core::sum(gz, std::vector<int>{axis}, true);
         auto diff = ::mlx::core::subtract(*g_gpu.arr, sum_gz);
         auto result = ::mlx::core::multiply(*z_gpu.arr, diff);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage log_softmax_backward(const Storage& y, const Storage& grad_out,
+                                  const Shape&, int axis, Dtype dt) override {
+        const auto& yg = std::get<GpuStorage>(y);
+        const auto& gg = std::get<GpuStorage>(grad_out);
+        auto p = ::mlx::core::exp(*yg.arr);
+        auto sum_g = ::mlx::core::sum(*gg.arr, axis, true);
+        auto result = ::mlx::core::subtract(*gg.arr, ::mlx::core::multiply(p, sum_g));
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage log_softmax(const Storage& a, const Shape&, int axis, Dtype dt) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto sm = ::mlx::core::softmax(*gs.arr, axis, true);
+        auto result = ::mlx::core::log(sm);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 

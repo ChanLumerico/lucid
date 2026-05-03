@@ -78,6 +78,21 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
+// Backward node for reciprocal square root: y = 1 / sqrt(x).
+//
+// Gradient rule: dL/dx = -0.5 * dL/dy * y^3 = -0.5 * dL/dy / x^(3/2).
+// Saves the *output* y to avoid recomputing rsqrt(x) in the backward pass.
+class LUCID_API RsqrtBackward : public UnaryOp<RsqrtBackward> {
+public:
+    static constexpr bool kSavesInput = false;
+    static constexpr bool kSavesOutput = true;
+    static const OpSchema schema_v1;
+    static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
+        return be.rsqrt(a, shape, dt);
+    }
+    Storage grad_formula(const Storage& g);
+};
+
 LUCID_API TensorImplPtr exp_op(const TensorImplPtr& a);
 
 LUCID_API TensorImplPtr log_op(const TensorImplPtr& a);
@@ -85,5 +100,7 @@ LUCID_API TensorImplPtr log_op(const TensorImplPtr& a);
 LUCID_API TensorImplPtr log2_op(const TensorImplPtr& a);
 
 LUCID_API TensorImplPtr sqrt_op(const TensorImplPtr& a);
+
+LUCID_API TensorImplPtr rsqrt_op(const TensorImplPtr& a);
 
 }  // namespace lucid

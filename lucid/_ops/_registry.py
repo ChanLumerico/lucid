@@ -212,9 +212,20 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("meshgrid",    _R.meshgrid,   -1,  free_fn_name="meshgrid",
             extra_kwargs=["indexing"]),
 
-    # ── softmax (has axis kwarg) ────────────────────────────────────────────
-    OpEntry("softmax",    _R.softmax,   1, method_name="softmax",    free_fn_name="softmax",
+    # ── softmax / log_softmax (have axis kwarg) ────────────────────────────
+    OpEntry("softmax",     _R.softmax,     1, method_name="softmax",     free_fn_name="softmax",
             extra_kwargs=["axis"]),
+    OpEntry("log_softmax", _R.log_softmax, 1, method_name="log_softmax", free_fn_name="log_softmax",
+            extra_kwargs=["axis"]),
+
+    # ── rsqrt / std (engine-native) ────────────────────────────────────────
+    OpEntry("rsqrt", _R.rsqrt, 1, method_name="rsqrt", free_fn_name="rsqrt"),
+    OpEntry("std",   _R.std,   1, method_name="std",   free_fn_name="std",
+            extra_kwargs=["axes", "keepdims"]),
+
+    # ── boolean reductions ─────────────────────────────────────────────────
+    OpEntry("any", _R.any, 1, method_name="any", free_fn_name="any"),
+    OpEntry("all", _R.all, 1, method_name="all", free_fn_name="all"),
 
     # ── linear algebra ─────────────────────────────────────────────────────
     OpEntry("tensordot",  _R.tensordot, 2, free_fn_name="tensordot",
