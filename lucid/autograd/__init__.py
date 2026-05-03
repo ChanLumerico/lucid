@@ -7,6 +7,7 @@ from lucid.autograd._grad_mode import (
 )
 from lucid.autograd._backward import backward, grad
 from lucid.autograd.function import Function, FunctionCtx
+from lucid.autograd.gradcheck import gradcheck
 
 __all__ = [
     "no_grad",
@@ -18,4 +19,5 @@ __all__ = [
     "grad",
     "Function",
     "FunctionCtx",
+    "gradcheck",
 ]
