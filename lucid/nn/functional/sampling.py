@@ -86,18 +86,55 @@ def affine_grid(
     return _wrap(_C_engine.nn.affine_grid(_unwrap(theta), list(size), ac))
 
 
+def unfold(
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    dilation: int | tuple[int, int] = 1,
+    padding: int | tuple[int, int] = 0,
+    stride: int | tuple[int, int] = 1,
+) -> Tensor:
+    """Extract sliding local blocks from a batched 4-D input tensor.
+
+    Args:
+        x:           Input of shape (N, C, H, W).
+        kernel_size: Size of the sliding blocks.
+        dilation:    Stride between elements within a sliding block.
+        padding:     Implicit zero padding on both sides.
+        stride:      Stride of the sliding blocks.
+
+    Returns:
+        Tensor of shape (N, C*kH*kW, L) where L = output locations.
+    """
+    def _pair(v: int | tuple[int, int]) -> tuple[int, int]:
+        return (v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
+
+    kh, kw = _pair(kernel_size)
+    dh, dw = _pair(dilation)
+    ph, pw = _pair(padding)
+    sh, sw = _pair(stride)
+    return _wrap(_C_engine.nn.unfold(_unwrap(x), [kh, kw], [sh, sw], [ph, pw], [dh, dw]))
+
+
 def pad(
     x: Tensor,
     padding: tuple[int, ...],
     mode: str = "constant",
     value: float = 0.0,
 ) -> Tensor:
-    """
-    Pad a tensor.
+    """Pad a tensor.
 
-    padding is specified as (left, right) for 1D, (left, right, top, bottom) for 2D,
-    starting from the last dimension (same convention as PyTorch F.pad).
+    padding follows PyTorch convention: flat tuple starting from the LAST dimension.
+    For example, (l, r) pads the last dim; (l, r, t, b) pads last two dims.
+    Internally converts to per-dimension pairs for the engine.
     """
-    _MODE_MAP = {"constant": 0, "reflect": 1, "replicate": 2, "circular": 3}
-    mode_int = _MODE_MAP.get(mode, 0)
-    return _wrap(_C_engine.pad(_unwrap(x), list(padding), mode_int, value))
+    impl = _unwrap(x)
+    ndim = len(impl.shape)
+    n_pad_dims = len(padding) // 2
+    # Convert PyTorch flat (last→first) to engine per-dim pairs (first→last)
+    pad_pairs: list[tuple[int, int]] = [(0, 0)] * ndim
+    for i in range(n_pad_dims):
+        dim_idx = ndim - 1 - i
+        left = padding[2 * i]
+        right = padding[2 * i + 1]
+        pad_pairs[dim_idx] = (left, right)
+    return _wrap(_C_engine.pad(impl, pad_pairs, value))

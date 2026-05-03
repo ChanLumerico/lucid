@@ -2,6 +2,7 @@ from lucid.nn.functional.activations import (
     relu, leaky_relu, elu, selu, gelu, silu, mish,
     hardswish, hardsigmoid, sigmoid, tanh,
     softmax, log_softmax, softplus, relu6,
+    softmin, glu, prelu, normalize, cosine_similarity, pairwise_distance,
 )
 from lucid.nn.functional.linear import linear, bilinear
 from lucid.nn.functional.conv import (
@@ -27,13 +28,14 @@ from lucid.nn.functional.loss import (
 )
 from lucid.nn.functional.sparse import embedding, one_hot
 from lucid.nn.functional.sampling import (
-    interpolate, grid_sample, affine_grid, pad,
+    interpolate, grid_sample, affine_grid, pad, unfold,
 )
 
 __all__ = [
     "relu", "leaky_relu", "elu", "selu", "gelu", "silu", "mish",
     "hardswish", "hardsigmoid", "sigmoid", "tanh",
     "softmax", "log_softmax", "softplus", "relu6",
+    "softmin", "glu", "prelu", "normalize", "cosine_similarity", "pairwise_distance",
     "linear", "bilinear",
     "conv1d", "conv2d", "conv3d",
     "conv_transpose1d", "conv_transpose2d", "conv_transpose3d",
@@ -46,5 +48,5 @@ __all__ = [
     "cross_entropy", "nll_loss",
     "binary_cross_entropy", "binary_cross_entropy_with_logits", "kl_div",
     "embedding", "one_hot",
-    "interpolate", "grid_sample", "affine_grid", "pad",
+    "interpolate", "grid_sample", "affine_grid", "pad", "unfold",
 ]

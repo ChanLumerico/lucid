@@ -62,19 +62,41 @@ class MultiheadAttention(Module):
         need_weights: bool = True,
         attn_mask: Any = None,
     ) -> tuple[Any, Any | None]:
-        # Project Q, K, V
-        q_w, k_w, v_w = (
-            _wrap(_C_engine.reshape(
-                _C_engine.contiguous(
-                    _C_engine.slice(self.in_proj_weight._impl, 0, i * self.embed_dim, (i + 1) * self.embed_dim, 1)
-                ), [self.embed_dim, self.embed_dim]
-            ))
-            for i in range(3)
-        )
-        q = F.linear(query, q_w, None)
-        k = F.linear(key, k_w, None)
-        v = F.linear(value, v_w, None)
+        from lucid.nn import functional as F
+        # Project Q, K, V by slicing in_proj_weight into 3 equal blocks
+        # in_proj_weight shape: (3 * embed_dim, embed_dim)
+        d = self.embed_dim
+        wt = self.in_proj_weight._impl  # (3*d, d)
+        # split_at([d, 2*d], axis=0) → [w[:d], w[d:2d], w[2d:]]
+        parts = _C_engine.split_at(wt, [d, 2 * d], 0)
+        q_w = _wrap(parts[0])   # (d, d)
+        k_w = _wrap(parts[1])   # (d, d)
+        v_w = _wrap(parts[2])   # (d, d)
+
+        # split biases if they exist
+        if self.in_proj_bias is not None:
+            bt = self.in_proj_bias._impl
+            b_parts = _C_engine.split_at(bt, [d, 2 * d], 0)
+            q_b, k_b, v_b = _wrap(b_parts[0]), _wrap(b_parts[1]), _wrap(b_parts[2])
+        else:
+            q_b = k_b = v_b = None
+
+        q = F.linear(query, q_w, q_b)
+        k = F.linear(key, k_w, k_b)
+        v = F.linear(value, v_w, v_b)
+
+        # SDPA expects (B, T, d) — transpose if seq-first (T, B, d)
+        if not self.batch_first and q.ndim == 3:
+            q = q.permute([1, 0, 2])
+            k = k.permute([1, 0, 2])
+            v = v.permute([1, 0, 2])
+
         out = F.scaled_dot_product_attention(q, k, v, attn_mask, self.dropout if self.training else 0.0)
+
+        # Transpose back to seq-first if needed
+        if not self.batch_first and out.ndim == 3:
+            out = out.permute([1, 0, 2])
+
         out = F.linear(out, self.out_proj_weight, self.out_proj_bias)
         return out, None
 

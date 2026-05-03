@@ -343,6 +343,142 @@ class Tensor:
         """No-op: Apple Silicon uses unified memory — all tensors share memory."""
         return self
 
+    # ── Phase N convenience methods ───────────────────────────────────────────
+
+    def fill_(self, value: float) -> Self:
+        """Fill this tensor in-place with a scalar value."""
+        raw = self._impl.data_as_python()
+        raw[:] = value
+        return self
+
+    def copy_(self, other: Self) -> Self:
+        """Copy data from other into this tensor in-place."""
+        raw = self._impl.data_as_python()
+        import numpy as np
+        raw[:] = np.asarray(other._impl.data_as_python())
+        return self
+
+    def flip(self, dims: int | list[int]) -> Self:
+        """Reverse the tensor along the given dimension(s)."""
+        import numpy as np
+        dims_list = [dims] if isinstance(dims, int) else list(dims)
+        arr = np.ascontiguousarray(np.flip(np.asarray(self._impl.data_as_python()), axis=dims_list))
+        impl = _C_engine.TensorImpl(arr, self._impl.device, False)
+        return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
+
+    def fliplr(self) -> Self:
+        """Reverse the tensor along dimension 1 (left-right)."""
+        return self.flip(1)
+
+    def flipud(self) -> Self:
+        """Reverse the tensor along dimension 0 (up-down)."""
+        return self.flip(0)
+
+    def index_select(self, dim: int, index: Self) -> Self:
+        """Select elements along dim using integer index tensor."""
+        # Build broadcast index for gather
+        import numpy as np
+        out_shape = list(self._impl.shape)
+        out_shape[dim] = index._impl.shape[0]
+        idx_1d = np.asarray(index._impl.data_as_python()).flatten().astype(np.int32)
+        bcast_shape = [1] * len(out_shape)
+        bcast_shape[dim] = len(idx_1d)
+        idx_nd = np.broadcast_to(idx_1d.reshape(bcast_shape), out_shape).copy()
+        idx_impl = _C_engine.TensorImpl(np.ascontiguousarray(idx_nd), self._impl.device, False)
+        return Tensor.__new_from_impl__(_C_engine.gather(self._impl, idx_impl, dim))  # type: ignore[return-value]
+
+    def masked_select(self, mask: Self) -> Self:
+        """Return a 1-D tensor of elements where mask is True."""
+        import numpy as np
+        arr = np.asarray(self._impl.data_as_python())
+        m = np.asarray(mask._impl.data_as_python()).astype(bool)
+        selected = np.ascontiguousarray(arr[m].astype(arr.dtype))
+        impl = _C_engine.TensorImpl(selected, self._impl.device, False)
+        return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
+
+    def expand_as(self, other: Self) -> Self:
+        """Expand this tensor to the shape of other."""
+        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+            _C_engine.broadcast_to(self._impl, list(other._impl.shape))
+        )
+
+    def view_as(self, other: Self) -> Self:
+        """Return a tensor with the same data but reshaped to other.shape."""
+        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+            _C_engine.reshape(self._impl, list(other._impl.shape))
+        )
+
+    def type_as(self, other: Self) -> Self:
+        """Return a tensor cast to the same dtype as other."""
+        return self.to(other.dtype)
+
+    def lerp(self, end: Self, weight: float | Self) -> Self:
+        """Linear interpolation: self + weight * (end - self)."""
+        diff = Tensor.__new_from_impl__(  # type: ignore[return-value]
+            _C_engine.sub(end._impl, self._impl)
+        )
+        if isinstance(weight, Tensor):
+            scaled = Tensor.__new_from_impl__(  # type: ignore[return-value]
+                _C_engine.mul(weight._impl, diff._impl)
+            )
+        else:
+            import numpy as np
+            w_arr = np.full(diff._impl.shape, weight, dtype=np.float32)
+            w_impl = _C_engine.TensorImpl(w_arr, self._impl.device, False)
+            scaled = Tensor.__new_from_impl__(  # type: ignore[return-value]
+                _C_engine.mul(w_impl, diff._impl)
+            )
+        return Tensor.__new_from_impl__(_C_engine.add(self._impl, scaled._impl))  # type: ignore[return-value]
+
+    def where(self, condition: Self, other: Self | float) -> Self:
+        """Return elements from self where condition is True, else from other."""
+        if not isinstance(other, Tensor):
+            import numpy as np
+            arr = np.full(self._impl.shape, float(other), dtype=np.float32)
+            other_impl = _C_engine.TensorImpl(arr, self._impl.device, False)
+        else:
+            other_impl = other._impl
+        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+            _C_engine.where(condition._impl, self._impl, other_impl)
+        )
+
+    def diff(self, n: int = 1, dim: int = -1) -> Self:
+        """Compute n-th order discrete difference along dim."""
+        result: Self = self  # type: ignore[assignment]
+        for _ in range(n):
+            ndim = len(result._impl.shape)
+            d = dim % ndim
+            length = result._impl.shape[d]
+            # result[1:] - result[:-1] along dim
+            from lucid._tensor._indexing import _select_slice as _ss
+            a_impl = _ss(result._impl, d, slice(1, length, 1))
+            b_impl = _ss(result._impl, d, slice(0, length - 1, 1))
+            result = Tensor.__new_from_impl__(_C_engine.sub(a_impl, b_impl))  # type: ignore[assignment]
+        return result
+
+    def addmm(self, mat1: Self, mat2: Self,
+              beta: float = 1.0, alpha: float = 1.0) -> Self:
+        """beta * self + alpha * mat1 @ mat2."""
+        mm = Tensor.__new_from_impl__(_C_engine.matmul(mat1._impl, mat2._impl))  # type: ignore[return-value]
+        import numpy as np
+        if alpha != 1.0:
+            a_arr = np.full(mm._impl.shape, alpha, dtype=np.float32)
+            a_impl = _C_engine.TensorImpl(a_arr, mm._impl.device, False)
+            mm_impl = _C_engine.mul(a_impl, mm._impl)
+        else:
+            mm_impl = mm._impl
+        if beta != 1.0:
+            b_arr = np.full(self._impl.shape, beta, dtype=np.float32)
+            b_impl = _C_engine.TensorImpl(b_arr, self._impl.device, False)
+            self_scaled = _C_engine.mul(b_impl, self._impl)
+        else:
+            self_scaled = self._impl
+        return Tensor.__new_from_impl__(_C_engine.add(self_scaled, mm_impl))  # type: ignore[return-value]
+
+    def bmm(self, mat2: Self) -> Self:
+        """Batch matrix multiplication: (B,n,m) @ (B,m,p) → (B,n,p)."""
+        return Tensor.__new_from_impl__(_C_engine.matmul(self._impl, mat2._impl))  # type: ignore[return-value]
+
     # ── zero_() helper ───────────────────────────────────────────────────────
 
     def zero_(self) -> Self:

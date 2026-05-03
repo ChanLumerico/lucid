@@ -88,3 +88,73 @@ def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
 def relu6(x: Tensor, inplace: bool = False) -> Tensor:
     """ReLU6 activation (clamped at 6)."""
     return _wrap(_C_engine.relu6(_unwrap(x)))
+
+
+def softmin(x: Tensor, dim: int | None = None) -> Tensor:
+    """Softmin: softmax applied to the negation of x."""
+    axis = dim if dim is not None else -1
+    return _wrap(_C_engine.softmax(_C_engine.neg(_unwrap(x)), axis))
+
+
+def glu(x: Tensor, dim: int = -1) -> Tensor:
+    """Gated linear unit: splits x along dim, returns first * sigmoid(second)."""
+    impl = _unwrap(x)
+    n = impl.shape[dim] // 2
+    # Split into two halves along dim
+    parts = _C_engine.split_at(impl, [n], dim)
+    first, second = parts[0], parts[1]
+    return _wrap(_C_engine.mul(first, _C_engine.sigmoid(second)))
+
+
+def prelu(x: Tensor, weight: Tensor) -> Tensor:
+    """Parametric ReLU: max(0,x) + weight * min(0,x)."""
+    xi = _unwrap(x)
+    wi = _unwrap(weight)
+    pos = _C_engine.relu(xi)
+    neg_part = _C_engine.mul(wi, _C_engine.minimum(_C_engine.zeros(xi.shape, xi.dtype, xi.device), xi))
+    return _wrap(_C_engine.add(pos, neg_part))
+
+
+def normalize(
+    x: Tensor,
+    p: float = 2.0,
+    dim: int = 1,
+    eps: float = 1e-12,
+) -> Tensor:
+    """L_p normalize x along dim."""
+    return _wrap(_C_engine.nn.lp_normalize(_unwrap(x), p, dim, eps))
+
+
+def cosine_similarity(
+    x1: Tensor,
+    x2: Tensor,
+    dim: int = 1,
+    eps: float = 1e-8,
+) -> Tensor:
+    """Compute cosine similarity along dim."""
+    x1n = normalize(x1, p=2.0, dim=dim, eps=eps)
+    x2n = normalize(x2, p=2.0, dim=dim, eps=eps)
+    # Element-wise product then sum along dim
+    impl = _C_engine.sum(_C_engine.mul(_unwrap(x1n), _unwrap(x2n)), [dim])
+    return _wrap(impl)
+
+
+def pairwise_distance(
+    x1: Tensor,
+    x2: Tensor,
+    p: float = 2.0,
+    eps: float = 1e-6,
+    keepdim: bool = False,
+) -> Tensor:
+    """Compute pairwise L_p distance between x1 and x2."""
+    diff = _C_engine.sub(_unwrap(x1), _unwrap(x2))
+    # |diff|_p = (sum |diff|^p)^(1/p)
+    abs_diff = _C_engine.abs(diff)
+    powered = _C_engine.pow(_C_engine.add(abs_diff, _C_engine.full(abs_diff.shape, eps, abs_diff.dtype, abs_diff.device)),
+                            _C_engine.full(abs_diff.shape, p, abs_diff.dtype, abs_diff.device))
+    s = _C_engine.sum(powered, -1)
+    inv_p = _C_engine.full(s.shape, 1.0 / p, s.dtype, s.device)
+    dist = _C_engine.pow(s, inv_p)
+    if keepdim:
+        dist = _C_engine.unsqueeze(dist, -1)
+    return _wrap(dist)

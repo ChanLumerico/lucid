@@ -38,7 +38,8 @@ def layer_norm(
     """Layer normalization."""
     w = _unwrap(weight) if weight is not None else None
     b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.layer_norm(_unwrap(x), list(normalized_shape), w, b, eps))
+    # Engine API: layer_norm(x, gamma, beta, eps) — no normalized_shape arg
+    return _wrap(_C_engine.nn.layer_norm(_unwrap(x), w, b, eps))
 
 
 def group_norm(
