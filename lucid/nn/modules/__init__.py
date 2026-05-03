@@ -26,6 +26,7 @@ from lucid.nn.modules.rnn import LSTM, GRU, RNN, LSTMCell, GRUCell, RNNCell
 from lucid.nn.modules.loss import (
     MSELoss, L1Loss, CrossEntropyLoss, NLLLoss,
     BCELoss, BCEWithLogitsLoss, HuberLoss,
+    SmoothL1Loss, KLDivLoss,
 )
 from lucid.nn.modules.container import (
     Sequential, ModuleList, ModuleDict,
@@ -63,6 +64,7 @@ __all__ = [
     "LSTM", "GRU", "RNN", "LSTMCell", "GRUCell", "RNNCell",
     "MSELoss", "L1Loss", "CrossEntropyLoss", "NLLLoss",
     "BCELoss", "BCEWithLogitsLoss", "HuberLoss",
+    "SmoothL1Loss", "KLDivLoss",
     "Sequential", "ModuleList", "ModuleDict",
     "ParameterList", "ParameterDict",
     "Flatten", "Unflatten",

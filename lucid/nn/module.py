@@ -281,6 +281,26 @@ class Module:
         """Move all parameters and buffers to CPU."""
         return self.to("cpu")
 
+    def half(self) -> Self:
+        """Cast all parameters and buffers to float16."""
+        from lucid._dtype import float16
+        return self.to(float16)
+
+    def float(self) -> Self:
+        """Cast all parameters and buffers to float32."""
+        from lucid._dtype import float32
+        return self.to(float32)
+
+    def double(self) -> Self:
+        """Cast all parameters and buffers to float64."""
+        from lucid._dtype import float64
+        return self.to(float64)
+
+    def bfloat16(self) -> Self:
+        """Cast all parameters and buffers to bfloat16."""
+        from lucid._dtype import bfloat16
+        return self.to(bfloat16)
+
     def apply(self, fn: Callable[[Module], None]) -> Self:
         """Apply fn recursively to every submodule (including self)."""
         for m in self.children():

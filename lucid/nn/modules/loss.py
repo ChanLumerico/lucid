@@ -7,6 +7,7 @@ from lucid.nn.module import Module
 from lucid.nn.functional.loss import (
     mse_loss, l1_loss, cross_entropy, nll_loss,
     binary_cross_entropy, binary_cross_entropy_with_logits, huber_loss,
+    smooth_l1_loss, kl_div,
 )
 
 
@@ -105,3 +106,27 @@ class HuberLoss(Module):
         return huber_loss(x, target, self.delta, self.reduction)
     def extra_repr(self) -> str:
         return f"delta={self.delta}, reduction={self.reduction!r}"
+
+
+class SmoothL1Loss(Module):
+    """Smooth L1 loss (Huber loss with delta=beta)."""
+    def __init__(self, reduction: str = "mean", beta: float = 1.0) -> None:
+        super().__init__()
+        self.reduction = reduction
+        self.beta = beta
+    def forward(self, x: Any, target: Any) -> Any:
+        return smooth_l1_loss(x, target, beta=self.beta, reduction=self.reduction)
+    def extra_repr(self) -> str:
+        return f"beta={self.beta}, reduction={self.reduction!r}"
+
+
+class KLDivLoss(Module):
+    """Kullback-Leibler divergence loss."""
+    def __init__(self, reduction: str = "mean", log_target: bool = False) -> None:
+        super().__init__()
+        self.reduction = reduction
+        self.log_target = log_target
+    def forward(self, x: Any, target: Any) -> Any:
+        return kl_div(x, target, reduction=self.reduction, log_target=self.log_target)
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}, log_target={self.log_target}"
