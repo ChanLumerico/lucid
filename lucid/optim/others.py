@@ -2,7 +2,8 @@
 Additional optimizers: RMSprop, Adagrad, Adadelta, Adamax, RAdam, NAdam, ASGD, Rprop.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
 from lucid.optim.optimizer import Optimizer
@@ -13,7 +14,7 @@ class RMSprop(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1e-2,
         alpha: float = 0.99,
         eps: float = 1e-8,
@@ -31,7 +32,7 @@ class RMSprop(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.RMSprop(
                 [_unwrap(p) for p in group["params"]],
@@ -43,9 +44,9 @@ class RMSprop(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single RMSprop step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss
@@ -56,7 +57,7 @@ class Adagrad(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1e-2,
         lr_decay: float = 0,
         weight_decay: float = 0,
@@ -65,7 +66,7 @@ class Adagrad(Optimizer):
         defaults = dict(lr=lr, lr_decay=lr_decay, weight_decay=weight_decay, eps=eps)
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.Adagrad(
                 [_unwrap(p) for p in group["params"]],
@@ -76,9 +77,9 @@ class Adagrad(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adagrad step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss
@@ -89,7 +90,7 @@ class Adadelta(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1.0,
         rho: float = 0.9,
         eps: float = 1e-6,
@@ -98,7 +99,7 @@ class Adadelta(Optimizer):
         defaults = dict(lr=lr, rho=rho, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.Adadelta(
                 [_unwrap(p) for p in group["params"]],
@@ -109,9 +110,9 @@ class Adadelta(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adadelta step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss
@@ -122,7 +123,7 @@ class Adamax(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 2e-3,
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
@@ -133,7 +134,7 @@ class Adamax(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.Adamax(
                 [_unwrap(p) for p in group["params"]],
@@ -145,9 +146,9 @@ class Adamax(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adamax step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss
@@ -158,7 +159,7 @@ class RAdam(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1e-3,
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
@@ -169,7 +170,7 @@ class RAdam(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.RAdam(
                 [_unwrap(p) for p in group["params"]],
@@ -181,9 +182,9 @@ class RAdam(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single RAdam step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss
@@ -194,7 +195,7 @@ class NAdam(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 2e-3,
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
@@ -205,7 +206,7 @@ class NAdam(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.NAdam(
                 [_unwrap(p) for p in group["params"]],
@@ -217,9 +218,9 @@ class NAdam(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single NAdam step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss
@@ -230,7 +231,7 @@ class ASGD(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1e-2,
         lambd: float = 1e-4,
         alpha: float = 0.75,
@@ -242,7 +243,7 @@ class ASGD(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.ASGD(
                 [_unwrap(p) for p in group["params"]],
@@ -254,9 +255,9 @@ class ASGD(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single ASGD step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss
@@ -267,7 +268,7 @@ class Rprop(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1e-2,
         etas: tuple[float, float] = (0.5, 1.2),
         step_sizes: tuple[float, float] = (1e-6, 50),
@@ -281,7 +282,7 @@ class Rprop(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.Rprop(
                 [_unwrap(p) for p in group["params"]],
@@ -293,9 +294,9 @@ class Rprop(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Rprop step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss

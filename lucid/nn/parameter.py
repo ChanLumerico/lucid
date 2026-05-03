@@ -2,7 +2,6 @@
 nn.Parameter: a Tensor that is automatically registered by Module.
 """
 
-from typing import Any
 import numpy as np
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
@@ -21,7 +20,7 @@ class Parameter(Tensor):
 
     def __new__(
         cls,
-        data: Any = None,
+        data: Tensor | np.ndarray | list[object] | None = None,
         requires_grad: bool = True,
     ) -> Parameter:
         if data is None:
@@ -38,7 +37,7 @@ class Parameter(Tensor):
         obj._impl = impl
         return obj
 
-    def __init__(self, data: Any = None, requires_grad: bool = True) -> None:
+    def __init__(self, data: Tensor | np.ndarray | list[object] | None = None, requires_grad: bool = True) -> None:
         pass
 
     def __repr__(self) -> str:

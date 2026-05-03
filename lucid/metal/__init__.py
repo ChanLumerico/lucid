@@ -3,7 +3,6 @@ lucid.metal: Apple Metal GPU utilities.
 """
 
 import time
-from typing import Any
 
 import mlx.core as _mx
 
@@ -74,7 +73,7 @@ class MetalStream:
     def __enter__(self) -> "MetalStream":
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         self.synchronize()
 
     def synchronize(self) -> None:

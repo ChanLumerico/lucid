@@ -2,7 +2,8 @@
 Adam and AdamW optimizers.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
 from lucid.optim.optimizer import Optimizer
@@ -40,7 +41,7 @@ class Adam(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1e-3,
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
@@ -57,7 +58,7 @@ class Adam(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.Adam(
                 [_unwrap(p) for p in group["params"]],
@@ -70,9 +71,9 @@ class Adam(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adam step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss
@@ -93,7 +94,7 @@ class AdamW(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1e-3,
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
@@ -110,7 +111,7 @@ class AdamW(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.AdamW(
                 [_unwrap(p) for p in group["params"]],
@@ -122,9 +123,9 @@ class AdamW(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single AdamW step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss

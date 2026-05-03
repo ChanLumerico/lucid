@@ -2,24 +2,22 @@
 state_dict save/load helpers for Module.
 """
 
-from typing import Any, TYPE_CHECKING
 import numpy as np
+from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
+from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
-
-if TYPE_CHECKING:
-    from lucid.nn.module import Module
-    from lucid._tensor.tensor import Tensor
+from lucid._types import StateDict
 
 
 def _save_to_state_dict(
     module: Module,
     prefix: str = "",
     keep_vars: bool = False,
-) -> dict[str, Any]:
+) -> StateDict:
     """Recursively collect parameters and persistent buffers into a flat dict."""
-    result: dict[str, Any] = {}
+    result: StateDict = {}
     non_persistent: set[str] = getattr(module, "_non_persistent_buffers", set())
 
     for name, p in module._parameters.items():
@@ -46,7 +44,7 @@ def _save_to_state_dict(
 
 def _load_from_state_dict(
     module: Module,
-    state_dict: dict[str, Any],
+    state_dict: StateDict,
     strict: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Load parameters from state_dict. Returns (missing_keys, unexpected_keys)."""

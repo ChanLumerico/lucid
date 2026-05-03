@@ -22,7 +22,7 @@ _builtin_bool = bool  # save before any local shadowing
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
 
-    def to(self: Tensor, *args: Any, **kwargs: Any) -> Tensor:
+    def to(self: Tensor, *args: _DType | _Device | str, **kwargs: object) -> Tensor:
         """
         Move and/or cast tensor.
 

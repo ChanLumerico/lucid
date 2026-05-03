@@ -3,7 +3,7 @@ Recurrent modules: LSTM, GRU, RNN.
 """
 
 import math
-from typing import Any
+from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty, zeros, ones
@@ -56,8 +56,8 @@ class LSTM(Module):
         dropout: float = 0.0,
         bidirectional: bool = False,
         proj_size: int = 0,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.input_size = input_size
@@ -105,9 +105,9 @@ class LSTM(Module):
 
     def forward(
         self,
-        x: Any,
-        hx: tuple[Any, Any] | None = None,
-    ) -> tuple[Any, tuple[Any, Any]]:
+        x: Tensor,
+        hx: tuple[Tensor, Tensor] | None = None,
+    ) -> tuple[Tensor, tuple[Tensor, Tensor]]:
         h0_impl = _unwrap(hx[0]) if hx is not None else None
         c0_impl = _unwrap(hx[1]) if hx is not None else None
 
@@ -168,8 +168,8 @@ class RNNCell(Module):
         hidden_size: int,
         bias: bool = True,
         nonlinearity: str = "tanh",
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.input_size = input_size
@@ -195,7 +195,7 @@ class RNNCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Any, hx: Any = None) -> Any:
+    def forward(self, x: Tensor, hx: Tensor | tuple[Tensor, Tensor] | None = None) -> tuple[Tensor, Tensor | tuple[Tensor, Tensor]]:
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size)
         pre = linear(x, self.weight_ih, self.bias_ih) + linear(
@@ -217,8 +217,8 @@ class LSTMCell(Module):
         input_size: int,
         hidden_size: int,
         bias: bool = True,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.input_size = input_size
@@ -247,7 +247,7 @@ class LSTMCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Any, hx: tuple[Any, Any] | None = None) -> tuple[Any, Any]:
+    def forward(self, x: Tensor, hx: tuple[Tensor, Tensor] | None = None) -> tuple[Tensor, tuple[Tensor, Tensor]]:
         if hx is None:
             batch = x.shape[0]
             h0 = zeros(batch, self.hidden_size)
@@ -278,8 +278,8 @@ class GRUCell(Module):
         input_size: int,
         hidden_size: int,
         bias: bool = True,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.input_size = input_size
@@ -308,7 +308,7 @@ class GRUCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Any, hx: Any = None) -> Any:
+    def forward(self, x: Tensor, hx: Tensor | tuple[Tensor, Tensor] | None = None) -> tuple[Tensor, Tensor | tuple[Tensor, Tensor]]:
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size)
         hs = self.hidden_size
@@ -336,8 +336,8 @@ class GRU(Module):
         batch_first: bool = False,
         dropout: float = 0.0,
         bidirectional: bool = False,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.input_size = input_size
@@ -350,13 +350,13 @@ class GRU(Module):
             input_size, hidden_size, bias=bias, device=device, dtype=dtype
         )
 
-    def forward(self, x: Any, hx: Any = None) -> tuple[Any, Any]:
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> tuple[Tensor, Tensor]:
         if self.batch_first:
             perm = [1, 0] + list(range(2, x.ndim))
             x = x.permute(perm)
         T, B = x.shape[0], x.shape[1]
         h = hx if hx is not None else zeros(B, self.hidden_size)
-        outputs: list[Any] = []
+        outputs: list[Tensor] = []
         for t in range(T):
             h = self._cell(x[t], h)
             outputs.append(h)
@@ -386,8 +386,8 @@ class RNN(Module):
         batch_first: bool = False,
         dropout: float = 0.0,
         bidirectional: bool = False,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.input_size = input_size
@@ -403,13 +403,13 @@ class RNN(Module):
             dtype=dtype,
         )
 
-    def forward(self, x: Any, hx: Any = None) -> tuple[Any, Any]:
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> tuple[Tensor, Tensor]:
         if self.batch_first:
             perm = [1, 0] + list(range(2, x.ndim))
             x = x.permute(perm)
         T, B = x.shape[0], x.shape[1]
         h = hx if hx is not None else zeros(B, self.hidden_size)
-        outputs: list[Any] = []
+        outputs: list[Tensor] = []
         for t in range(T):
             h = self._cell(x[t], h)
             outputs.append(h)

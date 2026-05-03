@@ -7,7 +7,7 @@ from __future__ import annotations
 import multiprocessing as _mp
 import random
 import threading
-from typing import Any, Callable, Iterator
+from typing import Callable, Iterator
 
 import numpy as np
 
@@ -30,7 +30,7 @@ _SHUTDOWN = None
 # ── collation ─────────────────────────────────────────────────────────────────
 
 
-def default_collate(batch: list[Any]) -> Any:
+def default_collate(batch: list[object]) -> Tensor | list[object] | dict[str, object] | tuple[object, ...]:
     """Collate a list of samples into a batched tensor or nested structure."""
     elem = batch[0]
 
@@ -66,8 +66,8 @@ def default_collate(batch: list[Any]) -> Any:
 def _worker_loop(
     worker_id: int,
     dataset: Dataset,
-    index_queue: Any,
-    result_queue: Any,
+    index_queue: object,
+    result_queue: object,
     collate_fn: Callable,
     worker_init_fn: Callable | None,
     seed: int,
@@ -114,7 +114,7 @@ class _SingleProcessDataLoaderIter:
     def __iter__(self) -> _SingleProcessDataLoaderIter:
         return self
 
-    def __next__(self) -> Any:
+    def __next__(self) -> Tensor | tuple[Tensor, ...]:
         indices = next(self._iter)
         batch = [self._dataset[i] for i in indices]
         return self._collate_fn(batch)
@@ -151,12 +151,12 @@ class _MultiProcessDataLoaderIter:
 
         # One index queue per worker to avoid contention.
         self._index_queues = [ctx.Queue() for _ in range(self._num_workers)]
-        self._result_queue: Any = ctx.Queue()
+        self._result_queue: object = ctx.Queue()
 
         # Sequence counters.
         self._send_idx: int = 0    # next batch index to dispatch
         self._rcvd_idx: int = 0    # next batch index to yield
-        self._reorder: dict[int, Any] = {}
+        self._reorder: dict[int, Tensor | tuple[Tensor, ...]] = {}
 
         # Materialise the full batch list once per epoch.
         self._batches: list[list[int]] = list(loader.batch_sampler)
@@ -209,7 +209,7 @@ class _MultiProcessDataLoaderIter:
     def __iter__(self) -> _MultiProcessDataLoaderIter:
         return self
 
-    def __next__(self) -> Any:
+    def __next__(self) -> Tensor | tuple[Tensor, ...]:
         if self._rcvd_idx >= self._n_batches:
             if not self._persistent:
                 self._shutdown_workers()
@@ -300,8 +300,8 @@ class DataLoader:
         drop_last: bool = False,
         timeout: float = 0.0,
         worker_init_fn: Callable | None = None,
-        multiprocessing_context: Any = None,
-        generator: Any = None,
+        multiprocessing_context: object = None,
+        generator: object = None,
         prefetch_factor: int | None = None,
         persistent_workers: bool = False,
     ) -> None:
@@ -350,7 +350,7 @@ class DataLoader:
         self.sampler = sampler
         self._persistent_iter: _MultiProcessDataLoaderIter | None = None
 
-    def __iter__(self) -> Iterator[Any]:
+    def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
         if self.num_workers == 0:
             yield from _SingleProcessDataLoaderIter(self)
             return

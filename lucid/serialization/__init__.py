@@ -5,7 +5,7 @@ lucid.serialization: save and load tensors and modules.
 import io
 import pickle
 import warnings
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 import numpy as np
 from lucid._tensor.tensor import Tensor as _T
@@ -39,7 +39,7 @@ _SAFE_CLASSES = frozenset(
 class _SafeUnpickler(pickle.Unpickler):
     """Restricted Unpickler that only allows safe types (weights_only=True mode)."""
 
-    def find_class(self, module: str, name: str) -> Any:
+    def find_class(self, module: str, name: str) -> type:
         full = f"{module}.{name}"
         if full in _SAFE_CLASSES:
             return super().find_class(module, name)
@@ -49,7 +49,7 @@ class _SafeUnpickler(pickle.Unpickler):
             "(potential security risk)."
         )
 
-    def persistent_load(self, pid: Any) -> Any:
+    def persistent_load(self, pid: object) -> object:
         return _LucidUnpickler.persistent_load(self, pid)
 
 
@@ -57,7 +57,7 @@ class _SafeUnpickler(pickle.Unpickler):
 
 
 class _LucidPickler(pickle.Pickler):
-    def persistent_id(self, obj: Any) -> Any:
+    def persistent_id(self, obj: object) -> object:
         if isinstance(obj, _T):
             arr = np.ascontiguousarray(np.asarray(obj._impl.data_as_python()))
             return (
@@ -72,7 +72,7 @@ class _LucidPickler(pickle.Pickler):
 
 
 class _LucidUnpickler(pickle.Unpickler):
-    def persistent_load(self, pid: Any) -> Any:
+    def persistent_load(self, pid: object) -> object:
         if isinstance(pid, tuple) and pid[0] == "tensor":
             _, shape, dtype_name, device_str, raw_bytes, np_dtype_str = pid
             arr = (
@@ -91,7 +91,7 @@ class _LucidUnpickler(pickle.Unpickler):
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def save(obj: Any, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> None:
+def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> None:
     """Save an object to a file or file-like object."""
     buf = io.BytesIO()
     pickler = _LucidPickler(buf, protocol=pickle_protocol)
@@ -108,9 +108,9 @@ def save(obj: Any, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> N
 def load(
     f: str | bytes | io.IOBase,
     *,
-    map_location: str | Callable[..., Any] | dict[str, str] | None = None,
+    map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
     weights_only: bool = True,
-) -> Any:
+) -> object:
     """Load an object saved with lucid.save()."""
     if isinstance(f, (str, bytes)):
         with open(f, "rb") as fp:
@@ -145,9 +145,9 @@ def load(
 
 
 def _apply_map_location(
-    obj: Any,
+    obj: object,
     map_location: str | Callable[..., Any] | dict[str, str],
-) -> Any:
+) -> object:
     """Recursively apply map_location to all Tensors in obj."""
     if isinstance(obj, _T):
         if callable(map_location) and not isinstance(map_location, str):

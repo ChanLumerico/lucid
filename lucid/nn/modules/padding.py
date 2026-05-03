@@ -2,7 +2,8 @@
 Padding modules: Constant, Reflection, Replication, Zero padding.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import _Size2d
 from lucid.nn.module import Module
 from lucid.nn.functional.sampling import pad
 
@@ -17,7 +18,7 @@ class _ConstantPadNd(Module):
         )
         self.value = value
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return pad(x, self.padding, mode="constant", value=self.value)
 
     def extra_repr(self) -> str:
@@ -33,7 +34,7 @@ class ConstantPad1d(_ConstantPadNd):
 
     _dims = 2
 
-    def __init__(self, padding: int | tuple[int, int], value: float) -> None:
+    def __init__(self, padding: _Size2d, value: float) -> None:
         super().__init__(padding, value)
 
 
@@ -70,13 +71,13 @@ class ZeroPad2d(ConstantPad2d):
 class ReflectionPad1d(Module):
     """Pad a 3-D tensor using reflection."""
 
-    def __init__(self, padding: int | tuple[int, int]) -> None:
+    def __init__(self, padding: _Size2d) -> None:
         super().__init__()
         self.padding = (
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
@@ -90,7 +91,7 @@ class ReflectionPad2d(Module):
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
@@ -100,13 +101,13 @@ class ReflectionPad2d(Module):
 class ReplicationPad1d(Module):
     """Pad a 3-D tensor using replication."""
 
-    def __init__(self, padding: int | tuple[int, int]) -> None:
+    def __init__(self, padding: _Size2d) -> None:
         super().__init__()
         self.padding = (
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
@@ -120,7 +121,7 @@ class ReplicationPad2d(Module):
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
@@ -134,7 +135,7 @@ class ReplicationPad3d(Module):
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:

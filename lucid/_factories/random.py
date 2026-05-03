@@ -2,7 +2,7 @@
 Random tensor creation: rand, randn, randint, bernoulli, normal, manual_seed.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _wrap, _impl_with_grad
 from lucid._dtype import dtype, int64
@@ -28,7 +28,7 @@ def _get_gen(
 
 
 def rand(
-    *size: Any,
+    *size: int | tuple[int, ...],
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
     requires_grad: bool = False,
@@ -42,7 +42,7 @@ def rand(
 
 
 def randn(
-    *size: Any,
+    *size: int | tuple[int, ...],
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
     requires_grad: bool = False,
@@ -139,7 +139,7 @@ def randn_like(
     return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
-def _size_to_list(*size: Any) -> list[int]:
+def _size_to_list(*size: int | tuple[int, ...]) -> list[int]:
     if len(size) == 1 and isinstance(size[0], (list, tuple)):
         return list(size[0])
     return list(size)

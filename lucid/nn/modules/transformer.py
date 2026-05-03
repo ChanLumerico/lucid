@@ -4,7 +4,7 @@ TransformerDecoderLayer, TransformerDecoder, Transformer.
 """
 
 import math
-from typing import Any
+from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
@@ -28,8 +28,8 @@ class TransformerEncoderLayer(Module):
         activation: str = "relu",
         batch_first: bool = False,
         norm_first: bool = False,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.d_model = d_model
@@ -56,16 +56,16 @@ class TransformerEncoderLayer(Module):
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
 
-    def _ff(self, x: Any) -> Any:
+    def _ff(self, x: Tensor) -> Tensor:
         act = gelu if self.activation == "gelu" else relu
         return self.linear2(self.dropout2(act(self.linear1(x))))
 
     def forward(
         self,
-        src: Any,
-        src_mask: Any = None,
-        src_key_padding_mask: Any = None,
-    ) -> Any:
+        src: Tensor,
+        src_mask: Tensor | None = None,
+        src_key_padding_mask: Tensor | None = None,
+    ) -> Tensor:
         if self.norm_first:
             src2, _ = self.self_attn(
                 self.norm1(src), self.norm1(src), self.norm1(src), attn_mask=src_mask
@@ -92,7 +92,7 @@ class TransformerEncoder(Module):
         self,
         encoder_layer: TransformerEncoderLayer,
         num_layers: int,
-        norm: Any = None,
+        norm: Module | None = None,
     ) -> None:
         super().__init__()
         self.layers = [
@@ -116,10 +116,10 @@ class TransformerEncoder(Module):
 
     def forward(
         self,
-        src: Any,
-        mask: Any = None,
-        src_key_padding_mask: Any = None,
-    ) -> Any:
+        src: Tensor,
+        mask: Tensor | None = None,
+        src_key_padding_mask: Tensor | None = None,
+    ) -> Tensor:
         output = src
         for layer in self.layers:
             output = layer(
@@ -145,8 +145,8 @@ class TransformerDecoderLayer(Module):
         activation: str = "relu",
         batch_first: bool = False,
         norm_first: bool = False,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.d_model = d_model
@@ -183,19 +183,19 @@ class TransformerDecoderLayer(Module):
         self.dropout3 = Dropout(dropout)
         self.dropout4 = Dropout(dropout)
 
-    def _ff(self, x: Any) -> Any:
+    def _ff(self, x: Tensor) -> Tensor:
         act = gelu if self.activation == "gelu" else relu
         return self.linear2(self.dropout2(act(self.linear1(x))))
 
     def forward(
         self,
-        tgt: Any,
-        memory: Any,
-        tgt_mask: Any = None,
-        memory_mask: Any = None,
-        tgt_key_padding_mask: Any = None,
-        memory_key_padding_mask: Any = None,
-    ) -> Any:
+        tgt: Tensor,
+        memory: Tensor,
+        tgt_mask: Tensor | None = None,
+        memory_mask: Tensor | None = None,
+        tgt_key_padding_mask: Tensor | None = None,
+        memory_key_padding_mask: Tensor | None = None,
+    ) -> Tensor:
         if self.norm_first:
             tgt2, _ = self.self_attn(
                 self.norm1(tgt), self.norm1(tgt), self.norm1(tgt), attn_mask=tgt_mask
@@ -228,7 +228,7 @@ class TransformerDecoder(Module):
         self,
         decoder_layer: TransformerDecoderLayer,
         num_layers: int,
-        norm: Any = None,
+        norm: Module | None = None,
     ) -> None:
         super().__init__()
         self.layers = [
@@ -252,13 +252,13 @@ class TransformerDecoder(Module):
 
     def forward(
         self,
-        tgt: Any,
-        memory: Any,
-        tgt_mask: Any = None,
-        memory_mask: Any = None,
-        tgt_key_padding_mask: Any = None,
-        memory_key_padding_mask: Any = None,
-    ) -> Any:
+        tgt: Tensor,
+        memory: Tensor,
+        tgt_mask: Tensor | None = None,
+        memory_mask: Tensor | None = None,
+        tgt_key_padding_mask: Tensor | None = None,
+        memory_key_padding_mask: Tensor | None = None,
+    ) -> Tensor:
         output = tgt
         for layer in self.layers:
             output = layer(output, memory, tgt_mask=tgt_mask, memory_mask=memory_mask)
@@ -283,8 +283,8 @@ class Transformer(Module):
         dropout: float = 0.1,
         activation: str = "relu",
         batch_first: bool = False,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         enc_layer = TransformerEncoderLayer(
@@ -314,15 +314,15 @@ class Transformer(Module):
 
     def forward(
         self,
-        src: Any,
-        tgt: Any,
-        src_mask: Any = None,
-        tgt_mask: Any = None,
-        memory_mask: Any = None,
-        src_key_padding_mask: Any = None,
-        tgt_key_padding_mask: Any = None,
-        memory_key_padding_mask: Any = None,
-    ) -> Any:
+        src: Tensor,
+        tgt: Tensor,
+        src_mask: Tensor = None,
+        tgt_mask: Tensor | None = None,
+        memory_mask: Tensor | None = None,
+        src_key_padding_mask: Tensor = None,
+        tgt_key_padding_mask: Tensor | None = None,
+        memory_key_padding_mask: Tensor | None = None,
+    ) -> Tensor:
         memory = self.encoder(
             src, mask=src_mask, src_key_padding_mask=src_key_padding_mask
         )

@@ -3,7 +3,7 @@ Multi-head attention module.
 """
 
 import math
-from typing import Any
+from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
@@ -28,8 +28,8 @@ class MultiheadAttention(Module):
         kdim: int | None = None,
         vdim: int | None = None,
         batch_first: bool = False,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
@@ -66,13 +66,13 @@ class MultiheadAttention(Module):
 
     def forward(
         self,
-        query: Any,
-        key: Any,
-        value: Any,
-        key_padding_mask: Any = None,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        key_padding_mask: Tensor | None = None,
         need_weights: bool = True,
-        attn_mask: Any = None,
-    ) -> tuple[Any, Any | None]:
+        attn_mask: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor | None]:
         d = self.embed_dim
         wt = self.in_proj_weight._impl
         parts = _C_engine.split_at(wt, [d, 2 * d], 0)

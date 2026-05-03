@@ -2,7 +2,8 @@
 Flatten, Unflatten, Unfold, and Fold modules.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import _Size2d
 from lucid.nn.module import Module
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
@@ -16,7 +17,7 @@ class Flatten(Module):
         self.start_dim = start_dim
         self.end_dim = end_dim
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return _wrap(_C_engine.flatten(_unwrap(x), self.start_dim, self.end_dim))
 
     def extra_repr(self) -> str:
@@ -31,7 +32,7 @@ class Unflatten(Module):
         self.dim = dim
         self.unflattened_size = unflattened_size
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         shape = list(x.shape)
         new_shape = (
             shape[: self.dim] + list(self.unflattened_size) + shape[self.dim + 1 :]
@@ -51,10 +52,10 @@ class Unfold(Module):
 
     def __init__(
         self,
-        kernel_size: int | tuple[int, int],
-        dilation: int | tuple[int, int] = 1,
-        padding: int | tuple[int, int] = 0,
-        stride: int | tuple[int, int] = 1,
+        kernel_size: _Size2d,
+        dilation: _Size2d = 1,
+        padding: _Size2d = 0,
+        stride: _Size2d = 1,
     ) -> None:
         super().__init__()
         self.kernel_size = kernel_size
@@ -62,7 +63,7 @@ class Unfold(Module):
         self.padding = padding
         self.stride = stride
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         from lucid.nn.functional.sampling import unfold as _unfold
         return _unfold(x, self.kernel_size, self.dilation, self.padding, self.stride)
 
@@ -85,11 +86,11 @@ class Fold(Module):
 
     def __init__(
         self,
-        output_size: int | tuple[int, int],
-        kernel_size: int | tuple[int, int],
-        dilation: int | tuple[int, int] = 1,
-        padding: int | tuple[int, int] = 0,
-        stride: int | tuple[int, int] = 1,
+        output_size: _Size2d,
+        kernel_size: _Size2d,
+        dilation: _Size2d = 1,
+        padding: _Size2d = 0,
+        stride: _Size2d = 1,
     ) -> None:
         super().__init__()
         self.output_size = output_size if isinstance(output_size, tuple) else (output_size, output_size)
@@ -98,7 +99,7 @@ class Fold(Module):
         self.padding = padding if isinstance(padding, tuple) else (padding, padding)
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         import numpy as np
 
         xi = _unwrap(x)

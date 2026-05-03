@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Any
+from lucid.utils.data.dataset import Dataset
+from typing import TYPE_CHECKING
 
 # Thread-local storage: each worker process stores its WorkerInfo here.
 _worker_local = threading.local()
@@ -24,14 +25,14 @@ class WorkerInfo:
         Total number of worker processes for this DataLoader.
     seed : int
         The per-worker random seed (base_seed + id).
-    dataset : Any
+    dataset : Dataset
         The dataset copy owned by this worker.
     """
 
     id: int
     num_workers: int
     seed: int
-    dataset: Any
+    dataset: Dataset
 
 
 def get_worker_info() -> WorkerInfo | None:

@@ -3,11 +3,11 @@ autocast context manager for automatic mixed precision.
 """
 
 import functools
-from typing import Any, Callable, TypeVar
+from typing import Callable, TypeVar
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype, float16, float32, to_engine_dtype
 
-_F = TypeVar("_F", bound=Callable[..., Any])
+_F = TypeVar("_F", bound=Callable[..., object])
 
 
 class autocast:
@@ -38,9 +38,9 @@ class autocast:
         self._dtype = dtype
         self._enabled = enabled
         self._prev_active: bool = False
-        self._prev_dtype: Any = None
+        self._prev_dtype: object = None
 
-    def __enter__(self) -> autocast:
+    def __enter__(self) -> "autocast":
         if not self._enabled:
             return self
         self._prev_active = _C_engine.amp_is_active()
@@ -50,7 +50,7 @@ class autocast:
         self._guard.__enter__()
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         if not self._enabled:
             return
         if self._prev_active and self._prev_dtype is not None:
@@ -69,7 +69,7 @@ class autocast:
         """Use as a function decorator."""
 
         @functools.wraps(fn)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: object, **kwargs: object) -> object:
             with autocast(dtype=self._dtype, enabled=self._enabled):
                 return fn(*args, **kwargs)
 

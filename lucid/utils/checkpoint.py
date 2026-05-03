@@ -2,7 +2,7 @@
 Gradient checkpointing: trade memory for recomputation during backward.
 """
 
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function
 from lucid.autograd._grad_mode import no_grad, enable_grad
@@ -13,16 +13,16 @@ if TYPE_CHECKING:
 
 
 def checkpoint(
-    function: Callable[..., Any],
-    *args: Any,
+    function: Callable[..., Tensor | tuple[Tensor, ...]],
+    *args: Tensor,
     use_reentrant: bool = False,
-    **kwargs: Any,
-) -> Any:
+    **kwargs: object,
+) -> Tensor | tuple[Tensor, ...]:
     """Run function without saving intermediate activations; recompute during backward."""
 
     class CheckpointFunction(Function):
         @staticmethod
-        def forward(ctx: Any, *inputs: Any) -> Any:
+        def forward(ctx: object, *inputs: Tensor) -> Tensor | tuple[Tensor, ...]:
             ctx.function = function
             ctx.kwargs = kwargs
             ctx.num_inputs = len(inputs)
@@ -31,7 +31,7 @@ def checkpoint(
                 return function(*inputs, **kwargs)
 
         @staticmethod
-        def backward(ctx: Any, *grad_outputs: Any) -> tuple[Any, ...]:
+        def backward(ctx: object, *grad_outputs: Tensor) -> tuple[Tensor | None, ...]:
             saved = ctx.saved_tensors
             inputs_detached = [
                 s.detach().requires_grad_(s.requires_grad) for s in saved

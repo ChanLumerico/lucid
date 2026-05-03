@@ -2,7 +2,8 @@
 Pooling modules.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import _Size2d, _Size3d
 from lucid.nn.module import Module
 from lucid.nn.functional.pooling import (
     max_pool1d,
@@ -39,7 +40,7 @@ class MaxPool1d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return max_pool1d(
             x,
             self.kernel_size,
@@ -62,10 +63,10 @@ class MaxPool2d(Module):
 
     def __init__(
         self,
-        kernel_size: int | tuple[int, int],
-        stride: int | tuple[int, int] | None = None,
-        padding: int | tuple[int, int] = 0,
-        dilation: int | tuple[int, int] = 1,
+        kernel_size: _Size2d,
+        stride: _Size2d | None = None,
+        padding: _Size2d = 0,
+        dilation: _Size2d = 1,
         return_indices: bool = False,
         ceil_mode: bool = False,
     ) -> None:
@@ -76,7 +77,7 @@ class MaxPool2d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return max_pool2d(
             x,
             self.kernel_size,
@@ -112,7 +113,7 @@ class AvgPool1d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return avg_pool1d(
             x,
             self.kernel_size,
@@ -131,9 +132,9 @@ class AvgPool2d(Module):
 
     def __init__(
         self,
-        kernel_size: int | tuple[int, int],
-        stride: int | tuple[int, int] | None = None,
-        padding: int | tuple[int, int] = 0,
+        kernel_size: _Size2d,
+        stride: _Size2d | None = None,
+        padding: _Size2d = 0,
         ceil_mode: bool = False,
         count_include_pad: bool = True,
     ) -> None:
@@ -144,7 +145,7 @@ class AvgPool2d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return avg_pool2d(
             x,
             self.kernel_size,
@@ -165,7 +166,7 @@ class AdaptiveAvgPool1d(Module):
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return adaptive_avg_pool1d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -175,11 +176,11 @@ class AdaptiveAvgPool1d(Module):
 class AdaptiveAvgPool2d(Module):
     """Adaptive 2D average pooling."""
 
-    def __init__(self, output_size: int | tuple[int, int]) -> None:
+    def __init__(self, output_size: _Size2d) -> None:
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return adaptive_avg_pool2d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -190,12 +191,12 @@ class AdaptiveMaxPool2d(Module):
     """Adaptive 2D max pooling."""
 
     def __init__(
-        self, output_size: int | tuple[int, int], return_indices: bool = False
+        self, output_size: _Size2d, return_indices: bool = False
     ) -> None:
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return adaptive_max_pool2d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -207,10 +208,10 @@ class MaxPool3d(Module):
 
     def __init__(
         self,
-        kernel_size: int | tuple[int, int, int],
-        stride: int | tuple[int, int, int] | None = None,
-        padding: int | tuple[int, int, int] = 0,
-        dilation: int | tuple[int, int, int] = 1,
+        kernel_size: _Size3d,
+        stride: _Size3d | None = None,
+        padding: _Size3d = 0,
+        dilation: _Size3d = 1,
         return_indices: bool = False,
         ceil_mode: bool = False,
     ) -> None:
@@ -221,7 +222,7 @@ class MaxPool3d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return max_pool3d(x, self.kernel_size, self.stride, self.padding)
 
     def extra_repr(self) -> str:
@@ -236,9 +237,9 @@ class AvgPool3d(Module):
 
     def __init__(
         self,
-        kernel_size: int | tuple[int, int, int],
-        stride: int | tuple[int, int, int] | None = None,
-        padding: int | tuple[int, int, int] = 0,
+        kernel_size: _Size3d,
+        stride: _Size3d | None = None,
+        padding: _Size3d = 0,
         ceil_mode: bool = False,
         count_include_pad: bool = True,
         divisor_override: int | None = None,
@@ -250,7 +251,7 @@ class AvgPool3d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return avg_pool3d(x, self.kernel_size, self.stride, self.padding)
 
     def extra_repr(self) -> str:
@@ -260,11 +261,11 @@ class AvgPool3d(Module):
 class AdaptiveAvgPool3d(Module):
     """Adaptive 3D average pooling."""
 
-    def __init__(self, output_size: int | tuple[int, int, int]) -> None:
+    def __init__(self, output_size: _Size3d) -> None:
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return adaptive_avg_pool3d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -278,7 +279,7 @@ class AdaptiveMaxPool1d(Module):
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return adaptive_max_pool1d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -289,12 +290,12 @@ class AdaptiveMaxPool3d(Module):
     """Adaptive 3D max pooling."""
 
     def __init__(
-        self, output_size: int | tuple[int, int, int], return_indices: bool = False
+        self, output_size: _Size3d, return_indices: bool = False
     ) -> None:
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return adaptive_max_pool3d(x, self.output_size)
 
     def extra_repr(self) -> str:

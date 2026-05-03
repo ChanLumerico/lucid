@@ -2,14 +2,15 @@
 Numerical gradient checker using finite differences.
 """
 
-from typing import Any, Callable, Sequence
+from typing import Callable, Sequence
 
 import numpy as np
+from lucid._tensor.tensor import Tensor
 
 
 def gradcheck(
-    func: Callable[..., Any],
-    inputs: Sequence[Any],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    inputs: Sequence[Tensor],
     *,
     eps: float = 1e-6,
     atol: float = 1e-5,
@@ -48,12 +49,12 @@ def gradcheck(
     """
     from lucid._C import engine as _C_engine
 
-    def _to_numpy(t: Any) -> np.ndarray:  # type: ignore[type-arg]
+    def _to_numpy(t: Tensor) -> np.ndarray:  # type: ignore[type-arg]
         if hasattr(t, "_impl"):
             return np.array(t._impl.data_as_python(), dtype=np.float64)
         return np.asarray(t, dtype=np.float64)
 
-    def _clone_with_grad(t: Any) -> Any:
+    def _clone_with_grad(t: Tensor) -> Tensor:
         from lucid._factories.converters import tensor as _tensor_fn
 
         arr = _to_numpy(t)

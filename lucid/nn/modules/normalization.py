@@ -2,7 +2,8 @@
 Normalization modules.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import ones, zeros
@@ -23,8 +24,8 @@ class LayerNorm(Module):
         normalized_shape: int | list[int] | tuple[int, ...],
         eps: float = 1e-5,
         elementwise_affine: bool = True,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         if isinstance(normalized_shape, int):
@@ -43,7 +44,7 @@ class LayerNorm(Module):
             self.weight = None
             self.bias = None
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return layer_norm(
             x, list(self.normalized_shape), self.weight, self.bias, self.eps
         )
@@ -62,8 +63,8 @@ class RMSNorm(Module):
         self,
         normalized_shape: int | list[int] | tuple[int, ...],
         eps: float = 1e-8,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         if isinstance(normalized_shape, int):
@@ -74,7 +75,7 @@ class RMSNorm(Module):
             ones(*self.normalized_shape, dtype=dtype, device=device)
         )
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
 
     def extra_repr(self) -> str:
@@ -90,8 +91,8 @@ class GroupNorm(Module):
         num_channels: int,
         eps: float = 1e-5,
         affine: bool = True,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.num_groups = num_groups
@@ -109,7 +110,7 @@ class GroupNorm(Module):
             self.weight = None
             self.bias = None
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
 
     def extra_repr(self) -> str:
@@ -126,8 +127,8 @@ class _BatchNormBase(Module):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.num_features = num_features
@@ -158,7 +159,7 @@ class _BatchNormBase(Module):
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return batch_norm(
             x,
             self._buffers.get("running_mean"),

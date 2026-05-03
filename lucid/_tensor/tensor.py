@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Self, Any, Iterator
+from typing import TYPE_CHECKING, ClassVar, Final, Self, Iterator, overload
 
 import numpy as np
 
@@ -27,12 +27,21 @@ if TYPE_CHECKING:
     from lucid.nn.parameter import Parameter
 
 
-class Tensor:
+class Tensor[DT: dtype, DV: device]:
     """Multi-dimensional array with automatic differentiation support.
 
     The central data structure of the Lucid framework. Wraps a C++ ``TensorImpl``
     via composition. Tensors live on either ``cpu`` (Apple Accelerate) or
     ``metal`` (Apple Metal GPU) devices.
+
+    Type Parameters
+    ---------------
+    DT : dtype
+        The element dtype of this tensor, e.g. ``lucid.float32``.
+        Use ``Tensor[float32, device]`` in type hints to communicate dtype.
+    DV : device
+        The device this tensor resides on, e.g. ``lucid.device("cpu")``.
+        Use ``Tensor[dtype, device("metal")]`` to communicate device.
 
     Parameters
     ----------
@@ -56,12 +65,12 @@ class Tensor:
     lucid.float32
     """
 
-    _is_parameter: bool = False
-    __lucid_function__: None = None
+    _is_parameter: ClassVar[bool] = False
+    __lucid_function__: ClassVar[None] = None
 
     def __init__(
         self,
-        data: Any,
+        data: np.ndarray | list[object] | int | float | bool | Tensor,
         *,
         dtype: dtype | _C_engine.Dtype | str | None = None,
         device: device | str | None = None,
@@ -90,12 +99,12 @@ class Tensor:
         return tuple(self._impl.shape)
 
     @property
-    def dtype(self) -> dtype:
-        return _ENGINE_TO_DTYPE[self._impl.dtype]
+    def dtype(self) -> DT:
+        return _ENGINE_TO_DTYPE[self._impl.dtype]  # type: ignore[return-value]
 
     @property
-    def device(self) -> device:
-        return _device_from_engine(self._impl.device)
+    def device(self) -> DV:
+        return _device_from_engine(self._impl.device)  # type: ignore[return-value]
 
     @property
     def ndim(self) -> int:
@@ -135,6 +144,10 @@ class Tensor:
         """Return the number of dimensions."""
         return len(self._impl.shape)
 
+    @overload
+    def size(self, dim: int) -> int: ...
+    @overload
+    def size(self, dim: None = ...) -> tuple[int, ...]: ...
     def size(self, dim: int | None = None) -> int | tuple[int, ...]:
         """Return size of a specific dimension, or all dimensions as a tuple."""
         s = tuple(self._impl.shape)
@@ -280,7 +293,7 @@ class Tensor:
         raw = self._impl.data_as_python()
         return np.asarray(raw)
 
-    def tolist(self) -> Any:
+    def tolist(self) -> list[object] | int | float | bool:
         """Return the tensor as a nested Python list."""
         return self.numpy().tolist()
 
@@ -404,7 +417,7 @@ class Tensor:
 
     def new_tensor(
         self,
-        data: Any,
+        data: np.ndarray | list[object] | int | float | bool | Tensor,
         dtype: dtype | None = None,
         device: device | str | None = None,
         requires_grad: bool = False,
@@ -594,7 +607,7 @@ class Tensor:
         )
 
 
-def _tensor_unpickle(arr: np.ndarray, device: Any, requires_grad: bool) -> Tensor:
+def _tensor_unpickle(arr: np.ndarray, device: object, requires_grad: bool) -> Tensor:
     """Top-level helper so multiprocessing (spawn) can pickle/unpickle Tensor."""
     impl = _C_engine.TensorImpl(arr, device, requires_grad)
     return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]

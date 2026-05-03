@@ -2,7 +2,7 @@
 Dropout modules.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
@@ -17,7 +17,7 @@ class Dropout(Module):
         self.p = p
         self.inplace = inplace
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return dropout(x, self.p, self.training, self.inplace)
 
     def extra_repr(self) -> str:
@@ -31,7 +31,7 @@ class Dropout2d(Module):
         super().__init__()
         self.p = p
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return dropout2d(x, self.p, self.training)
 
     def extra_repr(self) -> str:
@@ -45,7 +45,7 @@ class AlphaDropout(Module):
         super().__init__()
         self.p = p
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), self.p, self.training))
 
     def extra_repr(self) -> str:

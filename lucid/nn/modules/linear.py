@@ -3,7 +3,8 @@ Linear and related fully-connected layers.
 """
 
 import math
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 import lucid.nn.init as init
@@ -47,8 +48,8 @@ class Linear(Module):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.in_features = in_features
@@ -72,7 +73,7 @@ class Linear(Module):
             bound = 1.0 / math.sqrt(fan_in) if fan_in > 0 else 0.0
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return linear(x, self.weight, self.bias)
 
     def extra_repr(self) -> str:
@@ -82,7 +83,7 @@ class Linear(Module):
 class Identity(Module):
     """Pass-through layer that returns its input unchanged."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return x
 
 
@@ -95,8 +96,8 @@ class Bilinear(Module):
         in2_features: int,
         out_features: int,
         bias: bool = True,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.in1_features = in1_features
@@ -119,7 +120,7 @@ class Bilinear(Module):
         if self.bias is not None:
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x1: Any, x2: Any) -> Any:
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
         return bilinear(x1, x2, self.weight, self.bias)
 
     def extra_repr(self) -> str:

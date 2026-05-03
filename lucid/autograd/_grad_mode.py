@@ -4,11 +4,11 @@ Gradient mode context managers and decorators.
 
 import functools
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator, TypeVar
+from typing import Callable, Iterator, TypeVar
 
 from lucid._C import engine as _C_engine
 
-_F = TypeVar("_F", bound=Callable[..., Any])
+_F = TypeVar("_F", bound=Callable[..., object])
 
 
 class no_grad:
@@ -34,12 +34,12 @@ class no_grad:
         _C_engine.set_grad_enabled(False)
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         _C_engine.set_grad_enabled(self._prev)
 
     def __call__(self, fn: _F) -> _F:
         @functools.wraps(fn)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: object, **kwargs: object) -> object:
             with no_grad():
                 return fn(*args, **kwargs)
 
@@ -56,12 +56,12 @@ class enable_grad:
         _C_engine.set_grad_enabled(True)
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         _C_engine.set_grad_enabled(self._prev)
 
     def __call__(self, fn: _F) -> _F:
         @functools.wraps(fn)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: object, **kwargs: object) -> object:
             with enable_grad():
                 return fn(*args, **kwargs)
 

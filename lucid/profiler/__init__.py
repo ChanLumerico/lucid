@@ -13,7 +13,7 @@ Usage:
 """
 
 from contextlib import contextmanager
-from typing import Any, Iterator, TYPE_CHECKING
+from typing import Iterator, TYPE_CHECKING
 from lucid._C import engine as _C_engine
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class OpEvent:
     """A single recorded operation event."""
 
-    def __init__(self, impl: Any) -> None:
+    def __init__(self, impl: object) -> None:
         self._impl = impl
 
     @property
@@ -47,7 +47,7 @@ class OpEvent:
         return self.time_ns / 1_000_000.0
 
     @property
-    def shape(self) -> list[Any]:
+    def shape(self) -> list[int]:
         """Output tensor shape."""
         return list(self._impl.shape)
 
@@ -105,7 +105,7 @@ class ProfileSummary:
 class MemoryStats:
     """Memory usage snapshot."""
 
-    def __init__(self, impl: Any) -> None:
+    def __init__(self, impl: object) -> None:
         self._impl = impl
 
     @property
@@ -168,7 +168,7 @@ class Profiler:
         self.start()
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         self.stop()
 
     def events(self) -> list[OpEvent]:
@@ -223,7 +223,7 @@ class Profiler:
 
 @contextmanager
 def profile(
-    activities: Any = None,
+    activities: list[str] | None = None,
     with_memory: bool = True,
 ) -> Iterator[Profiler]:
     """Context manager for profiling a code block.

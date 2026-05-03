@@ -3,7 +3,7 @@ Learning rate schedulers.
 """
 
 import math
-from typing import Any, Callable
+from typing import Callable
 from lucid.optim.optimizer import Optimizer
 
 
@@ -416,7 +416,7 @@ class SequentialLR:
     def __init__(
         self,
         optimizer: Optimizer,
-        schedulers: list[Any],
+        schedulers: list[_LRScheduler],
         milestones: list[int],
         last_epoch: int = -1,
     ) -> None:
@@ -442,7 +442,7 @@ class SequentialLR:
 class ChainedScheduler:
     """Apply a list of schedulers sequentially each step (product of their LR changes)."""
 
-    def __init__(self, schedulers: list[Any]) -> None:
+    def __init__(self, schedulers: list[_LRScheduler]) -> None:
         self.schedulers = schedulers
 
     def step(self) -> None:

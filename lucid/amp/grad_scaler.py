@@ -4,7 +4,7 @@ GradScaler for mixed-precision training.
 Pure Python implementation — no engine changes required.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 import math
 
 if TYPE_CHECKING:
@@ -49,7 +49,7 @@ class GradScaler:
         self._scale_seq_len: int = 0
         self._found_inf = False
 
-    def scale(self, outputs: Any) -> Any:
+    def scale(self, outputs: Tensor | list[Tensor]) -> Tensor | list[Tensor]:
         """Multiply outputs by the current scale factor.
 
         Args:
@@ -94,7 +94,7 @@ class GradScaler:
                 else:
                     g[:] *= inv_scale
 
-    def step(self, optimizer: Optimizer, *args: Any, **kwargs: Any) -> Any:
+    def step(self, optimizer: Optimizer, *args: object, **kwargs: object) -> Tensor | None:
         """Unscale gradients and call optimizer.step() if no inf/nan detected.
 
         If inf/nan is detected in gradients, skip the optimizer step.
@@ -145,7 +145,7 @@ class GradScaler:
         """Return the current scale factor."""
         return self._scale
 
-    def state_dict(self) -> dict[str, Any]:
+    def state_dict(self) -> dict[str, float]:
         """Return serializable state dict."""
         return {
             "scale": self._scale,
@@ -155,7 +155,7 @@ class GradScaler:
             "growth_tracker": self._growth_tracker,
         }
 
-    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+    def load_state_dict(self, state_dict: dict[str, float]) -> None:
         """Load state from a dict."""
         self._scale = float(state_dict["scale"])
         self._growth_factor = float(state_dict["growth_factor"])

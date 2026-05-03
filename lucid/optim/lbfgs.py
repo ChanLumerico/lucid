@@ -1,8 +1,9 @@
+from lucid._tensor.tensor import Tensor
+from lucid._types import _OptimizerClosure
 """
 L-BFGS optimizer (Limited-memory Broyden–Fletcher–Goldfarb–Shanno).
 """
 
-from typing import Any, Callable
 from lucid.optim.optimizer import Optimizer
 
 
@@ -29,7 +30,7 @@ class LBFGS(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float = 1.0,
         max_iter: int = 20,
         max_eval: int = 25,
@@ -48,7 +49,7 @@ class LBFGS(Optimizer):
             line_search_fn=line_search_fn,
         )
         super().__init__(params, defaults)
-        self._lbfgs_state: dict[str, Any] = {
+        self._lbfgs_state: dict[str, object] = {
             "func_evals": 0,
             "n_iter": 0,
             "d": None,
@@ -61,7 +62,7 @@ class LBFGS(Optimizer):
         }
 
     # LBFGS is a pure-Python optimizer; no C++ engine optim needed.
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         pass
 
     def _sync_hyperparams(self) -> None:
@@ -69,7 +70,7 @@ class LBFGS(Optimizer):
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
-    def _gather_flat_grad(self) -> Any:
+    def _gather_flat_grad(self) -> Tensor:
         import lucid
 
         views = []
@@ -81,7 +82,7 @@ class LBFGS(Optimizer):
                     views.append(p.grad.detach().flatten())
         return lucid.cat(views)
 
-    def _gather_flat_params(self) -> Any:
+    def _gather_flat_params(self) -> Tensor:
         import lucid
 
         views = [
@@ -89,7 +90,7 @@ class LBFGS(Optimizer):
         ]
         return lucid.cat(views)
 
-    def _add_to_params(self, alpha: float, update_flat: Any) -> None:
+    def _add_to_params(self, alpha: float, update_flat: Tensor) -> None:
         import lucid
 
         offset = 0
@@ -100,7 +101,7 @@ class LBFGS(Optimizer):
                 p._impl = lucid.add(p, lucid.mul(lucid.tensor(alpha), chunk))._impl
                 offset += n
 
-    def _two_loop_recursion(self, flat_grad: Any) -> Any:
+    def _two_loop_recursion(self, flat_grad: Tensor) -> Tensor:
         import lucid
         import math
 
@@ -146,15 +147,15 @@ class LBFGS(Optimizer):
     @staticmethod
     def _strong_wolfe(
         f: Callable,
-        x_k: Any,
-        d: Any,
+        x_k: Tensor,
+        d: Tensor,
         f_k: float,
-        g_k: Any,
+        g_k: Tensor,
         lr: float,
         c1: float = 1e-4,
         c2: float = 0.9,
         max_ls: int = 20,
-    ) -> tuple[float, float, Any]:
+    ) -> tuple[float, float, Tensor]:
         import lucid
         import math
 
@@ -176,7 +177,7 @@ class LBFGS(Optimizer):
             for p in group["params"]:
                 p.grad = None
 
-    def step(self, closure: Callable[[], Any] | None = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single L-BFGS optimization step.
 
         Args:

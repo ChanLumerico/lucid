@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 def _inject_methods(tensor_cls: type) -> None:
     """Attach all registry ops as Tensor methods."""
 
-    def _make_method(e: OpEntry) -> Any:
+    def _make_method(e: OpEntry) -> object:
         if e.n_tensor_args == -1:
 
-            def method_list(self: Tensor, tensors: list[Any], *args: Any) -> Any:
+            def method_list(self: Tensor, tensors: list[Tensor], *args: object) -> Tensor:
                 all_tensors = [_unwrap(t) for t in [self] + list(tensors)]
                 result = e.engine_fn(all_tensors, *args)
                 if e.returns_tensor:
@@ -33,9 +33,9 @@ def _inject_methods(tensor_cls: type) -> None:
             return method_list
         else:
 
-            def method(self: Tensor, *args: Any) -> Any:
+            def method(self: Tensor, *args: object) -> Tensor:
                 # Unwrap any Tensor in extra tensor arg positions
-                proc_args: list[Any] = []
+                proc_args: list[object] = []
                 for i, a in enumerate(args):
                     if i < (e.n_tensor_args - 1) and isinstance(a, tensor_cls):
                         proc_args.append(_unwrap(a))
@@ -67,7 +67,7 @@ def _inject_methods(tensor_cls: type) -> None:
 
     # ── methods not in registry (Python-level implementations) ───────────
 
-    def view(self: Tensor, *shape: Any) -> Tensor:
+    def view(self: Tensor, *shape: int | tuple[int, ...]) -> Tensor:
         """Return a tensor with the same data but a different shape."""
         s = (
             list(shape[0])

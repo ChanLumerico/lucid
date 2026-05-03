@@ -2,7 +2,7 @@
 Loss function modules.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.functional.loss import (
     mse_loss,
@@ -31,7 +31,7 @@ class MSELoss(Module):
         super().__init__()
         self.reduction = reduction
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return mse_loss(x, target, self.reduction)
 
     def extra_repr(self) -> str:
@@ -45,7 +45,7 @@ class L1Loss(Module):
         super().__init__()
         self.reduction = reduction
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return l1_loss(x, target, self.reduction)
 
     def extra_repr(self) -> str:
@@ -57,7 +57,7 @@ class CrossEntropyLoss(Module):
 
     def __init__(
         self,
-        weight: Any = None,
+        weight: Tensor | None = None,
         ignore_index: int = -100,
         reduction: str = "mean",
         label_smoothing: float = 0.0,
@@ -68,7 +68,7 @@ class CrossEntropyLoss(Module):
         self.reduction = reduction
         self.label_smoothing = label_smoothing
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return cross_entropy(
             x,
             target,
@@ -92,7 +92,7 @@ class NLLLoss(Module):
         super().__init__()
         self.reduction = reduction
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return nll_loss(x, target, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -106,7 +106,7 @@ class BCELoss(Module):
         super().__init__()
         self.reduction = reduction
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return binary_cross_entropy(x, target, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -116,12 +116,12 @@ class BCELoss(Module):
 class BCEWithLogitsLoss(Module):
     """BCE with logits (sigmoid + BCE combined)."""
 
-    def __init__(self, reduction: str = "mean", pos_weight: Any = None) -> None:
+    def __init__(self, reduction: str = "mean", pos_weight: Tensor | None = None) -> None:
         super().__init__()
         self.reduction = reduction
         self.pos_weight = pos_weight
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return binary_cross_entropy_with_logits(
             x, target, pos_weight=self.pos_weight, reduction=self.reduction
         )
@@ -138,7 +138,7 @@ class HuberLoss(Module):
         self.reduction = reduction
         self.delta = delta
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return huber_loss(x, target, self.delta, self.reduction)
 
     def extra_repr(self) -> str:
@@ -153,7 +153,7 @@ class SmoothL1Loss(Module):
         self.reduction = reduction
         self.beta = beta
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return smooth_l1_loss(x, target, beta=self.beta, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -168,7 +168,7 @@ class KLDivLoss(Module):
         self.reduction = reduction
         self.log_target = log_target
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return kl_div(x, target, reduction=self.reduction, log_target=self.log_target)
 
     def extra_repr(self) -> str:
@@ -193,7 +193,7 @@ class TripletMarginLoss(Module):
         self.swap = swap
         self.reduction = reduction
 
-    def forward(self, anchor: Any, positive: Any, negative: Any) -> Any:
+    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:
         return triplet_margin_loss(
             anchor, positive, negative,
             margin=self.margin, p=self.p, eps=self.eps,
@@ -212,7 +212,7 @@ class CosineEmbeddingLoss(Module):
         self.margin = margin
         self.reduction = reduction
 
-    def forward(self, x1: Any, x2: Any, y: Any) -> Any:
+    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
         return cosine_embedding_loss(x1, x2, y, margin=self.margin, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -227,7 +227,7 @@ class MarginRankingLoss(Module):
         self.margin = margin
         self.reduction = reduction
 
-    def forward(self, x1: Any, x2: Any, y: Any) -> Any:
+    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
         return margin_ranking_loss(x1, x2, y, margin=self.margin, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -242,7 +242,7 @@ class HingeEmbeddingLoss(Module):
         self.margin = margin
         self.reduction = reduction
 
-    def forward(self, x: Any, y: Any) -> Any:
+    def forward(self, x: Tensor, y: Tensor) -> Tensor:
         return hinge_embedding_loss(x, y, margin=self.margin, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -265,7 +265,7 @@ class PoissonNLLLoss(Module):
         self.eps = eps
         self.reduction = reduction
 
-    def forward(self, x: Any, target: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return poisson_nll_loss(
             x, target, log_input=self.log_input, full=self.full,
             eps=self.eps, reduction=self.reduction,
@@ -289,7 +289,7 @@ class GaussianNLLLoss(Module):
         self.eps = eps
         self.reduction = reduction
 
-    def forward(self, x: Any, target: Any, var: Any) -> Any:
+    def forward(self, x: Tensor, target: Tensor, var: Tensor) -> Tensor:
         return gaussian_nll_loss(
             x, target, var, full=self.full, eps=self.eps, reduction=self.reduction
         )
@@ -312,9 +312,7 @@ class CTCLoss(Module):
         self.reduction = reduction
         self.zero_infinity = zero_infinity
 
-    def forward(
-        self, log_probs: Any, targets: Any, input_lengths: Any, target_lengths: Any
-    ) -> Any:
+    def forward(self, log_probs: Tensor, targets: Tensor, input_lengths: Tensor, target_lengths: Tensor) -> Tensor:
         return ctc_loss(
             log_probs, targets, input_lengths, target_lengths,
             blank=self.blank, reduction=self.reduction,

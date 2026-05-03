@@ -1,8 +1,9 @@
+from lucid.utils.data.dataset import Dataset
 """
 Sampler classes for DataLoader.
 """
 
-from typing import Any, Iterator
+from typing import Iterator, TYPE_CHECKING
 import random
 
 
@@ -19,7 +20,7 @@ class Sampler:
 class SequentialSampler(Sampler):
     """Samples elements sequentially, always in the same order."""
 
-    def __init__(self, data_source: Any) -> None:
+    def __init__(self, data_source: Dataset) -> None:
         self.data_source = data_source
 
     def __iter__(self) -> Iterator[int]:
@@ -34,10 +35,10 @@ class RandomSampler(Sampler):
 
     def __init__(
         self,
-        data_source: Any,
+        data_source: Dataset,
         replacement: bool = False,
         num_samples: int | None = None,
-        generator: Any = None,
+        generator: object = None,
     ) -> None:
         self.data_source = data_source
         self.replacement = replacement
@@ -71,7 +72,7 @@ class RandomSampler(Sampler):
 class SubsetRandomSampler(Sampler):
     """Samples elements randomly from a given list of indices."""
 
-    def __init__(self, indices: list[int], generator: Any = None) -> None:
+    def __init__(self, indices: list[int], generator: object = None) -> None:
         self.indices = list(indices)
         self.generator = generator
 
@@ -92,7 +93,7 @@ class WeightedRandomSampler(Sampler):
         weights: list[float],
         num_samples: int,
         replacement: bool = True,
-        generator: Any = None,
+        generator: object = None,
     ) -> None:
         self.weights = list(weights)
         self.num_samples = num_samples

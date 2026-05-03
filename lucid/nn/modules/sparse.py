@@ -2,8 +2,9 @@
 Sparse / embedding modules.
 """
 
-from typing import Any
 import math
+from lucid._tensor.tensor import Tensor
+from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
@@ -23,8 +24,8 @@ class Embedding(Module):
         norm_type: float = 2.0,
         scale_grad_by_freq: bool = False,
         sparse: bool = False,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.num_embeddings = num_embeddings
@@ -35,7 +36,7 @@ class Embedding(Module):
         )
         init.normal_(self.weight)
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return embedding(x, self.weight, self.padding_idx)
 
     def extra_repr(self) -> str:
@@ -61,8 +62,8 @@ class EmbeddingBag(Module):
         mode: str = "mean",
         sparse: bool = False,
         padding_idx: int | None = None,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.num_embeddings = num_embeddings
@@ -74,7 +75,7 @@ class EmbeddingBag(Module):
         )
         init.normal_(self.weight)
 
-    def forward(self, x: Any, offsets: Any = None) -> Any:
+    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
         from lucid._ops import stack

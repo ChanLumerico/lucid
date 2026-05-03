@@ -18,15 +18,15 @@ if TYPE_CHECKING:
 class PackedSequence(NamedTuple):
     """Holds packed padded sequence data."""
 
-    data: Any
-    batch_sizes: Any
-    sorted_indices: Any
-    unsorted_indices: Any
+    data: Tensor
+    batch_sizes: Tensor
+    sorted_indices: Tensor | None
+    unsorted_indices: Tensor | None
 
 
 def pack_padded_sequence(
-    input: Any,
-    lengths: Any,
+    input: Tensor,
+    lengths: Tensor | list[int],
     batch_first: bool = False,
     enforce_sorted: bool = True,
 ) -> PackedSequence:
@@ -124,10 +124,10 @@ def pad_packed_sequence(
 
 
 def pad_sequence(
-    sequences: list[Any],
+    sequences: list[Tensor],
     batch_first: bool = False,
     padding_value: float = 0.0,
-) -> Any:
+) -> Tensor:
     """Pad a list of variable-length tensors."""
     T_max = max(s.shape[0] for s in sequences)
     B = len(sequences)

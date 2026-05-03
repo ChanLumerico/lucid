@@ -2,7 +2,8 @@
 SGD optimizer.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
 from lucid.optim.optimizer import Optimizer
@@ -23,7 +24,7 @@ class SGD(Optimizer):
 
     def __init__(
         self,
-        params: Any,
+        params: object,
         lr: float,
         momentum: float = 0,
         dampening: float = 0,
@@ -39,7 +40,7 @@ class SGD(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         self._engine_optims.append(
             _C_engine.SGD(
                 [_unwrap(p) for p in group["params"]],
@@ -51,9 +52,9 @@ class SGD(Optimizer):
             )
         )
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single SGD step."""
-        loss = closure() if closure is not None else None
+        loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
         return loss

@@ -2,33 +2,30 @@
 autograd.Function: base class for custom differentiable operations.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._tensor.tensor import Tensor
 from lucid.autograd._python_node import _register
-
-if TYPE_CHECKING:
-    pass
 
 
 class FunctionCtx:
     """Context object passed to forward/backward in custom Functions."""
 
     def __init__(self) -> None:
-        self._saved_tensors: list[Any] = []
+        self._saved_tensors: list[Tensor] = []
         self.needs_input_grad: tuple[bool, ...] = ()
-        self._non_differentiable: list[Any] = []
-        self._extra: dict[str, Any] = {}
+        self._non_differentiable: list[Tensor] = []
+        self._extra: dict[str, object] = {}
 
-    def save_for_backward(self, *tensors: Any) -> None:
+    def save_for_backward(self, *tensors: Tensor) -> None:
         """Save tensors to be retrieved in backward()."""
         self._saved_tensors = list(tensors)
 
     @property
-    def saved_tensors(self) -> tuple[Any, ...]:
+    def saved_tensors(self) -> tuple[Tensor, ...]:
         """Return the tensors saved by save_for_backward() as Tensors."""
-        result: list[Any] = []
+        result: list[Tensor] = []
         for t in self._saved_tensors:
             if isinstance(t, _C_engine.TensorImpl):
                 result.append(_wrap(t))
@@ -36,11 +33,11 @@ class FunctionCtx:
                 result.append(t)
         return tuple(result)
 
-    def mark_non_differentiable(self, *tensors: Any) -> None:
+    def mark_non_differentiable(self, *tensors: Tensor) -> None:
         """Mark outputs as non-differentiable."""
         self._non_differentiable = list(tensors)
 
-    def __setattr__(self, name: str, value: Any) -> None:
+    def __setattr__(self, name: str, value: object) -> None:
         if name.startswith("_") or name in ("needs_input_grad",):
             object.__setattr__(self, name, value)
         else:
@@ -49,7 +46,7 @@ class FunctionCtx:
             except AttributeError:
                 self._extra[name] = value
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> object:
         extra = object.__getattribute__(self, "_extra")
         if name in extra:
             return extra[name]
@@ -57,7 +54,7 @@ class FunctionCtx:
 
 
 def _make_apply(cls: type) -> classmethod:
-    def apply(klass: type, *args: Any, **kwargs: Any) -> Any:
+    def apply(klass: type, *args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor, ...]:
         ctx = FunctionCtx()
         ctx.needs_input_grad = tuple(
             isinstance(a, Tensor) and a.requires_grad for a in args
@@ -76,7 +73,7 @@ def _make_apply(cls: type) -> classmethod:
 
 
 class FunctionMeta(type):
-    def __init__(cls, name: str, bases: tuple[type, ...], dct: dict[str, Any]) -> None:
+    def __init__(cls, name: str, bases: tuple[type, ...], dct: dict[str, object]) -> None:
         super().__init__(name, bases, dct)
         if name != "Function":
             cls.apply = _make_apply(cls)
@@ -102,11 +99,11 @@ class Function(metaclass=FunctionMeta):
     """
 
     @staticmethod
-    def forward(ctx: FunctionCtx, *args: Any) -> Any:
+    def forward(ctx: FunctionCtx, *args: Tensor) -> Tensor | tuple[Tensor, ...]:
         """Compute the forward pass. Override in subclasses."""
         raise NotImplementedError
 
     @staticmethod
-    def backward(ctx: FunctionCtx, *grad_outputs: Any) -> Any:
+    def backward(ctx: FunctionCtx, *grad_outputs: Tensor) -> Tensor | tuple[Tensor, ...]:
         """Compute the backward pass. Override in subclasses."""
         raise NotImplementedError

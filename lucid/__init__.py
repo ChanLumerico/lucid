@@ -118,6 +118,10 @@ __all__ = [
     "nn", "optim", "autograd", "linalg",
     "utils", "amp", "profiler", "einops",
     "metal", "backends", "testing",
+    # ── public type aliases ───────────────────────────────────────────────
+    "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
+    "StateDict", "TensorOrScalar",
+    "HasShape", "SupportsNumpyConversion", "SupportsGrad", "TensorLikeProtocol",
 ]
 
 # ── Sets derived from __all__ — used by __getattr__ below ────────────────────
@@ -291,5 +295,27 @@ def __getattr__(name: str) -> object:
 
         _g["dtypes"] = _dtypes
         return _dtypes
+
+    _TYPE_ALIAS_NAMES: frozenset[str] = frozenset([
+        "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
+        "StateDict", "TensorOrScalar",
+        "HasShape", "SupportsNumpyConversion", "SupportsGrad", "TensorLikeProtocol",
+    ])
+    if name in _TYPE_ALIAS_NAMES:
+        from lucid._types import (
+            Scalar, TensorLike, DeviceLike, DTypeLike, ShapeLike,
+            StateDict, TensorOrScalar,
+            HasShape, SupportsNumpyConversion, SupportsGrad, TensorLikeProtocol,
+        )
+        _map2 = {
+            "Scalar": Scalar, "TensorLike": TensorLike,
+            "DeviceLike": DeviceLike, "DTypeLike": DTypeLike,
+            "ShapeLike": ShapeLike, "StateDict": StateDict,
+            "TensorOrScalar": TensorOrScalar,
+            "HasShape": HasShape, "SupportsNumpyConversion": SupportsNumpyConversion,
+            "SupportsGrad": SupportsGrad, "TensorLikeProtocol": TensorLikeProtocol,
+        }
+        _g.update(_map2)
+        return _map2[name]
 
     raise AttributeError(f"module 'lucid' has no attribute '{name}'")

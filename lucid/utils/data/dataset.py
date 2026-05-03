@@ -2,7 +2,7 @@
 Dataset base classes and implementations.
 """
 
-from typing import Any, Iterator, TYPE_CHECKING
+from typing import Iterator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 class Dataset:
     """Abstract base class for datasets. Subclasses must implement __len__ and __getitem__."""
 
-    def __getitem__(self, index: int) -> Any:
+    def __getitem__(self, index: int) -> Tensor | tuple[Tensor, ...]:
         raise NotImplementedError
 
     def __len__(self) -> int:
@@ -24,7 +24,7 @@ class Dataset:
 class IterableDataset:
     """Base class for iterable-style datasets. Subclasses must implement __iter__."""
 
-    def __iter__(self) -> Iterator[Any]:
+    def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
         raise NotImplementedError
 
     def __add__(self, other: IterableDataset) -> IterableDataset:
@@ -34,7 +34,7 @@ class IterableDataset:
 class TensorDataset(Dataset):
     """Dataset wrapping Tensors. Each sample is a tuple of slices along the first dim."""
 
-    def __init__(self, *tensors: Any) -> None:
+    def __init__(self, *tensors: Tensor) -> None:
         if not tensors:
             raise ValueError("TensorDataset requires at least one tensor")
         n = tensors[0].shape[0]
@@ -46,7 +46,7 @@ class TensorDataset(Dataset):
                 )
         self.tensors = tensors
 
-    def __getitem__(self, index: int) -> tuple[Any, ...]:
+    def __getitem__(self, index: int) -> tuple[Tensor, ...]:
         return tuple(t[index] for t in self.tensors)
 
     def __len__(self) -> int:
@@ -72,7 +72,7 @@ class ConcatDataset(Dataset):
     def __len__(self) -> int:
         return self.cumulative_sizes[-1] if self.cumulative_sizes else 0
 
-    def __getitem__(self, idx: int) -> Any:
+    def __getitem__(self, idx: int) -> Tensor | tuple[Tensor, ...]:
         if idx < 0:
             idx = len(self) + idx
         dataset_idx = 0
@@ -98,14 +98,14 @@ class Subset(Dataset):
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __getitem__(self, idx: int) -> Any:
+    def __getitem__(self, idx: int) -> Tensor | tuple[Tensor, ...]:
         return self.dataset[self.indices[idx]]
 
 
 def random_split(
     dataset: Dataset,
     lengths: list[int] | list[float],
-    generator: Any = None,
+    generator: object = None,
 ) -> list[Subset]:
     """Randomly split a dataset into non-overlapping subsets.
 

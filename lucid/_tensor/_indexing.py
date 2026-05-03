@@ -11,7 +11,7 @@ Supported index forms:
 - int Tensor: t[idx]  (advanced integer indexing)
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap, _unwrap
@@ -19,6 +19,7 @@ from lucid._dtype import bool_ as _bool_dtype
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+    from lucid._types import _IndexType, TensorOrScalar
 
 
 def _select_int(impl: _C_engine.TensorImpl, dim: int, i: int) -> _C_engine.TensorImpl:
@@ -80,7 +81,7 @@ def _select_slice(
         return _C_engine.gather(impl, idx_impl, dim)
 
 
-def _getitem(t: Tensor, idx: Any) -> Tensor:
+def _getitem(t: Tensor, idx: _IndexType) -> Tensor:
     impl = t._impl
 
     # bool mask
@@ -101,7 +102,7 @@ def _getitem(t: Tensor, idx: Any) -> Tensor:
 
 def _normalize_and_apply_index(
     impl: _C_engine.TensorImpl,
-    idx_tuple: tuple[Any, ...],
+    idx_tuple: tuple[object, ...],
 ) -> _C_engine.TensorImpl:
     """Apply a normalized index tuple to a TensorImpl."""
     ndim = len(impl.shape)
@@ -112,7 +113,7 @@ def _normalize_and_apply_index(
     ellipsis_len = max(ndim - n_real, 0)
 
     # expand Ellipsis
-    expanded: list[Any] = []
+    expanded: list[int | slice | Tensor | list[int] | None] = []
     for i in idx_tuple:
         if i is ...:
             expanded.extend([slice(None)] * ellipsis_len)
@@ -136,7 +137,7 @@ def _normalize_and_apply_index(
     return impl
 
 
-def _setitem(t: Tensor, idx: Any, value: Any) -> None:
+def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     """In-place assignment: t[idx] = value."""
     if hasattr(value, "_impl"):
         v_impl = value._impl

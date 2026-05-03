@@ -3,7 +3,7 @@ Container modules: Sequential, ModuleList, ModuleDict.
 """
 
 from collections import OrderedDict
-from typing import Any, Iterator, overload
+from typing import Iterator, overload
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._tensor.tensor import Tensor
@@ -17,7 +17,7 @@ class Sequential(Module):
     @overload
     def __init__(self, arg: OrderedDict[str, Module]) -> None: ...
 
-    def __init__(self, *args: Any) -> None:
+    def __init__(self, *args: Module) -> None:
         super().__init__()
         if len(args) == 1 and isinstance(args[0], OrderedDict):
             for key, module in args[0].items():
@@ -26,7 +26,7 @@ class Sequential(Module):
             for idx, module in enumerate(args):
                 self.add_module(str(idx), module)
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         for m in self._modules.values():
             x = m(x)
         return x
@@ -73,7 +73,7 @@ class ModuleList(Module):
         self.add_module(str(len(self._modules)), module)
         return self
 
-    def forward(self, *args: Any) -> Any:
+    def forward(self, *args: object) -> Tensor:
         raise NotImplementedError("ModuleList has no forward; iterate manually.")
 
 
@@ -101,7 +101,7 @@ class ModuleDict(Module):
     def __iter__(self) -> Iterator[str]:
         yield from self._modules.keys()
 
-    def forward(self, *args: Any) -> Any:
+    def forward(self, *args: object) -> Tensor:
         raise NotImplementedError("ModuleDict has no forward; use indexing.")
 
 
@@ -127,7 +127,7 @@ class ParameterList(Module):
         self.register_parameter(str(len(self._parameters)), param)
         return self
 
-    def forward(self, *args: Any) -> Any:
+    def forward(self, *args: object) -> Tensor:
         raise NotImplementedError(
             "ParameterList has no forward(); it is a container for Parameters only. "
             "Access individual parameters via indexing: self.params[i]"
@@ -154,7 +154,7 @@ class ParameterDict(Module):
     def __contains__(self, key: str) -> bool:
         return key in self._parameters
 
-    def forward(self, *args: Any) -> Any:
+    def forward(self, *args: object) -> Tensor:
         raise NotImplementedError(
             "ParameterDict has no forward(); it is a container for Parameters only. "
             "Access individual parameters via key: self.params['key']"

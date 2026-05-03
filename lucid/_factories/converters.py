@@ -2,7 +2,7 @@
 Conversion utilities: Python objects / NumPy arrays -> TensorImpl.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 import numpy as np
 
 from lucid._C import engine as _C_engine
@@ -36,7 +36,7 @@ def _np_dtype_to_engine(np_dtype: np.dtype) -> _C_engine.Dtype:  # type: ignore[
 
 
 def _to_impl(
-    data: Any,
+    data: object,
     *,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
@@ -109,7 +109,7 @@ def _engine_dtype_to_np(d: _C_engine.Dtype) -> str:
 
 
 def tensor(
-    data: Any,
+    data: object,
     *,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
@@ -124,7 +124,7 @@ def tensor(
 
 
 def as_tensor(
-    data: Any,
+    data: object,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
 ) -> Tensor:

@@ -2,11 +2,11 @@
 Optimizer base class.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import Iterable
 
-if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
-    from lucid.nn.parameter import Parameter
+from lucid._tensor.tensor import Tensor
+from lucid._types import _OptimizerClosure
+from lucid.nn.parameter import Parameter
 
 
 class Optimizer:
@@ -19,34 +19,34 @@ class Optimizer:
 
     def __init__(
         self,
-        params: list["Parameter"] | list[dict[str, Any]],
-        defaults: dict[str, Any],
+        params: Iterable[Parameter] | Iterable[dict[str, object]],
+        defaults: dict[str, object],
     ) -> None:
         if (
             isinstance(params, (list, tuple))
             and len(params) > 0
             and isinstance(params[0], dict)
         ):
-            param_groups: list[dict[str, Any]] = list(params)  # type: ignore[arg-type]
+            param_groups: list[dict[str, object]] = list(params)  # type: ignore[arg-type]
         else:
             param_groups = [{"params": list(params)}]  # type: ignore[arg-type]
 
-        self.param_groups: list[dict[str, Any]] = []
-        self._engine_optims: list[Any] = []
-        self.state: dict[str, Any] = {}
+        self.param_groups: list[dict[str, object]] = []
+        self._engine_optims: list[object] = []
+        self.state: dict[str, object] = {}
         self.defaults = defaults
 
         for group in param_groups:
             self.add_param_group(group)
 
-    def add_param_group(self, group: dict[str, Any]) -> None:
+    def add_param_group(self, group: dict[str, object]) -> None:
         """Add a parameter group, creating one new engine optimizer for it."""
-        merged: dict[str, Any] = {**self.defaults, **group}
+        merged: dict[str, object] = {**self.defaults, **group}
         merged["params"] = list(merged["params"])
         self.param_groups.append(merged)
         self._append_engine_optim(merged)
 
-    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
         """Create and append one engine optimizer for a single param group.
 
         Override in subclasses. Base is a no-op so Optimizer can be subclassed
@@ -82,7 +82,7 @@ class Optimizer:
                     else:
                         p._impl.zero_grad()
 
-    def step(self, closure: Any = None) -> Any:
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single optimization step.
 
         Subclasses must override this to update parameters from their
@@ -95,11 +95,11 @@ class Optimizer:
             "Subclasses of Optimizer must override step()."
         )
 
-    def state_dict(self) -> dict[str, Any]:
+    def state_dict(self) -> dict[str, object]:
         """Return the optimizer state as a dict."""
         return {"state": self.state, "param_groups": self.param_groups}
 
-    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
         """Load optimizer state."""
         self.state = state_dict["state"]
         for g_new, g_old in zip(self.param_groups, state_dict["param_groups"]):

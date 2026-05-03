@@ -2,19 +2,17 @@
 Bridge between Python autograd.Function and the C++ engine's backward graph.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import Tensor
 
-if TYPE_CHECKING:
-    pass
 
 
 def _register(
     output: Tensor,
     fn_class: type,
-    py_ctx: Any,
+    py_ctx: object,
     tensor_inputs: list[Tensor],
 ) -> None:
     """
@@ -26,14 +24,14 @@ def _register(
     # C++ FunctionCtx — used as a carrier; C++ engine needs it to be non-null
     cpp_ctx = _C_engine.FunctionCtx()
 
-    def backward_fn(_cpp_ctx: Any, grad_impl: _C_engine.TensorImpl) -> list[Any]:
+    def backward_fn(_cpp_ctx: object, grad_impl: _C_engine.TensorImpl) -> list[_C_engine.TensorImpl]:
         """Called by C++ engine: (cpp_ctx, grad_impl) → list[TensorImpl | None]"""
         grad_tensor = _wrap(grad_impl)
         grads = fn_class.backward(py_ctx, grad_tensor)
         if not isinstance(grads, (list, tuple)):
             grads = [grads]
 
-        result: list[Any] = []
+        result: list[_C_engine.TensorImpl] = []
         for g in grads:
             if g is None:
                 result.append(None)

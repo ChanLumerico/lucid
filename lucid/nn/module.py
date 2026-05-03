@@ -3,15 +3,15 @@ nn.Module: base class for all neural network layers.
 """
 
 from collections import OrderedDict
-from typing import Any, Callable, Iterator, Self, TYPE_CHECKING
+from typing import Callable, ClassVar, Final, Iterator, Self, TYPE_CHECKING
 
 from lucid._tensor.tensor import Tensor
 from lucid.nn.parameter import Parameter
 from lucid.nn.hooks import RemovableHandle
-from lucid.nn._state_dict import _save_to_state_dict, _load_from_state_dict
+from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _BackwardHook
+# _state_dict is imported lazily inside state_dict()/load_state_dict() to
+# break the Module ↔ _state_dict circular dependency.
 
-if TYPE_CHECKING:
-    pass
 
 _HOOK_ID = 0
 
@@ -66,11 +66,11 @@ class Module:
         object.__setattr__(self, "_backward_hooks", OrderedDict())
         object.__setattr__(self, "training", True)
 
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
+    def forward(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
         """Override in subclasses to define the computation."""
         raise NotImplementedError(f"{type(self).__name__}.forward() not implemented")
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
         # pre-hooks
         for hook in self._forward_pre_hooks.values():
             result = hook(self, args)
@@ -84,7 +84,7 @@ class Module:
                 output = hook_out
         return output
 
-    def __setattr__(self, name: str, value: Any) -> None:
+    def __setattr__(self, name: str, value: object) -> None:
         # Remove from existing dicts before re-routing
         for d in (self._parameters, self._buffers, self._modules):
             if name in d:
@@ -97,7 +97,7 @@ class Module:
         else:
             object.__setattr__(self, name, value)
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Tensor | Parameter | Module:
         p = object.__getattribute__(self, "_parameters")
         if name in p:
             return p[name]
@@ -267,7 +267,7 @@ class Module:
             self._buffers[key] = fn(buf)
         return self
 
-    def to(self, *args: Any, **kwargs: Any) -> Self:
+    def to(self, *args: object, **kwargs: object) -> Self:
         """Move/cast all parameters and buffers, preserving Parameter object identity."""
 
         def _convert(t: Tensor) -> Tensor:
@@ -333,7 +333,7 @@ class Module:
         """No-op on Apple Silicon (unified memory is always shared)."""
         return self
 
-    def compile(self, *args: Any, **kwargs: Any) -> None:
+    def compile(self, *args: object, **kwargs: object) -> None:
         """Not implemented: JIT compilation is out of scope for this release."""
         raise NotImplementedError(
             "compile() is not available in this release. "
@@ -342,11 +342,11 @@ class Module:
 
     # ── extra state ───────────────────────────────────────────────────────
 
-    def get_extra_state(self) -> Any:
+    def get_extra_state(self) -> object:
         """Return extra state to include in state_dict. Override in subclasses."""
         return None
 
-    def set_extra_state(self, state: Any) -> None:
+    def set_extra_state(self, state: object) -> None:
         """Restore extra state loaded from state_dict. Override in subclasses."""
         pass
 
@@ -356,29 +356,31 @@ class Module:
         self, *, prefix: str = "", keep_vars: bool = False
     ) -> dict[str, Tensor]:
         """Return a dict mapping parameter/buffer names to tensors."""
+        from lucid.nn._state_dict import _save_to_state_dict
         return _save_to_state_dict(self, prefix=prefix, keep_vars=keep_vars)
 
     def load_state_dict(
         self, state_dict: dict[str, Tensor], strict: bool = True
     ) -> tuple[list[str], list[str]]:
         """Load parameters from a state_dict. Returns (missing_keys, unexpected_keys)."""
+        from lucid.nn._state_dict import _load_from_state_dict
         return _load_from_state_dict(self, state_dict, strict=strict)
 
     # ── hooks ─────────────────────────────────────────────────────────────
 
-    def register_forward_pre_hook(self, hook: Callable[..., Any]) -> RemovableHandle:
+    def register_forward_pre_hook(self, hook: _ForwardPreHook) -> RemovableHandle:
         """Register a hook called before forward(). Signature: hook(module, args) -> args | None."""
         key = _next_hook_id()
         self._forward_pre_hooks[key] = hook
         return RemovableHandle(self._forward_pre_hooks, key)
 
-    def register_forward_hook(self, hook: Callable[..., Any]) -> RemovableHandle:
+    def register_forward_hook(self, hook: _ForwardHook) -> RemovableHandle:
         """Register a hook called after forward(). Signature: hook(module, args, output) -> output | None."""
         key = _next_hook_id()
         self._forward_hooks[key] = hook
         return RemovableHandle(self._forward_hooks, key)
 
-    def register_full_backward_hook(self, hook: Callable[..., None]) -> RemovableHandle:
+    def register_full_backward_hook(self, hook: _BackwardHook) -> RemovableHandle:
         """Register a backward hook. Returns a RemovableHandle."""
         key = _next_hook_id()
         self._backward_hooks[key] = hook

@@ -2,7 +2,8 @@
 Activation function modules.
 """
 
-from typing import Any
+from lucid._tensor.tensor import Tensor
+from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import full
@@ -39,7 +40,7 @@ class ReLU(Module):
         super().__init__()
         self.inplace = inplace
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return relu(x, self.inplace)
 
     def extra_repr(self) -> str:
@@ -54,7 +55,7 @@ class LeakyReLU(Module):
         self.negative_slope = negative_slope
         self.inplace = inplace
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return leaky_relu(x, self.negative_slope, self.inplace)
 
     def extra_repr(self) -> str:
@@ -69,7 +70,7 @@ class ELU(Module):
         self.alpha = alpha
         self.inplace = inplace
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return elu(x, self.alpha, self.inplace)
 
     def extra_repr(self) -> str:
@@ -83,7 +84,7 @@ class SELU(Module):
         super().__init__()
         self.inplace = inplace
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return selu(x, self.inplace)
 
 
@@ -94,7 +95,7 @@ class GELU(Module):
         super().__init__()
         self.approximate = approximate
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return gelu(x, self.approximate)
 
     def extra_repr(self) -> str:
@@ -107,42 +108,42 @@ class SiLU(Module):
     def __init__(self, inplace: bool = False) -> None:
         super().__init__()
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return silu(x)
 
 
 class Mish(Module):
     """Mish activation."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return mish(x)
 
 
 class Hardswish(Module):
     """Hard Swish activation."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return hardswish(x)
 
 
 class Hardsigmoid(Module):
     """Hard sigmoid activation."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return hardsigmoid(x)
 
 
 class Sigmoid(Module):
     """Sigmoid activation."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return sigmoid(x)
 
 
 class Tanh(Module):
     """Hyperbolic tangent."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return tanh(x)
 
 
@@ -153,7 +154,7 @@ class Softmax(Module):
         super().__init__()
         self.dim = dim
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return softmax(x, self.dim)
 
     def extra_repr(self) -> str:
@@ -167,7 +168,7 @@ class LogSoftmax(Module):
         super().__init__()
         self.dim = dim
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return log_softmax(x, self.dim)
 
     def extra_repr(self) -> str:
@@ -180,7 +181,7 @@ class ReLU6(Module):
     def __init__(self, inplace: bool = False) -> None:
         super().__init__()
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return relu6(x)
 
 
@@ -191,8 +192,8 @@ class PReLU(Module):
         self,
         num_parameters: int = 1,
         init: float = 0.25,
-        device: Any = None,
-        dtype: Any = None,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
         self.num_parameters = num_parameters
@@ -200,7 +201,7 @@ class PReLU(Module):
             full((num_parameters,), init, dtype=dtype, device=device)
         )
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return prelu(x, self.weight)
 
     def extra_repr(self) -> str:
@@ -215,7 +216,7 @@ class Threshold(Module):
         self.threshold = threshold
         self.value = value
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         impl = _unwrap(x)
         fill = _C_engine.full(impl.shape, self.value, impl.dtype, impl.device)
         thresh = _C_engine.full(impl.shape, self.threshold, impl.dtype, impl.device)
@@ -236,7 +237,7 @@ class Hardtanh(Module):
         self.min_val = min_val
         self.max_val = max_val
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         impl = _unwrap(x)
         return _wrap(_C_engine.clip(impl, self.min_val, self.max_val))
 
@@ -247,14 +248,14 @@ class Hardtanh(Module):
 class LogSigmoid(Module):
     """Log-sigmoid: log(sigmoid(x))."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return _wrap(_C_engine.log(_C_engine.sigmoid(_unwrap(x))))
 
 
 class Softsign(Module):
     """Softsign: x / (1 + |x|)."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         impl = _unwrap(x)
         denom = _C_engine.add(
             _C_engine.full(impl.shape, 1.0, impl.dtype, impl.device),
@@ -270,7 +271,7 @@ class Softmin(Module):
         super().__init__()
         self.dim = dim
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return softmin(x, self.dim)
 
     def extra_repr(self) -> str:
@@ -284,7 +285,7 @@ class GLU(Module):
         super().__init__()
         self.dim = dim
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return glu(x, self.dim)
 
     def extra_repr(self) -> str:
@@ -298,7 +299,7 @@ class CELU(Module):
         super().__init__()
         self.alpha = alpha
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return celu(x, self.alpha)
 
     def extra_repr(self) -> str:
@@ -312,7 +313,7 @@ class Hardshrink(Module):
         super().__init__()
         self.lambd = lambd
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return hardshrink(x, self.lambd)
 
     def extra_repr(self) -> str:
@@ -322,5 +323,5 @@ class Hardshrink(Module):
 class Tanhshrink(Module):
     """Tanhshrink: x - tanh(x)."""
 
-    def forward(self, x: Any) -> Any:
+    def forward(self, x: Tensor) -> Tensor:
         return tanhshrink(x)

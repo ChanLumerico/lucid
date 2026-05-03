@@ -2,7 +2,7 @@
 Tensor creation functions: zeros, ones, empty, full, eye, arange, linspace, *_like.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap, _impl_with_grad
 from lucid._dtype import dtype
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _size_to_list(*size: Any) -> list[int]:
+def _size_to_list(*size: int | tuple[int, ...]) -> list[int]:
     """Normalize size args: zeros(2,3) or zeros((2,3)) → [2, 3]."""
     if len(size) == 1 and isinstance(size[0], (list, tuple)):
         return list(size[0])
@@ -19,7 +19,7 @@ def _size_to_list(*size: Any) -> list[int]:
 
 
 def zeros(
-    *size: Any,
+    *size: int | tuple[int, ...],
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
     requires_grad: bool = False,
@@ -54,7 +54,7 @@ def zeros(
 
 
 def ones(
-    *size: Any,
+    *size: int | tuple[int, ...],
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
     requires_grad: bool = False,
@@ -84,7 +84,7 @@ def ones(
 
 
 def empty(
-    *size: Any,
+    *size: int | tuple[int, ...],
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
     requires_grad: bool = False,
