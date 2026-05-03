@@ -1,9 +1,9 @@
-from typing import TYPE_CHECKING, Self, Any
+from typing import TYPE_CHECKING, Self, Any, Iterator
 
 import numpy as np
 
 from lucid._C import engine as _C_engine
-from lucid._dtype import dtype, _ENGINE_TO_DTYPE
+from lucid._dtype import dtype, _ENGINE_TO_DTYPE, float16, float32, float64, bfloat16, complex64
 from lucid._device import device, _device_from_engine
 
 if TYPE_CHECKING:
@@ -252,6 +252,96 @@ class Tensor:
 
     # hash: identity-based so tensors can be used as dict keys
     __hash__ = object.__hash__  # type: ignore[assignment]
+
+    # ── iteration & formatting ────────────────────────────────────────────────
+
+    def __iter__(self) -> Iterator[Self]:
+        """Iterate over the first dimension (raises for 0-d tensors)."""
+        if not self._impl.shape:
+            raise TypeError("iteration over a 0-d tensor")
+        for i in range(self._impl.shape[0]):
+            yield self[i]  # type: ignore[misc]
+
+    def __format__(self, format_spec: str) -> str:
+        if self._impl.numel() == 1:
+            return format(self.item(), format_spec)
+        return repr(self)
+
+    # ── new_* convenience constructors ────────────────────────────────────────
+
+    def new_empty(self, *size: int, dtype: dtype | None = None,
+                  device: device | str | None = None,
+                  requires_grad: bool = False) -> Self:
+        """Return an uninitialized tensor with the given size, inheriting dtype/device."""
+        from lucid._factories.creation import empty as _empty
+        _dtype = dtype or self.dtype
+        _device = device or self.device
+        return _empty(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
+                      requires_grad=requires_grad)
+
+    def new_zeros(self, *size: int, dtype: dtype | None = None,
+                  device: device | str | None = None,
+                  requires_grad: bool = False) -> Self:
+        """Return a zeros tensor with the given size, inheriting dtype/device."""
+        from lucid._factories.creation import zeros as _zeros
+        _dtype = dtype or self.dtype
+        _device = device or self.device
+        return _zeros(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
+                      requires_grad=requires_grad)
+
+    def new_ones(self, *size: int, dtype: dtype | None = None,
+                 device: device | str | None = None,
+                 requires_grad: bool = False) -> Self:
+        """Return an all-ones tensor with the given size, inheriting dtype/device."""
+        from lucid._factories.creation import ones as _ones
+        _dtype = dtype or self.dtype
+        _device = device or self.device
+        return _ones(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
+                     requires_grad=requires_grad)
+
+    def new_full(self, size: tuple[int, ...], fill_value: float,
+                 dtype: dtype | None = None,
+                 device: device | str | None = None,
+                 requires_grad: bool = False) -> Self:
+        """Return a tensor filled with fill_value, inheriting dtype/device."""
+        from lucid._factories.creation import full as _full
+        _dtype = dtype or self.dtype
+        _device = device or self.device
+        return _full(size, fill_value, dtype=_dtype, device=_device,  # type: ignore[return-value]
+                     requires_grad=requires_grad)
+
+    def new_tensor(self, data: Any, dtype: dtype | None = None,
+                   device: device | str | None = None,
+                   requires_grad: bool = False) -> Self:
+        """Return a new tensor from data, inheriting dtype/device."""
+        from lucid._factories.converters import tensor as _tensor
+        _dtype = dtype or self.dtype
+        _device = device or self.device
+        return _tensor(data, dtype=_dtype, device=_device,  # type: ignore[return-value]
+                       requires_grad=requires_grad)
+
+    # ── size / element info ───────────────────────────────────────────────────
+
+    def element_size(self) -> int:
+        """Return the size of each element in bytes."""
+        return self.dtype.itemsize
+
+    @property
+    def nbytes(self) -> int:
+        """Total number of bytes consumed by the tensor data."""
+        return self._impl.numel() * self.dtype.itemsize
+
+    def is_floating_point(self) -> bool:
+        """Return True if the dtype is a floating-point type."""
+        return self.dtype in (float16, float32, float64, bfloat16)
+
+    def is_complex(self) -> bool:
+        """Return True if the dtype is complex."""
+        return self.dtype is complex64
+
+    def share_memory_(self) -> Self:
+        """No-op: Apple Silicon uses unified memory — all tensors share memory."""
+        return self
 
     # ── zero_() helper ───────────────────────────────────────────────────────
 
