@@ -2,6 +2,7 @@ from lucid.nn.functional.activations import (
     relu,
     leaky_relu,
     elu,
+    celu,
     selu,
     gelu,
     silu,
@@ -17,6 +18,8 @@ from lucid.nn.functional.activations import (
     softmin,
     glu,
     prelu,
+    hardshrink,
+    tanhshrink,
     normalize,
     cosine_similarity,
     pairwise_distance,
@@ -40,11 +43,16 @@ from lucid.nn.functional.normalization import (
 from lucid.nn.functional.pooling import (
     max_pool1d,
     max_pool2d,
+    max_pool3d,
     avg_pool1d,
     avg_pool2d,
+    avg_pool3d,
     adaptive_avg_pool1d,
     adaptive_avg_pool2d,
+    adaptive_avg_pool3d,
     adaptive_max_pool2d,
+    adaptive_max_pool1d,
+    adaptive_max_pool3d,
 )
 from lucid.nn.functional.dropout import dropout, dropout2d
 from lucid.nn.functional.attention import scaled_dot_product_attention
@@ -58,6 +66,13 @@ from lucid.nn.functional.loss import (
     binary_cross_entropy,
     binary_cross_entropy_with_logits,
     kl_div,
+    triplet_margin_loss,
+    cosine_embedding_loss,
+    margin_ranking_loss,
+    hinge_embedding_loss,
+    poisson_nll_loss,
+    gaussian_nll_loss,
+    ctc_loss,
 )
 from lucid.nn.functional.sparse import embedding, one_hot
 from lucid.nn.functional.sampling import (
@@ -69,9 +84,11 @@ from lucid.nn.functional.sampling import (
 )
 
 __all__ = [
+    # activations
     "relu",
     "leaky_relu",
     "elu",
+    "celu",
     "selu",
     "gelu",
     "silu",
@@ -87,32 +104,46 @@ __all__ = [
     "softmin",
     "glu",
     "prelu",
+    "hardshrink",
+    "tanhshrink",
     "normalize",
     "cosine_similarity",
     "pairwise_distance",
+    # linear
     "linear",
     "bilinear",
+    # conv
     "conv1d",
     "conv2d",
     "conv3d",
     "conv_transpose1d",
     "conv_transpose2d",
     "conv_transpose3d",
+    # norm
     "batch_norm",
     "layer_norm",
     "group_norm",
     "rms_norm",
     "instance_norm",
+    # pooling
     "max_pool1d",
     "max_pool2d",
+    "max_pool3d",
     "avg_pool1d",
     "avg_pool2d",
+    "avg_pool3d",
     "adaptive_avg_pool1d",
     "adaptive_avg_pool2d",
+    "adaptive_avg_pool3d",
     "adaptive_max_pool2d",
+    "adaptive_max_pool1d",
+    "adaptive_max_pool3d",
+    # dropout
     "dropout",
     "dropout2d",
+    # attention
     "scaled_dot_product_attention",
+    # losses
     "mse_loss",
     "l1_loss",
     "smooth_l1_loss",
@@ -122,8 +153,17 @@ __all__ = [
     "binary_cross_entropy",
     "binary_cross_entropy_with_logits",
     "kl_div",
+    "triplet_margin_loss",
+    "cosine_embedding_loss",
+    "margin_ranking_loss",
+    "hinge_embedding_loss",
+    "poisson_nll_loss",
+    "gaussian_nll_loss",
+    "ctc_loss",
+    # sparse
     "embedding",
     "one_hot",
+    # sampling
     "interpolate",
     "grid_sample",
     "affine_grid",

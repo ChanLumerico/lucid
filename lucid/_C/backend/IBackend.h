@@ -600,6 +600,23 @@ public:
                                             const Shape& vt_shape,
                                             Dtype dt) = 0;
 
+    // LU factorisation (packed format).  Returns {LU, pivots} where LU is
+    // the packed n×n matrix (LAPACK dgetrf_ format) and pivots is an n-element
+    // I32 tensor of 1-based pivot indices.
+    virtual StoragePair linalg_lu_factor(const Storage& a,
+                                         const Shape& shape,
+                                         Dtype dt) = 0;
+
+    // Triangular solve: solve A X = B where A is triangular.
+    // upper=true → upper triangular; unit=true → unit diagonal.
+    virtual Storage linalg_solve_triangular(const Storage& a,
+                                             const Storage& b,
+                                             const Shape& a_shape,
+                                             const Shape& b_shape,
+                                             bool upper,
+                                             bool unitriangular,
+                                             Dtype dt) = 0;
+
     // Broadcasts `a` from src_shape to dst_shape following NumPy rules.
     virtual Storage
     broadcast(const Storage& a, const Shape& src_shape, const Shape& dst_shape, Dtype dt) = 0;

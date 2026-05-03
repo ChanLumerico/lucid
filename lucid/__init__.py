@@ -20,6 +20,7 @@ try:
 except (TypeError, ValueError):
     pass  # Mocked during docs build — skip ABI check
 
+# fmt: off
 from lucid._dtype import (
     dtype,
     float16,
@@ -226,6 +227,11 @@ __all__ = [
     "is_grad_enabled",
     "set_grad_enabled",
     "inference_mode",
+    # ── Tensor type predicates ────────────────────────────────────────────
+    "is_tensor",
+    "is_floating_point",
+    "is_complex",
+    "is_signed",
     # ── Serialization ─────────────────────────────────────────────────────
     "save",
     "load",
@@ -403,6 +409,7 @@ _SUBPKG_NAMES: frozenset[str] = frozenset(
         "testing",
     ]
 )
+# fmt: on
 
 
 def __getattr__(name: str) -> object:
@@ -448,6 +455,57 @@ def __getattr__(name: str) -> object:
         }
         _g.update(_map)
         return _map[name]
+
+    if name in ("is_tensor", "is_floating_point", "is_complex", "is_signed"):
+        from lucid._C import engine as _ce
+        from lucid._dtype import (
+            float16,
+            bfloat16,
+            float32,
+            float64,
+            complex64,
+            int8,
+            int16,
+            int32,
+            int64,
+            bool_,
+        )
+
+        _FLOAT_DTYPES = frozenset([_ce.F16, _ce.F32, _ce.F64])
+        _COMPLEX_DTYPES = frozenset([_ce.C64])
+        _SIGNED_DTYPES = frozenset(
+            [_ce.F16, _ce.F32, _ce.F64, _ce.C64, _ce.I8, _ce.I16, _ce.I32, _ce.I64]
+        )
+
+        def is_tensor(obj) -> bool:  # type: ignore
+            """Return True if *obj* is a lucid Tensor."""
+            from lucid._tensor.tensor import Tensor as _T
+
+            return isinstance(obj, _T)
+
+        def is_floating_point(t) -> bool:  # type: ignore
+            """Return True if *t* has a floating-point dtype."""
+            from lucid._dispatch import _unwrap
+
+            return _unwrap(t).dtype in _FLOAT_DTYPES
+
+        def is_complex(t) -> bool:  # type: ignore
+            """Return True if *t* has a complex dtype."""
+            from lucid._dispatch import _unwrap
+
+            return _unwrap(t).dtype in _COMPLEX_DTYPES
+
+        def is_signed(t) -> bool:  # type: ignore
+            """Return True if *t* has a signed numeric dtype."""
+            from lucid._dispatch import _unwrap
+
+            return _unwrap(t).dtype in _SIGNED_DTYPES
+
+        _g["is_tensor"] = is_tensor
+        _g["is_floating_point"] = is_floating_point
+        _g["is_complex"] = is_complex
+        _g["is_signed"] = is_signed
+        return _g[name]
 
     if name in ("save", "load"):
         import lucid.serialization as _ser

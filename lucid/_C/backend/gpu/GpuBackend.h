@@ -46,10 +46,12 @@
 #include <mlx/linalg.h>
 #include <mlx/ops.h>
 
+#include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Shape.h"
 #include "../Dispatcher.h"
 #include "../IBackend.h"
+#include "../cpu/Lapack.h"
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
 #include "MlxBridge.h"
@@ -1517,6 +1519,87 @@ public:
         for (auto& p : pieces)
             out.push_back(Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(p), dt)});
         return out;
+    }
+
+    // lu_factor: MLX has no packed-LU API; copy to CPU and use LAPACK.
+    StoragePair linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto cpu_arr = ::mlx::core::contiguous(*ga.arr);
+        cpu_arr.eval();
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        std::int64_t batch = 1;
+        for (std::size_t i = 0; i + 2 < shape.size(); ++i)
+            batch *= static_cast<std::int64_t>(shape[i]);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        const std::size_t nbytes = static_cast<std::size_t>(batch) * per_mat * dtype_size(dt);
+        const std::size_t ipiv_nbytes = static_cast<std::size_t>(batch) * n * sizeof(std::int32_t);
+        auto lu_ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        auto ipiv_ptr = allocate_aligned_bytes(ipiv_nbytes, Device::CPU);
+        auto* ipiv_out = reinterpret_cast<std::int32_t*>(ipiv_ptr.get());
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const float* src = cpu_arr.data<float>();
+            float* lu_p = reinterpret_cast<float*>(lu_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                std::vector<int> ipiv_local(n);
+                cpu::lapack_lu_factor_f32(src + b * per_mat, n,
+                                          lu_p + b * per_mat, ipiv_local.data(), &info);
+                for (int i = 0; i < n; ++i)
+                    ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
+            }
+        } else {
+            const double* src = cpu_arr.data<double>();
+            double* lu_p = reinterpret_cast<double*>(lu_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                std::vector<int> ipiv_local(n);
+                cpu::lapack_lu_factor_f64(src + b * per_mat, n,
+                                          lu_p + b * per_mat, ipiv_local.data(), &info);
+                for (int i = 0; i < n; ++i)
+                    ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
+            }
+        }
+        return {Storage{CpuStorage{lu_ptr, nbytes, dt}},
+                Storage{CpuStorage{ipiv_ptr, ipiv_nbytes, Dtype::I32}}};
+    }
+
+    // solve_triangular: delegate to CPU LAPACK (MLX has no native dtrtrs).
+    Storage linalg_solve_triangular(const Storage& a,
+                                     const Storage& b,
+                                     const Shape& a_shape,
+                                     const Shape& b_shape,
+                                     bool upper,
+                                     bool unitriangular,
+                                     Dtype dt) override {
+        const auto& ga_a = std::get<GpuStorage>(a);
+        const auto& ga_b = std::get<GpuStorage>(b);
+        auto ca = ::mlx::core::contiguous(*ga_a.arr); ca.eval();
+        auto cb = ::mlx::core::contiguous(*ga_b.arr); cb.eval();
+        const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
+        const bool b_is_vec = (b_shape.size() == a_shape.size() - 1);
+        const int nrhs = b_is_vec ? 1 : static_cast<int>(b_shape[b_shape.size() - 1]);
+        std::int64_t batch = 1;
+        for (std::size_t i = 0; i + 2 < a_shape.size(); ++i)
+            batch *= static_cast<std::int64_t>(a_shape[i]);
+        const std::size_t a_per = static_cast<std::size_t>(n) * n;
+        const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
+        const std::size_t out_bytes = cb.nbytes();
+        auto out_ptr = allocate_aligned_bytes(out_bytes, Device::CPU);
+        std::memcpy(out_ptr.get(), cb.data<void>(), out_bytes);
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const float* a_p = ca.data<float>();
+            float* x_p = reinterpret_cast<float*>(out_ptr.get());
+            for (std::int64_t bi = 0; bi < batch; ++bi)
+                cpu::lapack_solve_triangular_f32(a_p + bi * a_per, x_p + bi * b_per,
+                                                 n, nrhs, upper, unitriangular, &info);
+        } else {
+            const double* a_p = ca.data<double>();
+            double* x_p = reinterpret_cast<double*>(out_ptr.get());
+            for (std::int64_t bi = 0; bi < batch; ++bi)
+                cpu::lapack_solve_triangular_f64(a_p + bi * a_per, x_p + bi * b_per,
+                                                 n, nrhs, upper, unitriangular, &info);
+        }
+        return Storage{CpuStorage{out_ptr, out_bytes, dt}};
     }
 
     Storage

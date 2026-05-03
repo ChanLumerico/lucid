@@ -14,6 +14,13 @@ from lucid.nn.functional.loss import (
     huber_loss,
     smooth_l1_loss,
     kl_div,
+    triplet_margin_loss,
+    cosine_embedding_loss,
+    margin_ranking_loss,
+    hinge_embedding_loss,
+    poisson_nll_loss,
+    gaussian_nll_loss,
+    ctc_loss,
 )
 
 
@@ -166,3 +173,153 @@ class KLDivLoss(Module):
 
     def extra_repr(self) -> str:
         return f"reduction={self.reduction!r}, log_target={self.log_target}"
+
+
+class TripletMarginLoss(Module):
+    """Triplet margin loss."""
+
+    def __init__(
+        self,
+        margin: float = 1.0,
+        p: float = 2.0,
+        eps: float = 1e-6,
+        swap: bool = False,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__()
+        self.margin = margin
+        self.p = p
+        self.eps = eps
+        self.swap = swap
+        self.reduction = reduction
+
+    def forward(self, anchor: Any, positive: Any, negative: Any) -> Any:
+        return triplet_margin_loss(
+            anchor, positive, negative,
+            margin=self.margin, p=self.p, eps=self.eps,
+            swap=self.swap, reduction=self.reduction,
+        )
+
+    def extra_repr(self) -> str:
+        return f"margin={self.margin}, p={self.p}, reduction={self.reduction!r}"
+
+
+class CosineEmbeddingLoss(Module):
+    """Cosine embedding loss."""
+
+    def __init__(self, margin: float = 0.0, reduction: str = "mean") -> None:
+        super().__init__()
+        self.margin = margin
+        self.reduction = reduction
+
+    def forward(self, x1: Any, x2: Any, y: Any) -> Any:
+        return cosine_embedding_loss(x1, x2, y, margin=self.margin, reduction=self.reduction)
+
+    def extra_repr(self) -> str:
+        return f"margin={self.margin}, reduction={self.reduction!r}"
+
+
+class MarginRankingLoss(Module):
+    """Margin ranking loss: max(0, -y*(x1-x2) + margin)."""
+
+    def __init__(self, margin: float = 0.0, reduction: str = "mean") -> None:
+        super().__init__()
+        self.margin = margin
+        self.reduction = reduction
+
+    def forward(self, x1: Any, x2: Any, y: Any) -> Any:
+        return margin_ranking_loss(x1, x2, y, margin=self.margin, reduction=self.reduction)
+
+    def extra_repr(self) -> str:
+        return f"margin={self.margin}, reduction={self.reduction!r}"
+
+
+class HingeEmbeddingLoss(Module):
+    """Hinge embedding loss."""
+
+    def __init__(self, margin: float = 1.0, reduction: str = "mean") -> None:
+        super().__init__()
+        self.margin = margin
+        self.reduction = reduction
+
+    def forward(self, x: Any, y: Any) -> Any:
+        return hinge_embedding_loss(x, y, margin=self.margin, reduction=self.reduction)
+
+    def extra_repr(self) -> str:
+        return f"margin={self.margin}, reduction={self.reduction!r}"
+
+
+class PoissonNLLLoss(Module):
+    """Poisson negative log-likelihood loss."""
+
+    def __init__(
+        self,
+        log_input: bool = True,
+        full: bool = False,
+        eps: float = 1e-8,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__()
+        self.log_input = log_input
+        self.full = full
+        self.eps = eps
+        self.reduction = reduction
+
+    def forward(self, x: Any, target: Any) -> Any:
+        return poisson_nll_loss(
+            x, target, log_input=self.log_input, full=self.full,
+            eps=self.eps, reduction=self.reduction,
+        )
+
+    def extra_repr(self) -> str:
+        return f"log_input={self.log_input}, reduction={self.reduction!r}"
+
+
+class GaussianNLLLoss(Module):
+    """Gaussian negative log-likelihood loss."""
+
+    def __init__(
+        self,
+        full: bool = False,
+        eps: float = 1e-6,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__()
+        self.full = full
+        self.eps = eps
+        self.reduction = reduction
+
+    def forward(self, x: Any, target: Any, var: Any) -> Any:
+        return gaussian_nll_loss(
+            x, target, var, full=self.full, eps=self.eps, reduction=self.reduction
+        )
+
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"
+
+
+class CTCLoss(Module):
+    """Connectionist Temporal Classification loss."""
+
+    def __init__(
+        self,
+        blank: int = 0,
+        reduction: str = "mean",
+        zero_infinity: bool = False,
+    ) -> None:
+        super().__init__()
+        self.blank = blank
+        self.reduction = reduction
+        self.zero_infinity = zero_infinity
+
+    def forward(
+        self, log_probs: Any, targets: Any, input_lengths: Any, target_lengths: Any
+    ) -> Any:
+        return ctc_loss(
+            log_probs, targets, input_lengths, target_lengths,
+            blank=self.blank, reduction=self.reduction,
+            zero_infinity=self.zero_infinity,
+        )
+
+    def extra_repr(self) -> str:
+        return f"blank={self.blank}, reduction={self.reduction!r}"

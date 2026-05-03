@@ -3700,6 +3700,95 @@ public:
                 Storage{CpuStorage{vt_ptr, vt_nbytes, dt}}};
     }
 
+    StoragePair linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override {
+        if (dt != Dtype::F32 && dt != Dtype::F64)
+            ErrorBuilder("cpu_backend::linalg_lu_factor").not_implemented("only F32/F64 supported");
+        if (shape.size() < 2 || shape[shape.size()-1] != shape[shape.size()-2])
+            ErrorBuilder("cpu_backend::linalg_lu_factor").fail("input must be square 2-D");
+        const auto& cs = std::get<CpuStorage>(a);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+        // LU output (same size as A)
+        auto lu_ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
+        // pivots: n int32_t per batch element
+        const std::size_t ipiv_nbytes = static_cast<std::size_t>(batch) * n * sizeof(std::int32_t);
+        auto ipiv_ptr = allocate_aligned_bytes(ipiv_nbytes, Device::CPU);
+        int info = 0;
+        auto* ipiv_out = reinterpret_cast<std::int32_t*>(ipiv_ptr.get());
+        if (dt == Dtype::F32) {
+            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
+            auto* lu_p = reinterpret_cast<float*>(lu_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                std::vector<int> ipiv_local(n);
+                cpu::lapack_lu_factor_f32(in_p + b * per_mat, n,
+                                          lu_p + b * per_mat,
+                                          ipiv_local.data(), &info);
+                check_lapack_info(info < 0 ? info : 0, "lu_factor");
+                for (int i = 0; i < n; ++i)
+                    ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
+            }
+        } else {
+            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* lu_p = reinterpret_cast<double*>(lu_ptr.get());
+            for (std::int64_t b = 0; b < batch; ++b) {
+                std::vector<int> ipiv_local(n);
+                cpu::lapack_lu_factor_f64(in_p + b * per_mat, n,
+                                          lu_p + b * per_mat,
+                                          ipiv_local.data(), &info);
+                check_lapack_info(info < 0 ? info : 0, "lu_factor");
+                for (int i = 0; i < n; ++i)
+                    ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
+            }
+        }
+        Storage lu_storage{CpuStorage{lu_ptr, cs.nbytes, dt}};
+        Storage ipiv_storage{CpuStorage{ipiv_ptr, ipiv_nbytes, Dtype::I32}};
+        return {lu_storage, ipiv_storage};
+    }
+
+    Storage linalg_solve_triangular(const Storage& a,
+                                     const Storage& b,
+                                     const Shape& a_shape,
+                                     const Shape& b_shape,
+                                     bool upper,
+                                     bool unitriangular,
+                                     Dtype dt) override {
+        if (dt != Dtype::F32 && dt != Dtype::F64)
+            ErrorBuilder("cpu_backend::linalg_solve_triangular").not_implemented("only F32/F64");
+        const auto& a_cpu = std::get<CpuStorage>(a);
+        const auto& b_cpu = std::get<CpuStorage>(b);
+        const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
+        const bool b_is_vec = (b_shape.size() == a_shape.size() - 1);
+        const int nrhs = b_is_vec ? 1 : static_cast<int>(b_shape[b_shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(a_shape, 2);
+        const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
+        // Copy B for in-place overwrite
+        auto out_ptr = allocate_aligned_bytes(b_cpu.nbytes, Device::CPU);
+        if (b_cpu.nbytes > 0)
+            std::memcpy(out_ptr.get(), b_cpu.ptr.get(), b_cpu.nbytes);
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const auto* a_p = reinterpret_cast<const float*>(a_cpu.ptr.get());
+            auto* x_p = reinterpret_cast<float*>(out_ptr.get());
+            const std::size_t a_per = static_cast<std::size_t>(n) * n;
+            for (std::int64_t bi = 0; bi < batch; ++bi) {
+                cpu::lapack_solve_triangular_f32(a_p + bi * a_per, x_p + bi * b_per,
+                                                 n, nrhs, upper, unitriangular, &info);
+                check_lapack_info(info, "solve_triangular");
+            }
+        } else {
+            const auto* a_p = reinterpret_cast<const double*>(a_cpu.ptr.get());
+            auto* x_p = reinterpret_cast<double*>(out_ptr.get());
+            const std::size_t a_per = static_cast<std::size_t>(n) * n;
+            for (std::int64_t bi = 0; bi < batch; ++bi) {
+                cpu::lapack_solve_triangular_f64(a_p + bi * a_per, x_p + bi * b_per,
+                                                 n, nrhs, upper, unitriangular, &info);
+                check_lapack_info(info, "solve_triangular");
+            }
+        }
+        return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
+    }
+
     Storage
     broadcast(const Storage& a, const Shape& src_shape, const Shape& dst_shape, Dtype dt) override {
         const auto& cs = std::get<CpuStorage>(a);

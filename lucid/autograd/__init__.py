@@ -8,6 +8,7 @@ from lucid.autograd._grad_mode import (
 from lucid.autograd._backward import backward, grad
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.autograd.gradcheck import gradcheck
+from lucid.autograd._anomaly import detect_anomaly
 
 __all__ = [
     "no_grad",
@@ -20,4 +21,5 @@ __all__ = [
     "Function",
     "FunctionCtx",
     "gradcheck",
+    "detect_anomaly",
 ]

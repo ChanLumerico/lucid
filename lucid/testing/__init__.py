@@ -1,5 +1,5 @@
 """
-lucid.testing — Numerical verification utilities.
+lucid.testing — numerical verification utilities.
 """
 
 from lucid.testing._comparison import assert_close

@@ -11,6 +11,7 @@ from lucid.nn.modules.activation import (
     ReLU,
     LeakyReLU,
     ELU,
+    CELU,
     SELU,
     GELU,
     SiLU,
@@ -29,6 +30,8 @@ from lucid.nn.modules.activation import (
     Softsign,
     Softmin,
     GLU,
+    Hardshrink,
+    Tanhshrink,
 )
 from lucid.nn.modules.normalization import (
     LayerNorm,
@@ -44,14 +47,19 @@ from lucid.nn.modules.normalization import (
 from lucid.nn.modules.pooling import (
     MaxPool1d,
     MaxPool2d,
+    MaxPool3d,
     AvgPool1d,
     AvgPool2d,
+    AvgPool3d,
     AdaptiveAvgPool1d,
     AdaptiveAvgPool2d,
+    AdaptiveAvgPool3d,
     AdaptiveMaxPool2d,
+    AdaptiveMaxPool1d,
+    AdaptiveMaxPool3d,
 )
 from lucid.nn.modules.dropout import Dropout, Dropout2d, AlphaDropout
-from lucid.nn.modules.sparse import Embedding
+from lucid.nn.modules.sparse import Embedding, EmbeddingBag
 from lucid.nn.modules.attention import MultiheadAttention
 from lucid.nn.modules.rnn import LSTM, GRU, RNN, LSTMCell, GRUCell, RNNCell
 from lucid.nn.modules.loss import (
@@ -64,6 +72,13 @@ from lucid.nn.modules.loss import (
     HuberLoss,
     SmoothL1Loss,
     KLDivLoss,
+    TripletMarginLoss,
+    CosineEmbeddingLoss,
+    MarginRankingLoss,
+    HingeEmbeddingLoss,
+    PoissonNLLLoss,
+    GaussianNLLLoss,
+    CTCLoss,
 )
 from lucid.nn.modules.container import (
     Sequential,
@@ -72,7 +87,7 @@ from lucid.nn.modules.container import (
     ParameterList,
     ParameterDict,
 )
-from lucid.nn.modules.flatten import Flatten, Unflatten
+from lucid.nn.modules.flatten import Flatten, Unflatten, Unfold, Fold
 from lucid.nn.modules.padding import (
     ConstantPad1d,
     ConstantPad2d,
@@ -106,6 +121,7 @@ __all__ = [
     "ReLU",
     "LeakyReLU",
     "ELU",
+    "CELU",
     "SELU",
     "GELU",
     "SiLU",
@@ -124,6 +140,8 @@ __all__ = [
     "Softsign",
     "Softmin",
     "GLU",
+    "Hardshrink",
+    "Tanhshrink",
     "LayerNorm",
     "RMSNorm",
     "GroupNorm",
@@ -135,15 +153,21 @@ __all__ = [
     "InstanceNorm3d",
     "MaxPool1d",
     "MaxPool2d",
+    "MaxPool3d",
     "AvgPool1d",
     "AvgPool2d",
+    "AvgPool3d",
     "AdaptiveAvgPool1d",
     "AdaptiveAvgPool2d",
+    "AdaptiveAvgPool3d",
     "AdaptiveMaxPool2d",
+    "AdaptiveMaxPool1d",
+    "AdaptiveMaxPool3d",
     "Dropout",
     "Dropout2d",
     "AlphaDropout",
     "Embedding",
+    "EmbeddingBag",
     "MultiheadAttention",
     "LSTM",
     "GRU",
@@ -160,6 +184,13 @@ __all__ = [
     "HuberLoss",
     "SmoothL1Loss",
     "KLDivLoss",
+    "TripletMarginLoss",
+    "CosineEmbeddingLoss",
+    "MarginRankingLoss",
+    "HingeEmbeddingLoss",
+    "PoissonNLLLoss",
+    "GaussianNLLLoss",
+    "CTCLoss",
     "Sequential",
     "ModuleList",
     "ModuleDict",
@@ -167,6 +198,8 @@ __all__ = [
     "ParameterDict",
     "Flatten",
     "Unflatten",
+    "Unfold",
+    "Fold",
     "ConstantPad1d",
     "ConstantPad2d",
     "ConstantPad3d",

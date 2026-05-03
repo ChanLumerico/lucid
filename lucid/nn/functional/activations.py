@@ -157,6 +157,39 @@ def prelu(x: Tensor, weight: Tensor) -> Tensor:
     return _wrap(_C_engine.add(pos, neg_part))
 
 
+def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
+    """Continuously differentiable ELU: max(0,x) + min(0, alpha*(exp(x/alpha)-1))."""
+    xi = _unwrap(x)
+    pos = _C_engine.relu(xi)
+    exp_part = _C_engine.sub(
+        _C_engine.exp(_C_engine.div(xi, _C_engine.full(xi.shape, alpha, xi.dtype, xi.device))),
+        _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device),
+    )
+    neg = _C_engine.minimum(
+        _C_engine.zeros(xi.shape, xi.dtype, xi.device),
+        _C_engine.mul(_C_engine.full(xi.shape, alpha, xi.dtype, xi.device), exp_part),
+    )
+    return _wrap(_C_engine.add(pos, neg))
+
+
+def hardshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
+    """Hard shrinkage: x if |x|>lambd else 0."""
+    xi = _unwrap(x)
+    lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)
+    neg_lam = _C_engine.full(xi.shape, -lambd, xi.dtype, xi.device)
+    mask = _C_engine.bitwise_or(
+        _C_engine.greater(xi, lam),
+        _C_engine.less(xi, neg_lam),
+    )
+    return _wrap(_C_engine.where(mask, xi, _C_engine.zeros(xi.shape, xi.dtype, xi.device)))
+
+
+def tanhshrink(x: Tensor) -> Tensor:
+    """Tanh shrinkage: x - tanh(x)."""
+    xi = _unwrap(x)
+    return _wrap(_C_engine.sub(xi, _C_engine.tanh(xi)))
+
+
 def normalize(
     x: Tensor,
     p: float = 2.0,
@@ -222,9 +255,11 @@ def pairwise_distance(
         ),
         _C_engine.full(abs_diff.shape, p, abs_diff.dtype, abs_diff.device),
     )
-    s = _C_engine.sum(powered, -1)
+    ndim = len(powered.shape)
+    last_dim = ndim - 1
+    s = _C_engine.sum(powered, [last_dim], False)
     inv_p = _C_engine.full(s.shape, 1.0 / p, s.dtype, s.device)
     dist = _C_engine.pow(s, inv_p)
     if keepdim:
-        dist = _C_engine.unsqueeze(dist, -1)
+        dist = _C_engine.unsqueeze(dist, last_dim)
     return _wrap(dist)

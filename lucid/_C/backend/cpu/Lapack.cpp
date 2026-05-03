@@ -580,4 +580,86 @@ void lapack_eig_f64(const double* A, int n, double* wr, double* wi, double* VR, 
     *info_out = 0;
 }
 
+// LU factorisation (packed format): returns the raw dgetrf_ output where the
+// unit-lower and upper triangular factors share a single matrix (LAPACK packed
+// format), plus the 1-based pivot index array.
+//
+// Out layout matches PyTorch's lu_factor / torch.linalg.lu_factor:
+//   LU_out  : n×n row-major packed LU  (L below diagonal, U on/above diagonal,
+//             implicit unit diagonal of L)
+//   ipiv_out: n int32_t pivot indices (1-based, matching LAPACK convention)
+void lapack_lu_factor_f32(const float* A, int n, float* LU_out, int* ipiv_out,
+                          int* info_out) {
+    std::vector<float> Ac(static_cast<std::size_t>(n) * n);
+    rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
+
+    std::vector<i32> ipiv_local(n);
+    i32 N = n, lda = n, info = 0;
+    sgetrf_(&N, &N, Ac.data(), &lda, ipiv_local.data(), &info);
+    if (info < 0) { *info_out = info; return; }
+
+    colmajor_to_rowmajor_f32(Ac.data(), LU_out, n, n);
+    for (int i = 0; i < n; ++i) ipiv_out[i] = static_cast<int>(ipiv_local[i]);
+    *info_out = info;
+}
+
+void lapack_lu_factor_f64(const double* A, int n, double* LU_out, int* ipiv_out,
+                          int* info_out) {
+    std::vector<double> Ac(static_cast<std::size_t>(n) * n);
+    rowmajor_to_colmajor_f64(A, Ac.data(), n, n);
+
+    std::vector<i32> ipiv_local(n);
+    i32 N = n, lda = n, info = 0;
+    dgetrf_(&N, &N, Ac.data(), &lda, ipiv_local.data(), &info);
+    if (info < 0) { *info_out = info; return; }
+
+    colmajor_to_rowmajor_f64(Ac.data(), LU_out, n, n);
+    for (int i = 0; i < n; ++i) ipiv_out[i] = static_cast<int>(ipiv_local[i]);
+    *info_out = info;
+}
+
+// Triangular solve: solve A X = B (or Aᵀ X = B) where A is triangular.
+// Overwrites B with the solution X.
+// upper=true  → A is upper triangular; upper=false → lower triangular.
+// unit=true   → diagonal of A is treated as all-ones (unit triangular).
+// Uses LAPACK strtrs_ / dtrtrs_.
+void lapack_solve_triangular_f32(const float* A, float* B, int n, int nrhs,
+                                 bool upper, bool unit, int* info_out) {
+    char uplo = upper ? 'U' : 'L';
+    char diag = unit  ? 'U' : 'N';
+    char trans = 'N';
+
+    // LAPACK expects column-major input.
+    std::vector<float> Ac(static_cast<std::size_t>(n) * n);
+    std::vector<float> Bc(static_cast<std::size_t>(n) * nrhs);
+    rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
+    rowmajor_to_colmajor_f32(B, Bc.data(), n, nrhs);
+
+    i32 N = n, NRHS = nrhs, lda = n, ldb = n, info = 0;
+    strtrs_(&uplo, &trans, &diag, &N, &NRHS, Ac.data(), &lda, Bc.data(), &ldb, &info);
+    if (info != 0) { *info_out = info; return; }
+
+    colmajor_to_rowmajor_f32(Bc.data(), B, n, nrhs);
+    *info_out = 0;
+}
+
+void lapack_solve_triangular_f64(const double* A, double* B, int n, int nrhs,
+                                 bool upper, bool unit, int* info_out) {
+    char uplo = upper ? 'U' : 'L';
+    char diag = unit  ? 'U' : 'N';
+    char trans = 'N';
+
+    std::vector<double> Ac(static_cast<std::size_t>(n) * n);
+    std::vector<double> Bc(static_cast<std::size_t>(n) * nrhs);
+    rowmajor_to_colmajor_f64(A, Ac.data(), n, n);
+    rowmajor_to_colmajor_f64(B, Bc.data(), n, nrhs);
+
+    i32 N = n, NRHS = nrhs, lda = n, ldb = n, info = 0;
+    dtrtrs_(&uplo, &trans, &diag, &N, &NRHS, Ac.data(), &lda, Bc.data(), &ldb, &info);
+    if (info != 0) { *info_out = info; return; }
+
+    colmajor_to_rowmajor_f64(Bc.data(), B, n, nrhs);
+    *info_out = 0;
+}
+
 }  // namespace lucid::backend::cpu

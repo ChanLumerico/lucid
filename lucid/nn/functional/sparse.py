@@ -20,7 +20,8 @@ def embedding(
     sparse: bool = False,
 ) -> Tensor:
     """Look up rows in weight by integer indices x."""
-    return _wrap(_C_engine.nn.embedding(_unwrap(x), _unwrap(weight)))
+    pad = padding_idx if padding_idx is not None else -1
+    return _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(x), pad))
 
 
 def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:

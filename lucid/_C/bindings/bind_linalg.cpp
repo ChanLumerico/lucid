@@ -17,12 +17,14 @@
 #include "../ops/linalg/Eig.h"
 #include "../ops/linalg/Eigh.h"
 #include "../ops/linalg/Inv.h"
+#include "../ops/linalg/LUFactor.h"
 #include "../ops/linalg/MatrixPower.h"
 #include "../ops/linalg/Norm.h"
 #include "../ops/linalg/Pinv.h"
 #include "../ops/linalg/QR.h"
 #include "../ops/linalg/SVD.h"
 #include "../ops/linalg/Solve.h"
+#include "../ops/linalg/SolveTriangular.h"
 
 namespace py = pybind11;
 
@@ -85,6 +87,27 @@ void register_linalg(py::module_& m) {
         "Returns (eigenvalues, eigenvectors) with eigenvalues sorted ascending.\n"
         "Input must be a real symmetric square matrix.\n"
         "CPU: LAPACK ssyev/dsyev.  GPU: mlx::core::linalg::eigh.");
+
+    // lu_factor: packed LU factorisation + pivots.
+    // Returns (LU_packed, pivots) as a Python tuple.
+    m.def(
+        "lu_factor",
+        [](const TensorImplPtr& a) {
+            auto r = lu_factor_op(a);
+            return py::make_tuple(r[0], r[1]);
+        },
+        py::arg("a"),
+        "LU factorisation with partial pivoting.\n"
+        "Returns (LU_packed, pivots) where LU_packed is the packed n×n matrix\n"
+        "(LAPACK dgetrf format) and pivots is an int32 vector of 1-based pivot indices.");
+
+    // solve_triangular: triangular system solve.
+    m.def("solve_triangular", &solve_triangular_op,
+          py::arg("a"), py::arg("b"),
+          py::arg("upper") = true, py::arg("unitriangular") = false,
+          "Triangular solve: compute X such that A X = B.\n"
+          "upper=True  → A is upper triangular.\n"
+          "unitriangular=True → A has implicit unit diagonal.");
 }
 
 }  // namespace lucid::bindings

@@ -77,6 +77,26 @@ lapack_eig_f32(const float* A, int n, float* wr, float* wi, float* VR, int* info
 LUCID_INTERNAL void
 lapack_eig_f64(const double* A, int n, double* wr, double* wi, double* VR, int* info);
 
+// LU factorisation (packed format matching LAPACK dgetrf_ output).
+// LU_out receives the packed LU matrix (n×n, row-major); ipiv_out receives
+// the 1-based pivot indices (n int32_t values).
+// Uses sgetrf_ / dgetrf_.
+LUCID_INTERNAL void lapack_lu_factor_f32(const float* A, int n, float* LU_out,
+                                         int* ipiv_out, int* info);
+LUCID_INTERNAL void lapack_lu_factor_f64(const double* A, int n, double* LU_out,
+                                         int* ipiv_out, int* info);
+
+// Triangular solve: solve A X = B where A is triangular; B is overwritten
+// with X.  upper selects upper (true) or lower (false) triangular; unit
+// indicates a unit-diagonal (implicit 1 on diagonal).
+// Uses strtrs_ / dtrtrs_.
+LUCID_INTERNAL void lapack_solve_triangular_f32(const float* A, float* B, int n,
+                                                int nrhs, bool upper, bool unit,
+                                                int* info);
+LUCID_INTERNAL void lapack_solve_triangular_f64(const double* A, double* B, int n,
+                                                int nrhs, bool upper, bool unit,
+                                                int* info);
+
 // Low-level helpers: convert a row-major matrix to column-major (for LAPACK
 // input) and back (for LAPACK output) using vDSP_mtrans.
 LUCID_INTERNAL void transpose_to_col_major_f32(const float* src, float* dst, int rows, int cols);

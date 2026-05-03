@@ -12,6 +12,7 @@ from lucid.nn.functional.activations import (
     relu,
     leaky_relu,
     elu,
+    celu,
     selu,
     gelu,
     silu,
@@ -26,6 +27,8 @@ from lucid.nn.functional.activations import (
     prelu,
     softmin,
     glu,
+    hardshrink,
+    tanhshrink,
 )
 
 
@@ -286,3 +289,38 @@ class GLU(Module):
 
     def extra_repr(self) -> str:
         return f"dim={self.dim}"
+
+
+class CELU(Module):
+    """Continuously differentiable ELU: max(0,x) + min(0, alpha*(exp(x/alpha)-1))."""
+
+    def __init__(self, alpha: float = 1.0, inplace: bool = False) -> None:
+        super().__init__()
+        self.alpha = alpha
+
+    def forward(self, x: Any) -> Any:
+        return celu(x, self.alpha)
+
+    def extra_repr(self) -> str:
+        return f"alpha={self.alpha}"
+
+
+class Hardshrink(Module):
+    """Hard shrinkage: x if |x|>lambda else 0."""
+
+    def __init__(self, lambd: float = 0.5) -> None:
+        super().__init__()
+        self.lambd = lambd
+
+    def forward(self, x: Any) -> Any:
+        return hardshrink(x, self.lambd)
+
+    def extra_repr(self) -> str:
+        return f"lambd={self.lambd}"
+
+
+class Tanhshrink(Module):
+    """Tanhshrink: x - tanh(x)."""
+
+    def forward(self, x: Any) -> Any:
+        return tanhshrink(x)

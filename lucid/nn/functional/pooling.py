@@ -107,3 +107,64 @@ def adaptive_max_pool2d(
     """2D adaptive max pooling."""
     oh, ow = _int_or_tuple(output_size, 2)
     return _wrap(_C_engine.nn.adaptive_max_pool2d(_unwrap(x), oh, ow))
+
+
+def adaptive_max_pool1d(
+    x: Tensor,
+    output_size: int | tuple[int, ...],
+    return_indices: bool = False,
+) -> Tensor:
+    """1D adaptive max pooling."""
+    sz = _int_or_tuple(output_size, 1)[0]
+    return _wrap(_C_engine.nn.adaptive_max_pool1d(_unwrap(x), sz))
+
+
+def adaptive_max_pool3d(
+    x: Tensor,
+    output_size: int | tuple[int, int, int],
+    return_indices: bool = False,
+) -> Tensor:
+    """3D adaptive max pooling."""
+    od, oh, ow = _int_or_tuple(output_size, 3)
+    return _wrap(_C_engine.nn.adaptive_max_pool3d(_unwrap(x), od, oh, ow))
+
+
+def adaptive_avg_pool3d(
+    x: Tensor,
+    output_size: int | tuple[int, int, int],
+) -> Tensor:
+    """3D adaptive average pooling."""
+    od, oh, ow = _int_or_tuple(output_size, 3)
+    return _wrap(_C_engine.nn.adaptive_avg_pool3d(_unwrap(x), od, oh, ow))
+
+
+def max_pool3d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int, int],
+    stride: int | tuple[int, int, int] | None = None,
+    padding: int | tuple[int, int, int] = 0,
+    dilation: int | tuple[int, int, int] = 1,
+    return_indices: bool = False,
+    ceil_mode: bool = False,
+) -> Tensor:
+    """3D max pooling."""
+    kd, kh, kw = _int_or_tuple(kernel_size, 3)
+    sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
+    pd, ph, pw = _int_or_tuple(padding, 3)
+    return _wrap(_C_engine.nn.max_pool3d(_unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw))
+
+
+def avg_pool3d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int, int],
+    stride: int | tuple[int, int, int] | None = None,
+    padding: int | tuple[int, int, int] = 0,
+    ceil_mode: bool = False,
+    count_include_pad: bool = True,
+    divisor_override: int | None = None,
+) -> Tensor:
+    """3D average pooling."""
+    kd, kh, kw = _int_or_tuple(kernel_size, 3)
+    sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
+    pd, ph, pw = _int_or_tuple(padding, 3)
+    return _wrap(_C_engine.nn.avg_pool3d(_unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw))

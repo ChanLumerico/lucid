@@ -83,3 +83,7 @@ def inference_mode() -> Iterator[None]:
     """Context manager that disables gradient tracking (alias for no_grad)."""
     with no_grad():
         yield
+
+
+# Mutable flag consulted by detect_anomaly; kept here to avoid circular imports.
+_ANOMALY_ENABLED: list[bool] = [False]

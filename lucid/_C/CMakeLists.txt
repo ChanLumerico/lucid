@@ -205,6 +205,8 @@ lucid_object_library(
     ops/linalg/Pinv.cpp
     ops/linalg/Eig.cpp
     ops/linalg/Eigh.cpp
+    ops/linalg/LUFactor.cpp
+    ops/linalg/SolveTriangular.cpp
     nn/Linear.cpp
     nn/Dropout.cpp
     nn/LayerNorm.cpp

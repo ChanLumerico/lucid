@@ -15,6 +15,7 @@ from lucid._tensor.tensor import Tensor
 from lucid._factories.converters import tensor as _tensor_fn
 from lucid._ops import stack
 from lucid.utils.data.dataset import Dataset, IterableDataset
+from lucid.utils.data._worker import WorkerInfo, _set_worker_info
 from lucid.utils.data.sampler import (
     Sampler,
     SequentialSampler,
@@ -75,6 +76,14 @@ def _worker_loop(
     # Seed this worker independently for reproducibility.
     random.seed(seed)
     np.random.seed(seed % (2**32))
+
+    # Publish WorkerInfo so user code can call get_worker_info().
+    _set_worker_info(WorkerInfo(
+        id=worker_id,
+        num_workers=index_queue.maxsize if hasattr(index_queue, "maxsize") else 0,
+        seed=seed,
+        dataset=dataset,
+    ))
 
     if worker_init_fn is not None:
         worker_init_fn(worker_id)
