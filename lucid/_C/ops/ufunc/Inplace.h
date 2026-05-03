@@ -52,6 +52,10 @@ LUCID_API TensorImplPtr round_inplace_op(const TensorImplPtr& a);
 LUCID_API TensorImplPtr floor_inplace_op(const TensorImplPtr& a);
 LUCID_API TensorImplPtr ceil_inplace_op(const TensorImplPtr& a);
 
+// Activation in-place ops.
+LUCID_API TensorImplPtr sigmoid_inplace_op(const TensorImplPtr& a);
+LUCID_API TensorImplPtr relu_inplace_op(const TensorImplPtr& a);
+
 // Clip in-place: clamp(a, lo, hi) written back into a.
 LUCID_API TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi);
 

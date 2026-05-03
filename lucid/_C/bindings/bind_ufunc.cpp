@@ -147,6 +147,8 @@ void register_ufunc(py::module_& m) {
     m.def("sinh_", &sinh_inplace_op, py::arg("a"));
     m.def("cosh_", &cosh_inplace_op, py::arg("a"));
     m.def("tanh_", &tanh_inplace_op, py::arg("a"));
+    m.def("sigmoid_", &sigmoid_inplace_op, py::arg("a"));
+    m.def("relu_", &relu_inplace_op, py::arg("a"));
     m.def("round_", &round_inplace_op, py::arg("a"));
     m.def("floor_", &floor_inplace_op, py::arg("a"));
     m.def("ceil_", &ceil_inplace_op, py::arg("a"));

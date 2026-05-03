@@ -127,6 +127,14 @@ TensorImplPtr ceil_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &ceil_op, "ceil_");
 }
 
+// --- Activation ---
+TensorImplPtr sigmoid_inplace_op(const TensorImplPtr& a) {
+    return inplace_unary(a, &sigmoid_op, "sigmoid_");
+}
+TensorImplPtr relu_inplace_op(const TensorImplPtr& a) {
+    return inplace_unary(a, &relu_op, "relu_");
+}
+
 // Clip is handled manually because the lambda would need to capture lo/hi,
 // making it incompatible with the function-pointer-based inplace_unary template.
 TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
