@@ -8,9 +8,13 @@ import warnings
 from typing import Any, Callable, TYPE_CHECKING
 
 import numpy as np
+from lucid._tensor.tensor import Tensor as _T
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
+from lucid._dtype import to_engine_dtype
 
 if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
+    pass
 
 
 # ── Allowed types for weights_only=True ──────────────────────────────────────
@@ -44,7 +48,6 @@ class _SafeUnpickler(pickle.Unpickler):
 
 class _LucidPickler(pickle.Pickler):
     def persistent_id(self, obj: Any) -> Any:
-        from lucid._tensor.tensor import Tensor as _T
         if isinstance(obj, _T):
             arr = np.ascontiguousarray(np.asarray(obj._impl.data_as_python()))
             return (
@@ -61,9 +64,6 @@ class _LucidPickler(pickle.Pickler):
 class _LucidUnpickler(pickle.Unpickler):
     def persistent_load(self, pid: Any) -> Any:
         if isinstance(pid, tuple) and pid[0] == "tensor":
-            from lucid._C import engine as _C_engine
-            from lucid._dispatch import _wrap
-            from lucid._dtype import to_engine_dtype
             _, shape, dtype_name, device_str, raw_bytes, np_dtype_str = pid
             arr = np.frombuffer(raw_bytes, dtype=np.dtype(np_dtype_str)).reshape(shape).copy()
             eng_device = _C_engine.Device.GPU if device_str == "metal" else _C_engine.Device.CPU
@@ -75,16 +75,7 @@ class _LucidUnpickler(pickle.Unpickler):
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def save(obj: Any, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> None:
-    """Save an object to a file or file-like object.
-
-    Tensors are serialized as raw bytes (efficient). Modules are saved as-is
-    (their state_dict is part of the object graph).
-
-    Args:
-        obj:             Object to save (Tensor, Module, dict, etc.)
-        f:               File path (str/bytes) or file-like object.
-        pickle_protocol: Pickle protocol version (default: 4).
-    """
+    """Save an object to a file or file-like object."""
     buf = io.BytesIO()
     pickler = _LucidPickler(buf, protocol=pickle_protocol)
     pickler.dump({"_lucid_format": 1, "obj": obj})
@@ -103,21 +94,7 @@ def load(
     map_location: str | Callable[..., Any] | dict[str, str] | None = None,
     weights_only: bool = True,
 ) -> Any:
-    """Load an object saved with lucid.save().
-
-    Args:
-        f:             File path or file-like object.
-        map_location:  Remap tensor devices on load. Accepts:
-                       - str: device name ('cpu', 'metal')
-                       - dict: {'metal': 'cpu', 'cpu': 'cpu'}
-                       - callable: map_location(tensor, location_string) → Tensor
-        weights_only:  If True (default), only allow safe types (tensors, dicts,
-                       lists, scalars). Prevents arbitrary code execution.
-                       Pass False to allow loading Module objects etc.
-
-    Returns:
-        The deserialized object.
-    """
+    """Load an object saved with lucid.save()."""
     if isinstance(f, (str, bytes)):
         with open(f, "rb") as fp:
             data = fp.read()
@@ -155,8 +132,6 @@ def _apply_map_location(
     map_location: str | Callable[..., Any] | dict[str, str],
 ) -> Any:
     """Recursively apply map_location to all Tensors in obj."""
-    from lucid._tensor.tensor import Tensor as _T
-
     if isinstance(obj, _T):
         if callable(map_location) and not isinstance(map_location, str):
             device_str = "metal" if obj.is_metal else "cpu"
@@ -165,7 +140,6 @@ def _apply_map_location(
             device_str = "metal" if obj.is_metal else "cpu"
             target = map_location.get(device_str, device_str)
             return obj.to(target)
-        # String: simple device remap
         return obj.to(map_location)  # type: ignore[arg-type]
 
     if isinstance(obj, dict):

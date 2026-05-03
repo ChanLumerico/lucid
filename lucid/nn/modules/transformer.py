@@ -9,20 +9,15 @@ from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
 import lucid.nn.init as init
+from lucid.nn.modules.attention import MultiheadAttention
+from lucid.nn.modules.normalization import LayerNorm
+from lucid.nn.modules.linear import Linear
+from lucid.nn.modules.dropout import Dropout
+from lucid.nn.functional.activations import gelu, relu
 
 
 class TransformerEncoderLayer(Module):
-    """Single transformer encoder layer: self-attention + FFN with LayerNorm.
-
-    Args:
-        d_model:         Total embedding dimension.
-        nhead:           Number of attention heads.
-        dim_feedforward: Hidden size of the FFN (default: 2048).
-        dropout:         Dropout probability (default: 0.1).
-        activation:      Activation in FFN ('relu' or 'gelu').
-        batch_first:     If True, input shape is (B, T, d_model).
-        norm_first:      If True, use pre-LN (residual after norm).
-    """
+    """Single transformer encoder layer: self-attention + FFN with LayerNorm."""
 
     def __init__(
         self,
@@ -45,11 +40,6 @@ class TransformerEncoderLayer(Module):
         self.batch_first = batch_first
         self.norm_first = norm_first
 
-        from lucid.nn.modules.attention import MultiheadAttention
-        from lucid.nn.modules.normalization import LayerNorm
-        from lucid.nn.modules.linear import Linear
-        from lucid.nn.modules.dropout import Dropout
-
         self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout,
                                             batch_first=batch_first,
                                             device=device, dtype=dtype)
@@ -62,10 +52,8 @@ class TransformerEncoderLayer(Module):
         self.dropout3 = Dropout(dropout)
 
     def _ff(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        if self.activation == "gelu":
-            return self.linear2(self.dropout2(F.gelu(self.linear1(x))))
-        return self.linear2(self.dropout2(F.relu(self.linear1(x))))
+        act = gelu if self.activation == "gelu" else relu
+        return self.linear2(self.dropout2(act(self.linear1(x))))
 
     def forward(
         self,
@@ -90,13 +78,7 @@ class TransformerEncoderLayer(Module):
 
 
 class TransformerEncoder(Module):
-    """Stack of N TransformerEncoderLayers.
-
-    Args:
-        encoder_layer: A TransformerEncoderLayer instance (cloned N times).
-        num_layers:    Number of sub-encoder layers.
-        norm:          Optional normalization module applied to output.
-    """
+    """Stack of N TransformerEncoderLayers."""
 
     def __init__(
         self,
@@ -105,7 +87,6 @@ class TransformerEncoder(Module):
         norm: Any = None,
     ) -> None:
         super().__init__()
-        # Create fresh layers with the same config (deepcopy doesn't work with TensorImpl)
         self.layers = [
             TransformerEncoderLayer(
                 encoder_layer.d_model, encoder_layer.nhead,
@@ -141,17 +122,7 @@ class TransformerEncoder(Module):
 
 
 class TransformerDecoderLayer(Module):
-    """Single transformer decoder layer: masked self-attention + cross-attention + FFN.
-
-    Args:
-        d_model:         Total embedding dimension.
-        nhead:           Number of attention heads.
-        dim_feedforward: Hidden size of the FFN.
-        dropout:         Dropout probability.
-        activation:      'relu' or 'gelu'.
-        batch_first:     If True, input shape is (B, T, d_model).
-        norm_first:      Pre-LN if True.
-    """
+    """Single transformer decoder layer: masked self-attention + cross-attention + FFN."""
 
     def __init__(
         self,
@@ -174,11 +145,6 @@ class TransformerDecoderLayer(Module):
         self.batch_first = batch_first
         self.norm_first = norm_first
 
-        from lucid.nn.modules.attention import MultiheadAttention
-        from lucid.nn.modules.normalization import LayerNorm
-        from lucid.nn.modules.linear import Linear
-        from lucid.nn.modules.dropout import Dropout
-
         self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout,
                                             batch_first=batch_first,
                                             device=device, dtype=dtype)
@@ -196,10 +162,8 @@ class TransformerDecoderLayer(Module):
         self.dropout4 = Dropout(dropout)
 
     def _ff(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        if self.activation == "gelu":
-            return self.linear2(self.dropout2(F.gelu(self.linear1(x))))
-        return self.linear2(self.dropout2(F.relu(self.linear1(x))))
+        act = gelu if self.activation == "gelu" else relu
+        return self.linear2(self.dropout2(act(self.linear1(x))))
 
     def forward(
         self,
@@ -232,13 +196,7 @@ class TransformerDecoderLayer(Module):
 
 
 class TransformerDecoder(Module):
-    """Stack of N TransformerDecoderLayers.
-
-    Args:
-        decoder_layer: A TransformerDecoderLayer instance.
-        num_layers:    Number of sub-decoder layers.
-        norm:          Optional normalization module applied to output.
-    """
+    """Stack of N TransformerDecoderLayers."""
 
     def __init__(
         self,
@@ -285,18 +243,7 @@ class TransformerDecoder(Module):
 
 
 class Transformer(Module):
-    """Full encoder-decoder Transformer.
-
-    Args:
-        d_model:              Total embedding dimension (default: 512).
-        nhead:                Number of attention heads (default: 8).
-        num_encoder_layers:   Number of encoder layers (default: 6).
-        num_decoder_layers:   Number of decoder layers (default: 6).
-        dim_feedforward:      FFN hidden size (default: 2048).
-        dropout:              Dropout probability (default: 0.1).
-        activation:           'relu' or 'gelu'.
-        batch_first:          If True, I/O shape is (B, T, d_model).
-    """
+    """Full encoder-decoder Transformer."""
 
     def __init__(
         self,

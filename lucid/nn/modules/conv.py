@@ -7,8 +7,11 @@ from typing import Any
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
-# F imported lazily inside forward()
 import lucid.nn.init as init
+from lucid.nn.functional.conv import (
+    conv1d, conv2d, conv3d,
+    conv_transpose1d, conv_transpose2d, conv_transpose3d,
+)
 
 
 def _pair(v: int | tuple[int, int]) -> tuple[int, int]:
@@ -58,8 +61,7 @@ class Conv1d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.conv1d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return conv1d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
     def extra_repr(self) -> str:
         return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
@@ -106,8 +108,7 @@ class Conv2d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
     def extra_repr(self) -> str:
         return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
@@ -146,8 +147,7 @@ class Conv3d(Module):
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.conv3d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return conv3d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
     def extra_repr(self) -> str:
         return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
@@ -187,8 +187,7 @@ class ConvTranspose1d(Module):
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.conv_transpose1d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
+        return conv_transpose1d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
 
     def extra_repr(self) -> str:
         return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
@@ -229,8 +228,7 @@ class ConvTranspose2d(Module):
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.conv_transpose2d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
+        return conv_transpose2d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
 
     def extra_repr(self) -> str:
         return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
@@ -271,8 +269,7 @@ class ConvTranspose3d(Module):
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.conv_transpose3d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
+        return conv_transpose3d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
 
     def extra_repr(self) -> str:
         return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "

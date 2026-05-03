@@ -4,7 +4,10 @@ Pooling modules.
 
 from typing import Any
 from lucid.nn.module import Module
-# F imported lazily inside forward()
+from lucid.nn.functional.pooling import (
+    max_pool1d, max_pool2d, avg_pool1d, avg_pool2d,
+    adaptive_avg_pool1d, adaptive_avg_pool2d, adaptive_max_pool2d,
+)
 
 
 class MaxPool1d(Module):
@@ -18,8 +21,7 @@ class MaxPool1d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.max_pool1d(x, self.kernel_size, self.stride, self.padding, self.dilation, False, self.ceil_mode)
+        return max_pool1d(x, self.kernel_size, self.stride, self.padding, self.dilation, False, self.ceil_mode)
     def extra_repr(self) -> str:
         return (f"kernel_size={self.kernel_size}, stride={self.stride}, "
                 f"padding={self.padding}, dilation={self.dilation}")
@@ -37,8 +39,7 @@ class MaxPool2d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.max_pool2d(x, self.kernel_size, self.stride, self.padding, self.dilation, False, self.ceil_mode)
+        return max_pool2d(x, self.kernel_size, self.stride, self.padding, self.dilation, False, self.ceil_mode)
     def extra_repr(self) -> str:
         return (f"kernel_size={self.kernel_size}, stride={self.stride}, "
                 f"padding={self.padding}, dilation={self.dilation}")
@@ -55,8 +56,7 @@ class AvgPool1d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.avg_pool1d(x, self.kernel_size, self.stride, self.padding, self.ceil_mode, self.count_include_pad)
+        return avg_pool1d(x, self.kernel_size, self.stride, self.padding, self.ceil_mode, self.count_include_pad)
     def extra_repr(self) -> str:
         return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
 
@@ -73,8 +73,7 @@ class AvgPool2d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.avg_pool2d(x, self.kernel_size, self.stride, self.padding, self.ceil_mode, self.count_include_pad)
+        return avg_pool2d(x, self.kernel_size, self.stride, self.padding, self.ceil_mode, self.count_include_pad)
     def extra_repr(self) -> str:
         return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
 
@@ -85,8 +84,7 @@ class AdaptiveAvgPool1d(Module):
         super().__init__()
         self.output_size = output_size
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.adaptive_avg_pool1d(x, self.output_size)
+        return adaptive_avg_pool1d(x, self.output_size)
     def extra_repr(self) -> str:
         return f"output_size={self.output_size}"
 
@@ -97,8 +95,7 @@ class AdaptiveAvgPool2d(Module):
         super().__init__()
         self.output_size = output_size
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.adaptive_avg_pool2d(x, self.output_size)
+        return adaptive_avg_pool2d(x, self.output_size)
     def extra_repr(self) -> str:
         return f"output_size={self.output_size}"
 
@@ -109,7 +106,6 @@ class AdaptiveMaxPool2d(Module):
         super().__init__()
         self.output_size = output_size
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.adaptive_max_pool2d(x, self.output_size)
+        return adaptive_max_pool2d(x, self.output_size)
     def extra_repr(self) -> str:
         return f"output_size={self.output_size}"

@@ -1,5 +1,6 @@
 import threading
 from lucid._dtype import dtype, float32 as _f32
+from lucid._device import device as _dev
 
 _lock: threading.Lock = threading.Lock()
 _default_dtype: dtype = _f32
@@ -21,7 +22,6 @@ def get_default_dtype() -> dtype:
 def set_default_device(d: dtype | str) -> None:
     """Set the default device used by factory functions."""
     global _default_device_str
-    from lucid._device import device as _dev
     with _lock:
         _default_device_str = d if isinstance(d, str) else d.type  # type: ignore[union-attr]
 

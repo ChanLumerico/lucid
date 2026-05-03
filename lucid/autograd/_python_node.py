@@ -5,9 +5,10 @@ Bridge between Python autograd.Function and the C++ engine's backward graph.
 from typing import Any, TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._tensor.tensor import Tensor
 
 if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
+    pass
 
 
 def _register(
@@ -22,15 +23,12 @@ def _register(
     The C++ engine calls backward_fn(cpp_ctx, grad_impl) during backprop.
     We use a closure to capture py_ctx and the user's backward() method.
     """
-    from lucid._tensor.tensor import Tensor as _T
-
     # C++ FunctionCtx — used as a carrier; C++ engine needs it to be non-null
     cpp_ctx = _C_engine.FunctionCtx()
 
     def backward_fn(_cpp_ctx: Any, grad_impl: _C_engine.TensorImpl) -> list[Any]:
         """Called by C++ engine: (cpp_ctx, grad_impl) → list[TensorImpl | None]"""
         grad_tensor = _wrap(grad_impl)
-        # Call user's backward with the Python ctx and wrapped grad
         grads = fn_class.backward(py_ctx, grad_tensor)
         if not isinstance(grads, (list, tuple)):
             grads = [grads]
@@ -39,7 +37,7 @@ def _register(
         for g in grads:
             if g is None:
                 result.append(None)
-            elif isinstance(g, _T):
+            elif isinstance(g, Tensor):
                 result.append(_unwrap(g))
             else:
                 result.append(None)

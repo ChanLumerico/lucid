@@ -4,6 +4,9 @@ DataLoader and default_collate.
 
 from typing import Any, Callable, Iterator, TYPE_CHECKING
 import numpy as np
+from lucid._tensor.tensor import Tensor
+from lucid._factories.converters import tensor as _tensor_fn
+from lucid._ops import stack
 
 from lucid.utils.data.dataset import Dataset, IterableDataset
 from lucid.utils.data.sampler import (
@@ -18,33 +21,26 @@ if TYPE_CHECKING:
 
 
 def default_collate(batch: list[Any]) -> Any:
-    """Collate a list of samples into a batched tensor or nested structure.
-
-    Handles: Tensor, np.ndarray, int, float, str, bytes, list, tuple, dict.
-    """
-    import lucid
-    from lucid._tensor.tensor import Tensor
-
+    """Collate a list of samples into a batched tensor or nested structure."""
     elem = batch[0]
 
     if isinstance(elem, Tensor):
-        return lucid.stack(batch, 0)
+        return stack(batch, 0)
 
     if isinstance(elem, np.ndarray):
-        return lucid.Tensor(np.stack(batch, axis=0))
+        return Tensor(np.stack(batch, axis=0))
 
     if isinstance(elem, (int, float)):
         arr = np.array(batch, dtype=np.float32 if isinstance(elem, float) else np.int64)
-        return lucid.Tensor(arr)
+        return Tensor(arr)
 
     if isinstance(elem, (str, bytes)):
-        return batch  # return as list
+        return batch
 
     if isinstance(elem, dict):
         return {key: default_collate([d[key] for d in batch]) for key in elem}
 
     if isinstance(elem, tuple) and hasattr(elem, "_fields"):
-        # NamedTuple
         return type(elem)(*[default_collate([d[i] for d in batch]) for i in range(len(elem))])
 
     if isinstance(elem, (list, tuple)):
@@ -82,24 +78,19 @@ class DataLoader:
     batch_size : int, optional
         Samples per batch (default: 1).
     shuffle : bool, optional
-        Shuffle at the start of each epoch. Mutually exclusive with ``sampler``.
+        Shuffle at the start of each epoch.
     sampler : Sampler, optional
-        Custom index sampler. Mutually exclusive with ``shuffle``.
+        Custom index sampler.
     batch_sampler : Sampler, optional
-        Custom batch sampler. Mutually exclusive with ``batch_size``,
-        ``shuffle``, and ``drop_last``.
+        Custom batch sampler.
     num_workers : int, optional
-        Number of worker processes for data loading. ``0`` (default) means
-        single-process. macOS workers use ``multiprocessing.spawn``.
+        Number of worker processes. ``0`` means single-process.
     collate_fn : callable, optional
-        Merges a list of samples into a batch. Defaults to
-        :func:`default_collate`.
+        Merges a list of samples into a batch.
     pin_memory : bool, optional
-        No-op on Apple Silicon (unified memory architecture).
+        No-op on Apple Silicon.
     drop_last : bool, optional
         Drop the last incomplete batch (default: ``False``).
-    generator : optional
-        Random generator for reproducible shuffling.
 
     Examples
     --------
@@ -139,7 +130,6 @@ class DataLoader:
 
         if num_workers > 0:
             import multiprocessing
-            # macOS requires spawn to avoid fork + MLX issues
             ctx = multiprocessing.get_context("spawn")
 
         if batch_sampler is not None:
@@ -185,7 +175,7 @@ class DataLoader:
             for indices in batch_indices:
                 batch = [dataset[i] for i in indices]
                 result_queue.put(collate_fn(batch))
-            result_queue.put(None)  # sentinel
+            result_queue.put(None)
 
         result_queue: Any = ctx.Queue()
         workers = []

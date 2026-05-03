@@ -69,8 +69,11 @@ __all__ = [
 
 def __getattr__(name: str) -> object:
     import sys as _sys
+    _g = globals()
+
     if name == "Tensor":
         from lucid._tensor.tensor import Tensor
+        _g["Tensor"] = Tensor
         return Tensor
 
     _factory_names = {
@@ -81,7 +84,9 @@ def __getattr__(name: str) -> object:
     }
     if name in _factory_names:
         import lucid._factories as _fac
-        return getattr(_fac, name)
+        obj = getattr(_fac, name)
+        _g[name] = obj
+        return obj
 
     _random_names = {
         "rand", "randn", "randint", "bernoulli", "normal",
@@ -89,7 +94,9 @@ def __getattr__(name: str) -> object:
     }
     if name in _random_names:
         import lucid._factories as _fac
-        return getattr(_fac, name)
+        obj = getattr(_fac, name)
+        _g[name] = obj
+        return obj
 
     _ops_names = {
         "add", "sub", "mul", "div", "matmul", "cat", "stack",
@@ -111,43 +118,57 @@ def __getattr__(name: str) -> object:
     }
     if name in _ops_names:
         import lucid._ops as _ops
-        return getattr(_ops, name)
+        obj = getattr(_ops, name)
+        _g[name] = obj
+        return obj
 
     if name == "nn":
         if "lucid.nn" in _sys.modules:
-            return _sys.modules["lucid.nn"]
-        import lucid.nn as _nn
-        return _nn
+            mod = _sys.modules["lucid.nn"]
+        else:
+            import lucid.nn as mod  # type: ignore[no-redef]
+        _g["nn"] = mod
+        return mod
 
     if name == "optim":
         if "lucid.optim" in _sys.modules:
-            return _sys.modules["lucid.optim"]
-        import lucid.optim as _optim
-        return _optim
+            mod = _sys.modules["lucid.optim"]
+        else:
+            import lucid.optim as mod  # type: ignore[no-redef]
+        _g["optim"] = mod
+        return mod
 
     if name == "autograd":
         if "lucid.autograd" in _sys.modules:
-            return _sys.modules["lucid.autograd"]
-        import lucid.autograd as _ag
-        return _ag
+            mod = _sys.modules["lucid.autograd"]
+        else:
+            import lucid.autograd as mod  # type: ignore[no-redef]
+        _g["autograd"] = mod
+        return mod
 
     if name == "linalg":
         if "lucid.linalg" in _sys.modules:
-            return _sys.modules["lucid.linalg"]
-        import lucid.linalg as _la
-        return _la
+            mod = _sys.modules["lucid.linalg"]
+        else:
+            import lucid.linalg as mod  # type: ignore[no-redef]
+        _g["linalg"] = mod
+        return mod
 
     if name == "metal":
         if "lucid.metal" in _sys.modules:
-            return _sys.modules["lucid.metal"]
-        import lucid.metal as _metal
-        return _metal
+            mod = _sys.modules["lucid.metal"]
+        else:
+            import lucid.metal as mod  # type: ignore[no-redef]
+        _g["metal"] = mod
+        return mod
 
     if name == "backends":
         if "lucid.backends" in _sys.modules:
-            return _sys.modules["lucid.backends"]
-        import lucid.backends as _backends
-        return _backends
+            mod = _sys.modules["lucid.backends"]
+        else:
+            import lucid.backends as mod  # type: ignore[no-redef]
+        _g["backends"] = mod
+        return mod
 
     _grad_names = {
         "no_grad", "enable_grad", "is_grad_enabled",
@@ -158,44 +179,57 @@ def __getattr__(name: str) -> object:
             no_grad, enable_grad, is_grad_enabled,
             set_grad_enabled, inference_mode,
         )
-        return {
+        _map = {
             "no_grad": no_grad,
             "enable_grad": enable_grad,
             "is_grad_enabled": is_grad_enabled,
             "set_grad_enabled": set_grad_enabled,
             "inference_mode": inference_mode,
-        }[name]
+        }
+        _g.update(_map)
+        return _map[name]
 
     if name in ("save", "load"):
         import lucid.serialization as _ser
-        return getattr(_ser, name)
+        obj = getattr(_ser, name)
+        _g[name] = obj
+        return obj
 
     if name == "utils":
         if "lucid.utils" in _sys.modules:
-            return _sys.modules["lucid.utils"]
-        import lucid.utils as _utils
-        return _utils
+            mod = _sys.modules["lucid.utils"]
+        else:
+            import lucid.utils as mod  # type: ignore[no-redef]
+        _g["utils"] = mod
+        return mod
 
     if name == "dtypes":
         import lucid.dtypes as _dtypes
+        _g["dtypes"] = _dtypes
         return _dtypes
 
     if name == "einops":
         if "lucid.einops" in _sys.modules:
-            return _sys.modules["lucid.einops"]
-        import lucid.einops as _einops
-        return _einops
+            mod = _sys.modules["lucid.einops"]
+        else:
+            import lucid.einops as mod  # type: ignore[no-redef]
+        _g["einops"] = mod
+        return mod
 
     if name == "profiler":
         if "lucid.profiler" in _sys.modules:
-            return _sys.modules["lucid.profiler"]
-        import lucid.profiler as _profiler
-        return _profiler
+            mod = _sys.modules["lucid.profiler"]
+        else:
+            import lucid.profiler as mod  # type: ignore[no-redef]
+        _g["profiler"] = mod
+        return mod
 
     if name == "amp":
         if "lucid.amp" in _sys.modules:
-            return _sys.modules["lucid.amp"]
-        import lucid.amp as _amp
-        return _amp
+            mod = _sys.modules["lucid.amp"]
+        else:
+            import lucid.amp as mod  # type: ignore[no-redef]
+        _g["amp"] = mod
+        return mod
 
     raise AttributeError(f"module 'lucid' has no attribute '{name}'")

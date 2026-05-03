@@ -3,8 +3,9 @@ autograd.backward() and autograd.grad() free functions.
 """
 
 from typing import TYPE_CHECKING
+import numpy as np
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap
+from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -78,8 +79,6 @@ def grad(
     >>> y = (x * x).sum()
     >>> (gx,) = lucid.autograd.grad(y, [x])
     """
-    import numpy as np
-
     if not isinstance(outputs, (list, tuple)):
         outputs = [outputs]
     if not isinstance(inputs, (list, tuple)):
@@ -117,7 +116,6 @@ def grad(
         else:
             arr = np.ascontiguousarray(np.asarray(g_raw))
             impl = _C_engine.TensorImpl(arr, inp._impl.device, False)
-            from lucid._dispatch import _wrap
             result.append(_wrap(impl))
 
     # Restore original .grad values

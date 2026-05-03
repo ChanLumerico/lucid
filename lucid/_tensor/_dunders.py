@@ -6,7 +6,10 @@ the Tensor class by _inject_dunders() at module import time.
 """
 
 from typing import Any, TYPE_CHECKING
+import numpy as np
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
+from lucid._tensor._indexing import _getitem, _setitem
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -20,11 +23,10 @@ def _unwrap_or_scalar(
     Return TensorImpl for Tensor; convert scalars to scalar TensorImpl.
     ref_impl is used to match dtype/device for scalar→TensorImpl conversion.
     """
-    import numpy as np
-    from lucid._tensor.tensor import Tensor as _Tensor
-
-    if isinstance(x, _Tensor):
-        return x._impl
+    # Avoid circular import: check duck-type attribute instead of isinstance
+    impl = getattr(x, "_impl", None)
+    if impl is not None and isinstance(impl, _C_engine.TensorImpl):
+        return impl
     if isinstance(x, _C_engine.TensorImpl):
         return x
 
@@ -63,7 +65,6 @@ _DTYPE_TO_NP: dict[_C_engine.Dtype, str] = {
 
 def _inject_dunders(cls: type) -> None:
     """Attach all dunder methods to the Tensor class."""
-    from lucid._dispatch import _wrap
 
     def __add__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.add(self._impl, _unwrap_or_scalar(other, self._impl)))
@@ -160,11 +161,9 @@ def _inject_dunders(cls: type) -> None:
         return _wrap(_C_engine.greater_equal(self._impl, _unwrap_or_scalar(other, self._impl)))
 
     def __getitem__(self: Tensor, idx: Any) -> Tensor:
-        from lucid._tensor._indexing import _getitem
         return _getitem(self, idx)
 
     def __setitem__(self: Tensor, idx: Any, value: Any) -> None:
-        from lucid._tensor._indexing import _setitem
         _setitem(self, idx, value)
 
     # attach all methods

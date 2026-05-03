@@ -4,10 +4,13 @@ Injected into Tensor by _inject_to() after class definition.
 """
 
 from typing import Any, TYPE_CHECKING
+import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype as _dtype_cls, to_engine_dtype
+from lucid._dtype import float16, float32, float64, int32, int64, bool_
 from lucid._device import device as _device_cls
 from lucid._dispatch import _parse_device, _wrap
+from lucid._factories.converters import _engine_dtype_to_np
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -30,13 +33,12 @@ def _inject_to(cls: type) -> None:
           .to(other_tensor)            → match other's device & dtype
           .to(device=, dtype=, copy=)
         """
-        from lucid._tensor.tensor import Tensor as _T
         target_device = self._impl.device
         target_dtype  = self._impl.dtype
         copy = _builtin_bool(kwargs.get("copy", False))
 
         for a in args:
-            if isinstance(a, _T):
+            if isinstance(a, cls):
                 target_device = a._impl.device
                 target_dtype  = a._impl.dtype
             elif isinstance(a, _C_engine.Device):
@@ -61,8 +63,6 @@ def _inject_to(cls: type) -> None:
             return self
 
         impl = _C_engine.contiguous(self._impl)
-        import numpy as np
-        from lucid._factories.converters import _engine_dtype_to_np
         arr = np.asarray(impl.data_as_python())
         np_dtype = _engine_dtype_to_np(target_dtype)
         arr = arr.astype(np_dtype, copy=False)
@@ -80,32 +80,26 @@ def _inject_to(cls: type) -> None:
 
     def float(self: Tensor) -> Tensor:
         """Cast to float32."""
-        from lucid._dtype import float32
         return to(self, float32)
 
     def double(self: Tensor) -> Tensor:
         """Cast to float64."""
-        from lucid._dtype import float64
         return to(self, float64)
 
     def half(self: Tensor) -> Tensor:
         """Cast to float16."""
-        from lucid._dtype import float16
         return to(self, float16)
 
     def int(self: Tensor) -> Tensor:
         """Cast to int32."""
-        from lucid._dtype import int32
         return to(self, int32)
 
     def long(self: Tensor) -> Tensor:
         """Cast to int64."""
-        from lucid._dtype import int64
         return to(self, int64)
 
     def bool(self: Tensor) -> Tensor:
         """Cast to bool."""
-        from lucid._dtype import bool_
         return to(self, bool_)
 
     for _name, _fn in [

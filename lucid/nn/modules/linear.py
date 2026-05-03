@@ -6,9 +6,9 @@ import math
 from typing import Any
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
-# F imported lazily inside forward()
 import lucid.nn.init as init
 from lucid._factories.creation import empty
+from lucid.nn.functional.linear import linear, bilinear
 
 
 class Linear(Module):
@@ -69,8 +69,7 @@ class Linear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.linear(x, self.weight, self.bias)
+        return linear(x, self.weight, self.bias)
 
     def extra_repr(self) -> str:
         return f"in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}"
@@ -80,7 +79,6 @@ class Identity(Module):
     """Pass-through layer that returns its input unchanged."""
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
         return x
 
 
@@ -115,8 +113,7 @@ class Bilinear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x1: Any, x2: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.bilinear(x1, x2, self.weight, self.bias)
+        return bilinear(x1, x2, self.weight, self.bias)
 
     def extra_repr(self) -> str:
         return (f"in1_features={self.in1_features}, in2_features={self.in2_features}, "

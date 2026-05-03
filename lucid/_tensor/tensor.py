@@ -5,6 +5,9 @@ import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype, _ENGINE_TO_DTYPE, float16, float32, float64, bfloat16, complex64
 from lucid._device import device, _device_from_engine
+from lucid._dispatch import _wrap, _impl_with_grad
+from lucid._factories.creation import zeros as _zeros, ones as _ones, empty as _empty, full as _full
+from lucid._factories.converters import tensor as _tensor_fn, _to_impl
 
 if TYPE_CHECKING:
     from lucid.nn.module import Module
@@ -51,7 +54,6 @@ class Tensor:
         device: device | str | None = None,
         requires_grad: bool = False,
     ) -> None:
-        from lucid._factories.converters import _to_impl
         self._impl: _C_engine.TensorImpl = _to_impl(
             data, dtype=dtype, device=device, requires_grad=requires_grad
         )
@@ -110,7 +112,6 @@ class Tensor:
 
     @requires_grad.setter
     def requires_grad(self, v: bool) -> None:
-        from lucid._dispatch import _impl_with_grad
         self._impl = _impl_with_grad(self._impl, v)
 
     def numel(self) -> int:
@@ -139,7 +140,6 @@ class Tensor:
         g = self._impl.grad_as_python()
         if g is None:
             return None
-        import numpy as np
         arr = np.asarray(g)
         impl = _C_engine.TensorImpl(arr, self._impl.device, False)
         return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
@@ -148,8 +148,6 @@ class Tensor:
     def grad(self, v: Tensor | None) -> None:
         if v is None:
             self._impl.zero_grad()
-        # TensorImpl has no set_grad — assignment sets the underlying grad buffer
-        # through engine_backward only; manual grad setting is not supported
 
     @property
     def grad_fn(self) -> _C_engine.Node | None:
@@ -157,7 +155,6 @@ class Tensor:
 
     def requires_grad_(self, requires_grad: bool = True) -> Self:
         """Set requires_grad in-place and return self."""
-        from lucid._dispatch import _impl_with_grad
         self._impl = _impl_with_grad(self._impl, requires_grad)
         return self
 
@@ -208,7 +205,6 @@ class Tensor:
                     f"backward(): gradient shape {tuple(gradient._impl.shape)} does not "
                     f"match tensor shape {tuple(self._impl.shape)}"
                 )
-            # Compute VJP: (self * g.detach()).sum() then backprop that scalar
             g_impl = gradient.detach()._impl
             scaled = _C_engine.mul(self._impl, g_impl)
             root = _C_engine.sum(scaled)
@@ -223,21 +219,17 @@ class Tensor:
 
     def detach(self) -> Self:
         """Return a new Tensor detached from the autograd graph."""
-        from lucid._dispatch import _wrap, _impl_with_grad
-        import numpy as np
         arr = np.ascontiguousarray(np.asarray(self._impl.data_as_python()))
         impl = _C_engine.TensorImpl(arr, self._impl.device, False)
         return _wrap(impl)  # type: ignore[return-value]
 
     def detach_(self) -> Self:
         """Detach in-place from the autograd graph."""
-        from lucid._dispatch import _impl_with_grad
         self._impl = _impl_with_grad(self._impl, False)
         return self
 
     def clone(self) -> Self:
         """Return a copy of this tensor, preserving autograd history."""
-        from lucid._dispatch import _wrap
         impl = _C_engine.contiguous(self._impl)
         return _wrap(impl)  # type: ignore[return-value]
 
@@ -250,13 +242,11 @@ class Tensor:
                 "item() can only be called on a tensor with one element"
             )
         arr = self._impl.data_as_python()
-        import numpy as np
         val = np.asarray(arr).flat[0]
         return val.item()
 
     def numpy(self) -> np.ndarray:  # type: ignore[type-arg]
         """Return the tensor as a NumPy array (CPU only)."""
-        import numpy as np
         raw = self._impl.data_as_python()
         return np.asarray(raw)
 
@@ -266,13 +256,11 @@ class Tensor:
 
     def contiguous(self) -> Self:
         """Return a contiguous copy of this tensor."""
-        from lucid._dispatch import _wrap
         return _wrap(_C_engine.contiguous(self._impl))  # type: ignore[return-value]
 
     @property
     def data(self) -> Self:
         """Return this tensor's data without gradient tracking."""
-        from lucid._dispatch import _impl_with_grad
         return Tensor.__new_from_impl__(_impl_with_grad(self._impl, False))  # type: ignore[return-value]
 
     # ── device/dtype conversion ───────────────────────────────────────────────
@@ -293,8 +281,7 @@ class Tensor:
         return bool(self.item())
 
     def __repr__(self) -> str:
-        from lucid._tensor._repr import tensor_repr
-        return tensor_repr(self)
+        return _tensor_repr(self)
 
     # hash: identity-based so tensors can be used as dict keys
     __hash__ = object.__hash__  # type: ignore[assignment]
@@ -319,7 +306,6 @@ class Tensor:
                   device: device | str | None = None,
                   requires_grad: bool = False) -> Self:
         """Return an uninitialized tensor with the given size, inheriting dtype/device."""
-        from lucid._factories.creation import empty as _empty
         _dtype = dtype or self.dtype
         _device = device or self.device
         return _empty(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
@@ -329,7 +315,6 @@ class Tensor:
                   device: device | str | None = None,
                   requires_grad: bool = False) -> Self:
         """Return a zeros tensor with the given size, inheriting dtype/device."""
-        from lucid._factories.creation import zeros as _zeros
         _dtype = dtype or self.dtype
         _device = device or self.device
         return _zeros(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
@@ -339,7 +324,6 @@ class Tensor:
                  device: device | str | None = None,
                  requires_grad: bool = False) -> Self:
         """Return an all-ones tensor with the given size, inheriting dtype/device."""
-        from lucid._factories.creation import ones as _ones
         _dtype = dtype or self.dtype
         _device = device or self.device
         return _ones(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
@@ -350,7 +334,6 @@ class Tensor:
                  device: device | str | None = None,
                  requires_grad: bool = False) -> Self:
         """Return a tensor filled with fill_value, inheriting dtype/device."""
-        from lucid._factories.creation import full as _full
         _dtype = dtype or self.dtype
         _device = device or self.device
         return _full(size, fill_value, dtype=_dtype, device=_device,  # type: ignore[return-value]
@@ -360,11 +343,10 @@ class Tensor:
                    device: device | str | None = None,
                    requires_grad: bool = False) -> Self:
         """Return a new tensor from data, inheriting dtype/device."""
-        from lucid._factories.converters import tensor as _tensor
         _dtype = dtype or self.dtype
         _device = device or self.device
-        return _tensor(data, dtype=_dtype, device=_device,  # type: ignore[return-value]
-                       requires_grad=requires_grad)
+        return _tensor_fn(data, dtype=_dtype, device=_device,  # type: ignore[return-value]
+                          requires_grad=requires_grad)
 
     # ── size / element info ───────────────────────────────────────────────────
 
@@ -400,13 +382,11 @@ class Tensor:
     def copy_(self, other: Self) -> Self:
         """Copy data from other into this tensor in-place."""
         raw = self._impl.data_as_python()
-        import numpy as np
         raw[:] = np.asarray(other._impl.data_as_python())
         return self
 
     def flip(self, dims: int | list[int]) -> Self:
         """Reverse the tensor along the given dimension(s)."""
-        import numpy as np
         dims_list = [dims] if isinstance(dims, int) else list(dims)
         arr = np.ascontiguousarray(np.flip(np.asarray(self._impl.data_as_python()), axis=dims_list))
         impl = _C_engine.TensorImpl(arr, self._impl.device, False)
@@ -422,8 +402,6 @@ class Tensor:
 
     def index_select(self, dim: int, index: Self) -> Self:
         """Select elements along dim using integer index tensor."""
-        # Build broadcast index for gather
-        import numpy as np
         out_shape = list(self._impl.shape)
         out_shape[dim] = index._impl.shape[0]
         idx_1d = np.asarray(index._impl.data_as_python()).flatten().astype(np.int32)
@@ -435,7 +413,6 @@ class Tensor:
 
     def masked_select(self, mask: Self) -> Self:
         """Return a 1-D tensor of elements where mask is True."""
-        import numpy as np
         arr = np.asarray(self._impl.data_as_python())
         m = np.asarray(mask._impl.data_as_python()).astype(bool)
         selected = np.ascontiguousarray(arr[m].astype(arr.dtype))
@@ -468,7 +445,6 @@ class Tensor:
                 _C_engine.mul(weight._impl, diff._impl)
             )
         else:
-            import numpy as np
             w_arr = np.full(diff._impl.shape, weight, dtype=np.float32)
             w_impl = _C_engine.TensorImpl(w_arr, self._impl.device, False)
             scaled = Tensor.__new_from_impl__(  # type: ignore[return-value]
@@ -479,7 +455,6 @@ class Tensor:
     def where(self, condition: Self, other: Self | float) -> Self:
         """Return elements from self where condition is True, else from other."""
         if not isinstance(other, Tensor):
-            import numpy as np
             arr = np.full(self._impl.shape, float(other), dtype=np.float32)
             other_impl = _C_engine.TensorImpl(arr, self._impl.device, False)
         else:
@@ -495,8 +470,6 @@ class Tensor:
             ndim = len(result._impl.shape)
             d = dim % ndim
             length = result._impl.shape[d]
-            # result[1:] - result[:-1] along dim
-            from lucid._tensor._indexing import _select_slice as _ss
             a_impl = _ss(result._impl, d, slice(1, length, 1))
             b_impl = _ss(result._impl, d, slice(0, length - 1, 1))
             result = Tensor.__new_from_impl__(_C_engine.sub(a_impl, b_impl))  # type: ignore[assignment]
@@ -506,7 +479,6 @@ class Tensor:
               beta: float = 1.0, alpha: float = 1.0) -> Self:
         """beta * self + alpha * mat1 @ mat2."""
         mm = Tensor.__new_from_impl__(_C_engine.matmul(mat1._impl, mat2._impl))  # type: ignore[return-value]
-        import numpy as np
         if alpha != 1.0:
             a_arr = np.full(mm._impl.shape, alpha, dtype=np.float32)
             a_impl = _C_engine.TensorImpl(a_arr, mm._impl.device, False)
@@ -529,7 +501,6 @@ class Tensor:
 
     def zero_(self) -> Self:
         """Fill this tensor with zeros in-place."""
-        from lucid._dispatch import _unwrap
         result = _C_engine.mul_(self._impl, _C_engine.zeros(
             self._impl.shape, self._impl.dtype, self._impl.device
         ))
@@ -538,6 +509,8 @@ class Tensor:
 
 
 # ── inject dunders and methods after class definition ────────────────────────
+from lucid._tensor._repr import tensor_repr as _tensor_repr  # noqa: E402
+from lucid._tensor._indexing import _select_slice as _ss  # noqa: E402
 from lucid._tensor._dunders import _inject_dunders  # noqa: E402
 from lucid._tensor._methods import _inject_methods  # noqa: E402
 from lucid._tensor._to import _inject_to  # noqa: E402

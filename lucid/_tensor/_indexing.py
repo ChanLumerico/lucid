@@ -14,6 +14,8 @@ Supported index forms:
 from typing import Any, TYPE_CHECKING
 import numpy as np
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap, _unwrap
+from lucid._dtype import bool_ as _bool_dtype
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -75,18 +77,14 @@ def _select_slice(impl: _C_engine.TensorImpl, dim: int, s: slice) -> _C_engine.T
 
 
 def _getitem(t: Tensor, idx: Any) -> Tensor:
-    from lucid._dispatch import _wrap, _unwrap
-    from lucid._tensor.tensor import Tensor as _Tensor
-
     impl = t._impl
 
     # bool mask
-    if isinstance(idx, _Tensor) and idx.dtype._name == "bool":
-        indices = _C_engine.nonzero(_unwrap(idx))
-        return _wrap(_C_engine.gather(impl, indices, 0))
-
-    # integer tensor indexing
-    if isinstance(idx, _Tensor):
+    if hasattr(idx, "_impl") and getattr(idx, "dtype", None) is not None:
+        if idx.dtype is _bool_dtype:
+            indices = _C_engine.nonzero(_unwrap(idx))
+            return _wrap(_C_engine.gather(impl, indices, 0))
+        # integer tensor indexing
         return _wrap(_C_engine.gather(impl, _unwrap(idx), 0))
 
     # normalize single index → tuple
@@ -136,10 +134,7 @@ def _normalize_and_apply_index(
 
 def _setitem(t: Tensor, idx: Any, value: Any) -> None:
     """In-place assignment: t[idx] = value."""
-    from lucid._dispatch import _unwrap
-    from lucid._tensor.tensor import Tensor as _Tensor
-
-    if isinstance(value, _Tensor):
+    if hasattr(value, "_impl"):
         v_impl = value._impl
     elif isinstance(value, (int, float, bool)):
         v_impl = _C_engine.full(

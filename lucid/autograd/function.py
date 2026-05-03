@@ -4,9 +4,12 @@ autograd.Function: base class for custom differentiable operations.
 
 from typing import Any, TYPE_CHECKING
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
+from lucid._tensor.tensor import Tensor
+from lucid.autograd._python_node import _register
 
 if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
+    pass
 
 
 class FunctionCtx:
@@ -25,9 +28,6 @@ class FunctionCtx:
     @property
     def saved_tensors(self) -> tuple[Any, ...]:
         """Return the tensors saved by save_for_backward() as Tensors."""
-        from lucid._tensor.tensor import Tensor as _T
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _wrap
         result: list[Any] = []
         for t in self._saved_tensors:
             if isinstance(t, _C_engine.TensorImpl):
@@ -58,18 +58,16 @@ class FunctionCtx:
 
 def _make_apply(cls: type) -> classmethod:
     def apply(klass: type, *args: Any, **kwargs: Any) -> Any:
-        from lucid._tensor.tensor import Tensor as _T
         ctx = FunctionCtx()
         ctx.needs_input_grad = tuple(
-            isinstance(a, _T) and a.requires_grad for a in args
+            isinstance(a, Tensor) and a.requires_grad for a in args
         )
 
         output = klass.forward(ctx, *args, **kwargs)
 
         if _C_engine.grad_enabled() and any(ctx.needs_input_grad):
-            from lucid.autograd._python_node import _register
-            tensor_inputs = [a for a in args if isinstance(a, _T)]
-            if isinstance(output, _T):
+            tensor_inputs = [a for a in args if isinstance(a, Tensor)]
+            if isinstance(output, Tensor):
                 _register(output, klass, ctx, tensor_inputs)
 
         return output

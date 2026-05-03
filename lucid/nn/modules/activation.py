@@ -4,7 +4,15 @@ Activation function modules.
 
 from typing import Any
 from lucid.nn.module import Module
-# F imported lazily inside forward()
+from lucid.nn.parameter import Parameter
+from lucid._factories.creation import full
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
+from lucid.nn.functional.activations import (
+    relu, leaky_relu, elu, selu, gelu, silu, mish,
+    hardswish, hardsigmoid, sigmoid, tanh,
+    softmax, log_softmax, relu6, prelu, softmin, glu,
+)
 
 
 class ReLU(Module):
@@ -13,8 +21,7 @@ class ReLU(Module):
         super().__init__()
         self.inplace = inplace
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.relu(x, self.inplace)
+        return relu(x, self.inplace)
     def extra_repr(self) -> str:
         return f"inplace={self.inplace}" if self.inplace else ""
 
@@ -25,8 +32,7 @@ class LeakyReLU(Module):
         self.negative_slope = negative_slope
         self.inplace = inplace
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.leaky_relu(x, self.negative_slope, self.inplace)
+        return leaky_relu(x, self.negative_slope, self.inplace)
     def extra_repr(self) -> str:
         return f"negative_slope={self.negative_slope}"
 
@@ -37,8 +43,7 @@ class ELU(Module):
         self.alpha = alpha
         self.inplace = inplace
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.elu(x, self.alpha, self.inplace)
+        return elu(x, self.alpha, self.inplace)
     def extra_repr(self) -> str:
         return f"alpha={self.alpha}"
 
@@ -48,8 +53,7 @@ class SELU(Module):
         super().__init__()
         self.inplace = inplace
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.selu(x, self.inplace)
+        return selu(x, self.inplace)
 
 class GELU(Module):
     """Gaussian error linear unit."""
@@ -57,8 +61,7 @@ class GELU(Module):
         super().__init__()
         self.approximate = approximate
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.gelu(x, self.approximate)
+        return gelu(x, self.approximate)
     def extra_repr(self) -> str:
         return f"approximate={self.approximate!r}" if self.approximate != "none" else ""
 
@@ -67,38 +70,32 @@ class SiLU(Module):
     def __init__(self, inplace: bool = False) -> None:
         super().__init__()
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.silu(x)
+        return silu(x)
 
 class Mish(Module):
     """Mish activation."""
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.mish(x)
+        return mish(x)
 
 class Hardswish(Module):
     """Hard Swish activation."""
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.hardswish(x)
+        return hardswish(x)
 
 class Hardsigmoid(Module):
     """Hard sigmoid activation."""
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.hardsigmoid(x)
+        return hardsigmoid(x)
 
 class Sigmoid(Module):
     """Sigmoid activation."""
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.sigmoid(x)
+        return sigmoid(x)
 
 class Tanh(Module):
     """Hyperbolic tangent."""
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.tanh(x)
+        return tanh(x)
 
 class Softmax(Module):
     """Softmax activation."""
@@ -106,8 +103,7 @@ class Softmax(Module):
         super().__init__()
         self.dim = dim
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.softmax(x, self.dim)
+        return softmax(x, self.dim)
     def extra_repr(self) -> str:
         return f"dim={self.dim}"
 
@@ -117,8 +113,7 @@ class LogSoftmax(Module):
         super().__init__()
         self.dim = dim
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.log_softmax(x, self.dim)
+        return log_softmax(x, self.dim)
     def extra_repr(self) -> str:
         return f"dim={self.dim}"
 
@@ -127,8 +122,7 @@ class ReLU6(Module):
     def __init__(self, inplace: bool = False) -> None:
         super().__init__()
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.relu6(x)
+        return relu6(x)
 
 
 class PReLU(Module):
@@ -136,13 +130,10 @@ class PReLU(Module):
     def __init__(self, num_parameters: int = 1, init: float = 0.25,
                  device: Any = None, dtype: Any = None) -> None:
         super().__init__()
-        from lucid.nn.parameter import Parameter
-        from lucid._factories.creation import full
         self.num_parameters = num_parameters
         self.weight = Parameter(full((num_parameters,), init, dtype=dtype, device=device))
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.prelu(x, self.weight)
+        return prelu(x, self.weight)
     def extra_repr(self) -> str:
         return f"num_parameters={self.num_parameters}"
 
@@ -154,8 +145,6 @@ class Threshold(Module):
         self.threshold = threshold
         self.value = value
     def forward(self, x: Any) -> Any:
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
         impl = _unwrap(x)
         fill = _C_engine.full(impl.shape, self.value, impl.dtype, impl.device)
         thresh = _C_engine.full(impl.shape, self.threshold, impl.dtype, impl.device)
@@ -173,8 +162,6 @@ class Hardtanh(Module):
         self.min_val = min_val
         self.max_val = max_val
     def forward(self, x: Any) -> Any:
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
         impl = _unwrap(x)
         return _wrap(_C_engine.clip(impl, self.min_val, self.max_val))
     def extra_repr(self) -> str:
@@ -184,16 +171,12 @@ class Hardtanh(Module):
 class LogSigmoid(Module):
     """Log-sigmoid: log(sigmoid(x))."""
     def forward(self, x: Any) -> Any:
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
         return _wrap(_C_engine.log(_C_engine.sigmoid(_unwrap(x))))
 
 
 class Softsign(Module):
     """Softsign: x / (1 + |x|)."""
     def forward(self, x: Any) -> Any:
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
         impl = _unwrap(x)
         denom = _C_engine.add(_C_engine.full(impl.shape, 1.0, impl.dtype, impl.device),
                               _C_engine.abs(impl))
@@ -206,8 +189,7 @@ class Softmin(Module):
         super().__init__()
         self.dim = dim
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.softmin(x, self.dim)
+        return softmin(x, self.dim)
     def extra_repr(self) -> str:
         return f"dim={self.dim}"
 
@@ -218,7 +200,6 @@ class GLU(Module):
         super().__init__()
         self.dim = dim
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.glu(x, self.dim)
+        return glu(x, self.dim)
     def extra_repr(self) -> str:
         return f"dim={self.dim}"

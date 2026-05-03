@@ -6,8 +6,10 @@ from typing import Any
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import ones, zeros
-# F imported lazily inside forward()
 import lucid.nn.init as init
+from lucid.nn.functional.normalization import (
+    layer_norm, rms_norm, group_norm, batch_norm,
+)
 
 
 class LayerNorm(Module):
@@ -35,8 +37,7 @@ class LayerNorm(Module):
             self.bias = None
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.layer_norm(x, list(self.normalized_shape), self.weight, self.bias, self.eps)
+        return layer_norm(x, list(self.normalized_shape), self.weight, self.bias, self.eps)
 
     def extra_repr(self) -> str:
         return (f"{self.normalized_shape}, eps={self.eps}, "
@@ -61,8 +62,7 @@ class RMSNorm(Module):
         self.weight = Parameter(ones(*self.normalized_shape, dtype=dtype, device=device))
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
+        return rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
 
     def extra_repr(self) -> str:
         return f"{self.normalized_shape}, eps={self.eps}"
@@ -93,8 +93,7 @@ class GroupNorm(Module):
             self.bias = None
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        return group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
 
     def extra_repr(self) -> str:
         return f"{self.num_groups}, {self.num_channels}, eps={self.eps}, affine={self.affine}"
@@ -135,8 +134,7 @@ class _BatchNormBase(Module):
             self.register_buffer("running_var", None)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.batch_norm(
+        return batch_norm(
             x,
             self._buffers.get("running_mean"),
             self._buffers.get("running_var"),

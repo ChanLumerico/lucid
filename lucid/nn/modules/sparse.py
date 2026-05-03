@@ -8,7 +8,7 @@ from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
 import lucid.nn.init as init
-# F imported lazily inside forward()
+from lucid.nn.functional.sparse import embedding
 
 
 class Embedding(Module):
@@ -34,8 +34,7 @@ class Embedding(Module):
         init.normal_(self.weight)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.embedding(x, self.weight, self.padding_idx)
+        return embedding(x, self.weight, self.padding_idx)
 
     def extra_repr(self) -> str:
         return f"{self.num_embeddings}, {self.embedding_dim}, padding_idx={self.padding_idx}"

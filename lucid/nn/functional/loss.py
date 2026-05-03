@@ -106,9 +106,6 @@ def kl_div(
     log_target: bool = False,
 ) -> Tensor:
     """Kullback-Leibler divergence."""
-    from lucid._C import engine as E
-    import numpy as np
-    from lucid._dispatch import _wrap, _unwrap
     # KL(P||Q) = sum(P * (log P - log Q))
     if log_target:
         diff = _C_engine.sub(_unwrap(target), _unwrap(x))

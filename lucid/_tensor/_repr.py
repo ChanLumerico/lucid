@@ -1,6 +1,7 @@
 import numpy as np
 
 from typing import TYPE_CHECKING
+from lucid._dtype import float32 as _f32
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -30,7 +31,6 @@ def tensor_repr(t: Tensor) -> str:
     extras: list[str] = []
     if t.is_metal:
         extras.append("device='metal'")
-    from lucid._dtype import float32 as _f32
     if t.dtype is not _f32:
         extras.append(f"dtype={t.dtype!r}")
     if t.requires_grad:

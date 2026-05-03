@@ -4,7 +4,10 @@ Loss function modules.
 
 from typing import Any
 from lucid.nn.module import Module
-# F imported lazily inside forward()
+from lucid.nn.functional.loss import (
+    mse_loss, l1_loss, cross_entropy, nll_loss,
+    binary_cross_entropy, binary_cross_entropy_with_logits, huber_loss,
+)
 
 
 class MSELoss(Module):
@@ -13,8 +16,7 @@ class MSELoss(Module):
         super().__init__()
         self.reduction = reduction
     def forward(self, x: Any, target: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.mse_loss(x, target, self.reduction)
+        return mse_loss(x, target, self.reduction)
     def extra_repr(self) -> str:
         return f"reduction={self.reduction!r}"
 
@@ -25,8 +27,7 @@ class L1Loss(Module):
         super().__init__()
         self.reduction = reduction
     def forward(self, x: Any, target: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.l1_loss(x, target, self.reduction)
+        return l1_loss(x, target, self.reduction)
     def extra_repr(self) -> str:
         return f"reduction={self.reduction!r}"
 
@@ -46,8 +47,7 @@ class CrossEntropyLoss(Module):
         self.reduction = reduction
         self.label_smoothing = label_smoothing
     def forward(self, x: Any, target: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.cross_entropy(
+        return cross_entropy(
             x, target,
             weight=self.weight,
             ignore_index=self.ignore_index,
@@ -65,8 +65,7 @@ class NLLLoss(Module):
         super().__init__()
         self.reduction = reduction
     def forward(self, x: Any, target: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.nll_loss(x, target, reduction=self.reduction)
+        return nll_loss(x, target, reduction=self.reduction)
     def extra_repr(self) -> str:
         return f"reduction={self.reduction!r}"
 
@@ -77,8 +76,7 @@ class BCELoss(Module):
         super().__init__()
         self.reduction = reduction
     def forward(self, x: Any, target: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.binary_cross_entropy(x, target, reduction=self.reduction)
+        return binary_cross_entropy(x, target, reduction=self.reduction)
     def extra_repr(self) -> str:
         return f"reduction={self.reduction!r}"
 
@@ -90,8 +88,7 @@ class BCEWithLogitsLoss(Module):
         self.reduction = reduction
         self.pos_weight = pos_weight
     def forward(self, x: Any, target: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.binary_cross_entropy_with_logits(
+        return binary_cross_entropy_with_logits(
             x, target, pos_weight=self.pos_weight, reduction=self.reduction
         )
     def extra_repr(self) -> str:
@@ -105,7 +102,6 @@ class HuberLoss(Module):
         self.reduction = reduction
         self.delta = delta
     def forward(self, x: Any, target: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.huber_loss(x, target, self.delta, self.reduction)
+        return huber_loss(x, target, self.delta, self.reduction)
     def extra_repr(self) -> str:
         return f"delta={self.delta}, reduction={self.reduction!r}"

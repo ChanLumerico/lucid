@@ -4,6 +4,9 @@ Upsampling and pixel-shuffle modules.
 
 from typing import Any
 from lucid.nn.module import Module
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
+from lucid.nn.functional.sampling import interpolate
 
 
 class Upsample(Module):
@@ -30,9 +33,8 @@ class Upsample(Module):
         self.align_corners = align_corners
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.interpolate(x, size=self.size, scale_factor=self.scale_factor,
-                             mode=self.mode, align_corners=self.align_corners)
+        return interpolate(x, size=self.size, scale_factor=self.scale_factor,
+                           mode=self.mode, align_corners=self.align_corners)
 
     def extra_repr(self) -> str:
         parts = []
@@ -59,15 +61,9 @@ class PixelShuffle(Module):
         r = self.upscale_factor
         n, c_r2, h, w = x.shape
         c = c_r2 // (r * r)
-        # Reshape: (N, C, r, r, H, W) → (N, C, H*r, W*r)
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
         impl = _unwrap(x)
-        # (N, C, r, r, H, W)
         t = _C_engine.reshape(impl, [n, c, r, r, h, w])
-        # (N, C, H, r, W, r)
         t = _C_engine.permute(t, [0, 1, 4, 2, 5, 3])
-        # (N, C, H*r, W*r)
         return _wrap(_C_engine.reshape(t, [n, c, h * r, w * r]))
 
     def extra_repr(self) -> str:
@@ -89,14 +85,9 @@ class PixelUnshuffle(Module):
         r = self.downscale_factor
         n, c, h_r, w_r = x.shape
         h, w = h_r // r, w_r // r
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
         impl = _unwrap(x)
-        # (N, C, H, r, W, r)
         t = _C_engine.reshape(impl, [n, c, h, r, w, r])
-        # (N, C, r, r, H, W)
         t = _C_engine.permute(t, [0, 1, 3, 5, 2, 4])
-        # (N, C*r^2, H, W)
         return _wrap(_C_engine.reshape(t, [n, c * r * r, h, w]))
 
     def extra_repr(self) -> str:

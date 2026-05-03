@@ -4,6 +4,7 @@ Padding modules: Constant, Reflection, Replication, Zero padding.
 
 from typing import Any
 from lucid.nn.module import Module
+from lucid.nn.functional.sampling import pad
 
 
 class _ConstantPadNd(Module):
@@ -15,8 +16,7 @@ class _ConstantPadNd(Module):
         self.value = value
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.pad(x, self.padding, mode="constant", value=self.value)
+        return pad(x, self.padding, mode="constant", value=self.value)
 
     def extra_repr(self) -> str:
         return f"padding={self.padding}, value={self.value}"
@@ -69,8 +69,7 @@ class ReflectionPad1d(Module):
         self.padding = (padding, padding) if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.pad(x, self.padding, mode="reflect")
+        return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
         return f"padding={self.padding}"
@@ -84,8 +83,7 @@ class ReflectionPad2d(Module):
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.pad(x, self.padding, mode="reflect")
+        return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
         return f"padding={self.padding}"
@@ -99,8 +97,7 @@ class ReplicationPad1d(Module):
         self.padding = (padding, padding) if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.pad(x, self.padding, mode="replicate")
+        return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
         return f"padding={self.padding}"
@@ -114,8 +111,7 @@ class ReplicationPad2d(Module):
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.pad(x, self.padding, mode="replicate")
+        return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
         return f"padding={self.padding}"
@@ -129,8 +125,7 @@ class ReplicationPad3d(Module):
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Any) -> Any:
-        from lucid.nn import functional as F
-        return F.pad(x, self.padding, mode="replicate")
+        return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
         return f"padding={self.padding}"

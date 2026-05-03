@@ -3,25 +3,25 @@ RNN sequence packing utilities.
 """
 
 from typing import Any, NamedTuple, TYPE_CHECKING
+import numpy as np
+from lucid._tensor.tensor import Tensor as _Tensor
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
+from lucid._factories.creation import zeros as _zeros
+from lucid._factories.converters import tensor as _tensor_fn
+from lucid._ops import cat
 
 if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
+    pass
 
 
 class PackedSequence(NamedTuple):
-    """Holds packed padded sequence data.
+    """Holds packed padded sequence data."""
 
-    Attributes:
-        data:           packed tensor of shape (total_elements, *features)
-        batch_sizes:    number of valid elements per timestep
-        sorted_indices: permutation that sorted sequences by length
-        unsorted_indices: inverse permutation to restore original order
-    """
-
-    data: Any  # Tensor
-    batch_sizes: Any  # Tensor
-    sorted_indices: Any  # Tensor | None
-    unsorted_indices: Any  # Tensor | None
+    data: Any
+    batch_sizes: Any
+    sorted_indices: Any
+    unsorted_indices: Any
 
 
 def pack_padded_sequence(
@@ -30,24 +30,9 @@ def pack_padded_sequence(
     batch_first: bool = False,
     enforce_sorted: bool = True,
 ) -> PackedSequence:
-    """Pack a padded batch of variable-length sequences.
-
-    Args:
-        input:          (T, B, *) or (B, T, *) tensor.
-        lengths:        1-D tensor of sequence lengths.
-        batch_first:    If True, input is (B, T, *).
-        enforce_sorted: If True, sequences must be sorted by length descending.
-
-    Returns:
-        PackedSequence with packed data, batch_sizes, and sort indices.
-    """
-    import numpy as np
-    import lucid
-    from lucid._dispatch import _wrap
-    from lucid._C import engine as _C_engine
-
+    """Pack a padded batch of variable-length sequences."""
     if batch_first:
-        input = input.permute(1, 0, *range(2, input.ndim))  # → (T, B, *)
+        input = input.permute(1, 0, *range(2, input.ndim))
 
     T, B = input.shape[0], input.shape[1]
     lengths_np = np.asarray(lengths.numpy() if hasattr(lengths, "numpy") else lengths,
@@ -66,7 +51,7 @@ def pack_padded_sequence(
         input_np = input.numpy()
         input_np = input_np[:, sorted_indices_np]
         lengths_np = lengths_np[sorted_indices_np]
-        input = lucid.Tensor(input_np)
+        input = _Tensor(input_np)
 
     packed_list = []
     batch_sizes_list = []
@@ -77,16 +62,12 @@ def pack_padded_sequence(
         packed_list.append(input[t, :bs])
         batch_sizes_list.append(bs)
 
-    data_tensor = lucid.cat(packed_list, dim=0)  # type: ignore[attr-defined]
+    data_tensor = cat(packed_list, 0)
     bs_arr = np.array(batch_sizes_list, dtype=np.int64)
     batch_sizes_tensor = _wrap(_C_engine.TensorImpl(bs_arr, _C_engine.Device.CPU, False))
 
-    si_impl = _C_engine.TensorImpl(
-        sorted_indices_np.astype(np.int64), _C_engine.Device.CPU, False
-    )
-    ui_impl = _C_engine.TensorImpl(
-        unsorted_indices_np.astype(np.int64), _C_engine.Device.CPU, False
-    )
+    si_impl = _C_engine.TensorImpl(sorted_indices_np.astype(np.int64), _C_engine.Device.CPU, False)
+    ui_impl = _C_engine.TensorImpl(unsorted_indices_np.astype(np.int64), _C_engine.Device.CPU, False)
     return PackedSequence(data_tensor, batch_sizes_tensor, _wrap(si_impl), _wrap(ui_impl))
 
 
@@ -96,17 +77,7 @@ def pad_packed_sequence(
     padding_value: float = 0.0,
     total_length: int | None = None,
 ) -> tuple[Any, Any]:
-    """Unpack a PackedSequence to a padded tensor.
-
-    Returns:
-        (output, lengths) where output is (T, B, *) or (B, T, *) depending on
-        batch_first, and lengths is a 1-D tensor of valid lengths.
-    """
-    import numpy as np
-    import lucid
-    from lucid._dispatch import _wrap
-    from lucid._C import engine as _C_engine
-
+    """Unpack a PackedSequence to a padded tensor."""
     data = sequence.data
     batch_sizes_np = np.asarray(sequence.batch_sizes.numpy())
 
@@ -129,15 +100,15 @@ def pad_packed_sequence(
         bs = int(batch_sizes_np[t])
         lengths_np[:bs] = np.maximum(lengths_np[:bs], t + 1)
 
-    output = lucid.Tensor(out_np)
+    output = _Tensor(out_np)
     if sequence.unsorted_indices is not None:
         ui = np.asarray(sequence.unsorted_indices.numpy()).astype(np.int64)
         out_np2 = out_np[:, ui]
         lengths_np = lengths_np[ui]
-        output = lucid.Tensor(out_np2)
+        output = _Tensor(out_np2)
 
     if batch_first:
-        output = output.permute(1, 0, *range(2, output.ndim))  # type: ignore[attr-defined]
+        output = output.permute(1, 0, *range(2, output.ndim))
 
     len_impl = _C_engine.TensorImpl(lengths_np, _C_engine.Device.CPU, False)
     return output, _wrap(len_impl)
@@ -148,19 +119,7 @@ def pad_sequence(
     batch_first: bool = False,
     padding_value: float = 0.0,
 ) -> Any:
-    """Pad a list of variable-length tensors.
-
-    Args:
-        sequences:     list of tensors of shape (L_i, *).
-        batch_first:   If True, output is (B, T_max, *); else (T_max, B, *).
-        padding_value: Scalar used for padding.
-
-    Returns:
-        Padded tensor.
-    """
-    import numpy as np
-    import lucid
-
+    """Pad a list of variable-length tensors."""
     T_max = max(s.shape[0] for s in sequences)
     B = len(sequences)
     feat_shape = sequences[0].shape[1:]
@@ -172,4 +131,4 @@ def pad_sequence(
     if batch_first:
         out_np = np.transpose(out_np, (1, 0) + tuple(range(2, out_np.ndim)))
 
-    return lucid.Tensor(out_np)
+    return _Tensor(out_np)

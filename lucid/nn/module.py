@@ -8,6 +8,7 @@ from typing import Any, Callable, Iterator, Self, TYPE_CHECKING
 from lucid._tensor.tensor import Tensor
 from lucid.nn.parameter import Parameter
 from lucid.nn.hooks import RemovableHandle
+from lucid.nn._state_dict import _save_to_state_dict, _load_from_state_dict
 
 if TYPE_CHECKING:
     pass
@@ -329,14 +330,12 @@ class Module:
         self, *, prefix: str = "", keep_vars: bool = False
     ) -> dict[str, Tensor]:
         """Return a dict mapping parameter/buffer names to tensors."""
-        from lucid.nn._state_dict import _save_to_state_dict
         return _save_to_state_dict(self, prefix=prefix, keep_vars=keep_vars)
 
     def load_state_dict(
         self, state_dict: dict[str, Tensor], strict: bool = True
     ) -> tuple[list[str], list[str]]:
         """Load parameters from a state_dict. Returns (missing_keys, unexpected_keys)."""
-        from lucid.nn._state_dict import _load_from_state_dict
         return _load_from_state_dict(self, state_dict, strict=strict)
 
     # ── hooks ─────────────────────────────────────────────────────────────

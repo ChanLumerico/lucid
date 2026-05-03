@@ -3,6 +3,10 @@ state_dict save/load helpers for Module.
 """
 
 from typing import Any, TYPE_CHECKING
+import numpy as np
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
+from lucid.nn.parameter import Parameter
 
 if TYPE_CHECKING:
     from lucid.nn.module import Module
@@ -46,11 +50,6 @@ def _load_from_state_dict(
     strict: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Load parameters from state_dict. Returns (missing_keys, unexpected_keys)."""
-    import numpy as np
-    from lucid._C import engine as _C_engine
-    from lucid.nn.parameter import Parameter
-    from lucid._dispatch import _wrap
-
     own_state = module.state_dict(keep_vars=True)
     missing_keys: list[str] = []
     unexpected_keys: list[str] = []

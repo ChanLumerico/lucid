@@ -6,10 +6,14 @@ import math
 from typing import Any
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
-from lucid._factories.creation import empty
+from lucid._factories.creation import empty, zeros, ones
+from lucid._factories.random import rand
 import lucid.nn.init as init
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid.nn.functional.linear import linear
+from lucid.nn.functional.activations import tanh, relu, sigmoid
+from lucid._ops import stack
 
 
 class LSTM(Module):
@@ -33,26 +37,10 @@ class LSTM(Module):
     bidirectional : bool, optional
         If ``True``, use a bidirectional LSTM (default: ``False``).
 
-    Inputs
-    ------
-    input : Tensor
-        Shape ``(seq_len, batch, input_size)`` or ``(batch, seq_len, input_size)``
-        depending on ``batch_first``.
-    hx : tuple of (h_0, c_0), optional
-        Initial hidden and cell states. Each of shape
-        ``(num_layers * num_directions, batch, hidden_size)``.
-
-    Outputs
-    -------
-    output : Tensor
-        All hidden states of shape ``(seq_len, batch, hidden_size)``.
-    (h_n, c_n) : tuple of Tensor
-        Final hidden and cell states.
-
     Examples
     --------
     >>> lstm = nn.LSTM(input_size=10, hidden_size=20, batch_first=True)
-    >>> x = lucid.randn(2, 5, 10)         # (batch, seq, features)
+    >>> x = lucid.randn(2, 5, 10)
     >>> output, (h_n, c_n) = lstm(x)
     >>> output.shape
     (2, 5, 20)
@@ -119,7 +107,6 @@ class LSTM(Module):
         h0_impl = _unwrap(hx[0]) if hx is not None else None
         c0_impl = _unwrap(hx[1]) if hx is not None else None
 
-        # Collect weights in order: [wih_l0, whh_l0, bih_l0, bhh_l0, ...]
         weights = []
         num_dirs = 2 if self.bidirectional else 1
         for layer in range(self.num_layers):
@@ -131,7 +118,6 @@ class LSTM(Module):
                     weights.append(_unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"]))
                     weights.append(_unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"]))
 
-        # Engine always expects/returns (T, B, H) — transpose if batch_first
         x_impl = _unwrap(x)
         if self.batch_first:
             x_impl = _C_engine.permute(x_impl, [1, 0, 2])
@@ -142,7 +128,7 @@ class LSTM(Module):
             weights,
             self.hidden_size,
             self.num_layers,
-            False,  # always seq-first to engine
+            False,
             self.bidirectional,
             self.bias,
         )
@@ -162,7 +148,7 @@ class LSTM(Module):
 # ── Pure-Python RNN cells ─────────────────────────────────────────────────────
 
 class RNNCell(Module):
-    """Single-step Elman RNN cell: h = tanh(x @ W_ih.T + b_ih + h @ W_hh.T + b_hh)."""
+    """Single-step Elman RNN cell."""
 
     def __init__(self, input_size: int, hidden_size: int, bias: bool = True,
                  nonlinearity: str = "tanh", device: Any = None, dtype: Any = None) -> None:
@@ -183,13 +169,10 @@ class RNNCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     def forward(self, x: Any, hx: Any = None) -> Any:
-        from lucid.nn import functional as F
-        from lucid._factories.creation import zeros
         if hx is None:
-            batch = x.shape[0]
-            hx = zeros(batch, self.hidden_size)
-        pre = F.linear(x, self.weight_ih, self.bias_ih) + F.linear(hx, self.weight_hh, self.bias_hh)
-        return F.tanh(pre) if self.nonlinearity == "tanh" else F.relu(pre)
+            hx = zeros(x.shape[0], self.hidden_size)
+        pre = linear(x, self.weight_ih, self.bias_ih) + linear(hx, self.weight_hh, self.bias_hh)
+        return tanh(pre) if self.nonlinearity == "tanh" else relu(pre)
 
     def extra_repr(self) -> str:
         return f"{self.input_size}, {self.hidden_size}, nonlinearity={self.nonlinearity!r}"
@@ -216,24 +199,21 @@ class LSTMCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     def forward(self, x: Any, hx: tuple[Any, Any] | None = None) -> tuple[Any, Any]:
-        from lucid.nn import functional as F
-        from lucid._factories.creation import zeros
         if hx is None:
             batch = x.shape[0]
             h0 = zeros(batch, self.hidden_size)
             c0 = zeros(batch, self.hidden_size)
         else:
             h0, c0 = hx
-        gates = (F.linear(x, self.weight_ih, self.bias_ih)
-                 + F.linear(h0, self.weight_hh, self.bias_hh))
-        # split into 4 gates
+        gates = (linear(x, self.weight_ih, self.bias_ih)
+                 + linear(h0, self.weight_hh, self.bias_hh))
         hs = self.hidden_size
-        i_gate = F.sigmoid(gates[:, :hs])
-        f_gate = F.sigmoid(gates[:, hs:2*hs])
-        g_gate = F.tanh(gates[:, 2*hs:3*hs])
-        o_gate = F.sigmoid(gates[:, 3*hs:])
+        i_gate = sigmoid(gates[:, :hs])
+        f_gate = sigmoid(gates[:, hs:2*hs])
+        g_gate = tanh(gates[:, 2*hs:3*hs])
+        o_gate = sigmoid(gates[:, 3*hs:])
         c1 = f_gate * c0 + i_gate * g_gate
-        h1 = o_gate * F.tanh(c1)
+        h1 = o_gate * tanh(c1)
         return h1, c1
 
     def extra_repr(self) -> str:
@@ -261,16 +241,14 @@ class GRUCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     def forward(self, x: Any, hx: Any = None) -> Any:
-        from lucid.nn import functional as F
-        from lucid._factories.creation import zeros, ones
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size)
         hs = self.hidden_size
-        gates_x = F.linear(x, self.weight_ih, self.bias_ih)
-        gates_h = F.linear(hx, self.weight_hh, self.bias_hh)
-        r = F.sigmoid(gates_x[:, :hs] + gates_h[:, :hs])
-        z = F.sigmoid(gates_x[:, hs:2*hs] + gates_h[:, hs:2*hs])
-        n = F.tanh(gates_x[:, 2*hs:] + r * gates_h[:, 2*hs:])
+        gates_x = linear(x, self.weight_ih, self.bias_ih)
+        gates_h = linear(hx, self.weight_hh, self.bias_hh)
+        r = sigmoid(gates_x[:, :hs] + gates_h[:, :hs])
+        z = sigmoid(gates_x[:, hs:2*hs] + gates_h[:, hs:2*hs])
+        n = tanh(gates_x[:, 2*hs:] + r * gates_h[:, 2*hs:])
         h1 = (ones(x.shape[0], hs) - z) * n + z * hx
         return h1
 
@@ -294,8 +272,6 @@ class GRU(Module):
         self._cell = GRUCell(input_size, hidden_size, bias=bias, device=device, dtype=dtype)
 
     def forward(self, x: Any, hx: Any = None) -> tuple[Any, Any]:
-        import lucid
-        from lucid._factories.creation import zeros
         if self.batch_first:
             perm = [1, 0] + list(range(2, x.ndim))
             x = x.permute(perm)
@@ -305,7 +281,7 @@ class GRU(Module):
         for t in range(T):
             h = self._cell(x[t], h)
             outputs.append(h)
-        out = lucid.stack(outputs, 0)
+        out = stack(outputs, 0)
         if self.batch_first:
             perm_back = [1, 0] + list(range(2, out.ndim))
             out = out.permute(perm_back)
@@ -332,8 +308,6 @@ class RNN(Module):
                              device=device, dtype=dtype)
 
     def forward(self, x: Any, hx: Any = None) -> tuple[Any, Any]:
-        import lucid
-        from lucid._factories.creation import zeros
         if self.batch_first:
             perm = [1, 0] + list(range(2, x.ndim))
             x = x.permute(perm)
@@ -343,7 +317,7 @@ class RNN(Module):
         for t in range(T):
             h = self._cell(x[t], h)
             outputs.append(h)
-        out = lucid.stack(outputs, 0)
+        out = stack(outputs, 0)
         if self.batch_first:
             perm_back = [1, 0] + list(range(2, out.ndim))
             out = out.permute(perm_back)

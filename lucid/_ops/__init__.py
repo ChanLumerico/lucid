@@ -6,8 +6,10 @@ for missing engine ops (std, log_softmax, any, all) are also defined here.
 """
 
 from typing import Any, TYPE_CHECKING
+import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._registry import _REGISTRY
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -15,7 +17,6 @@ if TYPE_CHECKING:
 
 def _make_free_fn(name: str) -> Any:
     """Create a free function that wraps an engine function."""
-    from lucid._ops._registry import _REGISTRY
     for entry in _REGISTRY:
         fn_name = entry.free_fn_name or entry.name
         if fn_name == name:
@@ -35,9 +36,8 @@ def _make_free_fn(name: str) -> Any:
             else:
                 def _fn(*args: Any) -> Any:
                     proc: list[Any] = []
-                    from lucid._tensor.tensor import Tensor as _T
                     for i, a in enumerate(args):
-                        if i < e.n_tensor_args and isinstance(a, _T):
+                        if i < e.n_tensor_args and hasattr(a, "_impl"):
                             proc.append(_unwrap(a))
                         else:
                             proc.append(a)
@@ -57,7 +57,6 @@ def _make_free_fn(name: str) -> Any:
 _FREE_FN_NAMES = set()
 
 def _populate_free_fns() -> None:
-    from lucid._ops._registry import _REGISTRY
     for entry in _REGISTRY:
         fn_name = entry.free_fn_name
         if fn_name is None:
@@ -86,7 +85,6 @@ def log_softmax(x: Tensor, axis: int = -1) -> Tensor:
 
 def any(x: Tensor) -> Tensor:
     """Return True if any element is non-zero."""
-    import numpy as np
     val = bool(np.asarray(x._impl.data_as_python()).any())
     arr = np.array(val)
     return _wrap(_C_engine.TensorImpl(arr, _unwrap(x).device, False))
@@ -94,7 +92,6 @@ def any(x: Tensor) -> Tensor:
 
 def all(x: Tensor) -> Tensor:
     """Return True if all elements are non-zero."""
-    import numpy as np
     val = bool(np.asarray(x._impl.data_as_python()).all())
     arr = np.array(val)
     return _wrap(_C_engine.TensorImpl(arr, _unwrap(x).device, False))
@@ -107,7 +104,6 @@ def rsqrt(x: Tensor) -> Tensor:
 
 def detach(x: Tensor) -> Tensor:
     """Return a new tensor detached from the autograd graph."""
-    import numpy as np
     arr = np.ascontiguousarray(np.asarray(x._impl.data_as_python()))
     impl = _C_engine.TensorImpl(arr, x._impl.device, False)
     return _wrap(impl)

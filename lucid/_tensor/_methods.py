@@ -5,6 +5,10 @@ Called once at module import time by tensor.py.
 """
 
 from typing import Any, TYPE_CHECKING
+import numpy as np
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._registry import _REGISTRY, OpEntry
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -12,9 +16,6 @@ if TYPE_CHECKING:
 
 def _inject_methods(tensor_cls: type) -> None:
     """Attach all registry ops as Tensor methods."""
-    from lucid._ops._registry import _REGISTRY, OpEntry
-    from lucid._dispatch import _unwrap, _wrap
-    from lucid._C import engine as _C_engine
 
     def _make_method(e: OpEntry) -> Any:
         if e.n_tensor_args == -1:
@@ -32,9 +33,8 @@ def _inject_methods(tensor_cls: type) -> None:
             def method(self: Tensor, *args: Any) -> Any:
                 # Unwrap any Tensor in extra tensor arg positions
                 proc_args: list[Any] = []
-                from lucid._tensor.tensor import Tensor as _T
                 for i, a in enumerate(args):
-                    if i < (e.n_tensor_args - 1) and isinstance(a, _T):
+                    if i < (e.n_tensor_args - 1) and isinstance(a, tensor_cls):
                         proc_args.append(_unwrap(a))
                     else:
                         proc_args.append(a)
@@ -84,14 +84,12 @@ def _inject_methods(tensor_cls: type) -> None:
 
     def any(self: Tensor) -> Tensor:
         """Return True if any element is non-zero."""
-        import numpy as np
         val = bool(np.asarray(self._impl.data_as_python()).any())
         arr = np.array(val)
         return _wrap(_C_engine.TensorImpl(arr, self._impl.device, False))
 
     def all(self: Tensor) -> Tensor:
         """Return True if all elements are non-zero."""
-        import numpy as np
         val = bool(np.asarray(self._impl.data_as_python()).all())
         arr = np.array(val)
         return _wrap(_C_engine.TensorImpl(arr, self._impl.device, False))
