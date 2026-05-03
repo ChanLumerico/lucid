@@ -111,10 +111,21 @@ def trunc_normal_(
     a: float = -2.0,
     b: float = 2.0,
 ) -> Tensor:
-    """Fill tensor with truncated normal values."""
-    from scipy.stats import truncnorm  # type: ignore[import-untyped]
-    lo, hi = (a - mean) / std, (b - mean) / std
-    arr = truncnorm.rvs(lo, hi, loc=mean, scale=std, size=tensor.shape).astype("float32")
+    """Fill tensor with truncated normal values (pure numpy, no scipy needed)."""
+    import numpy as np
+    size = tuple(tensor.shape) if tensor.shape else (1,)
+    total = int(np.prod(size))
+    # Rejection sampling — resample until all values are in [a, b]
+    result = np.empty(total, dtype=np.float32)
+    filled = 0
+    while filled < total:
+        needed = (total - filled) * 4  # oversample 4× to reduce iterations
+        candidates = np.random.normal(mean, std, size=needed).astype(np.float32)
+        valid = candidates[(candidates >= a) & (candidates <= b)]
+        take = min(len(valid), total - filled)
+        result[filled: filled + take] = valid[:take]
+        filled += take
+    arr = result[:total].reshape(size)
     return _fill_impl(tensor, arr)
 
 
