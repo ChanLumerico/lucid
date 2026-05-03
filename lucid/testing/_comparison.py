@@ -47,6 +47,7 @@ def assert_close(
     >>> x = lucid.tensor([1.0, 2.0, 3.0])
     >>> assert_close(x, x.clone())
     """
+
     def _to_numpy(t: Any) -> np.ndarray:  # type: ignore[type-arg]
         if hasattr(t, "numpy"):
             return np.asarray(t.numpy())

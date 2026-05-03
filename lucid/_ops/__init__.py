@@ -23,6 +23,7 @@ def _make_free_fn(name: str) -> Any:
             e = entry
 
             if e.n_tensor_args == -1:
+
                 def _fn_list(tensors: list[Tensor], *args: Any) -> Any:
                     impls = [_unwrap(t) for t in tensors]
                     result = e.engine_fn(impls, *args)
@@ -31,22 +32,25 @@ def _make_free_fn(name: str) -> Any:
                             return type(result)(_wrap(r) for r in result)
                         return _wrap(result)
                     return result
+
                 _fn_list.__name__ = fn_name
                 return _fn_list
             else:
-                def _fn(*args: Any) -> Any:
+
+                def _fn(*args: Any, **kwargs: Any) -> Any:
                     proc: list[Any] = []
                     for i, a in enumerate(args):
                         if i < e.n_tensor_args and hasattr(a, "_impl"):
                             proc.append(_unwrap(a))
                         else:
                             proc.append(a)
-                    result = e.engine_fn(*proc)
+                    result = e.engine_fn(*proc, **kwargs)
                     if e.returns_tensor:
                         if isinstance(result, (list, tuple)):
                             return type(result)(_wrap(r) for r in result)
                         return _wrap(result)
                     return result
+
                 _fn.__name__ = fn_name
                 return _fn
     raise AttributeError(f"No op found for free function: {name}")
@@ -55,6 +59,7 @@ def _make_free_fn(name: str) -> Any:
 # ── generate all free functions from registry ─────────────────────────────
 
 _FREE_FN_NAMES = set()
+
 
 def _populate_free_fns() -> None:
     for entry in _REGISTRY:
@@ -66,10 +71,12 @@ def _populate_free_fns() -> None:
         _FREE_FN_NAMES.add(fn_name)
         globals()[fn_name] = _make_free_fn(fn_name)
 
+
 _populate_free_fns()
 
 
 # ── Python-level implementations ──────────────────────────────────────────
+
 
 def std(x: Tensor, axes: list[int] | None = None, keepdims: bool = False) -> Tensor:
     """Standard deviation (sqrt of variance)."""
@@ -116,11 +123,18 @@ def clone(x: Tensor) -> Tensor:
 
 def clamp(x: Tensor, min: float | None = None, max: float | None = None) -> Tensor:
     """Clamp all elements to [min, max]. Alias for clip."""
-    lo = min if min is not None else float('-inf')
-    hi = max if max is not None else float('inf')
+    lo = min if min is not None else float("-inf")
+    hi = max if max is not None else float("inf")
     return _wrap(_C_engine.clip(_unwrap(x), lo, hi))
 
 
 __all__ = list(_FREE_FN_NAMES) + [
-    "std", "log_softmax", "any", "all", "rsqrt", "detach", "clone", "clamp",
+    "std",
+    "log_softmax",
+    "any",
+    "all",
+    "rsqrt",
+    "detach",
+    "clone",
+    "clamp",
 ]

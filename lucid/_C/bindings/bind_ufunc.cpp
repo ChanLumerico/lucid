@@ -28,6 +28,7 @@
 #include "../ops/ufunc/Exponential.h"
 #include "../ops/ufunc/Hyperbolic.h"
 #include "../ops/ufunc/Inplace.h"
+#include "../ops/ufunc/Predicate.h"
 #include "../ops/ufunc/Reductions.h"
 #include "../ops/ufunc/ScalarParam.h"
 #include "../ops/ufunc/Scan.h"
@@ -153,6 +154,16 @@ void register_ufunc(py::module_& m) {
     m.def("floor_", &floor_inplace_op, py::arg("a"));
     m.def("ceil_", &ceil_inplace_op, py::arg("a"));
     m.def("clip_", &clip_inplace_op, py::arg("a"), py::arg("min"), py::arg("max"));
+
+    // Floating-point predicate ops (output is always bool).
+    m.def("isinf",   &isinf_op,   py::arg("a"));
+    m.def("isnan",   &isnan_op,   py::arg("a"));
+    m.def("isfinite",&isfinite_op,py::arg("a"));
+    m.def("nan_to_num", &nan_to_num_op,
+          py::arg("a"),
+          py::arg("nan")    = 0.0,
+          py::arg("posinf") = 3.4028234663852886e+38,
+          py::arg("neginf") = -3.4028234663852886e+38);
 }
 
 }  // namespace lucid::bindings

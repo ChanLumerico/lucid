@@ -1172,6 +1172,88 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        auto ptr = allocate_aligned_bytes(n, Device::CPU);
+        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n; ++i) dst[i] = std::isinf(p[i]) ? 1u : 0u;
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n; ++i) dst[i] = std::isinf(p[i]) ? 1u : 0u;
+        } else {
+            for (std::size_t i = 0; i < n; ++i) dst[i] = 0u;
+        }
+        return Storage{CpuStorage{ptr, n, Dtype::Bool}};
+    }
+
+    Storage isnan(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        auto ptr = allocate_aligned_bytes(n, Device::CPU);
+        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n; ++i) dst[i] = std::isnan(p[i]) ? 1u : 0u;
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n; ++i) dst[i] = std::isnan(p[i]) ? 1u : 0u;
+        } else {
+            for (std::size_t i = 0; i < n; ++i) dst[i] = 0u;
+        }
+        return Storage{CpuStorage{ptr, n, Dtype::Bool}};
+    }
+
+    Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        auto ptr = allocate_aligned_bytes(n, Device::CPU);
+        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n; ++i) dst[i] = std::isfinite(p[i]) ? 1u : 0u;
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            for (std::size_t i = 0; i < n; ++i) dst[i] = std::isfinite(p[i]) ? 1u : 0u;
+        } else {
+            for (std::size_t i = 0; i < n; ++i) dst[i] = 1u;
+        }
+        return Storage{CpuStorage{ptr, n, Dtype::Bool}};
+    }
+
+    Storage nan_to_num(const Storage& a, const Shape& shape, Dtype dt,
+                       double nan_val, double posinf_val, double neginf_val) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto replace = [&](auto* dst, const auto* src, auto nan_v, auto pi_v, auto ni_v) {
+            for (std::size_t i = 0; i < n; ++i) {
+                auto v = src[i];
+                if (std::isnan(v))       dst[i] = nan_v;
+                else if (v ==  std::numeric_limits<decltype(v)>::infinity()) dst[i] = pi_v;
+                else if (v == -std::numeric_limits<decltype(v)>::infinity()) dst[i] = ni_v;
+                else                    dst[i] = v;
+            }
+        };
+        if (dt == Dtype::F32) {
+            replace(reinterpret_cast<float*>(ptr.get()),
+                    reinterpret_cast<const float*>(cs.ptr.get()),
+                    static_cast<float>(nan_val),
+                    static_cast<float>(posinf_val),
+                    static_cast<float>(neginf_val));
+        } else if (dt == Dtype::F64) {
+            replace(reinterpret_cast<double*>(ptr.get()),
+                    reinterpret_cast<const double*>(cs.ptr.get()),
+                    nan_val, posinf_val, neginf_val);
+        } else {
+            std::memcpy(ptr.get(), cs.ptr.get(), nb);
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage
     reduce_sum(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override {
         return reduce_axes(a, in_shape, opts, dt, ReduceOp::Sum);

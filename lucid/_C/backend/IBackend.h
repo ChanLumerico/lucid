@@ -214,6 +214,16 @@ public:
     // ReLU clamped to [0, 6], used in MobileNet-style networks.
     virtual Storage relu6(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
+    // Floating-point predicate ops (output dtype is always Bool).
+    virtual Storage isinf(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage isnan(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) = 0;
+
+    // Replace NaN/Inf values with finite substitutes.  Output dtype matches input.
+    virtual Storage nan_to_num(
+        const Storage& a, const Shape& shape, Dtype dt,
+        double nan_val, double posinf_val, double neginf_val) = 0;
+
     // Axis reductions.  opts.axes specifies which dimensions to collapse; the
     // output shape follows keepdims semantics.  variance() uses the biased
     // (population) variance formula to match NumPy/PyTorch defaults.

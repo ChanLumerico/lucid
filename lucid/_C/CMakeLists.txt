@@ -177,6 +177,7 @@ lucid_object_library(
     ops/ufunc/Scan.cpp
     ops/ufunc/Inplace.cpp
     ops/ufunc/CubeRoot.cpp
+    ops/ufunc/Predicate.cpp
     ops/gfunc/Gfunc.cpp
     ops/utils/View.cpp
     ops/utils/Contiguous.cpp

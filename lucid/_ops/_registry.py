@@ -16,11 +16,11 @@ class OpEntry:
 
     name: str
     engine_fn: Callable[..., Any]
-    n_tensor_args: int          # positional Tensor args to unwrap; -1 = first arg is list
+    n_tensor_args: int  # positional Tensor args to unwrap; -1 = first arg is list
     returns_tensor: bool = True
     inplace: bool = False
-    method_name: str | None = None     # Tensor method name (None = no method)
-    free_fn_name: str | None = None    # lucid.xxx name (None = same as name)
+    method_name: str | None = None  # Tensor method name (None = no method)
+    free_fn_name: str | None = None  # lucid.xxx name (None = same as name)
     extra_kwargs: list[str] = field(default_factory=list)
 
 
@@ -221,5 +221,12 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["axes_a", "axes_b"]),
     OpEntry("clip",       _R.clip,      1, method_name="clip",       free_fn_name="clip",
             extra_kwargs=["min", "max"]),
+
+    # ── floating-point predicates (output is always bool) ──────────────────
+    OpEntry("isinf",      _R.isinf,     1, method_name="isinf",     free_fn_name="isinf"),
+    OpEntry("isnan",      _R.isnan,     1, method_name="isnan",     free_fn_name="isnan"),
+    OpEntry("isfinite",   _R.isfinite,  1, method_name="isfinite",  free_fn_name="isfinite"),
+    OpEntry("nan_to_num", _R.nan_to_num,1, method_name="nan_to_num",free_fn_name="nan_to_num",
+            extra_kwargs=["nan", "posinf", "neginf"]),
 ]
 # fmt: on

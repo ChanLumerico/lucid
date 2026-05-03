@@ -512,6 +512,40 @@ public:
         });
     }
 
+    Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, Dtype::Bool,
+                         [](auto& x) { return ::mlx::core::isinf(x); });
+    }
+
+    Storage isnan(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, Dtype::Bool,
+                         [](auto& x) { return ::mlx::core::isnan(x); });
+    }
+
+    Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, Dtype::Bool,
+                         [](auto& x) { return ::mlx::core::isfinite(x); });
+    }
+
+    Storage nan_to_num(const Storage& a, const Shape& shape, Dtype dt,
+                       double nan_val, double posinf_val, double neginf_val) override {
+        return mlx_unary(a, shape, dt, [dt, nan_val, posinf_val, neginf_val](auto& x) {
+            auto mdt = gpu::to_mlx_dtype(dt);
+            ::mlx::core::array nan_a(static_cast<float>(nan_val), mdt);
+            ::mlx::core::array pi_a(static_cast<float>(posinf_val), mdt);
+            ::mlx::core::array ni_a(static_cast<float>(neginf_val), mdt);
+            auto out = ::mlx::core::where(::mlx::core::isnan(x), nan_a, x);
+            auto pos_inf = ::mlx::core::logical_and(
+                ::mlx::core::isinf(out),
+                ::mlx::core::greater(out, ::mlx::core::array(0.f, mdt)));
+            out = ::mlx::core::where(pos_inf, pi_a, out);
+            auto neg_inf = ::mlx::core::logical_and(
+                ::mlx::core::isinf(out),
+                ::mlx::core::less(out, ::mlx::core::array(0.f, mdt)));
+            return ::mlx::core::where(neg_inf, ni_a, out);
+        });
+    }
+
     Storage
     reduce_sum(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override {
         return mlx_reduce(a, in_shape, opts, dt, [](auto& x, auto& axes, bool keepdims) {
