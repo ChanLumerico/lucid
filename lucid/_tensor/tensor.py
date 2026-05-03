@@ -584,6 +584,21 @@ class Tensor:
         self._impl = result
         return self
 
+    # ── pickling support (required for multiprocessing DataLoader) ────────────
+
+    def __reduce__(self) -> tuple:
+        arr = np.ascontiguousarray(np.asarray(self._impl.data_as_python()))
+        return (
+            _tensor_unpickle,
+            (arr, self._impl.device, self._impl.requires_grad),
+        )
+
+
+def _tensor_unpickle(arr: np.ndarray, device: Any, requires_grad: bool) -> Tensor:
+    """Top-level helper so multiprocessing (spawn) can pickle/unpickle Tensor."""
+    impl = _C_engine.TensorImpl(arr, device, requires_grad)
+    return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
+
 
 # ── inject dunders and methods after class definition ────────────────────────
 from lucid._tensor._repr import tensor_repr as _tensor_repr  # noqa: E402
