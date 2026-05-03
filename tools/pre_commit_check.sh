@@ -55,6 +55,7 @@ run_check "Kernel template coverage"     "$PYTHON" tools/check_kernel_template.p
 run_check "Storage API compliance"       "$PYTHON" tools/check_storage_api.py
 run_check "Registry coverage"            "$PYTHON" tools/check_registry_coverage.py
 run_check "Doxygen coverage ≥70%%"       "$PYTHON" tools/check_doxygen.py --threshold 70
+run_check "Stub freshness (gen_pyi)"     "$PYTHON" tools/check_stubs.py
 
 # ── 2. Forward/backward parity smoke tests ────────────────────────────────
 printf "\n${YELLOW}[2/2] Forward/backward parity (CPU + GPU)${RESET}\n"

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Phase 6.2 — Schema-driven Python type stub generator.
+"""Lucid stub generator — emits .pyi files for IDE type checking.
 
-Reads lucid._C.engine at runtime (registry + introspection) and emits
-``lucid/_C/engine.pyi`` for IDE type checking and autocomplete.
+Generates three stub files from a single run:
+
+  lucid/_C/engine.pyi       — C++ engine bindings (pybind11 introspection)
+  lucid/_tensor/tensor.pyi  — Tensor class (direct defs + registry injections)
+  lucid/__init__.pyi         — lucid.* free functions and module attributes
 
 Usage:
-    python tools/gen_pyi.py [--out PATH]
-
-The file is re-generated on every run; commit the result alongside schema
-changes.
+    python tools/gen_pyi.py [--out-engine PATH] [--out-tensor PATH]
+                             [--out-init PATH] [--dry-run]
 """
 
 from __future__ import annotations
@@ -16,64 +17,112 @@ from __future__ import annotations
 import argparse
 import inspect
 import sys
+import textwrap
 from pathlib import Path
 from typing import Any
 
-# Ensure the repo root is on sys.path.
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from lucid._C import engine as E  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Shared helpers
 # ---------------------------------------------------------------------------
-
-def _dtype_str(t: Any) -> str:
-    """Best-effort Python type annotation for a pybind11 attribute."""
-    if t is None:
-        return "None"
-    name = getattr(t, "__name__", None) or str(t)
-    return name
-
 
 def _sig_or_fallback(fn: Any) -> str:
-    """Return a best-effort signature string."""
     try:
         return str(inspect.signature(fn))
     except (ValueError, TypeError):
-        return "(*args, **kwargs)"
+        return "(*args: Any, **kwargs: Any)"
 
 
-def _collect_schemas() -> dict[str, Any]:
-    return {s.name: s for s in E.op_registry_all()}
+# Kwarg name → (type annotation, default value or None for required)
+_KWARG_MAP: dict[str, tuple[str, str | None]] = {
+    "axes":     ("list[int]",                "[]"),
+    "axis":     ("int",                      "-1"),
+    "keepdims": ("bool",                     "False"),
+    "dim":      ("int | None",               "None"),
+    "dims":     ("list[int]",                "..."),
+    "shape":    ("list[int] | tuple[int, ...]", "..."),
+    "sections": ("int | list[int]",          "..."),
+    "n":        ("int",                      "..."),
+    "k":        ("int",                      "..."),
+    "largest":  ("bool",                     "True"),
+    "descending": ("bool",                   "False"),
+    "shifts":   ("int | list[int]",          "..."),
+    "reps":     ("list[int]",                "..."),
+    "repeats":  ("int | list[int]",          "..."),
+    "paddings": ("list[list[int]]",          "..."),
+    "mode":     ("str",                      '"constant"'),
+    "constant": ("float",                    "0.0"),
+    "value":    ("float",                    "..."),
+    "min":      ("float | None",             "None"),
+    "max":      ("float | None",             "None"),
+    "indexing": ("str",                      '"xy"'),
+    "axes_a":   ("int | list[int]",          "..."),
+    "axes_b":   ("int | list[int]",          "..."),
+    "start":    ("int",                      "0"),
+    "end":      ("int",                      "-1"),
+    "d0":       ("int",                      "..."),
+    "d1":       ("int",                      "..."),
+    "nan":      ("float",                    "0.0"),
+    "posinf":   ("float",                    "3.4028234663852886e+38"),
+    "neginf":   ("float",                    "-3.4028234663852886e+38"),
+    "offset":   ("int",                      "0"),
+    "dim1":     ("int",                      "0"),
+    "dim2":     ("int",                      "1"),
+    "delta":    ("float",                    "1.0"),
+    "beta":     ("float",                    "1.0"),
+}
+
+
+def _kwarg_param(name: str) -> str:
+    """Return 'name: type = default' or 'name: type' for a known kwarg."""
+    typ, default = _KWARG_MAP.get(name, ("Any", None))
+    if default is None or default == "...":
+        return f"{name}: {typ}"
+    return f"{name}: {typ} = {default}"
+
+
+def _return_type(entry: Any) -> str:
+    if not entry.returns_tensor:
+        return "None"
+    # ops known to return tuple[Tensor, Tensor]
+    _PAIR_OPS = {"sort", "topk"}
+    name = entry.free_fn_name or entry.name
+    if name in _PAIR_OPS:
+        return "tuple[Tensor, Tensor]"
+    # ops that return list[Tensor]
+    _LIST_OPS = {"split", "chunk", "unbind", "meshgrid"}
+    if name in _LIST_OPS:
+        return "list[Tensor]"
+    return "Tensor"
 
 
 # ---------------------------------------------------------------------------
-# Section writers
+# 1. engine.pyi  (unchanged logic from original gen_pyi.py)
 # ---------------------------------------------------------------------------
 
-HEADER = '''\
+_ENGINE_HEADER = '''\
 # --------------------------------------------------------------------- #
-# engine.pyi — auto-generated by tools/gen_pyi.py (Phase 6.2)          #
+# engine.pyi — auto-generated by tools/gen_pyi.py                       #
 # DO NOT EDIT — regenerate with:  python tools/gen_pyi.py               #
 # --------------------------------------------------------------------- #
 
 from __future__ import annotations
-from typing import List, Optional, Sequence, Tuple, Union
-
-# ---- Enumerations -------------------------------------------------------
+from typing import Any, List, Optional
 
 class Dtype:
     F16: Dtype
     F32: Dtype
     F64: Dtype
+    BF16: Dtype
     I8: Dtype
     I16: Dtype
     I32: Dtype
     I64: Dtype
     Bool: Dtype
+    C64: Dtype
 
 class Device:
     CPU: Device
@@ -83,8 +132,6 @@ class AmpPolicy:
     Promote: AmpPolicy
     KeepInput: AmpPolicy
     ForceFP32: AmpPolicy
-
-# ---- Core types ---------------------------------------------------------
 
 class TensorImpl:
     @property
@@ -97,48 +144,36 @@ class TensorImpl:
     def requires_grad(self) -> bool: ...
     @property
     def is_leaf(self) -> bool: ...
-    @property
     def numel(self) -> int: ...
-    def data_as_python(self) -> List[float]: ...
-    def grad_as_python(self) -> List[float]: ...
-    def __init__(self, data: object, device: Device, requires_grad: bool) -> None: ...
+    def data_as_python(self) -> Any: ...
+    def grad_as_python(self) -> Any: ...
+    def zero_grad(self) -> None: ...
+    def is_contiguous(self) -> bool: ...
+    def bump_version(self) -> None: ...
+    def __init__(self, data: Any, device: Device, requires_grad: bool) -> None: ...
 
+class Node: ...
 class Generator:
     def __init__(self, seed: int) -> None: ...
-
 class OpSchema:
     name: str
     version: int
     amp_policy: AmpPolicy
     deterministic: bool
-    determinism_note: str
     input_arity: int
     output_arity: int
-    stable_input_indices: List[int]
-
 class AutocastGuard:
     def __init__(self, dtype: Dtype) -> None: ...
 
-# ---- AMP API ------------------------------------------------------------
+ABI_VERSION: int
 
 def amp_is_active() -> bool: ...
 def amp_active_dtype() -> Optional[Dtype]: ...
-def amp_policy_name(policy: AmpPolicy) -> str: ...
-
-# ---- Determinism --------------------------------------------------------
-
 def set_deterministic(value: bool) -> None: ...
 def is_deterministic() -> bool: ...
-
-# ---- Registry -----------------------------------------------------------
-
 def op_registry_all() -> List[OpSchema]: ...
 def op_registry_size() -> int: ...
 def op_lookup(name: str) -> Optional[OpSchema]: ...
-def schema_hash(schema: OpSchema) -> int: ...
-
-# ---- Autograd -----------------------------------------------------------
-
 def engine_backward(tensor: TensorImpl, retain_graph: bool = False) -> None: ...
 def no_grad() -> object: ...
 def is_grad_enabled() -> bool: ...
@@ -146,45 +181,488 @@ def is_grad_enabled() -> bool: ...
 '''
 
 
-def _write_op_stubs(schemas: dict[str, Any]) -> str:
-    """Generate stubs for all registered ops, grouped by AmpPolicy."""
-    lines: list[str] = ["# ---- Registered ops (from OpRegistry) --------------------------------\n"]
+def generate_engine_pyi(out_path: Path) -> None:
+    from lucid._C import engine as E
 
-    # Collect all engine functions; pair with schema if available.
-    seen: set[str] = set()
+    schemas: dict[str, Any] = {s.name: s for s in E.op_registry_all()}
+    lines: list[str] = [_ENGINE_HEADER, "# ---- Ops -------------------------------------------------------\n"]
+
     for name in sorted(dir(E)):
         if name.startswith("_"):
             continue
         obj = getattr(E, name)
         if not callable(obj) or isinstance(obj, type):
             continue
-        if name in seen:
-            continue
-        seen.add(name)
-
+        sig = _sig_or_fallback(obj).replace("(self, ", "(").replace("(self)", "()")
         schema = schemas.get(name)
-        sig = _sig_or_fallback(obj)
-
-        # Strip leading (self, ) if pybind11 injected it
-        sig = sig.replace("(self, ", "(").replace("(self)", "()")
-
-        policy_tag = ""
-        if schema:
-            policy_tag = f"  # {schema.amp_policy}, det={schema.deterministic}"
-
-        lines.append(f"def {name}{sig} -> TensorImpl:{policy_tag}")
+        comment = f"  # {schema.amp_policy}" if schema else ""
+        lines.append(f"def {name}{sig} -> TensorImpl:{comment}")
         lines.append("    ...")
         lines.append("")
 
-    return "\n".join(lines)
-
-
-def generate(out_path: Path) -> None:
-    schemas = _collect_schemas()
-    content = HEADER + _write_op_stubs(schemas)
+    content = "\n".join(lines)
     out_path.write_text(content, encoding="utf-8")
-    print(f"[gen_pyi] wrote {out_path}  ({len(content.splitlines())} lines, "
-          f"{len(schemas)} schemas)")
+    print(f"[gen_pyi] engine.pyi  → {out_path}  ({len(schemas)} schemas)")
+
+
+# ---------------------------------------------------------------------------
+# 2. tensor.pyi
+# ---------------------------------------------------------------------------
+
+_TENSOR_HEADER = '''\
+# --------------------------------------------------------------------- #
+# tensor.pyi — auto-generated by tools/gen_pyi.py                       #
+# DO NOT EDIT — regenerate with:  python tools/gen_pyi.py               #
+# --------------------------------------------------------------------- #
+
+from __future__ import annotations
+from typing import Any, Iterator, overload
+
+import numpy as np
+
+from lucid._C import engine as _C_engine
+from lucid._dtype import dtype
+from lucid._device import device
+
+class Tensor:
+    # ── construction ──────────────────────────────────────────────────────────
+    def __init__(
+        self,
+        data: Any,
+        *,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> None: ...
+
+    @classmethod
+    def __new_from_impl__(cls, impl: _C_engine.TensorImpl) -> Tensor: ...
+
+    # ── metadata ──────────────────────────────────────────────────────────────
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+    @property
+    def dtype(self) -> dtype: ...
+    @property
+    def device(self) -> device: ...
+    @property
+    def ndim(self) -> int: ...
+    @property
+    def T(self) -> Tensor: ...
+    @property
+    def mT(self) -> Tensor: ...
+    @property
+    def is_metal(self) -> bool: ...
+    @property
+    def is_leaf(self) -> bool: ...
+    @property
+    def requires_grad(self) -> bool: ...
+    @requires_grad.setter
+    def requires_grad(self, v: bool) -> None: ...
+    @property
+    def grad(self) -> Tensor | None: ...
+    @grad.setter
+    def grad(self, v: Tensor | None) -> None: ...
+    @property
+    def grad_fn(self) -> _C_engine.Node | None: ...
+    @property
+    def data(self) -> Tensor: ...
+    @property
+    def nbytes(self) -> int: ...
+    @property
+    def impl(self) -> _C_engine.TensorImpl: ...
+
+    def numel(self) -> int: ...
+    def dim(self) -> int: ...
+    def size(self, dim: int | None = None) -> int | tuple[int, ...]: ...
+    def is_contiguous(self) -> bool: ...
+    def is_floating_point(self) -> bool: ...
+    def is_complex(self) -> bool: ...
+    def element_size(self) -> int: ...
+
+    # ── autograd ──────────────────────────────────────────────────────────────
+    def requires_grad_(self, requires_grad: bool = True) -> Tensor: ...
+    def retain_grad(self) -> None: ...
+    def backward(
+        self,
+        gradient: Tensor | None = None,
+        retain_graph: bool = False,
+        create_graph: bool = False,
+    ) -> None: ...
+    def detach(self) -> Tensor: ...
+    def detach_(self) -> Tensor: ...
+
+    # ── in-place fill ─────────────────────────────────────────────────────────
+    def clamp_(self, min: float | None = None, max: float | None = None) -> Tensor: ...
+    def clamp_min_(self, min: float) -> Tensor: ...
+    def clamp_max_(self, max: float) -> Tensor: ...
+    def fill_(self, value: float) -> Tensor: ...
+    def zero_(self) -> Tensor: ...
+    def copy_(self, other: Tensor) -> Tensor: ...
+    def share_memory_(self) -> Tensor: ...
+
+    # ── conversion ────────────────────────────────────────────────────────────
+    def item(self) -> float | int | bool: ...
+    def numpy(self) -> np.ndarray: ...  # type: ignore[type-arg]
+    def tolist(self) -> Any: ...
+    def clone(self) -> Tensor: ...
+    def contiguous(self) -> Tensor: ...
+
+    # ── device / dtype cast ───────────────────────────────────────────────────
+    def to(self, *args: Any, **kwargs: Any) -> Tensor: ...
+    def metal(self) -> Tensor: ...
+    def cpu(self) -> Tensor: ...
+    def float(self) -> Tensor: ...
+    def double(self) -> Tensor: ...
+    def half(self) -> Tensor: ...
+    def int(self) -> Tensor: ...
+    def long(self) -> Tensor: ...
+    def bool(self) -> Tensor: ...
+
+    # ── new_* constructors ────────────────────────────────────────────────────
+    def new_empty(
+        self,
+        *size: int,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Tensor: ...
+    def new_zeros(
+        self,
+        *size: int,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Tensor: ...
+    def new_ones(
+        self,
+        *size: int,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Tensor: ...
+    def new_full(
+        self,
+        size: list[int] | tuple[int, ...],
+        fill_value: float,
+        *,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Tensor: ...
+    def new_tensor(
+        self,
+        data: Any,
+        *,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Tensor: ...
+
+    # ── convenience ───────────────────────────────────────────────────────────
+    def flip(self, dims: int | list[int]) -> Tensor: ...
+    def fliplr(self) -> Tensor: ...
+    def flipud(self) -> Tensor: ...
+    def index_select(self, dim: int, index: Tensor) -> Tensor: ...
+    def masked_select(self, mask: Tensor) -> Tensor: ...
+    def expand_as(self, other: Tensor) -> Tensor: ...
+    def view_as(self, other: Tensor) -> Tensor: ...
+    def type_as(self, other: Tensor) -> Tensor: ...
+    def lerp(self, end: Tensor, weight: float | Tensor) -> Tensor: ...
+    def where(self, condition: Tensor, other: Tensor | float) -> Tensor: ...
+    def diff(self, n: int = 1, dim: int = -1) -> Tensor: ...
+    def addmm(
+        self,
+        mat1: Tensor,
+        mat2: Tensor,
+        beta: float = 1.0,
+        alpha: float = 1.0,
+    ) -> Tensor: ...
+    def bmm(self, mat2: Tensor) -> Tensor: ...
+
+    # ── dunder operators ──────────────────────────────────────────────────────
+    def __add__(self, other: Tensor | float) -> Tensor: ...
+    def __radd__(self, other: Tensor | float) -> Tensor: ...
+    def __iadd__(self, other: Tensor | float) -> Tensor: ...
+    def __sub__(self, other: Tensor | float) -> Tensor: ...
+    def __rsub__(self, other: Tensor | float) -> Tensor: ...
+    def __isub__(self, other: Tensor | float) -> Tensor: ...
+    def __mul__(self, other: Tensor | float) -> Tensor: ...
+    def __rmul__(self, other: Tensor | float) -> Tensor: ...
+    def __imul__(self, other: Tensor | float) -> Tensor: ...
+    def __truediv__(self, other: Tensor | float) -> Tensor: ...
+    def __rtruediv__(self, other: Tensor | float) -> Tensor: ...
+    def __itruediv__(self, other: Tensor | float) -> Tensor: ...
+    def __floordiv__(self, other: Tensor | float) -> Tensor: ...
+    def __rfloordiv__(self, other: Tensor | float) -> Tensor: ...
+    def __pow__(self, other: Tensor | float) -> Tensor: ...
+    def __rpow__(self, other: Tensor | float) -> Tensor: ...
+    def __ipow__(self, other: Tensor | float) -> Tensor: ...
+    def __matmul__(self, other: Tensor) -> Tensor: ...
+    def __rmatmul__(self, other: Tensor) -> Tensor: ...
+    def __neg__(self) -> Tensor: ...
+    def __abs__(self) -> Tensor: ...
+    def __invert__(self) -> Tensor: ...
+    def __and__(self, other: Tensor | int) -> Tensor: ...
+    def __or__(self, other: Tensor | int) -> Tensor: ...
+    def __xor__(self, other: Tensor | int) -> Tensor: ...
+    def __eq__(self, other: Tensor | float) -> Tensor: ...  # type: ignore[override]
+    def __ne__(self, other: Tensor | float) -> Tensor: ...  # type: ignore[override]
+    def __lt__(self, other: Tensor | float) -> Tensor: ...
+    def __le__(self, other: Tensor | float) -> Tensor: ...
+    def __gt__(self, other: Tensor | float) -> Tensor: ...
+    def __ge__(self, other: Tensor | float) -> Tensor: ...
+    def __getitem__(self, idx: Any) -> Tensor: ...
+    def __setitem__(self, idx: Any, value: Any) -> None: ...
+    def __len__(self) -> int: ...
+    def __bool__(self) -> bool: ...
+    def __iter__(self) -> Iterator[Tensor]: ...
+    def __repr__(self) -> str: ...
+    def __format__(self, format_spec: str) -> str: ...
+    def __hash__(self) -> int: ...
+
+'''
+
+
+def _registry_tensor_methods(registry: list[Any]) -> list[str]:
+    """Generate Tensor method signatures from the ops registry."""
+    lines: list[str] = ["    # ── registry-injected ops ───────────────────────────────────────────\n"]
+    seen: set[str] = set()
+
+    for entry in registry:
+        mname = entry.method_name
+        if not mname or mname in seen:
+            continue
+        seen.add(mname)
+
+        ret = _return_type(entry)
+        params: list[str] = []
+
+        if entry.n_tensor_args == -1:
+            # cat/stack style: takes list of tensors
+            params.append("tensors: list[Tensor]")
+        elif entry.n_tensor_args == 2:
+            params.append("other: Tensor | float")
+        elif entry.n_tensor_args == 3:
+            params.append("condition: Tensor")
+            params.append("other: Tensor | float")
+
+        for kw in entry.extra_kwargs:
+            params.append(_kwarg_param(kw))
+
+        sig = ", ".join(params)
+        lines.append(f"    def {mname}(self{', ' + sig if sig else ''}) -> {ret}: ...")
+
+    return lines
+
+
+def generate_tensor_pyi(registry: list[Any], out_path: Path) -> None:
+    method_lines = _registry_tensor_methods(registry)
+    content = _TENSOR_HEADER + "\n".join(method_lines) + "\n"
+    out_path.write_text(content, encoding="utf-8")
+    print(f"[gen_pyi] tensor.pyi  → {out_path}  ({len(method_lines) - 1} registry methods)")
+
+
+# ---------------------------------------------------------------------------
+# 3. lucid/__init__.pyi
+# ---------------------------------------------------------------------------
+
+_INIT_HEADER = '''\
+# --------------------------------------------------------------------- #
+# __init__.pyi — auto-generated by tools/gen_pyi.py                     #
+# DO NOT EDIT — regenerate with:  python tools/gen_pyi.py               #
+# --------------------------------------------------------------------- #
+
+from __future__ import annotations
+from typing import Any, overload
+
+import numpy as np
+
+from lucid._dtype import dtype
+from lucid._device import device
+from lucid._tensor.tensor import Tensor
+
+# ── Package metadata ──────────────────────────────────────────────────────
+__version__: str
+
+# ── Dtype objects ─────────────────────────────────────────────────────────
+class float16(dtype): ...
+class float32(dtype): ...
+class float64(dtype): ...
+class bfloat16(dtype): ...
+class int8(dtype): ...
+class int16(dtype): ...
+class int32(dtype): ...
+class int64(dtype): ...
+class bool_(dtype): ...
+class complex64(dtype): ...
+
+# Aliases
+half = float16
+double = float64
+short = int16
+long = int64
+
+# torch-style module-level dtype attributes (NOT in __all__)
+float = float32   # type: ignore[assignment]
+int = int32       # type: ignore[assignment]
+bool = bool_      # type: ignore[assignment]
+
+# ── Device ────────────────────────────────────────────────────────────────
+# (re-export)
+
+# ── Global defaults ───────────────────────────────────────────────────────
+def set_default_dtype(dt: dtype) -> None: ...
+def get_default_dtype() -> dtype: ...
+def set_default_device(dev: device | str) -> None: ...
+def get_default_device() -> device: ...
+
+# ── Tensor factories — deterministic ──────────────────────────────────────
+def tensor(
+    data: Any,
+    *,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+    requires_grad: bool = False,
+) -> Tensor: ...
+def as_tensor(
+    data: Any,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+) -> Tensor: ...
+def from_numpy(arr: np.ndarray) -> Tensor: ...  # type: ignore[type-arg]
+def zeros(
+    *shape: int,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+    requires_grad: bool = False,
+) -> Tensor: ...
+def ones(
+    *shape: int,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+    requires_grad: bool = False,
+) -> Tensor: ...
+def empty(
+    *shape: int,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+    requires_grad: bool = False,
+) -> Tensor: ...
+def full(
+    shape: list[int] | tuple[int, ...],
+    fill_value: float,
+    *,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+    requires_grad: bool = False,
+) -> Tensor: ...
+def eye(
+    n: int,
+    m: int | None = None,
+    *,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+    requires_grad: bool = False,
+) -> Tensor: ...
+def arange(
+    start: float,
+    stop: float | None = None,
+    step: float = 1.0,
+    *,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+) -> Tensor: ...
+def linspace(
+    start: float,
+    stop: float,
+    num: int,
+    *,
+    dtype: dtype | None = None,
+    device: device | str | None = None,
+) -> Tensor: ...
+def zeros_like(input: Tensor, dtype: dtype | None = None, device: device | str | None = None) -> Tensor: ...
+def ones_like(input: Tensor, dtype: dtype | None = None, device: device | str | None = None) -> Tensor: ...
+def empty_like(input: Tensor, dtype: dtype | None = None, device: device | str | None = None) -> Tensor: ...
+def full_like(input: Tensor, fill_value: float, dtype: dtype | None = None, device: device | str | None = None) -> Tensor: ...
+
+# ── Tensor factories — random ─────────────────────────────────────────────
+def rand(*shape: int, dtype: dtype | None = None, device: device | str | None = None, requires_grad: bool = False) -> Tensor: ...
+def randn(*shape: int, dtype: dtype | None = None, device: device | str | None = None, requires_grad: bool = False) -> Tensor: ...
+def randint(low: int, high: int, shape: list[int] | tuple[int, ...], *, dtype: dtype | None = None, device: device | str | None = None, requires_grad: bool = False) -> Tensor: ...
+def bernoulli(p: float, shape: list[int] | tuple[int, ...], *, dtype: dtype | None = None, device: device | str | None = None) -> Tensor: ...
+def normal(mean: float, std: float, shape: list[int] | tuple[int, ...], *, dtype: dtype | None = None, device: device | str | None = None) -> Tensor: ...
+def rand_like(input: Tensor, requires_grad: bool = False) -> Tensor: ...
+def randn_like(input: Tensor, requires_grad: bool = False) -> Tensor: ...
+def manual_seed(seed: int) -> None: ...
+
+# ── Gradient control ──────────────────────────────────────────────────────
+def no_grad() -> Any: ...
+def enable_grad() -> Any: ...
+def inference_mode() -> Any: ...
+def is_grad_enabled() -> bool: ...
+def set_grad_enabled(mode: bool) -> None: ...
+
+# ── Serialization ─────────────────────────────────────────────────────────
+def save(obj: Any, path: str) -> None: ...
+def load(path: str) -> Any: ...
+
+# ── Subpackages ───────────────────────────────────────────────────────────
+from lucid import nn as nn
+from lucid import optim as optim
+from lucid import autograd as autograd
+from lucid import linalg as linalg
+from lucid import utils as utils
+from lucid import amp as amp
+from lucid import profiler as profiler
+from lucid import einops as einops
+from lucid import metal as metal
+from lucid import backends as backends
+from lucid import testing as testing
+
+'''
+
+
+def _registry_free_fns(registry: list[Any]) -> list[str]:
+    """Generate lucid.xxx free function signatures from the ops registry."""
+    lines: list[str] = ["# ── Math ops (registry-generated) ───────────────────────────────────────\n"]
+    seen: set[str] = set()
+
+    for entry in registry:
+        fname = entry.free_fn_name
+        if not fname or fname in seen:
+            continue
+        seen.add(fname)
+
+        ret = _return_type(entry)
+        params: list[str] = []
+
+        if entry.n_tensor_args == -1:
+            params.append("tensors: list[Tensor]")
+        elif entry.n_tensor_args == 1:
+            params.append("x: Tensor")
+        elif entry.n_tensor_args == 2:
+            params.append("x: Tensor")
+            params.append("y: Tensor | float")
+        elif entry.n_tensor_args == 3:
+            params.append("condition: Tensor")
+            params.append("x: Tensor | float")
+            params.append("y: Tensor | float")
+
+        for kw in entry.extra_kwargs:
+            params.append(_kwarg_param(kw))
+
+        sig = ", ".join(params)
+        lines.append(f"def {fname}({sig}) -> {ret}: ...")
+
+    return lines
+
+
+def generate_init_pyi(registry: list[Any], out_path: Path) -> None:
+    fn_lines = _registry_free_fns(registry)
+    content = _INIT_HEADER + "\n".join(fn_lines) + "\n"
+    out_path.write_text(content, encoding="utf-8")
+    print(f"[gen_pyi] __init__.pyi → {out_path}  ({len(fn_lines) - 1} free functions)")
 
 
 # ---------------------------------------------------------------------------
@@ -193,13 +671,28 @@ def generate(out_path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--out",
-        default=str(ROOT / "lucid" / "_C" / "engine.pyi"),
-        help="Output path for the .pyi stub file.",
-    )
+    parser.add_argument("--out-engine", default=str(ROOT / "lucid" / "_C" / "engine.pyi"))
+    parser.add_argument("--out-tensor", default=str(ROOT / "lucid" / "_tensor" / "tensor.pyi"))
+    parser.add_argument("--out-init",   default=str(ROOT / "lucid" / "__init__.pyi"))
+    parser.add_argument("--dry-run", action="store_true", help="Print without writing files")
     args = parser.parse_args()
-    generate(Path(args.out))
+
+    from lucid._ops._registry import _REGISTRY
+
+    targets = [
+        ("engine",   Path(args.out_engine), lambda p: generate_engine_pyi(p)),
+        ("tensor",   Path(args.out_tensor), lambda p: generate_tensor_pyi(_REGISTRY, p)),
+        ("__init__", Path(args.out_init),   lambda p: generate_init_pyi(_REGISTRY, p)),
+    ]
+
+    for name, path, gen in targets:
+        if args.dry_run:
+            print(f"[gen_pyi] (dry-run) would write {name} → {path}")
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            gen(path)
+
+    print("[gen_pyi] done.")
 
 
 if __name__ == "__main__":
