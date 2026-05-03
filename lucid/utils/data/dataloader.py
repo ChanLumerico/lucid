@@ -257,8 +257,6 @@ class DataLoader:
         Worker processes for parallel data loading. ``0`` = single-process.
     collate_fn : callable, optional
         Merge a list of samples into a batch.
-    pin_memory : bool, optional
-        No-op on Apple Silicon (unified memory).
     drop_last : bool, optional
         Drop the last incomplete batch (default: False).
     timeout : float, optional
@@ -290,7 +288,6 @@ class DataLoader:
         batch_sampler: Sampler | None = None,
         num_workers: int = 0,
         collate_fn: Callable | None = None,
-        pin_memory: bool = False,
         drop_last: bool = False,
         timeout: float = 0.0,
         worker_init_fn: Callable | None = None,
@@ -310,7 +307,6 @@ class DataLoader:
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.collate_fn = collate_fn or default_collate
-        self.pin_memory = pin_memory          # no-op on Apple Silicon
         self.drop_last = drop_last
         self.timeout = timeout
         self.worker_init_fn = worker_init_fn
