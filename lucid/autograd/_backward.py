@@ -46,22 +46,37 @@ def grad(
     only_inputs: bool = True,
     allow_unused: bool = False,
 ) -> tuple[Tensor | None, ...]:
-    """Compute gradients of outputs w.r.t. inputs without accumulating .grad.
+    """Compute gradients of outputs w.r.t. inputs, returning them directly.
 
-    This is a functional gradient computation: leaf tensor .grad fields are
-    temporarily swapped out and restored after the call. The computed gradients
-    are returned directly.
+    Unlike :meth:`~lucid.Tensor.backward`, this function does **not** accumulate
+    gradients into ``.grad``; it returns them as a tuple.
 
-    Args:
-        outputs:      Scalar-or-vector output tensor(s).
-        inputs:       Input tensors to differentiate with respect to.
-        grad_outputs: Seed gradients for non-scalar outputs.
-        retain_graph: Keep the computation graph (default: True if create_graph else False).
-        create_graph: Not yet supported.
-        allow_unused: If False, raise if an input has no gradient path.
+    Parameters
+    ----------
+    outputs : Tensor or list of Tensor
+        Output tensors to differentiate.
+    inputs : Tensor or list of Tensor
+        Input tensors to compute gradients for.
+    grad_outputs : list of Tensor, optional
+        Seed gradients for non-scalar outputs.
+    retain_graph : bool, optional
+        Keep the computation graph after backward. Defaults to ``create_graph``.
+    create_graph : bool, optional
+        Not yet supported.
+    allow_unused : bool, optional
+        If ``True``, return ``None`` for inputs with no gradient path.
 
-    Returns:
-        Tuple of gradient Tensors (or None for unused inputs).
+    Returns
+    -------
+    tuple of Tensor or None
+        One gradient per input.
+
+    Examples
+    --------
+    >>> x = lucid.randn(3)
+    >>> x.requires_grad_(True)
+    >>> y = (x * x).sum()
+    >>> (gx,) = lucid.autograd.grad(y, [x])
     """
     import numpy as np
 

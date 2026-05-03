@@ -21,6 +21,11 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.8",
 ]
+docs = [
+    "sphinx>=7.2",
+    "shibuya",
+    "sphinx-autobuild",
+]
 
 [tool.pytest.ini_options]
 markers = [

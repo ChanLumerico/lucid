@@ -9,16 +9,33 @@ from lucid.optim.optimizer import Optimizer
 
 
 class Adam(Optimizer):
-    """
-    Adaptive moment estimation optimizer.
+    """Adaptive Moment Estimation optimizer.
 
-    Args:
-        params:       iterable of Parameters
-        lr:           learning rate (default: 1e-3)
-        betas:        (beta1, beta2) coefficients (default: (0.9, 0.999))
-        eps:          numerical stability term (default: 1e-8)
-        weight_decay: L2 penalty (default: 0)
-        amsgrad:      whether to use AMSGrad variant (default: False)
+    Maintains per-parameter first and second moment estimates to adapt
+    the learning rate. See :cite:t:`Kingma2015Adam`.
+
+    Parameters
+    ----------
+    params : iterable of Parameter
+        Iterable of parameters to optimize or dicts defining parameter groups.
+    lr : float, optional
+        Learning rate (default: 1e-3).
+    betas : tuple of float, optional
+        Coefficients for computing running averages of gradient and its square
+        (default: ``(0.9, 0.999)``).
+    eps : float, optional
+        Term added to the denominator for numerical stability (default: 1e-8).
+    weight_decay : float, optional
+        L2 penalty coefficient (default: 0).
+    amsgrad : bool, optional
+        Whether to use the AMSGrad variant (default: ``False``).
+
+    Examples
+    --------
+    >>> optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    >>> optimizer.zero_grad()
+    >>> loss.backward()
+    >>> optimizer.step()
     """
 
     def __init__(

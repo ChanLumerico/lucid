@@ -5,11 +5,15 @@ Lucid — Apple Silicon ML framework.
 from lucid.version import __version__, _EXPECTED_ABI
 from lucid._C import engine as _C_engine
 
-if _C_engine.ABI_VERSION != _EXPECTED_ABI:
-    raise RuntimeError(
-        f"lucid C++ engine ABI mismatch: expected {_EXPECTED_ABI}, "
-        f"got {_C_engine.ABI_VERSION}. Rebuild the engine."
-    )
+try:
+    _abi = int(_C_engine.ABI_VERSION)
+    if _abi != _EXPECTED_ABI:
+        raise RuntimeError(
+            f"lucid C++ engine ABI mismatch: expected {_EXPECTED_ABI}, "
+            f"got {_abi}. Rebuild the engine."
+        )
+except (TypeError, ValueError):
+    pass  # Mocked during docs build — skip ABI check
 
 from lucid._dtype import (
     dtype,

@@ -11,7 +11,27 @@ if TYPE_CHECKING:
 
 
 def relu(x: Tensor, inplace: bool = False) -> Tensor:
-    """Rectified linear unit activation."""
+    """Apply the rectified linear unit function element-wise.
+
+    :math:`\\text{ReLU}(x) = \\max(0, x)`
+
+    Parameters
+    ----------
+    x : Tensor
+        Input tensor.
+    inplace : bool, optional
+        Currently ignored (not supported).
+
+    Returns
+    -------
+    Tensor
+        Tensor with negative values zeroed.
+
+    Examples
+    --------
+    >>> F.relu(lucid.tensor([-1.0, 0.0, 1.0]))
+    tensor([0., 0., 1.])
+    """
     return _wrap(_C_engine.relu(_unwrap(x)))
 
 
@@ -68,7 +88,27 @@ def tanh(x: Tensor) -> Tensor:
 
 
 def softmax(x: Tensor, dim: int | None = None) -> Tensor:
-    """Softmax along dim."""
+    """Apply softmax along a dimension.
+
+    :math:`\\text{Softmax}(x_i) = \\frac{\\exp(x_i)}{\\sum_j \\exp(x_j)}`
+
+    Parameters
+    ----------
+    x : Tensor
+        Input tensor.
+    dim : int, optional
+        Dimension along which softmax is computed. Defaults to ``-1``.
+
+    Returns
+    -------
+    Tensor
+        Tensor of the same shape with values summing to 1 along ``dim``.
+
+    Examples
+    --------
+    >>> logits = lucid.tensor([[1.0, 2.0, 3.0]])
+    >>> F.softmax(logits, dim=1).sum()   # ≈ 1.0
+    """
     axis = dim if dim is not None else -1
     return _wrap(_C_engine.softmax(_unwrap(x), axis))
 
@@ -121,7 +161,30 @@ def normalize(
     dim: int = 1,
     eps: float = 1e-12,
 ) -> Tensor:
-    """L_p normalize x along dim."""
+    """Normalize a tensor to unit :math:`L_p` norm along a dimension.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input tensor.
+    p : float, optional
+        Exponent of the norm (default: 2.0 for Euclidean norm).
+    dim : int, optional
+        Dimension along which to normalize (default: 1).
+    eps : float, optional
+        Small value added to the denominator for numerical stability.
+
+    Returns
+    -------
+    Tensor
+        Normalized tensor with unit :math:`L_p` norm along ``dim``.
+
+    Examples
+    --------
+    >>> x = lucid.tensor([[3.0, 4.0]])
+    >>> F.normalize(x, p=2, dim=1)
+    tensor([[0.6, 0.8]])
+    """
     return _wrap(_C_engine.nn.lp_normalize(_unwrap(x), p, dim, eps))
 
 

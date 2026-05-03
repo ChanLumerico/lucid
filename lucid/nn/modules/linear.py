@@ -12,13 +12,34 @@ from lucid._factories.creation import empty
 
 
 class Linear(Module):
-    """
-    Fully connected linear layer: y = x @ weight.T + bias.
+    """Apply a linear transformation: :math:`y = xW^T + b`.
 
-    Args:
-        in_features:  number of input features
-        out_features: number of output features
-        bias:         if True, add a learnable bias
+    Parameters
+    ----------
+    in_features : int
+        Size of each input sample.
+    out_features : int
+        Size of each output sample.
+    bias : bool, optional
+        If ``True`` (default), add a learnable bias term.
+    device : optional
+        Device for the initial parameters.
+    dtype : optional
+        Data type for the initial parameters.
+
+    Attributes
+    ----------
+    weight : Parameter
+        Shape ``(out_features, in_features)``. Initialized with Kaiming uniform.
+    bias : Parameter or None
+        Shape ``(out_features,)``. ``None`` when ``bias=False``.
+
+    Examples
+    --------
+    >>> m = nn.Linear(20, 10)
+    >>> x = lucid.randn(4, 20)
+    >>> m(x).shape
+    (4, 10)
     """
 
     def __init__(

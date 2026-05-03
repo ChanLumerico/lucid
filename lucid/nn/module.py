@@ -22,14 +22,36 @@ def _next_hook_id() -> int:
 
 
 class Module:
-    """
-    Base class for all neural network modules.
+    """Base class for all neural network modules.
 
-    __setattr__ routing (priority order):
-    1. value._is_parameter is True → _parameters[name]
-    2. isinstance(value, Module)   → _modules[name]
-    3. Tensor (non-parameter)      → plain attr (use register_buffer explicitly)
-    4. anything else               → plain attr
+    Every custom model should subclass this and implement :meth:`forward`.
+    Submodules assigned as attributes are tracked automatically.
+
+    Notes
+    -----
+    **Attribute routing**: Setting an attribute follows this priority order:
+
+    1. If the value is a :class:`~lucid.nn.Parameter` → stored in ``_parameters``.
+    2. If the value is a :class:`Module` → stored in ``_modules``.
+    3. Otherwise → plain Python attribute.
+
+    To register a non-parameter tensor (e.g. a running mean), call
+    :meth:`register_buffer` explicitly.
+
+    Examples
+    --------
+    >>> class MLP(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.fc1 = nn.Linear(10, 20)
+    ...         self.fc2 = nn.Linear(20, 1)
+    ...
+    ...     def forward(self, x):
+    ...         return self.fc2(lucid.relu(self.fc1(x)))
+    ...
+    >>> model = MLP()
+    >>> model(lucid.randn(4, 10)).shape
+    (4, 1)
     """
 
     training: bool

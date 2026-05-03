@@ -73,23 +73,40 @@ class _SingleProcessDataLoaderIter:
 
 
 class DataLoader:
-    """Combines a dataset with a sampler and provides iteration over mini-batches.
+    """Combine a dataset with a sampler to provide iteration over mini-batches.
 
-    Args:
-        dataset:         Dataset to load from.
-        batch_size:      Number of samples per batch (default: 1).
-        shuffle:         Shuffle at the start of each epoch (default: False).
-        sampler:         Custom sampler; mutually exclusive with shuffle.
-        batch_sampler:   Custom batch sampler; mutually exclusive with batch_size/shuffle/drop_last.
-        num_workers:     Number of worker processes (0 = single-process).
-        collate_fn:      Function to merge a list of samples into a batch.
-        pin_memory:      No-op on Apple Silicon (unified memory).
-        drop_last:       Drop the last incomplete batch (default: False).
-        timeout:         Timeout for collecting a batch (unused in single-process).
-        worker_init_fn:  Function called on each worker process (unused when num_workers=0).
-        generator:       Random generator for reproducibility.
-        prefetch_factor: Number of batches to prefetch per worker.
-        persistent_workers: Keep workers alive between epochs.
+    Parameters
+    ----------
+    dataset : Dataset
+        Dataset to load data from.
+    batch_size : int, optional
+        Samples per batch (default: 1).
+    shuffle : bool, optional
+        Shuffle at the start of each epoch. Mutually exclusive with ``sampler``.
+    sampler : Sampler, optional
+        Custom index sampler. Mutually exclusive with ``shuffle``.
+    batch_sampler : Sampler, optional
+        Custom batch sampler. Mutually exclusive with ``batch_size``,
+        ``shuffle``, and ``drop_last``.
+    num_workers : int, optional
+        Number of worker processes for data loading. ``0`` (default) means
+        single-process. macOS workers use ``multiprocessing.spawn``.
+    collate_fn : callable, optional
+        Merges a list of samples into a batch. Defaults to
+        :func:`default_collate`.
+    pin_memory : bool, optional
+        No-op on Apple Silicon (unified memory architecture).
+    drop_last : bool, optional
+        Drop the last incomplete batch (default: ``False``).
+    generator : optional
+        Random generator for reproducible shuffling.
+
+    Examples
+    --------
+    >>> ds = TensorDataset(X, y)
+    >>> loader = DataLoader(ds, batch_size=32, shuffle=True)
+    >>> for x_batch, y_batch in loader:
+    ...     loss = model(x_batch).mean()
     """
 
     def __init__(

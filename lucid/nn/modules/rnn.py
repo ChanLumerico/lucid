@@ -13,10 +13,49 @@ from lucid._dispatch import _unwrap, _wrap
 
 
 class LSTM(Module):
-    """
-    Long short-term memory (LSTM) recurrent layer.
+    """Long Short-Term Memory recurrent layer.
 
-    Input: (seq_len, batch, input_size) or (batch, seq_len, input_size) if batch_first
+    Parameters
+    ----------
+    input_size : int
+        Number of expected features in the input.
+    hidden_size : int
+        Number of features in the hidden state.
+    num_layers : int, optional
+        Number of recurrent layers (default: 1).
+    bias : bool, optional
+        If ``False``, the layer does not use bias weights (default: ``True``).
+    batch_first : bool, optional
+        If ``True``, input/output tensors are ``(batch, seq, feature)``
+        instead of ``(seq, batch, feature)`` (default: ``False``).
+    dropout : float, optional
+        Dropout probability between LSTM layers (default: 0.0).
+    bidirectional : bool, optional
+        If ``True``, use a bidirectional LSTM (default: ``False``).
+
+    Inputs
+    ------
+    input : Tensor
+        Shape ``(seq_len, batch, input_size)`` or ``(batch, seq_len, input_size)``
+        depending on ``batch_first``.
+    hx : tuple of (h_0, c_0), optional
+        Initial hidden and cell states. Each of shape
+        ``(num_layers * num_directions, batch, hidden_size)``.
+
+    Outputs
+    -------
+    output : Tensor
+        All hidden states of shape ``(seq_len, batch, hidden_size)``.
+    (h_n, c_n) : tuple of Tensor
+        Final hidden and cell states.
+
+    Examples
+    --------
+    >>> lstm = nn.LSTM(input_size=10, hidden_size=20, batch_first=True)
+    >>> x = lucid.randn(2, 5, 10)         # (batch, seq, features)
+    >>> output, (h_n, c_n) = lstm(x)
+    >>> output.shape
+    (2, 5, 20)
     """
 
     def __init__(

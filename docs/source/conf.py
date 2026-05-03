@@ -1,55 +1,110 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
-
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+"""
+Sphinx configuration for Lucid documentation.
+"""
 
 import os
 import sys
 
-HERE = os.path.abspath(os.path.dirname(__file__))
-ROOT = os.path.abspath(os.path.join(HERE, "../../"))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, HERE)
-os.environ["SPHINX_BUILD"] = "1"
+# Make lucid importable during docs build
+sys.path.insert(0, os.path.abspath("../.."))
+
+# TYPE_CHECKING=True so that TYPE_CHECKING blocks are evaluated,
+# making type aliases like Tensor, Optimizer visible to autodoc.
+import typing
+typing.TYPE_CHECKING = True
+
+# ── Project info ──────────────────────────────────────────────────────────────
 
 project = "Lucid"
-copyright = "2026, ChanLumerico"
-author = "ChanLumerico"
-release = "2.16.0"
+copyright = "2025, Chan Lee"
+author = "Chan Lee"
+release = "3.0.0"
+version = "3.0"
 
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+# ── Extensions ────────────────────────────────────────────────────────────────
 
-html_baseurl = "https://chanlumerico.github.io/lucid/"
 extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.githubpages",
-    "sphinx_design",
-    "sphinxcontrib.mermaid",
+    "sphinx.ext.autodoc",        # Pull docstrings from source
+    "sphinx.ext.napoleon",       # Parse numpy-style docstrings
+    "sphinx.ext.viewcode",       # Add [source] links to API pages
+    "sphinx.ext.intersphinx",    # Cross-reference Python / NumPy docs
+    "sphinx.ext.autosummary",    # Auto-generate summary tables
 ]
 
-templates_path = ["_templates"]
-exclude_patterns = []
+# ── autodoc ───────────────────────────────────────────────────────────────────
 
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+# Mock the C extension so docs can be built without the .so binary
+autodoc_mock_imports = ["lucid._C", "lucid._C.engine"]
 
-# Theme
-# Requires: `pip install shibuya`
-html_theme = "shibuya"
-html_static_path = ["_static"]
-html_css_files = ["badges.css", "mermaid.css"]
-html_js_files = ["mermaid-zoom.js"]
-
-html_theme_options = {
-    "accent_color": "indigo",
-    "toctree_maxdepth": 6,
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": False,
+    "show-inheritance": True,
+    "member-order": "bysource",
+    "special-members": "__init__, __call__",
+    "exclude-members": "__weakref__, __dict__, __module__",
 }
 
-# -- RST Epilogs -------------------------------------------------------------
-from rstep import get_total_epilogs
+autodoc_typehints = "description"       # Render type hints in description
+autodoc_typehints_description_target = "documented"
+autoclass_content = "both"              # Include both class & __init__ docstring
+autodoc_preserve_defaults = True
 
-rst_epilog = get_total_epilogs()
+# ── Napoleon (numpy-style docstrings) ────────────────────────────────────────
+
+napoleon_numpy_docstring = True
+napoleon_google_docstring = False
+napoleon_include_init_with_doc = True
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = True
+napoleon_use_admonition_for_notes = True
+napoleon_use_rtype = True
+
+# ── intersphinx ───────────────────────────────────────────────────────────────
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable", None),
+}
+
+# ── autosummary ───────────────────────────────────────────────────────────────
+
+autosummary_generate = True
+autosummary_imported_members = False
+
+# ── Theme: Shibuya ────────────────────────────────────────────────────────────
+
+html_theme = "shibuya"
+
+html_theme_options = {
+    "nav_links": [
+        {"title": "API Reference", "url": "api/index"},
+        {"title": "GitHub", "url": "https://github.com/chanlee/lucid", "external": True},
+    ],
+    "accent_color": "purple",      # Brand color
+    "github_url": "https://github.com/chanlee/lucid",
+    "light_logo": "_static/logo-light.svg",
+    "dark_logo": "_static/logo-dark.svg",
+}
+
+html_title = "Lucid Documentation"
+html_short_title = "Lucid"
+html_favicon = "_static/favicon.ico"
+
+html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+
+# ── Output ────────────────────────────────────────────────────────────────────
+
+# Disable epub builder — has a circular import issue on Python 3.14
+epub_show_urls = "no"
+
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+templates_path = ["_templates"]
+
+# ── Source ────────────────────────────────────────────────────────────────────
+
+source_suffix = {
+    ".rst": "restructuredtext",
+}

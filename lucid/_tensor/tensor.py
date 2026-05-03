@@ -12,10 +12,32 @@ if TYPE_CHECKING:
 
 
 class Tensor:
-    """
-    Core data structure of the Lucid framework.
+    """Multi-dimensional array with automatic differentiation support.
 
-    Wraps TensorImpl via composition. All public API goes through this class.
+    The central data structure of the Lucid framework. Wraps a C++ ``TensorImpl``
+    via composition. Tensors live on either ``cpu`` (Apple Accelerate) or
+    ``metal`` (Apple Metal GPU) devices.
+
+    Parameters
+    ----------
+    data : array_like
+        Input data. Accepts nested Python lists, NumPy arrays, or scalars.
+    dtype : lucid.dtype, optional
+        Desired data type. Defaults to ``lucid.float32``.
+    device : str or lucid.device, optional
+        Target device (``"cpu"`` or ``"metal"``). Defaults to the global default.
+    requires_grad : bool, optional
+        If ``True``, operations on this tensor are recorded for autograd.
+        Default is ``False``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.Tensor([[1.0, 2.0], [3.0, 4.0]])
+    >>> x.shape
+    (2, 2)
+    >>> x.dtype
+    lucid.float32
     """
 
     _is_parameter: bool = False
@@ -150,11 +172,35 @@ class Tensor:
         retain_graph: bool = False,
         create_graph: bool = False,
     ) -> None:
-        """Compute gradients by backpropagating from this tensor.
+        """Compute gradients by back-propagating from this tensor.
 
-        For scalar outputs, gradient defaults to ones.
-        For non-scalar outputs, gradient must be provided with the same shape;
-        gradients are then computed as if the effective scalar were (self * gradient).sum().
+        Accumulates gradients into the ``.grad`` attribute of all leaf tensors
+        that have ``requires_grad=True``.
+
+        Parameters
+        ----------
+        gradient : Tensor, optional
+            Seed gradient of the same shape as ``self``. Required when ``self``
+            is not a scalar. Omitting it for non-scalars raises ``RuntimeError``.
+        retain_graph : bool, optional
+            If ``False`` (default), the computation graph is freed after the
+            backward pass. Set to ``True`` when calling backward multiple times.
+        create_graph : bool, optional
+            Not yet supported. Reserved for higher-order gradients.
+
+        Raises
+        ------
+        RuntimeError
+            If ``self`` is not a scalar and ``gradient`` is not provided, or if
+            ``gradient.shape != self.shape``.
+
+        Examples
+        --------
+        >>> x = lucid.randn(3)
+        >>> x.requires_grad_(True)
+        >>> y = (x * x).sum()
+        >>> y.backward()
+        >>> x.grad          # 2 * x
         """
         if gradient is not None:
             if self._impl.shape != gradient._impl.shape:
