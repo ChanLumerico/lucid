@@ -128,9 +128,17 @@ class _MultiProcessDataLoaderIter:
         self._num_workers: int = loader.num_workers
         self._prefetch_factor: int = loader.prefetch_factor or 2
         self._persistent: bool = loader.persistent_workers
-        self._collate_fn = loader.collate_fn
+        self._timeout: float = loader.timeout
 
-        ctx = _mp.get_context("spawn")
+        # multiprocessing_context: use caller's choice if provided,
+        # otherwise default to 'spawn' (safe on macOS/Apple Silicon).
+        mp_ctx = loader.multiprocessing_context
+        if mp_ctx is None:
+            ctx = _mp.get_context("spawn")
+        elif isinstance(mp_ctx, str):
+            ctx = _mp.get_context(mp_ctx)
+        else:
+            ctx = mp_ctx  # already a context object
 
         # One index queue per worker to avoid contention.
         self._index_queues = [ctx.Queue() for _ in range(self._num_workers)]
@@ -199,8 +207,17 @@ class _MultiProcessDataLoaderIter:
             raise StopIteration
 
         # Collect from the result queue until the in-order batch is ready.
+        # Apply timeout if set (>0), otherwise block indefinitely.
+        get_kwargs = {"timeout": self._timeout} if self._timeout > 0 else {}
         while self._rcvd_idx not in self._reorder:
-            seq, result = self._result_queue.get()
+            try:
+                seq, result = self._result_queue.get(**get_kwargs)
+            except Exception:  # queue.Empty on timeout
+                self._shutdown_workers()
+                raise RuntimeError(
+                    f"DataLoader worker timed out after {self._timeout}s. "
+                    "Increase timeout or reduce batch size."
+                ) from None
             if isinstance(result, Exception):
                 self._shutdown_workers()
                 raise result
@@ -297,6 +314,7 @@ class DataLoader:
         self.drop_last = drop_last
         self.timeout = timeout
         self.worker_init_fn = worker_init_fn
+        self.multiprocessing_context = multiprocessing_context
         self.generator = generator
         # Match PyTorch: prefetch_factor=None when num_workers=0, else default 2
         if prefetch_factor is None:
