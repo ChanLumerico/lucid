@@ -12,6 +12,14 @@ from lucid.nn.hooks import RemovableHandle
 if TYPE_CHECKING:
     pass
 
+_HOOK_ID = 0
+
+
+def _next_hook_id() -> int:
+    global _HOOK_ID
+    _HOOK_ID += 1
+    return _HOOK_ID
+
 
 class Module:
     """
@@ -30,8 +38,9 @@ class Module:
         object.__setattr__(self, "_parameters", OrderedDict())
         object.__setattr__(self, "_buffers",    OrderedDict())
         object.__setattr__(self, "_modules",    OrderedDict())
-        object.__setattr__(self, "_forward_hooks",  OrderedDict())
-        object.__setattr__(self, "_backward_hooks", OrderedDict())
+        object.__setattr__(self, "_forward_pre_hooks",  OrderedDict())
+        object.__setattr__(self, "_forward_hooks",      OrderedDict())
+        object.__setattr__(self, "_backward_hooks",     OrderedDict())
         object.__setattr__(self, "training", True)
 
     def forward(self, *args: Any, **kwargs: Any) -> Any:
@@ -39,9 +48,18 @@ class Module:
         raise NotImplementedError(f"{type(self).__name__}.forward() not implemented")
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        # pre-hooks
+        for hook in self._forward_pre_hooks.values():
+            result = hook(self, args)
+            if result is not None:
+                args = result if isinstance(result, tuple) else (result,)
+        output = self.forward(*args, **kwargs)
+        # post-hooks
         for hook in self._forward_hooks.values():
-            hook(self, args, kwargs)
-        return self.forward(*args, **kwargs)
+            hook_out = hook(self, args, output)
+            if hook_out is not None:
+                output = hook_out
+        return output
 
     def __setattr__(self, name: str, value: Any) -> None:
         # Remove from existing dicts before re-routing
@@ -127,6 +145,46 @@ class Module:
         """Yield (name, child_module) pairs."""
         yield from self._modules.items()
 
+    # ── dotted-path accessors ─────────────────────────────────────────────
+
+    def get_submodule(self, target: str) -> Module:
+        """Return submodule at dotted path, e.g. 'encoder.layer.0'."""
+        if not target:
+            return self
+        parts = target.split(".")
+        mod: Module = self
+        for part in parts:
+            if not isinstance(mod, Module):
+                raise AttributeError(f"'{type(mod).__name__}' is not a Module")
+            if part not in mod._modules:
+                raise AttributeError(f"'{type(mod).__name__}' has no submodule '{part}'")
+            mod = mod._modules[part]
+        return mod
+
+    def get_parameter(self, target: str) -> Parameter:
+        """Return parameter at dotted path, e.g. 'fc.weight'."""
+        parts = target.split(".")
+        mod = self.get_submodule(".".join(parts[:-1])) if len(parts) > 1 else self
+        name = parts[-1]
+        if name not in mod._parameters:
+            raise AttributeError(f"'{type(mod).__name__}' has no parameter '{name}'")
+        p = mod._parameters[name]
+        if p is None:
+            raise AttributeError(f"Parameter '{target}' is None")
+        return p
+
+    def get_buffer(self, target: str) -> Tensor:
+        """Return buffer at dotted path, e.g. 'bn.running_mean'."""
+        parts = target.split(".")
+        mod = self.get_submodule(".".join(parts[:-1])) if len(parts) > 1 else self
+        name = parts[-1]
+        if name not in mod._buffers:
+            raise AttributeError(f"'{type(mod).__name__}' has no buffer '{name}'")
+        b = mod._buffers[name]
+        if b is None:
+            raise AttributeError(f"Buffer '{target}' is None")
+        return b
+
     # ── registration ─────────────────────────────────────────────────────
 
     def register_parameter(self, name: str, param: Parameter | None) -> None:
@@ -139,7 +197,12 @@ class Module:
     def register_buffer(
         self, name: str, tensor: Tensor | None, persistent: bool = True
     ) -> None:
-        """Register a buffer tensor. Buffers appear in state_dict but not parameters()."""
+        """Register a buffer tensor. Non-persistent buffers are excluded from state_dict."""
+        if not persistent:
+            # Store in a separate set of non-persistent buffer names
+            if not hasattr(self, "_non_persistent_buffers"):
+                object.__setattr__(self, "_non_persistent_buffers", set())
+            self._non_persistent_buffers.add(name)  # type: ignore[attr-defined]
         self._buffers[name] = tensor
 
     def add_module(self, name: str, module: Module | None) -> None:
@@ -153,6 +216,8 @@ class Module:
 
     def train(self, mode: bool = True) -> Self:
         """Set this module and all children to training mode."""
+        if not isinstance(mode, bool):
+            raise TypeError(f"train() requires a bool, got {type(mode).__name__}")
         self.training = mode
         for m in self._modules.values():
             m.train(mode)
@@ -162,20 +227,28 @@ class Module:
         """Set this module and all children to evaluation mode."""
         return self.train(False)
 
-    # ── device / dtype conversion ─────────────────────────────────────────
+    # ── device / dtype conversion via _apply ─────────────────────────────
+
+    def _apply(self, fn: Callable[[Tensor], Tensor]) -> Self:
+        """Apply fn to every parameter/buffer in-place (preserves object identity)."""
+        for module in self.children():
+            module._apply(fn)
+        for key, param in self._parameters.items():
+            if param is None:
+                continue
+            new_impl = fn(param)._impl
+            param._impl = new_impl  # mutate in-place — keeps Python object identity
+        for key, buf in self._buffers.items():
+            if buf is None:
+                continue
+            self._buffers[key] = fn(buf)
+        return self
 
     def to(self, *args: Any, **kwargs: Any) -> Self:
-        """Move/cast all parameters and buffers."""
-        for name, p in list(self._parameters.items()):
-            if p is not None:
-                new_p = Parameter(p.to(*args, **kwargs), requires_grad=p.requires_grad)
-                self._parameters[name] = new_p
-        for name, b in list(self._buffers.items()):
-            if b is not None:
-                self._buffers[name] = b.to(*args, **kwargs)
-        for m in self._modules.values():
-            m.to(*args, **kwargs)
-        return self
+        """Move/cast all parameters and buffers, preserving Parameter object identity."""
+        def _convert(t: Tensor) -> Tensor:
+            return t.to(*args, **kwargs)
+        return self._apply(_convert)
 
     def metal(self) -> Self:
         """Move all parameters and buffers to Apple Metal GPU."""
@@ -207,6 +280,27 @@ class Module:
             p.requires_grad_(requires_grad)
         return self
 
+    def share_memory(self) -> Self:
+        """No-op on Apple Silicon (unified memory is always shared)."""
+        return self
+
+    def compile(self, *args: Any, **kwargs: Any) -> None:
+        """Not implemented: JIT compilation is out of scope for this release."""
+        raise NotImplementedError(
+            "compile() is not available in this release. "
+            "JIT compilation is planned for a future major version."
+        )
+
+    # ── extra state ───────────────────────────────────────────────────────
+
+    def get_extra_state(self) -> Any:
+        """Return extra state to include in state_dict. Override in subclasses."""
+        return None
+
+    def set_extra_state(self, state: Any) -> None:
+        """Restore extra state loaded from state_dict. Override in subclasses."""
+        pass
+
     # ── state_dict ────────────────────────────────────────────────────────
 
     def state_dict(
@@ -225,11 +319,19 @@ class Module:
 
     # ── hooks ─────────────────────────────────────────────────────────────
 
-    def register_forward_hook(
-        self, hook: Callable[..., None]
+    def register_forward_pre_hook(
+        self, hook: Callable[..., Any]
     ) -> RemovableHandle:
-        """Register a hook called after forward(). Returns a RemovableHandle."""
-        key = id(hook)
+        """Register a hook called before forward(). Signature: hook(module, args) -> args | None."""
+        key = _next_hook_id()
+        self._forward_pre_hooks[key] = hook
+        return RemovableHandle(self._forward_pre_hooks, key)
+
+    def register_forward_hook(
+        self, hook: Callable[..., Any]
+    ) -> RemovableHandle:
+        """Register a hook called after forward(). Signature: hook(module, args, output) -> output | None."""
+        key = _next_hook_id()
         self._forward_hooks[key] = hook
         return RemovableHandle(self._forward_hooks, key)
 
@@ -237,7 +339,7 @@ class Module:
         self, hook: Callable[..., None]
     ) -> RemovableHandle:
         """Register a backward hook. Returns a RemovableHandle."""
-        key = id(hook)
+        key = _next_hook_id()
         self._backward_hooks[key] = hook
         return RemovableHandle(self._backward_hooks, key)
 

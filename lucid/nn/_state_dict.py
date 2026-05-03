@@ -13,9 +13,10 @@ def _save_to_state_dict(
     module: Module,
     prefix: str = "",
     keep_vars: bool = False,
-) -> dict[str, Tensor]:
-    """Recursively collect all parameters and buffers into a flat dict."""
+) -> dict[str, Any]:
+    """Recursively collect parameters and persistent buffers into a flat dict."""
     result: dict[str, Any] = {}
+    non_persistent: set[str] = getattr(module, "_non_persistent_buffers", set())
 
     for name, p in module._parameters.items():
         if p is not None:
@@ -23,7 +24,7 @@ def _save_to_state_dict(
             result[key] = p if keep_vars else p.detach()
 
     for name, b in module._buffers.items():
-        if b is not None:
+        if b is not None and name not in non_persistent:
             key = f"{prefix}{name}"
             result[key] = b if keep_vars else b.detach()
 
@@ -31,19 +32,20 @@ def _save_to_state_dict(
         subprefix = f"{prefix}{mname}."
         result.update(_save_to_state_dict(m, prefix=subprefix, keep_vars=keep_vars))
 
+    # Allow modules to include extra state
+    extra = module.get_extra_state()
+    if extra is not None:
+        result[f"{prefix}_extra_state"] = extra
+
     return result
 
 
 def _load_from_state_dict(
     module: Module,
-    state_dict: dict[str, Tensor],
+    state_dict: dict[str, Any],
     strict: bool = True,
 ) -> tuple[list[str], list[str]]:
-    """
-    Load parameters from state_dict.
-
-    Returns (missing_keys, unexpected_keys).
-    """
+    """Load parameters from state_dict. Returns (missing_keys, unexpected_keys)."""
     import numpy as np
     from lucid._C import engine as _C_engine
     from lucid.nn.parameter import Parameter
@@ -53,7 +55,6 @@ def _load_from_state_dict(
     missing_keys: list[str] = []
     unexpected_keys: list[str] = []
 
-    # Find missing and unexpected keys
     for key in own_state:
         if key not in state_dict:
             missing_keys.append(key)
@@ -67,7 +68,6 @@ def _load_from_state_dict(
             f"Missing keys: {missing_keys}; Unexpected keys: {unexpected_keys}"
         )
 
-    # Copy matching parameters
     for key, src in state_dict.items():
         if key not in own_state:
             continue
@@ -75,11 +75,16 @@ def _load_from_state_dict(
         parts = key.split(".")
         sub: Module = module
         for part in parts[:-1]:
+            if part == "_extra_state":
+                break
             sub = sub._modules[part]
         attr_name = parts[-1]
 
-        src_arr = np.asarray(src._impl.data_as_python())
-        src_arr = np.ascontiguousarray(src_arr)
+        if attr_name == "_extra_state":
+            sub.set_extra_state(src)
+            continue
+
+        src_arr = np.ascontiguousarray(np.asarray(src._impl.data_as_python()))
 
         if attr_name in sub._parameters:
             old_p = sub._parameters[attr_name]
@@ -87,9 +92,8 @@ def _load_from_state_dict(
                 new_impl = _C_engine.TensorImpl(
                     src_arr, old_p._impl.device, old_p.requires_grad
                 )
-                sub._parameters[attr_name] = Parameter(
-                    _wrap(new_impl), requires_grad=old_p.requires_grad
-                )
+                # Mutate _impl in-place to preserve Parameter object identity
+                old_p._impl = new_impl
         elif attr_name in sub._buffers:
             old_b = sub._buffers[attr_name]
             device = old_b._impl.device if old_b is not None else _C_engine.Device.CPU
