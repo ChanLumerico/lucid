@@ -128,7 +128,10 @@ class ParameterList(Module):
         return self
 
     def forward(self, *args: Any) -> Any:
-        raise NotImplementedError
+        raise NotImplementedError(
+            "ParameterList has no forward(); it is a container for Parameters only. "
+            "Access individual parameters via indexing: self.params[i]"
+        )
 
 
 class ParameterDict(Module):
@@ -152,4 +155,7 @@ class ParameterDict(Module):
         return key in self._parameters
 
     def forward(self, *args: Any) -> Any:
-        raise NotImplementedError
+        raise NotImplementedError(
+            "ParameterDict has no forward(); it is a container for Parameters only. "
+            "Access individual parameters via key: self.params['key']"
+        )

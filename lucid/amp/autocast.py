@@ -53,16 +53,17 @@ class autocast:
     def __exit__(self, *args: Any) -> None:
         if not self._enabled:
             return
-        # Manually restore previous AMP state since AutocastGuard.__exit__ doesn't
         if self._prev_active and self._prev_dtype is not None:
+            # Restore the previous AMP dtype (e.g. nested autocast blocks).
             prev_guard = _C_engine.AutocastGuard(self._prev_dtype)
             prev_guard.__enter__()
         elif not self._prev_active:
-            # Disable AMP — no direct API, use float32 guard and then disable
-            # by entering float32 (which still keeps AMP "active" with f32)
-            # As a best-effort: we can't turn AMP off without engine API
-            # Just leave it as-is and trust the outer context to clean up
-            pass
+            # AMP was off before this context.  The engine has no disable_amp()
+            # API, so restore neutrality by entering a float32 guard — ops will
+            # cast to float32 (identity for most) until the guard is superseded
+            # or the program exits AMP-active scope.
+            restore_guard = _C_engine.AutocastGuard(_C_engine.F32)
+            restore_guard.__enter__()
 
     def __call__(self, fn: _F) -> _F:
         """Use as a function decorator."""

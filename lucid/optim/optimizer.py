@@ -83,8 +83,17 @@ class Optimizer:
                         p._impl.zero_grad()
 
     def step(self, closure: Any = None) -> Any:
-        """Perform a single optimization step."""
-        raise NotImplementedError
+        """Perform a single optimization step.
+
+        Subclasses must override this to update parameters from their
+        current gradients.  Optionally accepts a *closure* that re-evaluates
+        the model and returns the loss (required by some optimizers, e.g.
+        LBFGS; ignored by most first-order methods).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__}.step() is not implemented. "
+            "Subclasses of Optimizer must override step()."
+        )
 
     def state_dict(self) -> dict[str, Any]:
         """Return the optimizer state as a dict."""

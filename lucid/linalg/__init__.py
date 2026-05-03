@@ -211,7 +211,11 @@ def solve_triangular(
         If ``True``, the diagonal entries of *A* are treated as 1.
     """
     if not left:
-        raise NotImplementedError("solve_triangular with left=False is not yet supported")
+        # X A = B  ⟺  Aᵀ Xᵀ = Bᵀ  — solve the transposed system, then transpose result.
+        AT = _wrap(_C_engine.mT(_unwrap(A)))
+        BT = _wrap(_C_engine.mT(_unwrap(B)))
+        XT = _wrap(_la.solve_triangular(_unwrap(AT), _unwrap(BT), not upper, unitriangular))
+        return _wrap(_C_engine.mT(_unwrap(XT)))
     return _wrap(_la.solve_triangular(_unwrap(A), _unwrap(B), upper, unitriangular))
 
 
