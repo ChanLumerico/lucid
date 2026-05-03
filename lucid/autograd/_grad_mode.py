@@ -15,7 +15,8 @@ class no_grad:
     """
     Disable gradient computation.
 
-    Can be used as a context manager or as a function decorator.
+    Correctly restores the previous grad mode on exit (RAII).
+    Can be used as a context manager or function decorator.
 
     Examples:
         with lucid.no_grad():
@@ -26,13 +27,15 @@ class no_grad:
             return model(x)
     """
 
+    _prev: bool
+
     def __enter__(self) -> "no_grad":
-        self._guard = _C_engine.NoGradGuard()
-        self._guard.__enter__()
+        self._prev = _C_engine.grad_enabled()
+        _C_engine.set_grad_enabled(False)
         return self
 
     def __exit__(self, *args: Any) -> None:
-        self._guard.__exit__(*args)
+        _C_engine.set_grad_enabled(self._prev)
 
     def __call__(self, fn: _F) -> _F:
         @functools.wraps(fn)
@@ -43,14 +46,24 @@ class no_grad:
 
 
 class enable_grad:
-    """Re-enable gradient computation inside a no_grad block."""
+    """Re-enable gradient computation, restoring previous mode on exit."""
+
+    _prev: bool
 
     def __enter__(self) -> "enable_grad":
+        self._prev = _C_engine.grad_enabled()
         _C_engine.set_grad_enabled(True)
         return self
 
     def __exit__(self, *args: Any) -> None:
-        pass
+        _C_engine.set_grad_enabled(self._prev)
+
+    def __call__(self, fn: _F) -> _F:
+        @functools.wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            with enable_grad():
+                return fn(*args, **kwargs)
+        return wrapper  # type: ignore[return-value]
 
 
 def set_grad_enabled(flag: bool) -> None:
@@ -65,6 +78,6 @@ def is_grad_enabled() -> bool:
 
 @contextmanager
 def inference_mode() -> Iterator[None]:
-    """Alias for no_grad; disables gradient tracking."""
+    """Context manager that disables gradient tracking (alias for no_grad)."""
     with no_grad():
         yield
