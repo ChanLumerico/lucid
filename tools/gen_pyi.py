@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# fmt: off
 """Lucid stub generator — emits .pyi files for IDE type checking.
 
 All stubs are derived from live sources; nothing is hardcoded:
