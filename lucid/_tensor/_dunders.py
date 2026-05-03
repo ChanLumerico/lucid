@@ -118,6 +118,10 @@ def _inject_dunders(cls: type) -> None:
     def __rpow__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.pow(_unwrap_or_scalar(other, self._impl), self._impl))
 
+    def __ipow__(self: Tensor, other: Any) -> Tensor:
+        self._impl = _C_engine.pow_(self._impl, _unwrap_or_scalar(other, self._impl))
+        return self
+
     def __matmul__(self: Tensor, other: Tensor) -> Tensor:
         return _wrap(_C_engine.matmul(self._impl, _unwrap_or_scalar(other, self._impl)))
 
@@ -174,7 +178,7 @@ def _inject_dunders(cls: type) -> None:
         ("__truediv__", __truediv__), ("__rtruediv__", __rtruediv__),
         ("__itruediv__", __itruediv__),
         ("__floordiv__", __floordiv__), ("__rfloordiv__", __rfloordiv__),
-        ("__pow__", __pow__), ("__rpow__", __rpow__),
+        ("__pow__", __pow__), ("__rpow__", __rpow__), ("__ipow__", __ipow__),
         ("__matmul__", __matmul__), ("__rmatmul__", __rmatmul__),
         ("__neg__", __neg__), ("__abs__", __abs__), ("__invert__", __invert__),
         ("__and__", __and__), ("__or__", __or__), ("__xor__", __xor__),

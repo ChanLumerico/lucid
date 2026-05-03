@@ -228,6 +228,25 @@ class Tensor:
         self._impl = _impl_with_grad(self._impl, False)
         return self
 
+    def clamp_(
+        self,
+        min: float | None = None,
+        max: float | None = None,
+    ) -> Self:
+        """Clamp all elements in-place to [min, max]."""
+        lo = min if min is not None else float("-inf")
+        hi = max if max is not None else float("inf")
+        self._impl = _C_engine.clip_(self._impl, lo, hi)
+        return self
+
+    def clamp_min_(self, min: float) -> Self:
+        """Clamp all elements in-place to a minimum value."""
+        return self.clamp_(min=min)
+
+    def clamp_max_(self, max: float) -> Self:
+        """Clamp all elements in-place to a maximum value."""
+        return self.clamp_(max=max)
+
     def clone(self) -> Self:
         """Return a copy of this tensor, preserving autograd history."""
         impl = _C_engine.contiguous(self._impl)
