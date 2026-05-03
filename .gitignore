@@ -67,3 +67,4 @@ compile_commands.json
 .ruff_cache/
 .pyre/
 .pytype/
+docs/_build/
