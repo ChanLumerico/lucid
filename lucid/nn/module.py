@@ -59,11 +59,11 @@ class Module:
 
     def __init__(self) -> None:
         object.__setattr__(self, "_parameters", OrderedDict())
-        object.__setattr__(self, "_buffers",    OrderedDict())
-        object.__setattr__(self, "_modules",    OrderedDict())
-        object.__setattr__(self, "_forward_pre_hooks",  OrderedDict())
-        object.__setattr__(self, "_forward_hooks",      OrderedDict())
-        object.__setattr__(self, "_backward_hooks",     OrderedDict())
+        object.__setattr__(self, "_buffers", OrderedDict())
+        object.__setattr__(self, "_modules", OrderedDict())
+        object.__setattr__(self, "_forward_pre_hooks", OrderedDict())
+        object.__setattr__(self, "_forward_hooks", OrderedDict())
+        object.__setattr__(self, "_backward_hooks", OrderedDict())
         object.__setattr__(self, "training", True)
 
     def forward(self, *args: Any, **kwargs: Any) -> Any:
@@ -151,9 +151,7 @@ class Module:
         for m in self._modules.values():
             yield from m.modules()
 
-    def named_modules(
-        self, prefix: str = ""
-    ) -> Iterator[tuple[str, Module]]:
+    def named_modules(self, prefix: str = "") -> Iterator[tuple[str, Module]]:
         """Yield (name, module) pairs."""
         yield prefix, self
         for name, m in self._modules.items():
@@ -180,7 +178,9 @@ class Module:
             if not isinstance(mod, Module):
                 raise AttributeError(f"'{type(mod).__name__}' is not a Module")
             if part not in mod._modules:
-                raise AttributeError(f"'{type(mod).__name__}' has no submodule '{part}'")
+                raise AttributeError(
+                    f"'{type(mod).__name__}' has no submodule '{part}'"
+                )
             mod = mod._modules[part]
         return mod
 
@@ -269,8 +269,10 @@ class Module:
 
     def to(self, *args: Any, **kwargs: Any) -> Self:
         """Move/cast all parameters and buffers, preserving Parameter object identity."""
+
         def _convert(t: Tensor) -> Tensor:
             return t.to(*args, **kwargs)
+
         return self._apply(_convert)
 
     def metal(self) -> Self:
@@ -284,21 +286,25 @@ class Module:
     def half(self) -> Self:
         """Cast all parameters and buffers to float16."""
         from lucid._dtype import float16
+
         return self.to(float16)
 
     def float(self) -> Self:
         """Cast all parameters and buffers to float32."""
         from lucid._dtype import float32
+
         return self.to(float32)
 
     def double(self) -> Self:
         """Cast all parameters and buffers to float64."""
         from lucid._dtype import float64
+
         return self.to(float64)
 
     def bfloat16(self) -> Self:
         """Cast all parameters and buffers to bfloat16."""
         from lucid._dtype import bfloat16
+
         return self.to(bfloat16)
 
     def apply(self, fn: Callable[[Module], None]) -> Self:
@@ -360,25 +366,19 @@ class Module:
 
     # ── hooks ─────────────────────────────────────────────────────────────
 
-    def register_forward_pre_hook(
-        self, hook: Callable[..., Any]
-    ) -> RemovableHandle:
+    def register_forward_pre_hook(self, hook: Callable[..., Any]) -> RemovableHandle:
         """Register a hook called before forward(). Signature: hook(module, args) -> args | None."""
         key = _next_hook_id()
         self._forward_pre_hooks[key] = hook
         return RemovableHandle(self._forward_pre_hooks, key)
 
-    def register_forward_hook(
-        self, hook: Callable[..., Any]
-    ) -> RemovableHandle:
+    def register_forward_hook(self, hook: Callable[..., Any]) -> RemovableHandle:
         """Register a hook called after forward(). Signature: hook(module, args, output) -> output | None."""
         key = _next_hook_id()
         self._forward_hooks[key] = hook
         return RemovableHandle(self._forward_hooks, key)
 
-    def register_full_backward_hook(
-        self, hook: Callable[..., None]
-    ) -> RemovableHandle:
+    def register_full_backward_hook(self, hook: Callable[..., None]) -> RemovableHandle:
         """Register a backward hook. Returns a RemovableHandle."""
         key = _next_hook_id()
         self._backward_hooks[key] = hook

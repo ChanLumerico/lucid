@@ -33,7 +33,9 @@ class Unflatten(Module):
 
     def forward(self, x: Any) -> Any:
         shape = list(x.shape)
-        new_shape = shape[: self.dim] + list(self.unflattened_size) + shape[self.dim + 1:]
+        new_shape = (
+            shape[: self.dim] + list(self.unflattened_size) + shape[self.dim + 1 :]
+        )
         return _wrap(_C_engine.reshape(_unwrap(x), new_shape))
 
     def extra_repr(self) -> str:

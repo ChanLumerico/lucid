@@ -25,7 +25,9 @@ def batch_norm(
     rv = _unwrap(running_var) if running_var is not None else None
     w = _unwrap(weight) if weight is not None else None
     b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.batch_norm(_unwrap(x), rm, rv, w, b, training, momentum, eps))
+    return _wrap(
+        _C_engine.nn.batch_norm(_unwrap(x), rm, rv, w, b, training, momentum, eps)
+    )
 
 
 def layer_norm(
@@ -78,6 +80,12 @@ def instance_norm(
 ) -> Tensor:
     """Instance normalization (batch_norm with training=True and per-sample stats)."""
     return batch_norm(
-        x, running_mean, running_var, weight, bias,
-        training=True, momentum=momentum, eps=eps,
+        x,
+        running_mean,
+        running_var,
+        weight,
+        bias,
+        training=True,
+        momentum=momentum,
+        eps=eps,
     )

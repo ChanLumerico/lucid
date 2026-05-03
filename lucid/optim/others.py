@@ -11,11 +11,24 @@ from lucid.optim.optimizer import Optimizer
 class RMSprop(Optimizer):
     """RMSprop optimizer."""
 
-    def __init__(self, params: Any, lr: float = 1e-2, alpha: float = 0.99,
-                 eps: float = 1e-8, weight_decay: float = 0, momentum: float = 0,
-                 centered: bool = False) -> None:
-        defaults = dict(lr=lr, alpha=alpha, eps=eps, weight_decay=weight_decay,
-                        momentum=momentum, centered=centered)
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 1e-2,
+        alpha: float = 0.99,
+        eps: float = 1e-8,
+        weight_decay: float = 0,
+        momentum: float = 0,
+        centered: bool = False,
+    ) -> None:
+        defaults = dict(
+            lr=lr,
+            alpha=alpha,
+            eps=eps,
+            weight_decay=weight_decay,
+            momentum=momentum,
+            centered=centered,
+        )
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, Any]) -> None:
@@ -41,8 +54,14 @@ class RMSprop(Optimizer):
 class Adagrad(Optimizer):
     """Adagrad optimizer."""
 
-    def __init__(self, params: Any, lr: float = 1e-2, lr_decay: float = 0,
-                 weight_decay: float = 0, eps: float = 1e-10) -> None:
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 1e-2,
+        lr_decay: float = 0,
+        weight_decay: float = 0,
+        eps: float = 1e-10,
+    ) -> None:
         defaults = dict(lr=lr, lr_decay=lr_decay, weight_decay=weight_decay, eps=eps)
         super().__init__(params, defaults)
 
@@ -68,8 +87,14 @@ class Adagrad(Optimizer):
 class Adadelta(Optimizer):
     """Adadelta optimizer."""
 
-    def __init__(self, params: Any, lr: float = 1.0, rho: float = 0.9,
-                 eps: float = 1e-6, weight_decay: float = 0) -> None:
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 1.0,
+        rho: float = 0.9,
+        eps: float = 1e-6,
+        weight_decay: float = 0,
+    ) -> None:
         defaults = dict(lr=lr, rho=rho, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
@@ -95,9 +120,17 @@ class Adadelta(Optimizer):
 class Adamax(Optimizer):
     """Adamax optimizer (variant of Adam based on infinity norm)."""
 
-    def __init__(self, params: Any, lr: float = 2e-3, betas: tuple[float, float] = (0.9, 0.999),
-                 eps: float = 1e-8, weight_decay: float = 0) -> None:
-        defaults = dict(lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay)
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 2e-3,
+        betas: tuple[float, float] = (0.9, 0.999),
+        eps: float = 1e-8,
+        weight_decay: float = 0,
+    ) -> None:
+        defaults = dict(
+            lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay
+        )
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, Any]) -> None:
@@ -123,9 +156,17 @@ class Adamax(Optimizer):
 class RAdam(Optimizer):
     """Rectified Adam optimizer."""
 
-    def __init__(self, params: Any, lr: float = 1e-3, betas: tuple[float, float] = (0.9, 0.999),
-                 eps: float = 1e-8, weight_decay: float = 0) -> None:
-        defaults = dict(lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay)
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 1e-3,
+        betas: tuple[float, float] = (0.9, 0.999),
+        eps: float = 1e-8,
+        weight_decay: float = 0,
+    ) -> None:
+        defaults = dict(
+            lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay
+        )
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, Any]) -> None:
@@ -151,9 +192,17 @@ class RAdam(Optimizer):
 class NAdam(Optimizer):
     """Nesterov Adam optimizer."""
 
-    def __init__(self, params: Any, lr: float = 2e-3, betas: tuple[float, float] = (0.9, 0.999),
-                 eps: float = 1e-8, weight_decay: float = 0) -> None:
-        defaults = dict(lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay)
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 2e-3,
+        betas: tuple[float, float] = (0.9, 0.999),
+        eps: float = 1e-8,
+        weight_decay: float = 0,
+    ) -> None:
+        defaults = dict(
+            lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay
+        )
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, Any]) -> None:
@@ -179,9 +228,18 @@ class NAdam(Optimizer):
 class ASGD(Optimizer):
     """Averaged stochastic gradient descent."""
 
-    def __init__(self, params: Any, lr: float = 1e-2, lambd: float = 1e-4,
-                 alpha: float = 0.75, t0: float = 1e6, weight_decay: float = 0) -> None:
-        defaults = dict(lr=lr, lambd=lambd, alpha=alpha, t0=t0, weight_decay=weight_decay)
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 1e-2,
+        lambd: float = 1e-4,
+        alpha: float = 0.75,
+        t0: float = 1e6,
+        weight_decay: float = 0,
+    ) -> None:
+        defaults = dict(
+            lr=lr, lambd=lambd, alpha=alpha, t0=t0, weight_decay=weight_decay
+        )
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, Any]) -> None:
@@ -207,10 +265,20 @@ class ASGD(Optimizer):
 class Rprop(Optimizer):
     """Resilient backpropagation optimizer."""
 
-    def __init__(self, params: Any, lr: float = 1e-2, etas: tuple[float, float] = (0.5, 1.2),
-                 step_sizes: tuple[float, float] = (1e-6, 50)) -> None:
-        defaults = dict(lr=lr, eta_minus=etas[0], eta_plus=etas[1],
-                        step_min=step_sizes[0], step_max=step_sizes[1])
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 1e-2,
+        etas: tuple[float, float] = (0.5, 1.2),
+        step_sizes: tuple[float, float] = (1e-6, 50),
+    ) -> None:
+        defaults = dict(
+            lr=lr,
+            eta_minus=etas[0],
+            eta_plus=etas[1],
+            step_min=step_sizes[0],
+            step_max=step_sizes[1],
+        )
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, Any]) -> None:

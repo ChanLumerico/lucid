@@ -26,7 +26,11 @@ def interpolate(
                 oh, ow = (size, size) if isinstance(size, int) else size
             else:
                 assert scale_factor is not None
-                sf = (scale_factor, scale_factor) if isinstance(scale_factor, float) else scale_factor
+                sf = (
+                    (scale_factor, scale_factor)
+                    if isinstance(scale_factor, float)
+                    else scale_factor
+                )
                 oh = int(x.shape[2] * sf[0])
                 ow = int(x.shape[3] * sf[1])
             return _wrap(_C_engine.nn.interpolate_nearest_2d(_unwrap(x), oh, ow))
@@ -35,7 +39,11 @@ def interpolate(
                 od, oh, ow = (size, size, size) if isinstance(size, int) else size
             else:
                 assert scale_factor is not None
-                sf = (scale_factor,) * 3 if isinstance(scale_factor, float) else scale_factor
+                sf = (
+                    (scale_factor,) * 3
+                    if isinstance(scale_factor, float)
+                    else scale_factor
+                )
                 od = int(x.shape[2] * sf[0])
                 oh = int(x.shape[3] * sf[1])
                 ow = int(x.shape[4] * sf[2])
@@ -45,7 +53,11 @@ def interpolate(
             oh, ow = (size, size) if isinstance(size, int) else size
         else:
             assert scale_factor is not None
-            sf = (scale_factor, scale_factor) if isinstance(scale_factor, float) else scale_factor
+            sf = (
+                (scale_factor, scale_factor)
+                if isinstance(scale_factor, float)
+                else scale_factor
+            )
             oh = int(x.shape[2] * sf[0])
             ow = int(x.shape[3] * sf[1])
         ac = align_corners if align_corners is not None else False
@@ -55,7 +67,9 @@ def interpolate(
             od, oh, ow = (size, size, size) if isinstance(size, int) else size
         else:
             assert scale_factor is not None
-            sf = (scale_factor,) * 3 if isinstance(scale_factor, float) else scale_factor
+            sf = (
+                (scale_factor,) * 3 if isinstance(scale_factor, float) else scale_factor
+            )
             od = int(x.shape[2] * sf[0])
             oh = int(x.shape[3] * sf[1])
             ow = int(x.shape[4] * sf[2])
@@ -105,6 +119,7 @@ def unfold(
     Returns:
         Tensor of shape (N, C*kH*kW, L) where L = output locations.
     """
+
     def _pair(v: int | tuple[int, int]) -> tuple[int, int]:
         return (v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
 
@@ -112,7 +127,9 @@ def unfold(
     dh, dw = _pair(dilation)
     ph, pw = _pair(padding)
     sh, sw = _pair(stride)
-    return _wrap(_C_engine.nn.unfold(_unwrap(x), [kh, kw], [sh, sw], [ph, pw], [dh, dw]))
+    return _wrap(
+        _C_engine.nn.unfold(_unwrap(x), [kh, kw], [sh, sw], [ph, pw], [dh, dw])
+    )
 
 
 def pad(

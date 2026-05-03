@@ -20,9 +20,7 @@ class device:
             self.type = type_or_str.strip()
             self.index = index
         if self.type not in self._VALID_TYPES:
-            raise ValueError(
-                f"Unknown device '{self.type}'. Use 'metal' or 'cpu'."
-            )
+            raise ValueError(f"Unknown device '{self.type}'. Use 'metal' or 'cpu'.")
         self._engine: _C_engine.Device = (
             _C_engine.Device.GPU
             if self.type in self._METAL_TYPES

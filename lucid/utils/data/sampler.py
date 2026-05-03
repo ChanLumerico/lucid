@@ -46,12 +46,17 @@ class RandomSampler(Sampler):
 
     @property
     def num_samples(self) -> int:
-        return self._num_samples if self._num_samples is not None else len(self.data_source)
+        return (
+            self._num_samples
+            if self._num_samples is not None
+            else len(self.data_source)
+        )
 
     def __iter__(self) -> Iterator[int]:
         n = len(self.data_source)
         if self.replacement:
             import random as _r
+
             rng = _r.Random(self.generator)
             yield from (rng.randrange(n) for _ in range(self.num_samples))
         else:
@@ -96,6 +101,7 @@ class WeightedRandomSampler(Sampler):
 
     def __iter__(self) -> Iterator[int]:
         import random as _r
+
         rng = _r.Random(self.generator)
         total = sum(self.weights)
         normalized = [w / total for w in self.weights]
@@ -122,9 +128,7 @@ class WeightedRandomSampler(Sampler):
 class BatchSampler(Sampler):
     """Wrap a sampler to yield mini-batches of indices."""
 
-    def __init__(
-        self, sampler: Sampler, batch_size: int, drop_last: bool
-    ) -> None:
+    def __init__(self, sampler: Sampler, batch_size: int, drop_last: bool) -> None:
         self.sampler = sampler
         self.batch_size = batch_size
         self.drop_last = drop_last

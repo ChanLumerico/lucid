@@ -113,6 +113,7 @@ def trunc_normal_(
 ) -> Tensor:
     """Fill tensor with truncated normal values (pure numpy, no scipy needed)."""
     import numpy as np
+
     size = tuple(tensor.shape) if tensor.shape else (1,)
     total = int(np.prod(size))
     # Rejection sampling — resample until all values are in [a, b]
@@ -123,7 +124,7 @@ def trunc_normal_(
         candidates = np.random.normal(mean, std, size=needed).astype(np.float32)
         valid = candidates[(candidates >= a) & (candidates <= b)]
         take = min(len(valid), total - filled)
-        result[filled: filled + take] = valid[:take]
+        result[filled : filled + take] = valid[:take]
         filled += take
     arr = result[:total].reshape(size)
     return _fill_impl(tensor, arr)
@@ -143,18 +144,18 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
 def calculate_gain(nonlinearity: str, param: float | None = None) -> float:
     """Return the recommended gain for an activation function."""
     _gains: dict[str, float] = {
-        "linear":  1.0,
-        "conv1d":  1.0,
-        "conv2d":  1.0,
-        "conv3d":  1.0,
+        "linear": 1.0,
+        "conv1d": 1.0,
+        "conv2d": 1.0,
+        "conv3d": 1.0,
         "sigmoid": 1.0,
-        "tanh":    5.0 / 3.0,
-        "relu":    math.sqrt(2.0),
-        "selu":    3.0 / 4.0,
+        "tanh": 5.0 / 3.0,
+        "relu": math.sqrt(2.0),
+        "selu": 3.0 / 4.0,
     }
     if nonlinearity == "leaky_relu":
         slope = param if param is not None else 0.01
-        return math.sqrt(2.0 / (1 + slope ** 2))
+        return math.sqrt(2.0 / (1 + slope**2))
     if nonlinearity in _gains:
         return _gains[nonlinearity]
     raise ValueError(f"Unsupported nonlinearity: {nonlinearity!r}")

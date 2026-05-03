@@ -77,11 +77,15 @@ class LSTM(Module):
                 layer_input = input_size if layer == 0 else hidden_size * num_directions
                 self.register_parameter(
                     f"weight_ih_l{layer}{suffix}",
-                    Parameter(empty(gate_size, layer_input, dtype=dtype, device=device)),
+                    Parameter(
+                        empty(gate_size, layer_input, dtype=dtype, device=device)
+                    ),
                 )
                 self.register_parameter(
                     f"weight_hh_l{layer}{suffix}",
-                    Parameter(empty(gate_size, hidden_size, dtype=dtype, device=device)),
+                    Parameter(
+                        empty(gate_size, hidden_size, dtype=dtype, device=device)
+                    ),
                 )
                 if bias:
                     self.register_parameter(
@@ -115,8 +119,12 @@ class LSTM(Module):
                 weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
                 weights.append(_unwrap(self._parameters[f"weight_hh_l{layer}{suffix}"]))
                 if self.bias:
-                    weights.append(_unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"]))
-                    weights.append(_unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"]))
+                    weights.append(
+                        _unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"])
+                    )
+                    weights.append(
+                        _unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"])
+                    )
 
         x_impl = _unwrap(x)
         if self.batch_first:
@@ -124,7 +132,8 @@ class LSTM(Module):
 
         output_impl, h_n_impl, c_n_impl = _C_engine.nn.lstm_forward(
             x_impl,
-            h0_impl, c0_impl,
+            h0_impl,
+            c0_impl,
             weights,
             self.hidden_size,
             self.num_layers,
@@ -140,27 +149,45 @@ class LSTM(Module):
         return output, (_wrap(h_n_impl), _wrap(c_n_impl))
 
     def extra_repr(self) -> str:
-        return (f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
-                f"bias={self.bias}, batch_first={self.batch_first}, "
-                f"dropout={self.dropout_val}, bidirectional={self.bidirectional}")
+        return (
+            f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
+            f"bias={self.bias}, batch_first={self.batch_first}, "
+            f"dropout={self.dropout_val}, bidirectional={self.bidirectional}"
+        )
 
 
 # ── Pure-Python RNN cells ─────────────────────────────────────────────────────
 
+
 class RNNCell(Module):
     """Single-step Elman RNN cell."""
 
-    def __init__(self, input_size: int, hidden_size: int, bias: bool = True,
-                 nonlinearity: str = "tanh", device: Any = None, dtype: Any = None) -> None:
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        bias: bool = True,
+        nonlinearity: str = "tanh",
+        device: Any = None,
+        dtype: Any = None,
+    ) -> None:
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
         self.nonlinearity = nonlinearity
-        self.weight_ih = Parameter(empty(hidden_size, input_size, dtype=dtype, device=device))
-        self.weight_hh = Parameter(empty(hidden_size, hidden_size, dtype=dtype, device=device))
-        self.bias_ih: Parameter | None = Parameter(empty(hidden_size, dtype=dtype, device=device)) if bias else None
-        self.bias_hh: Parameter | None = Parameter(empty(hidden_size, dtype=dtype, device=device)) if bias else None
+        self.weight_ih = Parameter(
+            empty(hidden_size, input_size, dtype=dtype, device=device)
+        )
+        self.weight_hh = Parameter(
+            empty(hidden_size, hidden_size, dtype=dtype, device=device)
+        )
+        self.bias_ih: Parameter | None = (
+            Parameter(empty(hidden_size, dtype=dtype, device=device)) if bias else None
+        )
+        self.bias_hh: Parameter | None = (
+            Parameter(empty(hidden_size, dtype=dtype, device=device)) if bias else None
+        )
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -171,26 +198,48 @@ class RNNCell(Module):
     def forward(self, x: Any, hx: Any = None) -> Any:
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size)
-        pre = linear(x, self.weight_ih, self.bias_ih) + linear(hx, self.weight_hh, self.bias_hh)
+        pre = linear(x, self.weight_ih, self.bias_ih) + linear(
+            hx, self.weight_hh, self.bias_hh
+        )
         return tanh(pre) if self.nonlinearity == "tanh" else relu(pre)
 
     def extra_repr(self) -> str:
-        return f"{self.input_size}, {self.hidden_size}, nonlinearity={self.nonlinearity!r}"
+        return (
+            f"{self.input_size}, {self.hidden_size}, nonlinearity={self.nonlinearity!r}"
+        )
 
 
 class LSTMCell(Module):
     """Single-step LSTM cell."""
 
-    def __init__(self, input_size: int, hidden_size: int, bias: bool = True,
-                 device: Any = None, dtype: Any = None) -> None:
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        bias: bool = True,
+        device: Any = None,
+        dtype: Any = None,
+    ) -> None:
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
-        self.weight_ih = Parameter(empty(4 * hidden_size, input_size, dtype=dtype, device=device))
-        self.weight_hh = Parameter(empty(4 * hidden_size, hidden_size, dtype=dtype, device=device))
-        self.bias_ih: Parameter | None = Parameter(empty(4 * hidden_size, dtype=dtype, device=device)) if bias else None
-        self.bias_hh: Parameter | None = Parameter(empty(4 * hidden_size, dtype=dtype, device=device)) if bias else None
+        self.weight_ih = Parameter(
+            empty(4 * hidden_size, input_size, dtype=dtype, device=device)
+        )
+        self.weight_hh = Parameter(
+            empty(4 * hidden_size, hidden_size, dtype=dtype, device=device)
+        )
+        self.bias_ih: Parameter | None = (
+            Parameter(empty(4 * hidden_size, dtype=dtype, device=device))
+            if bias
+            else None
+        )
+        self.bias_hh: Parameter | None = (
+            Parameter(empty(4 * hidden_size, dtype=dtype, device=device))
+            if bias
+            else None
+        )
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -205,13 +254,14 @@ class LSTMCell(Module):
             c0 = zeros(batch, self.hidden_size)
         else:
             h0, c0 = hx
-        gates = (linear(x, self.weight_ih, self.bias_ih)
-                 + linear(h0, self.weight_hh, self.bias_hh))
+        gates = linear(x, self.weight_ih, self.bias_ih) + linear(
+            h0, self.weight_hh, self.bias_hh
+        )
         hs = self.hidden_size
         i_gate = sigmoid(gates[:, :hs])
-        f_gate = sigmoid(gates[:, hs:2*hs])
-        g_gate = tanh(gates[:, 2*hs:3*hs])
-        o_gate = sigmoid(gates[:, 3*hs:])
+        f_gate = sigmoid(gates[:, hs : 2 * hs])
+        g_gate = tanh(gates[:, 2 * hs : 3 * hs])
+        o_gate = sigmoid(gates[:, 3 * hs :])
         c1 = f_gate * c0 + i_gate * g_gate
         h1 = o_gate * tanh(c1)
         return h1, c1
@@ -223,16 +273,34 @@ class LSTMCell(Module):
 class GRUCell(Module):
     """Single-step GRU cell."""
 
-    def __init__(self, input_size: int, hidden_size: int, bias: bool = True,
-                 device: Any = None, dtype: Any = None) -> None:
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        bias: bool = True,
+        device: Any = None,
+        dtype: Any = None,
+    ) -> None:
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
-        self.weight_ih = Parameter(empty(3 * hidden_size, input_size, dtype=dtype, device=device))
-        self.weight_hh = Parameter(empty(3 * hidden_size, hidden_size, dtype=dtype, device=device))
-        self.bias_ih: Parameter | None = Parameter(empty(3 * hidden_size, dtype=dtype, device=device)) if bias else None
-        self.bias_hh: Parameter | None = Parameter(empty(3 * hidden_size, dtype=dtype, device=device)) if bias else None
+        self.weight_ih = Parameter(
+            empty(3 * hidden_size, input_size, dtype=dtype, device=device)
+        )
+        self.weight_hh = Parameter(
+            empty(3 * hidden_size, hidden_size, dtype=dtype, device=device)
+        )
+        self.bias_ih: Parameter | None = (
+            Parameter(empty(3 * hidden_size, dtype=dtype, device=device))
+            if bias
+            else None
+        )
+        self.bias_hh: Parameter | None = (
+            Parameter(empty(3 * hidden_size, dtype=dtype, device=device))
+            if bias
+            else None
+        )
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -247,8 +315,8 @@ class GRUCell(Module):
         gates_x = linear(x, self.weight_ih, self.bias_ih)
         gates_h = linear(hx, self.weight_hh, self.bias_hh)
         r = sigmoid(gates_x[:, :hs] + gates_h[:, :hs])
-        z = sigmoid(gates_x[:, hs:2*hs] + gates_h[:, hs:2*hs])
-        n = tanh(gates_x[:, 2*hs:] + r * gates_h[:, 2*hs:])
+        z = sigmoid(gates_x[:, hs : 2 * hs] + gates_h[:, hs : 2 * hs])
+        n = tanh(gates_x[:, 2 * hs :] + r * gates_h[:, 2 * hs :])
         h1 = (ones(x.shape[0], hs) - z) * n + z * hx
         return h1
 
@@ -259,9 +327,18 @@ class GRUCell(Module):
 class GRU(Module):
     """Multi-layer GRU (pure-Python cell-based implementation)."""
 
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1,
-                 bias: bool = True, batch_first: bool = False, dropout: float = 0.0,
-                 bidirectional: bool = False, device: Any = None, dtype: Any = None) -> None:
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        bias: bool = True,
+        batch_first: bool = False,
+        dropout: float = 0.0,
+        bidirectional: bool = False,
+        device: Any = None,
+        dtype: Any = None,
+    ) -> None:
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -269,7 +346,9 @@ class GRU(Module):
         self.batch_first = batch_first
         self.dropout_val = dropout
         self.bidirectional = bidirectional
-        self._cell = GRUCell(input_size, hidden_size, bias=bias, device=device, dtype=dtype)
+        self._cell = GRUCell(
+            input_size, hidden_size, bias=bias, device=device, dtype=dtype
+        )
 
     def forward(self, x: Any, hx: Any = None) -> tuple[Any, Any]:
         if self.batch_first:
@@ -288,24 +367,41 @@ class GRU(Module):
         return out, h
 
     def extra_repr(self) -> str:
-        return (f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
-                f"batch_first={self.batch_first}")
+        return (
+            f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
+            f"batch_first={self.batch_first}"
+        )
 
 
 class RNN(Module):
     """Multi-layer Elman RNN (pure-Python cell-based implementation)."""
 
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1,
-                 nonlinearity: str = "tanh", bias: bool = True, batch_first: bool = False,
-                 dropout: float = 0.0, bidirectional: bool = False,
-                 device: Any = None, dtype: Any = None) -> None:
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        nonlinearity: str = "tanh",
+        bias: bool = True,
+        batch_first: bool = False,
+        dropout: float = 0.0,
+        bidirectional: bool = False,
+        device: Any = None,
+        dtype: Any = None,
+    ) -> None:
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        self._cell = RNNCell(input_size, hidden_size, bias=bias, nonlinearity=nonlinearity,
-                             device=device, dtype=dtype)
+        self._cell = RNNCell(
+            input_size,
+            hidden_size,
+            bias=bias,
+            nonlinearity=nonlinearity,
+            device=device,
+            dtype=dtype,
+        )
 
     def forward(self, x: Any, hx: Any = None) -> tuple[Any, Any]:
         if self.batch_first:
@@ -324,5 +420,7 @@ class RNN(Module):
         return out, h
 
     def extra_repr(self) -> str:
-        return (f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
-                f"batch_first={self.batch_first}")
+        return (
+            f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
+            f"batch_first={self.batch_first}"
+        )

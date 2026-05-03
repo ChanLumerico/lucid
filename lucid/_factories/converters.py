@@ -1,5 +1,5 @@
 """
-Conversion utilities: Python objects / NumPy arrays → TensorImpl.
+Conversion utilities: Python objects / NumPy arrays -> TensorImpl.
 """
 
 from typing import Any, TYPE_CHECKING
@@ -17,11 +17,11 @@ _NP_TO_ENGINE_DTYPE: dict[str, _C_engine.Dtype] = {
     "float16": _C_engine.Dtype.F16,
     "float32": _C_engine.Dtype.F32,
     "float64": _C_engine.Dtype.F64,
-    "int8":    _C_engine.Dtype.I8,
-    "int16":   _C_engine.Dtype.I16,
-    "int32":   _C_engine.Dtype.I32,
-    "int64":   _C_engine.Dtype.I64,
-    "bool":    _C_engine.Dtype.Bool,
+    "int8": _C_engine.Dtype.I8,
+    "int16": _C_engine.Dtype.I16,
+    "int32": _C_engine.Dtype.I32,
+    "int64": _C_engine.Dtype.I64,
+    "bool": _C_engine.Dtype.Bool,
     "complex64": _C_engine.Dtype.C64,
 }
 
@@ -42,21 +42,25 @@ def _to_impl(
     device: str | None = None,
     requires_grad: bool = False,
 ) -> _C_engine.TensorImpl:
-    """Convert list/scalar/ndarray/Tensor → TensorImpl."""
+    """Convert list/scalar/ndarray/Tensor -> TensorImpl."""
     from lucid._tensor.tensor import Tensor as _Tensor
 
-    _dtype_eng, _device_eng, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
+    _dtype_eng, _device_eng, _rg = normalize_factory_kwargs(
+        dtype, device, requires_grad
+    )
 
     if isinstance(data, _Tensor):
         impl = data._impl
         if impl.requires_grad != _rg:
             from lucid._dispatch import _impl_with_grad
+
             impl = _impl_with_grad(impl, _rg)
         return impl
 
     if isinstance(data, _C_engine.TensorImpl):
         if data.requires_grad != _rg:
             from lucid._dispatch import _impl_with_grad
+
             data = _impl_with_grad(data, _rg)
         return data
 
@@ -64,11 +68,13 @@ def _to_impl(
 
     # Convert data to numpy
     if not numpy_input:
-        # Python list/scalar → convert to numpy with default dtype (float32)
+        # Python list/scalar -> convert to numpy with default dtype (float32)
         tmp = np.array(data)
         if dtype is None:
             # Use default dtype for Python scalars/lists
-            target_eng = _dtype_eng  # already set to default by normalize_factory_kwargs
+            target_eng = (
+                _dtype_eng  # already set to default by normalize_factory_kwargs
+            )
         else:
             target_eng = _dtype_eng
         arr = tmp.astype(_engine_dtype_to_np(target_eng), copy=False)
@@ -89,15 +95,15 @@ def _to_impl(
 
 def _engine_dtype_to_np(d: _C_engine.Dtype) -> str:
     _MAP: dict[_C_engine.Dtype, str] = {
-        _C_engine.Dtype.F16:  "float16",
-        _C_engine.Dtype.F32:  "float32",
-        _C_engine.Dtype.F64:  "float64",
-        _C_engine.Dtype.I8:   "int8",
-        _C_engine.Dtype.I16:  "int16",
-        _C_engine.Dtype.I32:  "int32",
-        _C_engine.Dtype.I64:  "int64",
+        _C_engine.Dtype.F16: "float16",
+        _C_engine.Dtype.F32: "float32",
+        _C_engine.Dtype.F64: "float64",
+        _C_engine.Dtype.I8: "int8",
+        _C_engine.Dtype.I16: "int16",
+        _C_engine.Dtype.I32: "int32",
+        _C_engine.Dtype.I64: "int64",
         _C_engine.Dtype.Bool: "bool",
-        _C_engine.Dtype.C64:  "complex64",
+        _C_engine.Dtype.C64: "complex64",
     }
     return _MAP.get(d, "float32")
 
@@ -111,6 +117,7 @@ def tensor(
 ) -> Tensor:
     """Create a tensor from data (list, ndarray, scalar, or Tensor)."""
     from lucid._tensor.tensor import Tensor
+
     return Tensor.__new_from_impl__(
         _to_impl(data, dtype=dtype, device=device, requires_grad=requires_grad)
     )

@@ -33,7 +33,9 @@ def checkpoint(
         @staticmethod
         def backward(ctx: Any, *grad_outputs: Any) -> tuple[Any, ...]:
             saved = ctx.saved_tensors
-            inputs_detached = [s.detach().requires_grad_(s.requires_grad) for s in saved]
+            inputs_detached = [
+                s.detach().requires_grad_(s.requires_grad) for s in saved
+            ]
             with enable_grad():
                 output = ctx.function(*inputs_detached, **ctx.kwargs)
 

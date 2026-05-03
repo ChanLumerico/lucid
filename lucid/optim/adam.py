@@ -48,8 +48,12 @@ class Adam(Optimizer):
         amsgrad: bool = False,
     ) -> None:
         defaults = dict(
-            lr=lr, beta1=betas[0], beta2=betas[1],
-            eps=eps, weight_decay=weight_decay, amsgrad=amsgrad,
+            lr=lr,
+            beta1=betas[0],
+            beta2=betas[1],
+            eps=eps,
+            weight_decay=weight_decay,
+            amsgrad=amsgrad,
         )
         super().__init__(params, defaults)
 
@@ -97,8 +101,12 @@ class AdamW(Optimizer):
         amsgrad: bool = False,
     ) -> None:
         defaults = dict(
-            lr=lr, beta1=betas[0], beta2=betas[1],
-            eps=eps, weight_decay=weight_decay, amsgrad=amsgrad,
+            lr=lr,
+            beta1=betas[0],
+            beta2=betas[1],
+            eps=eps,
+            weight_decay=weight_decay,
+            amsgrad=amsgrad,
         )
         super().__init__(params, defaults)
 

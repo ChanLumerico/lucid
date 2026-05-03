@@ -47,9 +47,11 @@ def conv2d(
     ph, pw = _normalize_int_or_tuple(padding, 2)
     dh, dw = _normalize_int_or_tuple(dilation, 2)
     b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.conv2d(
-        _unwrap(x), _unwrap(weight), b, sh, sw, ph, pw, dh, dw, groups
-    ))
+    return _wrap(
+        _C_engine.nn.conv2d(
+            _unwrap(x), _unwrap(weight), b, sh, sw, ph, pw, dh, dw, groups
+        )
+    )
 
 
 def conv3d(
@@ -66,9 +68,11 @@ def conv3d(
     pd, ph, pw = _normalize_int_or_tuple(padding, 3)
     dd, dh, dw = _normalize_int_or_tuple(dilation, 3)
     b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.conv3d(
-        _unwrap(x), _unwrap(weight), b, sd, sh, sw, pd, ph, pw, dd, dh, dw, groups
-    ))
+    return _wrap(
+        _C_engine.nn.conv3d(
+            _unwrap(x), _unwrap(weight), b, sd, sh, sw, pd, ph, pw, dd, dh, dw, groups
+        )
+    )
 
 
 def conv_transpose1d(
@@ -87,7 +91,11 @@ def conv_transpose1d(
     op = _normalize_int_or_tuple(output_padding, 1)[0]
     d = _normalize_int_or_tuple(dilation, 1)[0]
     b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.conv_transpose1d(_unwrap(x), _unwrap(weight), b, s, p, op, groups, d))
+    return _wrap(
+        _C_engine.nn.conv_transpose1d(
+            _unwrap(x), _unwrap(weight), b, s, p, op, groups, d
+        )
+    )
 
 
 def conv_transpose2d(
@@ -106,9 +114,11 @@ def conv_transpose2d(
     oh, ow = _normalize_int_or_tuple(output_padding, 2)
     dh, dw = _normalize_int_or_tuple(dilation, 2)
     b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.conv_transpose2d(
-        _unwrap(x), _unwrap(weight), b, sh, sw, ph, pw, oh, ow, groups, dh, dw
-    ))
+    return _wrap(
+        _C_engine.nn.conv_transpose2d(
+            _unwrap(x), _unwrap(weight), b, sh, sw, ph, pw, oh, ow, groups, dh, dw
+        )
+    )
 
 
 def conv_transpose3d(
@@ -127,6 +137,23 @@ def conv_transpose3d(
     od, oh, ow = _normalize_int_or_tuple(output_padding, 3)
     dd, dh, dw = _normalize_int_or_tuple(dilation, 3)
     b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.conv_transpose3d(
-        _unwrap(x), _unwrap(weight), b, sd, sh, sw, pd, ph, pw, od, oh, ow, groups, dd, dh, dw
-    ))
+    return _wrap(
+        _C_engine.nn.conv_transpose3d(
+            _unwrap(x),
+            _unwrap(weight),
+            b,
+            sd,
+            sh,
+            sw,
+            pd,
+            ph,
+            pw,
+            od,
+            oh,
+            ow,
+            groups,
+            dd,
+            dh,
+            dw,
+        )
+    )

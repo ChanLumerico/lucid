@@ -9,8 +9,12 @@ from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
 import lucid.nn.init as init
 from lucid.nn.functional.conv import (
-    conv1d, conv2d, conv3d,
-    conv_transpose1d, conv_transpose2d, conv_transpose3d,
+    conv1d,
+    conv2d,
+    conv3d,
+    conv_transpose1d,
+    conv_transpose2d,
+    conv_transpose3d,
 )
 
 
@@ -52,7 +56,15 @@ class Conv1d(Module):
         else:
             self._padding_str = None
             self.padding = padding
-        self.weight = Parameter(empty(out_channels, in_channels // groups, kernel_size, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(
+                out_channels,
+                in_channels // groups,
+                kernel_size,
+                dtype=dtype,
+                device=device,
+            )
+        )
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
@@ -66,7 +78,7 @@ class Conv1d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def _compute_padding(self, x: Any) -> int:
-        if self._padding_str == 'valid':
+        if self._padding_str == "valid":
             return 0
         in_len = x.shape[2]
         stride = self.stride
@@ -78,11 +90,15 @@ class Conv1d(Module):
 
     def forward(self, x: Any) -> Any:
         padding = self._compute_padding(x) if self._padding_str else self.padding
-        return conv1d(x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups)
+        return conv1d(
+            x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups
+        )
 
     def extra_repr(self) -> str:
-        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-                f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}")
+        return (
+            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+            f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
+        )
 
 
 class Conv2d(Module):
@@ -116,7 +132,11 @@ class Conv2d(Module):
         else:
             self._padding_str = None
             self.padding = _pair(padding)
-        self.weight = Parameter(empty(out_channels, in_channels // groups, kh, kw, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(
+                out_channels, in_channels // groups, kh, kw, dtype=dtype, device=device
+            )
+        )
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
@@ -130,7 +150,7 @@ class Conv2d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def _compute_padding(self, x: Any) -> tuple[int, int]:
-        if self._padding_str == 'valid':
+        if self._padding_str == "valid":
             return (0, 0)
         in_h, in_w = x.shape[2], x.shape[3]
         sh, sw = self.stride
@@ -144,11 +164,15 @@ class Conv2d(Module):
 
     def forward(self, x: Any) -> Any:
         padding = self._compute_padding(x) if self._padding_str else self.padding
-        return conv2d(x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups)
+        return conv2d(
+            x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups
+        )
 
     def extra_repr(self) -> str:
-        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-                f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}")
+        return (
+            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+            f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
+        )
 
 
 class Conv3d(Module):
@@ -181,14 +205,24 @@ class Conv3d(Module):
         else:
             self._padding_str = None
             self.padding = _triple(padding)
-        self.weight = Parameter(empty(out_channels, in_channels // groups, kd, kh, kw, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(
+                out_channels,
+                in_channels // groups,
+                kd,
+                kh,
+                kw,
+                dtype=dtype,
+                device=device,
+            )
+        )
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
     def _compute_padding(self, x: Any) -> tuple[int, int, int]:
-        if self._padding_str == 'valid':
+        if self._padding_str == "valid":
             return (0, 0, 0)
         in_d, in_h, in_w = x.shape[2], x.shape[3], x.shape[4]
         sd, sh, sw = self.stride
@@ -204,11 +238,15 @@ class Conv3d(Module):
 
     def forward(self, x: Any) -> Any:
         padding = self._compute_padding(x) if self._padding_str else self.padding
-        return conv3d(x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups)
+        return conv3d(
+            x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups
+        )
 
     def extra_repr(self) -> str:
-        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-                f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}")
+        return (
+            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+            f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
+        )
 
 
 class ConvTranspose1d(Module):
@@ -237,18 +275,37 @@ class ConvTranspose1d(Module):
         self.output_padding = output_padding
         self.groups = groups
         self.dilation = dilation
-        self.weight = Parameter(empty(in_channels, out_channels // groups, kernel_size, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(
+                in_channels,
+                out_channels // groups,
+                kernel_size,
+                dtype=dtype,
+                device=device,
+            )
+        )
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
     def forward(self, x: Any) -> Any:
-        return conv_transpose1d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
+        return conv_transpose1d(
+            x,
+            self.weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.output_padding,
+            self.groups,
+            self.dilation,
+        )
 
     def extra_repr(self) -> str:
-        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-                f"stride={self.stride}, padding={self.padding}")
+        return (
+            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+            f"stride={self.stride}, padding={self.padding}"
+        )
 
 
 class ConvTranspose2d(Module):
@@ -278,18 +335,33 @@ class ConvTranspose2d(Module):
         self.output_padding = _pair(output_padding)
         self.groups = groups
         self.dilation = _pair(dilation)
-        self.weight = Parameter(empty(in_channels, out_channels // groups, kh, kw, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(
+                in_channels, out_channels // groups, kh, kw, dtype=dtype, device=device
+            )
+        )
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
     def forward(self, x: Any) -> Any:
-        return conv_transpose2d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
+        return conv_transpose2d(
+            x,
+            self.weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.output_padding,
+            self.groups,
+            self.dilation,
+        )
 
     def extra_repr(self) -> str:
-        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-                f"stride={self.stride}, padding={self.padding}")
+        return (
+            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+            f"stride={self.stride}, padding={self.padding}"
+        )
 
 
 class ConvTranspose3d(Module):
@@ -319,15 +391,36 @@ class ConvTranspose3d(Module):
         self.output_padding = _triple(output_padding)
         self.groups = groups
         self.dilation = _triple(dilation)
-        self.weight = Parameter(empty(in_channels, out_channels // groups, kd, kh, kw, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(
+                in_channels,
+                out_channels // groups,
+                kd,
+                kh,
+                kw,
+                dtype=dtype,
+                device=device,
+            )
+        )
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
     def forward(self, x: Any) -> Any:
-        return conv_transpose3d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
+        return conv_transpose3d(
+            x,
+            self.weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.output_padding,
+            self.groups,
+            self.dilation,
+        )
 
     def extra_repr(self) -> str:
-        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-                f"stride={self.stride}, padding={self.padding}")
+        return (
+            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+            f"stride={self.stride}, padding={self.padding}"
+        )

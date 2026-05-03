@@ -40,10 +40,20 @@ class MultiheadAttention(Module):
         kdim = kdim or embed_dim
         vdim = vdim or embed_dim
 
-        self.in_proj_weight = Parameter(empty(3 * embed_dim, embed_dim, dtype=dtype, device=device))
-        self.out_proj_weight = Parameter(empty(embed_dim, embed_dim, dtype=dtype, device=device))
-        self.in_proj_bias: Parameter | None = Parameter(empty(3 * embed_dim, dtype=dtype, device=device)) if bias else None
-        self.out_proj_bias: Parameter | None = Parameter(empty(embed_dim, dtype=dtype, device=device)) if bias else None
+        self.in_proj_weight = Parameter(
+            empty(3 * embed_dim, embed_dim, dtype=dtype, device=device)
+        )
+        self.out_proj_weight = Parameter(
+            empty(embed_dim, embed_dim, dtype=dtype, device=device)
+        )
+        self.in_proj_bias: Parameter | None = (
+            Parameter(empty(3 * embed_dim, dtype=dtype, device=device))
+            if bias
+            else None
+        )
+        self.out_proj_bias: Parameter | None = (
+            Parameter(empty(embed_dim, dtype=dtype, device=device)) if bias else None
+        )
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -86,7 +96,9 @@ class MultiheadAttention(Module):
             k = k.permute([1, 0, 2])
             v = v.permute([1, 0, 2])
 
-        out = scaled_dot_product_attention(q, k, v, attn_mask, self.dropout if self.training else 0.0)
+        out = scaled_dot_product_attention(
+            q, k, v, attn_mask, self.dropout if self.training else 0.0
+        )
 
         if not self.batch_first and out.ndim == 3:
             out = out.permute([1, 0, 2])
@@ -95,5 +107,7 @@ class MultiheadAttention(Module):
         return out, None
 
     def extra_repr(self) -> str:
-        return (f"embed_dim={self.embed_dim}, num_heads={self.num_heads}, "
-                f"dropout={self.dropout}, batch_first={self.batch_first}")
+        return (
+            f"embed_dim={self.embed_dim}, num_heads={self.num_heads}, "
+            f"dropout={self.dropout}, batch_first={self.batch_first}"
+        )

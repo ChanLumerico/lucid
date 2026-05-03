@@ -35,8 +35,9 @@ def pack_padded_sequence(
         input = input.permute(1, 0, *range(2, input.ndim))
 
     T, B = input.shape[0], input.shape[1]
-    lengths_np = np.asarray(lengths.numpy() if hasattr(lengths, "numpy") else lengths,
-                            dtype=np.int64)
+    lengths_np = np.asarray(
+        lengths.numpy() if hasattr(lengths, "numpy") else lengths, dtype=np.int64
+    )
 
     sorted_indices_np = np.argsort(-lengths_np, stable=True)
     unsorted_indices_np = np.argsort(sorted_indices_np, stable=True)
@@ -64,11 +65,19 @@ def pack_padded_sequence(
 
     data_tensor = cat(packed_list, 0)
     bs_arr = np.array(batch_sizes_list, dtype=np.int64)
-    batch_sizes_tensor = _wrap(_C_engine.TensorImpl(bs_arr, _C_engine.Device.CPU, False))
+    batch_sizes_tensor = _wrap(
+        _C_engine.TensorImpl(bs_arr, _C_engine.Device.CPU, False)
+    )
 
-    si_impl = _C_engine.TensorImpl(sorted_indices_np.astype(np.int64), _C_engine.Device.CPU, False)
-    ui_impl = _C_engine.TensorImpl(unsorted_indices_np.astype(np.int64), _C_engine.Device.CPU, False)
-    return PackedSequence(data_tensor, batch_sizes_tensor, _wrap(si_impl), _wrap(ui_impl))
+    si_impl = _C_engine.TensorImpl(
+        sorted_indices_np.astype(np.int64), _C_engine.Device.CPU, False
+    )
+    ui_impl = _C_engine.TensorImpl(
+        unsorted_indices_np.astype(np.int64), _C_engine.Device.CPU, False
+    )
+    return PackedSequence(
+        data_tensor, batch_sizes_tensor, _wrap(si_impl), _wrap(ui_impl)
+    )
 
 
 def pad_packed_sequence(
@@ -92,7 +101,7 @@ def pad_packed_sequence(
     offset = 0
     for t, bs in enumerate(batch_sizes_np):
         bs = int(bs)
-        out_np[t, :bs] = np.asarray(data[offset: offset + bs].numpy())
+        out_np[t, :bs] = np.asarray(data[offset : offset + bs].numpy())
         offset += bs
 
     lengths_np = np.zeros(B, dtype=np.int64)

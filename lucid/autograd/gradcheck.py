@@ -55,6 +55,7 @@ def gradcheck(
 
     def _clone_with_grad(t: Any) -> Any:
         from lucid._factories.converters import tensor as _tensor_fn
+
         arr = _to_numpy(t)
         return _tensor_fn(arr.copy(), requires_grad=True)
 
@@ -83,6 +84,7 @@ def gradcheck(
 
             arr[idx] = orig + eps
             from lucid._factories.converters import tensor as _tensor_fn
+
             inp_plus = _tensor_fn(arr.copy())
             inp_list = []
             for other in inputs:

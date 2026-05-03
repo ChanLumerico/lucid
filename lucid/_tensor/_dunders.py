@@ -54,7 +54,7 @@ _DTYPE_TO_NP: dict[_C_engine.Dtype, str] = {
     _C_engine.Dtype.F16: "float16",
     _C_engine.Dtype.F32: "float32",
     _C_engine.Dtype.F64: "float64",
-    _C_engine.Dtype.I8:  "int8",
+    _C_engine.Dtype.I8: "int8",
     _C_engine.Dtype.I16: "int16",
     _C_engine.Dtype.I32: "int32",
     _C_engine.Dtype.I64: "int64",
@@ -107,10 +107,14 @@ def _inject_dunders(cls: type) -> None:
         return self
 
     def __floordiv__(self: Tensor, other: Any) -> Tensor:
-        return _wrap(_C_engine.floordiv(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _wrap(
+            _C_engine.floordiv(self._impl, _unwrap_or_scalar(other, self._impl))
+        )
 
     def __rfloordiv__(self: Tensor, other: Any) -> Tensor:
-        return _wrap(_C_engine.floordiv(_unwrap_or_scalar(other, self._impl), self._impl))
+        return _wrap(
+            _C_engine.floordiv(_unwrap_or_scalar(other, self._impl), self._impl)
+        )
 
     def __pow__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.pow(self._impl, _unwrap_or_scalar(other, self._impl)))
@@ -138,31 +142,45 @@ def _inject_dunders(cls: type) -> None:
         return _wrap(_C_engine.invert(self._impl))
 
     def __and__(self: Tensor, other: Any) -> Tensor:
-        return _wrap(_C_engine.bitwise_and(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _wrap(
+            _C_engine.bitwise_and(self._impl, _unwrap_or_scalar(other, self._impl))
+        )
 
     def __or__(self: Tensor, other: Any) -> Tensor:
-        return _wrap(_C_engine.bitwise_or(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _wrap(
+            _C_engine.bitwise_or(self._impl, _unwrap_or_scalar(other, self._impl))
+        )
 
     def __xor__(self: Tensor, other: Any) -> Tensor:
-        return _wrap(_C_engine.bitwise_xor(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _wrap(
+            _C_engine.bitwise_xor(self._impl, _unwrap_or_scalar(other, self._impl))
+        )
 
     def __eq__(self: Tensor, other: Any) -> Tensor:  # type: ignore[override]
         return _wrap(_C_engine.equal(self._impl, _unwrap_or_scalar(other, self._impl)))
 
     def __ne__(self: Tensor, other: Any) -> Tensor:  # type: ignore[override]
-        return _wrap(_C_engine.not_equal(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _wrap(
+            _C_engine.not_equal(self._impl, _unwrap_or_scalar(other, self._impl))
+        )
 
     def __lt__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.less(self._impl, _unwrap_or_scalar(other, self._impl)))
 
     def __le__(self: Tensor, other: Any) -> Tensor:
-        return _wrap(_C_engine.less_equal(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _wrap(
+            _C_engine.less_equal(self._impl, _unwrap_or_scalar(other, self._impl))
+        )
 
     def __gt__(self: Tensor, other: Any) -> Tensor:
-        return _wrap(_C_engine.greater(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _wrap(
+            _C_engine.greater(self._impl, _unwrap_or_scalar(other, self._impl))
+        )
 
     def __ge__(self: Tensor, other: Any) -> Tensor:
-        return _wrap(_C_engine.greater_equal(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _wrap(
+            _C_engine.greater_equal(self._impl, _unwrap_or_scalar(other, self._impl))
+        )
 
     def __getitem__(self: Tensor, idx: Any) -> Tensor:
         return _getitem(self, idx)
@@ -172,19 +190,38 @@ def _inject_dunders(cls: type) -> None:
 
     # attach all methods
     for _name, _fn in [
-        ("__add__", __add__), ("__radd__", __radd__), ("__iadd__", __iadd__),
-        ("__sub__", __sub__), ("__rsub__", __rsub__), ("__isub__", __isub__),
-        ("__mul__", __mul__), ("__rmul__", __rmul__), ("__imul__", __imul__),
-        ("__truediv__", __truediv__), ("__rtruediv__", __rtruediv__),
+        ("__add__", __add__),
+        ("__radd__", __radd__),
+        ("__iadd__", __iadd__),
+        ("__sub__", __sub__),
+        ("__rsub__", __rsub__),
+        ("__isub__", __isub__),
+        ("__mul__", __mul__),
+        ("__rmul__", __rmul__),
+        ("__imul__", __imul__),
+        ("__truediv__", __truediv__),
+        ("__rtruediv__", __rtruediv__),
         ("__itruediv__", __itruediv__),
-        ("__floordiv__", __floordiv__), ("__rfloordiv__", __rfloordiv__),
-        ("__pow__", __pow__), ("__rpow__", __rpow__), ("__ipow__", __ipow__),
-        ("__matmul__", __matmul__), ("__rmatmul__", __rmatmul__),
-        ("__neg__", __neg__), ("__abs__", __abs__), ("__invert__", __invert__),
-        ("__and__", __and__), ("__or__", __or__), ("__xor__", __xor__),
-        ("__eq__", __eq__), ("__ne__", __ne__),
-        ("__lt__", __lt__), ("__le__", __le__),
-        ("__gt__", __gt__), ("__ge__", __ge__),
-        ("__getitem__", __getitem__), ("__setitem__", __setitem__),
+        ("__floordiv__", __floordiv__),
+        ("__rfloordiv__", __rfloordiv__),
+        ("__pow__", __pow__),
+        ("__rpow__", __rpow__),
+        ("__ipow__", __ipow__),
+        ("__matmul__", __matmul__),
+        ("__rmatmul__", __rmatmul__),
+        ("__neg__", __neg__),
+        ("__abs__", __abs__),
+        ("__invert__", __invert__),
+        ("__and__", __and__),
+        ("__or__", __or__),
+        ("__xor__", __xor__),
+        ("__eq__", __eq__),
+        ("__ne__", __ne__),
+        ("__lt__", __lt__),
+        ("__le__", __le__),
+        ("__gt__", __gt__),
+        ("__ge__", __ge__),
+        ("__getitem__", __getitem__),
+        ("__setitem__", __setitem__),
     ]:
         setattr(cls, _name, _fn)

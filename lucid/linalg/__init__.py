@@ -48,9 +48,7 @@ def qr(x: Tensor) -> tuple[Tensor, Tensor]:
     return _wrap(q), _wrap(r)
 
 
-def svd(
-    x: Tensor, full_matrices: bool = True
-) -> tuple[Tensor, Tensor, Tensor]:
+def svd(x: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     """Singular value decomposition."""
     u, s, v = _la.svd(_unwrap(x))
     return _wrap(u), _wrap(s), _wrap(v)
@@ -79,6 +77,15 @@ def eigh(x: Tensor) -> tuple[Tensor, Tensor]:
 
 
 __all__ = [
-    "inv", "det", "solve", "cholesky", "norm", "qr", "svd",
-    "matrix_power", "pinv", "eig", "eigh",
+    "inv",
+    "det",
+    "solve",
+    "cholesky",
+    "norm",
+    "qr",
+    "svd",
+    "matrix_power",
+    "pinv",
+    "eig",
+    "eigh",
 ]

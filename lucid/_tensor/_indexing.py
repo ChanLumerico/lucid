@@ -43,7 +43,9 @@ def _select_int(impl: _C_engine.TensorImpl, dim: int, i: int) -> _C_engine.Tenso
     return _C_engine.squeeze(sliced, dim)
 
 
-def _select_slice(impl: _C_engine.TensorImpl, dim: int, s: slice) -> _C_engine.TensorImpl:
+def _select_slice(
+    impl: _C_engine.TensorImpl, dim: int, s: slice
+) -> _C_engine.TensorImpl:
     """Slice along dim using a Python slice object."""
     length = impl.shape[dim]
     start, stop, step = s.indices(length)
@@ -72,7 +74,9 @@ def _select_slice(impl: _C_engine.TensorImpl, dim: int, s: slice) -> _C_engine.T
         bcast_shape = [1] * len(out_shape)
         bcast_shape[dim] = n
         idx_nd = np.broadcast_to(indices_1d.reshape(bcast_shape), out_shape).copy()
-        idx_impl = _C_engine.TensorImpl(np.ascontiguousarray(idx_nd), impl.device, False)
+        idx_impl = _C_engine.TensorImpl(
+            np.ascontiguousarray(idx_nd), impl.device, False
+        )
         return _C_engine.gather(impl, idx_impl, dim)
 
 

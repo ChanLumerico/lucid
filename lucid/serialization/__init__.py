@@ -19,12 +19,21 @@ if TYPE_CHECKING:
 
 # ── Allowed types for weights_only=True ──────────────────────────────────────
 
-_SAFE_CLASSES = frozenset({
-    "builtins.dict", "builtins.list", "builtins.tuple",
-    "builtins.int", "builtins.float", "builtins.str", "builtins.bool",
-    "builtins.bytes", "builtins.NoneType",
-    "numpy.ndarray", "numpy.dtype",
-})
+_SAFE_CLASSES = frozenset(
+    {
+        "builtins.dict",
+        "builtins.list",
+        "builtins.tuple",
+        "builtins.int",
+        "builtins.float",
+        "builtins.str",
+        "builtins.bool",
+        "builtins.bytes",
+        "builtins.NoneType",
+        "numpy.ndarray",
+        "numpy.dtype",
+    }
+)
 
 
 class _SafeUnpickler(pickle.Unpickler):
@@ -46,6 +55,7 @@ class _SafeUnpickler(pickle.Unpickler):
 
 # ── Pickler / Unpickler ───────────────────────────────────────────────────────
 
+
 class _LucidPickler(pickle.Pickler):
     def persistent_id(self, obj: Any) -> Any:
         if isinstance(obj, _T):
@@ -65,14 +75,21 @@ class _LucidUnpickler(pickle.Unpickler):
     def persistent_load(self, pid: Any) -> Any:
         if isinstance(pid, tuple) and pid[0] == "tensor":
             _, shape, dtype_name, device_str, raw_bytes, np_dtype_str = pid
-            arr = np.frombuffer(raw_bytes, dtype=np.dtype(np_dtype_str)).reshape(shape).copy()
-            eng_device = _C_engine.Device.GPU if device_str == "metal" else _C_engine.Device.CPU
+            arr = (
+                np.frombuffer(raw_bytes, dtype=np.dtype(np_dtype_str))
+                .reshape(shape)
+                .copy()
+            )
+            eng_device = (
+                _C_engine.Device.GPU if device_str == "metal" else _C_engine.Device.CPU
+            )
             impl = _C_engine.TensorImpl(arr, eng_device, False)
             return _wrap(impl)
         raise pickle.UnpicklingError(f"Unknown persistent id: {pid}")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def save(obj: Any, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> None:
     """Save an object to a file or file-like object."""

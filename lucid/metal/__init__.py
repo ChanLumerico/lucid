@@ -89,7 +89,14 @@ class MetalEvent:
 
 
 __all__ = [
-    "is_available", "synchronize", "empty_cache", "manual_seed",
-    "memory_allocated", "max_memory_allocated", "reset_peak_memory_stats",
-    "get_device_name", "MetalStream", "MetalEvent",
+    "is_available",
+    "synchronize",
+    "empty_cache",
+    "manual_seed",
+    "memory_allocated",
+    "max_memory_allocated",
+    "reset_peak_memory_stats",
+    "get_device_name",
+    "MetalStream",
+    "MetalEvent",
 ]

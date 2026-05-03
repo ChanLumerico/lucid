@@ -34,7 +34,7 @@ class GradScaler:
 
     def __init__(
         self,
-        init_scale: float = 2.0 ** 16,
+        init_scale: float = 2.0**16,
         growth_factor: float = 2.0,
         backoff_factor: float = 0.5,
         growth_interval: int = 2000,
@@ -79,6 +79,7 @@ class GradScaler:
         if not self._enabled:
             return
         import numpy as np
+
         inv_scale = 1.0 / self._scale
         self._found_inf = False
         for group in optimizer.param_groups:

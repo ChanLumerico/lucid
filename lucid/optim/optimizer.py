@@ -22,7 +22,11 @@ class Optimizer:
         params: list["Parameter"] | list[dict[str, Any]],
         defaults: dict[str, Any],
     ) -> None:
-        if isinstance(params, (list, tuple)) and len(params) > 0 and isinstance(params[0], dict):
+        if (
+            isinstance(params, (list, tuple))
+            and len(params) > 0
+            and isinstance(params[0], dict)
+        ):
             param_groups: list[dict[str, Any]] = list(params)  # type: ignore[arg-type]
         else:
             param_groups = [{"params": list(params)}]  # type: ignore[arg-type]

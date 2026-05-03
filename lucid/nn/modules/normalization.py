@@ -8,7 +8,10 @@ from lucid.nn.parameter import Parameter
 from lucid._factories.creation import ones, zeros
 import lucid.nn.init as init
 from lucid.nn.functional.normalization import (
-    layer_norm, rms_norm, group_norm, batch_norm,
+    layer_norm,
+    rms_norm,
+    group_norm,
+    batch_norm,
 )
 
 
@@ -30,18 +33,26 @@ class LayerNorm(Module):
         self.eps = eps
         self.elementwise_affine = elementwise_affine
         if elementwise_affine:
-            self.weight: Parameter | None = Parameter(ones(*self.normalized_shape, dtype=dtype, device=device))
-            self.bias: Parameter | None = Parameter(zeros(*self.normalized_shape, dtype=dtype, device=device))
+            self.weight: Parameter | None = Parameter(
+                ones(*self.normalized_shape, dtype=dtype, device=device)
+            )
+            self.bias: Parameter | None = Parameter(
+                zeros(*self.normalized_shape, dtype=dtype, device=device)
+            )
         else:
             self.weight = None
             self.bias = None
 
     def forward(self, x: Any) -> Any:
-        return layer_norm(x, list(self.normalized_shape), self.weight, self.bias, self.eps)
+        return layer_norm(
+            x, list(self.normalized_shape), self.weight, self.bias, self.eps
+        )
 
     def extra_repr(self) -> str:
-        return (f"{self.normalized_shape}, eps={self.eps}, "
-                f"elementwise_affine={self.elementwise_affine}")
+        return (
+            f"{self.normalized_shape}, eps={self.eps}, "
+            f"elementwise_affine={self.elementwise_affine}"
+        )
 
 
 class RMSNorm(Module):
@@ -59,7 +70,9 @@ class RMSNorm(Module):
             normalized_shape = (normalized_shape,)
         self.normalized_shape = tuple(normalized_shape)
         self.eps = eps
-        self.weight = Parameter(ones(*self.normalized_shape, dtype=dtype, device=device))
+        self.weight = Parameter(
+            ones(*self.normalized_shape, dtype=dtype, device=device)
+        )
 
     def forward(self, x: Any) -> Any:
         return rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
@@ -86,8 +99,12 @@ class GroupNorm(Module):
         self.eps = eps
         self.affine = affine
         if affine:
-            self.weight: Parameter | None = Parameter(ones(num_channels, dtype=dtype, device=device))
-            self.bias: Parameter | None = Parameter(zeros(num_channels, dtype=dtype, device=device))
+            self.weight: Parameter | None = Parameter(
+                ones(num_channels, dtype=dtype, device=device)
+            )
+            self.bias: Parameter | None = Parameter(
+                zeros(num_channels, dtype=dtype, device=device)
+            )
         else:
             self.weight = None
             self.bias = None
@@ -120,15 +137,23 @@ class _BatchNormBase(Module):
         self.track_running_stats = track_running_stats
 
         if affine:
-            self.weight: Parameter | None = Parameter(ones(num_features, dtype=dtype, device=device))
-            self.bias: Parameter | None = Parameter(zeros(num_features, dtype=dtype, device=device))
+            self.weight: Parameter | None = Parameter(
+                ones(num_features, dtype=dtype, device=device)
+            )
+            self.bias: Parameter | None = Parameter(
+                zeros(num_features, dtype=dtype, device=device)
+            )
         else:
             self.weight = None
             self.bias = None
 
         if track_running_stats:
-            self.register_buffer("running_mean", zeros(num_features, dtype=dtype, device=device))
-            self.register_buffer("running_var", ones(num_features, dtype=dtype, device=device))
+            self.register_buffer(
+                "running_mean", zeros(num_features, dtype=dtype, device=device)
+            )
+            self.register_buffer(
+                "running_var", ones(num_features, dtype=dtype, device=device)
+            )
         else:
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
@@ -138,15 +163,18 @@ class _BatchNormBase(Module):
             x,
             self._buffers.get("running_mean"),
             self._buffers.get("running_var"),
-            self.weight, self.bias,
+            self.weight,
+            self.bias,
             training=self.training,
             momentum=self.momentum,
             eps=self.eps,
         )
 
     def extra_repr(self) -> str:
-        return (f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
-                f"affine={self.affine}, track_running_stats={self.track_running_stats}")
+        return (
+            f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
+            f"affine={self.affine}, track_running_stats={self.track_running_stats}"
+        )
 
 
 class BatchNorm1d(_BatchNormBase):

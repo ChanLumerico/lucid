@@ -40,9 +40,14 @@ class TransformerEncoderLayer(Module):
         self.batch_first = batch_first
         self.norm_first = norm_first
 
-        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout,
-                                            batch_first=batch_first,
-                                            device=device, dtype=dtype)
+        self.self_attn = MultiheadAttention(
+            d_model,
+            nhead,
+            dropout=dropout,
+            batch_first=batch_first,
+            device=device,
+            dtype=dtype,
+        )
         self.linear1 = Linear(d_model, dim_feedforward, device=device, dtype=dtype)
         self.linear2 = Linear(dim_feedforward, d_model, device=device, dtype=dtype)
         self.norm1 = LayerNorm(d_model, device=device, dtype=dtype)
@@ -62,8 +67,9 @@ class TransformerEncoderLayer(Module):
         src_key_padding_mask: Any = None,
     ) -> Any:
         if self.norm_first:
-            src2, _ = self.self_attn(self.norm1(src), self.norm1(src), self.norm1(src),
-                                     attn_mask=src_mask)
+            src2, _ = self.self_attn(
+                self.norm1(src), self.norm1(src), self.norm1(src), attn_mask=src_mask
+            )
             src = src + self.dropout1(src2)
             src = src + self.dropout3(self._ff(self.norm2(src)))
         else:
@@ -73,8 +79,10 @@ class TransformerEncoderLayer(Module):
         return src
 
     def extra_repr(self) -> str:
-        return (f"d_model={self.d_model}, nhead={self.nhead}, "
-                f"dim_feedforward={self.dim_feedforward}, dropout={self.dropout_val}")
+        return (
+            f"d_model={self.d_model}, nhead={self.nhead}, "
+            f"dim_feedforward={self.dim_feedforward}, dropout={self.dropout_val}"
+        )
 
 
 class TransformerEncoder(Module):
@@ -89,9 +97,12 @@ class TransformerEncoder(Module):
         super().__init__()
         self.layers = [
             TransformerEncoderLayer(
-                encoder_layer.d_model, encoder_layer.nhead,
-                encoder_layer.dim_feedforward, encoder_layer.dropout_val,
-                encoder_layer.activation, encoder_layer.batch_first,
+                encoder_layer.d_model,
+                encoder_layer.nhead,
+                encoder_layer.dim_feedforward,
+                encoder_layer.dropout_val,
+                encoder_layer.activation,
+                encoder_layer.batch_first,
                 encoder_layer.norm_first,
             )
             for _ in range(num_layers)
@@ -111,8 +122,9 @@ class TransformerEncoder(Module):
     ) -> Any:
         output = src
         for layer in self.layers:
-            output = layer(output, src_mask=mask,
-                           src_key_padding_mask=src_key_padding_mask)
+            output = layer(
+                output, src_mask=mask, src_key_padding_mask=src_key_padding_mask
+            )
         if self.norm is not None:
             output = self.norm(output)
         return output
@@ -145,12 +157,22 @@ class TransformerDecoderLayer(Module):
         self.batch_first = batch_first
         self.norm_first = norm_first
 
-        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout,
-                                            batch_first=batch_first,
-                                            device=device, dtype=dtype)
-        self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout,
-                                                  batch_first=batch_first,
-                                                  device=device, dtype=dtype)
+        self.self_attn = MultiheadAttention(
+            d_model,
+            nhead,
+            dropout=dropout,
+            batch_first=batch_first,
+            device=device,
+            dtype=dtype,
+        )
+        self.multihead_attn = MultiheadAttention(
+            d_model,
+            nhead,
+            dropout=dropout,
+            batch_first=batch_first,
+            device=device,
+            dtype=dtype,
+        )
         self.linear1 = Linear(d_model, dim_feedforward, device=device, dtype=dtype)
         self.linear2 = Linear(dim_feedforward, d_model, device=device, dtype=dtype)
         self.norm1 = LayerNorm(d_model, device=device, dtype=dtype)
@@ -175,11 +197,13 @@ class TransformerDecoderLayer(Module):
         memory_key_padding_mask: Any = None,
     ) -> Any:
         if self.norm_first:
-            tgt2, _ = self.self_attn(self.norm1(tgt), self.norm1(tgt), self.norm1(tgt),
-                                     attn_mask=tgt_mask)
+            tgt2, _ = self.self_attn(
+                self.norm1(tgt), self.norm1(tgt), self.norm1(tgt), attn_mask=tgt_mask
+            )
             tgt = tgt + self.dropout1(tgt2)
-            tgt2, _ = self.multihead_attn(self.norm2(tgt), memory, memory,
-                                          attn_mask=memory_mask)
+            tgt2, _ = self.multihead_attn(
+                self.norm2(tgt), memory, memory, attn_mask=memory_mask
+            )
             tgt = tgt + self.dropout3(tgt2)
             tgt = tgt + self.dropout4(self._ff(self.norm3(tgt)))
         else:
@@ -191,8 +215,10 @@ class TransformerDecoderLayer(Module):
         return tgt
 
     def extra_repr(self) -> str:
-        return (f"d_model={self.d_model}, nhead={self.nhead}, "
-                f"dim_feedforward={self.dim_feedforward}, dropout={self.dropout_val}")
+        return (
+            f"d_model={self.d_model}, nhead={self.nhead}, "
+            f"dim_feedforward={self.dim_feedforward}, dropout={self.dropout_val}"
+        )
 
 
 class TransformerDecoder(Module):
@@ -207,9 +233,12 @@ class TransformerDecoder(Module):
         super().__init__()
         self.layers = [
             TransformerDecoderLayer(
-                decoder_layer.d_model, decoder_layer.nhead,
-                decoder_layer.dim_feedforward, decoder_layer.dropout_val,
-                decoder_layer.activation, decoder_layer.batch_first,
+                decoder_layer.d_model,
+                decoder_layer.nhead,
+                decoder_layer.dim_feedforward,
+                decoder_layer.dropout_val,
+                decoder_layer.activation,
+                decoder_layer.batch_first,
                 decoder_layer.norm_first,
             )
             for _ in range(num_layers)
@@ -232,8 +261,7 @@ class TransformerDecoder(Module):
     ) -> Any:
         output = tgt
         for layer in self.layers:
-            output = layer(output, memory, tgt_mask=tgt_mask,
-                           memory_mask=memory_mask)
+            output = layer(output, memory, tgt_mask=tgt_mask, memory_mask=memory_mask)
         if self.norm is not None:
             output = self.norm(output)
         return output
@@ -260,12 +288,24 @@ class Transformer(Module):
     ) -> None:
         super().__init__()
         enc_layer = TransformerEncoderLayer(
-            d_model, nhead, dim_feedforward, dropout, activation, batch_first,
-            device=device, dtype=dtype,
+            d_model,
+            nhead,
+            dim_feedforward,
+            dropout,
+            activation,
+            batch_first,
+            device=device,
+            dtype=dtype,
         )
         dec_layer = TransformerDecoderLayer(
-            d_model, nhead, dim_feedforward, dropout, activation, batch_first,
-            device=device, dtype=dtype,
+            d_model,
+            nhead,
+            dim_feedforward,
+            dropout,
+            activation,
+            batch_first,
+            device=device,
+            dtype=dtype,
         )
         self.encoder = TransformerEncoder(enc_layer, num_encoder_layers)
         self.decoder = TransformerDecoder(dec_layer, num_decoder_layers)
@@ -283,10 +323,10 @@ class Transformer(Module):
         tgt_key_padding_mask: Any = None,
         memory_key_padding_mask: Any = None,
     ) -> Any:
-        memory = self.encoder(src, mask=src_mask,
-                              src_key_padding_mask=src_key_padding_mask)
-        return self.decoder(tgt, memory, tgt_mask=tgt_mask,
-                            memory_mask=memory_mask)
+        memory = self.encoder(
+            src, mask=src_mask, src_key_padding_mask=src_key_padding_mask
+        )
+        return self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask)
 
     def extra_repr(self) -> str:
         return f"d_model={self.d_model}, nhead={self.nhead}"

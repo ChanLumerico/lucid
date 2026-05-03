@@ -30,7 +30,9 @@ class Embedding(Module):
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         self.padding_idx = padding_idx
-        self.weight = Parameter(empty(num_embeddings, embedding_dim, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(num_embeddings, embedding_dim, dtype=dtype, device=device)
+        )
         init.normal_(self.weight)
 
     def forward(self, x: Any) -> Any:

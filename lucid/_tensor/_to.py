@@ -34,13 +34,13 @@ def _inject_to(cls: type) -> None:
           .to(device=, dtype=, copy=)
         """
         target_device = self._impl.device
-        target_dtype  = self._impl.dtype
+        target_dtype = self._impl.dtype
         copy = _builtin_bool(kwargs.get("copy", False))
 
         for a in args:
             if isinstance(a, cls):
                 target_device = a._impl.device
-                target_dtype  = a._impl.dtype
+                target_dtype = a._impl.dtype
             elif isinstance(a, _C_engine.Device):
                 target_device = a
             elif isinstance(a, _dtype_cls):
@@ -55,10 +55,7 @@ def _inject_to(cls: type) -> None:
         if "dtype" in kwargs:
             target_dtype = to_engine_dtype(kwargs["dtype"])
 
-        same = (
-            target_device == self._impl.device
-            and target_dtype == self._impl.dtype
-        )
+        same = target_device == self._impl.device and target_dtype == self._impl.dtype
         if same and not copy:
             return self
 
@@ -103,8 +100,14 @@ def _inject_to(cls: type) -> None:
         return to(self, bool_)
 
     for _name, _fn in [
-        ("to", to), ("metal", metal), ("cpu", cpu),
-        ("float", float), ("double", double), ("half", half),
-        ("int", int), ("long", long), ("bool", bool),
+        ("to", to),
+        ("metal", metal),
+        ("cpu", cpu),
+        ("float", float),
+        ("double", double),
+        ("half", half),
+        ("int", int),
+        ("long", long),
+        ("bool", bool),
     ]:
         setattr(cls, _name, _fn)

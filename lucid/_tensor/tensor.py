@@ -3,10 +3,23 @@ from typing import TYPE_CHECKING, Self, Any, Iterator
 import numpy as np
 
 from lucid._C import engine as _C_engine
-from lucid._dtype import dtype, _ENGINE_TO_DTYPE, float16, float32, float64, bfloat16, complex64
+from lucid._dtype import (
+    dtype,
+    _ENGINE_TO_DTYPE,
+    float16,
+    float32,
+    float64,
+    bfloat16,
+    complex64,
+)
 from lucid._device import device, _device_from_engine
 from lucid._dispatch import _wrap, _impl_with_grad
-from lucid._factories.creation import zeros as _zeros, ones as _ones, empty as _empty, full as _full
+from lucid._factories.creation import (
+    zeros as _zeros,
+    ones as _ones,
+    empty as _empty,
+    full as _full,
+)
 from lucid._factories.converters import tensor as _tensor_fn, _to_impl
 
 if TYPE_CHECKING:
@@ -257,9 +270,7 @@ class Tensor:
     def item(self) -> float | int | bool:
         """Return the value of a single-element tensor as a Python scalar."""
         if self._impl.numel() != 1:
-            raise RuntimeError(
-                "item() can only be called on a tensor with one element"
-            )
+            raise RuntimeError("item() can only be called on a tensor with one element")
         arr = self._impl.data_as_python()
         val = np.asarray(arr).flat[0]
         return val.item()
@@ -321,51 +332,92 @@ class Tensor:
 
     # ── new_* convenience constructors ────────────────────────────────────────
 
-    def new_empty(self, *size: int, dtype: dtype | None = None,
-                  device: device | str | None = None,
-                  requires_grad: bool = False) -> Self:
+    def new_empty(
+        self,
+        *size: int,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Self:
         """Return an uninitialized tensor with the given size, inheriting dtype/device."""
         _dtype = dtype or self.dtype
         _device = device or self.device
-        return _empty(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
-                      requires_grad=requires_grad)
+        return _empty(
+            *size,
+            dtype=_dtype,
+            device=_device,  # type: ignore[return-value]
+            requires_grad=requires_grad,
+        )
 
-    def new_zeros(self, *size: int, dtype: dtype | None = None,
-                  device: device | str | None = None,
-                  requires_grad: bool = False) -> Self:
+    def new_zeros(
+        self,
+        *size: int,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Self:
         """Return a zeros tensor with the given size, inheriting dtype/device."""
         _dtype = dtype or self.dtype
         _device = device or self.device
-        return _zeros(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
-                      requires_grad=requires_grad)
+        return _zeros(
+            *size,
+            dtype=_dtype,
+            device=_device,  # type: ignore[return-value]
+            requires_grad=requires_grad,
+        )
 
-    def new_ones(self, *size: int, dtype: dtype | None = None,
-                 device: device | str | None = None,
-                 requires_grad: bool = False) -> Self:
+    def new_ones(
+        self,
+        *size: int,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Self:
         """Return an all-ones tensor with the given size, inheriting dtype/device."""
         _dtype = dtype or self.dtype
         _device = device or self.device
-        return _ones(*size, dtype=_dtype, device=_device,  # type: ignore[return-value]
-                     requires_grad=requires_grad)
+        return _ones(
+            *size,
+            dtype=_dtype,
+            device=_device,  # type: ignore[return-value]
+            requires_grad=requires_grad,
+        )
 
-    def new_full(self, size: tuple[int, ...], fill_value: float,
-                 dtype: dtype | None = None,
-                 device: device | str | None = None,
-                 requires_grad: bool = False) -> Self:
+    def new_full(
+        self,
+        size: tuple[int, ...],
+        fill_value: float,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Self:
         """Return a tensor filled with fill_value, inheriting dtype/device."""
         _dtype = dtype or self.dtype
         _device = device or self.device
-        return _full(size, fill_value, dtype=_dtype, device=_device,  # type: ignore[return-value]
-                     requires_grad=requires_grad)
+        return _full(
+            size,
+            fill_value,
+            dtype=_dtype,
+            device=_device,  # type: ignore[return-value]
+            requires_grad=requires_grad,
+        )
 
-    def new_tensor(self, data: Any, dtype: dtype | None = None,
-                   device: device | str | None = None,
-                   requires_grad: bool = False) -> Self:
+    def new_tensor(
+        self,
+        data: Any,
+        dtype: dtype | None = None,
+        device: device | str | None = None,
+        requires_grad: bool = False,
+    ) -> Self:
         """Return a new tensor from data, inheriting dtype/device."""
         _dtype = dtype or self.dtype
         _device = device or self.device
-        return _tensor_fn(data, dtype=_dtype, device=_device,  # type: ignore[return-value]
-                          requires_grad=requires_grad)
+        return _tensor_fn(
+            data,
+            dtype=_dtype,
+            device=_device,  # type: ignore[return-value]
+            requires_grad=requires_grad,
+        )
 
     # ── size / element info ───────────────────────────────────────────────────
 
@@ -407,7 +459,9 @@ class Tensor:
     def flip(self, dims: int | list[int]) -> Self:
         """Reverse the tensor along the given dimension(s)."""
         dims_list = [dims] if isinstance(dims, int) else list(dims)
-        arr = np.ascontiguousarray(np.flip(np.asarray(self._impl.data_as_python()), axis=dims_list))
+        arr = np.ascontiguousarray(
+            np.flip(np.asarray(self._impl.data_as_python()), axis=dims_list)
+        )
         impl = _C_engine.TensorImpl(arr, self._impl.device, False)
         return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
 
@@ -427,7 +481,9 @@ class Tensor:
         bcast_shape = [1] * len(out_shape)
         bcast_shape[dim] = len(idx_1d)
         idx_nd = np.broadcast_to(idx_1d.reshape(bcast_shape), out_shape).copy()
-        idx_impl = _C_engine.TensorImpl(np.ascontiguousarray(idx_nd), self._impl.device, False)
+        idx_impl = _C_engine.TensorImpl(
+            np.ascontiguousarray(idx_nd), self._impl.device, False
+        )
         return Tensor.__new_from_impl__(_C_engine.gather(self._impl, idx_impl, dim))  # type: ignore[return-value]
 
     def masked_select(self, mask: Self) -> Self:
@@ -494,8 +550,9 @@ class Tensor:
             result = Tensor.__new_from_impl__(_C_engine.sub(a_impl, b_impl))  # type: ignore[assignment]
         return result
 
-    def addmm(self, mat1: Self, mat2: Self,
-              beta: float = 1.0, alpha: float = 1.0) -> Self:
+    def addmm(
+        self, mat1: Self, mat2: Self, beta: float = 1.0, alpha: float = 1.0
+    ) -> Self:
         """beta * self + alpha * mat1 @ mat2."""
         mm = Tensor.__new_from_impl__(_C_engine.matmul(mat1._impl, mat2._impl))  # type: ignore[return-value]
         if alpha != 1.0:
@@ -520,9 +577,10 @@ class Tensor:
 
     def zero_(self) -> Self:
         """Fill this tensor with zeros in-place."""
-        result = _C_engine.mul_(self._impl, _C_engine.zeros(
-            self._impl.shape, self._impl.dtype, self._impl.device
-        ))
+        result = _C_engine.mul_(
+            self._impl,
+            _C_engine.zeros(self._impl.shape, self._impl.dtype, self._impl.device),
+        )
         self._impl = result
         return self
 
@@ -533,6 +591,7 @@ from lucid._tensor._indexing import _select_slice as _ss  # noqa: E402
 from lucid._tensor._dunders import _inject_dunders  # noqa: E402
 from lucid._tensor._methods import _inject_methods  # noqa: E402
 from lucid._tensor._to import _inject_to  # noqa: E402
+
 _inject_dunders(Tensor)
 _inject_methods(Tensor)
 _inject_to(Tensor)

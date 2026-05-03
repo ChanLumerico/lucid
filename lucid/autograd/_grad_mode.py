@@ -42,6 +42,7 @@ class no_grad:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             with no_grad():
                 return fn(*args, **kwargs)
+
         return wrapper  # type: ignore[return-value]
 
 
@@ -63,6 +64,7 @@ class enable_grad:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             with enable_grad():
                 return fn(*args, **kwargs)
+
         return wrapper  # type: ignore[return-value]
 
 

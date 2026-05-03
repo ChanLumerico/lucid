@@ -37,8 +37,13 @@ class _LRScheduler:
 class StepLR(_LRScheduler):
     """Decay LR by gamma every step_size epochs."""
 
-    def __init__(self, optimizer: Optimizer, step_size: int, gamma: float = 0.1,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        step_size: int,
+        gamma: float = 0.1,
+        last_epoch: int = -1,
+    ) -> None:
         self.step_size = step_size
         self.gamma = gamma
         super().__init__(optimizer, last_epoch)
@@ -52,7 +57,9 @@ class StepLR(_LRScheduler):
 class ExponentialLR(_LRScheduler):
     """Decay LR by gamma every epoch."""
 
-    def __init__(self, optimizer: Optimizer, gamma: float, last_epoch: int = -1) -> None:
+    def __init__(
+        self, optimizer: Optimizer, gamma: float, last_epoch: int = -1
+    ) -> None:
         self.gamma = gamma
         super().__init__(optimizer, last_epoch)
 
@@ -65,8 +72,13 @@ class ExponentialLR(_LRScheduler):
 class MultiStepLR(_LRScheduler):
     """Decay LR by gamma at specified milestones."""
 
-    def __init__(self, optimizer: Optimizer, milestones: list[int], gamma: float = 0.1,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        milestones: list[int],
+        gamma: float = 0.1,
+        last_epoch: int = -1,
+    ) -> None:
         self.milestones = sorted(milestones)
         self.gamma = gamma
         super().__init__(optimizer, last_epoch)
@@ -80,16 +92,19 @@ class MultiStepLR(_LRScheduler):
 class CosineAnnealingLR(_LRScheduler):
     """Cosine annealing schedule."""
 
-    def __init__(self, optimizer: Optimizer, T_max: int, eta_min: float = 0,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self, optimizer: Optimizer, T_max: int, eta_min: float = 0, last_epoch: int = -1
+    ) -> None:
         self.T_max = T_max
         self.eta_min = eta_min
         super().__init__(optimizer, last_epoch)
 
     def get_lr(self) -> list[float]:
         return [
-            self.eta_min + (base_lr - self.eta_min) *
-            (1 + math.cos(math.pi * self.last_epoch / self.T_max)) / 2
+            self.eta_min
+            + (base_lr - self.eta_min)
+            * (1 + math.cos(math.pi * self.last_epoch / self.T_max))
+            / 2
             for base_lr in self.base_lrs
         ]
 
@@ -97,9 +112,12 @@ class CosineAnnealingLR(_LRScheduler):
 class LambdaLR(_LRScheduler):
     """LR determined by a user-defined function."""
 
-    def __init__(self, optimizer: Optimizer,
-                 lr_lambda: Callable[[int], float] | list[Callable[[int], float]],
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        lr_lambda: Callable[[int], float] | list[Callable[[int], float]],
+        last_epoch: int = -1,
+    ) -> None:
         if callable(lr_lambda):
             self.lr_lambdas = [lr_lambda] * len(optimizer.param_groups)
         else:
@@ -107,16 +125,25 @@ class LambdaLR(_LRScheduler):
         super().__init__(optimizer, last_epoch)
 
     def get_lr(self) -> list[float]:
-        return [base_lr * fn(self.last_epoch)
-                for base_lr, fn in zip(self.base_lrs, self.lr_lambdas)]
+        return [
+            base_lr * fn(self.last_epoch)
+            for base_lr, fn in zip(self.base_lrs, self.lr_lambdas)
+        ]
 
 
 class CyclicLR(_LRScheduler):
     """Cyclic learning rate policy."""
 
-    def __init__(self, optimizer: Optimizer, base_lr: float, max_lr: float,
-                 step_size_up: int = 2000, mode: str = "triangular",
-                 gamma: float = 1.0, last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        base_lr: float,
+        max_lr: float,
+        step_size_up: int = 2000,
+        mode: str = "triangular",
+        gamma: float = 1.0,
+        last_epoch: int = -1,
+    ) -> None:
         self.base_lr_val = base_lr
         self.max_lr_val = max_lr
         self.step_size_up = step_size_up
@@ -131,7 +158,7 @@ class CyclicLR(_LRScheduler):
         if self.mode == "triangular2":
             scale /= 2 ** (cycle - 1)
         elif self.mode == "exp_range":
-            scale *= self.gamma ** self.last_epoch
+            scale *= self.gamma**self.last_epoch
         lr = self.base_lr_val + (self.max_lr_val - self.base_lr_val) * scale
         return [lr] * len(self.optimizer.param_groups)
 
@@ -139,9 +166,16 @@ class CyclicLR(_LRScheduler):
 class ReduceLROnPlateau:
     """Reduce LR when a metric has stopped improving."""
 
-    def __init__(self, optimizer: Optimizer, mode: str = "min", factor: float = 0.1,
-                 patience: int = 10, verbose: bool = False,
-                 threshold: float = 1e-4, min_lr: float = 0) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        mode: str = "min",
+        factor: float = 0.1,
+        patience: int = 10,
+        verbose: bool = False,
+        threshold: float = 1e-4,
+        min_lr: float = 0,
+    ) -> None:
         self.optimizer = optimizer
         self.mode = mode
         self.factor = factor
@@ -175,8 +209,13 @@ class ReduceLROnPlateau:
 class NoamScheduler(_LRScheduler):
     """Transformer Noam learning rate schedule."""
 
-    def __init__(self, optimizer: Optimizer, d_model: int, warmup_steps: int,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        d_model: int,
+        warmup_steps: int,
+        last_epoch: int = -1,
+    ) -> None:
         self.d_model = d_model
         self.warmup_steps = warmup_steps
         super().__init__(optimizer, last_epoch)
@@ -192,9 +231,12 @@ class NoamScheduler(_LRScheduler):
 class MultiplicativeLR(_LRScheduler):
     """Multiply LR by a factor returned by lr_lambda each epoch."""
 
-    def __init__(self, optimizer: Optimizer,
-                 lr_lambda: Callable[[int], float],
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        lr_lambda: Callable[[int], float],
+        last_epoch: int = -1,
+    ) -> None:
         self.lr_lambda = lr_lambda
         super().__init__(optimizer, last_epoch)
 
@@ -208,11 +250,14 @@ class MultiplicativeLR(_LRScheduler):
 class LinearLR(_LRScheduler):
     """Linearly interpolate LR from start_factor to end_factor over total_iters steps."""
 
-    def __init__(self, optimizer: Optimizer,
-                 start_factor: float = 1.0 / 3,
-                 end_factor: float = 1.0,
-                 total_iters: int = 5,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        start_factor: float = 1.0 / 3,
+        end_factor: float = 1.0,
+        total_iters: int = 5,
+        last_epoch: int = -1,
+    ) -> None:
         self.start_factor = start_factor
         self.end_factor = end_factor
         self.total_iters = total_iters
@@ -220,17 +265,23 @@ class LinearLR(_LRScheduler):
 
     def get_lr(self) -> list[float]:
         t = min(self.last_epoch, self.total_iters)
-        factor = self.start_factor + (self.end_factor - self.start_factor) * t / self.total_iters
+        factor = (
+            self.start_factor
+            + (self.end_factor - self.start_factor) * t / self.total_iters
+        )
         return [base_lr * factor for base_lr in self.base_lrs]
 
 
 class ConstantLR(_LRScheduler):
     """Scale LR by factor for total_iters steps, then restore to base LR."""
 
-    def __init__(self, optimizer: Optimizer,
-                 factor: float = 1.0 / 3,
-                 total_iters: int = 5,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        factor: float = 1.0 / 3,
+        total_iters: int = 5,
+        last_epoch: int = -1,
+    ) -> None:
         self.factor = factor
         self.total_iters = total_iters
         super().__init__(optimizer, last_epoch)
@@ -244,11 +295,14 @@ class ConstantLR(_LRScheduler):
 class PolynomialLR(_LRScheduler):
     """Decay LR polynomially over total_iters steps, reaching eta_min."""
 
-    def __init__(self, optimizer: Optimizer,
-                 total_iters: int = 5,
-                 power: float = 1.0,
-                 eta_min: float = 0.0,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        total_iters: int = 5,
+        power: float = 1.0,
+        eta_min: float = 0.0,
+        last_epoch: int = -1,
+    ) -> None:
         self.total_iters = total_iters
         self.power = power
         self.eta_min = eta_min
@@ -268,11 +322,14 @@ class PolynomialLR(_LRScheduler):
 class CosineAnnealingWarmRestarts(_LRScheduler):
     """Cosine annealing with warm restarts (SGDR)."""
 
-    def __init__(self, optimizer: Optimizer,
-                 T_0: int,
-                 T_mult: int = 1,
-                 eta_min: float = 0.0,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        T_0: int,
+        T_mult: int = 1,
+        eta_min: float = 0.0,
+        last_epoch: int = -1,
+    ) -> None:
         self.T_0 = T_0
         self.T_mult = T_mult
         self.eta_min = eta_min
@@ -294,8 +351,10 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
 
     def get_lr(self) -> list[float]:
         return [
-            self.eta_min + (base_lr - self.eta_min) *
-            (1 + math.cos(math.pi * self._T_cur / self._T_i)) / 2
+            self.eta_min
+            + (base_lr - self.eta_min)
+            * (1 + math.cos(math.pi * self._T_cur / self._T_i))
+            / 2
             for base_lr in self.base_lrs
         ]
 
@@ -303,14 +362,17 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
 class OneCycleLR(_LRScheduler):
     """1cycle learning rate policy."""
 
-    def __init__(self, optimizer: Optimizer,
-                 max_lr: float,
-                 total_steps: int,
-                 pct_start: float = 0.3,
-                 anneal_strategy: str = "cos",
-                 div_factor: float = 25.0,
-                 final_div_factor: float = 1e4,
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        max_lr: float,
+        total_steps: int,
+        pct_start: float = 0.3,
+        anneal_strategy: str = "cos",
+        div_factor: float = 25.0,
+        final_div_factor: float = 1e4,
+        last_epoch: int = -1,
+    ) -> None:
         self.max_lr = max_lr
         self.total_steps = total_steps
         self.pct_start = pct_start
@@ -326,7 +388,11 @@ class OneCycleLR(_LRScheduler):
         return start + pct * (end - start)
 
     def get_lr(self) -> list[float]:
-        anneal = self._annealing_cos if self.anneal_strategy == "cos" else self._annealing_linear
+        anneal = (
+            self._annealing_cos
+            if self.anneal_strategy == "cos"
+            else self._annealing_linear
+        )
         t = self.last_epoch
         T = self.total_steps
         warmup_steps = int(T * self.pct_start)
@@ -337,7 +403,9 @@ class OneCycleLR(_LRScheduler):
             if t <= warmup_steps:
                 lr = anneal(init_lr, self.max_lr, t / max(1, warmup_steps))
             else:
-                lr = anneal(self.max_lr, min_lr, (t - warmup_steps) / max(1, T - warmup_steps))
+                lr = anneal(
+                    self.max_lr, min_lr, (t - warmup_steps) / max(1, T - warmup_steps)
+                )
             results.append(lr)
         return results
 
@@ -345,10 +413,13 @@ class OneCycleLR(_LRScheduler):
 class SequentialLR:
     """Run a sequence of schedulers, switching at specified milestones."""
 
-    def __init__(self, optimizer: Optimizer,
-                 schedulers: list[Any],
-                 milestones: list[int],
-                 last_epoch: int = -1) -> None:
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        schedulers: list[Any],
+        milestones: list[int],
+        last_epoch: int = -1,
+    ) -> None:
         self.optimizer = optimizer
         self.schedulers = schedulers
         self.milestones = milestones
@@ -357,7 +428,10 @@ class SequentialLR:
 
     def step(self) -> None:
         self.last_epoch += 1
-        while self._idx < len(self.milestones) and self.last_epoch >= self.milestones[self._idx]:
+        while (
+            self._idx < len(self.milestones)
+            and self.last_epoch >= self.milestones[self._idx]
+        ):
             self._idx += 1
         self.schedulers[min(self._idx, len(self.schedulers) - 1)].step()
 

@@ -12,17 +12,13 @@ if TYPE_CHECKING:
 _REDUCTION_MAP = {"none": 0, "mean": 1, "sum": 2}
 
 
-def mse_loss(
-    x: Tensor, target: Tensor, reduction: str = "mean"
-) -> Tensor:
+def mse_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     """Mean squared error loss."""
     red = _REDUCTION_MAP.get(reduction, 1)
     return _wrap(_C_engine.nn.mse_loss(_unwrap(x), _unwrap(target), red))
 
 
-def l1_loss(
-    x: Tensor, target: Tensor, reduction: str = "mean"
-) -> Tensor:
+def l1_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     """Mean absolute error loss."""
     diff = _C_engine.abs(_C_engine.sub(_unwrap(x), _unwrap(target)))
     if reduction == "mean":
@@ -58,9 +54,7 @@ def cross_entropy(
     """Cross-entropy loss for multi-class classification."""
     red = _REDUCTION_MAP.get(reduction, 1)
     w = _unwrap(weight) if weight is not None else None
-    return _wrap(
-        _C_engine.nn.cross_entropy_loss(_unwrap(x), _unwrap(target), red)
-    )
+    return _wrap(_C_engine.nn.cross_entropy_loss(_unwrap(x), _unwrap(target), red))
 
 
 def nll_loss(

@@ -151,7 +151,9 @@ def prelu(x: Tensor, weight: Tensor) -> Tensor:
     xi = _unwrap(x)
     wi = _unwrap(weight)
     pos = _C_engine.relu(xi)
-    neg_part = _C_engine.mul(wi, _C_engine.minimum(_C_engine.zeros(xi.shape, xi.dtype, xi.device), xi))
+    neg_part = _C_engine.mul(
+        wi, _C_engine.minimum(_C_engine.zeros(xi.shape, xi.dtype, xi.device), xi)
+    )
     return _wrap(_C_engine.add(pos, neg_part))
 
 
@@ -213,8 +215,13 @@ def pairwise_distance(
     diff = _C_engine.sub(_unwrap(x1), _unwrap(x2))
     # |diff|_p = (sum |diff|^p)^(1/p)
     abs_diff = _C_engine.abs(diff)
-    powered = _C_engine.pow(_C_engine.add(abs_diff, _C_engine.full(abs_diff.shape, eps, abs_diff.dtype, abs_diff.device)),
-                            _C_engine.full(abs_diff.shape, p, abs_diff.dtype, abs_diff.device))
+    powered = _C_engine.pow(
+        _C_engine.add(
+            abs_diff,
+            _C_engine.full(abs_diff.shape, eps, abs_diff.dtype, abs_diff.device),
+        ),
+        _C_engine.full(abs_diff.shape, p, abs_diff.dtype, abs_diff.device),
+    )
     s = _C_engine.sum(powered, -1)
     inv_p = _C_engine.full(s.shape, 1.0 / p, s.dtype, s.device)
     dist = _C_engine.pow(s, inv_p)

@@ -21,6 +21,7 @@ def _unwrap(t: _C_engine.TensorImpl | Tensor) -> _C_engine.TensorImpl:
 def _wrap(impl: _C_engine.TensorImpl) -> Tensor:
     """Wrap a TensorImpl in a Tensor (zero-copy)."""
     from lucid._tensor.tensor import Tensor
+
     return Tensor.__new_from_impl__(impl)
 
 
@@ -51,6 +52,7 @@ def _impl_with_grad(
 ) -> _C_engine.TensorImpl:
     """Return a new TensorImpl with the same data/device/dtype but different requires_grad."""
     import numpy as np
+
     arr = np.ascontiguousarray(np.asarray(impl.data_as_python()))
     return _C_engine.TensorImpl(arr, impl.device, requires_grad)
 

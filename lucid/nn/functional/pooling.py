@@ -45,7 +45,9 @@ def max_pool2d(
     sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
     ph, pw = _int_or_tuple(padding, 2)
     dh, dw = _int_or_tuple(dilation, 2)
-    return _wrap(_C_engine.nn.max_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw, dh, dw, ceil_mode))
+    return _wrap(
+        _C_engine.nn.max_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw, dh, dw, ceil_mode)
+    )
 
 
 def avg_pool1d(
@@ -60,7 +62,9 @@ def avg_pool1d(
     k = _int_or_tuple(kernel_size, 1)[0]
     s = k if stride is None else _int_or_tuple(stride, 1)[0]
     p = _int_or_tuple(padding, 1)[0]
-    return _wrap(_C_engine.nn.avg_pool1d(_unwrap(x), k, s, p, ceil_mode, count_include_pad))
+    return _wrap(
+        _C_engine.nn.avg_pool1d(_unwrap(x), k, s, p, ceil_mode, count_include_pad)
+    )
 
 
 def avg_pool2d(
@@ -76,7 +80,11 @@ def avg_pool2d(
     kh, kw = _int_or_tuple(kernel_size, 2)
     sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
     ph, pw = _int_or_tuple(padding, 2)
-    return _wrap(_C_engine.nn.avg_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode, count_include_pad))
+    return _wrap(
+        _C_engine.nn.avg_pool2d(
+            _unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode, count_include_pad
+        )
+    )
 
 
 def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor:
@@ -85,9 +93,7 @@ def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor
     return _wrap(_C_engine.nn.adaptive_avg_pool1d(_unwrap(x), sz))
 
 
-def adaptive_avg_pool2d(
-    x: Tensor, output_size: int | tuple[int, int]
-) -> Tensor:
+def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor:
     """2D adaptive average pooling."""
     oh, ow = _int_or_tuple(output_size, 2)
     return _wrap(_C_engine.nn.adaptive_avg_pool2d(_unwrap(x), oh, ow))

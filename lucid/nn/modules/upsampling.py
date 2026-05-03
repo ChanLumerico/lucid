@@ -33,8 +33,13 @@ class Upsample(Module):
         self.align_corners = align_corners
 
     def forward(self, x: Any) -> Any:
-        return interpolate(x, size=self.size, scale_factor=self.scale_factor,
-                           mode=self.mode, align_corners=self.align_corners)
+        return interpolate(
+            x,
+            size=self.size,
+            scale_factor=self.scale_factor,
+            mode=self.mode,
+            align_corners=self.align_corners,
+        )
 
     def extra_repr(self) -> str:
         parts = []

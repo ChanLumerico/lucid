@@ -39,7 +39,9 @@ def bilinear(
     bias: Tensor | None = None,
 ) -> Tensor:
     """Bilinear transformation: y = x1 @ W @ x2.T + bias."""
-    result = _wrap(_C_engine.nn.bilinear_layer(_unwrap(x1), _unwrap(x2), _unwrap(weight)))
+    result = _wrap(
+        _C_engine.nn.bilinear_layer(_unwrap(x1), _unwrap(x2), _unwrap(weight))
+    )
     if bias is not None:
         result = _wrap(_C_engine.add(result._impl, _unwrap(bias)))
     return result

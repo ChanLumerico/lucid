@@ -66,10 +66,12 @@ class autocast:
 
     def __call__(self, fn: _F) -> _F:
         """Use as a function decorator."""
+
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             with autocast(dtype=self._dtype, enabled=self._enabled):
                 return fn(*args, **kwargs)
+
         return wrapper  # type: ignore[return-value]
 
     @staticmethod
@@ -81,6 +83,7 @@ class autocast:
     def get_autocast_dtype() -> dtype | None:
         """Return the currently active autocast dtype, or None."""
         from lucid._dtype import _ENGINE_TO_DTYPE
+
         eng = _C_engine.amp_active_dtype()
         if eng is None:
             return None

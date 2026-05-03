@@ -53,9 +53,13 @@ class Linear(Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = Parameter(empty(out_features, in_features, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(out_features, in_features, dtype=dtype, device=device)
+        )
         if bias:
-            self.bias: Parameter | None = Parameter(empty(out_features, dtype=dtype, device=device))
+            self.bias: Parameter | None = Parameter(
+                empty(out_features, dtype=dtype, device=device)
+            )
         else:
             self.bias = None
         self.reset_parameters()
@@ -98,7 +102,9 @@ class Bilinear(Module):
         self.in1_features = in1_features
         self.in2_features = in2_features
         self.out_features = out_features
-        self.weight = Parameter(empty(out_features, in1_features, in2_features, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(out_features, in1_features, in2_features, dtype=dtype, device=device)
+        )
         self.bias: Parameter | None = (
             Parameter(empty(out_features, dtype=dtype, device=device)) if bias else None
         )
@@ -107,6 +113,7 @@ class Bilinear(Module):
     def reset_parameters(self) -> None:
         """Initialize with Kaiming uniform."""
         import math
+
         bound = 1.0 / math.sqrt(self.weight.shape[1])
         init.uniform_(self.weight, -bound, bound)
         if self.bias is not None:
@@ -116,5 +123,7 @@ class Bilinear(Module):
         return bilinear(x1, x2, self.weight, self.bias)
 
     def extra_repr(self) -> str:
-        return (f"in1_features={self.in1_features}, in2_features={self.in2_features}, "
-                f"out_features={self.out_features}, bias={self.bias is not None}")
+        return (
+            f"in1_features={self.in1_features}, in2_features={self.in2_features}, "
+            f"out_features={self.out_features}, bias={self.bias is not None}"
+        )

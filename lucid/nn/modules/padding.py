@@ -12,7 +12,9 @@ class _ConstantPadNd(Module):
 
     def __init__(self, padding: int | tuple[int, ...], value: float) -> None:
         super().__init__()
-        self.padding = padding if isinstance(padding, tuple) else _make_tuple(padding, self._dims)
+        self.padding = (
+            padding if isinstance(padding, tuple) else _make_tuple(padding, self._dims)
+        )
         self.value = value
 
     def forward(self, x: Any) -> Any:
@@ -28,6 +30,7 @@ def _make_tuple(v: int, n: int) -> tuple[int, ...]:
 
 class ConstantPad1d(_ConstantPadNd):
     """Pad a 3-D tensor with a constant value on left/right."""
+
     _dims = 2
 
     def __init__(self, padding: int | tuple[int, int], value: float) -> None:
@@ -36,6 +39,7 @@ class ConstantPad1d(_ConstantPadNd):
 
 class ConstantPad2d(_ConstantPadNd):
     """Pad a 4-D tensor with a constant value (left, right, top, bottom)."""
+
     _dims = 4
 
     def __init__(self, padding: int | tuple[int, int, int, int], value: float) -> None:
@@ -44,10 +48,12 @@ class ConstantPad2d(_ConstantPadNd):
 
 class ConstantPad3d(_ConstantPadNd):
     """Pad a 5-D tensor with a constant value."""
+
     _dims = 6
 
-    def __init__(self, padding: int | tuple[int, int, int, int, int, int],
-                 value: float) -> None:
+    def __init__(
+        self, padding: int | tuple[int, int, int, int, int, int], value: float
+    ) -> None:
         super().__init__(padding, value)
 
 
@@ -66,7 +72,9 @@ class ReflectionPad1d(Module):
 
     def __init__(self, padding: int | tuple[int, int]) -> None:
         super().__init__()
-        self.padding = (padding, padding) if isinstance(padding, int) else tuple(padding)
+        self.padding = (
+            (padding, padding) if isinstance(padding, int) else tuple(padding)
+        )
 
     def forward(self, x: Any) -> Any:
         return pad(x, self.padding, mode="reflect")
@@ -94,7 +102,9 @@ class ReplicationPad1d(Module):
 
     def __init__(self, padding: int | tuple[int, int]) -> None:
         super().__init__()
-        self.padding = (padding, padding) if isinstance(padding, int) else tuple(padding)
+        self.padding = (
+            (padding, padding) if isinstance(padding, int) else tuple(padding)
+        )
 
     def forward(self, x: Any) -> Any:
         return pad(x, self.padding, mode="replicate")

@@ -76,7 +76,10 @@ class ConcatDataset(Dataset):
         if idx < 0:
             idx = len(self) + idx
         dataset_idx = 0
-        while dataset_idx < len(self.cumulative_sizes) and idx >= self.cumulative_sizes[dataset_idx]:
+        while (
+            dataset_idx < len(self.cumulative_sizes)
+            and idx >= self.cumulative_sizes[dataset_idx]
+        ):
             dataset_idx += 1
         if dataset_idx == 0:
             sample_idx = idx
@@ -115,6 +118,7 @@ def random_split(
         List of Subsets.
     """
     import random as _random
+
     n = len(dataset)
 
     if all(isinstance(x, float) for x in lengths):
@@ -142,6 +146,6 @@ def random_split(
     result = []
     offset = 0
     for length in lengths_int:
-        result.append(Subset(dataset, indices[offset: offset + length]))
+        result.append(Subset(dataset, indices[offset : offset + length]))
         offset += length
     return result

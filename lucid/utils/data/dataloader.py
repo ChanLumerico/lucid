@@ -41,7 +41,9 @@ def default_collate(batch: list[Any]) -> Any:
         return {key: default_collate([d[key] for d in batch]) for key in elem}
 
     if isinstance(elem, tuple) and hasattr(elem, "_fields"):
-        return type(elem)(*[default_collate([d[i] for d in batch]) for i in range(len(elem))])
+        return type(elem)(
+            *[default_collate([d[i] for d in batch]) for i in range(len(elem))]
+        )
 
     if isinstance(elem, (list, tuple)):
         collated = [default_collate([d[i] for d in batch]) for i in range(len(elem))]
@@ -130,6 +132,7 @@ class DataLoader:
 
         if num_workers > 0:
             import multiprocessing
+
             ctx = multiprocessing.get_context("spawn")
 
         if batch_sampler is not None:
@@ -161,6 +164,7 @@ class DataLoader:
     def _multiprocess_iter(self) -> Iterator[Any]:
         """Multi-process loading using spawn context (macOS safe)."""
         import multiprocessing
+
         ctx = multiprocessing.get_context("spawn")
 
         indices_batches = list(self.batch_sampler)
@@ -180,7 +184,7 @@ class DataLoader:
         result_queue: Any = ctx.Queue()
         workers = []
         for i in range(0, len(indices_batches), chunk):
-            chunk_batches = indices_batches[i: i + chunk]
+            chunk_batches = indices_batches[i : i + chunk]
             p = ctx.Process(
                 target=_worker_fn,
                 args=(chunk_batches, result_queue, self.dataset, self.collate_fn),

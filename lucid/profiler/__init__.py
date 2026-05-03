@@ -62,8 +62,10 @@ class OpEvent:
         return int(self._impl.memory_delta_bytes)
 
     def __repr__(self) -> str:
-        return (f"OpEvent(name={self.name!r}, time_us={self.time_us:.3f}, "
-                f"shape={self.shape})")
+        return (
+            f"OpEvent(name={self.name!r}, time_us={self.time_us:.3f}, "
+            f"shape={self.shape})"
+        )
 
 
 class ProfileSummary:
@@ -94,8 +96,10 @@ class ProfileSummary:
         return sum(e.flops for e in self._events)
 
     def __repr__(self) -> str:
-        return (f"ProfileSummary(name={self.name!r}, count={self.count}, "
-                f"avg_us={self.avg_time_us:.3f}, total_flops={self.total_flops})")
+        return (
+            f"ProfileSummary(name={self.name!r}, count={self.count}, "
+            f"avg_us={self.avg_time_us:.3f}, total_flops={self.total_flops})"
+        )
 
 
 class MemoryStats:
@@ -125,8 +129,10 @@ class MemoryStats:
         return int(self._impl.free_count)
 
     def __repr__(self) -> str:
-        return (f"MemoryStats(current={self.current_bytes / 1024:.1f}KB, "
-                f"peak={self.peak_bytes / 1024:.1f}KB)")
+        return (
+            f"MemoryStats(current={self.current_bytes / 1024:.1f}KB, "
+            f"peak={self.peak_bytes / 1024:.1f}KB)"
+        )
 
 
 class Profiler:
@@ -172,6 +178,7 @@ class Profiler:
     def key_averages(self) -> list[ProfileSummary]:
         """Return per-operation-name summaries sorted by total time."""
         from collections import defaultdict
+
         by_name: dict[str, list[OpEvent]] = defaultdict(list)
         for ev in self.events():
             by_name[ev.name].append(ev)
@@ -192,17 +199,20 @@ class Profiler:
         Open with chrome://tracing or https://ui.perfetto.dev.
         """
         import json
+
         trace_events = []
         for i, ev in enumerate(self.events()):
-            trace_events.append({
-                "name": ev.name,
-                "ph": "X",  # complete event
-                "ts": i * 100,  # synthetic timestamp (µs)
-                "dur": ev.time_us,
-                "pid": 0,
-                "tid": 0,
-                "args": {"shape": str(ev.shape), "flops": ev.flops},
-            })
+            trace_events.append(
+                {
+                    "name": ev.name,
+                    "ph": "X",  # complete event
+                    "ts": i * 100,  # synthetic timestamp (µs)
+                    "dur": ev.time_us,
+                    "pid": 0,
+                    "tid": 0,
+                    "args": {"shape": str(ev.shape), "flops": ev.flops},
+                }
+            )
         with open(path, "w") as f:
             json.dump({"traceEvents": trace_events}, f)
 

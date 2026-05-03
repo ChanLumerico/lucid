@@ -31,8 +31,11 @@ class SGD(Optimizer):
         nesterov: bool = False,
     ) -> None:
         defaults = dict(
-            lr=lr, momentum=momentum, dampening=dampening,
-            weight_decay=weight_decay, nesterov=nesterov,
+            lr=lr,
+            momentum=momentum,
+            dampening=dampening,
+            weight_decay=weight_decay,
+            nesterov=nesterov,
         )
         super().__init__(params, defaults)
 
