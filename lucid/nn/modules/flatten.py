@@ -23,7 +23,7 @@ class Flatten(Module):
 class Unflatten(Module):
     """Unflatten one dimension into multiple dimensions."""
 
-    def __init__(self, dim: int, unflattened_size: "tuple[int, ...]") -> None:
+    def __init__(self, dim: int, unflattened_size: tuple[int, ...]) -> None:
         super().__init__()
         self.dim = dim
         self.unflattened_size = unflattened_size

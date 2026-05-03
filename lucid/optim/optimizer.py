@@ -20,7 +20,7 @@ class Optimizer:
 
     def __init__(
         self,
-        params: "list[Parameter] | list[dict[str, Any]]",
+        params: list[Parameter] | list[dict[str, Any]],
         defaults: dict[str, Any],
     ) -> None:
         if isinstance(params, (list, tuple)) and len(params) > 0 and isinstance(params[0], dict):

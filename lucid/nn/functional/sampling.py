@@ -11,13 +11,13 @@ if TYPE_CHECKING:
 
 
 def interpolate(
-    x: "Tensor",
-    size: "int | tuple[int, ...] | None" = None,
-    scale_factor: "float | tuple[float, ...] | None" = None,
+    x: Tensor,
+    size: int | tuple[int, ...] | None = None,
+    scale_factor: float | tuple[float, ...] | None = None,
     mode: str = "nearest",
     align_corners: bool | None = None,
     recompute_scale_factor: bool | None = None,
-) -> "Tensor":
+) -> Tensor:
     """Interpolate a tensor to a given size or scale factor."""
     if mode in ("nearest", "nearest-exact"):
         ndim = x.ndim - 2
@@ -65,33 +65,33 @@ def interpolate(
 
 
 def grid_sample(
-    x: "Tensor",
-    grid: "Tensor",
+    x: Tensor,
+    grid: Tensor,
     mode: str = "bilinear",
     padding_mode: str = "zeros",
     align_corners: bool | None = None,
-) -> "Tensor":
+) -> Tensor:
     """Sample x using grid coordinates."""
     ac = align_corners if align_corners is not None else False
     return _wrap(_C_engine.nn.grid_sample(_unwrap(x), _unwrap(grid), ac))
 
 
 def affine_grid(
-    theta: "Tensor",
-    size: "list[int] | tuple[int, ...]",
+    theta: Tensor,
+    size: list[int] | tuple[int, ...],
     align_corners: bool | None = None,
-) -> "Tensor":
+) -> Tensor:
     """Generate a sampling grid for affine_grid / grid_sample."""
     ac = align_corners if align_corners is not None else False
     return _wrap(_C_engine.nn.affine_grid(_unwrap(theta), list(size), ac))
 
 
 def pad(
-    x: "Tensor",
-    padding: "tuple[int, ...]",
+    x: Tensor,
+    padding: tuple[int, ...],
     mode: str = "constant",
     value: float = 0.0,
-) -> "Tensor":
+) -> Tensor:
     """
     Pad a tensor.
 

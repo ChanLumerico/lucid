@@ -61,7 +61,7 @@ class MultiheadAttention(Module):
         key_padding_mask: Any = None,
         need_weights: bool = True,
         attn_mask: Any = None,
-    ) -> "tuple[Any, Any | None]":
+    ) -> tuple[Any, Any | None]:
         # Project Q, K, V
         q_w, k_w, v_w = (
             _wrap(_C_engine.reshape(

@@ -15,7 +15,7 @@ class LayerNorm(Module):
 
     def __init__(
         self,
-        normalized_shape: "int | list[int] | tuple[int, ...]",
+        normalized_shape: int | list[int] | tuple[int, ...],
         eps: float = 1e-5,
         elementwise_affine: bool = True,
         device: Any = None,
@@ -44,7 +44,7 @@ class RMSNorm(Module):
 
     def __init__(
         self,
-        normalized_shape: "int | list[int] | tuple[int, ...]",
+        normalized_shape: int | list[int] | tuple[int, ...],
         eps: float = 1e-8,
         device: Any = None,
         dtype: Any = None,

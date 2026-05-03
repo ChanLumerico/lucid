@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _getitem(t: "Tensor", idx: Any) -> "Tensor":
+def _getitem(t: Tensor, idx: Any) -> Tensor:
     from lucid._dispatch import _wrap, _unwrap
     from lucid._tensor.tensor import Tensor as _Tensor
 
@@ -89,7 +89,7 @@ def _normalize_and_apply_index(
     return impl
 
 
-def _setitem(t: "Tensor", idx: Any, value: Any) -> None:
+def _setitem(t: Tensor, idx: Any, value: Any) -> None:
     """In-place assignment: t[idx] = value."""
     from lucid._dispatch import _unwrap
     from lucid._tensor.tensor import Tensor as _Tensor

@@ -43,7 +43,7 @@ class _LucidUnpickler(pickle.Unpickler):
         raise pickle.UnpicklingError(f"Unknown persistent id: {pid}")
 
 
-def save(obj: Any, f: "str | bytes | io.IOBase", *, pickle_protocol: int = 4) -> None:
+def save(obj: Any, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> None:
     """
     Save an object to a file.
 
@@ -68,7 +68,7 @@ def save(obj: Any, f: "str | bytes | io.IOBase", *, pickle_protocol: int = 4) ->
 
 
 def load(
-    f: "str | bytes | io.IOBase",
+    f: str | bytes | io.IOBase,
     *,
     map_location: Any = None,
 ) -> Any:

@@ -25,8 +25,8 @@ class Tensor:
         self,
         data: Any,
         *,
-        dtype: "dtype | _C_engine.Dtype | str | None" = None,
-        device: "device | str | None" = None,
+        dtype: dtype | _C_engine.Dtype | str | None = None,
+        device: device | str | None = None,
         requires_grad: bool = False,
     ) -> None:
         from lucid._factories.converters import _to_impl
@@ -103,7 +103,7 @@ class Tensor:
     # ── autograd ─────────────────────────────────────────────────────────────
 
     @property
-    def grad(self) -> "Self | None":
+    def grad(self) -> Self | None:
         g = self._impl.grad_as_python()
         if g is None:
             return None
@@ -113,7 +113,7 @@ class Tensor:
         return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
 
     @grad.setter
-    def grad(self, v: "Tensor | None") -> None:
+    def grad(self, v: Tensor | None) -> None:
         if v is None:
             self._impl.zero_grad()
         # TensorImpl has no set_grad — assignment sets the underlying grad buffer
@@ -136,7 +136,7 @@ class Tensor:
 
     def backward(
         self,
-        gradient: "Tensor | None" = None,
+        gradient: Tensor | None = None,
         retain_graph: bool = False,
         create_graph: bool = False,
     ) -> None:

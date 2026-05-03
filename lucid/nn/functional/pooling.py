@@ -10,19 +10,19 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _int_or_tuple(v: "int | tuple[int, ...]", n: int) -> tuple[int, ...]:
+def _int_or_tuple(v: int | tuple[int, ...], n: int) -> tuple[int, ...]:
     return (v,) * n if isinstance(v, int) else tuple(v)
 
 
 def max_pool1d(
-    x: "Tensor",
-    kernel_size: "int | tuple[int, ...]",
-    stride: "int | tuple[int, ...] | None" = None,
-    padding: "int | tuple[int, ...]" = 0,
-    dilation: "int | tuple[int, ...]" = 1,
+    x: Tensor,
+    kernel_size: int | tuple[int, ...],
+    stride: int | tuple[int, ...] | None = None,
+    padding: int | tuple[int, ...] = 0,
+    dilation: int | tuple[int, ...] = 1,
     return_indices: bool = False,
     ceil_mode: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """1D max pooling."""
     k = _int_or_tuple(kernel_size, 1)[0]
     s = k if stride is None else _int_or_tuple(stride, 1)[0]
@@ -32,14 +32,14 @@ def max_pool1d(
 
 
 def max_pool2d(
-    x: "Tensor",
-    kernel_size: "int | tuple[int, int]",
-    stride: "int | tuple[int, int] | None" = None,
-    padding: "int | tuple[int, int]" = 0,
-    dilation: "int | tuple[int, int]" = 1,
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    stride: int | tuple[int, int] | None = None,
+    padding: int | tuple[int, int] = 0,
+    dilation: int | tuple[int, int] = 1,
     return_indices: bool = False,
     ceil_mode: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """2D max pooling."""
     kh, kw = _int_or_tuple(kernel_size, 2)
     sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
@@ -49,13 +49,13 @@ def max_pool2d(
 
 
 def avg_pool1d(
-    x: "Tensor",
-    kernel_size: "int | tuple[int, ...]",
-    stride: "int | tuple[int, ...] | None" = None,
-    padding: "int | tuple[int, ...]" = 0,
+    x: Tensor,
+    kernel_size: int | tuple[int, ...],
+    stride: int | tuple[int, ...] | None = None,
+    padding: int | tuple[int, ...] = 0,
     ceil_mode: bool = False,
     count_include_pad: bool = True,
-) -> "Tensor":
+) -> Tensor:
     """1D average pooling."""
     k = _int_or_tuple(kernel_size, 1)[0]
     s = k if stride is None else _int_or_tuple(stride, 1)[0]
@@ -64,14 +64,14 @@ def avg_pool1d(
 
 
 def avg_pool2d(
-    x: "Tensor",
-    kernel_size: "int | tuple[int, int]",
-    stride: "int | tuple[int, int] | None" = None,
-    padding: "int | tuple[int, int]" = 0,
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    stride: int | tuple[int, int] | None = None,
+    padding: int | tuple[int, int] = 0,
     ceil_mode: bool = False,
     count_include_pad: bool = True,
     divisor_override: int | None = None,
-) -> "Tensor":
+) -> Tensor:
     """2D average pooling."""
     kh, kw = _int_or_tuple(kernel_size, 2)
     sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
@@ -79,25 +79,25 @@ def avg_pool2d(
     return _wrap(_C_engine.nn.avg_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode, count_include_pad))
 
 
-def adaptive_avg_pool1d(x: "Tensor", output_size: "int | tuple[int, ...]") -> "Tensor":
+def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor:
     """1D adaptive average pooling."""
     sz = _int_or_tuple(output_size, 1)[0]
     return _wrap(_C_engine.nn.adaptive_avg_pool1d(_unwrap(x), sz))
 
 
 def adaptive_avg_pool2d(
-    x: "Tensor", output_size: "int | tuple[int, int]"
-) -> "Tensor":
+    x: Tensor, output_size: int | tuple[int, int]
+) -> Tensor:
     """2D adaptive average pooling."""
     oh, ow = _int_or_tuple(output_size, 2)
     return _wrap(_C_engine.nn.adaptive_avg_pool2d(_unwrap(x), oh, ow))
 
 
 def adaptive_max_pool2d(
-    x: "Tensor",
-    output_size: "int | tuple[int, int]",
+    x: Tensor,
+    output_size: int | tuple[int, int],
     return_indices: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """2D adaptive max pooling."""
     oh, ow = _int_or_tuple(output_size, 2)
     return _wrap(_C_engine.nn.adaptive_max_pool2d(_unwrap(x), oh, ow))

@@ -21,7 +21,7 @@ class Parameter(Tensor):
         cls,
         data: Any = None,
         requires_grad: bool = True,
-    ) -> "Parameter":
+    ) -> Parameter:
         if data is None:
             import numpy as np
             arr = np.array([], dtype="float32").reshape(0)

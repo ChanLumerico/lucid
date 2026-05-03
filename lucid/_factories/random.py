@@ -22,17 +22,17 @@ def manual_seed(seed: int) -> None:
 
 
 def _get_gen(
-    generator: "_C_engine.Generator | None",
-) -> "_C_engine.Generator | None":
+    generator: _C_engine.Generator | None,
+) -> _C_engine.Generator | None:
     return generator if generator is not None else _default_generator
 
 
 def rand(
     *size: Any,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-    generator: "_C_engine.Generator | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     """Return a tensor filled with uniform random values in [0, 1)."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -42,10 +42,10 @@ def rand(
 
 def randn(
     *size: Any,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-    generator: "_C_engine.Generator | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     """Return a tensor filled with standard normal random values."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -56,12 +56,12 @@ def randn(
 def randint(
     low: int,
     high: int,
-    size: "list[int] | tuple[int, ...]",
+    size: list[int] | tuple[int, ...],
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-    generator: "_C_engine.Generator | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     """Return a tensor filled with random integers in [low, high)."""
     from lucid._dispatch import _wrap
     from lucid._dtype import int64
@@ -75,11 +75,11 @@ def randint(
 def bernoulli(
     p: float,
     *,
-    size: "list[int] | tuple[int, ...] | None" = None,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-    generator: "_C_engine.Generator | None" = None,
-) -> "Tensor":
+    size: list[int] | tuple[int, ...] | None = None,
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     """Return a tensor of Bernoulli samples with probability p."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -91,11 +91,11 @@ def normal(
     mean: float = 0.0,
     std: float = 1.0,
     *,
-    size: "list[int] | tuple[int, ...]",
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-    generator: "_C_engine.Generator | None" = None,
-) -> "Tensor":
+    size: list[int] | tuple[int, ...],
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     """Return a tensor filled with normal random values."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -104,11 +104,11 @@ def normal(
 
 
 def rand_like(
-    t: "Tensor",
+    t: Tensor,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return a uniform random tensor with the same shape/dtype/device as t."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(
@@ -119,11 +119,11 @@ def rand_like(
 
 
 def randn_like(
-    t: "Tensor",
+    t: Tensor,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return a normal random tensor with the same shape/dtype/device as t."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(

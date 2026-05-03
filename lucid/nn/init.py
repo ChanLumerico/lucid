@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _fill_impl(tensor: "Tensor", arr: np.ndarray) -> "Tensor":  # type: ignore[type-arg]
+def _fill_impl(tensor: Tensor, arr: np.ndarray) -> Tensor:  # type: ignore[type-arg]
     impl = _C_engine.TensorImpl(
         np.ascontiguousarray(arr.reshape(tensor.shape)),
         tensor._impl.device,
@@ -25,35 +25,35 @@ def _fill_impl(tensor: "Tensor", arr: np.ndarray) -> "Tensor":  # type: ignore[t
     return tensor
 
 
-def uniform_(tensor: "Tensor", a: float = 0.0, b: float = 1.0) -> "Tensor":
+def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
     """Fill tensor in-place with values from U(a, b)."""
     arr = np.random.uniform(a, b, size=tensor.shape).astype("float32")
     return _fill_impl(tensor, arr)
 
 
-def normal_(tensor: "Tensor", mean: float = 0.0, std: float = 1.0) -> "Tensor":
+def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
     """Fill tensor in-place with values from N(mean, std²)."""
     arr = np.random.normal(mean, std, size=tensor.shape).astype("float32")
     return _fill_impl(tensor, arr)
 
 
-def constant_(tensor: "Tensor", val: float) -> "Tensor":
+def constant_(tensor: Tensor, val: float) -> Tensor:
     """Fill tensor in-place with a constant value."""
     arr = np.full(tensor.shape, val, dtype="float32")
     return _fill_impl(tensor, arr)
 
 
-def ones_(tensor: "Tensor") -> "Tensor":
+def ones_(tensor: Tensor) -> Tensor:
     """Fill tensor in-place with ones."""
     return constant_(tensor, 1.0)
 
 
-def zeros_(tensor: "Tensor") -> "Tensor":
+def zeros_(tensor: Tensor) -> Tensor:
     """Fill tensor in-place with zeros."""
     return constant_(tensor, 0.0)
 
 
-def eye_(tensor: "Tensor") -> "Tensor":
+def eye_(tensor: Tensor) -> Tensor:
     """Fill a 2D tensor in-place as an identity matrix."""
     if tensor.ndim != 2:
         raise ValueError("eye_() requires a 2D tensor")
@@ -62,7 +62,7 @@ def eye_(tensor: "Tensor") -> "Tensor":
     return _fill_impl(tensor, arr)
 
 
-def xavier_uniform_(tensor: "Tensor", gain: float = 1.0) -> "Tensor":
+def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     """Fill tensor with Xavier uniform values."""
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / (fan_in + fan_out))
@@ -70,7 +70,7 @@ def xavier_uniform_(tensor: "Tensor", gain: float = 1.0) -> "Tensor":
     return uniform_(tensor, -a, a)
 
 
-def xavier_normal_(tensor: "Tensor", gain: float = 1.0) -> "Tensor":
+def xavier_normal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     """Fill tensor with Xavier normal values."""
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / (fan_in + fan_out))
@@ -78,11 +78,11 @@ def xavier_normal_(tensor: "Tensor", gain: float = 1.0) -> "Tensor":
 
 
 def kaiming_uniform_(
-    tensor: "Tensor",
+    tensor: Tensor,
     a: float = 0,
     mode: str = "fan_in",
     nonlinearity: str = "leaky_relu",
-) -> "Tensor":
+) -> Tensor:
     """Fill tensor with Kaiming uniform values."""
     fan = _calculate_correct_fan(tensor, mode)
     gain = calculate_gain(nonlinearity, a)
@@ -92,11 +92,11 @@ def kaiming_uniform_(
 
 
 def kaiming_normal_(
-    tensor: "Tensor",
+    tensor: Tensor,
     a: float = 0,
     mode: str = "fan_in",
     nonlinearity: str = "leaky_relu",
-) -> "Tensor":
+) -> Tensor:
     """Fill tensor with Kaiming normal values."""
     fan = _calculate_correct_fan(tensor, mode)
     gain = calculate_gain(nonlinearity, a)
@@ -105,12 +105,12 @@ def kaiming_normal_(
 
 
 def trunc_normal_(
-    tensor: "Tensor",
+    tensor: Tensor,
     mean: float = 0.0,
     std: float = 1.0,
     a: float = -2.0,
     b: float = 2.0,
-) -> "Tensor":
+) -> Tensor:
     """Fill tensor with truncated normal values."""
     from scipy.stats import truncnorm  # type: ignore[import-untyped]
     lo, hi = (a - mean) / std, (b - mean) / std
@@ -118,7 +118,7 @@ def trunc_normal_(
     return _fill_impl(tensor, arr)
 
 
-def orthogonal_(tensor: "Tensor", gain: float = 1.0) -> "Tensor":
+def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     """Fill tensor with a (semi-)orthogonal matrix."""
     rows = tensor.shape[0]
     cols = tensor.numel() // rows
@@ -149,7 +149,7 @@ def calculate_gain(nonlinearity: str, param: float | None = None) -> float:
     raise ValueError(f"Unsupported nonlinearity: {nonlinearity!r}")
 
 
-def _calculate_fan_in_and_fan_out(tensor: "Tensor") -> tuple[int, int]:
+def _calculate_fan_in_and_fan_out(tensor: Tensor) -> tuple[int, int]:
     """Compute fan_in and fan_out for Linear and Conv weight tensors."""
     ndim = tensor.ndim
     if ndim < 2:
@@ -163,7 +163,7 @@ def _calculate_fan_in_and_fan_out(tensor: "Tensor") -> tuple[int, int]:
     return fan_in, fan_out
 
 
-def _calculate_correct_fan(tensor: "Tensor", mode: str) -> int:
+def _calculate_correct_fan(tensor: Tensor, mode: str) -> int:
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     if mode == "fan_in":
         return fan_in

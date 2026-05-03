@@ -98,7 +98,7 @@ class CosineAnnealingLR(_LRScheduler):
 class LambdaLR(_LRScheduler):
     """LR determined by a user-defined function."""
 
-    def __init__(self, optimizer: Optimizer, lr_lambda: "Callable[[int], float] | list[Callable[[int], float]]",
+    def __init__(self, optimizer: Optimizer, lr_lambda: Callable[[int], float] | list[Callable[[int], float]],
                  last_epoch: int = -1) -> None:
         if callable(lr_lambda):
             self.lr_lambdas = [lr_lambda] * len(optimizer.param_groups)

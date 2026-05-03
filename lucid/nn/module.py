@@ -104,7 +104,7 @@ class Module:
                 subprefix = f"{prefix}.{mname}" if prefix else mname
                 yield from m.named_buffers(subprefix, recurse=True)
 
-    def modules(self) -> Iterator["Module"]:
+    def modules(self) -> Iterator[Module]:
         """Yield this module and all submodules (depth-first)."""
         yield self
         for m in self._modules.values():
@@ -112,18 +112,18 @@ class Module:
 
     def named_modules(
         self, prefix: str = ""
-    ) -> Iterator[tuple[str, "Module"]]:
+    ) -> Iterator[tuple[str, Module]]:
         """Yield (name, module) pairs."""
         yield prefix, self
         for name, m in self._modules.items():
             subprefix = f"{prefix}.{name}" if prefix else name
             yield from m.named_modules(subprefix)
 
-    def children(self) -> Iterator["Module"]:
+    def children(self) -> Iterator[Module]:
         """Yield direct child modules."""
         yield from self._modules.values()
 
-    def named_children(self) -> Iterator[tuple[str, "Module"]]:
+    def named_children(self) -> Iterator[tuple[str, Module]]:
         """Yield (name, child_module) pairs."""
         yield from self._modules.items()
 
@@ -142,7 +142,7 @@ class Module:
         """Register a buffer tensor. Buffers appear in state_dict but not parameters()."""
         self._buffers[name] = tensor
 
-    def add_module(self, name: str, module: "Module | None") -> None:
+    def add_module(self, name: str, module: Module | None) -> None:
         """Add a child module."""
         if module is None:
             self._modules[name] = None  # type: ignore[assignment]
@@ -185,7 +185,7 @@ class Module:
         """Move all parameters and buffers to CPU."""
         return self.to("cpu")
 
-    def apply(self, fn: Callable[["Module"], None]) -> Self:
+    def apply(self, fn: Callable[[Module], None]) -> Self:
         """Apply fn recursively to every submodule (including self)."""
         for m in self.children():
             m.apply(fn)

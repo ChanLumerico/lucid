@@ -18,7 +18,7 @@ def _inject_methods(tensor_cls: type) -> None:
 
     def _make_method(e: OpEntry) -> Any:
         if e.n_tensor_args == -1:
-            def method_list(self: "Tensor", tensors: list[Any], *args: Any) -> Any:
+            def method_list(self: Tensor, tensors: list[Any], *args: Any) -> Any:
                 all_tensors = [_unwrap(t) for t in [self] + list(tensors)]
                 result = e.engine_fn(all_tensors, *args)
                 if e.returns_tensor:
@@ -29,7 +29,7 @@ def _inject_methods(tensor_cls: type) -> None:
             method_list.__name__ = e.method_name or e.name
             return method_list
         else:
-            def method(self: "Tensor", *args: Any) -> Any:
+            def method(self: Tensor, *args: Any) -> Any:
                 # Unwrap any Tensor in extra tensor arg positions
                 proc_args: list[Any] = []
                 from lucid._tensor.tensor import Tensor as _T
@@ -63,33 +63,33 @@ def _inject_methods(tensor_cls: type) -> None:
 
     # ── methods not in registry (Python-level implementations) ───────────
 
-    def view(self: "Tensor", *shape: Any) -> "Tensor":
+    def view(self: Tensor, *shape: Any) -> Tensor:
         """Return a tensor with the same data but a different shape."""
         s = list(shape[0]) if len(shape) == 1 and isinstance(shape[0], (list, tuple)) else list(shape)
         return _wrap(_C_engine.reshape(self._impl, s))
 
-    def t(self: "Tensor") -> "Tensor":
+    def t(self: Tensor) -> Tensor:
         """Return the 2D transpose of this tensor."""
         return _wrap(_C_engine.T(self._impl))
 
-    def std(self: "Tensor", axes: list[int] | None = None, keepdims: bool = False) -> "Tensor":
+    def std(self: Tensor, axes: list[int] | None = None, keepdims: bool = False) -> Tensor:
         """Return standard deviation (implemented as sqrt(var(x)))."""
         axes_: list[int] = axes if axes is not None else []
         return _wrap(_C_engine.sqrt(_C_engine.var(self._impl, axes_, keepdims)))
 
-    def log_softmax(self: "Tensor", axis: int = -1) -> "Tensor":
+    def log_softmax(self: Tensor, axis: int = -1) -> Tensor:
         """Return log-softmax along the given axis."""
         sm = _C_engine.softmax(self._impl, axis)
         return _wrap(_C_engine.log(sm))
 
-    def any(self: "Tensor") -> "Tensor":
+    def any(self: Tensor) -> Tensor:
         """Return True if any element is non-zero."""
         import numpy as np
         val = bool(np.asarray(self._impl.data_as_python()).any())
         arr = np.array(val)
         return _wrap(_C_engine.TensorImpl(arr, self._impl.device, False))
 
-    def all(self: "Tensor") -> "Tensor":
+    def all(self: Tensor) -> Tensor:
         """Return True if all elements are non-zero."""
         import numpy as np
         val = bool(np.asarray(self._impl.data_as_python()).all())

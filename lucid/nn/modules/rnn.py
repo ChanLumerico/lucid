@@ -75,8 +75,8 @@ class LSTM(Module):
     def forward(
         self,
         x: Any,
-        hx: "tuple[Any, Any] | None" = None,
-    ) -> "tuple[Any, tuple[Any, Any]]":
+        hx: tuple[Any, Any] | None = None,
+    ) -> tuple[Any, tuple[Any, Any]]:
         # Collect weight parameters
         weight_ih = self._parameters.get("weight_ih_l0")
         weight_hh = self._parameters.get("weight_hh_l0")

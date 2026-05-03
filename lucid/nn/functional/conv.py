@@ -10,21 +10,21 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _normalize_int_or_tuple(v: "int | tuple[int, ...]", n: int) -> tuple[int, ...]:
+def _normalize_int_or_tuple(v: int | tuple[int, ...], n: int) -> tuple[int, ...]:
     if isinstance(v, int):
         return (v,) * n
     return tuple(v)
 
 
 def conv1d(
-    x: "Tensor",
-    weight: "Tensor",
-    bias: "Tensor | None" = None,
-    stride: "int | tuple[int, ...]" = 1,
-    padding: "int | tuple[int, ...]" = 0,
-    dilation: "int | tuple[int, ...]" = 1,
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, ...] = 1,
+    padding: int | tuple[int, ...] = 0,
+    dilation: int | tuple[int, ...] = 1,
     groups: int = 1,
-) -> "Tensor":
+) -> Tensor:
     """1D convolution."""
     s = _normalize_int_or_tuple(stride, 1)[0]
     p = _normalize_int_or_tuple(padding, 1)[0]
@@ -34,14 +34,14 @@ def conv1d(
 
 
 def conv2d(
-    x: "Tensor",
-    weight: "Tensor",
-    bias: "Tensor | None" = None,
-    stride: "int | tuple[int, int]" = 1,
-    padding: "int | tuple[int, int]" = 0,
-    dilation: "int | tuple[int, int]" = 1,
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, int] = 1,
+    padding: int | tuple[int, int] = 0,
+    dilation: int | tuple[int, int] = 1,
     groups: int = 1,
-) -> "Tensor":
+) -> Tensor:
     """2D convolution."""
     sh, sw = _normalize_int_or_tuple(stride, 2)
     ph, pw = _normalize_int_or_tuple(padding, 2)
@@ -53,14 +53,14 @@ def conv2d(
 
 
 def conv3d(
-    x: "Tensor",
-    weight: "Tensor",
-    bias: "Tensor | None" = None,
-    stride: "int | tuple[int, int, int]" = 1,
-    padding: "int | tuple[int, int, int]" = 0,
-    dilation: "int | tuple[int, int, int]" = 1,
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, int, int] = 1,
+    padding: int | tuple[int, int, int] = 0,
+    dilation: int | tuple[int, int, int] = 1,
     groups: int = 1,
-) -> "Tensor":
+) -> Tensor:
     """3D convolution."""
     sd, sh, sw = _normalize_int_or_tuple(stride, 3)
     pd, ph, pw = _normalize_int_or_tuple(padding, 3)
@@ -72,15 +72,15 @@ def conv3d(
 
 
 def conv_transpose1d(
-    x: "Tensor",
-    weight: "Tensor",
-    bias: "Tensor | None" = None,
-    stride: "int | tuple[int, ...]" = 1,
-    padding: "int | tuple[int, ...]" = 0,
-    output_padding: "int | tuple[int, ...]" = 0,
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, ...] = 1,
+    padding: int | tuple[int, ...] = 0,
+    output_padding: int | tuple[int, ...] = 0,
     groups: int = 1,
-    dilation: "int | tuple[int, ...]" = 1,
-) -> "Tensor":
+    dilation: int | tuple[int, ...] = 1,
+) -> Tensor:
     """Transposed 1D convolution."""
     s = _normalize_int_or_tuple(stride, 1)[0]
     p = _normalize_int_or_tuple(padding, 1)[0]
@@ -91,15 +91,15 @@ def conv_transpose1d(
 
 
 def conv_transpose2d(
-    x: "Tensor",
-    weight: "Tensor",
-    bias: "Tensor | None" = None,
-    stride: "int | tuple[int, int]" = 1,
-    padding: "int | tuple[int, int]" = 0,
-    output_padding: "int | tuple[int, int]" = 0,
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, int] = 1,
+    padding: int | tuple[int, int] = 0,
+    output_padding: int | tuple[int, int] = 0,
     groups: int = 1,
-    dilation: "int | tuple[int, int]" = 1,
-) -> "Tensor":
+    dilation: int | tuple[int, int] = 1,
+) -> Tensor:
     """Transposed 2D convolution."""
     sh, sw = _normalize_int_or_tuple(stride, 2)
     ph, pw = _normalize_int_or_tuple(padding, 2)
@@ -112,15 +112,15 @@ def conv_transpose2d(
 
 
 def conv_transpose3d(
-    x: "Tensor",
-    weight: "Tensor",
-    bias: "Tensor | None" = None,
-    stride: "int | tuple[int, int, int]" = 1,
-    padding: "int | tuple[int, int, int]" = 0,
-    output_padding: "int | tuple[int, int, int]" = 0,
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+    stride: int | tuple[int, int, int] = 1,
+    padding: int | tuple[int, int, int] = 0,
+    output_padding: int | tuple[int, int, int] = 0,
     groups: int = 1,
-    dilation: "int | tuple[int, int, int]" = 1,
-) -> "Tensor":
+    dilation: int | tuple[int, int, int] = 1,
+) -> Tensor:
     """Transposed 3D convolution."""
     sd, sh, sw = _normalize_int_or_tuple(stride, 3)
     pd, ph, pw = _normalize_int_or_tuple(padding, 3)

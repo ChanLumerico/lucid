@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _unwrap(t: "_C_engine.TensorImpl | Tensor") -> _C_engine.TensorImpl:
+def _unwrap(t: _C_engine.TensorImpl | Tensor) -> _C_engine.TensorImpl:
     """Return the underlying TensorImpl from a Tensor or TensorImpl."""
     if isinstance(t, _C_engine.TensorImpl):
         return t
@@ -18,22 +18,22 @@ def _unwrap(t: "_C_engine.TensorImpl | Tensor") -> _C_engine.TensorImpl:
     raise TypeError(f"Expected Tensor or TensorImpl, got {type(t).__name__}")
 
 
-def _wrap(impl: _C_engine.TensorImpl) -> "Tensor":
+def _wrap(impl: _C_engine.TensorImpl) -> Tensor:
     """Wrap a TensorImpl in a Tensor (zero-copy)."""
     from lucid._tensor.tensor import Tensor
     return Tensor.__new_from_impl__(impl)
 
 
 def _wrap_or_none(
-    impl: "_C_engine.TensorImpl | None",
-) -> "Tensor | None":
+    impl: _C_engine.TensorImpl | None,
+) -> Tensor | None:
     """Wrap TensorImpl in Tensor, or return None."""
     return _wrap(impl) if impl is not None else None
 
 
 def normalize_factory_kwargs(
-    dt: "dtype | _C_engine.Dtype | str | None" = None,
-    dev: "device | str | None" = None,
+    dt: dtype | _C_engine.Dtype | str | None = None,
+    dev: device | str | None = None,
     requires_grad: bool = False,
 ) -> tuple[_C_engine.Dtype, _C_engine.Device, bool]:
     """Resolve dtype/device to engine enums, applying defaults."""
@@ -55,7 +55,7 @@ def _impl_with_grad(
     return _C_engine.TensorImpl(arr, impl.device, requires_grad)
 
 
-def _parse_device(d: "device | _C_engine.Device | str") -> _C_engine.Device:
+def _parse_device(d: device | _C_engine.Device | str) -> _C_engine.Device:
     """Convert device/string/engine Device → engine Device enum."""
     if isinstance(d, _C_engine.Device):
         return d

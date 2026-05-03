@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
 def _unwrap_or_scalar(
     x: Any,
-    ref_impl: "_C_engine.TensorImpl | None" = None,
-) -> "_C_engine.TensorImpl":
+    ref_impl: _C_engine.TensorImpl | None = None,
+) -> _C_engine.TensorImpl:
     """
     Return TensorImpl for Tensor; convert scalars to scalar TensorImpl.
     ref_impl is used to match dtype/device for scalar→TensorImpl conversion.
@@ -65,105 +65,105 @@ def _inject_dunders(cls: type) -> None:
     """Attach all dunder methods to the Tensor class."""
     from lucid._dispatch import _wrap
 
-    def __add__(self: "Tensor", other: Any) -> "Tensor":
+    def __add__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.add(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __radd__(self: "Tensor", other: Any) -> "Tensor":
+    def __radd__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.add(_unwrap_or_scalar(other, self._impl), self._impl))
 
-    def __iadd__(self: "Tensor", other: Any) -> "Tensor":
+    def __iadd__(self: Tensor, other: Any) -> Tensor:
         self._impl = _C_engine.add_(self._impl, _unwrap_or_scalar(other, self._impl))
         return self
 
-    def __sub__(self: "Tensor", other: Any) -> "Tensor":
+    def __sub__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.sub(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __rsub__(self: "Tensor", other: Any) -> "Tensor":
+    def __rsub__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.sub(_unwrap_or_scalar(other, self._impl), self._impl))
 
-    def __isub__(self: "Tensor", other: Any) -> "Tensor":
+    def __isub__(self: Tensor, other: Any) -> Tensor:
         self._impl = _C_engine.sub_(self._impl, _unwrap_or_scalar(other, self._impl))
         return self
 
-    def __mul__(self: "Tensor", other: Any) -> "Tensor":
+    def __mul__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.mul(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __rmul__(self: "Tensor", other: Any) -> "Tensor":
+    def __rmul__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.mul(_unwrap_or_scalar(other, self._impl), self._impl))
 
-    def __imul__(self: "Tensor", other: Any) -> "Tensor":
+    def __imul__(self: Tensor, other: Any) -> Tensor:
         self._impl = _C_engine.mul_(self._impl, _unwrap_or_scalar(other, self._impl))
         return self
 
-    def __truediv__(self: "Tensor", other: Any) -> "Tensor":
+    def __truediv__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.div(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __rtruediv__(self: "Tensor", other: Any) -> "Tensor":
+    def __rtruediv__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.div(_unwrap_or_scalar(other, self._impl), self._impl))
 
-    def __itruediv__(self: "Tensor", other: Any) -> "Tensor":
+    def __itruediv__(self: Tensor, other: Any) -> Tensor:
         self._impl = _C_engine.div_(self._impl, _unwrap_or_scalar(other, self._impl))
         return self
 
-    def __floordiv__(self: "Tensor", other: Any) -> "Tensor":
+    def __floordiv__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.floordiv(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __rfloordiv__(self: "Tensor", other: Any) -> "Tensor":
+    def __rfloordiv__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.floordiv(_unwrap_or_scalar(other, self._impl), self._impl))
 
-    def __pow__(self: "Tensor", other: Any) -> "Tensor":
+    def __pow__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.pow(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __rpow__(self: "Tensor", other: Any) -> "Tensor":
+    def __rpow__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.pow(_unwrap_or_scalar(other, self._impl), self._impl))
 
-    def __matmul__(self: "Tensor", other: "Tensor") -> "Tensor":
+    def __matmul__(self: Tensor, other: Tensor) -> Tensor:
         return _wrap(_C_engine.matmul(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __rmatmul__(self: "Tensor", other: "Tensor") -> "Tensor":
+    def __rmatmul__(self: Tensor, other: Tensor) -> Tensor:
         return _wrap(_C_engine.matmul(_unwrap_or_scalar(other, self._impl), self._impl))
 
-    def __neg__(self: "Tensor") -> "Tensor":
+    def __neg__(self: Tensor) -> Tensor:
         return _wrap(_C_engine.neg(self._impl))
 
-    def __abs__(self: "Tensor") -> "Tensor":
+    def __abs__(self: Tensor) -> Tensor:
         return _wrap(_C_engine.abs(self._impl))
 
-    def __invert__(self: "Tensor") -> "Tensor":
+    def __invert__(self: Tensor) -> Tensor:
         return _wrap(_C_engine.invert(self._impl))
 
-    def __and__(self: "Tensor", other: Any) -> "Tensor":
+    def __and__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.bitwise_and(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __or__(self: "Tensor", other: Any) -> "Tensor":
+    def __or__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.bitwise_or(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __xor__(self: "Tensor", other: Any) -> "Tensor":
+    def __xor__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.bitwise_xor(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __eq__(self: "Tensor", other: Any) -> "Tensor":  # type: ignore[override]
+    def __eq__(self: Tensor, other: Any) -> Tensor:  # type: ignore[override]
         return _wrap(_C_engine.equal(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __ne__(self: "Tensor", other: Any) -> "Tensor":  # type: ignore[override]
+    def __ne__(self: Tensor, other: Any) -> Tensor:  # type: ignore[override]
         return _wrap(_C_engine.not_equal(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __lt__(self: "Tensor", other: Any) -> "Tensor":
+    def __lt__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.less(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __le__(self: "Tensor", other: Any) -> "Tensor":
+    def __le__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.less_equal(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __gt__(self: "Tensor", other: Any) -> "Tensor":
+    def __gt__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.greater(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __ge__(self: "Tensor", other: Any) -> "Tensor":
+    def __ge__(self: Tensor, other: Any) -> Tensor:
         return _wrap(_C_engine.greater_equal(self._impl, _unwrap_or_scalar(other, self._impl)))
 
-    def __getitem__(self: "Tensor", idx: Any) -> "Tensor":
+    def __getitem__(self: Tensor, idx: Any) -> Tensor:
         from lucid._tensor._indexing import _getitem
         return _getitem(self, idx)
 
-    def __setitem__(self: "Tensor", idx: Any, value: Any) -> None:
+    def __setitem__(self: Tensor, idx: Any, value: Any) -> None:
         from lucid._tensor._indexing import _setitem
         _setitem(self, idx, value)
 

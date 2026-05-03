@@ -10,10 +10,10 @@ if TYPE_CHECKING:
 
 
 def _save_to_state_dict(
-    module: "Module",
+    module: Module,
     prefix: str = "",
     keep_vars: bool = False,
-) -> "dict[str, Tensor]":
+) -> dict[str, Tensor]:
     """Recursively collect all parameters and buffers into a flat dict."""
     result: dict[str, Any] = {}
 
@@ -35,10 +35,10 @@ def _save_to_state_dict(
 
 
 def _load_from_state_dict(
-    module: "Module",
-    state_dict: "dict[str, Tensor]",
+    module: Module,
+    state_dict: dict[str, Tensor],
     strict: bool = True,
-) -> "tuple[list[str], list[str]]":
+) -> tuple[list[str], list[str]]:
     """
     Load parameters from state_dict.
 
@@ -73,7 +73,7 @@ def _load_from_state_dict(
             continue
         # Navigate to the right sub-module
         parts = key.split(".")
-        sub: "Module" = module
+        sub: Module = module
         for part in parts[:-1]:
             sub = sub._modules[part]
         attr_name = parts[-1]

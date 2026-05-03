@@ -11,11 +11,11 @@ if TYPE_CHECKING:
 
 
 def backward(
-    tensors: "Tensor | list[Tensor]",
-    grad_tensors: "list[Tensor] | None" = None,
+    tensors: Tensor | list[Tensor],
+    grad_tensors: list[Tensor] | None = None,
     retain_graph: bool = False,
     create_graph: bool = False,
-    inputs: "list[Tensor] | None" = None,
+    inputs: list[Tensor] | None = None,
 ) -> None:
     """
     Compute gradients of tensors w.r.t. leaf variables.

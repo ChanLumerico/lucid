@@ -11,14 +11,14 @@ if TYPE_CHECKING:
 
 
 def scaled_dot_product_attention(
-    query: "Tensor",
-    key: "Tensor",
-    value: "Tensor",
-    attn_mask: "Tensor | None" = None,
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    attn_mask: Tensor | None = None,
     dropout_p: float = 0.0,
     is_causal: bool = False,
     scale: float | None = None,
-) -> "Tensor":
+) -> Tensor:
     """
     Scaled dot-product attention.
 

@@ -18,7 +18,7 @@ def get_default_dtype() -> dtype:
     return _default_dtype
 
 
-def set_default_device(d: "dtype | str") -> None:
+def set_default_device(d: dtype | str) -> None:
     """Set the default device used by factory functions."""
     global _default_device_str
     from lucid._device import device as _dev

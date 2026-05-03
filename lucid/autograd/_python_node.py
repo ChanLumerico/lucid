@@ -11,10 +11,10 @@ if TYPE_CHECKING:
 
 
 def _register(
-    output: "Tensor",
+    output: Tensor,
     fn_class: type,
     py_ctx: Any,
-    tensor_inputs: "list[Tensor]",
+    tensor_inputs: list[Tensor],
 ) -> None:
     """
     Wire a Python backward function into the C++ autograd graph.

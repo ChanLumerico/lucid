@@ -41,7 +41,7 @@ class Sequential(Module):
     def __iter__(self) -> Iterator[Module]:
         yield from self._modules.values()
 
-    def append(self, module: Module) -> "Sequential":
+    def append(self, module: Module) -> Sequential:
         self.add_module(str(len(self._modules)), module)
         return self
 
@@ -69,7 +69,7 @@ class ModuleList(Module):
     def __iter__(self) -> Iterator[Module]:
         yield from self._modules.values()
 
-    def append(self, module: Module) -> "ModuleList":
+    def append(self, module: Module) -> ModuleList:
         self.add_module(str(len(self._modules)), module)
         return self
 
@@ -123,7 +123,7 @@ class ParameterList(Module):
     def __len__(self) -> int:
         return len(self._parameters)
 
-    def append(self, param: Parameter) -> "ParameterList":
+    def append(self, param: Parameter) -> ParameterList:
         self.register_parameter(str(len(self._parameters)), param)
         return self
 

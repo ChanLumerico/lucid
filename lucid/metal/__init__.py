@@ -75,7 +75,7 @@ class MetalEvent:
     def __init__(self, enable_timing: bool = False) -> None:
         self._enable_timing = enable_timing
 
-    def record(self, stream: "MetalStream | None" = None) -> None:
+    def record(self, stream: MetalStream | None = None) -> None:
         """Record the current time on this event."""
         pass
 
@@ -83,7 +83,7 @@ class MetalEvent:
         """Wait for this event to complete."""
         pass
 
-    def elapsed_time(self, end_event: "MetalEvent") -> float:
+    def elapsed_time(self, end_event: MetalEvent) -> float:
         """Return elapsed time in milliseconds between events."""
         return 0.0
 

@@ -77,7 +77,7 @@ _NAME_TO_DTYPE: dict[str, dtype] = {
 
 
 def to_engine_dtype(
-    d: "dtype | _C_engine.Dtype | str | None",
+    d: dtype | _C_engine.Dtype | str | None,
 ) -> _C_engine.Dtype:
     """Convert lucid dtype, engine Dtype, string name, or None → engine Dtype."""
     if d is None:

@@ -11,12 +11,12 @@ if TYPE_CHECKING:
 
 
 def dropout(
-    x: "Tensor", p: float = 0.5, training: bool = True, inplace: bool = False
-) -> "Tensor":
+    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+) -> Tensor:
     """Randomly zero elements with probability p during training."""
     return _wrap(_C_engine.nn.dropout(_unwrap(x), p, training))
 
 
-def dropout2d(x: "Tensor", p: float = 0.5, training: bool = True) -> "Tensor":
+def dropout2d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     """Randomly zero entire channels with probability p during training."""
     return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))

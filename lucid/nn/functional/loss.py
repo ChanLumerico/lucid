@@ -13,16 +13,16 @@ _REDUCTION_MAP = {"none": 0, "mean": 1, "sum": 2}
 
 
 def mse_loss(
-    x: "Tensor", target: "Tensor", reduction: str = "mean"
-) -> "Tensor":
+    x: Tensor, target: Tensor, reduction: str = "mean"
+) -> Tensor:
     """Mean squared error loss."""
     red = _REDUCTION_MAP.get(reduction, 1)
     return _wrap(_C_engine.nn.mse_loss(_unwrap(x), _unwrap(target), red))
 
 
 def l1_loss(
-    x: "Tensor", target: "Tensor", reduction: str = "mean"
-) -> "Tensor":
+    x: Tensor, target: Tensor, reduction: str = "mean"
+) -> Tensor:
     """Mean absolute error loss."""
     diff = _C_engine.abs(_C_engine.sub(_unwrap(x), _unwrap(target)))
     if reduction == "mean":
@@ -33,28 +33,28 @@ def l1_loss(
 
 
 def smooth_l1_loss(
-    x: "Tensor", target: "Tensor", beta: float = 1.0, reduction: str = "mean"
-) -> "Tensor":
+    x: Tensor, target: Tensor, beta: float = 1.0, reduction: str = "mean"
+) -> Tensor:
     """Smooth L1 (Huber) loss."""
     return huber_loss(x, target, delta=beta, reduction=reduction)
 
 
 def huber_loss(
-    x: "Tensor", target: "Tensor", delta: float = 1.0, reduction: str = "mean"
-) -> "Tensor":
+    x: Tensor, target: Tensor, delta: float = 1.0, reduction: str = "mean"
+) -> Tensor:
     """Huber loss."""
     red = _REDUCTION_MAP.get(reduction, 1)
     return _wrap(_C_engine.nn.huber_loss(_unwrap(x), _unwrap(target), delta, red))
 
 
 def cross_entropy(
-    x: "Tensor",
-    target: "Tensor",
-    weight: "Tensor | None" = None,
+    x: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
     ignore_index: int = -100,
     reduction: str = "mean",
     label_smoothing: float = 0.0,
-) -> "Tensor":
+) -> Tensor:
     """Cross-entropy loss for multi-class classification."""
     red = _REDUCTION_MAP.get(reduction, 1)
     w = _unwrap(weight) if weight is not None else None
@@ -64,47 +64,47 @@ def cross_entropy(
 
 
 def nll_loss(
-    x: "Tensor",
-    target: "Tensor",
-    weight: "Tensor | None" = None,
+    x: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
     ignore_index: int = -100,
     reduction: str = "mean",
-) -> "Tensor":
+) -> Tensor:
     """Negative log-likelihood loss."""
     red = _REDUCTION_MAP.get(reduction, 1)
     return _wrap(_C_engine.nn.nll_loss(_unwrap(x), _unwrap(target), red))
 
 
 def binary_cross_entropy(
-    x: "Tensor",
-    target: "Tensor",
-    weight: "Tensor | None" = None,
+    x: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
     reduction: str = "mean",
-) -> "Tensor":
+) -> Tensor:
     """Binary cross-entropy loss."""
     red = _REDUCTION_MAP.get(reduction, 1)
     return _wrap(_C_engine.nn.bce_loss(_unwrap(x), _unwrap(target), red))
 
 
 def binary_cross_entropy_with_logits(
-    x: "Tensor",
-    target: "Tensor",
-    weight: "Tensor | None" = None,
-    pos_weight: "Tensor | None" = None,
+    x: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    pos_weight: Tensor | None = None,
     reduction: str = "mean",
-) -> "Tensor":
+) -> Tensor:
     """BCE with logits loss (combines sigmoid + BCE for numerical stability)."""
     red = _REDUCTION_MAP.get(reduction, 1)
     return _wrap(_C_engine.nn.bce_with_logits(_unwrap(x), _unwrap(target), red))
 
 
 def kl_div(
-    x: "Tensor",
-    target: "Tensor",
+    x: Tensor,
+    target: Tensor,
     size_average: bool | None = None,
     reduction: str = "mean",
     log_target: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """Kullback-Leibler divergence."""
     from lucid._C import engine as E
     import numpy as np

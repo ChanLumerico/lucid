@@ -11,10 +11,10 @@ if TYPE_CHECKING:
 
 
 def linear(
-    x: "Tensor",
-    weight: "Tensor",
-    bias: "Tensor | None" = None,
-) -> "Tensor":
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+) -> Tensor:
     """
     Apply a linear transformation: y = x @ weight.T + bias.
 
@@ -33,11 +33,11 @@ def linear(
 
 
 def bilinear(
-    x1: "Tensor",
-    x2: "Tensor",
-    weight: "Tensor",
-    bias: "Tensor | None" = None,
-) -> "Tensor":
+    x1: Tensor,
+    x2: Tensor,
+    weight: Tensor,
+    bias: Tensor | None = None,
+) -> Tensor:
     """Bilinear transformation: y = x1 @ W @ x2.T + bias."""
     result = _wrap(_C_engine.nn.bilinear_layer(_unwrap(x1), _unwrap(x2), _unwrap(weight)))
     if bias is not None:

@@ -22,8 +22,8 @@ class MaxPool1d(Module):
 
 
 class MaxPool2d(Module):
-    def __init__(self, kernel_size: "int | tuple[int,int]", stride: "int | tuple[int,int] | None" = None,
-                 padding: "int | tuple[int,int]" = 0, dilation: "int | tuple[int,int]" = 1,
+    def __init__(self, kernel_size: int | tuple[int, int], stride: int | tuple[int, int] | None = None,
+                 padding: int | tuple[int, int] = 0, dilation: int | tuple[int, int] = 1,
                  return_indices: bool = False, ceil_mode: bool = False) -> None:
         super().__init__()
         self.kernel_size = kernel_size
@@ -51,8 +51,8 @@ class AvgPool1d(Module):
 
 
 class AvgPool2d(Module):
-    def __init__(self, kernel_size: "int | tuple[int,int]", stride: "int | tuple[int,int] | None" = None,
-                 padding: "int | tuple[int,int]" = 0, ceil_mode: bool = False,
+    def __init__(self, kernel_size: int | tuple[int, int], stride: int | tuple[int, int] | None = None,
+                 padding: int | tuple[int, int] = 0, ceil_mode: bool = False,
                  count_include_pad: bool = True) -> None:
         super().__init__()
         self.kernel_size = kernel_size
@@ -66,7 +66,7 @@ class AvgPool2d(Module):
 
 
 class AdaptiveAvgPool1d(Module):
-    def __init__(self, output_size: "int | tuple[int,...]") -> None:
+    def __init__(self, output_size: int | tuple[int, ...]) -> None:
         super().__init__()
         self.output_size = output_size
     def forward(self, x: Any) -> Any:
@@ -75,7 +75,7 @@ class AdaptiveAvgPool1d(Module):
 
 
 class AdaptiveAvgPool2d(Module):
-    def __init__(self, output_size: "int | tuple[int,int]") -> None:
+    def __init__(self, output_size: int | tuple[int, int]) -> None:
         super().__init__()
         self.output_size = output_size
     def forward(self, x: Any) -> Any:
@@ -84,7 +84,7 @@ class AdaptiveAvgPool2d(Module):
 
 
 class AdaptiveMaxPool2d(Module):
-    def __init__(self, output_size: "int | tuple[int,int]", return_indices: bool = False) -> None:
+    def __init__(self, output_size: int | tuple[int, int], return_indices: bool = False) -> None:
         super().__init__()
         self.output_size = output_size
     def forward(self, x: Any) -> Any:

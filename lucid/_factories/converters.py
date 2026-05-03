@@ -38,8 +38,8 @@ def _np_dtype_to_engine(np_dtype: np.dtype) -> _C_engine.Dtype:  # type: ignore[
 def _to_impl(
     data: Any,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
     requires_grad: bool = False,
 ) -> _C_engine.TensorImpl:
     """Convert list/scalar/ndarray/Tensor → TensorImpl."""
@@ -105,10 +105,10 @@ def _engine_dtype_to_np(d: _C_engine.Dtype) -> str:
 def tensor(
     data: Any,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
     requires_grad: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """Create a tensor from data (list, ndarray, scalar, or Tensor)."""
     from lucid._tensor.tensor import Tensor
     return Tensor.__new_from_impl__(
@@ -118,13 +118,13 @@ def tensor(
 
 def as_tensor(
     data: Any,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Convert data to a tensor, sharing memory where possible."""
     return tensor(data, dtype=dtype, device=device)
 
 
-def from_numpy(arr: np.ndarray) -> "Tensor":  # type: ignore[type-arg]
+def from_numpy(arr: np.ndarray) -> Tensor:  # type: ignore[type-arg]
     """Create a CPU tensor from a NumPy array with automatic dtype mapping."""
     return tensor(arr)

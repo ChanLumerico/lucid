@@ -11,11 +11,11 @@ from lucid._factories.creation import empty
 import lucid.nn.init as init
 
 
-def _pair(v: "int | tuple[int, int]") -> tuple[int, int]:
+def _pair(v: int | tuple[int, int]) -> tuple[int, int]:
     return (v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
 
 
-def _triple(v: "int | tuple[int, int, int]") -> tuple[int, int, int]:
+def _triple(v: int | tuple[int, int, int]) -> tuple[int, int, int]:
     return (v, v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
 
 
@@ -69,10 +69,10 @@ class Conv2d(Module):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: "int | tuple[int, int]",
-        stride: "int | tuple[int, int]" = 1,
-        padding: "int | tuple[int, int]" = 0,
-        dilation: "int | tuple[int, int]" = 1,
+        kernel_size: int | tuple[int, int],
+        stride: int | tuple[int, int] = 1,
+        padding: int | tuple[int, int] = 0,
+        dilation: int | tuple[int, int] = 1,
         groups: int = 1,
         bias: bool = True,
         padding_mode: str = "zeros",
@@ -113,10 +113,10 @@ class Conv3d(Module):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: "int | tuple[int, int, int]",
-        stride: "int | tuple[int, int, int]" = 1,
-        padding: "int | tuple[int, int, int]" = 0,
-        dilation: "int | tuple[int, int, int]" = 1,
+        kernel_size: int | tuple[int, int, int],
+        stride: int | tuple[int, int, int] = 1,
+        padding: int | tuple[int, int, int] = 0,
+        dilation: int | tuple[int, int, int] = 1,
         groups: int = 1,
         bias: bool = True,
         device: Any = None,
@@ -186,13 +186,13 @@ class ConvTranspose2d(Module):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: "int | tuple[int, int]",
-        stride: "int | tuple[int, int]" = 1,
-        padding: "int | tuple[int, int]" = 0,
-        output_padding: "int | tuple[int, int]" = 0,
+        kernel_size: int | tuple[int, int],
+        stride: int | tuple[int, int] = 1,
+        padding: int | tuple[int, int] = 0,
+        output_padding: int | tuple[int, int] = 0,
         groups: int = 1,
         bias: bool = True,
-        dilation: "int | tuple[int, int]" = 1,
+        dilation: int | tuple[int, int] = 1,
         device: Any = None,
         dtype: Any = None,
     ) -> None:
@@ -224,13 +224,13 @@ class ConvTranspose3d(Module):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: "int | tuple[int, int, int]",
-        stride: "int | tuple[int, int, int]" = 1,
-        padding: "int | tuple[int, int, int]" = 0,
-        output_padding: "int | tuple[int, int, int]" = 0,
+        kernel_size: int | tuple[int, int, int],
+        stride: int | tuple[int, int, int] = 1,
+        padding: int | tuple[int, int, int] = 0,
+        output_padding: int | tuple[int, int, int] = 0,
         groups: int = 1,
         bias: bool = True,
-        dilation: "int | tuple[int, int, int]" = 1,
+        dilation: int | tuple[int, int, int] = 1,
         device: Any = None,
         dtype: Any = None,
     ) -> None:

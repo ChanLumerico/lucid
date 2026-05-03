@@ -19,7 +19,7 @@ _builtin_bool = bool  # save before any local shadowing
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
 
-    def to(self: "Tensor", *args: Any, **kwargs: Any) -> "Tensor":
+    def to(self: Tensor, *args: Any, **kwargs: Any) -> Tensor:
         """
         Move and/or cast tensor.
 
@@ -70,40 +70,40 @@ def _inject_to(cls: type) -> None:
         impl = _C_engine.TensorImpl(arr, target_device, self._impl.requires_grad)
         return _wrap(impl)
 
-    def metal(self: "Tensor") -> "Tensor":
+    def metal(self: Tensor) -> Tensor:
         """Move this tensor to Apple Metal GPU."""
         return to(self, _C_engine.Device.GPU)
 
-    def cpu(self: "Tensor") -> "Tensor":
+    def cpu(self: Tensor) -> Tensor:
         """Move this tensor to CPU."""
         return to(self, _C_engine.Device.CPU)
 
-    def float(self: "Tensor") -> "Tensor":
+    def float(self: Tensor) -> Tensor:
         """Cast to float32."""
         from lucid._dtype import float32
         return to(self, float32)
 
-    def double(self: "Tensor") -> "Tensor":
+    def double(self: Tensor) -> Tensor:
         """Cast to float64."""
         from lucid._dtype import float64
         return to(self, float64)
 
-    def half(self: "Tensor") -> "Tensor":
+    def half(self: Tensor) -> Tensor:
         """Cast to float16."""
         from lucid._dtype import float16
         return to(self, float16)
 
-    def int(self: "Tensor") -> "Tensor":
+    def int(self: Tensor) -> Tensor:
         """Cast to int32."""
         from lucid._dtype import int32
         return to(self, int32)
 
-    def long(self: "Tensor") -> "Tensor":
+    def long(self: Tensor) -> Tensor:
         """Cast to int64."""
         from lucid._dtype import int64
         return to(self, int64)
 
-    def bool(self: "Tensor") -> "Tensor":
+    def bool(self: Tensor) -> Tensor:
         """Cast to bool."""
         from lucid._dtype import bool_
         return to(self, bool_)

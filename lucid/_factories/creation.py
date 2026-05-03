@@ -20,10 +20,10 @@ def _size_to_list(*size: Any) -> list[int]:
 
 def zeros(
     *size: Any,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
     requires_grad: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """Return a tensor filled with zeros."""
     from lucid._dispatch import _wrap
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
@@ -33,10 +33,10 @@ def zeros(
 
 def ones(
     *size: Any,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
     requires_grad: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """Return a tensor filled with ones."""
     from lucid._dispatch import _wrap
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
@@ -46,10 +46,10 @@ def ones(
 
 def empty(
     *size: Any,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
     requires_grad: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """Return an uninitialized tensor."""
     from lucid._dispatch import _wrap
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
@@ -58,13 +58,13 @@ def empty(
 
 
 def full(
-    size: "int | list[int] | tuple[int, ...]",
+    size: int | list[int] | tuple[int, ...],
     fill_value: float,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
     requires_grad: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """Return a tensor filled with fill_value."""
     from lucid._dispatch import _wrap
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
@@ -76,9 +76,9 @@ def eye(
     n: int,
     m: int | None = None,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return a 2D identity matrix."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -91,9 +91,9 @@ def arange(
     end: float | None = None,
     step: float = 1,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return evenly spaced values within a given interval."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -107,9 +107,9 @@ def linspace(
     end: float,
     steps: int,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return evenly spaced numbers over a specified interval."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -117,11 +117,11 @@ def linspace(
 
 
 def zeros_like(
-    t: "Tensor",
+    t: Tensor,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return a zeros tensor with the same shape/dtype/device as t."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(
@@ -132,11 +132,11 @@ def zeros_like(
 
 
 def ones_like(
-    t: "Tensor",
+    t: Tensor,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return a ones tensor with the same shape/dtype/device as t."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(
@@ -147,11 +147,11 @@ def ones_like(
 
 
 def empty_like(
-    t: "Tensor",
+    t: Tensor,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return an uninitialized tensor with the same shape/dtype/device as t."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(
@@ -162,12 +162,12 @@ def empty_like(
 
 
 def full_like(
-    t: "Tensor",
+    t: Tensor,
     fill_value: float,
     *,
-    dtype: "dtype | _C_engine.Dtype | str | None" = None,
-    device: "str | None" = None,
-) -> "Tensor":
+    dtype: dtype | _C_engine.Dtype | str | None = None,
+    device: str | None = None,
+) -> Tensor:
     """Return a tensor filled with fill_value, shaped like t."""
     from lucid._dispatch import _wrap
     _dt, _dev, _ = normalize_factory_kwargs(
