@@ -59,7 +59,7 @@ __all__ = [
     "no_grad", "enable_grad", "is_grad_enabled", "set_grad_enabled",
     "inference_mode",
     "save", "load",
-    "nn", "optim", "autograd", "linalg", "metal", "backends", "utils",
+    "nn", "optim", "autograd", "linalg", "metal", "backends", "utils", "einops",
 ]
 
 
@@ -175,5 +175,11 @@ def __getattr__(name: str) -> object:
     if name == "dtypes":
         import lucid.dtypes as _dtypes
         return _dtypes
+
+    if name == "einops":
+        if "lucid.einops" in _sys.modules:
+            return _sys.modules["lucid.einops"]
+        import lucid.einops as _einops
+        return _einops
 
     raise AttributeError(f"module 'lucid' has no attribute '{name}'")
