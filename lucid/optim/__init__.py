@@ -8,6 +8,8 @@ from lucid.optim.others import (
 from lucid.optim.lr_scheduler import (
     StepLR, ExponentialLR, MultiStepLR, CosineAnnealingLR,
     LambdaLR, CyclicLR, ReduceLROnPlateau, NoamScheduler,
+    MultiplicativeLR, LinearLR, ConstantLR, PolynomialLR,
+    CosineAnnealingWarmRestarts, OneCycleLR, SequentialLR, ChainedScheduler,
 )
 
 __all__ = [
@@ -17,4 +19,6 @@ __all__ = [
     "RAdam", "NAdam", "ASGD", "Rprop",
     "StepLR", "ExponentialLR", "MultiStepLR", "CosineAnnealingLR",
     "LambdaLR", "CyclicLR", "ReduceLROnPlateau", "NoamScheduler",
+    "MultiplicativeLR", "LinearLR", "ConstantLR", "PolynomialLR",
+    "CosineAnnealingWarmRestarts", "OneCycleLR", "SequentialLR", "ChainedScheduler",
 ]
