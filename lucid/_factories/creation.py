@@ -4,7 +4,7 @@ Tensor creation functions: zeros, ones, empty, full, eye, arange, linspace, *_li
 
 from typing import Any, TYPE_CHECKING
 from lucid._C import engine as _C_engine
-from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap
+from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap, _impl_with_grad
 from lucid._dtype import dtype
 
 if TYPE_CHECKING:
@@ -49,7 +49,8 @@ def zeros(
     """
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = _size_to_list(*size)
-    return _wrap(_C_engine.zeros(shape, _dt, _dev))
+    impl = _C_engine.zeros(shape, _dt, _dev)
+    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
 
 
 def ones(
@@ -78,7 +79,8 @@ def ones(
     """
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = _size_to_list(*size)
-    return _wrap(_C_engine.ones(shape, _dt, _dev))
+    impl = _C_engine.ones(shape, _dt, _dev)
+    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
 
 
 def empty(
@@ -110,7 +112,8 @@ def empty(
     """
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = _size_to_list(*size)
-    return _wrap(_C_engine.empty(shape, _dt, _dev))
+    impl = _C_engine.empty(shape, _dt, _dev)
+    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
 
 
 def full(
@@ -124,7 +127,8 @@ def full(
     """Return a tensor filled with fill_value."""
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = list(size) if isinstance(size, (list, tuple)) else [size]
-    return _wrap(_C_engine.full(shape, fill_value, _dt, _dev))
+    impl = _C_engine.full(shape, fill_value, _dt, _dev)
+    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
 
 
 def eye(
@@ -133,11 +137,13 @@ def eye(
     *,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     """Return a 2D identity matrix."""
-    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
+    _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     _m = m if m is not None else n
-    return _wrap(_C_engine.eye(n, _m, _dt, _dev))
+    impl = _C_engine.eye(n, _m, 0, _dt, _dev)
+    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
 
 
 def arange(

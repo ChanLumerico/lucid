@@ -4,7 +4,7 @@ Random tensor creation: rand, randn, randint, bernoulli, normal, manual_seed.
 
 from typing import Any, TYPE_CHECKING
 from lucid._C import engine as _C_engine
-from lucid._dispatch import normalize_factory_kwargs, _wrap
+from lucid._dispatch import normalize_factory_kwargs, _wrap, _impl_with_grad
 from lucid._dtype import dtype, int64
 
 if TYPE_CHECKING:
@@ -31,24 +31,28 @@ def rand(
     *size: Any,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
+    requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor filled with uniform random values in [0, 1)."""
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = _size_to_list(*size)
-    return _wrap(_C_engine.rand(shape, _dt, _dev, _get_gen(generator)))
+    impl = _C_engine.rand(shape, _dt, _dev, _get_gen(generator))
+    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
 def randn(
     *size: Any,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
+    requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor filled with standard normal random values."""
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = _size_to_list(*size)
-    return _wrap(_C_engine.randn(shape, _dt, _dev, _get_gen(generator)))
+    impl = _C_engine.randn(shape, _dt, _dev, _get_gen(generator))
+    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
 def randint(
@@ -58,6 +62,7 @@ def randint(
     *,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
+    requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor filled with random integers in [low, high)."""
@@ -65,7 +70,8 @@ def randint(
         dtype if dtype is not None else int64, device
     )
     shape = list(size)
-    return _wrap(_C_engine.randint(shape, low, high, _dt, _dev, _get_gen(generator)))
+    impl = _C_engine.randint(shape, low, high, _dt, _dev, _get_gen(generator))
+    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
 def bernoulli(
@@ -74,12 +80,14 @@ def bernoulli(
     size: list[int] | tuple[int, ...] | None = None,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
+    requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor of Bernoulli samples with probability p."""
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = list(size) if size is not None else [1]
-    return _wrap(_C_engine.bernoulli(shape, p, _dt, _dev, _get_gen(generator)))
+    impl = _C_engine.bernoulli(shape, p, _dt, _dev, _get_gen(generator))
+    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
 def normal(
@@ -89,12 +97,14 @@ def normal(
     size: list[int] | tuple[int, ...],
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
+    requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor filled with normal random values."""
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = list(size)
-    return _wrap(_C_engine.normal(shape, mean, std, _dt, _dev, _get_gen(generator)))
+    impl = _C_engine.normal(shape, mean, std, _dt, _dev, _get_gen(generator))
+    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
 def rand_like(
@@ -102,13 +112,15 @@ def rand_like(
     *,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     """Return a uniform random tensor with the same shape/dtype/device as t."""
     _dt, _dev, _ = normalize_factory_kwargs(
         dtype if dtype is not None else t.dtype,
         device if device is not None else t.device,
     )
-    return _wrap(_C_engine.rand(list(t.shape), _dt, _dev, None))
+    impl = _C_engine.rand(list(t.shape), _dt, _dev, None)
+    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
 def randn_like(
@@ -116,13 +128,15 @@ def randn_like(
     *,
     dtype: dtype | _C_engine.Dtype | str | None = None,
     device: str | None = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     """Return a normal random tensor with the same shape/dtype/device as t."""
     _dt, _dev, _ = normalize_factory_kwargs(
         dtype if dtype is not None else t.dtype,
         device if device is not None else t.device,
     )
-    return _wrap(_C_engine.randn(list(t.shape), _dt, _dev, None))
+    impl = _C_engine.randn(list(t.shape), _dt, _dev, None)
+    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
 def _size_to_list(*size: Any) -> list[int]:
