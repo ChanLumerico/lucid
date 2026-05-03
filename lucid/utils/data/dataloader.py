@@ -126,7 +126,7 @@ class _MultiProcessDataLoaderIter:
 
     def __init__(self, loader: DataLoader) -> None:
         self._num_workers: int = loader.num_workers
-        self._prefetch_factor: int = loader.prefetch_factor
+        self._prefetch_factor: int = loader.prefetch_factor or 2
         self._persistent: bool = loader.persistent_workers
         self._collate_fn = loader.collate_fn
 
@@ -268,7 +268,7 @@ class DataLoader:
         self,
         dataset: Dataset,
         batch_size: int = 1,
-        shuffle: bool = False,
+        shuffle: bool | None = None,
         sampler: Sampler | None = None,
         batch_sampler: Sampler | None = None,
         num_workers: int = 0,
@@ -279,12 +279,12 @@ class DataLoader:
         worker_init_fn: Callable | None = None,
         multiprocessing_context: Any = None,
         generator: Any = None,
-        prefetch_factor: int = 2,
+        prefetch_factor: int | None = None,
         persistent_workers: bool = False,
     ) -> None:
         if num_workers < 0:
             raise ValueError(f"num_workers must be >= 0, got {num_workers}")
-        if prefetch_factor <= 0:
+        if prefetch_factor is not None and prefetch_factor <= 0:
             raise ValueError(f"prefetch_factor must be > 0, got {prefetch_factor}")
         if persistent_workers and num_workers == 0:
             raise ValueError("persistent_workers requires num_workers > 0")
@@ -298,7 +298,11 @@ class DataLoader:
         self.timeout = timeout
         self.worker_init_fn = worker_init_fn
         self.generator = generator
-        self.prefetch_factor = prefetch_factor
+        # Match PyTorch: prefetch_factor=None when num_workers=0, else default 2
+        if prefetch_factor is None:
+            self.prefetch_factor = 2 if num_workers > 0 else None
+        else:
+            self.prefetch_factor = prefetch_factor
         self.persistent_workers = persistent_workers
 
         if batch_sampler is not None:
@@ -315,7 +319,7 @@ class DataLoader:
             if sampler is None:
                 sampler = (
                     RandomSampler(dataset, generator=generator)
-                    if shuffle
+                    if shuffle  # None and False both → SequentialSampler
                     else SequentialSampler(dataset)
                 )
             self.batch_sampler = BatchSampler(sampler, batch_size, drop_last)
@@ -339,7 +343,7 @@ class DataLoader:
                 it._send_idx = 0
                 it._rcvd_idx = 0
                 it._reorder.clear()
-                prefill = min(self.num_workers * self.prefetch_factor, it._n_batches)
+                prefill = min(self.num_workers * (self.prefetch_factor or 2), it._n_batches)
                 for _ in range(prefill):
                     it._dispatch_next()
             yield from self._persistent_iter
