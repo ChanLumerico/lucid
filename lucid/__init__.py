@@ -59,7 +59,7 @@ __all__ = [
     "no_grad", "enable_grad", "is_grad_enabled", "set_grad_enabled",
     "inference_mode",
     "save", "load",
-    "nn", "optim", "autograd", "linalg", "metal", "backends", "utils", "einops", "profiler",
+    "nn", "optim", "autograd", "linalg", "metal", "backends", "utils", "einops", "profiler", "amp",
 ]
 
 
@@ -187,5 +187,11 @@ def __getattr__(name: str) -> object:
             return _sys.modules["lucid.profiler"]
         import lucid.profiler as _profiler
         return _profiler
+
+    if name == "amp":
+        if "lucid.amp" in _sys.modules:
+            return _sys.modules["lucid.amp"]
+        import lucid.amp as _amp
+        return _amp
 
     raise AttributeError(f"module 'lucid' has no attribute '{name}'")
