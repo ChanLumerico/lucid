@@ -35,3 +35,18 @@ repos:
         entry: tools/check_format.sh --format-only
         language: system
         pass_filenames: false
+
+      - id: lucid-stub-freshness
+        name: lucid .pyi stub freshness
+        entry: python tools/check_stubs.py
+        language: system
+        pass_filenames: false
+        files: |
+          (?x)^(
+            lucid/_ops/_registry\.py |
+            lucid/_tensor/tensor\.py |
+            lucid/_tensor/_methods\.py |
+            lucid/_tensor/_dunders\.py |
+            lucid/_tensor/_to\.py |
+            lucid/__init__\.py
+          )$
