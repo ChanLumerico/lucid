@@ -1,3 +1,14 @@
+// lucid/_C/ops/utils/Histogram.cpp
+//
+// Implements histogram_op, histogram2d_op, and histogramdd_op.  All three
+// functions count data points into fixed-width bins and optionally normalise
+// the counts to form a probability density.  Computation is always performed
+// on the CPU; GPU inputs are transferred to host memory before counting
+// because the random-access accumulation pattern does not vectorise well on
+// the MLX compute graph.  F64 outputs remain on CPU (MLX has no float64
+// support); other dtypes are transferred back to the original device after
+// counting completes.
+
 #include "Histogram.h"
 
 #include <algorithm>
@@ -23,10 +34,13 @@ namespace {
 using utils_detail::allocate_cpu;
 using utils_detail::fresh;
 
+// Transfer `a` to host memory, regardless of its current device.
 CpuStorage to_cpu(const TensorImplPtr& a) {
     return backend::Dispatcher::for_device(a->device()).to_cpu(a->storage(), a->shape());
 }
 
+// Move a CPU buffer to `target_device`, unless the dtype is F64 (which MLX
+// does not support) in which case the storage remains on CPU.
 Storage to_device_storage(CpuStorage&& cpu, Device target_device, const Shape& shape) {
     if (target_device == Device::GPU && cpu.dtype != Dtype::F64) {
         return backend::Dispatcher::for_device(Device::GPU).from_cpu(cpu, shape);
@@ -34,12 +48,18 @@ Storage to_device_storage(CpuStorage&& cpu, Device target_device, const Shape& s
     return Storage{std::move(cpu)};
 }
 
+// Determine the actual output device.  F64 outputs must stay on CPU because
+// MLX (the GPU backend) does not support 64-bit floating-point buffers.
 Device pick_out_device(Device requested, Dtype dt) {
     if (requested == Device::GPU && dt == Dtype::F64)
         return Device::CPU;
     return requested;
 }
 
+// Read the i-th scalar element from a CpuStorage as a double, casting from
+// whatever element dtype the storage holds.  Used by histogram2d and
+// histogramdd where the loop-level type must be uniform (double) regardless
+// of the input tensor's dtype.
 double read_double(const CpuStorage& s, std::size_t i, Dtype dt) {
     switch (dt) {
     case Dtype::F32:
@@ -55,6 +75,9 @@ double read_double(const CpuStorage& s, std::size_t i, Dtype dt) {
     }
 }
 
+// Allocate a 1-D F64 tensor of shape (bins+1,) containing uniformly spaced
+// bin boundary values from `lo` to `hi` inclusive.  The last entry is forced
+// to exactly `hi` to avoid floating-point accumulation drift at the right edge.
 TensorImplPtr build_edges(double lo, double hi, std::int64_t bins) {
     Shape sh{bins + 1};
     auto cpu = allocate_cpu(sh, Dtype::F64);
@@ -62,12 +85,19 @@ TensorImplPtr build_edges(double lo, double hi, std::int64_t bins) {
     const double step = (hi - lo) / static_cast<double>(bins);
     for (std::int64_t i = 0; i <= bins; ++i)
         dst[i] = lo + static_cast<double>(i) * step;
+    // Assign the last edge exactly to avoid rounding errors that could leave
+    // the rightmost boundary slightly below `hi`.
     dst[bins] = hi;
     return fresh(Storage{std::move(cpu)}, std::move(sh), Dtype::F64, Device::CPU);
 }
 
 }  // namespace
 
+// Count elements of `a` into `bins` uniform bins over [lo, hi).  Delegates
+// the per-element bucketing to the CPU backend's histogram_forward kernel.
+// After counting, the edge array is constructed via build_edges and both
+// outputs are optionally transferred back to the input device (except when
+// dtype is F64, which must remain on CPU).
 std::vector<TensorImplPtr>
 histogram_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
     Validator::input(a, "histogram.a").non_null();
@@ -91,6 +121,8 @@ histogram_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bo
         fresh(std::move(final_counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
     auto edges = build_edges(lo, hi, bins);
 
+    // If the output device is GPU (and dtype is not F64) transfer the edge
+    // tensor to the GPU so both outputs live on the same device.
     if (out_dev == Device::GPU) {
         edges = fresh(backend::Dispatcher::for_device(Device::GPU)
                           .from_cpu(storage_cpu(edges->storage()), edges->shape()),
@@ -99,6 +131,15 @@ histogram_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bo
     return {counts_t, edges};
 }
 
+// Joint 2-D histogram of paired observations (a[i], b[i]).  Both inputs must
+// have identical shapes (they are treated as flat parallel arrays of N samples).
+// The count tensor has shape (bins_a, bins_b); element [ia, ib] accumulates
+// points whose x-value falls in x-bin ia and whose y-value falls in y-bin ib.
+// The edge tensor concatenates the x-edges (length bins_a+1) followed by the
+// y-edges (length bins_b+1) into a single 1-D output of length
+// (bins_a + bins_b + 2) for compact return.
+// Samples outside either range are silently skipped.  Elements that land
+// exactly on the right boundary are clamped to the last bin.
 std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
                                           const TensorImplPtr& b,
                                           std::int64_t bins_a,
@@ -136,6 +177,8 @@ std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
             continue;
         std::int64_t ia = static_cast<std::int64_t>((va - lo_a) / step_a);
         std::int64_t ib = static_cast<std::int64_t>((vb - lo_b) / step_b);
+        // Clamp to last bin: a value exactly equal to the right boundary would
+        // otherwise map to an out-of-range index one past the last bin.
         if (ia >= bins_a)
             ia = bins_a - 1;
         if (ib >= bins_b)
@@ -144,6 +187,8 @@ std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
     }
 
     if (density) {
+        // Normalise so that integrating over all cells gives 1:
+        // density[i,j] = count[i,j] / (step_a * step_b * N).
         const double area = step_a * step_b * n;
         for (std::size_t i = 0; i < (std::size_t)(bins_a * bins_b); ++i)
             dst[i] /= area;
@@ -153,6 +198,8 @@ std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
     auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
     auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
 
+    // Build independent edge arrays for each axis, then pack them into a
+    // single concatenated 1-D edge tensor to match the declared return layout.
     auto ea = build_edges(lo_a, hi_a, bins_a);
     auto eb = build_edges(lo_b, hi_b, bins_b);
     Shape edge_shape{bins_a + 1 + bins_b + 1};
@@ -166,6 +213,15 @@ std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
     return {counts_t, edges_t};
 }
 
+// N-dimensional histogram from the rows of a 2-D input matrix of shape (N, D).
+// Each row `a[i, :]` is a D-dimensional data point.  The output counts tensor
+// has shape equal to `bins` (one entry per dimension).  The output edge tensor
+// is a 1-D concatenation of per-dimension edge arrays (each of length bins[d]+1).
+//
+// The flat index for a data point is computed using a pre-computed row-major
+// stride vector so that multi-dimensional bin addressing does not require
+// nested indexing.  Points outside any dimension's range are silently skipped.
+// Values exactly on the right boundary are clamped to the last bin.
 std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
                                           std::vector<std::int64_t> bins,
                                           std::vector<std::pair<double, double>> ranges,
@@ -181,6 +237,7 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
 
     const auto ca = to_cpu(a);
 
+    // Pre-compute the bin width for each dimension and validate range ordering.
     std::vector<double> step(D);
     for (std::int64_t d = 0; d < D; ++d) {
         if (ranges[d].second <= ranges[d].first)
@@ -193,6 +250,8 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
     auto* dst = reinterpret_cast<double*>(counts.ptr.get());
     std::memset(dst, 0, counts.nbytes);
 
+    // Row-major strides over the counts tensor so that the flat index for a
+    // multi-dimensional bin address can be accumulated in a single pass.
     Stride stride(D);
     if (D > 0) {
         stride.back() = 1;
@@ -210,6 +269,7 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
                 break;
             }
             std::int64_t bd = static_cast<std::int64_t>((v - ranges[d].first) / step[d]);
+            // Clamp to the last bin to handle values at exactly the right edge.
             if (bd >= bins[d])
                 bd = bins[d] - 1;
             flat += static_cast<std::size_t>(bd) * static_cast<std::size_t>(stride[d]);
@@ -219,6 +279,8 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
     }
 
     if (density) {
+        // Each cell is normalised by (cell_volume * N) so the histogram is a
+        // probability density: integrating over all cells gives 1.
         double cell_volume = 1.0;
         for (auto s : step)
             cell_volume *= s;
@@ -232,6 +294,8 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
     auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
     auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
 
+    // Concatenate all per-dimension edge arrays into a single 1-D tensor.
+    // The total length is sum(bins[d]+1) for d in [0, D).
     std::int64_t edge_total = 0;
     for (auto b_ : bins)
         edge_total += (b_ + 1);
@@ -244,6 +308,7 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
         const double hi = ranges[d].second;
         for (std::int64_t i = 0; i <= bins[d]; ++i)
             edst[off + i] = lo + static_cast<double>(i) * step[d];
+        // Pin the last edge exactly to `hi` to avoid drift from repeated addition.
         edst[off + bins[d]] = hi;
         off += bins[d] + 1;
     }

@@ -1,3 +1,11 @@
+// lucid/_C/ops/ufunc/Activation.cpp
+//
+// Implementations of activation backward nodes and forward entry points.
+// Activations with complex backward formulas (gelu, elu, selu, mish,
+// hard_sigmoid, hard_swish) delegate to the backend dispatcher so that
+// platform-specific implementations (Accelerate on CPU, MLX on GPU) can be
+// used without duplicating the math here.
+
 #include "Activation.h"
 
 #include <cmath>
@@ -17,8 +25,10 @@
 
 namespace lucid {
 
+// relu — AmpPolicy::KeepInput: ReLU is valid on integer types.
 const OpSchema ReluBackward::schema_v1{"relu", 1, AmpPolicy::KeepInput, true};
 
+// dL/dx = (x > 0) * dL/dy: zero out gradient where x was non-positive.
 Storage ReluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage mask = positive_mask_storage(saved_inputs_[0], n, dtype_, device_);
@@ -30,8 +40,12 @@ TensorImplPtr relu_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(ReluBackward)
 
+// sigmoid — AmpPolicy::Promote: output requires float for stability.
 const OpSchema SigmoidBackward::schema_v1{"sigmoid", 1, AmpPolicy::Promote, true};
 
+// dL/dx = z*(1-z) * dL/dy  where z = saved_output_.
+// Building (1-z) via mul_scalar(-1) + add_scalar(1) avoids a dedicated
+// subtract kernel, reusing storage primitives already in the hot path.
 Storage SigmoidBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -46,8 +60,16 @@ TensorImplPtr sigmoid_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SigmoidBackward)
 
+// silu — AmpPolicy::Promote; gradient derived analytically from y = x*σ(x).
 const OpSchema SiluBackward::schema_v1{"silu", 1, AmpPolicy::Promote, true};
 
+// dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy.
+// Step-by-step using storage primitives:
+//   sx       = sigmoid(x)
+//   (1-sx)   = -sx + 1
+//   x*(1-sx) = x * (1-sx)
+//   (1+…)    = x*(1-sx) + 1
+//   dx       = sx * (1 + x*(1-sx))
 Storage SiluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -65,8 +87,12 @@ TensorImplPtr silu_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SiluBackward)
 
+// gelu — ForceFP32 because the tanh approximation used inside the backend is
+// not numerically safe in half precision.
 const OpSchema GeluBackward::schema_v1{"gelu", 1, AmpPolicy::ForceFP32, true};
 
+// Delegate to the backend; the exact formula involves the Gaussian CDF
+// 0.5*(1 + erf(x/sqrt(2))) and its derivative.
 Storage GeluBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).gelu_backward(saved_inputs_[0], g, out_shape_,
                                                                   dtype_);
@@ -77,14 +103,18 @@ TensorImplPtr gelu_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(GeluBackward)
 
+// leaky_relu — KeepInput (valid for integer slopes).
 const OpSchema LeakyReluBackward::schema_v1{"leaky_relu", 1, AmpPolicy::KeepInput, true};
 
+// dL/dx = (x > 0 ? 1 : slope_) * dL/dy  (leaky mask).
 Storage LeakyReluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage mask = leaky_mask_storage(saved_inputs_[0], slope_, n, dtype_, device_);
     return multiply_storages(g, mask, n, dtype_, device_);
 }
 
+// Custom forward: the slope parameter must be captured on the backward node,
+// which is not possible through the standard dispatch() path.
 TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
     Validator::input(a, "leaky_relu.a").non_null();
 
@@ -106,8 +136,10 @@ TensorImplPtr leaky_relu_op(const TensorImplPtr& a, double slope) {
 }
 LUCID_REGISTER_OP(LeakyReluBackward)
 
+// softplus — ForceFP32 because log(1 + e^x) overflows in float16.
 const OpSchema SoftplusBackward::schema_v1{"softplus", 1, AmpPolicy::ForceFP32, true};
 
+// dL/dx = sigmoid(x) * dL/dy  (derivative of log(1 + e^x) is sigmoid(x)).
 Storage SoftplusBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage sx = sigmoid_storage(saved_inputs_[0], n, dtype_, device_);
@@ -119,13 +151,18 @@ TensorImplPtr softplus_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SoftplusBackward)
 
+// elu — ForceFP32; backward depends on alpha_ captured in the node.
 const OpSchema EluBackward::schema_v1{"elu", 1, AmpPolicy::ForceFP32, true};
 
+// Delegate to the backend because the piecewise formula (1 if x>=0 else
+// alpha*e^x) requires a conditional that the generic storage primitives do
+// not express without an explicit branch kernel.
 Storage EluBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).elu_backward(saved_inputs_[0], g, out_shape_,
                                                                  dtype_, alpha_);
 }
 
+// Custom forward: alpha_ must be captured on the backward node.
 TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
     Validator::input(a, "elu.a").non_null();
 
@@ -147,8 +184,11 @@ TensorImplPtr elu_op(const TensorImplPtr& a, double alpha) {
 }
 LUCID_REGISTER_OP(EluBackward)
 
+// selu — ForceFP32; fixed α/λ constants embedded in the backend.
 const OpSchema SeluBackward::schema_v1{"selu", 1, AmpPolicy::ForceFP32, true};
 
+// Delegate; the backend applies the standard SELU backward with its fixed
+// self-normalising constants.
 Storage SeluBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).selu_backward(saved_inputs_[0], g, out_shape_,
                                                                   dtype_);
@@ -159,8 +199,11 @@ TensorImplPtr selu_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SeluBackward)
 
+// mish — ForceFP32; composed function requires tanh and softplus in backward.
 const OpSchema MishBackward::schema_v1{"mish", 1, AmpPolicy::ForceFP32, true};
 
+// Delegate; the backend computes d/dx[x*tanh(log(1+e^x))] which involves the
+// product rule applied to tanh(softplus(x)).
 Storage MishBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).mish_backward(saved_inputs_[0], g, out_shape_,
                                                                   dtype_);
@@ -171,8 +214,10 @@ TensorImplPtr mish_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(MishBackward)
 
+// hard_sigmoid — KeepInput; piecewise linear, valid for float inputs.
 const OpSchema HardSigmoidBackward::schema_v1{"hard_sigmoid", 1, AmpPolicy::KeepInput, true};
 
+// Delegate; the backend returns 1/6 inside the active region, 0 outside.
 Storage HardSigmoidBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).hard_sigmoid_backward(saved_inputs_[0], g,
                                                                           out_shape_, dtype_);
@@ -183,8 +228,10 @@ TensorImplPtr hard_sigmoid_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(HardSigmoidBackward)
 
+// hard_swish — KeepInput; piecewise linear backward.
 const OpSchema HardSwishBackward::schema_v1{"hard_swish", 1, AmpPolicy::KeepInput, true};
 
+// Delegate; the backend handles the three-region piecewise formula.
 Storage HardSwishBackward::grad_formula(const Storage& g) {
     return backend::Dispatcher::for_device(device_).hard_swish_backward(saved_inputs_[0], g,
                                                                         out_shape_, dtype_);
@@ -195,8 +242,10 @@ TensorImplPtr hard_swish_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(HardSwishBackward)
 
+// relu6 — KeepInput; gradient is non-zero only in the open interval (0, 6).
 const OpSchema Relu6Backward::schema_v1{"relu6", 1, AmpPolicy::KeepInput, true};
 
+// dL/dx = (0 < x < 6) * dL/dy  using an in-range boolean mask.
 Storage Relu6Backward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage mask = in_range_mask_storage(saved_inputs_[0], 0.0, 6.0, n, dtype_, device_);

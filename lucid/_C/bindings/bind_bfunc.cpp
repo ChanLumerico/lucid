@@ -1,3 +1,18 @@
+// lucid/_C/bindings/bind_bfunc.cpp
+//
+// Registers all binary tensor operations on the top-level engine module.
+// Binary ops fall into four groups:
+//   1. Differentiable element-wise arithmetic (add, sub, mul, div, pow,
+//      maximum, minimum) — registered via the bind_binary<> helper which reads
+//      the Python name from BackwardNode::schema_v1.
+//   2. matmul and contraction ops (dot, inner, outer, tensordot) — registered
+//      individually because their signatures differ.
+//   3. Comparison ops (equal, not_equal, greater, etc.) — no backward node;
+//      output is always Bool dtype.
+//   4. Bitwise ops (bitwise_and, bitwise_or, bitwise_xor) — integer tensors only.
+//   5. In-place variants (add_, sub_, ...) — mutate `a` in-place, returning it;
+//      the trailing underscore follows PyTorch convention.
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -24,7 +39,11 @@ namespace py = pybind11;
 
 namespace lucid::bindings {
 
+// Registers all binary ops on the module.
 void register_bfunc(py::module_& m) {
+    // Differentiable element-wise arithmetic ops.  bind_binary reads the Python
+    // name from each BackwardNode's schema so op name and registry entry stay
+    // in sync without manual string literals.
     bind_binary<AddBackward>(m, &add_op, "Element-wise a + b (vDSP_vadd).");
     bind_binary<SubBackward>(m, &sub_op, "Element-wise a - b (vDSP_vsub).");
     bind_binary<MulBackward>(m, &mul_op, "Element-wise a * b (vDSP_vmul).");
@@ -33,9 +52,12 @@ void register_bfunc(py::module_& m) {
     bind_binary<MaximumBackward>(m, &maximum_op, "Element-wise max(a, b) (vDSP_vmax).");
     bind_binary<MinimumBackward>(m, &minimum_op, "Element-wise min(a, b) (vDSP_vmin).");
 
+    // matmul is registered manually because its C++ op does not follow the
+    // standard binary signature (it handles batched dims internally).
     m.def("matmul", &matmul_op, py::arg("a"), py::arg("b"),
           "2-D matrix multiply a @ b (cblas_sgemm/dgemm via Apple AMX).");
 
+    // Comparison ops return Bool tensors and have no autograd support.
     m.def("equal", &equal_op, py::arg("a"), py::arg("b"));
     m.def("not_equal", &not_equal_op, py::arg("a"), py::arg("b"));
     m.def("greater", &greater_op, py::arg("a"), py::arg("b"));
@@ -43,10 +65,12 @@ void register_bfunc(py::module_& m) {
     m.def("less", &less_op, py::arg("a"), py::arg("b"));
     m.def("less_equal", &less_equal_op, py::arg("a"), py::arg("b"));
 
+    // Bitwise ops operate on integer-dtype tensors only.
     m.def("bitwise_and", &bitwise_and_op, py::arg("a"), py::arg("b"));
     m.def("bitwise_or", &bitwise_or_op, py::arg("a"), py::arg("b"));
     m.def("bitwise_xor", &bitwise_xor_op, py::arg("a"), py::arg("b"));
 
+    // Contraction ops with non-standard signatures.
     m.def("dot", &dot_op, py::arg("a"), py::arg("b"));
     m.def("inner", &inner_op, py::arg("a"), py::arg("b"));
     m.def("outer", &outer_op, py::arg("a"), py::arg("b"));
@@ -56,6 +80,8 @@ void register_bfunc(py::module_& m) {
     m.def("floordiv", &floordiv_op, py::arg("a"), py::arg("b"),
           "Element-wise floor(a / b). Output dtype is Int64.");
 
+    // In-place variants mutate `a` and return it.  They bypass the autograd
+    // graph (version counter is bumped to invalidate saved references).
     m.def("add_", &add_inplace_op, py::arg("a"), py::arg("b"));
     m.def("sub_", &sub_inplace_op, py::arg("a"), py::arg("b"));
     m.def("mul_", &mul_inplace_op, py::arg("a"), py::arg("b"));

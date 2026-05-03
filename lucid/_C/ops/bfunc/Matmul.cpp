@@ -1,3 +1,8 @@
+// lucid/_C/ops/bfunc/Matmul.cpp
+//
+// Implements MatmulBackward::forward, MatmulBackward::apply, and the matmul_op
+// free function.
+
 #include "Matmul.h"
 
 #include <utility>
@@ -27,6 +32,8 @@ const OpSchema MatmulBackward::schema_v1{"matmul", 1, AmpPolicy::Promote, true};
 
 namespace {
 
+// Build a MatmulOpts struct for use with IBackend::matmul from a pre-computed
+// NdMatmulInfo, optionally transposing either operand.
 backend::MatmulOpts matmul_opts(const NdMatmulInfo& info, bool transA, bool transB) {
     backend::MatmulOpts opts;
     opts.transA = transA;
@@ -38,6 +45,8 @@ backend::MatmulOpts matmul_opts(const NdMatmulInfo& info, bool transA, bool tran
     return opts;
 }
 
+// Return storage broadcast to dst_shape if src_shape differs; otherwise return
+// the original storage unchanged to avoid an unnecessary allocation.
 Storage broadcast_for_matmul(const Storage& storage,
                              const Shape& src_shape,
                              const Shape& dst_shape,
@@ -50,6 +59,16 @@ Storage broadcast_for_matmul(const Storage& storage,
 
 }  // namespace
 
+// Compute dA and dB from the upstream gradient tensor.
+//
+// Given C = A @ B  (shapes [batch, M, K] and [batch, K, N]):
+//   dA = grad_out @ B^T   → [batch, M, K]
+//   dB = A^T @ grad_out   → [batch, K, N]
+//
+// Both saved inputs are first broadcast to the shapes that were used during the
+// forward pass (info.a_bcast_shape and info.b_bcast_shape).  After the matmuls,
+// reduce_grad_to_shape collapses any batch dimensions that were broadcast-
+// expanded, recovering tensors with the original input shapes.
 std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
     const auto info = plan_nd_matmul(input_shapes_[0], input_shapes_[1]);
 
@@ -65,15 +84,18 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
     dB_info.M = info.K;
     dB_info.N = info.N;
 
+    // dA opts: grad_out [batch, M, N] @ B^T [batch, N, K] → [batch, M, K]
     backend::MatmulOpts dA_opts;
     dA_opts.M = info.M;
-    dA_opts.K = info.N;
-    dA_opts.N = info.K;
+    dA_opts.K = info.N;   // grad_out inner dim is N
+    dA_opts.N = info.K;   // output inner dim recovers K
     dA_opts.batch = info.batch;
     dA_opts.transB = true;
+
+    // dB opts: A^T [batch, K, M] @ grad_out [batch, M, N] → [batch, K, N]
     backend::MatmulOpts dB_opts;
-    dB_opts.M = info.K;
-    dB_opts.K = info.M;
+    dB_opts.M = info.K;   // output leading dim is K
+    dB_opts.K = info.M;   // inner dim is M
     dB_opts.N = info.N;
     dB_opts.batch = info.batch;
     dB_opts.transA = true;
@@ -82,11 +104,19 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
         backend::Dispatcher::for_device(device_).matmul(grad_out, b_use, dA_opts, dtype_);
     Storage dB_s =
         backend::Dispatcher::for_device(device_).matmul(a_use, grad_out, dB_opts, dtype_);
+
+    // Sum over any batch dimensions that were broadcast-expanded.
     dA_s = reduce_grad_to_shape(dA_s, info.a_bcast_shape, input_shapes_[0], dtype_, device_);
     dB_s = reduce_grad_to_shape(dB_s, info.b_bcast_shape, input_shapes_[1], dtype_, device_);
     return {std::move(dA_s), std::move(dB_s)};
 }
 
+// Execute the forward matmul, open a profiler scope, compute FLOPs, and wire
+// the backward node if gradient tracking is active.
+//
+// Validation requires:
+//   - both inputs non-null, same dtype and device
+//   - both inputs at least 2-D (plan_nd_matmul handles batch broadcasting)
 TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (!a || !b)
         ErrorBuilder("matmul").fail("null input");
@@ -104,6 +134,7 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
     const int M = info.M, N = info.N, K = info.K;
 
     OpScopeFull scope{MatmulBackward::schema_v1.name, a->device(), a->dtype(), info.out_shape};
+    // Each output element requires K multiplications and K-1 additions ≈ 2*K MACs.
     scope.set_flops(static_cast<std::int64_t>(2) * info.batch * M * N * K);
 
     Storage a_use =

@@ -1,3 +1,10 @@
+// lucid/_C/ops/ufunc/Softmax.cpp
+//
+// Softmax forward and Jacobian-vector backward.  The backward is fully
+// delegated to the backend (IBackend::softmax_backward) which computes:
+//   dL/dx_i = p_i * (dL/dy_i - sum_j p_j * dL/dy_j)
+// in a single fused pass to avoid materialising the N×N Jacobian.
+
 #include "Softmax.h"
 
 #include "../../autograd/AccumulateGrad.h"
@@ -16,12 +23,19 @@
 
 namespace lucid {
 
+// ForceFP32 prevents probability underflow; softmax on float16 is numerically
+// unreliable for large logit magnitudes.
 const OpSchema SoftmaxBackward::schema_v1{"softmax", 1, AmpPolicy::ForceFP32, true};
 
+// Normalise the axis, dispatch the forward softmax, and wire the backward node.
+// The output tensor is saved on the node (saved_output_) so apply() can use p
+// directly without re-running the forward pass.
+// set_flops(*5): each element needs roughly exp + div + two adds + a compare.
 TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     Validator::input(a, "softmax.a").non_null();
 
     const int ndim = static_cast<int>(a->shape().size());
+    // Normalise negative axis to a canonical non-negative index.
     const int wrapped = axis < 0 ? axis + ndim : axis;
     if (wrapped < 0 || wrapped >= ndim)
         ErrorBuilder("softmax").index_error("axis out of range");
@@ -38,12 +52,15 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
         return result;
 
     auto bwd = std::make_shared<SoftmaxBackward>();
-    bwd->saved_output_ = result->storage();
+    bwd->saved_output_ = result->storage();  // p = softmax(x)
     bwd->axis_ = wrapped;
+    // wire_autograd called with save_output=false because we already set
+    // saved_output_ manually above.
     kernel::NaryKernel<SoftmaxBackward, 1>::wire_autograd(std::move(bwd), {a}, result, false);
     return result;
 }
 
+// dL/dx = p * (dL/dy - dot(dL/dy, p)) along axis_, computed by the backend.
 std::vector<Storage> SoftmaxBackward::apply(Storage grad_out) {
     return {backend::Dispatcher::for_device(device_).softmax_backward(
         saved_output_, grad_out, input_shapes_[0], axis_, dtype_)};

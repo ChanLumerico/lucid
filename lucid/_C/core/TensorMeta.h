@@ -1,3 +1,10 @@
+// lucid/_C/core/TensorMeta.h
+//
+// Plain-data structs that carry the metadata associated with a TensorImpl.
+// Separating these structs from TensorImpl itself makes the autograd layer
+// and view-creation code easier to read: callers can manipulate a
+// TensorMeta or AutogradMeta in isolation without touching the full tensor.
+
 #pragma once
 
 #include <cstdint>
@@ -13,12 +20,21 @@ namespace lucid {
 
 class Node;
 
+// Immutable geometric and type description of a tensor.
+//
+// TensorMeta is stored directly inside TensorImpl (not on the heap) so that
+// shape/dtype/device queries are a single pointer dereference.  Views share
+// the same Storage as their base tensor but carry an independent TensorMeta
+// (different shape, stride, or even offset).
 struct TensorMeta {
     Shape shape;
     Stride stride;
     Dtype dtype = Dtype::F32;
     Device device = Device::CPU;
 
+    // Returns the product of all dimension sizes, or 1 for a scalar (empty
+    // shape).  Does not guard against negative dimensions — callers should
+    // use shape_numel() from Shape.h when dynamic negative dims are possible.
     std::size_t numel() const noexcept {
         std::size_t n = 1;
         for (auto d : shape)
@@ -26,6 +42,10 @@ struct TensorMeta {
         return n;
     }
 
+    // Returns true if the stored stride vector matches the row-major
+    // (C-contiguous) stride for elem_size-byte elements.  Used by
+    // is_contiguous() in TensorImpl and by op kernels that require
+    // contiguous input.
     bool is_contiguous_for(std::size_t elem_size) const noexcept {
         if (shape.empty())
             return true;
@@ -41,6 +61,22 @@ struct TensorMeta {
     }
 };
 
+// Autograd bookkeeping for a single tensor.
+//
+// This struct is stored as an std::optional<AutogradMeta> inside TensorImpl
+// and is only heap-constructed when a tensor actually participates in the
+// autograd graph (requires_grad == true or a grad_fn is attached).  Tensors
+// that never need gradients pay zero overhead for the optional.
+//
+// Invariants:
+//   - is_leaf == true for tensors created directly by the user (no grad_fn).
+//   - is_leaf == false for outputs of differentiable operations; such tensors
+//     always have a non-null grad_fn.
+//   - grad holds the accumulated gradient Storage after backward(); it is
+//     cleared by zero_grad().
+//   - version is bumped on every in-place write via TensorImpl::bump_version();
+//     autograd saves the pre-forward version and raises VersionMismatch if the
+//     tensor is mutated between forward and backward.
 struct AutogradMeta {
     bool requires_grad = false;
     bool is_leaf = true;

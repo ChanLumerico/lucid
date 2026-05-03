@@ -1,3 +1,33 @@
+// lucid/_C/bindings/bind_nn.cpp
+//
+// Registers all neural-network ops on the `lucid._C.engine.nn` sub-module
+// (created in bind.cpp).  The sub-module is imported by the Python layer as
+// `lucid._C.engine.nn` and re-exported through `lucid.nn.functional`.
+//
+// Ops covered:
+//   - Fully-connected: linear, bilinear_layer
+//   - Normalisation: layer_norm, rms_norm, batch_norm{,1d,3d,eval},
+//     group_norm, lp_normalize, global_response_norm
+//   - Dropout family: dropout, dropoutnd (spatial), alpha_dropout,
+//     drop_block, drop_path
+//   - Convolution: conv{1,2,3}d, conv_transpose{1,2,3}d, unfold
+//   - Pooling: max_pool{1,2,3}d, avg_pool{1,2,3}d,
+//     adaptive_{max,avg}_pool{1,2,3}d
+//   - Losses: mse_loss, bce_loss, bce_with_logits, cross_entropy_loss,
+//     nll_loss, huber_loss
+//   - Attention: scaled_dot_product_attention,
+//     scaled_dot_product_attention_with_weights
+//   - Embeddings: embedding, sinusoidal_pos_embedding, rotary_pos_embedding
+//   - Spatial / vision: affine_grid, grid_sample,
+//     interpolate_{bilinear,trilinear,nearest_2d,nearest_3d},
+//     one_hot, rotate
+//   - Recurrent: lstm_forward
+//
+// Dropout ops accept an optional `generator` keyword (None = default_generator()).
+// The generator pointer is resolved at the Python→C++ boundary inside each lambda.
+// LSTM's lstm_forward lambda handles optional h0/c0 (None → zeros) and packs
+// IBackend::LstmOpts before delegating to lstm_op.
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -30,7 +60,10 @@ namespace py = pybind11;
 
 namespace lucid::bindings {
 
+// Registers all nn ops on the sub-module `m` (engine.nn).
 void register_nn(py::module_& m) {
+    // linear delegates directly; its C++ signature already matches pybind11
+    // argument conventions (x, W, b → TensorImplPtr).
     m.def("linear", &linear_op, py::arg("x"), py::arg("W"), py::arg("b"),
           "Fused linear: y = x @ W^T + b. Backward returns (dx, dW, db).");
 
@@ -41,6 +74,10 @@ void register_nn(py::module_& m) {
     m.def("rms_norm", &rms_norm_op, py::arg("x"), py::arg("gamma"), py::arg("eps") = 1e-5,
           "RMSNorm: y = γ · x / √(mean(x²)+ε). No mean subtraction, no β.");
 
+    // Dropout ops share a common pattern: py::object gen_obj is accepted as
+    // py::none() by default and cast to Generator* only when non-None.  This
+    // avoids making Generator a required argument at the Python call site while
+    // still allowing reproducible sequences via an explicit Generator instance.
     m.def(
         "dropout",
         [](const TensorImplPtr& a, double p, bool training, py::object gen_obj) {
@@ -54,6 +91,9 @@ void register_nn(py::module_& m) {
         "Inverted dropout. Training: y = x · Bernoulli(1-p) / (1-p). "
         "Inference: identity. `generator=None` uses default_generator().");
 
+    // dropoutnd zeroes entire channels rather than individual elements;
+    // suitable for convolutional feature maps where spatial correlation would
+    // make element-wise dropout ineffective.
     m.def(
         "dropoutnd",
         [](const TensorImplPtr& a, double p, bool training, py::object gen_obj) {
@@ -104,6 +144,10 @@ void register_nn(py::module_& m) {
         py::arg("generator") = py::none(),
         "Stochastic depth — per-sample dropout. Mask shape (B, 1, ..., 1).");
 
+    // Convolution ops: each conv{N}d variant takes separate per-axis stride,
+    // padding, and dilation scalars so callers are explicit about anisotropic
+    // kernels.  `groups` enables depthwise and grouped convolution.
+    // All three share the same per-parameter gradient API (dx, dW, db).
     m.def("conv1d", &conv1d_op, py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_l") = 1,
           py::arg("pad_l") = 0, py::arg("dilation_l") = 1, py::arg("groups") = 1,
           "1D convolution. x:(B,C_in,L), W:(C_out,C_in/G,KL), b:(C_out,). "
@@ -122,9 +166,14 @@ void register_nn(py::module_& m) {
           "3D convolution. x:(B,C_in,D,H,W), W:(C_out,C_in/G,KD,KH,KW), b:(C_out,). "
           "Backward returns (dx, dW, db).");
 
+    // unfold (im2col) extracts sliding local blocks from the input; the output
+    // layout matches PyTorch's unfold so it can feed gemm-based conv2d.
     m.def("unfold", &unfold_op, py::arg("x"), py::arg("kernel"), py::arg("stride"), py::arg("pad"),
           py::arg("dilation"), "im2col over an N-D input. Returns (B, C·prod(K), prod(O)).");
 
+    // Transposed convolutions.  opad_{d,h,w} adds extra output padding on the
+    // trailing edge to resolve ambiguity when stride > 1 produces multiple
+    // valid output sizes.
     m.def("conv_transpose1d", &conv_transpose1d_op, py::arg("x"), py::arg("W"), py::arg("b"),
           py::arg("stride_l") = 1, py::arg("pad_l") = 0, py::arg("opad_l") = 0,
           "1D transposed convolution. x:(B,C_in,L), W:(C_in,C_out,KL), b:(C_out,).");
@@ -138,6 +187,8 @@ void register_nn(py::module_& m) {
           py::arg("opad_h") = 0, py::arg("opad_w") = 0,
           "3D transposed convolution. x:(B,C_in,D,H,W), W:(C_in,C_out,KD,KH,KW).");
 
+    // Adaptive pooling: output size is specified directly; the kernel and
+    // stride are computed internally assuming uniform spatial partitioning.
     m.def("adaptive_max_pool1d", &adaptive_max_pool1d_op, py::arg("x"), py::arg("output_l"),
           "1D adaptive max pooling (uniform case: L must be divisible by output_l).");
     m.def("adaptive_max_pool2d", &adaptive_max_pool2d_op, py::arg("x"), py::arg("output_h"),
@@ -151,6 +202,8 @@ void register_nn(py::module_& m) {
     m.def("adaptive_avg_pool3d", &adaptive_avg_pool3d_op, py::arg("x"), py::arg("output_d"),
           py::arg("output_h"), py::arg("output_w"), "3D adaptive average pooling (uniform case).");
 
+    // Fixed-kernel pooling: stride=0 is a sentinel that the C++ op interprets
+    // as stride == kernel_size (non-overlapping, stride-equals-kernel pooling).
     m.def("max_pool1d", &max_pool1d_op, py::arg("x"), py::arg("kernel_l"), py::arg("stride_l") = 0,
           py::arg("pad_l") = 0, "1D max pooling. stride=0 means stride==kernel.");
     m.def("max_pool2d", &max_pool2d_op, py::arg("x"), py::arg("kernel_h"), py::arg("kernel_w"),
@@ -171,6 +224,9 @@ void register_nn(py::module_& m) {
           py::arg("stride_w") = 0, py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
           "3D average pooling. stride=0 means stride==kernel.");
 
+    // Normalisation ops.  The "pure-function" batch norm variants compute
+    // mean/var from the current mini-batch (training statistics only); the
+    // Module wrapper in lucid.nn manages running_mean / running_var separately.
     m.def("batch_norm1d", &batch_norm1d_op, py::arg("x"), py::arg("gamma"), py::arg("beta"),
           py::arg("eps") = 1e-5, "Pure-function BatchNorm1d. x:(B,C,L). γ,β:(C,).");
     m.def("batch_norm", &batch_norm_op, py::arg("x"), py::arg("gamma"), py::arg("beta"),
@@ -196,6 +252,13 @@ void register_nn(py::module_& m) {
           py::arg("beta"), py::arg("eps") = 1e-6,
           "ConvNeXt-v2 GRN: gamma·(x·Nx) + beta·x with Nx = ||x||_2 / mean.");
 
+    // Loss functions.  The `reduction` argument uses integer codes rather than
+    // a string to avoid std::string allocation on every forward call:
+    //   0 = None (return per-element tensor)
+    //   1 = Mean  (scalar)
+    //   2 = Sum   (scalar)
+    // Optional TensorImplPtr arguments (weight, pos_weight) default to a null
+    // shared_ptr which the C++ op treats as "no per-class weighting".
     m.def("mse_loss", &mse_loss_op, py::arg("input"), py::arg("target"), py::arg("reduction") = 1,
           "MSE loss. reduction: 0=None, 1=Mean, 2=Sum.");
     m.def("bce_loss", &bce_loss_op, py::arg("input"), py::arg("target"),
@@ -215,6 +278,11 @@ void register_nn(py::module_& m) {
     m.def("huber_loss", &huber_loss_op, py::arg("input"), py::arg("target"), py::arg("delta") = 1.0,
           py::arg("reduction") = 1, "Huber loss with parameter `delta`.");
 
+    // Attention ops.  scaled_dot_product_attention returns only the context
+    // tensor (grad-capable); the _with_weights variant also returns the softmax
+    // attention weight matrix, but that second output is detached (no autograd)
+    // and is intended for visualisation/inspection only.  The lambda unpacks
+    // the 2-element std::vector returned by the C++ op into a Python tuple.
     m.def("scaled_dot_product_attention", &scaled_dot_product_attention_op, py::arg("query"),
           py::arg("key"), py::arg("value"), py::arg("attn_mask") = TensorImplPtr{},
           py::arg("scale"), py::arg("is_causal") = false,
@@ -225,6 +293,7 @@ void register_nn(py::module_& m) {
         "scaled_dot_product_attention_with_weights",
         [](const TensorImplPtr& q, const TensorImplPtr& k, const TensorImplPtr& v,
            const TensorImplPtr& attn_mask, double scale, bool is_causal) {
+            // The C++ op returns {context, weights}; unpack to a 2-tuple.
             auto out =
                 scaled_dot_product_attention_with_weights_op(q, k, v, attn_mask, scale, is_causal);
             return py::make_tuple(out.at(0), out.at(1));
@@ -234,6 +303,7 @@ void register_nn(py::module_& m) {
         "As scaled_dot_product_attention but also returns the attention "
         "weights (detached — used for visualization/inspection).");
 
+    // Embedding lookup and positional encoding utilities.
     m.def("embedding", &embedding_op, py::arg("weight"), py::arg("indices"),
           py::arg("padding_idx") = -1,
           "Index-gather rows from weight ([N, D]) by indices. "
@@ -250,6 +320,7 @@ void register_nn(py::module_& m) {
           "derived from positions. interleaved=True uses (even, odd) pairs; "
           "False splits into two halves.");
 
+    // Spatial transformation and interpolation ops.
     m.def("affine_grid", &affine_grid_op, py::arg("theta"), py::arg("N"), py::arg("H"),
           py::arg("W"), py::arg("align_corners") = true,
           "Builds a sampling grid from (N, 2, 3) affine matrices. "
@@ -281,6 +352,15 @@ void register_nn(py::module_& m) {
           "Learned bilinear layer: y = x1 W x2 + b. "
           "x1: (..., D1), x2: (..., D2), W: (Dout, D1, D2), b: (Dout,).");
 
+    // lstm_forward is implemented as a lambda rather than a direct C++ op
+    // pointer because it needs to:
+    //   1. Validate and reshape the input to extract seq_len / batch / input_size.
+    //   2. Allocate zero h0 / c0 tensors on the correct device when the caller
+    //      passes None (common for the initial hidden state).
+    //   3. Pack IBackend::LstmOpts from the keyword arguments before calling
+    //      lstm_op.
+    //   4. Unpack the returned 3-element vector into a Python (output, h_n, c_n)
+    //      tuple via py::make_tuple.
     m.def(
         "lstm_forward",
         [](const TensorImplPtr& input, py::object h0_obj, py::object c0_obj,
@@ -293,6 +373,7 @@ void register_nn(py::module_& m) {
             if (in_shape.size() < 2)
                 throw std::invalid_argument("lstm_forward: input must be at least 2-D");
 
+            // Derive sequence/batch dimensions based on batch_first layout.
             const int seq_len =
                 batch_first ? static_cast<int>(in_shape[1]) : static_cast<int>(in_shape[0]);
             const int batch =
@@ -303,6 +384,8 @@ void register_nn(py::module_& m) {
             const Dtype dt = input->dtype();
             const Device dev = input->device();
 
+            // Allocate zeros for h0 / c0 when the caller passes None.
+            // Shape: (num_layers * num_dirs, batch, hidden_size).
             auto make_zeros = [&](int rows) -> TensorImplPtr {
                 Shape s{static_cast<std::int64_t>(rows), static_cast<std::int64_t>(batch),
                         static_cast<std::int64_t>(hidden_size)};
@@ -324,6 +407,7 @@ void register_nn(py::module_& m) {
             opts.bidirectional = bidirectional;
             opts.has_bias = has_bias;
 
+            // lstm_op returns {output, h_n, c_n}; unpack to a Python 3-tuple.
             auto results = lstm_op(input, h0, c0, weight_tensors, opts);
             return py::make_tuple(results[0], results[1], results[2]);
         },

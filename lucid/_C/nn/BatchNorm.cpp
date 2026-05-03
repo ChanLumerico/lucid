@@ -1,3 +1,17 @@
+// lucid/_C/nn/BatchNorm.cpp
+//
+// Training-mode Batch Normalization for 1-D, 2-D, and 3-D inputs.
+//
+// For each channel c, statistics are computed over the (B, S_total) axes:
+//   mean_c  = mean over all (b, spatial) pairs
+//   rstd_c  = 1 / sqrt(var_c + eps)
+//   y_{b,c,...} = (x_{b,c,...} - mean_c) * rstd_c * gamma_c + beta_c
+//
+// The forward delegates to IBackend::batch_norm_forward, which returns
+// [y, mean, rstd].  The backward delegates to IBackend::batch_norm_backward,
+// which returns [dx, d_gamma, d_beta].  Running-stats inference is handled by
+// BatchNormEvalBackward in NormExt.h.
+
 #include "BatchNorm.h"
 
 #include <vector>
@@ -36,6 +50,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     if (x->device() != gamma->device() || x->device() != beta->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(gamma->device())), "batch_norm");
+    // Rank check: x must be (B, C, S_0, ..., S_{N-1}).
     if (x->device() == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
         if (static_cast<int>(x->shape().size()) != N + 2)
@@ -56,6 +71,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
 
     OpScopeFull scope{BatchNormNdBackward<N>::schema_v1.name, x->device(), x->dtype(), x->shape()};
 
+    // batch_norm_forward returns [y, mean, rstd].
     auto forward = backend::Dispatcher::for_device(x->device())
                        .batch_norm_forward(x->storage(), gamma->storage(), beta->storage(), B, C,
                                            spatial_total, N, eps, x->shape(), x->dtype());
@@ -69,6 +85,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     bwd->C_ = C;
     for (int i = 0; i < N; ++i)
         bwd->S_[i] = S[i];
+    // saved_inputs_[0..2] will hold {x, gamma, beta}.
     kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, gamma, beta},
                                                                  out);
     return out;
@@ -80,6 +97,7 @@ std::vector<Storage> BatchNormNdBackward<N>::apply(Storage grad_out) {
     for (int i = 0; i < N; ++i)
         spatial_total *= this->S_[i];
 
+    // Returns [dx, d_gamma, d_beta].
     return backend::Dispatcher::for_device(this->device_)
         .batch_norm_backward(this->saved_inputs_[0], this->saved_inputs_[1], this->saved_mean_,
                              this->saved_rstd_, grad_out, this->B_, this->C_, spatial_total, N,

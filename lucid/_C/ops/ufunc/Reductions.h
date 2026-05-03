@@ -1,3 +1,19 @@
+// lucid/_C/ops/ufunc/Reductions.h
+//
+// Backward nodes and entry points for multi-axis reductions: sum, mean, prod,
+// max, min.  Each node inherits from ReduceOp<Derived> (an alias for
+// ReduceKernel<Derived>), which handles axis normalisation, dispatch, and the
+// autograd bookkeeping (saved reduce_axes_, keepdims_, full_input_shape_).
+//
+// Backward strategy per op:
+//   sum  — broadcast_back_for_reduce: expand the reduced gradient to the input
+//           shape by broadcasting along the collapsed axes.
+//   mean — same as sum, then divide by the number of reduced elements.
+//   prod — broadcast both the output and the gradient back to input shape, then
+//           compute grad * (prod_output / x).  Requires both input and output.
+//   max/min — builds an equality mask (argmax indicator), then multiplies the
+//             broadcast gradient by the mask.  Ties receive equal gradient.
+
 #pragma once
 
 #include <utility>
@@ -13,6 +29,10 @@
 
 namespace lucid {
 
+// Backward node for reduction sum along arbitrary axes.
+//
+// Gradient rule: broadcast the upstream gradient back to the input shape.
+// kSavesInput = false because sum backward needs no saved tensor.
 class LUCID_API SumBackward : public ReduceOp<SumBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -29,6 +49,11 @@ public:
     Storage grad_formula(const Storage& grad_out);
 };
 
+// Backward node for reduction mean along arbitrary axes.
+//
+// Gradient rule: broadcast the upstream gradient back to the input shape and
+// scale by 1/N, where N is the product of the reduced dimension sizes.
+// kSavesInput = false.
 class LUCID_API MeanBackward : public ReduceOp<MeanBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -45,16 +70,25 @@ public:
     Storage grad_formula(const Storage& grad_out);
 };
 
+// Backward node for reduction product along arbitrary axes.
+//
+// Gradient rule: dL/dx_i = dL/dy * (prod_y / x_i), i.e., the gradient is the
+// product of all *other* elements along the reduction axes.  Both input and
+// output must be saved.  Requires cpu_kernel and gpu_kernel because no single
+// IBackend::dispatch overload covers prod for all back-ends.
 class LUCID_API ProdBackward : public ReduceOp<ProdBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // CPU path: iterates axes in descending order (innermost last) to produce
+    // a correct sequential multi-axis product using Accelerate primitives.
     static CpuStorage cpu_kernel(const CpuStorage& a,
                                  const Shape& in_shape,
                                  const std::vector<int>& axes,
                                  bool keepdims,
                                  Dtype dt);
+    // GPU path: delegates to mlx::core::prod with keepdims.
     static GpuStorage gpu_kernel(const GpuStorage& a,
                                  const Shape& in_shape,
                                  const std::vector<int>& axes,
@@ -63,6 +97,12 @@ public:
     Storage grad_formula(const Storage& grad_out);
 };
 
+// Backward node for reduction maximum along arbitrary axes.
+//
+// Gradient rule: route the gradient only to positions where x == max(x).
+// Saves the *output* (the max value) to build the equality mask without
+// re-running the reduction.  Ties (multiple equal maxima) split the gradient
+// equally, matching NumPy/PyTorch behaviour.
 class LUCID_API MaxBackward : public ReduceOp<MaxBackward> {
 public:
     static constexpr bool kSavesOutput = true;
@@ -79,6 +119,11 @@ public:
     Storage grad_formula(const Storage& grad_out);
 };
 
+// Backward node for reduction minimum along arbitrary axes.
+//
+// Gradient rule: symmetric to MaxBackward — route gradient to positions where
+// x == min(x).  The equality mask is built by composing two ge_mask calls
+// (a==b iff a>=b && b>=a).
 class LUCID_API MinBackward : public ReduceOp<MinBackward> {
 public:
     static constexpr bool kSavesOutput = true;

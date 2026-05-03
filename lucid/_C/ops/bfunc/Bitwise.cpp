@@ -1,3 +1,8 @@
+// lucid/_C/ops/bfunc/Bitwise.cpp
+//
+// Implements the three bitwise binary operators by routing through a single
+// shared dispatch helper.  Floating-point dtypes are rejected before dispatch.
+
 #include "Bitwise.h"
 
 #include "../../backend/Dispatcher.h"
@@ -15,6 +20,8 @@ using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair_eq_shape;
 
+// Return true for dtypes that support bitwise operations.  Floating-point
+// types are excluded because their bit patterns are not meaningful as bitmasks.
 bool is_integer_or_bool(Dtype dt) {
     switch (dt) {
     case Dtype::Bool:
@@ -28,6 +35,15 @@ bool is_integer_or_bool(Dtype dt) {
     }
 }
 
+// Shared implementation for all bitwise binary operations.
+//
+// Op codes match the backend's bitwise_binary convention:
+//   0 = AND (&)
+//   1 = OR  (|)
+//   2 = XOR (^)
+//
+// The output dtype matches the input dtype.  No autograd node is attached
+// because bitwise operations on integers have no meaningful gradient.
 TensorImplPtr
 bit_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
     validate_pair_eq_shape(a, b, name);

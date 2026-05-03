@@ -1,3 +1,16 @@
+// lucid/_C/nn/ConvTransposeNd.cpp
+//
+// Transposed convolution (deconvolution) forward and backward.
+//
+// Output shape per spatial axis i:
+//   O[i] = (S[i] - 1) * stride[i] - 2 * pad[i] + K[i] + opad[i]
+//
+// FLOP estimate: 2 * B * C_out * prod(O) * C_in * prod(K)
+//
+// The forward delegates to IBackend::conv_transpose_nd_forward (col2im + GEMM
+// on CPU, MLX conv-transpose on GPU).  The backward delegates to
+// IBackend::conv_transpose_nd_backward, which returns [dx, dW, db].
+
 #include "ConvTransposeNd.h"
 
 #include <vector>
@@ -40,6 +53,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
                              std::string(device_name(W->device())), "conv_transpose");
     if (static_cast<int>(x->shape().size()) != N + 2)
         throw ShapeMismatch(x->shape(), Shape{}, "conv_transpose: x rank mismatch");
+    // Weight layout for transpose: (C_in, C_out, K_0, ..., K_{N-1}).
     if (static_cast<int>(W->shape().size()) != N + 2)
         throw ShapeMismatch(W->shape(), Shape{}, "conv_transpose: W rank mismatch");
     if (b->shape().size() != 1)
@@ -58,6 +72,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i) {
         S[i] = static_cast<int>(x->shape()[2 + i]);
         K[i] = static_cast<int>(W->shape()[2 + i]);
+        // Transposed-conv output formula.
         O[i] = (S[i] - 1) * stride[i] - 2 * pad[i] + K[i] + opad[i];
         if (O[i] <= 0)
             throw ShapeMismatch(x->shape(), W->shape(),
@@ -96,6 +111,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->pad_[i] = pad[i];
         bwd->opad_[i] = opad[i];
     }
+    // saved_inputs_[0..2] will hold {x, W, b}.
     kernel::NaryKernel<ConvTransposeNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, W, b},
                                                                      out);
     return out;
@@ -113,6 +129,7 @@ std::vector<Storage> ConvTransposeNdBackward<N>::apply(Storage grad_out) {
         O[i] = static_cast<int>(this->out_shape_[2 + i]);
     }
 
+    // Returns [dx, dW, db].
     return backend::Dispatcher::for_device(this->device_)
         .conv_transpose_nd_backward(grad_out, this->saved_inputs_[0], this->saved_inputs_[1], B,
                                     Cin, Cout, S, K, O, this->stride_, this->pad_, N, this->dtype_);
@@ -122,6 +139,7 @@ template class ConvTransposeNdBackward<1>;
 template class ConvTransposeNdBackward<2>;
 template class ConvTransposeNdBackward<3>;
 
+// Entry points pack scalar parameters into fixed-size arrays.
 TensorImplPtr conv_transpose1d_op(const TensorImplPtr& x,
                                   const TensorImplPtr& W,
                                   const TensorImplPtr& b,

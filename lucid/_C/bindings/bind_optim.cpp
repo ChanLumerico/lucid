@@ -1,3 +1,29 @@
+// lucid/_C/bindings/bind_optim.cpp
+//
+// Registers all optimizer classes and LR scheduler classes on the top-level
+// engine module.  The Python hierarchy mirrors PyTorch's torch.optim layout:
+//
+//   Optimizer (abstract base) — step(), zero_grad(), lr property
+//     SGD, ASGD
+//     Adam, AdamW, NAdam, RAdam, Adamax
+//     RMSprop, Rprop
+//     Adagrad, Adadelta
+//
+//   LRScheduler (abstract base) — step(), set_epoch(), epoch property
+//     StepLR, ExponentialLR, MultiStepLR, CosineAnnealingLR,
+//     LambdaLR, CyclicLR, NoamScheduler
+//
+//   ReduceLROnPlateau (not a LRScheduler subclass; uses metric-based step)
+//
+// All LRScheduler subclasses take an Optimizer& reference as their first
+// constructor argument.  py::keep_alive<1, 2>() ensures the Optimizer object
+// (argument 2, the bound "self" being constructed is 1) outlives the scheduler
+// — without this the C++ reference would dangle if Python GCs the optimizer
+// before the scheduler.
+//
+// pybind11/functional.h is included for LambdaLR which stores a
+// std::function<double(int64_t)> populated from a Python callable.
+
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -14,14 +40,22 @@ namespace py = pybind11;
 
 namespace lucid::bindings {
 
+// Registers all optimizer and LR scheduler classes.
 void register_optim(py::module_& m) {
+    // Optimizer is the abstract base class; Python cannot instantiate it
+    // directly but holds references through the concrete subclass hierarchy.
+    // `lr` is read/write so Python can override the learning rate after
+    // construction (e.g., manual LR warm-up without a scheduler).
     py::class_<Optimizer>(m, "Optimizer")
         .def("step", &Optimizer::step)
         .def("zero_grad", &Optimizer::zero_grad)
         .def_property("lr", &Optimizer::lr, &Optimizer::set_lr)
         .def_property_readonly("num_params", &Optimizer::num_params)
+        // state_dict_id is a monotonically-increasing counter incremented on
+        // each step() call; used by the Python layer to detect stale caches.
         .def_property_readonly("state_dict_id", &Optimizer::state_dict_id);
 
+    // SGD with optional Nesterov momentum and L2 weight decay.
     py::class_<SGD, Optimizer>(m, "SGD")
         .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
                       bool>(),
@@ -31,6 +65,8 @@ void register_optim(py::module_& m) {
         .def_property_readonly("momentum", &SGD::momentum)
         .def_property_readonly("weight_decay", &SGD::weight_decay);
 
+    // Adam (Kingma & Ba 2014).  amsgrad=True enables the AMSGrad variant which
+    // uses the maximum of past squared gradients for a tighter convergence bound.
     py::class_<Adam, Optimizer>(m, "Adam")
         .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
                       double, bool>(),
@@ -41,6 +77,8 @@ void register_optim(py::module_& m) {
         .def_property_readonly("beta2", &Adam::beta2)
         .def_property_readonly("eps", &Adam::eps);
 
+    // AdamW: decoupled weight decay applied directly to parameters rather than
+    // folded into the gradient (Loshchilov & Hutter 2017).
     py::class_<AdamW, Optimizer>(m, "AdamW")
         .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
                       double>(),
@@ -48,6 +86,7 @@ void register_optim(py::module_& m) {
              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 1e-2,
              "AdamW (decoupled weight decay, Loshchilov & Hutter 2017).");
 
+    // ASGD averages parameters after t0 steps; useful for convex problems.
     py::class_<ASGD, Optimizer>(m, "ASGD").def(
         py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double, double,
                  double>(),
@@ -101,11 +140,16 @@ void register_optim(py::module_& m) {
              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
              "Adamax: Adam with infinity norm.");
 
+    // LRScheduler is the abstract base for epoch-based schedules.  Subclasses
+    // store a raw reference to the Optimizer and adjust its lr on each call
+    // to step().  py::keep_alive<1, 2>() in each subclass constructor prevents
+    // Python from GC-ing the optimizer before the scheduler is destroyed.
     py::class_<LRScheduler>(m, "LRScheduler")
         .def("step", &LRScheduler::step)
         .def("set_epoch", &LRScheduler::set_epoch, py::arg("epoch"))
         .def_property_readonly("epoch", &LRScheduler::epoch);
 
+    // StepLR: multiply lr by gamma every step_size epochs.
     py::class_<StepLR, LRScheduler>(m, "StepLR")
         .def(py::init<Optimizer&, std::int64_t, double>(), py::arg("optimizer"),
              py::arg("step_size"), py::arg("gamma") = 0.1, py::keep_alive<1, 2>(),
@@ -125,11 +169,17 @@ void register_optim(py::module_& m) {
              py::arg("eta_min") = 0.0, py::keep_alive<1, 2>(),
              "Cosine annealing schedule with period T_max.");
 
+    // LambdaLR stores a Python callable via std::function.  pybind11 holds a
+    // GIL-safe reference to the callable inside the std::function object, so
+    // the Python function will not be GC-ed while the scheduler is alive.
     py::class_<LambdaLR, LRScheduler>(m, "LambdaLR")
         .def(py::init<Optimizer&, std::function<double(std::int64_t)>>(), py::arg("optimizer"),
              py::arg("lr_lambda"), py::keep_alive<1, 2>(),
              "Multiply base LR by lr_lambda(epoch). Lambda is a Python callable.");
 
+    // CyclicLR needs a nested Mode enum.  The enum is defined on the class
+    // object (cyclic) rather than on the module so it is accessed as
+    // engine.CyclicLR.Mode.Triangular from Python.
     py::class_<CyclicLR, LRScheduler> cyclic(m, "CyclicLR");
     py::enum_<CyclicLR::Mode>(cyclic, "Mode")
         .value("Triangular", CyclicLR::Mode::Triangular)
@@ -142,11 +192,18 @@ void register_optim(py::module_& m) {
         py::arg("gamma") = 1.0, py::keep_alive<1, 2>(),
         "Cyclic LR (Smith 2017): triangular wave between base_lr and max_lr.");
 
+    // Noam schedule: lr = factor * model_size^(-0.5) *
+    //   min(step^(-0.5), step * warmup_steps^(-1.5)).
+    // Commonly used in Transformer training (Vaswani et al. 2017).
     py::class_<NoamScheduler, LRScheduler>(m, "NoamScheduler")
         .def(py::init<Optimizer&, std::int64_t, std::int64_t, double>(), py::arg("optimizer"),
              py::arg("model_size"), py::arg("warmup_steps"), py::arg("factor") = 1.0,
              py::keep_alive<1, 2>(), "Transformer-style warmup-then-decay schedule.");
 
+    // ReduceLROnPlateau is NOT a LRScheduler subclass because its step(metric)
+    // signature differs — it receives a scalar metric value rather than
+    // advancing an epoch counter.  Mode and ThresholdMode nested enums are
+    // defined on the class object (rlrp) for the same reason as CyclicLR.Mode.
     py::class_<ReduceLROnPlateau> rlrp(m, "ReduceLROnPlateau");
     py::enum_<ReduceLROnPlateau::Mode>(rlrp, "Mode")
         .value("Min", ReduceLROnPlateau::Mode::Min)

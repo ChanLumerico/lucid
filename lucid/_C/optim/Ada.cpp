@@ -1,3 +1,9 @@
+// lucid/_C/optim/Ada.cpp
+//
+// CPU and GPU implementations of Adamax, Adagrad, and Adadelta.
+// Each optimizer's update logic is inlined into update_one() via a
+// typed lambda on CPU and MLX array expressions on GPU.
+
 #include "Ada.h"
 
 #include <cmath>
@@ -30,6 +36,7 @@ Adamax::Adamax(std::vector<std::shared_ptr<TensorImpl>> p,
       weight_decay_(wd),
       step_count_(0) {}
 
+// Allocate zero-initialized first-moment m_ and infinity-norm u_ buffers.
 void Adamax::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (m_.size() < params_.size())
         m_.resize(params_.size());
@@ -39,6 +46,8 @@ void Adamax::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p
     u_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
+// Advance the step count once per optimizer step, then apply the
+// Adamax update: EMA for m, element-wise max for u, bias-corrected step.
 void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     if (i == 0)
         ++step_count_;
@@ -56,6 +65,7 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
         }
         auto new_m = ::mlx::core::add(::mlx::core::multiply(mlx_scalar(beta1_, dt), *mg.arr),
                                       ::mlx::core::multiply(mlx_scalar(1.0 - beta1_, dt), g));
+        // Infinity-norm update: u = max(beta2 * u, |g|).
         auto new_u = ::mlx::core::maximum(::mlx::core::multiply(mlx_scalar(beta2_, dt), *ug.arr),
                                           ::mlx::core::abs(g));
         gpu_replace(mg, ::mlx::core::array(new_m), dt);
@@ -86,6 +96,7 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
             M[k] = b1T * M[k] + omb1 * g;
             const T abs_g = std::abs(g);
             const T b2u = b2T * U[k];
+            // Element-wise max: u = max(beta2 * u, |g|).
             U[k] = (b2u > abs_g) ? b2u : abs_g;
             P[k] -= step_size * (M[k] / (U[k] + epsT));
         }
@@ -107,6 +118,8 @@ Adagrad::Adagrad(
       weight_decay_(wd),
       initial_accumulator_value_(init_acc) {}
 
+// Allocate sum_sq_grad_ and pre-fill with initial_accumulator_value_
+// if non-zero, so early steps are not dominated by a near-zero divisor.
 void Adagrad::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (sum_sq_grad_.size() < params_.size())
         sum_sq_grad_.resize(params_.size());
@@ -134,6 +147,8 @@ void Adagrad::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& 
     }
 }
 
+// Accumulate g^2 into sum_sq_grad_ (monotonically increasing), then
+// take the normalized step: p -= lr * g / (sqrt(ss) + eps).
 void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     const auto dt = p->dtype();
     if (p->device() == Device::GPU) {
@@ -181,6 +196,8 @@ Adadelta::Adadelta(
     std::vector<std::shared_ptr<TensorImpl>> p, double lr, double rho, double eps, double wd)
     : Optimizer(std::move(p)), lr_(lr), rho_(rho), eps_(eps), weight_decay_(wd) {}
 
+// Allocate zero-initialized sq_avg_ (running squared-gradient average)
+// and accumulated_update_ (running squared-update average).
 void Adadelta::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (sq_avg_.size() < params_.size())
         sq_avg_.resize(params_.size());
@@ -190,6 +207,13 @@ void Adadelta::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>&
     accumulated_update_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
+// Apply the Adadelta step:
+//   sq_avg  = rho * sq_avg  + (1 - rho) * g^2
+//   update  = sqrt(acc_upd + eps) / sqrt(sq_avg + eps) * g
+//   acc_upd = rho * acc_upd + (1 - rho) * update^2
+//   p      -= lr * update
+// The ratio sqrt(acc_upd + eps) / sqrt(sq_avg + eps) acts as an
+// implicit step size that tracks the scale of recent parameter changes.
 void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     const auto dt = p->dtype();
     if (p->device() == Device::GPU) {
@@ -205,6 +229,8 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
             ::mlx::core::multiply(mlx_scalar(rho_, dt), *sq.arr),
             ::mlx::core::multiply(mlx_scalar(1.0 - rho_, dt), ::mlx::core::square(g)));
         gpu_replace(sq, ::mlx::core::array(new_sq), dt);
+        // Numerator uses the previous accumulated_update_ (before this step's
+        // update), matching the original Adadelta formulation.
         auto update = ::mlx::core::multiply(
             ::mlx::core::divide(::mlx::core::sqrt(::mlx::core::add(*acc.arr, mlx_scalar(eps_, dt))),
                                 ::mlx::core::sqrt(::mlx::core::add(new_sq, mlx_scalar(eps_, dt)))),

@@ -1,3 +1,15 @@
+// lucid/_C/backend/cpu/Reduce.cpp
+//
+// Implements the single-axis reduction primitives declared in Reduce.h.
+//
+// The generic axis_reduce template handles arbitrary outer/reduce/inner triples
+// using a three-level nested loop.  For sum_axis_f32/f64 when inner == 1
+// (i.e. the reduction is over the last, contiguous dimension), vDSP_sve /
+// vDSP_sveD is used instead because it performs a numerically stable
+// compensated summation in a single pass and is vectorised by Accelerate.
+// The other reductions (max, min, prod) use the generic template even for
+// inner == 1 because there is no vDSP equivalent with the same semantics.
+
 #include "Reduce.h"
 
 #include <algorithm>
@@ -9,6 +21,9 @@ namespace lucid::backend::cpu {
 
 namespace {
 
+// Generic single-axis reduction over the [outer, reduce_dim, inner] layout.
+// identity is the neutral element of op (0 for sum, -inf for max, +inf for
+// min, 1 for prod).
 template <typename T, typename Op>
 void axis_reduce(const T* in,
                  T* out,

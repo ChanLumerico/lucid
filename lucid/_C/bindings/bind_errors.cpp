@@ -1,3 +1,12 @@
+// lucid/_C/bindings/bind_errors.cpp
+//
+// Maps every C++ exception type defined in core/Error.h to a corresponding
+// Python exception class and installs a pybind11 exception translator so that
+// C++ throws propagate across the language boundary as typed Python exceptions.
+// All custom exception classes are subclasses of `LucidError` (itself a
+// subclass of Python's `RuntimeError`) so that Python catch-all handlers for
+// `RuntimeError` still work.
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -9,10 +18,20 @@ namespace py = pybind11;
 
 namespace lucid::bindings {
 
+// Registers the LucidError hierarchy as Python exception classes and installs
+// the global exception translator.  Must be called before any op bindings so
+// that errors thrown during subsequent registration are caught correctly.
 void register_errors(py::module_& m) {
+    // LucidError is the base; created via py::exception so pybind11 owns
+    // the type object.  All sub-classes are created dynamically via the
+    // Python type() builtin to avoid needing a separate py::exception<>
+    // instantiation for each leaf type.
     static py::object lucid_error_cls =
         py::exception<LucidError>(m, "LucidError", PyExc_RuntimeError);
 
+    // Creates a Python subclass of LucidError and exports it as m.<name>.
+    // Static locals ensure the class objects survive the module's lifetime
+    // without holding a Python reference on the stack.
     auto make_subclass = [&](const char* name) {
         py::object cls =
             py::module_::import("builtins")
@@ -30,6 +49,9 @@ void register_errors(py::module_& m) {
     static py::object index_error_cls = make_subclass("IndexError");
     static py::object not_implemented_cls = make_subclass("NotImplementedError");
 
+    // The translator is called for every active exception that crosses the
+    // C++/Python boundary.  More-derived types are checked first so that they
+    // shadow the base LucidError catch at the end.
     py::register_exception_translator([](std::exception_ptr p) {
         if (!p)
             return;

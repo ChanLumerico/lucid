@@ -1,3 +1,9 @@
+// lucid/_C/ops/ufunc/Trig.cpp
+//
+// Gradient formulas for the six trigonometric ops.  Each implementation only
+// uses cheap storage-level primitives (cos_storage, square_storage, …) — no
+// temporary TensorImpl allocations — to keep backward overhead minimal.
+
 #include "Trig.h"
 
 #include "../../core/OpRegistry.h"
@@ -6,6 +12,7 @@ namespace lucid {
 
 const OpSchema SinBackward::schema_v1{"sin", 1, AmpPolicy::Promote, true};
 
+// dL/dx = cos(x) * dL/dy.
 Storage SinBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage cosx = cos_storage(saved_inputs_[0], n, dtype_, device_);
@@ -19,6 +26,7 @@ LUCID_REGISTER_OP(SinBackward)
 
 const OpSchema CosBackward::schema_v1{"cos", 1, AmpPolicy::Promote, true};
 
+// dL/dx = -sin(x) * dL/dy.
 Storage CosBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage sinx = sin_storage(saved_inputs_[0], n, dtype_, device_);
@@ -33,6 +41,7 @@ LUCID_REGISTER_OP(CosBackward)
 
 const OpSchema TanBackward::schema_v1{"tan", 1, AmpPolicy::Promote, true};
 
+// dL/dx = dL/dy / cos^2(x)  (equivalent to dL/dy * sec^2(x)).
 Storage TanBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -48,6 +57,9 @@ LUCID_REGISTER_OP(TanBackward)
 
 const OpSchema AsinBackward::schema_v1{"arcsin", 1, AmpPolicy::Promote, true};
 
+// dL/dx = dL/dy / sqrt(1 - x^2).
+// Building the radicand as (-x^2 + 1) with mul_scalar(-1) + add_scalar(1)
+// avoids a separate subtract kernel.
 Storage AsinBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -65,6 +77,8 @@ LUCID_REGISTER_OP(AsinBackward)
 
 const OpSchema AcosBackward::schema_v1{"arccos", 1, AmpPolicy::Promote, true};
 
+// dL/dx = -dL/dy / sqrt(1 - x^2).
+// Same radicand construction as arcsin, plus a final negation.
 Storage AcosBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage x_sq = square_storage(saved_inputs_[0], n, dtype_, device_);
@@ -82,6 +96,7 @@ LUCID_REGISTER_OP(AcosBackward)
 
 const OpSchema AtanBackward::schema_v1{"arctan", 1, AmpPolicy::Promote, true};
 
+// dL/dx = dL/dy / (1 + x^2).
 Storage AtanBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 

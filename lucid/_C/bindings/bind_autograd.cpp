@@ -1,3 +1,14 @@
+// lucid/_C/bindings/bind_autograd.cpp
+//
+// Exposes the autograd graph and backward engine to Python.  Registers:
+//   - Node / AccumulateGrad — the two graph node types visible from Python
+//   - engine_backward() — triggers reverse-mode AD from a scalar root
+//   - register_custom_function() — wires up lucid.autograd.Function so Python
+//     subclasses can define custom forward/backward passes (delegates to
+//     CustomFunction.h for the heavy lifting)
+//   - _run_fusion_pass() — testing helper that runs the op-fusion pass on the
+//     backward graph and returns the number of fusions detected
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -12,15 +23,26 @@ namespace py = pybind11;
 
 namespace lucid::bindings {
 
+// Registers the backward engine, autograd node types, and the custom-function
+// registration helper.
 void register_autograd(py::module_& m) {
+    // Node is the abstract base for all backward-graph vertices.  It is held
+    // as shared_ptr<Node> because backward-graph edges are also shared_ptrs;
+    // Python may hold a reference longer than the graph itself.
     py::class_<Node, std::shared_ptr<Node>>(m, "Node")
         .def_property_readonly("sequence_nr", &Node::sequence_nr)
         .def("__repr__", [](const Node& n) {
             return "<lucid.Node seq=" + std::to_string(n.sequence_nr()) + ">";
         });
 
+    // AccumulateGrad is the leaf-variable sink node; Python code can detect it
+    // via isinstance(tensor.grad_fn, engine.AccumulateGrad).
     py::class_<AccumulateGrad, Node, std::shared_ptr<AccumulateGrad>>(m, "AccumulateGrad");
 
+    // engine_backward seeds the backward pass with a ones_like gradient so
+    // scalar loss tensors do not need an explicit gradient argument.  The
+    // CpuStorage{} seed is an empty storage; Engine::backward constructs the
+    // actual ones tensor internally.
     m.def(
         "engine_backward",
         [](std::shared_ptr<TensorImpl> root, bool retain_graph) {
@@ -29,8 +51,13 @@ void register_autograd(py::module_& m) {
         py::arg("root"), py::arg("retain_graph") = false,
         "Run backward starting at `root` with an implicit ones_like seed.");
 
+    // register_custom_function installs the Python-side CustomFunction class
+    // and the _register_python_backward_node() hook used by lucid.autograd.Function.
     lucid::register_custom_function(m);
 
+    // _run_fusion_pass is exposed for unit tests and profiling; in production
+    // it is called automatically inside Engine::backward before the BFS
+    // traversal.  Returns 0 if root has no grad_fn (leaf or detached tensor).
     m.def(
         "_run_fusion_pass",
         [](std::shared_ptr<TensorImpl> root) -> int {

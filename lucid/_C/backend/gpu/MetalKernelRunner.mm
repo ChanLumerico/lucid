@@ -1,4 +1,28 @@
-
+// lucid/_C/backend/gpu/MetalKernelRunner.mm
+//
+// Implements compile_metal_kernel and run_metal_kernel declared in
+// MetalKernelRunner.h.
+//
+// Pipeline cache:
+//   g_pipeline_cache maps a (source, function_name) hash to a PipelineEntry.
+//   g_cache_mutex serialises cache reads and writes.  Cache entries are never
+//   evicted; the cache is process-lifetime.  cache_key uses djb2-mix to
+//   combine the two string hashes.
+//
+// resolve_storage_to_mtl:
+//   Converts any Storage variant to an id<MTLBuffer> for use as a kernel
+//   argument.  SharedStorage provides a pre-existing MTLBuffer at zero cost.
+//   GpuStorage must be eval()'d first (to materialise the lazy graph), then
+//   a *copy* into a shared buffer is made via newBufferWithBytes — not
+//   newBufferWithBytesNoCopy — because MLX GPU-private allocations are not
+//   guaranteed to be page-aligned, which is a requirement of the no-copy API.
+//   CpuStorage takes the same copy path.  is_temp==true buffers are created
+//   inline and must not be released by the caller.
+//
+// run_metal_kernel buffer indexing convention (matches MSL [[buffer(i)]]):
+//   [0 .. n-1]     input buffers (one per element of inputs[])
+//   [n .. n+k-1]   scalar constants (passed via setBytes:length:atIndex:)
+//   [n+k]          output buffer
 
 #import <Metal/Metal.h>
 #import <Foundation/Foundation.h>
@@ -23,6 +47,7 @@ namespace lucid::gpu {
 
 namespace {
 
+// Returns the process-wide default Metal device, created once on first call.
 id<MTLDevice> runner_device() {
     static id<MTLDevice> dev = nil;
     static dispatch_once_t once;
@@ -32,17 +57,22 @@ id<MTLDevice> runner_device() {
     return dev;
 }
 
+// Cached pipeline state and command queue for a compiled kernel.
 struct PipelineEntry {
     id<MTLComputePipelineState> pso  = nil;
     id<MTLCommandQueue>         cq   = nil;
 };
 
+// Global pipeline cache and its mutex.  The cache is never evicted; entries
+// accumulate for the lifetime of the process.
 std::mutex g_cache_mutex;
 std::unordered_map<std::size_t, PipelineEntry> g_pipeline_cache;
 
+// Hashes (source, fn_name) into a single std::size_t using the boost-style
+// hash combine formula to reduce collision probability.
 std::size_t cache_key(const std::string& source, const std::string& fn_name) {
     std::size_t h = std::hash<std::string>{}(source);
-
+    // XOR with a golden-ratio-based mix to combine the two hashes.
     h ^= std::hash<std::string>{}(fn_name) + 0x9e3779b9 + (h << 6) + (h >> 2);
     return h;
 }
@@ -127,11 +157,17 @@ MetalKernel compile_metal_kernel(const std::string& source,
 
 namespace {
 
+// A resolved Metal buffer with a flag indicating whether it was allocated
+// temporarily (for GpuStorage and CpuStorage copies) and must be released
+// after the command buffer completes.  SharedStorage buffers are not temporary.
 struct BoundBuffer {
     id<MTLBuffer> buf     = nil;
     bool          is_temp = false;
 };
 
+// Resolves any Storage variant to a Metal buffer suitable for passing to a
+// compute kernel.  For SharedStorage the existing MTLBuffer is reused;
+// for GpuStorage and CpuStorage a temporary shared buffer is created by copy.
 BoundBuffer resolve_storage_to_mtl(const Storage& s, id<MTLDevice> dev) {
     if (storage_is_metal_shared(s)) {
         const auto& sh = storage_metal_shared(s);

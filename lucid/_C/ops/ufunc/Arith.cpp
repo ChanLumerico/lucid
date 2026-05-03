@@ -1,11 +1,20 @@
+// lucid/_C/ops/ufunc/Arith.cpp
+//
+// Implementations of the six basic arithmetic unary backward nodes: neg, abs,
+// sign, reciprocal, square, cube.  Each section defines the static OpSchema,
+// implements grad_formula, provides the public entry-point wrapper, and
+// registers the op in the global OpRegistry via LUCID_REGISTER_OP.
+
 #include "Arith.h"
 
 #include "../../core/OpRegistry.h"
 
 namespace lucid {
 
+// neg — AmpPolicy::Promote promotes integer inputs to float before dispatch.
 const OpSchema NegBackward::schema_v1{"neg", 1, AmpPolicy::Promote, true};
 
+// dL/dx = -dL/dy: negate the upstream gradient in-place over the output shape.
 Storage NegBackward::grad_formula(const Storage& g) {
     return negate_storage(g, shape_numel(out_shape_), dtype_, device_);
 }
@@ -15,8 +24,10 @@ TensorImplPtr neg_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(NegBackward)
 
+// abs — saves input so grad_formula can recompute sign(x).
 const OpSchema AbsBackward::schema_v1{"abs", 1, AmpPolicy::Promote, true};
 
+// dL/dx = sign(x) * dL/dy.
 Storage AbsBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage s = sign_storage(saved_inputs_[0], n, dtype_, device_);
@@ -28,8 +39,13 @@ TensorImplPtr abs_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(AbsBackward)
 
+// sign — AmpPolicy::KeepInput preserves the input dtype (sign is valid on
+// integers).  kHasGradient = false means UnaryKernel never wires autograd, so
+// grad_formula is only called if someone constructs a backward node manually;
+// the returned empty CpuStorage acts as a zero-gradient sentinel.
 const OpSchema SignBackward::schema_v1{"sign", 1, AmpPolicy::KeepInput, true};
 
+// Gradient of sign is zero almost everywhere (discontinuous at 0).
 Storage SignBackward::grad_formula(const Storage& g) {
     (void)g;
     return Storage{CpuStorage{}};
@@ -40,8 +56,10 @@ TensorImplPtr sign_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SignBackward)
 
+// reciprocal — saves input to compute x^2 in the backward pass.
 const OpSchema ReciprocalBackward::schema_v1{"reciprocal", 1, AmpPolicy::Promote, true};
 
+// dL/dx = -dL/dy / x^2.
 Storage ReciprocalBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -55,8 +73,10 @@ TensorImplPtr reciprocal_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(ReciprocalBackward)
 
+// square — saves input to compute 2*x in the backward pass.
 const OpSchema SquareBackward::schema_v1{"square", 1, AmpPolicy::Promote, true};
 
+// dL/dx = 2*x * dL/dy.
 Storage SquareBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -69,8 +89,10 @@ TensorImplPtr square_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(SquareBackward)
 
+// cube — saves input to compute 3*x^2 in the backward pass.
 const OpSchema CubeBackward::schema_v1{"cube", 1, AmpPolicy::Promote, true};
 
+// dL/dx = 3*x^2 * dL/dy.
 Storage CubeBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 

@@ -1,3 +1,12 @@
+// lucid/_C/optim/Optimizer.h
+//
+// Abstract base class for all parameter optimizers in the Lucid engine.
+// An Optimizer owns a flat list of shared TensorImpl parameter pointers
+// and drives the training loop by calling update_one() per parameter on
+// each optimizer step. Per-parameter state (momentum buffers, moment
+// estimates, etc.) is managed by derived classes and keyed by a slot
+// index that corresponds to the position of the parameter in params_.
+
 #pragma once
 
 #include <memory>
@@ -13,6 +22,16 @@ namespace lucid {
 
 class TensorImpl;
 
+// Owns a collection of trainable parameters and provides the canonical
+// training-step interface.
+//
+// Derived classes override update_one() with their specific update
+// mathematics and init_state_slot() to lazily allocate per-parameter
+// state the first time a gradient is seen. The base step() method
+// handles gradient presence checks, lazy state initialization, and
+// version bump bookkeeping so derived classes need not repeat that
+// logic. Copying is deleted because optimizer state is not safely
+// copyable (state Storages hold raw heap buffers).
 class LUCID_API Optimizer {
 public:
     explicit Optimizer(std::vector<std::shared_ptr<TensorImpl>> params)
@@ -22,26 +41,42 @@ public:
     Optimizer(const Optimizer&) = delete;
     Optimizer& operator=(const Optimizer&) = delete;
 
+    // Iterate over all parameters; for each with an available gradient,
+    // lazily initialize per-parameter state on the first call, invoke
+    // update_one(), then bump the parameter's version counter to
+    // invalidate any stale autograd views.
     void step();
 
+    // Zero all gradient Storage values so the next backward pass
+    // accumulates into fresh buffers.
     void zero_grad();
 
     std::size_t num_params() const { return params_.size(); }
 
+    // Allow schedulers to update the learning rate between optimizer steps.
     virtual void set_lr(double lr) = 0;
     virtual double lr() const = 0;
 
+    // Short identifier for checkpoint serialization (e.g., "sgd_v1").
     virtual std::string state_dict_id() const = 0;
 
 protected:
+    // Apply the optimizer's update rule for a single parameter.
+    // slot_idx is the stable index of the parameter in params_, used to
+    // look up pre-allocated state buffers.
     virtual void
     update_one(std::size_t slot_idx, std::shared_ptr<TensorImpl>& param, const Storage& grad) = 0;
 
+    // Allocate and zero-initialize per-parameter state (e.g., momentum
+    // buffers, second-moment estimates) for the given slot. Called once
+    // per parameter on the first optimizer step that has a gradient.
     virtual void init_state_slot(std::size_t slot_idx,
                                  const std::shared_ptr<TensorImpl>& param) = 0;
 
     std::vector<std::shared_ptr<TensorImpl>> params_;
 
+    // Parallel to params_; tracks whether init_state_slot has been called
+    // for each slot so state is only allocated once.
     std::vector<bool> state_initialized_;
 };
 

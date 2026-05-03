@@ -1,3 +1,10 @@
+// lucid/_C/ops/bfunc/Inplace.cpp
+//
+// Implements the in-place arithmetic operators.  Each operator delegates to
+// the corresponding out-of-place forward function via the shared inplace_apply
+// helper, which validates preconditions and splices the result Storage back
+// into the original tensor.
+
 #include "Inplace.h"
 
 #include <utility>
@@ -17,6 +24,17 @@ namespace lucid {
 
 namespace {
 
+// Execute fwd_fn(a, b) and write its Storage back into a, preserving a's
+// identity (pointer) while updating its contents.
+//
+// Preconditions checked here:
+//   1. Neither a nor b is null.
+//   2. a does not share storage with any view tensor (would corrupt the view).
+//   3. The out-of-place result has the same shape as a (in-place ops may not
+//      change shape; this would also silently break any live views of a).
+//
+// After the Storage swap, a->bump_version() invalidates any backward nodes that
+// hold a saved reference to a's old storage, making stale-gradient bugs loud.
 template <typename Fn>
 TensorImplPtr
 inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const char* name) {
@@ -29,9 +47,12 @@ inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const
     if (out->shape() != a->shape())
         throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");
+    // Splice the new Storage and metadata back into a.
     a->mutable_storage() = std::move(out->mutable_storage());
     a->set_dtype(out->dtype());
     a->set_device(out->device());
+    // Increment the version counter so that any backward node that retained a
+    // weak reference to a will detect the mutation during validate_versions().
     a->bump_version();
     return a;
 }

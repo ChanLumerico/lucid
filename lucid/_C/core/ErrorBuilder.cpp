@@ -1,3 +1,12 @@
+// lucid/_C/core/ErrorBuilder.cpp
+//
+// Implementation of ErrorContext and ErrorBuilder.
+//
+// The call-stack state is stored in a thread_local std::vector<std::string>.
+// Using thread_local avoids any locking; each thread's stack is independent.
+// The stack is intentionally simple (no capacity limit) because deeply nested
+// op call chains are uncommon and each name is typically a short string.
+
 #include "ErrorBuilder.h"
 
 #include <vector>
@@ -6,6 +15,7 @@ namespace lucid {
 
 namespace {
 
+// Thread-local call stack of operation names.
 thread_local std::vector<std::string> tl_stack_;
 
 }
@@ -19,6 +29,9 @@ void ErrorContext::pop() {
         tl_stack_.pop_back();
 }
 
+// Joins all entries on the stack with " > " as the separator.
+// Returns an empty string when the stack is empty so that callers can
+// omit the trace annotation entirely in the common no-context case.
 std::string ErrorContext::trace() {
     if (tl_stack_.empty())
         return {};
@@ -43,6 +56,9 @@ ErrorContextGuard::~ErrorContextGuard() {
     ErrorContext::pop();
 }
 
+// Produces a string of the form "op_name: msg [trace=A > B > C]".
+// The trace annotation is omitted when the stack is empty to keep messages
+// concise in the common single-op case.
 std::string ErrorBuilder::format_with_context(const std::string& msg) const {
     std::string out = op_;
     out += ": ";
@@ -68,6 +84,9 @@ void ErrorBuilder::index_error(const std::string& msg) const {
     throw IndexError(format_with_context(msg));
 }
 
+// For typed mismatch throws, the context string is built separately so the
+// ShapeMismatch / DtypeMismatch / DeviceMismatch constructors receive a fully
+// qualified context (op + detail + trace) as their context argument.
 void ErrorBuilder::shape_mismatch(const Shape& expected,
                                   const Shape& got,
                                   const std::string& detail) const {

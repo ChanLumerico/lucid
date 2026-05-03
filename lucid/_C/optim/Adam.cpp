@@ -1,3 +1,11 @@
+// lucid/_C/optim/Adam.cpp
+//
+// CPU and GPU implementations of Adam, AdamW, NAdam, and RAdam.
+// The shared scalar kernel adam_step_cpu / adam_step_gpu handles both
+// Adam and AdamW by toggling the decoupled_wd flag. NAdam and RAdam
+// have their own loops because their update formulas diverge from
+// the standard Adam structure.
+
 #include "Adam.h"
 
 #include <cmath>
@@ -18,6 +26,14 @@ using namespace lucid::optim_detail;
 
 namespace {
 
+// Scalar CPU loop for Adam and AdamW.
+//
+// decoupled_wd == true  → AdamW: apply p *= (1 - lr * wd) before the
+//                          gradient step (weight decay not added to g).
+// decoupled_wd == false → Adam:  add wd * p to g before the moment update.
+//
+// Bias corrections bc1 = 1 - beta1^t and bc2 = 1 - beta2^t are computed
+// once outside the loop (step is the global step count at this call).
 template <typename T>
 void adam_step_cpu(T* param,
                    const T* grad,
@@ -47,6 +63,7 @@ void adam_step_cpu(T* param,
     for (std::size_t i = 0; i < numel; ++i) {
         T g = grad[i];
         if (decoupled_wd) {
+            // AdamW: decay parameter directly, leaving g unmodified.
             param[i] -= lrT * wdT * param[i];
         } else if (weight_decay != 0.0) {
             g += wdT * param[i];
@@ -59,6 +76,10 @@ void adam_step_cpu(T* param,
     }
 }
 
+// MLX GPU path for Adam and AdamW. Follows the same decoupled_wd logic
+// as the CPU version but expressed entirely in MLX array operations.
+// Bias-correction factors are pre-computed as scalars and broadcast
+// via zero-dimensional arrays.
 void adam_step_gpu(GpuStorage& param_g,
                    const GpuStorage& grad_g,
                    GpuStorage& m_g,
@@ -144,6 +165,7 @@ Adam::Adam(std::vector<std::shared_ptr<TensorImpl>> params,
         ErrorBuilder("Adam").not_implemented("amsgrad not yet supported");
 }
 
+// Allocate zero-initialized first- and second-moment buffers.
 void Adam::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) {
     if (m_.size() < params_.size())
         m_.resize(params_.size());
@@ -153,9 +175,13 @@ void Adam::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImp
     v_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
 }
 
+// Advance the global step counter on the first parameter of each step,
+// then invoke the shared adam_step kernel with decoupled_wd = false.
 void Adam::update_one(std::size_t slot_idx,
                       std::shared_ptr<TensorImpl>& param,
                       const Storage& grad) {
+    // step_count_ is incremented exactly once per optimizer step, not
+    // once per parameter, so the bias correction is consistent.
     if (slot_idx == 0)
         ++step_count_;
 
@@ -218,6 +244,7 @@ AdamW::AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
         ErrorBuilder("AdamW").fail("weight_decay must be >= 0");
 }
 
+// Allocate zero-initialized first- and second-moment buffers.
 void AdamW::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) {
     if (m_.size() < params_.size())
         m_.resize(params_.size());
@@ -227,6 +254,9 @@ void AdamW::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorIm
     v_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
 }
 
+// Same as Adam::update_one but with decoupled_wd = true, directing the
+// kernel to apply weight decay directly to the parameter rather than
+// adding it to the gradient.
 void AdamW::update_one(std::size_t slot_idx,
                        std::shared_ptr<TensorImpl>& param,
                        const Storage& grad) {
@@ -282,6 +312,8 @@ NAdam::NAdam(std::vector<std::shared_ptr<TensorImpl>> p,
       momentum_decay_(mom_decay),
       step_count_(0) {}
 
+// Allocate zero-initialized m and v buffers; initialize the per-parameter
+// mu_product to 1.0 (the empty product).
 void NAdam::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (m_.size() < params_.size())
         m_.resize(params_.size());
@@ -294,13 +326,18 @@ void NAdam::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p)
     mu_product_[i] = 1.0;
 }
 
+// NAdam update: compute the schedule-annealed momentum mu_t and the
+// look-ahead momentum mu_{t+1}, advance mu_product_, then apply the
+// two-term update that incorporates Nesterov acceleration.
 void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     if (i == 0)
         ++step_count_;
     const auto dt = p->dtype();
     const std::int64_t step = step_count_;
+    // Schedule-annealed momentum coefficient for the current step.
     const double mu =
         beta1_ * (1.0 - 0.5 * std::pow(0.96, static_cast<double>(step) * momentum_decay_));
+    // Look-ahead momentum coefficient for the next step.
     const double mu_next =
         beta1_ * (1.0 - 0.5 * std::pow(0.96, static_cast<double>(step + 1) * momentum_decay_));
     mu_product_[i] *= mu;
@@ -327,6 +364,7 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         auto denom = ::mlx::core::add(
             ::mlx::core::sqrt(::mlx::core::multiply(mlx_scalar(1.0 / bc2, dt), new_v)),
             mlx_scalar(eps_, dt));
+        // term1 uses the raw gradient; term2 uses the bias-corrected first moment.
         auto term1 = ::mlx::core::multiply(mlx_scalar(lr_ * (1.0 - mu) / (1.0 - mu_prod), dt),
                                            ::mlx::core::divide(g, denom));
         auto term2 = ::mlx::core::multiply(mlx_scalar(lr_ * mu_next / (1.0 - mu_prod_next), dt),
@@ -384,6 +422,7 @@ RAdam::RAdam(std::vector<std::shared_ptr<TensorImpl>> p,
       weight_decay_(wd),
       step_count_(0) {}
 
+// Allocate zero-initialized m and v buffers for this slot.
 void RAdam::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (m_.size() < params_.size())
         m_.resize(params_.size());
@@ -393,6 +432,9 @@ void RAdam::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p)
     v_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
+// RAdam update: compute rho_inf, rho_t, and the rectification factor r_t.
+// When rho_t > 5 the variance estimate is stable and the adaptive step
+// is used; otherwise fall back to a bias-corrected SGD-like step.
 void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     if (i == 0)
         ++step_count_;
@@ -401,11 +443,15 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
     const double bc1 = 1.0 - std::pow(beta1_, static_cast<double>(step));
     const double bc2 = 1.0 - std::pow(beta2_, static_cast<double>(step));
     const double bc2_sqrt = std::sqrt(bc2);
+    // Maximum SMA (simple moving average) achievable in the limit.
     const double rho_inf = 2.0 / (1.0 - beta2_) - 1.0;
+    // Approximated SMA at the current step.
     const double rho_t = rho_inf - 2.0 * step * std::pow(beta2_, static_cast<double>(step)) / bc2;
     const bool use_rect = rho_t > 5.0;
     double r_t = 0.0;
     if (use_rect) {
+        // Rectification factor: ratio of the variance of the adaptive
+        // learning rate to the maximum achievable variance.
         r_t = std::sqrt((rho_t - 4.0) * (rho_t - 2.0) * rho_inf /
                         ((rho_inf - 4.0) * (rho_inf - 2.0) * rho_t));
     }

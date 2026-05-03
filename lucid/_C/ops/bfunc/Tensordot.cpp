@@ -1,3 +1,10 @@
+// lucid/_C/ops/bfunc/Tensordot.cpp
+//
+// Implements tensordot_op.  For gradient-tracked tensors the call is lowered to
+// einsum_op.  For the CPU inference path, inputs are permuted and reshaped into
+// 2-D matrices then contracted with a scalar GEMM loop.  GPU inference
+// delegates to the backend tensordot primitive.
+
 #include "Tensordot.h"
 
 #include <numeric>
@@ -25,10 +32,22 @@ using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair;
 
+// Build an einsum contraction string equivalent to the tensordot over the
+// given axis pairs.
+//
+// Contracted axes in A and B are assigned matching uppercase letters starting
+// at 'A'.  Free axes (not contracted) in A and B receive distinct lowercase
+// letters starting at 'a', and appear in the output in A-free, B-free order.
+//
+// Example — tensordot of a 4-D and 3-D tensor contracting axis (2) of A with
+// axis (0) of B:  tensordot_einsum_pattern(4, 3, {2}, {0}) → "abAd,Ace->abcde"
+//   ('A' is the shared contracted label; free labels in A are {a,b,d} and in B
+//    are {c,e}).
 std::string tensordot_einsum_pattern(std::size_t na,
                                      std::size_t nb,
                                      const std::vector<int>& axes_a,
                                      const std::vector<int>& axes_b) {
+    // Normalise negative axis indices to the range [0, n).
     auto norm = [](int ax, std::size_t n) { return ax < 0 ? ax + static_cast<int>(n) : ax; };
     std::set<int> ca_set, cb_set;
     for (auto a : axes_a)
@@ -37,9 +56,10 @@ std::string tensordot_einsum_pattern(std::size_t na,
         cb_set.insert(norm(b, nb));
 
     std::string a_lhs(na, '?'), b_lhs(nb, '?'), rhs;
-    char free = 'a';
-    char shared = 'A';
+    char free = 'a';    // Next free-axis label.
+    char shared = 'A';  // Next contracted-axis label.
 
+    // Assign shared (contracted) labels to paired axis positions.
     for (std::size_t i = 0; i < axes_a.size(); ++i) {
         int pa = norm(axes_a[i], na);
         int pb = norm(axes_b[i], nb);
@@ -48,6 +68,7 @@ std::string tensordot_einsum_pattern(std::size_t na,
         ++shared;
     }
 
+    // Assign free labels to the remaining axes in A (appear first in rhs).
     for (std::size_t i = 0; i < na; ++i) {
         if (a_lhs[i] == '?') {
             a_lhs[i] = free;
@@ -55,6 +76,7 @@ std::string tensordot_einsum_pattern(std::size_t na,
             ++free;
         }
     }
+    // Assign free labels to the remaining axes in B (appear after A's free dims).
     for (std::size_t i = 0; i < nb; ++i) {
         if (b_lhs[i] == '?') {
             b_lhs[i] = free;
@@ -75,6 +97,8 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     if (axes_a.size() != axes_b.size())
         ErrorBuilder("tensordot").fail("axes_a and axes_b must have equal length");
 
+    // Autograd path: express the contraction as an einsum so that the einsum
+    // backward node handles gradient computation.
     if (GradMode::is_enabled() && (a->requires_grad() || b->requires_grad())) {
         return einsum_op(
             tensordot_einsum_pattern(a->shape().size(), b->shape().size(), axes_a, axes_b), {a, b});
@@ -84,9 +108,12 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     const Device device = a->device();
     OpScopeFull scope{"tensordot", device, dt, Shape{}};
 
+    // GPU inference path: delegate to the backend tensordot primitive.
     if (device == Device::GPU) {
         auto out_storage = backend::Dispatcher::for_device(device).tensordot(
             a->storage(), b->storage(), a->shape(), b->shape(), Shape{}, axes_a, axes_b, dt);
+        // Read the actual output shape from the MLX array because the backend
+        // may have resolved trailing scalar squeezes.
         const auto& gs = storage_gpu(out_storage);
         Shape out_shape;
         for (auto d : gs.arr->shape())
@@ -94,6 +121,14 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
         return fresh(std::move(out_storage), std::move(out_shape), dt, device);
     }
 
+    // CPU inference path: manually permute and reshape both tensors into 2-D
+    // matrices [free_dims × contract_dims] and [contract_dims × free_dims],
+    // then execute a scalar GEMM.
+    //
+    // contract() permutes the axes of t so that either the contracted axes come
+    // first (put_first=true) or last (put_first=false), then flattens contracted
+    // and free axes into a 2-D CpuStorage.  Returns the permuted storage, the
+    // list of kept (free) dimension sizes, and the product of contracted dims.
     auto contract = [&](const TensorImplPtr& t, const std::vector<int>& axes_contract,
                         bool put_first) {
         const std::size_t nd = t->shape().size();
@@ -108,6 +143,8 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
         std::vector<std::int64_t> kept;
         std::int64_t contract_size = 1;
         if (put_first) {
+            // Contracted axes first, then free axes — used for B so the
+            // resulting matrix is [K × N_free].
             for (auto ax : axes_contract) {
                 int p = ax < 0 ? ax + (int)nd : ax;
                 perm.push_back(p);
@@ -119,6 +156,8 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
                     kept.push_back(t->shape()[d]);
                 }
         } else {
+            // Free axes first, then contracted axes — used for A so the
+            // resulting matrix is [M_free × K].
             for (std::size_t d = 0; d < nd; ++d)
                 if (!is_c[d]) {
                     perm.push_back((int)d);
@@ -138,6 +177,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
             std::move(dst), std::move(kept), contract_size};
     };
 
+    // A is arranged as [M × K]; B is arranged as [K × N].
     auto [a_cpu, a_kept, a_contract] = contract(a, axes_a, false);
     auto [b_cpu, b_kept, b_contract] = contract(b, axes_b, true);
     if (a_contract != b_contract)
@@ -153,6 +193,9 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     out_shape.insert(out_shape.end(), b_kept.begin(), b_kept.end());
     auto out_cpu = allocate_cpu(out_shape, dt);
 
+    // Scalar GEMM: C[i,j] = Σ_k A[i,k] * B[k,j].
+    // This is used only when gradient tracking is off; for autograd the call
+    // is routed through einsum_op above.
     auto gemm = [&](auto* op, const auto* ap, const auto* bp) {
         using T = std::remove_pointer_t<decltype(op)>;
         for (std::int64_t i = 0; i < M; ++i)

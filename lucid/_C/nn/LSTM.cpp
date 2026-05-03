@@ -1,3 +1,26 @@
+// lucid/_C/nn/LSTM.cpp
+//
+// LSTM forward and BPTT backward implementation.
+//
+// forward() decides between two backend paths based on whether any input
+// requires a gradient:
+//   Inference (no grad): IBackend::lstm_forward  (BNNS on CPU).
+//   Training   (grad):   IBackend::lstm_forward_train  (BLAS, saves gates/cells).
+//
+// The training path returns 5 Storage objects:
+//   res[0] – output sequence (T, B, H).
+//   res[1] – final hidden state hn (1, B, H).
+//   res[2] – final cell state cn (1, B, H).
+//   res[3] – gates_all (T, B, 4H).
+//   res[4] – cells_all (T+1, B, H).
+//
+// Edges are wired manually in forward(): each weight tensor that requires_grad
+// gets an AccumulateGrad leaf node; non-differentiable tensors get a null edge.
+// Only out_t carries the grad_fn; hn_t and cn_t are detached (requires_grad=false).
+//
+// In apply(), gradients for hn and cn at the sequence end are zero because they
+// are not used further in the computation graph in the standard single-layer case.
+
 #include "LSTM.h"
 
 #include <cstring>
@@ -15,6 +38,8 @@ namespace lucid {
 std::vector<Storage> LstmBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device);
 
+    // Gradients for hn and cn at the sequence end are zero here because only
+    // the output sequence is connected in the graph for the single-layer case.
     const Shape zero_shape{static_cast<std::int64_t>(opts.batch_size),
                            static_cast<std::int64_t>(opts.hidden_size)};
     Storage zero_hn = be.zeros(zero_shape, dtype);
@@ -83,6 +108,9 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
     bwd->dtype = dt;
     bwd->device = dev;
 
+    // Build the edge list manually: {input, h0, c0, wih, whh, bih, bhh}.
+    // NaryKernel is not used here because the number of edges is dynamic
+    // (it depends on the number of weight tensors supplied).
     std::vector<TensorImplPtr> edge_tensors{input, h0, c0};
     for (const auto& w : weights)
         edge_tensors.push_back(w);
@@ -91,6 +119,8 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
     std::vector<std::int64_t> versions;
     for (const auto& t : edge_tensors) {
         if (!t || !t->requires_grad()) {
+            // A null edge signals that this input does not participate in
+            // gradient accumulation; the backward skips it.
             edges.emplace_back(nullptr, 0);
             versions.push_back(0);
         } else {

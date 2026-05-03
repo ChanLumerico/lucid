@@ -1,3 +1,19 @@
+// lucid/_C/backend/cpu/Vforce.cpp
+//
+// Implements the vForce wrappers declared in Vforce.h.  All non-power functions
+// hand off to the corresponding vv*f / vv* symbol from Accelerate.  The count
+// argument required by vForce is a signed int*, so every function captures a
+// local int before the call via the helper N().
+//
+// vpow_f32 / vpow_f64 note: vvpowf and vvpow take (out, exponent, base, &n),
+// which is the opposite order from pow(base, exp) in C.  The wrappers accept
+// (base, expo, out, n) to match the Lucid calling convention and internally
+// pass expo before base to the vForce API.
+//
+// The LUCID_VFORCE_UNARY macro at the bottom expands pairs of f32/f64 wrappers
+// for functions that share a uniform (out, in, &count) signature (asin, acos,
+// atan, sinh, cosh, log2, fabs, rec, floor, ceil, round).
+
 #include "Vforce.h"
 
 #include <Accelerate/Accelerate.h>
@@ -5,6 +21,8 @@
 namespace lucid::backend::cpu {
 
 namespace {
+// Converts a std::size_t element count to the signed int* expected by all
+// vForce vector math functions.
 inline int N(std::size_t n) {
     return static_cast<int>(n);
 }
@@ -91,6 +109,8 @@ void vpow_f64(const double* base, const double* expo, double* out, std::size_t n
     vvpow(out, expo, base, &count);
 }
 
+// Expands a matching f32 and f64 wrapper pair for any vForce function that
+// follows the (output_ptr, input_ptr, &count) calling convention.
 #define LUCID_VFORCE_UNARY(NAME, F32, F64)                                                         \
     void NAME##_f32(const float* in, float* out, std::size_t n) {                                  \
         int c = N(n);                                                                              \

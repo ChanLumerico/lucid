@@ -1,3 +1,9 @@
+// lucid/_C/core/Validate.cpp
+//
+// Implementation of the Validator and Validator::Pair fluent validation
+// chains.  Each method is intentionally short — its only job is to evaluate
+// a single precondition and delegate to ErrorBuilder for the throw.
+
 #include "Validate.h"
 
 #include <set>
@@ -37,11 +43,16 @@ Validator& Validator::dtype_eq(Dtype expected) {
     return *this;
 }
 
+// Iterates the allowed set linearly — the list is almost always very short
+// (2–4 entries) so a std::set or bitset would be overkill.  The two-pass
+// approach (check first, then build the error string) keeps the fast path
+// (success) free of any string construction.
 Validator& Validator::dtype_in(std::initializer_list<Dtype> allowed) {
     non_null();
     for (Dtype d : allowed)
         if (t_->dtype() == d)
             return *this;
+    // Build a "|"-separated string of allowed dtype names for the error message.
     std::string allowed_str;
     bool first = true;
     for (Dtype d : allowed) {
@@ -79,6 +90,9 @@ Validator& Validator::shape_eq(const Shape& expected) {
     return *this;
 }
 
+// Checks both that the tensor is at least 2-D and that the trailing two
+// dimensions are equal (square matrix / batch of square matrices).  A 3-D
+// tensor [B, N, N] passes; [B, N, M] with N != M fails.
 Validator& Validator::square_2d() {
     non_null();
     if (t_->shape().size() < 2) {

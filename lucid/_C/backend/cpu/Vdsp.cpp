@@ -1,3 +1,16 @@
+// lucid/_C/backend/cpu/Vdsp.cpp
+//
+// Implements the vDSP wrapper functions declared in Vdsp.h.  Each function is
+// a one-line delegate to the corresponding Apple Accelerate vDSP_* intrinsic
+// with unit stride (ia=1, ib=1, ic=1).  The anonymous helper L() converts the
+// Lucid std::size_t element count to vDSP_Length (also std::size_t on Apple
+// Silicon, but the cast documents the intent).
+//
+// Note on vDSP_vsub / vDSP_vdiv argument order: vDSP uses (B, ib, A, ia, C,
+// ic, N) with the convention C = A - B and C = A / B.  Both vsub_f32 and
+// vdiv_f32 therefore swap the a/b argument order when calling vDSP so that the
+// wrapper's semantics match the caller's expectation (out = a op b).
+
 #include "Vdsp.h"
 
 #include <Accelerate/Accelerate.h>
@@ -6,6 +19,8 @@ namespace lucid::backend::cpu {
 
 namespace {
 
+// Converts a std::size_t element count to the vDSP_Length type expected by
+// the Accelerate framework APIs.
 inline vDSP_Length L(std::size_t n) {
     return static_cast<vDSP_Length>(n);
 }

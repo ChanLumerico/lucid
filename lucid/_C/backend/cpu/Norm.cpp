@@ -1,3 +1,21 @@
+// lucid/_C/backend/cpu/Norm.cpp
+//
+// Implements the LayerNorm and RMSNorm forward and backward passes declared in
+// Norm.h.
+//
+// LayerNorm f32 forward uses a fast path (layer_norm_forward_f32_fast) that
+// calls vDSP helpers (vmean_f32, vdotpr_f32, vsadd_f32, vsmul_f32, vmadd_f32)
+// to exploit Apple Silicon NEON; the f64 forward uses a generic template.
+//
+// The LayerNorm backward uses the standard closed-form gradient:
+//   dx_i = rstd * (N * dxn_i - sum(dxn) - xn_i * sum(dxn * xn)) / N
+// where xn_i = (x_i - mean) * rstd is the normalised activation and dxn_i =
+// gamma_i * g_i is the pre-affine upstream gradient.
+//
+// The RMSNorm backward uses:
+//   dx_i = rstd * (gamma_i * g_i - x_i * rstd^2 * cross / N)
+// where cross = sum_j(gamma_j * g_j * x_j).
+
 #include "Norm.h"
 
 #include <cmath>
@@ -12,6 +30,8 @@ namespace lucid::backend::cpu {
 
 namespace {
 
+// Fast vDSP-accelerated f32 forward path.  Uses a temporary `centered` buffer
+// for (x - mean) to allow reuse with vdotpr_f32 for the variance computation.
 void layer_norm_forward_f32_fast(const float* x,
                                  const float* gamma,
                                  const float* beta,
@@ -44,6 +64,7 @@ void layer_norm_forward_f32_fast(const float* x,
     }
 }
 
+// Generic typed LayerNorm forward; used for f64 and any future non-f32 path.
 template <typename T>
 void layer_norm_forward(const T* x,
                         const T* gamma,
@@ -80,6 +101,9 @@ void layer_norm_forward(const T* x,
     }
 }
 
+// Generic typed LayerNorm backward.  Accumulates dgamma and dbeta across all
+// outer rows; recomputes xn_i = (x_i - mean)*rstd inline to avoid an extra
+// buffer allocation.
 template <typename T>
 void layer_norm_backward(const T* x,
                          const T* gamma,
@@ -125,6 +149,7 @@ void layer_norm_backward(const T* x,
     }
 }
 
+// Generic typed RMSNorm forward: rstd = 1 / sqrt(mean(x^2) + eps).
 template <typename T>
 void rms_norm_forward(
     const T* x, const T* gamma, T* y, T* saved_rstd, std::size_t outer, std::size_t N, double eps) {
@@ -145,6 +170,9 @@ void rms_norm_forward(
     }
 }
 
+// Generic typed RMSNorm backward: computes dx and accumulates dgamma.
+// cross = sum_j(gamma_j * g_j * x_j) is the per-row contraction needed to
+// back-propagate through the normalisation denominator.
 template <typename T>
 void rms_norm_backward(const T* x,
                        const T* gamma,

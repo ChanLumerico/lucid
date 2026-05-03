@@ -1,3 +1,14 @@
+// lucid/_C/backend/cpu/Shape.cpp
+//
+// Implements the N-D permute_copy operation for f32, f64, i32, and i64 types.
+// The generic permute_typed template uses two auxiliary stride vectors:
+//   in_strides  — C-order strides of the input layout
+//   out_strides — C-order strides of the output layout (permuted shape)
+// For each output flat index it back-computes the N-D coordinate in the output
+// shape, maps that coordinate to an input flat index via in_strides[perm[d]],
+// and copies the single element.  This is O(numel * ndim) but avoids any
+// additional memory allocation beyond the two stride vectors.
+
 #include "Shape.h"
 
 #include <cstddef>
@@ -7,6 +18,8 @@ namespace lucid::backend::cpu {
 
 namespace {
 
+// Computes C-order (row-major) element strides for a given shape.
+// stride[i] = product of shape[i+1..ndim-1], with the last stride equal to 1.
 std::vector<std::int64_t> elem_strides(const std::vector<std::int64_t>& shape) {
     std::vector<std::int64_t> s(shape.size());
     if (shape.empty())
@@ -19,6 +32,9 @@ std::vector<std::int64_t> elem_strides(const std::vector<std::int64_t>& shape) {
     return s;
 }
 
+// Generic N-D permutation: iterates over all output positions in flat order,
+// maps each back to an N-D coordinate, then reads from the corresponding
+// input position by applying the inverse permutation through in_strides.
 template <typename T>
 void permute_typed(const T* in,
                    T* out,

@@ -1,3 +1,26 @@
+// lucid/_C/ops/utils/Select.cpp
+//
+// Implements where, masked_fill, roll, gather, and diagonal with autograd.
+//
+// Backward nodes:
+//   WhereBackward      — mask grad_out with `cond` to obtain dx (x-branch)
+//                        and with ~cond to obtain dy (y-branch); cond itself
+//                        is non-differentiable.
+//   MaskedFillBackward — pass grad_out only through positions where mask is
+//                        false (positions that kept the original value).
+//   RollBackward       — apply an inverse circular roll by negating all shifts
+//                        along the same axes; this exactly inverts a circular
+//                        shift of +k with one of -k.
+//   GatherBackward     — scatter-add grad_out back to source positions in the
+//                        original tensor using the saved index storage.
+//   DiagonalBackward   — scatter the length-L diagonal gradient back into a
+//                        zero-initialised buffer at the correct (row, col)
+//                        positions determined by offset, axis1, and axis2.
+//
+// where and masked_fill extend AutogradNode<N> (the multi-input base) because
+// they need to validate versions for multiple saved weak_ptrs.  The remaining
+// ops use the single-input FuncOp<1> template for simplicity.
+
 #include "Select.h"
 
 #include <algorithm>
@@ -35,6 +58,12 @@ using utils_detail::mlx_shape_to_lucid;
 using utils_detail::numel;
 using utils_detail::wrap_axis;
 
+// Compute the gradient contribution for one branch of where_op.
+//
+// When `true_branch` is true, this returns grad * cond (the gradient flowing
+// to `x`, the tensor chosen where cond is true).  When false, it returns
+// grad * ~cond (the gradient flowing to `y`, chosen where cond is false).
+// The dispatcher handles both CPU (same-shape elementwise) and GPU (broadcast).
 Storage where_branch_storage(const Storage& grad,
                              const Storage& cond,
                              const Shape& shape,
@@ -44,6 +73,10 @@ Storage where_branch_storage(const Storage& grad,
     return backend::Dispatcher::for_device(device).where_branch(grad, cond, shape, dt, true_branch);
 }
 
+// Scatter-add the output gradient back to input positions using the same
+// index tensor that was passed to gather_op.  Each element of grad at position
+// p is accumulated (scatter-add) into the input gradient at the position
+// indices[p] along `axis`.  This is the adjoint of the gather operation.
 Storage gather_backward_storage(const Storage& grad,
                                 const Storage& indices,
                                 const Shape& input_shape,
@@ -56,6 +89,10 @@ Storage gather_backward_storage(const Storage& grad,
         grad, indices, input_shape, output_shape, axis, index_dtype, dt);
 }
 
+// Scatter the length-L diagonal gradient back into a zero-initialised buffer
+// of `input_shape`.  The offset, axis1, and axis2 parameters are used to
+// identify which (row, col) pairs along the two chosen axes correspond to
+// the diagonal elements so that each gradient value lands at the right position.
 Storage diagonal_backward_storage(const Storage& grad,
                                   const Shape& input_shape,
                                   const Shape& output_shape,
@@ -68,6 +105,14 @@ Storage diagonal_backward_storage(const Storage& grad,
         grad, input_shape, output_shape, offset, axis1, axis2, dt);
 }
 
+// Backward node for where_op.
+//
+// Invariants:
+//   cond_       — a copy of the condition storage, used to route gradients.
+//   shape_      — the output (and condition) shape.
+//   cond/x/y_tensor_ — weak refs for version checking.
+//
+// Backward: grad_out * cond → dx,  grad_out * ~cond → dy.
 class WhereBackward : public AutogradNode<WhereBackward, 2> {
 public:
     static const OpSchema schema_v1;
@@ -95,6 +140,15 @@ public:
 
 const OpSchema WhereBackward::schema_v1{"where", 1, AmpPolicy::KeepInput, true};
 
+// Backward node for masked_fill_op.
+//
+// Invariants:
+//   mask_  — a copy of the boolean mask storage.
+//   shape_ — tensor shape (same for input and output).
+//
+// Backward: pass gradient only through positions where mask was false (the
+// positions whose values were kept from the original input).  Positions where
+// mask is true received the fill constant, so their gradient is zero.
 class MaskedFillBackward : public AutogradNode<MaskedFillBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -105,6 +159,7 @@ public:
     std::weak_ptr<TensorImpl> mask_tensor_;
 
     std::vector<Storage> apply(Storage grad_out) override {
+        // false_branch passes gradient through where mask is false.
         return {where_branch_storage(grad_out, mask_, shape_, dtype_, device_, false)};
     }
 
@@ -118,6 +173,10 @@ public:
 
 const OpSchema MaskedFillBackward::schema_v1{"masked_fill", 1, AmpPolicy::KeepInput, true};
 
+// Backward node for roll_op.
+//
+// Backward formula: roll the gradient by the negated shifts along the same
+// axes.  A circular shift of +k is exactly inverted by a shift of -k.
 class RollBackward : public FuncOp<RollBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -137,6 +196,17 @@ public:
 
 const OpSchema RollBackward::schema_v1{"roll", 1, AmpPolicy::KeepInput, true};
 
+// Backward node for gather_op.
+//
+// Invariants:
+//   indices_      — saved index storage from the forward call.
+//   input_shape_  — shape of the source tensor `a`.
+//   output_shape_ — shape of the gathered output.
+//   axis_         — axis along which gathering was performed.
+//   index_dtype_  — dtype of the index tensor (I32 or I64).
+//
+// Backward formula: scatter-add grad_out back to the input positions indicated
+// by indices_.  This is the adjoint of gather.
 class GatherBackward : public AutogradNode<GatherBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -164,6 +234,11 @@ public:
 
 const OpSchema GatherBackward::schema_v1{"gather", 1, AmpPolicy::KeepInput, true};
 
+// Backward node for diagonal_op.
+//
+// Backward formula: scatter the length-L diagonal gradient back into a zero
+// tensor of the original input shape at the positions determined by offset,
+// axis1, and axis2.
 class DiagonalBackward : public FuncOp<DiagonalBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -180,6 +255,10 @@ public:
 
 const OpSchema DiagonalBackward::schema_v1{"diagonal", 1, AmpPolicy::KeepInput, true};
 
+// Build and attach WhereBackward to `out`.  Gradient edges connect only to
+// `x` and `y` — the condition tensor `cond` is treated as a non-differentiable
+// selector.  The WhereBackward node retains a copy of the condition storage
+// to perform the masking during the backward pass.
 TensorImplPtr attach_where_grad(const TensorImplPtr& cond,
                                 const TensorImplPtr& x,
                                 const TensorImplPtr& y,
@@ -206,6 +285,10 @@ TensorImplPtr attach_where_grad(const TensorImplPtr& cond,
     return out;
 }
 
+// Build and attach MaskedFillBackward to `out`.  Only the data input `a`
+// carries a gradient edge; the boolean mask is a non-differentiable selector.
+// The mask storage is retained so that the backward can zero gradient entries
+// at positions where the fill constant was written.
 TensorImplPtr
 attach_masked_fill_grad(const TensorImplPtr& a, const TensorImplPtr& mask, TensorImplPtr out) {
     if (!GradMode::is_enabled() || !a->requires_grad())
@@ -227,6 +310,9 @@ attach_masked_fill_grad(const TensorImplPtr& a, const TensorImplPtr& mask, Tenso
     return out;
 }
 
+// Generic helper to wire a pre-built, fully initialised single-input backward
+// node onto `out`.  Used by roll_op and diagonal_op, which construct their
+// backward nodes inline before calling this function.
 template <class Derived>
 TensorImplPtr
 attach_unary_grad(const TensorImplPtr& a, TensorImplPtr out, std::shared_ptr<Derived> bwd) {
@@ -242,6 +328,12 @@ LUCID_REGISTER_OP(DiagonalBackward)
 
 }  // namespace
 
+// Select elements from `x` (where cond is true) or `y` (where cond is false).
+// Validates that x and y share dtype and device, and that cond is on the same
+// device.  On the CPU backend, all three tensors must have identical shapes;
+// on the GPU backend the MLX backend handles implicit broadcasting, and the
+// actual output shape is read back from the MLX array after execution.
+// Attaches WhereBackward only when x or y requires a gradient.
 TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const TensorImplPtr& y) {
     if (!cond || !x || !y)
         ErrorBuilder("where").fail("null input");
@@ -254,12 +346,14 @@ TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const 
     const Dtype dt = x->dtype();
     const Device device = x->device();
     OpScopeFull scope{"where", device, dt, x->shape()};
+    // CPU backend requires identical shapes; GPU backend handles broadcasting internally.
     if (device == Device::CPU && cond->shape() != x->shape())
         throw ShapeMismatch(x->shape(), y->shape(), "where (CPU same-shape)");
     auto out_storage = backend::Dispatcher::for_device(device).where_op(
         cond->storage(), x->storage(), y->storage(), x->shape(), dt);
     Shape out_shape;
     if (device == Device::GPU) {
+        // Read the actual output shape from the MLX array (may have been broadcast).
         const auto& gs = storage_gpu(out_storage);
         out_shape = mlx_shape_to_lucid(gs.arr->shape());
     } else {
@@ -269,6 +363,10 @@ TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const 
     return attach_where_grad(cond, x, y, std::move(result));
 }
 
+// Replace positions of `a` where `mask` is true with scalar `value`.  Both
+// tensors must have identical shapes.  Delegates to the backend dispatcher,
+// then attaches MaskedFillBackward so that gradients flow back only through
+// the positions that kept the original `a` value (mask == false).
 TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, double value) {
     if (!a || !mask)
         ErrorBuilder("masked_fill").fail("null input");
@@ -283,6 +381,11 @@ TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, 
     return attach_masked_fill_grad(a, mask, std::move(result));
 }
 
+// Circularly shift `a` by shifts[i] positions along axes[i].  Validates that
+// shifts and axes have equal length, normalises each axis value (negative
+// wrapping), then dispatches to the backend.  RollBackward is wired with
+// the normalised axes and original shifts so the backward can negate each
+// shift to produce the exact inverse rotation.
 TensorImplPtr
 roll_op(const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<int> axes) {
     Validator::input(a, "roll.a").non_null();
@@ -308,6 +411,10 @@ roll_op(const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<in
     return attach_unary_grad(a, std::move(result), std::move(bwd));
 }
 
+// Gather values from `a` at positions given by `indices` along `axis`.  Both
+// tensors must have the same rank.  The output shape equals indices.shape.
+// Attaches GatherBackward (a scatter-add over indices) only when `a` requires
+// a gradient; `indices` itself is always treated as non-differentiable.
 TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, int axis) {
     if (!a || !indices)
         ErrorBuilder("gather").fail("null input");
@@ -343,6 +450,13 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
     return result;
 }
 
+// Extract the k-th diagonal of `a` along (axis1, axis2).  Validates that the
+// input is at least 2-D, normalises both axes, and enforces axis1 < axis2 via
+// a swap.  Computes the diagonal length L = max(0, min(M - r0, N - c0)) where
+// M=shape[a1], N=shape[a2] and (r0, c0) are the starting row/col for offset.
+// The output shape consists of all non-axis dimensions followed by L.
+// Attaches DiagonalBackward to scatter the gradient back to the correct
+// positions in a zero tensor of the input shape.
 TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axis2) {
     Validator::input(a, "diagonal.a").non_null();
     const Dtype dt = a->dtype();
@@ -360,10 +474,15 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
 
     const std::int64_t M = a->shape()[a1];
     const std::int64_t N = a->shape()[a2];
+    // Compute the starting (row, col) corner for the requested diagonal.
+    // A positive offset starts at column `offset`, row 0.
+    // A negative offset starts at row `-offset`, column 0.
     const std::int64_t r0 = (offset >= 0) ? 0 : -offset;
     const std::int64_t c0 = (offset >= 0) ? offset : 0;
+    // L is the number of elements on the diagonal; 0 if it falls outside the matrix.
     const std::int64_t L = std::max<std::int64_t>(0, std::min(M - r0, N - c0));
 
+    // Output shape: all dimensions except a1 and a2, then L.
     Shape out_shape;
     for (std::size_t d = 0; d < ndim; ++d) {
         if ((int)d == a1 || (int)d == a2)

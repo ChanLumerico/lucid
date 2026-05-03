@@ -1,4 +1,18 @@
-
+// lucid/_C/bindings/bind.cpp
+//
+// Top-level entry point for the `lucid._C.engine` Python extension module.
+// This file owns the single PYBIND11_MODULE(engine, m) definition and is
+// responsible for:
+//   1. Exporting the ABI / version constants (VERSION_MAJOR, VERSION_MINOR,
+//      VERSION_PATCH, ABI_VERSION, __version__).
+//   2. Calling every subsystem register_xxx() function in dependency order so
+//      that base types (errors, enums, TensorImpl) are visible before the ops
+//      that use them.
+//   3. Creating the `nn`, `linalg`, and `einops` sub-modules.
+//   4. Defining the two fused-kernel helpers (_fused_linear_relu,
+//      _fused_linear_gelu) and the custom Metal kernel launcher
+//      (_run_metal_kernel) that are too tightly coupled to the Dispatcher to
+//      live in a separate file.
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -10,6 +24,8 @@
 
 namespace py = pybind11;
 
+// Forward declarations of every subsystem binder.  Each is defined in its own
+// bind_xxx.cpp translation unit and linked into the shared library.
 namespace lucid::bindings {
 void register_errors(py::module_& m);
 void register_core(py::module_& m);
@@ -32,12 +48,18 @@ void register_einops(py::module_& m);
 PYBIND11_MODULE(engine, m) {
     m.doc() = "Lucid C++ engine (production rebuild).";
 
+    // Version constants are read by lucid/__init__.py to enforce ABI
+    // compatibility between the Python wheel and the compiled extension.
     m.attr("__version__") = LUCID_VERSION_STRING;
     m.attr("VERSION_MAJOR") = LUCID_VERSION_MAJOR;
     m.attr("VERSION_MINOR") = LUCID_VERSION_MINOR;
     m.attr("VERSION_PATCH") = LUCID_VERSION_PATCH;
     m.attr("ABI_VERSION") = LUCID_ABI_VERSION;
 
+    // Registration order matters: error translators must be installed first so
+    // that exceptions thrown during subsequent registrations are mapped
+    // correctly.  Core enums (Device, Dtype) must precede TensorImpl which
+    // depends on them.
     lucid::bindings::register_errors(m);
     lucid::bindings::register_core(m);
     lucid::bindings::register_tensor_impl(m);
@@ -45,6 +67,8 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_profiler(m);
     lucid::bindings::register_op_registry(m);
     lucid::bindings::register_autograd(m);
+    // nn ops live in a dedicated sub-module (lucid._C.engine.nn) to avoid
+    // polluting the top-level namespace.
     auto nn = m.def_submodule("nn", "Neural-network ops (linear, conv, norm, pool, ...).");
     lucid::bindings::register_nn(nn);
     lucid::bindings::register_random(m);
@@ -54,13 +78,22 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_bfunc(m);
     lucid::bindings::register_ufunc(m);
     lucid::bindings::register_utils(m);
+    // linalg and einops each get their own sub-module so Python can import
+    // them as lucid.linalg / lucid.einops without name collisions.
     auto linalg = m.def_submodule("linalg", "Linear-algebra ops.");
     lucid::bindings::register_linalg(linalg);
     auto einops = m.def_submodule("einops", "einops-style rearrange/reduce/repeat/einsum.");
     lucid::bindings::register_einops(einops);
 
+    // Fused kernel bindings that directly call IBackend dispatch and therefore
+    // cannot be separated into their own translation units without exposing
+    // internal Dispatcher headers to bind_nn.cpp.
     m.def(
         "_fused_linear_relu",
+        // The lambda validates shapes and delegates to the backend; the
+        // output TensorImpl is created without requires_grad because the
+        // fused path has no autograd support (use linear + relu separately
+        // if gradients are needed).
         [](const lucid::TensorImplPtr& x, const lucid::TensorImplPtr& w,
            const lucid::TensorImplPtr& b) -> lucid::TensorImplPtr {
             if (!x || !w || !b)
@@ -85,6 +118,8 @@ PYBIND11_MODULE(engine, m) {
 
     m.def(
         "_fused_linear_gelu",
+        // Same structure as _fused_linear_relu; activation switched to GELU
+        // approximated via vForce vtanh on the CPU backend.
         [](const lucid::TensorImplPtr& x, const lucid::TensorImplPtr& w,
            const lucid::TensorImplPtr& b) -> lucid::TensorImplPtr {
             if (!x || !w || !b)
@@ -107,6 +142,10 @@ PYBIND11_MODULE(engine, m) {
         "Fused linear + GELU: y = GELU(x @ W.T + b).  "
         "CPU: BLAS SGEMM + vForce vtanh.");
 
+    // Custom Metal kernel launcher.  The dtype string is converted to a
+    // Dtype enum here rather than in C++ generic code so that Python callers
+    // can pass plain strings ("f32", "f16", etc.).  The output TensorImpl
+    // always lives on Device::GPU and is created without autograd.
     m.def(
         "_run_metal_kernel",
         [](const std::string& kernel_source, const std::string& function_name,

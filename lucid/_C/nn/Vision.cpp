@@ -1,3 +1,21 @@
+// lucid/_C/nn/Vision.cpp
+//
+// Implementations of one_hot, rotate, and the bilinear layer.
+//
+// one_hot: IBackend::one_hot_forward builds a float (or other dtype) matrix
+//   of shape (*input.shape, num_classes) with 1 at the class index and 0
+//   elsewhere.  No backward node.
+//
+// rotate: IBackend::rotate_forward applies a 2-D rotation matrix with center
+//   (cx, cy) per image channel.  The angle is negated before passing to the
+//   backend so that positive angle_deg produces a counter-clockwise rotation
+//   in standard image coordinates.  No backward node.
+//
+// BilinearLayer: IBackend::bilinear_layer_forward computes
+//   y = x1 @ W[d, :, :] @ x2^T + b[d] for each output dimension d.
+//   Backward is skipped when no input requires a gradient.
+//   The has_bias flag is inferred from input_shapes_[3].empty() in apply().
+
 #include "Vision.h"
 
 #include <algorithm>
@@ -55,13 +73,17 @@ const OpSchema BilinearLayerBackward::schema_v1{"bilinear_layer", 1, AmpPolicy::
 
 namespace {
 
+// Decomposed bilinear-layer dimensions derived from x1, x2, and weight shapes.
 struct BilinearShape {
-    std::size_t B;
-    std::size_t D1;
-    std::size_t D2;
-    std::size_t Dout;
+    std::size_t B;     // Product of all leading "batch" dims.
+    std::size_t D1;    // Last dim of x1 (== weight.shape[1]).
+    std::size_t D2;    // Last dim of x2 (== weight.shape[2]).
+    std::size_t Dout;  // Output features (== weight.shape[0]).
 };
 
+// Validate that the last dims of s1/s2 match the weight's inner dimensions and
+// that all leading batch dims of s1 and s2 are equal.  Returns the flattened
+// BilinearShape.  Throws ShapeMismatch on any mismatch.
 BilinearShape flatten_bilinear(const Shape& s1, const Shape& s2, const Shape& sw) {
     if (s1.empty() || s2.empty()) {
         ErrorBuilder("bilinear").fail("input must have ≥1 dim");

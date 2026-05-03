@@ -1,3 +1,10 @@
+// lucid/_C/core/Determinism.cpp
+//
+// Global atomic determinism flag.  std::memory_order_relaxed is acceptable
+// here because there is no ordering dependency between the flag write and any
+// tensor computation — the flag is merely a gate that is read independently
+// before each op dispatch.  A full fence is not required.
+
 #include "Determinism.h"
 
 #include <atomic>

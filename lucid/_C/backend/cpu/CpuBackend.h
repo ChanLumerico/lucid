@@ -1,3 +1,48 @@
+// lucid/_C/backend/cpu/CpuBackend.h
+//
+// Concrete IBackend implementation for Apple Silicon CPU using the Apple
+// Accelerate framework.  All compute is performed on CpuStorage (host-side
+// aligned allocations); no raw loops are used where a vDSP or vForce vector
+// intrinsic exists.
+//
+// Design overview:
+//   Elementwise ops (add, sub, mul, exp, …) delegate to cpu::vadd_f32 and
+//   friends (vDSP / vForce wrappers) through the private unary_op / binary_op
+//   template helpers, which dispatch on the runtime Dtype.
+//
+//   Axis reductions (reduce_sum, reduce_mean, reduce_max, reduce_min) use the
+//   private reduce_axes helper, which iterates axes from highest to lowest
+//   (sorted descending) and calls the corresponding cpu::sum_axis_f32 etc.
+//   primitives from Reduce.h.  For mean reduction the result is scaled by
+//   1/reduce_dim after the sum.
+//
+//   Convolution uses the im2col + GEMM strategy: for each batch element the
+//   input patches are unrolled into a column matrix by conv_nd_im2col_f32/f64,
+//   then cblas_sgemm/dgemm computes the full output in a single call.  The
+//   backward pass uses col2im for the input gradient and a second GEMM for the
+//   weight gradient.
+//
+//   Normalization (BatchNorm, LayerNorm, GroupNorm, RMSNorm) delegates to the
+//   Norm.h wrappers which use per-row vDSP operations for f32 throughput.
+//
+//   Linear algebra (eig, eigh, svd, qr, chol, inv, solve) delegates to the
+//   Lapack.h wrappers which handle the row-major ↔ column-major conversion
+//   required by Accelerate's LAPACK interface.
+//
+//   Pooling (MaxPool, AvgPool) delegates to Pool.h for 1-D, 2-D, and 3-D.
+//
+// Private helpers:
+//   fill_ones(ptr, n, dt)           — fills a raw buffer with the value 1.
+//   unary_op(a, shape, dt, …)       — allocates output, dispatches f32/f64/i32.
+//   binary_op(a, b, shape, dt, …)   — allocates output, dispatches f32/f64/i32/i64.
+//   reduce_axes(a, in_shape, opts, dt, op) — single-axis reduction loop.
+//   cast_impl(src, dst, n, src_dt, dst_dt) — element-by-element type cast.
+//
+// Self-registration:
+//   An anonymous-namespace CpuBackendRegistrar struct at the bottom of the
+//   file registers a CpuBackend singleton with the Dispatcher at static-init
+//   time.  BackendInit.cpp includes this header to trigger registration.
+
 #pragma once
 
 #include <algorithm>
@@ -28,14 +73,22 @@
 namespace lucid {
 namespace backend {
 
+// CPU (Accelerate-backed) concrete backend.
+//
+// All public methods satisfy the IBackend contract.  The private section
+// contains low-level type-dispatch helpers (unary_op, binary_op, reduce_axes)
+// and per-op compute routines that delegate to the Accelerate helpers in
+// Blas.h, Lapack.h, Norm.h, Pool.h, Reduce.h, Vdsp.h, and Vforce.h.
 class CpuBackend final : public IBackend {
 public:
+    // Registers this backend with the Dispatcher for Device::CPU.
     static void register_self() {
         Dispatcher::register_backend(Device::CPU, std::make_unique<CpuBackend>());
     }
 
     Device device() const noexcept override { return Device::CPU; }
 
+    // CpuStorage is already in the correct form; move it into Storage directly.
     Storage from_cpu(CpuStorage cpu, const Shape&) override { return Storage{std::move(cpu)}; }
 
     Storage zeros(const Shape& shape, Dtype dt) override {
@@ -7241,6 +7294,8 @@ public:
     }
 
 private:
+    // Dispatches im2col to the 1-D, 2-D, or 3-D variant based on N.
+    // S/K/O are input spatial sizes, kernel sizes, and output sizes indexed 0..N-1.
     static void conv_nd_im2col_f32(const float* x,
                                    float* cols,
                                    int C,
@@ -8245,6 +8300,7 @@ private:
         }
     }
 
+    // Fills ptr with the scalar value 1 for dtype dt.  Used by ones().
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {
         switch (dt) {
         case Dtype::F32: {
@@ -8276,6 +8332,8 @@ private:
         }
     }
 
+    // Generic unary dispatch: allocates output, calls fn32/fn64/fni32 based on dt.
+    // I64 falls back to a scalar loop via static_cast<double>.
     template <class F32Fn, class F64Fn, class I32Fn>
     Storage
     unary_op(const Storage& a, const Shape& shape, Dtype dt, F32Fn fn32, F64Fn fn64, I32Fn fni32) {
@@ -8303,6 +8361,7 @@ private:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    // Generic binary dispatch: allocates output, calls fn32/fn64/fni32/fni64 based on dt.
     template <class F32Fn, class F64Fn, class I32Fn, class I64Fn>
     Storage binary_op(const Storage& a,
                       const Storage& b,
@@ -8338,8 +8397,13 @@ private:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    // Tags used by reduce_axes to select the accumulation operation.
     enum class ReduceOp { Sum, Mean, Max, Min };
 
+    // Reduces a over the axes in opts by iterating axes from largest to smallest
+    // (descending sort ensures that axis indices remain valid after each step).
+    // Each single-axis pass calls the appropriate cpu::sum_axis / max_axis /
+    // min_axis primitive.  Mean divides by the reduce dimension after summing.
     Storage reduce_axes(
         const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt, ReduceOp op) {
         if (opts.axes.empty()) {
@@ -9818,6 +9882,9 @@ private:
 }  // namespace backend
 }  // namespace lucid
 
+// Anonymous-namespace static registrar that calls Dispatcher::register_backend
+// for Device::CPU at process startup, before any tensor code executes.
+// BackendInit.cpp includes this header to trigger the registration.
 namespace {
 struct CpuBackendRegistrar {
     CpuBackendRegistrar() {

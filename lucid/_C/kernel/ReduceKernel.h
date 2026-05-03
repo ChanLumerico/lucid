@@ -1,3 +1,27 @@
+// lucid/_C/kernel/ReduceKernel.h
+//
+// CRTP base for single-input reduction ops (sum, mean, max, min, etc.).
+// Unlike UnaryKernel, the output shape differs from the input shape so
+// the backward pass must broadcast the gradient back to the full input
+// extent via restore_shape() / broadcast before calling grad_formula.
+//
+// A concrete reduction op is declared as:
+//
+//   struct SumOp : ReduceKernel<SumOp> {
+//       static constexpr OpSchema schema_v1 = {"sum", ...};
+//       static CpuStorage cpu_kernel(const CpuStorage&, const Shape&,
+//                                    const std::vector<int>& axes,
+//                                    bool keepdims, Dtype);
+//       static GpuStorage gpu_kernel(const GpuStorage&, const Shape&,
+//                                    const std::vector<int>& axes,
+//                                    bool keepdims, Dtype);
+//       Storage grad_formula(Storage grad_out);
+//   };
+//
+// The extra state members (reduce_axes_, keepdims_, full_input_shape_)
+// are stored on the backward node so grad_formula can reconstruct the
+// shape transformation done during forward.
+
 #pragma once
 
 #include <memory>
@@ -25,12 +49,16 @@ namespace lucid {
 
 namespace detail {
 
+// Satisfied when Derived provides a gpu_kernel static method matching the
+// reduction GPU kernel signature (axes and keepdims are additional params).
 template <class T>
 concept HasReduceGpuKernel =
     requires(GpuStorage a, Shape s, std::vector<int> ax, bool kd, Dtype d) {
         { T::gpu_kernel(a, s, ax, kd, d) } -> std::same_as<GpuStorage>;
     };
 
+// Satisfied when Derived routes through the IBackend dispatch interface
+// for the reduction operation.
 template <class T>
 concept HasReduceDispatch =
     requires(backend::IBackend& be, Storage a, Shape s, std::vector<int> ax, bool kd, Dtype d) {
@@ -39,6 +67,9 @@ concept HasReduceDispatch =
 
 }  // namespace detail
 
+// CRTP reduction-op base. Inherits AutogradNode<Derived, 1>.
+// Extra backward state is stored in the instance fields below and
+// populated by forward() before the node is attached to the graph.
 template <class Derived>
 class ReduceKernel : public AutogradNode<Derived, 1>, public kernel::IKernel {
 public:
@@ -48,16 +79,29 @@ public:
 
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
+    // Axes that were reduced during forward(), stored for use in grad_formula.
     std::vector<int> reduce_axes_;
+    // Whether keepdims was requested; grad_formula uses this to know whether
+    // to insert size-1 dimensions before broadcasting back to full_input_shape_.
     bool keepdims_ = false;
+    // The shape of the input tensor before reduction; needed to broadcast
+    // the gradient back to the original extent during backward.
     Shape full_input_shape_;
 
+    // Forward pass: normalize axes, compute output shape, dispatch kernel,
+    // and wire the backward node with the extra reduction state.
     static std::shared_ptr<TensorImpl>
     forward(const std::shared_ptr<TensorImpl>& a, const std::vector<int>& axes_user, bool keepdims);
 
+    // Backward pass: call Derived::grad_formula(grad_out) and return the
+    // single input gradient (no shape reduction needed here; grad_formula
+    // is responsible for restoring the reduced dimensions).
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
+// Normalize axes to canonical positive form, compute the output shape,
+// enforce contiguity on CPU, dispatch the reduce kernel, and record the
+// reduction axes + keepdims on the backward node for grad_formula.
 template <class Derived>
 std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
                                                            const std::vector<int>& axes_user,
@@ -72,6 +116,8 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
         (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
     const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
 
+    // normalize_axes converts negative indices and deduplicates; the
+    // result is a sorted, non-negative axis list suitable for the kernels.
     const auto axes = normalize_axes(axes_user, static_cast<int>(a_ptr->shape().size()));
     Shape out_shape = reduce_output_shape(a_ptr->shape(), axes, keepdims);
 
@@ -117,6 +163,7 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
         if constexpr (Derived::kSavesOutput)
             bwd->saved_output_ = out->storage();
 
+        // Store reduction metadata so grad_formula can invert the shape change.
         bwd->reduce_axes_ = axes;
         bwd->keepdims_ = keepdims;
         bwd->full_input_shape_ = a->shape();
@@ -133,6 +180,10 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     }
 }
 
+// Delegate entirely to Derived::grad_formula. Unlike UnaryKernel::apply(),
+// no reduce_grad_to_shape call is made here because the reduction kernel's
+// grad_formula is responsible for broadcasting grad_out back to
+// full_input_shape_ using the saved reduce_axes_ and keepdims_ fields.
 template <class Derived>
 std::vector<Storage> ReduceKernel<Derived>::apply(Storage grad_out) {
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);

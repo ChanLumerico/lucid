@@ -1,3 +1,20 @@
+// lucid/_C/nn/ConvNd.cpp
+//
+// N-dimensional convolution and Unfold implementation.
+//
+// Forward shape formula for each spatial axis i:
+//   O[i] = (S[i] + 2*pad[i] - dilation[i]*(K[i]-1) - 1) / stride[i] + 1
+//
+// FLOP estimate (multiply-add pairs):
+//   2 * B * C_out * prod(O) * C_in_per_group * prod(K)
+//
+// The forward delegates to IBackend::conv_nd_forward (im2col + GEMM on CPU,
+// native MLX conv on GPU).  The backward delegates to
+// IBackend::conv_nd_backward, which returns [dx, dW, db].
+//
+// Unfold (im2col) delegates to IBackend::unfold_forward; its backward
+// (fold / col2im) delegates to IBackend::unfold_backward.
+
 #include "ConvNd.h"
 
 #include <vector>
@@ -26,8 +43,10 @@ const OpSchema Conv3dBackward::schema_v1{"conv3d", 1, AmpPolicy::Promote, true};
 
 namespace {
 
+// Compute the output size for one spatial dimension.
+// S – input size, K – kernel size, stride, pad, dilation are scalars.
 inline int compute_out(int S, int K, int stride, int pad, int dilation) {
-    const int eff = dilation * (K - 1) + 1;
+    const int eff = dilation * (K - 1) + 1;  // Effective (dilated) kernel size.
     return (S + 2 * pad - eff) / stride + 1;
 }
 
@@ -49,6 +68,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     if (x->device() != W->device() || x->device() != b->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(W->device())), "conv");
+    // x must be (B, C_in, S_0...) and W must be (C_out, C_in/g, K_0...).
     if (static_cast<int>(x->shape().size()) != N + 2)
         throw ShapeMismatch(x->shape(), Shape{}, "conv: x rank mismatch");
     if (static_cast<int>(W->shape().size()) != N + 2)
@@ -102,6 +122,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         K_total *= K[i];
 
     OpScopeFull scope{ConvNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
+    // 2 ops (mul+add) per element of the output per input-channel-kernel position.
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin_g * K_total);
 
     backend::IBackend::ConvNdOpts opts{};
@@ -126,6 +147,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->dilation_[i] = dilation[i];
     }
     bwd->groups_ = groups;
+    // saved_inputs_[0..2] will hold {x, W, b}.
     kernel::NaryKernel<ConvNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, W, b}, out);
     return out;
 }
@@ -152,6 +174,7 @@ std::vector<Storage> ConvNdBackward<N>::apply(Storage grad_out) {
         opts.dilation[i] = this->dilation_[i];
     }
     auto& be = backend::Dispatcher::for_device(this->device_);
+    // Returns [dx, dW, db].
     return be.conv_nd_backward(grad_out, this->saved_inputs_[0], this->saved_inputs_[1], B, Cin,
                                Cout, Cin_g, Cout_g, S, K, O, opts, this->dtype_);
 }
@@ -160,6 +183,7 @@ template class ConvNdBackward<1>;
 template class ConvNdBackward<2>;
 template class ConvNdBackward<3>;
 
+// Entry points flatten individual scalar parameters into fixed-size arrays.
 TensorImplPtr conv1d_op(const TensorImplPtr& x,
                         const TensorImplPtr& W,
                         const TensorImplPtr& b,
@@ -246,6 +270,7 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         K_total *= K[i];
 
+    // Output: (B, C * prod(K), prod(O)) — the im2col column matrix.
     Shape out_shape{static_cast<std::int64_t>(B), static_cast<std::int64_t>(C * K_total),
                     static_cast<std::int64_t>(O_total)};
 
@@ -280,6 +305,7 @@ std::vector<Storage> UnfoldBackward::apply(Storage grad_out) {
         O[i] = (S[i] + 2 * pad_[i] - eff) / stride_[i] + 1;
     }
     auto& be = backend::Dispatcher::for_device(this->device_);
+    // fold / col2im to recover the original input gradient.
     return {be.unfold_backward(grad_out, B, C, S, K, O, stride_, pad_, dilation_, this->dtype_)};
 }
 

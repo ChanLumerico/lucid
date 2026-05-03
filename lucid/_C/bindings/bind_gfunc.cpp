@@ -1,3 +1,11 @@
+// lucid/_C/bindings/bind_gfunc.cpp
+//
+// Registers tensor-creation ("generator function") ops: zeros, ones, full,
+// empty, eye, arange, linspace, diag, and the _like variants.  These ops
+// produce new tensors from scalar or shape arguments rather than from existing
+// tensors, so they do not have backward nodes and do not appear in the binary-
+// or unary-op registration files.
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -11,13 +19,17 @@ namespace lucid::bindings {
 
 namespace {
 
+// Converts a Python list of int64 dimensions to the internal Shape typedef.
 Shape vec_to_shape(const std::vector<std::int64_t>& v) {
     return Shape(v.begin(), v.end());
 }
 
 }  // namespace
 
+// Registers all tensor-creation ops on the top-level engine module.
 void register_gfunc(py::module_& m) {
+    // zeros, ones, full, and empty accept a Python list for shape; the lambda
+    // converts it to Shape before calling the C++ op.
     m.def(
         "zeros",
         [](std::vector<std::int64_t> shape, Dtype dt, Device device, bool requires_grad) {
@@ -51,6 +63,9 @@ void register_gfunc(py::module_& m) {
         py::arg("shape"), py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,
         py::arg("requires_grad") = false);
 
+    // eye, arange, linspace, and diag delegate directly to their C++ ops
+    // without shape conversion because they take scalar dimension arguments.
+    // eye: M=-1 means square (N×N); k is the diagonal offset.
     m.def("eye", &eye_op, py::arg("N"), py::arg("M") = -1, py::arg("k") = 0,
           py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,
           py::arg("requires_grad") = false);
@@ -65,6 +80,8 @@ void register_gfunc(py::module_& m) {
 
     m.def("diag", &diag_op, py::arg("v"), py::arg("k") = 0);
 
+    // _like ops infer shape and device from an existing tensor; only the
+    // requires_grad flag may be overridden.
     m.def("zeros_like", &zeros_like_op, py::arg("a"), py::arg("requires_grad") = false);
     m.def("ones_like", &ones_like_op, py::arg("a"), py::arg("requires_grad") = false);
     m.def("empty_like", &empty_like_op, py::arg("a"), py::arg("requires_grad") = false);

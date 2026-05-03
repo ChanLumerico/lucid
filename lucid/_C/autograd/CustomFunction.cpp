@@ -1,3 +1,9 @@
+// lucid/_C/autograd/CustomFunction.cpp
+//
+// Implements PythonBackwardNode::apply() and the pybind11 registration
+// function register_custom_function().  Together they allow Python code to
+// inject a custom backward computation into the C++ autograd graph.
+
 #include "CustomFunction.h"
 
 #include <pybind11/pybind11.h>
@@ -18,6 +24,15 @@ namespace lucid {
 
 namespace {
 
+// Attempt to extract a Storage from a Python object.
+//
+// Two strategies are tried in order:
+//   1. Direct cast to shared_ptr<TensorImpl>: the object is itself a
+//      C++-backed TensorImpl exposed to Python.
+//   2. Attribute-access cast via obj.impl: the object is a thin Python
+//      wrapper (lucid.Tensor) that carries an impl shared_ptr.
+// If both fail, returns an empty default-constructed CpuStorage{} so that
+// None-valued gradient outputs (stop-gradient inputs) can be represented.
 Storage extract_storage(py::object obj) {
     try {
         auto t = obj.cast<std::shared_ptr<TensorImpl>>();
@@ -38,6 +53,19 @@ Storage extract_storage(py::object obj) {
 
 }  // namespace
 
+// Invoke the Python backward function and collect the resulting gradients.
+//
+// Steps:
+//   1. Acquire the GIL; the Python interpreter may not be active on the
+//      backward thread.
+//   2. Wrap grad_out in a temporary TensorImpl so Python can treat it as a
+//      normal tensor.  out_shape is used as the shape; if it is empty the
+//      shape is inferred from nbytes / element size.
+//   3. Call py_backward_fn(py_ctx, grad_tensor).  Any Python exception is
+//      re-thrown as a C++ std::runtime_error.
+//   4. Unpack the result: a tuple or list yields one Storage per item; a
+//      single tensor yields one Storage.  Python None entries become empty
+//      CpuStorage{} values representing "no gradient for this input".
 std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     py::gil_scoped_acquire gil;
 
@@ -48,6 +76,8 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     Dtype grad_dt = storage_dtype(grad_out);
     Device grad_dev = storage_is_gpu(grad_out) ? Device::GPU : Device::CPU;
 
+    // Reconstruct shape for the gradient TensorImpl.  A non-empty out_shape
+    // is used directly; otherwise a flat 1-D shape is derived from byte count.
     Shape grad_shape = out_shape;
     if (grad_shape.empty()) {
         const std::size_t n = storage_nbytes(grad_out) / dtype_size(grad_dt);
@@ -66,6 +96,7 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
 
     std::vector<Storage> storages;
 
+    // Helper that appends one Storage for a single Python return value.
     auto collect_one = [&](py::object item) {
         if (item.is_none()) {
             storages.push_back(Storage{CpuStorage{}});
@@ -74,6 +105,7 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
         }
     };
 
+    // Unpack tuple/list returns (multiple inputs) or a single tensor return.
     if (py::isinstance<py::tuple>(result) || py::isinstance<py::list>(result)) {
         for (auto item : result)
             collect_one(item.cast<py::object>());
@@ -84,7 +116,15 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     return storages;
 }
 
+// -------------------------------------------------------------------------
+// pybind11 bindings
+// -------------------------------------------------------------------------
+
 void register_custom_function(py::module_& m) {
+    // FunctionCtx — Python-visible as lucid._C.FunctionCtx.
+    // save_for_backward accepts *args of tensors (TensorImpl or Python
+    // wrappers with an .impl attribute).  saved_tensors returns a tuple.
+    // Arbitrary attributes are stored/retrieved via __setattr__/__getattr__.
     py::class_<FunctionCtx, std::shared_ptr<FunctionCtx>>(m, "FunctionCtx")
         .def(py::init<>())
         .def(
@@ -96,6 +136,7 @@ void register_custom_function(py::module_& m) {
                     try {
                         v.push_back(t.cast<std::shared_ptr<TensorImpl>>());
                     } catch (...) {
+                        // Fall back to wrapper-with-.impl convention.
                         v.push_back(t.attr("impl").cast<std::shared_ptr<TensorImpl>>());
                     }
                 }
@@ -120,12 +161,23 @@ void register_custom_function(py::module_& m) {
             return v;
         });
 
+    // _PythonBackwardNode — internal type; Python sets ctx and backward_fn
+    // fields, then passes the node to _register_python_backward_node.
     py::class_<PythonBackwardNode, Node, std::shared_ptr<PythonBackwardNode>>(m,
                                                                               "_PythonBackwardNode")
         .def(py::init<>())
         .def_readwrite("ctx", &PythonBackwardNode::py_ctx)
         .def_readwrite("backward_fn", &PythonBackwardNode::py_backward_fn);
 
+    // _register_python_backward_node(output, node, inputs)
+    //
+    // Wire node into the autograd graph as the grad_fn of output.
+    // For each input in inputs:
+    //   - If the input is a leaf requiring grad, create an AccumulateGrad
+    //     node for it (if not already present) and record an edge to it.
+    //   - If the input does not require grad, record a null edge.
+    // Saves the version counters for in-place mutation detection.
+    // Marks output as a non-leaf tensor requiring gradients.
     m.def(
         "_register_python_backward_node",
         [](std::shared_ptr<TensorImpl> output, std::shared_ptr<PythonBackwardNode> node,
@@ -149,6 +201,8 @@ void register_custom_function(py::module_& m) {
                     continue;
                 }
                 if (inp->is_leaf()) {
+                    // Ensure a leaf has an AccumulateGrad node so that
+                    // gradients flowing to it will be accumulated into .grad.
                     if (!inp->grad_fn())
                         inp->set_grad_fn(std::make_shared<AccumulateGrad>(inp));
                 }

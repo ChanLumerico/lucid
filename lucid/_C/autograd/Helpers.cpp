@@ -1,3 +1,12 @@
+// lucid/_C/autograd/Helpers.cpp
+//
+// Implements the utility functions declared in Helpers.h.  The file is split
+// into three areas:
+//   1. CPU in-place accumulation (typed loops + overloaded visitor).
+//   2. Thin dispatcher wrappers for element-wise and reduction operations.
+//   3. CPU-side random number generators (uniform, normal, Bernoulli, randint)
+//      that produce CpuStorage buffers then transfer to the target device.
+
 #include "Helpers.h"
 
 #include <algorithm>
@@ -20,6 +29,7 @@ namespace lucid {
 
 namespace {
 
+// C++17 overloaded-lambda helper for std::visit.
 template <class... Ts>
 struct overloaded : Ts... {
     using Ts::operator()...;
@@ -27,6 +37,7 @@ struct overloaded : Ts... {
 template <class... Ts>
 overloaded(Ts...) -> overloaded<Ts...>;
 
+// Typed in-place addition loop: dst[i] += src[i] for numel elements of type T.
 template <typename T>
 void add_typed(std::byte* dst, const std::byte* src, std::size_t numel) {
     auto* td = reinterpret_cast<T*>(dst);
@@ -35,6 +46,8 @@ void add_typed(std::byte* dst, const std::byte* src, std::size_t numel) {
         td[i] = td[i] + ts[i];
 }
 
+// Perform dst += src for two CpuStorage buffers.
+// Validates dtype and byte-count equality, then dispatches to add_typed<T>.
 void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
     if (dst.dtype != src.dtype) {
         throw DtypeMismatch(std::string(dtype_name(dst.dtype)), std::string(dtype_name(src.dtype)),
@@ -81,6 +94,15 @@ Storage reduce_grad_to_shape(const Storage& grad,
                                                                         target_shape, dtype);
 }
 
+// Dispatch accumulation to the appropriate device handler using std::visit.
+//
+// The visitor handles five cases:
+//   CPU+CPU          — direct typed loop via cpu_add_inplace.
+//   GPU+GPU          — MLX add, rewrap result into the destination GpuStorage.
+//   SharedStorage+SharedStorage — obtain cpu_view() of both, then cpu_add_inplace.
+//   SharedStorage+CpuStorage   — view the shared buffer as CPU, then add.
+//   CpuStorage+SharedStorage   — view the shared source as CPU, then add.
+// Any other combination (CPU+GPU, GPU+CPU, etc.) throws DeviceMismatch.
 void accumulate_into(Storage& dst, const Storage& src) {
     std::visit(overloaded{
                    [&](CpuStorage& d, const CpuStorage& s) { cpu_add_inplace(d, s); },
@@ -92,7 +114,9 @@ void accumulate_into(Storage& dst, const Storage& src) {
                            throw DtypeMismatch(std::string(dtype_name(d.dtype)),
                                                std::string(dtype_name(s.dtype)), "accumulate_into");
                        }
-
+                       // MLX add produces a new array; replace the destination's
+                       // arr pointer in-place so callers holding a reference to
+                       // d see the updated value.
                        auto next = ::mlx::core::add(*d.arr, *s.arr);
                        d.arr = gpu::wrap_mlx_array(std::move(next), d.dtype).arr;
                    },
@@ -116,6 +140,12 @@ void accumulate_into(Storage& dst, const Storage& src) {
                },
                dst, src);
 }
+
+// -------------------------------------------------------------------------
+// Element-wise arithmetic helpers.
+// Each function constructs a flat 1-D Shape from numel and delegates to the
+// Dispatcher so that the correct backend (CPU/GPU) is used automatically.
+// -------------------------------------------------------------------------
 
 Storage negate_storage(const Storage& s, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
@@ -191,6 +221,8 @@ mul_scalar_storage(const Storage& s, double scalar, std::size_t numel, Dtype dt,
     return backend::Dispatcher::for_device(device).mul_scalar(s, flat, dt, scalar);
 }
 
+// Macro-generated unary helpers.  Each expands to a free function that
+// wraps numel into a flat Shape and calls the matching Dispatcher method.
 #define LUCID_UNARY_HELPER(NAME, BACKEND_METHOD)                                                   \
     Storage NAME##_storage(const Storage& s, std::size_t n, Dtype dt, Device device) {             \
         const Shape flat{static_cast<std::int64_t>(n)};                                            \
@@ -212,6 +244,9 @@ LUCID_UNARY_HELPER(tanh, tanh)
 
 #undef LUCID_UNARY_HELPER
 
+// tan and sign are defined outside the macro because they share the same
+// dispatcher method name as other functions (avoiding collision) or because
+// there is no 1-to-1 macro match.
 Storage tan_storage(const Storage& s, std::size_t numel, Dtype dt, Device device) {
     const Shape flat{static_cast<std::int64_t>(numel)};
     return backend::Dispatcher::for_device(device).tan(s, flat, dt);
@@ -228,6 +263,13 @@ Storage in_range_mask_storage(
     return backend::Dispatcher::for_device(device).in_range_mask(s, flat, dt, lo, hi);
 }
 
+// -------------------------------------------------------------------------
+// Version counter validation.
+// -------------------------------------------------------------------------
+
+// Compare the version counter of the live TensorImpl against the saved value.
+// A discrepancy means the tensor was mutated in-place between the forward pass
+// and this backward call — which invalidates the saved activation data.
 void check_version_match(const std::weak_ptr<TensorImpl>& live,
                          std::int64_t saved_version,
                          std::string_view op_name,
@@ -241,6 +283,13 @@ void check_version_match(const std::weak_ptr<TensorImpl>& live,
     }
 }
 
+// -------------------------------------------------------------------------
+// Shape / axis helpers for reduction backward passes.
+// -------------------------------------------------------------------------
+
+// Resolve axis indices to a sorted, deduplicated list of non-negative values.
+// Negative indices are wrapped by adding ndim.  An empty input axes list is
+// interpreted as "all axes".
 std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
     std::vector<int> out;
     if (axes.empty()) {
@@ -266,6 +315,8 @@ std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
     return out;
 }
 
+// Build the output shape of a reduction, applying keepdims semantics.
+// Reduced dimensions either disappear (keepdims=false) or become 1.
 Shape reduce_output_shape(const Shape& input_shape, const std::vector<int>& axes, bool keepdims) {
     std::vector<bool> reduce_mask(input_shape.size(), false);
     for (int a : axes)
@@ -276,6 +327,7 @@ Shape reduce_output_shape(const Shape& input_shape, const std::vector<int>& axes
         if (reduce_mask[i]) {
             if (keepdims)
                 out.push_back(1);
+            // else: dimension is dropped
         } else {
             out.push_back(input_shape[i]);
         }
@@ -283,6 +335,12 @@ Shape reduce_output_shape(const Shape& input_shape, const std::vector<int>& axes
     return out;
 }
 
+// Expand grad back from the reduced shape to input_shape so that it can be
+// added to the input's gradient buffer.
+//
+// The expected shape of grad is validated against reduce_output_shape() to
+// catch mismatches early.  The actual broadcasting is delegated to the
+// Dispatcher's broadcast_back_for_reduce(), which handles both CPU and GPU.
 Storage broadcast_back_for_reduce(const Storage& grad,
                                   const Shape& grad_shape,
                                   const Shape& input_shape,
@@ -310,6 +368,13 @@ Storage sigmoid_storage(const Storage& s, std::size_t numel, Dtype dt, Device de
     return backend::Dispatcher::for_device(device).sigmoid(s, flat, dt);
 }
 
+// -------------------------------------------------------------------------
+// Random tensor generation — all produced on CPU then transferred to device.
+// -------------------------------------------------------------------------
+
+// Generate a Bernoulli mask with explicit shape.  Samples are drawn on CPU
+// using the Generator's uniform float stream, then transferred to the target
+// device via Dispatcher::from_cpu().
 Storage bernoulli_mask_storage_shape(
     double keep_prob, const Shape& shape, Dtype dt, Device device, Generator& gen) {
     if (keep_prob < 0.0 || keep_prob > 1.0) {
@@ -344,6 +409,7 @@ Storage bernoulli_mask_storage_shape(
     return backend::Dispatcher::for_device(device).from_cpu(std::move(out), shape);
 }
 
+// Flat-numel convenience wrapper around bernoulli_mask_storage_shape.
 Storage bernoulli_mask_storage(
     double keep_prob, std::size_t numel, Dtype dt, Device device, Generator& gen) {
     Shape flat;
@@ -358,6 +424,7 @@ Storage positive_mask_storage(const Storage& s, std::size_t numel, Dtype dt, Dev
 
 namespace {
 
+// Fill dst[0..numel) with uniform floats scaled to [lo, hi).
 template <typename T>
 void fill_uniform(T* dst, std::size_t numel, double lo, double hi, Generator& gen) {
     const T span = static_cast<T>(hi - lo);
@@ -367,6 +434,10 @@ void fill_uniform(T* dst, std::size_t numel, double lo, double hi, Generator& ge
     }
 }
 
+// Fill dst[0..numel) with samples from N(mean, std) using the Box-Muller
+// transform.  Pairs of uniform samples produce two normal samples, so the
+// loop processes two elements at a time with a tail case for odd numel.
+// u1 is clamped away from zero to prevent log(0).
 template <typename T>
 void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& gen) {
     const T m = static_cast<T>(mean);
@@ -387,6 +458,7 @@ void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& 
         i += 2;
     }
     if (i < numel) {
+        // Odd element: use only z0 from the final Box-Muller pair.
         T u1 = static_cast<T>(gen.next_uniform_float());
         if (u1 < eps)
             u1 = eps;
@@ -396,6 +468,11 @@ void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& 
     }
 }
 
+// Fill dst[0..numel) with integers uniformly drawn from [low, high).
+// When range fits in 32 bits, a single uint32 is used per element.
+// When range exceeds 32 bits, two consecutive uint32 values are combined
+// into a 64-bit value.  The Generator is queried in batches of four uint32s
+// to amortise call overhead.
 template <typename Int>
 void fill_randint(
     Int* dst, std::size_t numel, std::int64_t low, std::int64_t high, Generator& gen) {
@@ -413,6 +490,7 @@ void fill_randint(
             std::uint64_t r = buf[k];
 
             if (range > 0xFFFFFFFFull) {
+                // Combine two 32-bit words for large ranges.
                 std::uint32_t buf2[4];
                 gen.next_uint32x4(buf2);
                 r = (r << 32) | buf2[0];
@@ -422,6 +500,7 @@ void fill_randint(
     }
 }
 
+// Allocate an uninitialized CpuStorage sized for shape and dtype.
 CpuStorage allocate_for_random(const Shape& shape, Dtype dt) {
     CpuStorage s;
     s.dtype = dt;

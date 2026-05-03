@@ -1,3 +1,10 @@
+// lucid/_C/backend/cpu/Blas.h
+//
+// Thin wrappers around Apple Accelerate CBLAS routines used by the CPU backend
+// for matrix multiplication and matrix-vector multiplication.  All functions
+// assume row-major storage (CblasRowMajor) and map the bool transpose flags to
+// CBLAS_TRANSPOSE constants.  "s" prefix = float32; "d" prefix = float64.
+
 #pragma once
 
 #include <cstddef>
@@ -6,6 +13,9 @@
 
 namespace lucid::backend::cpu {
 
+// Single-precision general matrix multiply: C = alpha*(A @ B) + beta*C.
+// Leading dimensions lda, ldb, ldc are the column strides of A, B, C.
+// transA/transB control whether each matrix is transposed before multiplication.
 LUCID_INTERNAL void sgemm(bool transA,
                           bool transB,
                           int M,
@@ -20,6 +30,7 @@ LUCID_INTERNAL void sgemm(bool transA,
                           float* C,
                           int ldc);
 
+// Double-precision general matrix multiply: C = alpha*(A @ B) + beta*C.
 LUCID_INTERNAL void dgemm(bool transA,
                           bool transB,
                           int M,
@@ -34,6 +45,8 @@ LUCID_INTERNAL void dgemm(bool transA,
                           double* C,
                           int ldc);
 
+// Single-precision matrix-vector multiply: y = alpha*(A @ x) + beta*y.
+// incx/incy are the strides within the input/output vectors.
 LUCID_INTERNAL void sgemv(bool transA,
                           int M,
                           int N,
@@ -46,6 +59,7 @@ LUCID_INTERNAL void sgemv(bool transA,
                           float* y,
                           int incy);
 
+// Double-precision matrix-vector multiply: y = alpha*(A @ x) + beta*y.
 LUCID_INTERNAL void dgemv(bool transA,
                           int M,
                           int N,

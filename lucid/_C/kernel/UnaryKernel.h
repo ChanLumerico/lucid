@@ -1,3 +1,27 @@
+// lucid/_C/kernel/UnaryKernel.h
+//
+// CRTP base for single-input, single-output op kernels. A concrete op
+// declares itself as:
+//
+//   struct ReluOp : UnaryKernel<ReluOp> {
+//       static constexpr OpSchema schema_v1 = {"relu", ...};
+//       static CpuStorage cpu_kernel(const CpuStorage&, const Shape&, Dtype);
+//       static GpuStorage gpu_kernel(const GpuStorage&, const Shape&, Dtype);
+//       Storage grad_formula(Storage grad_out);
+//   };
+//
+// UnaryKernel::forward() then handles dtype negotiation (SchemaGuard),
+// contiguous enforcement, dispatch to cpu_kernel / gpu_kernel / dispatch,
+// and autograd graph wiring. Derived ops only implement the math.
+//
+// Dispatch priority inside forward():
+//   1. Derived::dispatch(IBackend&, ...)  — if HasUnaryDispatch<Derived>
+//   2. Derived::gpu_kernel(GpuStorage, ...)  — GPU path
+//   3. Derived::cpu_kernel(CpuStorage, ...)  — CPU path
+//
+// The apply() override calls Derived::grad_formula(grad_out) and
+// broadcasts the result back to the original input shape.
+
 #pragma once
 
 #include <memory>
@@ -25,11 +49,16 @@ namespace lucid {
 
 namespace detail {
 
+// Satisfied when Derived provides a gpu_kernel static method matching the
+// signature required for unary GPU dispatch.
 template <class T>
 concept HasUnaryGpuKernel = requires(GpuStorage a, Shape s, Dtype d) {
     { T::gpu_kernel(a, s, d) } -> std::same_as<GpuStorage>;
 };
 
+// Satisfied when Derived provides a dispatch static method that routes
+// through the IBackend abstraction (used by ops with Accelerate BNNS
+// or other backend-specific implementations).
 template <class T>
 concept HasUnaryDispatch = requires(backend::IBackend& be, Storage a, Shape s, Dtype d) {
     { T::dispatch(be, a, s, d) } -> std::same_as<Storage>;
@@ -37,17 +66,32 @@ concept HasUnaryDispatch = requires(backend::IBackend& be, Storage a, Shape s, D
 
 }  // namespace detail
 
+// CRTP unary-op base. Inherits AutogradNode<Derived, 1> (one saved input)
+// and IKernel so it can be used via the polymorphic IKernel* interface.
+//
+// kSavesInput, kSavesOutput, and kHasGradient may be overridden by
+// Derived as static constexpr bool constants to suppress unnecessary
+// allocations when e.g. no backward pass is required.
 template <class Derived>
 class UnaryKernel : public AutogradNode<Derived, 1>, public kernel::IKernel {
 public:
+    // Whether to snapshot a->storage() for use in grad_formula(). When
+    // the gradient formula does not need the forward input (e.g. for
+    // ReLU using the saved output) set to false to avoid the copy.
     static constexpr bool kSavesInput = true;
+    // Whether to snapshot the output storage for use in grad_formula().
     static constexpr bool kSavesOutput = false;
+    // Set to false for in-place or non-differentiable ops to skip graph wiring.
     static constexpr bool kHasGradient = true;
 
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
+    // Forward pass: validate, cast dtype, enforce contiguity, dispatch,
+    // then wire the autograd graph if any input requires gradients.
     static std::shared_ptr<TensorImpl> forward(const std::shared_ptr<TensorImpl>& a);
 
+    // Backward pass: delegate to Derived::grad_formula, then reduce the
+    // gradient back to the original input shape (for broadcast ops).
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
@@ -56,9 +100,13 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
     if (!a)
         ErrorBuilder(Derived::schema_v1.name).fail("null input tensor");
 
+    // SchemaGuard resolves the effective dtype (e.g., promoting F16 → F32
+    // when the schema requires full precision) and validates device support.
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
+    // Non-contiguous CPU tensors must be materialized before the typed
+    // cpu_kernel loop can index them with a simple pointer + offset.
     const TensorImplPtr a_contig =
         (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
     const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
@@ -67,6 +115,7 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
 
     Storage out_storage;
     if constexpr (detail::HasUnaryDispatch<Derived>) {
+        // Dispatch path: uses the backend abstraction (Accelerate / MLX).
         out_storage = Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()),
                                         a_ptr->storage(), a_ptr->shape(), eff_dt);
     } else if (a_ptr->device() == Device::GPU) {
@@ -92,6 +141,8 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
         if (!needs_grad)
             return out;
 
+        // ensure_grad_fn wraps a leaf parameter in an AccumulateGrad node
+        // so the autograd engine knows where to accumulate its gradient.
         auto a_edge = detail::ensure_grad_fn(a);
 
         auto bwd = std::make_shared<Derived>();
@@ -100,6 +151,7 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
         bwd->dtype_ = eff_dt;
         bwd->device_ = a->device();
         bwd->input_tensors_ = {a};
+        // Conditionally snapshot inputs/output for use in grad_formula.
         if constexpr (Derived::kSavesInput)
             bwd->saved_inputs_ = {a_ptr->storage()};
         if constexpr (Derived::kSavesOutput)
@@ -108,6 +160,8 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);
         bwd->set_next_edges(std::move(edges));
+        // Version is captured so in-place modifications after this forward
+        // call are detected as version mismatches during backward.
         bwd->set_saved_versions({a->version()});
 
         out->set_grad_fn(std::move(bwd));
@@ -117,6 +171,8 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
     }
 }
 
+// Delegate to the concrete grad_formula, then broadcast-reduce the result
+// to match the original input shape if the op changed the shape.
 template <class Derived>
 std::vector<Storage> UnaryKernel<Derived>::apply(Storage grad_out) {
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);

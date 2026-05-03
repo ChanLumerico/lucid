@@ -1,3 +1,12 @@
+// lucid/_C/nn/AdaptivePool.cpp
+//
+// Adaptive pooling implemented as a thin wrapper over the fixed PoolNd ops.
+// For each spatial axis the kernel size is K = input_size / output_size and
+// the stride equals K (non-overlapping, no padding).  If the division is not
+// exact, check_uniform() raises not_implemented.
+//
+// Autograd is inherited transparently from the underlying PoolNd calls.
+
 #include "AdaptivePool.h"
 
 #include <vector>
@@ -12,6 +21,9 @@ namespace lucid {
 
 namespace {
 
+// Assert that the input spatial size S is evenly divisible by the requested
+// output size O for the given axis, and that O is positive.
+// Throws not_implemented with a diagnostic message if the constraint fails.
 inline void check_uniform(int S, int O, int axis, const char* op) {
     if (O <= 0)
         ErrorBuilder(op).fail("output_size must be > 0");
@@ -23,6 +35,7 @@ inline void check_uniform(int S, int O, int axis, const char* op) {
     }
 }
 
+// Validate that x is non-null and has exactly expected_rank dimensions.
 inline void check_rank(const TensorImplPtr& x, int expected_rank, const char* op) {
     Validator::input(x, std::string(op) + ".x").non_null();
     if (static_cast<int>(x->shape().size()) != expected_rank)

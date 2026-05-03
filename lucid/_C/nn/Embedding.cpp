@@ -1,3 +1,22 @@
+// lucid/_C/nn/Embedding.cpp
+//
+// Implementation of embedding lookup, sinusoidal position encoding, and
+// Rotary Position Embedding (RoPE).
+//
+// Embedding forward: IBackend::embedding_forward gathers rows from the weight
+//   matrix at positions given by indices, zeroing any row at padding_idx.
+//   Output shape: (*indices.shape, embed_dim).
+// Embedding backward: IBackend::embedding_backward scatter-adds grad_out into
+//   a zero-initialized weight gradient.
+//
+// Sinusoidal encoding: IBackend::sinusoidal_pos_embedding fills the (L, D)
+//   matrix with sin/cos at geometrically spaced frequencies.  No grad node.
+//
+// RoPE forward: IBackend::rope_forward returns {rotated_input, cos, sin}.
+//   cos and sin are saved for the backward.
+// RoPE backward: IBackend::rope_backward applies the inverse rotation to
+//   grad_out using the saved cos/sin tables.
+
 #include "Embedding.h"
 
 #include <vector>

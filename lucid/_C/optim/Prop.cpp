@@ -1,3 +1,10 @@
+// lucid/_C/optim/Prop.cpp
+//
+// CPU and GPU implementations of RMSprop and Rprop. RMSprop uses MLX
+// array operations on GPU and a scalar loop on CPU. Rprop on GPU uses
+// element-wise masking via mlx::core::where to avoid conditional branches
+// across array elements.
+
 #include "Prop.h"
 
 #include <variant>
@@ -30,6 +37,9 @@ RMSprop::RMSprop(std::vector<std::shared_ptr<TensorImpl>> p,
       momentum_(momentum),
       centered_(centered) {}
 
+// Conditionally allocate the three possible state buffers.
+// grad_avg_ and moment_buf_ are only allocated when their corresponding
+// features are enabled, avoiding unnecessary memory allocation.
 void RMSprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (square_avg_.size() < params_.size())
         square_avg_.resize(params_.size());
@@ -44,6 +54,9 @@ void RMSprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& 
         moment_buf_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
+// Apply one RMSprop step. On CPU the lambda captures typed pointers
+// and runs a scalar loop. On GPU each operation produces a new MLX
+// array that replaces the previous one via gpu_replace().
 void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     const auto dt = p->dtype();
     if (p->device() == Device::GPU) {
@@ -60,6 +73,8 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         gpu_replace(sq, ::mlx::core::array(new_sq), dt);
         ::mlx::core::array avg = new_sq;
         if (centered_) {
+            // Centered RMSprop: subtract the squared gradient mean to
+            // estimate the variance rather than the raw second moment.
             auto& ga = gpu_get(grad_avg_[i]);
             auto new_ga = ::mlx::core::add(::mlx::core::multiply(mlx_scalar(alpha_, dt), *ga.arr),
                                            ::mlx::core::multiply(mlx_scalar(1.0 - alpha_, dt), g));
@@ -87,6 +102,7 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* SQ = cpu_ptr<T>(square_avg_[i]);
+        // GA and MB are null when the corresponding features are disabled.
         T* GA = centered_ ? cpu_ptr<T>(grad_avg_[i]) : nullptr;
         T* MB = (momentum_ != 0.0) ? cpu_ptr<T>(moment_buf_[i]) : nullptr;
         const T lrT = static_cast<T>(lr_);
@@ -137,6 +153,9 @@ Rprop::Rprop(std::vector<std::shared_ptr<TensorImpl>> p,
       step_min_(step_min),
       step_max_(step_max) {}
 
+// Allocate previous-gradient buffer (zero) and step-size buffer.
+// step_size_ is set to lr_ on every element rather than 1.0 so the
+// very first update uses a sensible absolute step magnitude.
 void Rprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (prev_grad_.size() < params_.size())
         prev_grad_.resize(params_.size());
@@ -164,6 +183,11 @@ void Rprop::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p)
     }
 }
 
+// Apply one Rprop step. On GPU sign agreement is detected with
+// element-wise greater/less comparisons, and where() selects between
+// the scaled and unscaled step for each element without branching.
+// When the gradient reverses sign, the previous gradient is zeroed so
+// the next step does not trigger another sign-change event.
 void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     const auto dt = p->dtype();
     if (p->device() == Device::GPU) {
@@ -175,16 +199,20 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         ::mlx::core::array sign_change = ::mlx::core::multiply(*gg.arr, *pv.arr);
         ::mlx::core::array zero_arr = mlx_scalar(0.0, dt);
 
+        // Increase step size where gradient maintained its sign.
         auto pos_mask = ::mlx::core::greater(sign_change, zero_arr);
         auto inc = ::mlx::core::multiply(mlx_scalar(eta_plus_, dt), *ss.arr);
         auto new_ss = ::mlx::core::where(pos_mask, inc, *ss.arr);
 
+        // Decrease step size where gradient reversed sign.
         auto neg_mask = ::mlx::core::less(sign_change, zero_arr);
         auto dec = ::mlx::core::multiply(mlx_scalar(eta_minus_, dt), new_ss);
         new_ss = ::mlx::core::where(neg_mask, dec, new_ss);
         new_ss = ::mlx::core::clip(new_ss, mlx_scalar(step_min_, dt), mlx_scalar(step_max_, dt));
         gpu_replace(ss, ::mlx::core::array(new_ss), dt);
 
+        // Zero out the gradient for sign-reversal elements so the next
+        // step does not see a spurious sign agreement.
         auto eff_g = ::mlx::core::where(neg_mask, zero_arr, *gg.arr);
         gpu_replace(pv, ::mlx::core::array(eff_g), dt);
         auto new_p =
@@ -204,7 +232,7 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         const T smin = static_cast<T>(step_min_);
         const T smax = static_cast<T>(step_max_);
         for (std::size_t k = 0; k < n; ++k) {
-            const T sc = G[k] * PV[k];
+            const T sc = G[k] * PV[k]; // Positive: same sign; negative: reversed.
             T s = SS[k];
             if (sc > T{0})
                 s *= epT;
@@ -215,6 +243,8 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
             if (s > smax)
                 s = smax;
             SS[k] = s;
+            // Zero the gradient for sign-reversal elements; this also
+            // makes PV[k] = 0 so the next step sees no sign agreement.
             T g = (sc < T{0}) ? T{0} : G[k];
             PV[k] = g;
             const T sgn = (g > T{0}) ? T{1} : ((g < T{0}) ? T{-1} : T{0});

@@ -1,3 +1,8 @@
+// lucid/_C/ops/bfunc/Floordiv.cpp
+//
+// Implements floordiv_op.  The backend floor-division primitive handles both
+// integer and floating-point inputs; the result is always returned as I64.
+
 #include "Floordiv.h"
 
 #include <cmath>
@@ -30,6 +35,8 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 
     auto out_storage = backend::Dispatcher::for_device(device).floordiv(a->storage(), b->storage(),
                                                                         a->shape(), dt);
+    // The output is always I64 regardless of the input dtype so that the result
+    // type is consistent with Python's // operator semantics.
     return fresh(std::move(out_storage), a->shape(), Dtype::I64, device);
 }
 

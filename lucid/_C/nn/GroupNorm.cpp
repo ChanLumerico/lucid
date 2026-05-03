@@ -1,3 +1,15 @@
+// lucid/_C/nn/GroupNorm.cpp
+//
+// Implementation of Group Normalization.
+//
+// Layout expected: (B, C, S_0, ..., S_{ndim-3}) where ndim >= 2.
+// The C channels are partitioned into G groups of (C/G) channels each.
+// Statistics are computed per (b, g) slice spanning all channels in the
+// group plus all spatial positions.
+//
+// Forward calls IBackend::group_norm_forward, returning [y, mean, rstd].
+// Backward calls IBackend::group_norm_backward, returning [dx, d_gamma, d_beta].
+
 #include "GroupNorm.h"
 
 #include <vector>
@@ -31,6 +43,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     if (x->device() != gamma->device() || x->device() != beta->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(gamma->device())), "group_norm");
+    // Rank >= 2 required (at least batch and channel dims).
     if (x->device() == Device::CPU &&
         (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
         if (x->shape().size() < 2)
@@ -54,6 +67,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     }
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
 
+    // group_norm_forward returns [y, mean, rstd].
     auto forward = backend::Dispatcher::for_device(x->device())
                        .group_norm_forward(x->storage(), gamma->storage(), beta->storage(), B, C,
                                            spatial_total, G, S, eps, x->shape(), x->dtype());
@@ -67,6 +81,7 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     bwd->C_ = C;
     bwd->G_ = G;
     bwd->spatial_dims_ = std::move(S);
+    // saved_inputs_[0..2] will hold {x, gamma, beta}.
     kernel::NaryKernel<GroupNormBackward, 3>::wire_autograd(std::move(bwd), {x, gamma, beta}, out);
     return out;
 }
@@ -76,6 +91,7 @@ std::vector<Storage> GroupNormBackward::apply(Storage grad_out) {
     for (int s : spatial_dims_)
         spatial_total *= s;
 
+    // Returns [dx, d_gamma, d_beta].
     return backend::Dispatcher::for_device(device_).group_norm_backward(
         saved_inputs_[0], saved_inputs_[1], saved_mean_, saved_rstd_, grad_out, B_, C_,
         spatial_total, G_, spatial_dims_, input_shapes_[0], dtype_);

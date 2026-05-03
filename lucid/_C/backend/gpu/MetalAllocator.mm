@@ -1,4 +1,25 @@
-
+// lucid/_C/backend/gpu/MetalAllocator.mm
+//
+// Implements the MetalBuffer allocation and lifetime management functions
+// declared in MetalAllocator.h.
+//
+// shared_device() is a Meyers-singleton that obtains the system default
+// MTLDevice exactly once using dispatch_once.  This is safe for concurrent
+// callers and avoids redundant MTLCreateSystemDefaultDevice calls.
+//
+// allocate_shared: calls newBufferWithLength:options: with
+//   MTLResourceStorageModeShared so that the returned pages are simultaneously
+//   CPU- and GPU-accessible.  CFRetain is called on the resulting MTLBuffer
+//   before bridging to void* to balance the release in deallocate_shared.
+//
+// deallocate_shared: calls CFRelease on the stored opaque handle to decrement
+//   the buffer's retain count.  After release the cpu_ptr pointer must not be
+//   accessed by the CPU or the GPU.
+//
+// wrap_existing: uses newBufferWithBytesNoCopy which creates a zero-copy view
+//   of an existing page-aligned allocation.  Ownership of the underlying pages
+//   is NOT transferred to the MTLBuffer; the caller is responsible for their
+//   lifetime.
 
 #import <Metal/Metal.h>
 
@@ -8,6 +29,7 @@ namespace lucid::gpu {
 
 namespace {
 
+// Returns the process-wide default Metal device, created once on first call.
 id<MTLDevice> shared_device() {
     static id<MTLDevice> dev = nil;
     static dispatch_once_t once;

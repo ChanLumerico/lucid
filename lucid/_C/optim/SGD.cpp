@@ -1,3 +1,10 @@
+// lucid/_C/optim/SGD.cpp
+//
+// CPU and GPU implementations of Stochastic Gradient Descent (SGD)
+// and Averaged SGD (ASGD). The CPU path is a typed scalar loop
+// operating directly on raw buffer pointers; the GPU path builds an
+// MLX expression graph that is evaluated lazily by the MLX runtime.
+
 #include "SGD.h"
 
 #include <cstring>
@@ -34,11 +41,15 @@ SGD::SGD(std::vector<std::shared_ptr<TensorImpl>> params,
         ErrorBuilder("SGD").fail("momentum must be >= 0");
     if (weight_decay_ < 0.0)
         ErrorBuilder("SGD").fail("weight_decay must be >= 0");
+    // Nesterov momentum requires a pure momentum term (no dampening) so
+    // that the gradient look-ahead is well-defined.
     if (nesterov_ && (momentum_ <= 0.0 || dampening_ != 0.0)) {
         ErrorBuilder("SGD").fail("nesterov requires momentum > 0 and dampening = 0");
     }
 }
 
+// Grow moment_ to cover all parameter slots if needed, then
+// allocate a zero velocity buffer only when momentum is active.
 void SGD::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) {
     if (moment_.size() < params_.size()) {
         moment_.resize(params_.size());
@@ -50,6 +61,9 @@ void SGD::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl
 
 namespace {
 
+// Scalar CPU loop for SGD. Supports full feature set: weight decay,
+// momentum, dampening, and Nesterov acceleration. When momentum == 0
+// the moment_buf pointer is null and the code takes the simpler branch.
 template <typename T>
 void sgd_step_cpu(T* param,
                   const T* grad,
@@ -62,6 +76,8 @@ void sgd_step_cpu(T* param,
                   bool nesterov) {
     const T lrT = static_cast<T>(lr);
     const T mT = static_cast<T>(momentum);
+    // (1 - dampening) is the scale applied to the gradient contribution
+    // when updating the velocity buffer.
     const T dampT = static_cast<T>(1.0 - dampening);
     const T wdT = static_cast<T>(weight_decay);
     if (momentum != 0.0) {
@@ -71,6 +87,8 @@ void sgd_step_cpu(T* param,
                 g += wdT * param[i];
             T buf = mT * moment_buf[i] + dampT * g;
             moment_buf[i] = buf;
+            // Nesterov: look one step ahead by adding m * new_buf to the
+            // gradient; classical: use the buffer directly.
             const T eff_g = nesterov ? (g + mT * buf) : buf;
             param[i] -= lrT * eff_g;
         }
@@ -84,6 +102,12 @@ void sgd_step_cpu(T* param,
     }
 }
 
+// MLX-based GPU path for SGD.
+//
+// All arithmetic is expressed as MLX lazy-evaluated array operations.
+// The momentum buffer and parameter array are replaced atomically via
+// gpu_replace() so the shared_ptr inside GpuStorage always points to
+// the latest computed result.
 void sgd_step_gpu(GpuStorage& param_g,
                   const GpuStorage& grad_g,
                   GpuStorage& moment_g,
@@ -127,6 +151,8 @@ void sgd_step_gpu(GpuStorage& param_g,
 
 }  // namespace
 
+// Dispatch SGD update to the GPU path or the typed CPU scalar loop.
+// Only F32 and F64 are supported on CPU; other dtypes raise.
 void SGD::update_one(std::size_t slot_idx,
                      std::shared_ptr<TensorImpl>& param,
                      const Storage& grad) {
@@ -191,6 +217,9 @@ ASGD::ASGD(std::vector<std::shared_ptr<TensorImpl>> p,
         ErrorBuilder("ASGD").fail("lr must be >= 0");
 }
 
+// Initialize velocity and running-average buffers for this slot.
+// The running average ax_ is seeded with a copy of the current
+// parameter value so the average starts from a meaningful point.
 void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
     if (moment_.size() < params_.size())
         moment_.resize(params_.size());
@@ -213,6 +242,8 @@ void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) 
     }
 }
 
+// Apply one ASGD step: standard SGD update followed by a running
+// average update of ax_ once the step counter reaches t0_.
 void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     step_[i] += 1;
     const auto dt = p->dtype();
@@ -234,6 +265,7 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
         gpu_replace(pg, std::move(new_p), dt);
 
         if (step_[i] >= static_cast<std::int64_t>(t0_)) {
+            // Exponentially decaying coefficient for the running average.
             const double coef = 1.0 / (alpha_ * step_[i] + 1.0);
             auto& ag = gpu_get(ax_[i]);
 

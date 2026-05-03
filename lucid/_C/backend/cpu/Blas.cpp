@@ -1,3 +1,10 @@
+// lucid/_C/backend/cpu/Blas.cpp
+//
+// Implements the BLAS wrapper functions declared in Blas.h by delegating
+// directly to cblas_sgemm, cblas_dgemm, cblas_sgemv, and cblas_dgemv from
+// Apple Accelerate.  All calls use CblasRowMajor storage order because
+// Lucid tensors are row-major by default.
+
 #include "Blas.h"
 
 #include <Accelerate/Accelerate.h>
@@ -5,6 +12,7 @@
 namespace lucid::backend::cpu {
 
 namespace {
+// Converts a bool transpose flag to the CBLAS enum expected by Accelerate.
 inline CBLAS_TRANSPOSE T(bool t) {
     return t ? CblasTrans : CblasNoTrans;
 }

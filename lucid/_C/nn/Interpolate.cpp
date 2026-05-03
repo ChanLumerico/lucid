@@ -1,3 +1,15 @@
+// lucid/_C/nn/Interpolate.cpp
+//
+// Bilinear, trilinear, and nearest-neighbor interpolation implementations.
+//
+// Differentiable ops (bilinear, trilinear): forward delegates to
+//   IBackend::interpolate_*_forward; the backward node saves only the original
+//   shape and the output dimensions — the backend recomputes interpolation
+//   weights during backward.
+//
+// Non-differentiable ops (nearest 2-D and 3-D): forward delegates to
+//   IBackend::interpolate_nearest_*_forward; no backward node is created.
+
 #include "Interpolate.h"
 
 #include <algorithm>

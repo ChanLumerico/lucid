@@ -1,3 +1,17 @@
+// lucid/_C/ops/utils/Pad.cpp
+//
+// Implements constant padding with a differentiable backward pass.
+//
+// PadBackward undoes the padding by slicing out the original tensor region
+// from the incoming gradient.  It iterates over dimensions in order, applying
+// one slice_axis call per dimension to reduce the padded shape back to the
+// original input shape recorded in input_shapes_[0].
+//
+// Design note: slicing dimension-by-dimension avoids the need for a
+// specialised "multi-dim unpad" kernel in the backend.  Each slice_axis call
+// strips the leading pad_width_[d].first elements from the current dimension
+// while the narrower target shape implicitly truncates the trailing padding.
+
 #include "Pad.h"
 
 #include <variant>
@@ -24,6 +38,16 @@ namespace {
 
 using utils_detail::fresh;
 
+// Backward node for pad_op.
+//
+// Invariant: pad_width_[d] holds the (before, after) padding for dimension d
+// exactly as provided to the forward call.
+//
+// Backward formula:
+//   For each dimension d, extract the slice [pad_width_[d].first,
+//   pad_width_[d].first + input_shapes_[0][d]) from the current gradient
+//   buffer.  After all dimensions have been processed the result has exactly
+//   the shape of the original input.
 class PadBackward : public FuncOp<PadBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -37,6 +61,8 @@ public:
         for (std::size_t d = 0; d < input_shapes_[0].size(); ++d) {
             Shape next_shape = current_shape;
             next_shape[d] = input_shapes_[0][d];
+            // Slice away the leading padding; trailing padding is implicitly
+            // dropped by the narrower next_shape.
             current = be.slice_axis(current, current_shape, next_shape, static_cast<int>(d),
                                     pad_width_[d].first, dtype_);
             current_shape = std::move(next_shape);
@@ -47,6 +73,9 @@ public:
 
 const OpSchema PadBackward::schema_v1{"pad", 1, AmpPolicy::KeepInput, true};
 
+// Construct a PadBackward node, move the pad_width record into it so that
+// the backward can reconstruct the unpadded slice offsets, and wire it onto
+// the output tensor.
 TensorImplPtr attach_pad_grad(const TensorImplPtr& a,
                               TensorImplPtr out,
                               std::vector<std::pair<std::int64_t, std::int64_t>> pad_width) {
@@ -60,6 +89,14 @@ LUCID_REGISTER_OP(PadBackward)
 
 }  // namespace
 
+// Validate that pad_width has exactly one entry per dimension.  Compute the
+// output shape by adding the before/after widths to each input dimension.
+// Dispatch to the backend, which allocates the output buffer, fills it with
+// `constant`, and copies the input data into the interior region.  Wire a
+// PadBackward node to recover the gradient of the un-padded input.
+//
+// Critical: the backend must use memset-style initialisation even when
+// `constant == 0.0` because pooled allocator buffers may carry stale data.
 TensorImplPtr pad_op(const TensorImplPtr& a,
                      std::vector<std::pair<std::int64_t, std::int64_t>> pad_width,
                      double constant) {

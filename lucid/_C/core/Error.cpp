@@ -1,3 +1,12 @@
+// lucid/_C/core/Error.cpp
+//
+// Constructors for the typed exception classes declared in Error.h.
+// Each constructor formats a human-readable what() message by writing into an
+// ostringstream and then assigning to the inherited msg_ field.  We construct
+// with an empty base-class string and overwrite msg_ rather than pre-computing
+// the message in an initialiser, because the formatting depends on member
+// fields that must be initialised first.
+
 #include "Error.h"
 
 #include <sstream>
@@ -6,6 +15,7 @@ namespace lucid {
 
 namespace {
 
+// Converts a shape vector to a bracketed comma-separated string, e.g. [2,3,4].
 std::string format_shape(const std::vector<std::int64_t>& s) {
     std::ostringstream os;
     os << '[';
@@ -20,6 +30,9 @@ std::string format_shape(const std::vector<std::int64_t>& s) {
 
 }  // namespace
 
+// The LucidError base is constructed with an empty string; msg_ is overwritten
+// below after all member fields have been initialised, so the formatted message
+// can reference device_ (which has been moved) without a dangling reference.
 OutOfMemory::OutOfMemory(std::size_t requested_bytes,
                          std::size_t current_bytes,
                          std::size_t peak_bytes,

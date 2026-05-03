@@ -1,3 +1,18 @@
+// lucid/_C/backend/cpu/Pool.cpp
+//
+// Implements 1-D, 2-D, and 3-D MaxPool and AvgPool forward and backward
+// kernels.  All kernels are instantiated via typed templates and exposed
+// through thin f32/f64 entry points.
+//
+// MaxPool forward scans the receptive field of each output position and
+// records the flat spatial index of the winner in argmax[].  Padding regions
+// are excluded from consideration (they can never beat NEG_INF).  The backward
+// simply scatter-adds g[o] to dx[argmax[o]].
+//
+// AvgPool forward sums the receptive field and divides by the full window area
+// (count-include-pad semantics).  The backward divides g uniformly by the
+// same area and scatter-adds to every input position in the window.
+
 #include "Pool.h"
 
 #include <algorithm>
@@ -7,6 +22,7 @@ namespace lucid::backend::cpu {
 
 namespace {
 
+// 2-D max pooling forward typed implementation.
 template <typename T>
 void max_pool2d_forward_typed(const T* x,
                               T* y,

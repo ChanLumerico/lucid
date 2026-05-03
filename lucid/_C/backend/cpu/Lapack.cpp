@@ -1,3 +1,15 @@
+// lucid/_C/backend/cpu/Lapack.cpp
+//
+// Implements the LAPACK wrappers declared in Lapack.h.  Each function:
+//   1. Copies the input to a temporary column-major buffer using vDSP_mtrans.
+//   2. Calls the Accelerate LAPACK routine with lwork=-1 to query workspace
+//      size, allocates the workspace, then calls the routine again.
+//   3. Converts results back to row-major and writes them to the output buffers.
+//
+// The column-major round-trip is unavoidable because LAPACK was written in
+// Fortran, which uses column-major ("Fortran order") storage natively.  Using
+// vDSP_mtrans for the conversion avoids scalar loops in the hot path.
+
 #include "Lapack.h"
 
 #include <algorithm>
@@ -11,8 +23,12 @@ namespace lucid::backend::cpu {
 
 namespace {
 
+// __CLPK_integer is the Accelerate typedef for LAPACK's INTEGER argument type.
 using i32 = __CLPK_integer;
 
+// Transposes a rows×cols row-major matrix to cols×rows column-major layout.
+// vDSP_mtrans(src, 1, dst, 1, cols, rows) reads rows rows of length cols
+// and writes them as columns, which is equivalent to a full matrix transpose.
 inline void rowmajor_to_colmajor_f32(const float* src, float* dst, int rows, int cols) {
     vDSP_mtrans(src, 1, dst, 1, cols, rows);
 }
@@ -21,6 +37,7 @@ inline void rowmajor_to_colmajor_f64(const double* src, double* dst, int rows, i
     vDSP_mtransD(src, 1, dst, 1, cols, rows);
 }
 
+// Transposes a cols×rows column-major matrix back to rows×cols row-major layout.
 inline void colmajor_to_rowmajor_f32(const float* src, float* dst, int rows, int cols) {
     vDSP_mtrans(src, 1, dst, 1, rows, cols);
 }

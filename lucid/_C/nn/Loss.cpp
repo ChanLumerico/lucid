@@ -1,3 +1,19 @@
+// lucid/_C/nn/Loss.cpp
+//
+// Implementations of MSE, BCE, BCEWithLogits, CrossEntropy, NLL, and Huber
+// loss functions with full autograd support.
+//
+// All forward methods follow the same pattern:
+//   1. Validate inputs (shape, dtype, device).
+//   2. Delegate the actual computation to IBackend (ForceFP32 schema).
+//   3. Construct the output TensorImpl with the reduced shape (scalar for
+//      Mean/Sum, per-sample shape for None).
+//   4. Wire the backward node via NaryKernel::wire_autograd.
+//
+// For CrossEntropy and NLL, the backend also returns saved auxiliary tensors
+// (softmax probabilities, valid_count) needed by the backward pass; these are
+// stored directly in the backward node rather than via saved_inputs_.
+
 #include "Loss.h"
 
 #include <vector>
@@ -20,6 +36,8 @@ namespace lucid {
 
 namespace {
 
+// Return the output shape after applying the reduction.
+// Mean and Sum collapse to a scalar (empty shape); None preserves input shape.
 Shape reduced_shape(const Shape& in, Reduction red) {
     if (red == Reduction::None)
         return in;

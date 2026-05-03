@@ -1,3 +1,30 @@
+// lucid/_C/kernel/BinaryKernel.h
+//
+// CRTP base for two-input, single-output op kernels, as well as the
+// broadcast and autograd utility helpers shared by the entire kernel layer.
+//
+// A concrete binary op is declared as:
+//
+//   struct AddOp : BinaryKernel<AddOp> {
+//       static constexpr OpSchema schema_v1 = {"add", ...};
+//       static CpuStorage cpu_kernel(const CpuStorage& a,
+//                                    const CpuStorage& b,
+//                                    const Shape&, Dtype);
+//       static GpuStorage gpu_kernel(const GpuStorage& a,
+//                                    const GpuStorage& b,
+//                                    const Shape&, Dtype);
+//       std::tuple<Storage, Storage> grad_formula(Storage grad_out);
+//   };
+//
+// BinaryKernel::forward() handles dtype+device validation, broadcast
+// shape inference, contiguous enforcement, dispatch to the right backend,
+// and full autograd graph wiring. apply() calls grad_formula and
+// broadcast-reduces both gradients back to their original input shapes.
+//
+// The detail:: namespace below also provides the broadcast helpers
+// (try_broadcast_shapes, broadcast_cpu) and autograd utilities
+// (ensure_grad_fn, maybe_cast_for_kernel) used by all kernel bases.
+
 #pragma once
 
 #include <memory>
@@ -32,17 +59,24 @@ namespace lucid {
 
 namespace detail {
 
+// Satisfied when Derived provides a gpu_kernel static method matching the
+// binary GPU kernel signature.
 template <class T>
 concept HasGpuKernel = requires(GpuStorage a, GpuStorage b, Shape s, Dtype d) {
     { T::gpu_kernel(a, b, s, d) } -> std::same_as<GpuStorage>;
 };
 
+// Satisfied when Derived routes through the IBackend dispatch interface
+// rather than calling a typed cpu_kernel/gpu_kernel directly.
 template <class T>
 concept HasBinaryDispatch =
     requires(backend::IBackend& be, Storage a, Storage b, Shape s, Dtype d) {
         { T::dispatch(be, a, b, s, d) } -> std::same_as<Storage>;
     };
 
+// Compute the NumPy-style broadcast shape of a and b, returning an error
+// Result if the shapes are incompatible (no dimension pair is broadcastable).
+// Used by both forward() and saved_input_broadcasted().
 inline Result<Shape> try_broadcast_shapes(const Shape& a, const Shape& b) {
     const std::size_t ra = a.size();
     const std::size_t rb = b.size();
@@ -62,6 +96,7 @@ inline Result<Shape> try_broadcast_shapes(const Shape& a, const Shape& b) {
     return Ok(std::move(out));
 }
 
+// Throwing wrapper around try_broadcast_shapes. Raises ShapeMismatch on failure.
 inline Shape broadcast_shapes(const Shape& a, const Shape& b) {
     auto r = try_broadcast_shapes(a, b);
     if (r.is_ok())
@@ -69,6 +104,10 @@ inline Shape broadcast_shapes(const Shape& a, const Shape& b) {
     throw ShapeMismatch(a, b, "broadcast: incompatible shapes");
 }
 
+// Materialize a CPU broadcast of src from src_shape to out_shape.
+// Uses a stride-based mapping: dimensions of size 1 get stride 0 so all
+// output positions in that dimension read from the same source element.
+// This is the pure-CPU analogue of mlx::core::broadcast_to.
 inline CpuStorage
 broadcast_cpu(const CpuStorage& src, const Shape& src_shape, const Shape& out_shape, Dtype dt) {
     const std::size_t ndim_out = out_shape.size();
@@ -130,6 +169,9 @@ broadcast_cpu(const CpuStorage& src, const Shape& src_shape, const Shape& out_sh
     return out;
 }
 
+// Retrieve or create the autograd function for a tensor. Leaf parameters
+// that haven't been involved in a computation yet get an AccumulateGrad
+// node installed lazily here so the engine has a sink to write into.
 inline std::shared_ptr<Node> ensure_grad_fn(const std::shared_ptr<TensorImpl>& t) {
     if (!t || !t->requires_grad())
         return nullptr;
@@ -142,6 +184,9 @@ inline std::shared_ptr<Node> ensure_grad_fn(const std::shared_ptr<TensorImpl>& t
     return nullptr;
 }
 
+// Return t unchanged if its dtype already matches dt, or allocate a new
+// TensorImpl with a type-cast copy of the storage. Used by forward() to
+// normalize both inputs to the effective dtype before compute.
 inline TensorImplPtr maybe_cast_for_kernel(const TensorImplPtr& t, Dtype dt) {
     if (!t || t->dtype() == dt)
         return t;
@@ -153,21 +198,37 @@ inline TensorImplPtr maybe_cast_for_kernel(const TensorImplPtr& t, Dtype dt) {
 
 }  // namespace detail
 
+// CRTP binary-op base. Inherits AutogradNode<Derived, 2> (two saved inputs)
+// and IKernel. forward() owns all validation, broadcast, dispatch, and graph
+// wiring. apply() calls grad_formula and reduces each gradient to its input
+// shape.
+//
+// kSavesInputs may be overridden to false by ops whose backward pass does
+// not need the original inputs (e.g. Add, where the backward is identity).
 template <class Derived>
 class BinaryKernel : public AutogradNode<Derived, 2>, public kernel::IKernel {
 public:
+    // Forward pass: validate dtype/device consistency, infer broadcast output
+    // shape, cast inputs to eff_dt, dispatch, wire autograd graph.
     static std::shared_ptr<TensorImpl> forward(const std::shared_ptr<TensorImpl>& a,
                                                const std::shared_ptr<TensorImpl>& b);
 
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
+    // Backward pass: call Derived::grad_formula to get (da, db), then
+    // broadcast-reduce each to its original input shape.
     std::vector<Storage> apply(Storage grad_out) override;
 
+    // Controls whether forward() saves a_ptr->storage() and b_ptr->storage()
+    // into saved_inputs_ for use in grad_formula.
     static constexpr bool kSavesInputs = true;
 
 protected:
     static backend::IBackend& backend_for(Device d) { return backend::Dispatcher::for_device(d); }
 
+    // Return the saved input k broadcast to out_shape_, materializing the
+    // broadcast copy lazily. Used by grad_formula implementations that need
+    // the full-rank operand rather than the original possibly-smaller tensor.
     Storage saved_input_broadcasted(std::size_t k) const {
         const Shape& src = this->input_shapes_[k];
         if (src == this->out_shape_)
@@ -183,15 +244,21 @@ protected:
     }
 };
 
+// Validate, broadcast, dispatch, and wire autograd for a two-input op.
+// The broadcast shape is inferred from a and b; if the shapes are equal
+// no copy is performed. On CPU, non-contiguous inputs are materialized
+// via contiguous_op before entering the typed compute loop.
 template <class Derived>
 std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
                                                            const std::shared_ptr<TensorImpl>& b) {
     if (!a || !b)
         ErrorBuilder(Derived::schema_v1.name).fail("null input tensor");
+    // Mixed-dtype binary ops are not implicitly promoted; callers must cast.
     if (a->dtype() != b->dtype())
         throw DtypeMismatch(std::string(dtype_name(a->dtype())),
                             std::string(dtype_name(b->dtype())),
                             std::string(Derived::schema_v1.name));
+    // Cross-device binary ops are never silently moved; callers must migrate.
     if (a->device() != b->device())
         throw DeviceMismatch(std::string(device_name(a->device())),
                              std::string(device_name(b->device())),
@@ -293,6 +360,7 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     if (!needs_grad)
         return out;
 
+    // Install AccumulateGrad sinks for leaf parameters before recording edges.
     auto a_edge = detail::ensure_grad_fn(a);
     auto b_edge = detail::ensure_grad_fn(b);
 
@@ -302,6 +370,8 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     bwd->dtype_ = eff_dt;
     bwd->device_ = a->device();
     bwd->input_tensors_ = {a, b};
+    // saved_inputs_ holds the (possibly cast) pre-broadcast input storages
+    // so that grad_formula can inspect the original per-element values.
     if constexpr (Derived::kSavesInputs)
         bwd->saved_inputs_ = {a_ptr->storage(), b_ptr->storage()};
 
@@ -309,6 +379,7 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     edges.emplace_back(a_edge, 0);
     edges.emplace_back(b_edge, 0);
     bwd->set_next_edges(std::move(edges));
+    // Both input versions are captured to detect in-place mutations.
     bwd->set_saved_versions({a->version(), b->version()});
 
     out->set_grad_fn(std::move(bwd));
@@ -317,6 +388,9 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     return out;
 }
 
+// Call grad_formula to obtain (da, db), then broadcast-reduce each
+// gradient back to the original input shapes in case the forward pass
+// broadcast either operand to a larger output shape.
 template <class Derived>
 std::vector<Storage> BinaryKernel<Derived>::apply(Storage grad_out) {
     auto [da, db] = static_cast<Derived*>(this)->grad_formula(grad_out);

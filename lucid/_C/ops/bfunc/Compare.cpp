@@ -1,3 +1,9 @@
+// lucid/_C/ops/bfunc/Compare.cpp
+//
+// Implements the six element-wise comparison operators by routing through a
+// single shared dispatch helper.  The operator is identified by an integer op
+// code that the backend uses to select the appropriate comparison kernel.
+
 #include "Compare.h"
 
 #include "../../backend/Dispatcher.h"
@@ -15,6 +21,18 @@ using bfunc_detail::allocate_cpu;
 using bfunc_detail::fresh;
 using bfunc_detail::validate_pair_eq_shape;
 
+// Shared implementation for all binary comparisons.
+//
+// Op codes match the backend's compare_binary convention:
+//   0 = equal (==)
+//   1 = not_equal (!=)
+//   2 = greater (>)
+//   3 = greater_equal (>=)
+//   4 = less (<)
+//   5 = less_equal (<=)
+//
+// The output dtype is always Bool regardless of the input dtype.  No autograd
+// node is attached because comparisons are not differentiable.
 TensorImplPtr
 cmp_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
     validate_pair_eq_shape(a, b, name);

@@ -1,3 +1,16 @@
+// lucid/_C/nn/Attention.cpp
+//
+// Implementation of Scaled Dot-Product Attention forward and backward.
+//
+// The shared run_forward() helper validates inputs, dispatches to
+// IBackend::sdpa_forward, and returns a ForwardCore bundle containing the
+// output tensor, the attention weight storage, batch/sequence/dim sizes, and
+// the output/weights shapes.  Both public entry points call run_forward and
+// then either wire the backward node (forward()) or expose the weights tensor
+// as a second return value (scaled_dot_product_attention_with_weights_op()).
+//
+// FLOP estimate: 2 * B * Lq * Lk * (Dk + Dv) — covers Q@K^T and W@V.
+
 #include "Attention.h"
 
 #include <vector>
@@ -21,12 +34,15 @@ const OpSchema ScaledDotProductAttentionBackward::schema_v1{"scaled_dot_product_
 
 namespace {
 
+// Batch size B plus the last two dims (L, D) extracted from a Q/K/V shape.
 struct Flat3 {
     std::size_t B;
     std::size_t L;
     std::size_t D;
 };
 
+// Flatten all leading dims of s (except last two) into a single batch B.
+// Throws if s has fewer than 2 dimensions.
 Flat3 flatten_qkv(const Shape& s, const char* name) {
     if (s.size() < 2) {
         ErrorBuilder("attention").fail(std::string(name) + " must be at least 2-D ([..., L, d])");
@@ -37,6 +53,7 @@ Flat3 flatten_qkv(const Shape& s, const char* name) {
     return {b, static_cast<std::size_t>(s[s.size() - 2]), static_cast<std::size_t>(s.back())};
 }
 
+// Construct the SDPA output shape (..., Lq, Dv) from the Q and V shapes.
 Shape build_output_shape(const Shape& q_shape, const Shape& v_shape) {
     Shape out;
     out.reserve(q_shape.size());
@@ -47,18 +64,21 @@ Shape build_output_shape(const Shape& q_shape, const Shape& v_shape) {
     return out;
 }
 
+// All data produced by the shared forward kernel, bundled for the two callers.
 struct ForwardCore {
     TensorImplPtr output;
-    Storage weights_storage;
+    Storage weights_storage;  // Attention weights W; may be {1} on GPU path.
     std::size_t B;
     std::size_t Lq;
     std::size_t Lk;
     std::size_t Dk;
     std::size_t Dv;
     Shape out_shape;
-    Shape weights_shape;
+    Shape weights_shape;  // (..., Lq, Lk).
 };
 
+// Validate Q/K/V shapes and dtypes, dispatch to IBackend::sdpa_forward, and
+// return a ForwardCore.  The backend returns [weights, output] in results[].
 ForwardCore run_forward(const TensorImplPtr& q,
                         const TensorImplPtr& k,
                         const TensorImplPtr& v,
@@ -100,6 +120,8 @@ ForwardCore run_forward(const TensorImplPtr& q,
     weights_shape.push_back(k->shape()[k->shape().size() - 2]);
 
     const Storage* mask_storage = attn_mask ? &attn_mask->storage() : nullptr;
+    // sdpa_forward returns {weights, output}.  On the GPU path weights may be a
+    // dummy {1}-shape tensor; the backward detects this and recomputes W.
     auto results =
         backend::Dispatcher::for_device(q->device())
             .sdpa_forward(q->storage(), k->storage(), v->storage(), mask_storage, q->shape(),
@@ -107,6 +129,7 @@ ForwardCore run_forward(const TensorImplPtr& q,
                           attn_mask ? static_cast<std::size_t>(attn_mask->numel()) : std::size_t{0},
                           scale, is_causal, q->dtype());
 
+    // results[0] = weights storage; results[1] = output storage.
     auto out = std::make_shared<TensorImpl>(std::move(results[1]), out_shape, q->dtype(),
                                             q->device(), false);
 

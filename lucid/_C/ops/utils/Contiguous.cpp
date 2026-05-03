@@ -1,3 +1,14 @@
+// lucid/_C/ops/utils/Contiguous.cpp
+//
+// Implements the contiguous op, which guarantees that the output tensor uses
+// a dense, offset-free row-major (C-order) storage layout.  The backend
+// dispatcher examines the is_contiguous flag together with the stride/offset
+// metadata to decide whether a copy is actually needed.
+//
+// Design note: the forward static method on ContiguousBackward combines the
+// forward compute step and the autograd wiring into a single call to keep the
+// public contiguous_op entry point trivially thin.
+
 #include "Contiguous.h"
 
 #include "../../autograd/AccumulateGrad.h"
@@ -17,8 +28,14 @@
 
 namespace lucid {
 
+// Schema for ContiguousBackward; the fourth field (true) marks this op as a
+// potential view (the forward may return the same storage unchanged when the
+// input is already contiguous).
 const OpSchema ContiguousBackward::schema_v1{"contiguous", 1, AmpPolicy::KeepInput, true};
 
+// Allocate (or reuse) a contiguous buffer for `a` and attach the backward
+// node.  Passes stride, storage_offset, and is_contiguous to the dispatcher
+// so the backend can skip a physical copy when the data is already dense.
 TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
     Validator::input(a, "contiguous.a").non_null();
 
@@ -35,6 +52,9 @@ TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
     return result;
 }
 
+// The gradient of making a tensor contiguous is the identity: the incoming
+// gradient already matches the output shape and dtype, so a plain clone is
+// sufficient to give the upstream node a concrete, owning buffer.
 std::vector<Storage> ContiguousBackward::apply(Storage grad_out) {
     return {clone_storage(grad_out, shape_numel(out_shape_), dtype_, device_)};
 }

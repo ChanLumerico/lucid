@@ -1,3 +1,9 @@
+// lucid/_C/ops/ufunc/ScalarParam.cpp
+//
+// Forward implementations and gradient formulas for the three scalar-parameter
+// unary ops.  Each uses a custom forward() that captures the scalar on the
+// backward node before calling NaryKernel::wire_autograd.
+
 #include "ScalarParam.h"
 
 #include <cmath>
@@ -14,8 +20,13 @@
 
 namespace lucid {
 
+// pow_scalar — ForceFP32; general power is not safe in integer or half types.
+// set_flops uses *11 as a rough estimate for the cost of a pow() call.
 const OpSchema PowScalarBackward::schema_v1{"pow_scalar", 1, AmpPolicy::ForceFP32, true};
 
+// dL/dx = exp * x^(exp-1) * dL/dy.
+// Reuses the backend's pow_scalar to compute x^(exp-1) rather than
+// implementing a separate "reduce-exponent-by-one" kernel.
 Storage PowScalarBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage x_pow_em1 = backend::Dispatcher::for_device(device_).pow_scalar(
@@ -24,6 +35,7 @@ Storage PowScalarBackward::grad_formula(const Storage& g) {
     return multiply_storages(scaled, g, n, dtype_, device_);
 }
 
+// Capture exp before wiring autograd so grad_formula has it at backward time.
 TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a, double exp) {
     Validator::input(a, "pow_scalar.a").non_null();
 
@@ -45,8 +57,11 @@ TensorImplPtr pow_scalar_op(const TensorImplPtr& a, double exp) {
 }
 LUCID_REGISTER_OP(PowScalarBackward)
 
+// rpow_scalar — ForceFP32; ln(base) requires floating-point.
 const OpSchema RPowScalarBackward::schema_v1{"rpow_scalar", 1, AmpPolicy::ForceFP32, true};
 
+// dL/dx = ln(base) * y * dL/dy  where y = saved_output_ = base^x.
+// ln(base) is computed once per backward call from the saved base_.
 Storage RPowScalarBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -55,6 +70,8 @@ Storage RPowScalarBackward::grad_formula(const Storage& g) {
     return multiply_storages(scaled_out, g, n, dtype_, device_);
 }
 
+// Manually saves the output in bwd->saved_output_ because the standard
+// wire_autograd helper (called with save_output=false) does not do so.
 TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
     Validator::input(a, "rpow_scalar.a").non_null();
 
@@ -77,14 +94,17 @@ TensorImplPtr rpow_scalar_op(double base, const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(RPowScalarBackward)
 
+// clip — KeepInput: clamp is valid on integer inputs.
 const OpSchema ClipBackward::schema_v1{"clip", 1, AmpPolicy::KeepInput, true};
 
+// dL/dx = 1 if min_ < x < max_, else 0  (in-range boolean mask).
 Storage ClipBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage mask = in_range_mask_storage(saved_inputs_[0], min_, max_, n, dtype_, device_);
     return multiply_storages(g, mask, n, dtype_, device_);
 }
 
+// Capture both bounds on the backward node before wiring autograd.
 TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double max_v) {
     Validator::input(a, "clip.a").non_null();
 

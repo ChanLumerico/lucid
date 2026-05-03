@@ -1,3 +1,7 @@
+// lucid/_C/ops/ufunc/CubeRoot.h
+//
+// Autograd backward node and entry point for the cube-root operation: y = x^(1/3).
+
 #pragma once
 
 #include "../../api.h"
@@ -10,6 +14,13 @@
 
 namespace lucid {
 
+// Backward node for element-wise cube root: y = cbrt(x) = x^(1/3).
+//
+// Gradient rule: dL/dx = dL/dy / (3 * y^2).
+// Saves the *output* y rather than the input to avoid re-running cbrt in the
+// backward pass; squaring y is cheaper and numerically equivalent.
+// kSavesInput = false opts out of the default input-save in UnaryKernel.
+// ForceFP32 is used because cbrt is numerically unreliable in half precision.
 class LUCID_API CubeRootBackward : public UnaryOp<CubeRootBackward> {
 public:
     static constexpr bool kSavesInput = false;

@@ -1,3 +1,13 @@
+// lucid/_C/nn/RMSNorm.cpp
+//
+// Implementation of Root Mean Square Layer Normalization.
+//
+// Shape resolution is performed inline (not via a helper): gamma's shape must
+// match the trailing Dn dims of x, and the outer/N split is computed manually.
+// Forward calls IBackend::rms_norm_forward, returning {y, rstd}.
+// Backward calls IBackend::rms_norm_backward, returning {dx, d_gamma}.
+// FLOP estimate: 4 * outer * N (rms + scale).
+
 #include "RMSNorm.h"
 
 #include <vector>
@@ -28,6 +38,7 @@ RMSNormBackward::forward(const TensorImplPtr& x, const TensorImplPtr& gamma, dou
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(gamma->device())), "rms_norm");
 
+    // Validate that gamma's shape matches the trailing dims of x.
     if (gamma->shape().size() > x->shape().size())
         throw ShapeMismatch(x->shape(), gamma->shape(), "rms_norm: γ has more dims than x");
     const std::size_t Dn = gamma->shape().size();
@@ -46,6 +57,7 @@ RMSNormBackward::forward(const TensorImplPtr& x, const TensorImplPtr& gamma, dou
 
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
 
+    // rms_norm_forward returns {y, rstd}.
     auto forward = backend::Dispatcher::for_device(x->device())
                        .rms_norm_forward(x->storage(), gamma->storage(), outer, N, eps, x->shape(),
                                          x->dtype());
@@ -58,11 +70,13 @@ RMSNormBackward::forward(const TensorImplPtr& x, const TensorImplPtr& gamma, dou
     bwd->saved_rstd_ = std::move(forward.second);
     bwd->outer_ = outer;
     bwd->N_ = N;
+    // saved_inputs_[0..1] will hold {x, gamma}.
     kernel::NaryKernel<RMSNormBackward, 2>::wire_autograd(std::move(bwd), {x, gamma}, out);
     return out;
 }
 
 std::vector<Storage> RMSNormBackward::apply(Storage grad_out) {
+    // rms_norm_backward returns {dx, d_gamma} as a pair.
     auto grads = backend::Dispatcher::for_device(device_).rms_norm_backward(
         saved_inputs_[0], saved_inputs_[1], saved_rstd_, grad_out, outer_, N_, input_shapes_[0],
         input_shapes_[1], dtype_);

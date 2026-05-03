@@ -1,9 +1,23 @@
+// lucid/_C/backend/cpu/Im2Col.cpp
+//
+// Implements the im2col and col2im transforms for 1-D, 2-D, and 3-D tensors.
+// All spatial dimensions share the same loop structure: for each output
+// (channel, kernel-offset, output-position) triple, compute the corresponding
+// input position and either read it (im2col) or accumulate into it (col2im).
+// Out-of-bound positions are treated as zero for im2col and skipped in col2im.
+//
+// The public f32/f64 entry points are thin wrappers that instantiate the
+// corresponding template specialisation; no code is duplicated.
+
 #include "Im2Col.h"
 
 namespace lucid::backend::cpu {
 
 namespace {
 
+// Typed 1-D im2col: builds a column matrix cols[C*KL, OL] from input x[C, L].
+// Each row of cols corresponds to one (channel, kernel-offset) pair; each
+// column corresponds to one output position.  Padding positions are zero.
 template <typename T>
 void im2col_1d_typed(
     const T* x, T* cols, int C, int L, int KL, int OL, int stride_l, int pad_l, int dilation_l) {
@@ -19,6 +33,8 @@ void im2col_1d_typed(
     }
 }
 
+// Typed 1-D col2im: scatters-accumulates cols back into dx[C, L].
+// dx is assumed to be zeroed on entry; overlapping contributions are summed.
 template <typename T>
 void col2im_1d_typed(
     const T* cols, T* dx, int C, int L, int KL, int OL, int stride_l, int pad_l, int dilation_l) {
@@ -36,6 +52,9 @@ void col2im_1d_typed(
     }
 }
 
+// Typed 2-D im2col: builds cols[C*KH*KW, OH*OW] from input x[C, H, W].
+// The inner height loop checks bounds once and zero-fills the whole width
+// row on out-of-bounds, avoiding per-pixel branching in the common case.
 template <typename T>
 void im2col_typed(const T* x,
                   T* cols,
@@ -76,6 +95,8 @@ void im2col_typed(const T* x,
     }
 }
 
+// Typed 2-D col2im: scatters-accumulates cols back into dx[C, H, W].
+// dx is assumed zeroed on entry.
 template <typename T>
 void col2im_typed(const T* cols,
                   T* dx,
@@ -114,6 +135,9 @@ void col2im_typed(const T* cols,
     }
 }
 
+// Typed 3-D im2col: builds cols[C*KD*KH*KW, OD*OH*OW] from x[C, D, H, W].
+// Depth and height bound checks are hoisted out of the innermost loop to
+// minimize branching (d_in and h_in early-exit path).
 template <typename T>
 void im2col_3d_typed(const T* x,
                      T* cols,
@@ -168,6 +192,8 @@ void im2col_3d_typed(const T* x,
     }
 }
 
+// Typed 3-D col2im: scatters-accumulates cols back into dx[C, D, H, W].
+// dx must be zeroed before calling.
 template <typename T>
 void col2im_3d_typed(const T* cols,
                      T* dx,

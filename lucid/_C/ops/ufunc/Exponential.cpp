@@ -1,11 +1,20 @@
+// lucid/_C/ops/ufunc/Exponential.cpp
+//
+// Gradient formulas and entry points for the exponential / logarithm family.
+// AmpPolicy::ForceFP32 is applied to exp/log/log2 to keep numerical precision
+// consistent with vForce, which operates in single precision on CPU.
+
 #include "Exponential.h"
 
 #include "../../core/OpRegistry.h"
 
 namespace lucid {
 
+// exp — ForceFP32 prevents half-precision underflow during exponentiation.
 const OpSchema ExpBackward::schema_v1{"exp", 1, AmpPolicy::ForceFP32, true};
 
+// dL/dx = dL/dy * y  (since d/dx e^x = e^x = y).
+// Using saved_output_ avoids re-running the vForce exp kernel.
 Storage ExpBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -17,8 +26,10 @@ TensorImplPtr exp_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(ExpBackward)
 
+// log — ForceFP32 for consistent behaviour with vvlogf.
 const OpSchema LogBackward::schema_v1{"log", 1, AmpPolicy::ForceFP32, true};
 
+// dL/dx = dL/dy / x.
 Storage LogBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     return divide_storages(g, saved_inputs_[0], n, dtype_, device_);
@@ -29,8 +40,12 @@ TensorImplPtr log_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(LogBackward)
 
+// log2 — ForceFP32; gradient includes the chain-rule factor 1/ln(2).
 const OpSchema Log2Backward::schema_v1{"log2", 1, AmpPolicy::ForceFP32, true};
 
+// dL/dx = dL/dy / (x * ln(2)).
+// kLn2 is specified to 50 significant digits so that it rounds correctly to
+// both float32 and float64 without rounding compensation.
 Storage Log2Backward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 
@@ -44,8 +59,12 @@ TensorImplPtr log2_op(const TensorImplPtr& a) {
 }
 LUCID_REGISTER_OP(Log2Backward)
 
+// sqrt — AmpPolicy::Promote (not ForceFP32) so that float64 inputs remain f64.
 const OpSchema SqrtBackward::schema_v1{"sqrt", 1, AmpPolicy::Promote, true};
 
+// dL/dx = 0.5 * dL/dy / y  (since d/dx sqrt(x) = 1 / (2*sqrt(x)) = 1/(2*y)).
+// Dividing by saved_output_ rather than recomputing sqrt(x) avoids a second
+// vForce call and keeps the formula numerically stable near x = 0.
 Storage SqrtBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
 

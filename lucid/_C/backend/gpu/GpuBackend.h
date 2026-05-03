@@ -1,3 +1,38 @@
+// lucid/_C/backend/gpu/GpuBackend.h
+//
+// Concrete IBackend implementation for Apple Silicon GPU using MLX.  Almost
+// every operation is a thin delegation to the corresponding mlx::core:: API,
+// with shape/dtype conversions handled by the MlxBridge helpers.
+//
+// Key invariants:
+//   - All Storage values passed to GpuBackend methods must hold GpuStorage.
+//     The Dispatcher guarantees this by routing Device::GPU tensors here.
+//   - mlx uses lazy evaluation: operations build a graph but do not execute
+//     immediately.  Execution is deferred until a .eval() call or until data
+//     is needed by the CPU (e.g. in to_cpu or MetalKernelRunner).
+//   - float64 is NOT supported on the GPU (Metal limitation).  Callers must
+//     cast to float32 first or keep the tensor on CPU.
+//
+// Private helpers:
+//   mlx_unary(a, fn)  — extracts GpuStorage, applies fn(*arr), wraps result.
+//   mlx_binary(a, b, fn) — extracts both GpuStorage arrays, applies fn, wraps.
+//   mlx_reduce(a, opts, fn) — handles multi-axis reductions via MLX.
+//   k_linalg_stream   — CPU-device stream used for linalg ops because MLX's
+//                        linalg routines (eigh, svd, qr, etc.) run on CPU even
+//                        when called from the GPU backend.
+//
+// Layout conversions:
+//   MLX convolutions use NHWC (channels-last) order.  The convolution forward/
+//   backward methods permute NCHW inputs to NHWC before calling mlx::core::conv*
+//   and permute results back.  Helper functions gpu_nchw_to_nhwc_perm,
+//   gpu_nhwc_to_nchw_perm, and gpu_w_to_mlx_transpose_perm build the
+//   required permutation vectors for 1-D, 2-D, and 3-D cases.
+//
+// Self-registration:
+//   An anonymous-namespace GpuBackendRegistrar struct at the bottom of the
+//   file registers a GpuBackend singleton via Dispatcher at static-init time.
+//   BackendInit.cpp includes this header to trigger that registration.
+
 #pragma once
 
 #include <cstddef>
@@ -22,14 +57,21 @@
 namespace lucid {
 namespace backend {
 
+// GPU (MLX/Metal) concrete backend.
+//
+// All public methods satisfy the IBackend contract.  The private section
+// contains layout-conversion helpers and the mlx_unary/mlx_binary/mlx_reduce
+// template dispatchers that eliminate boilerplate in the many op methods.
 class GpuBackend final : public IBackend {
 public:
+    // Registers this backend with the Dispatcher for Device::GPU.
     static void register_self() {
         Dispatcher::register_backend(Device::GPU, std::make_unique<GpuBackend>());
     }
 
     Device device() const noexcept override { return Device::GPU; }
 
+    // Uploads cpu to GPU-private memory via mlx::core::copy() (see MlxBridge).
     Storage from_cpu(CpuStorage cpu, const Shape& shape) override {
         return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
     }
@@ -2868,8 +2910,14 @@ public:
     }
 
 private:
+    // MLX linalg operations (eig, eigh, svd, qr, cholesky, inv, solve) only
+    // have CPU implementations inside MLX itself.  Dispatching them on the
+    // default GPU stream would stall; using Device::cpu tells MLX to schedule
+    // them on the CPU dispatch queue while still returning mlx::core::array.
     inline static const ::mlx::core::Device k_linalg_stream{::mlx::core::Device::cpu};
 
+    // Builds a permutation for NCHW → NHWC transpose: [0, 2,..,N+1, 1].
+    // N is the number of spatial dimensions (1, 2, or 3).
     static std::vector<int> gpu_nchw_to_nhwc_perm(int N) {
         std::vector<int> p;
         p.reserve(N + 2);
@@ -2880,6 +2928,7 @@ private:
         return p;
     }
 
+    // Builds a permutation for NHWC → NCHW transpose: [0, N+1, 1,..,N].
     static std::vector<int> gpu_nhwc_to_nchw_perm(int N) {
         std::vector<int> p;
         p.reserve(N + 2);
@@ -3080,6 +3129,9 @@ private:
         return M;
     }
 
+    // Applies a unary MLX operation fn to the underlying array and wraps the
+    // contiguous result in a new GpuStorage.  mlx::core::contiguous ensures the
+    // output has C-order strides so that subsequent CPU reads (if any) are safe.
     template <class Fn>
     Storage mlx_unary(const Storage& a, const Shape&, Dtype dt, Fn fn) {
         const auto& gs = std::get<GpuStorage>(a);
@@ -3087,6 +3139,8 @@ private:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    // Applies a binary MLX operation fn to two GpuStorage arrays.  Shape is
+    // ignored because MLX handles broadcasting internally.
     template <class Fn>
     Storage mlx_binary(const Storage& a, const Storage& b, const Shape&, Dtype dt, Fn fn) {
         const auto& ga = std::get<GpuStorage>(a);
@@ -3095,6 +3149,8 @@ private:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    // Applies an MLX reduction fn(array, axes, keepdims).  If opts.axes is
+    // empty all axes are reduced (full reduction).
     template <class Fn>
     Storage
     mlx_reduce(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt, Fn fn) {
@@ -3108,6 +3164,10 @@ private:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
+    // Computes the sign of a permutation by counting cycles.
+    // Returns +1.0 if the permutation is even, -1.0 if odd.
+    // Used by linalg_det to apply the correct sign correction from the LU
+    // pivot permutation.
     static float perm_index_sign(const std::uint32_t* p, std::size_t n) {
         std::vector<bool> seen(n, false);
         std::size_t cycles = 0;
@@ -4895,6 +4955,9 @@ private:
 }  // namespace backend
 }  // namespace lucid
 
+// Anonymous-namespace static registrar that calls Dispatcher::register_backend
+// for Device::GPU at process startup, before any tensor code executes.
+// BackendInit.cpp includes this header to trigger the registration.
 namespace {
 struct GpuBackendRegistrar {
     GpuBackendRegistrar() {

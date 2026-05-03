@@ -1,3 +1,18 @@
+// lucid/_C/nn/Spatial.cpp
+//
+// Implementation of affine_grid and grid_sample.
+//
+// AffineGrid forward: IBackend::affine_grid_forward produces a (N, H, W, 2)
+//   grid of normalized sample coordinates from a batch of 2x3 affine matrices.
+//   Backward wiring is skipped when theta does not require a gradient.
+//
+// GridSample forward: IBackend::grid_sample_forward resamples the input image
+//   using bilinear/nearest/bicubic interpolation at the grid positions.
+//   Backward wiring is skipped when neither input nor grid requires a gradient.
+//
+// The backward for both ops is fully delegated to the backend; no activations
+// are saved beyond the mode and shape parameters recorded in the backward node.
+
 #include "Spatial.h"
 
 #include <algorithm>

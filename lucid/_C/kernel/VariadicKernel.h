@@ -1,3 +1,20 @@
+// lucid/_C/kernel/VariadicKernel.h
+//
+// CRTP base for ops that take a runtime-variable number of inputs, the
+// canonical example being concatenation (cat) which accepts any number of
+// tensors along a specified dimension. Unlike NaryKernel<Derived, N>,
+// which fixes N at compile time, VariadicKernel stores per-input metadata
+// in std::vector rather than std::array.
+//
+// Because the input count is dynamic, VariadicKernel inherits directly from
+// Node (not from AutogradNode<Derived, N>). It replicates the input_shapes_,
+// input_tensors_, saved_inputs_, and out_shape_ pattern but in vector form
+// (suffixed _v_ to avoid collisions with AutogradNode members when a Derived
+// type also inherits another kernel base).
+//
+// A variadic op's forward() allocates its output, then calls:
+//   VariadicKernel<Derived>::wire_autograd(inputs, out);
+
 #pragma once
 
 #include <cstddef>
@@ -23,11 +40,16 @@ class TensorImpl;
 
 namespace kernel {
 
+// CRTP base for variable-arity ops. Inherits Node directly rather than
+// AutogradNode<N> to support a runtime input count. Derived classes must
+// implement apply(Storage) for the backward pass.
 template <class Derived>
 class VariadicKernel : public Node, public IKernel {
 public:
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
+    // Version-staleness check for all variadic inputs. Called by the
+    // autograd engine before apply() to detect in-place mutations.
     void validate_versions() override {
         for (std::size_t i = 0; i < input_tensors_v_.size(); ++i) {
             ::lucid::check_version_match(input_tensors_v_[i],
@@ -36,14 +58,25 @@ public:
         }
     }
 
+    // Weak references to original input tensors; used for version checks.
     std::vector<std::weak_ptr<TensorImpl>> input_tensors_v_;
+    // Shapes of the original inputs, preserved for backward shape math.
     std::vector<Shape> input_shapes_v_;
+    // Shape of the produced output tensor.
     Shape out_shape_;
+    // Dtype and device of the first non-null input (all inputs must match).
     Dtype dtype_ = Dtype::F32;
     Device device_ = Device::CPU;
+    // Snapshots of each input's Storage at forward time, available to apply().
     std::vector<Storage> saved_inputs_v_;
+    // Optional snapshot of the output storage (used by ops whose backward
+    // needs the forward output value, e.g., softmax).
     Storage saved_output_;
 
+    // Wire the provided backward node bwd to out and to each input edge.
+    // Returns false if grad mode is off or no input requires a gradient.
+    // When save_ins is true, each input's storage is captured into
+    // saved_inputs_v_ for use in apply().
     static bool wire_autograd(std::shared_ptr<Derived> bwd,
                               const std::vector<TensorImplPtr>& inputs,
                               const TensorImplPtr& out,
@@ -57,6 +90,7 @@ public:
         if (!any_grad)
             return false;
 
+        // Use the first non-null input to resolve dtype and device.
         for (const auto& inp : inputs) {
             if (inp) {
                 bwd->dtype_ = inp->dtype();
@@ -95,6 +129,7 @@ public:
         return true;
     }
 
+    // Convenience overload that creates the backward node internally.
     static bool wire_autograd(const std::vector<TensorImplPtr>& inputs,
                               const TensorImplPtr& out,
                               bool save_ins = true) {

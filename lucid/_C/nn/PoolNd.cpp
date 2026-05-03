@@ -1,3 +1,19 @@
+// lucid/_C/nn/PoolNd.cpp
+//
+// N-dimensional MaxPool and AvgPool implementations.
+//
+// Output size formula (same as conv, no dilation):
+//   O[i] = (S[i] + 2*pad[i] - K[i]) / stride[i] + 1
+//
+// MaxPool forward: IBackend::max_pool_nd_forward returns [out, argmax].
+//   Backward: IBackend::max_pool_nd_backward scatters grad_out via argmax.
+//
+// AvgPool forward: IBackend::avg_pool_nd_forward returns out.
+//   Backward: IBackend::avg_pool_nd_backward distributes grad uniformly.
+//
+// Both forward paths skip wiring the autograd node when grad is not needed
+// (GradMode disabled or x.requires_grad == false).
+
 #include "PoolNd.h"
 
 #include <cstring>
@@ -36,10 +52,12 @@ const OpSchema AvgPool3dBackward::schema_v1{"avg_pool3d", 1, AmpPolicy::KeepInpu
 
 namespace {
 
+// Standard pooling output-size formula (no dilation).
 inline int compute_out(int S, int K, int stride, int pad) {
     return (S + 2 * pad - K) / stride + 1;
 }
 
+// Validate that x is non-null and has rank N+2.
 template <int N>
 void validate_input(const TensorImplPtr& x, std::string_view op_name) {
     Validator::input(x, std::string(op_name) + ".x").non_null();
@@ -56,6 +74,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
                                             const int (&pad)[N]) {
     validate_input<N>(x, MaxPoolNdBackward<N>::schema_v1.name);
     int stride[N];
+    // stride == 0 is a sentinel meaning "use kernel size" (non-overlapping).
     for (int i = 0; i < N; ++i)
         stride[i] = (stride_in[i] == 0) ? K[i] : stride_in[i];
 
@@ -92,12 +111,14 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         opts.pad[i] = pad[i];
     }
     auto& be = backend::Dispatcher::for_device(x->device());
+    // max_pool_nd_forward returns [output, argmax].
     auto pool_out = be.max_pool_nd_forward(x->storage(), x->shape(), out_shape, opts, x->dtype());
     Storage out_storage = std::move(pool_out[0]);
     Storage saved_argmax = std::move(pool_out[1]);
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
+    // Skip backward wiring if grad computation is off.
     if (!GradMode::is_enabled() || !x->requires_grad())
         return out;
 
@@ -122,6 +143,7 @@ std::vector<Storage> MaxPoolNdBackward<N>::apply(Storage grad_out) {
         opts.pad[i] = this->pad_[i];
     }
     auto& be = backend::Dispatcher::for_device(this->device_);
+    // Scatter grad to input positions using saved argmax indices.
     return {be.max_pool_nd_backward(grad_out, this->saved_argmax_, this->input_shapes_[0],
                                     this->out_shape_, opts, this->dtype_)};
 }
@@ -194,6 +216,7 @@ std::vector<Storage> AvgPoolNdBackward<N>::apply(Storage grad_out) {
         opts.pad[i] = this->pad_[i];
     }
     auto& be = backend::Dispatcher::for_device(this->device_);
+    // Distribute grad evenly across each pooling window.
     return {be.avg_pool_nd_backward(grad_out, this->input_shapes_[0], this->out_shape_, opts,
                                     this->dtype_)};
 }
@@ -205,6 +228,7 @@ template class AvgPoolNdBackward<1>;
 template class AvgPoolNdBackward<2>;
 template class AvgPoolNdBackward<3>;
 
+// Entry points pack scalar parameters into fixed-size arrays.
 TensorImplPtr max_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl) {
     int K[1]{KL};
     int s[1]{sl};
