@@ -1,4 +1,21 @@
 repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^lucid/
+
+  - repo: local
+    hooks:
+      - id: mypy-strict
+        name: mypy strict
+        entry: mypy --strict lucid/
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v18.1.8
     hooks:

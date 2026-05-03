@@ -1,0 +1,99 @@
+"""
+state_dict save/load helpers for Module.
+"""
+
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lucid.nn.module import Module
+    from lucid._tensor.tensor import Tensor
+
+
+def _save_to_state_dict(
+    module: "Module",
+    prefix: str = "",
+    keep_vars: bool = False,
+) -> "dict[str, Tensor]":
+    """Recursively collect all parameters and buffers into a flat dict."""
+    result: dict[str, Any] = {}
+
+    for name, p in module._parameters.items():
+        if p is not None:
+            key = f"{prefix}{name}"
+            result[key] = p if keep_vars else p.detach()
+
+    for name, b in module._buffers.items():
+        if b is not None:
+            key = f"{prefix}{name}"
+            result[key] = b if keep_vars else b.detach()
+
+    for mname, m in module._modules.items():
+        subprefix = f"{prefix}{mname}."
+        result.update(_save_to_state_dict(m, prefix=subprefix, keep_vars=keep_vars))
+
+    return result
+
+
+def _load_from_state_dict(
+    module: "Module",
+    state_dict: "dict[str, Tensor]",
+    strict: bool = True,
+) -> "tuple[list[str], list[str]]":
+    """
+    Load parameters from state_dict.
+
+    Returns (missing_keys, unexpected_keys).
+    """
+    import numpy as np
+    from lucid._C import engine as _C_engine
+    from lucid.nn.parameter import Parameter
+    from lucid._dispatch import _wrap
+
+    own_state = module.state_dict(keep_vars=True)
+    missing_keys: list[str] = []
+    unexpected_keys: list[str] = []
+
+    # Find missing and unexpected keys
+    for key in own_state:
+        if key not in state_dict:
+            missing_keys.append(key)
+
+    for key in state_dict:
+        if key not in own_state:
+            unexpected_keys.append(key)
+
+    if strict and (missing_keys or unexpected_keys):
+        raise RuntimeError(
+            f"Missing keys: {missing_keys}; Unexpected keys: {unexpected_keys}"
+        )
+
+    # Copy matching parameters
+    for key, src in state_dict.items():
+        if key not in own_state:
+            continue
+        # Navigate to the right sub-module
+        parts = key.split(".")
+        sub: "Module" = module
+        for part in parts[:-1]:
+            sub = sub._modules[part]
+        attr_name = parts[-1]
+
+        src_arr = np.asarray(src._impl.data_as_python())
+        src_arr = np.ascontiguousarray(src_arr)
+
+        if attr_name in sub._parameters:
+            old_p = sub._parameters[attr_name]
+            if old_p is not None:
+                new_impl = _C_engine.TensorImpl(
+                    src_arr, old_p._impl.device, old_p.requires_grad
+                )
+                sub._parameters[attr_name] = Parameter(
+                    _wrap(new_impl), requires_grad=old_p.requires_grad
+                )
+        elif attr_name in sub._buffers:
+            old_b = sub._buffers[attr_name]
+            device = old_b._impl.device if old_b is not None else _C_engine.Device.CPU
+            new_impl = _C_engine.TensorImpl(src_arr, device, False)
+            sub._buffers[attr_name] = _wrap(new_impl)
+
+    return missing_keys, unexpected_keys
