@@ -3,6 +3,7 @@ from lucid.nn.parameter import Parameter
 from lucid.nn.hooks import RemovableHandle
 from lucid.nn import functional
 from lucid.nn import init
+from lucid.nn import utils
 from lucid.nn.modules import (
     Linear, Identity, Bilinear,
     Conv1d, Conv2d, Conv3d,
@@ -26,7 +27,7 @@ from lucid.nn.modules import (
 
 __all__ = [
     "Module", "Parameter", "RemovableHandle",
-    "functional", "init",
+    "functional", "init", "utils",
     "Linear", "Identity", "Bilinear",
     "Conv1d", "Conv2d", "Conv3d",
     "ConvTranspose1d", "ConvTranspose2d", "ConvTranspose3d",
