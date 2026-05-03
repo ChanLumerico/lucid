@@ -19,6 +19,9 @@ class Flatten(Module):
     def forward(self, x: Any) -> Any:
         return _wrap(_C_engine.flatten(_unwrap(x), self.start_dim, self.end_dim))
 
+    def extra_repr(self) -> str:
+        return f"start_dim={self.start_dim}, end_dim={self.end_dim}"
+
 
 class Unflatten(Module):
     """Unflatten one dimension into multiple dimensions."""
@@ -32,3 +35,6 @@ class Unflatten(Module):
         shape = list(x.shape)
         new_shape = shape[: self.dim] + list(self.unflattened_size) + shape[self.dim + 1:]
         return _wrap(_C_engine.reshape(_unwrap(x), new_shape))
+
+    def extra_repr(self) -> str:
+        return f"dim={self.dim}, unflattened_size={self.unflattened_size}"

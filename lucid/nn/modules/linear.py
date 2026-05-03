@@ -96,3 +96,7 @@ class Bilinear(Module):
     def forward(self, x1: Any, x2: Any) -> Any:
         from lucid.nn import functional as F
         return F.bilinear(x1, x2, self.weight, self.bias)
+
+    def extra_repr(self) -> str:
+        return (f"in1_features={self.in1_features}, in2_features={self.in2_features}, "
+                f"out_features={self.out_features}, bias={self.bias is not None}")

@@ -15,23 +15,22 @@ class _LRScheduler:
         self.last_epoch = last_epoch
         self._step_count = 0
         self.base_lrs = [g["lr"] for g in optimizer.param_groups]
-        if hasattr(optimizer, "_engine_optims"):
-            for optim in optimizer._engine_optims:
-                if hasattr(optim, "lr"):
-                    pass  # lr already set
 
     def step(self) -> None:
+        """Advance the scheduler by one epoch and update learning rates."""
         self.last_epoch += 1
         self._step_count += 1
         values = self.get_lr()
         for group, lr in zip(self.optimizer.param_groups, values):
             group["lr"] = lr
-        self.optimizer._rebuild_engine_optims()
+        self.optimizer._sync_hyperparams()
 
     def get_lr(self) -> list[float]:
+        """Compute new LRs. Override in subclasses."""
         raise NotImplementedError
 
     def get_last_lr(self) -> list[float]:
+        """Return the last computed LR per group."""
         return [g["lr"] for g in self.optimizer.param_groups]
 
 
@@ -98,7 +97,8 @@ class CosineAnnealingLR(_LRScheduler):
 class LambdaLR(_LRScheduler):
     """LR determined by a user-defined function."""
 
-    def __init__(self, optimizer: Optimizer, lr_lambda: Callable[[int], float] | list[Callable[[int], float]],
+    def __init__(self, optimizer: Optimizer,
+                 lr_lambda: Callable[[int], float] | list[Callable[[int], float]],
                  last_epoch: int = -1) -> None:
         if callable(lr_lambda):
             self.lr_lambdas = [lr_lambda] * len(optimizer.param_groups)
@@ -127,7 +127,7 @@ class CyclicLR(_LRScheduler):
     def get_lr(self) -> list[float]:
         cycle = math.floor(1 + self.last_epoch / (2 * self.step_size_up))
         x = abs(self.last_epoch / self.step_size_up - 2 * cycle + 1)
-        scale = max(0, 1 - x)
+        scale = max(0.0, 1.0 - x)
         if self.mode == "triangular2":
             scale /= 2 ** (cycle - 1)
         elif self.mode == "exp_range":
@@ -153,6 +153,7 @@ class ReduceLROnPlateau:
         self._num_bad_epochs = 0
 
     def step(self, metrics: float) -> None:
+        """Update scheduler with current metric value."""
         if self.mode == "min":
             improved = metrics < self._best - self.threshold
         else:
@@ -167,7 +168,7 @@ class ReduceLROnPlateau:
                 for group in self.optimizer.param_groups:
                     new_lr = max(group["lr"] * self.factor, self.min_lr)
                     group["lr"] = new_lr
-                self.optimizer._rebuild_engine_optims()
+                self.optimizer._sync_hyperparams()
                 self._num_bad_epochs = 0
 
 

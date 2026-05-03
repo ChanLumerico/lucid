@@ -36,3 +36,6 @@ class Embedding(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.embedding(x, self.weight, self.padding_idx)
+
+    def extra_repr(self) -> str:
+        return f"{self.num_embeddings}, {self.embedding_dim}, padding_idx={self.padding_idx}"

@@ -77,3 +77,7 @@ class MultiheadAttention(Module):
         out = F.scaled_dot_product_attention(q, k, v, attn_mask, self.dropout if self.training else 0.0)
         out = F.linear(out, self.out_proj_weight, self.out_proj_bias)
         return out, None
+
+    def extra_repr(self) -> str:
+        return (f"embed_dim={self.embed_dim}, num_heads={self.num_heads}, "
+                f"dropout={self.dropout}, batch_first={self.batch_first}")

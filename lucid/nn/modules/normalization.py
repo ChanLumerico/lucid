@@ -38,6 +38,10 @@ class LayerNorm(Module):
         from lucid.nn import functional as F
         return F.layer_norm(x, list(self.normalized_shape), self.weight, self.bias, self.eps)
 
+    def extra_repr(self) -> str:
+        return (f"{self.normalized_shape}, eps={self.eps}, "
+                f"elementwise_affine={self.elementwise_affine}")
+
 
 class RMSNorm(Module):
     """RMS normalization."""
@@ -59,6 +63,9 @@ class RMSNorm(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
+
+    def extra_repr(self) -> str:
+        return f"{self.normalized_shape}, eps={self.eps}"
 
 
 class GroupNorm(Module):
@@ -88,6 +95,9 @@ class GroupNorm(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+
+    def extra_repr(self) -> str:
+        return f"{self.num_groups}, {self.num_channels}, eps={self.eps}, affine={self.affine}"
 
 
 class _BatchNormBase(Module):
@@ -135,6 +145,10 @@ class _BatchNormBase(Module):
             momentum=self.momentum,
             eps=self.eps,
         )
+
+    def extra_repr(self) -> str:
+        return (f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
+                f"affine={self.affine}, track_running_stats={self.track_running_stats}")
 
 
 class BatchNorm1d(_BatchNormBase):

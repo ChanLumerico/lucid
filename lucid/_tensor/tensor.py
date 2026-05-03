@@ -65,6 +65,16 @@ class Tensor:
         return len(self._impl.shape)
 
     @property
+    def T(self) -> Self:
+        """Return a tensor with all dimensions reversed (like numpy .T)."""
+        return Tensor.__new_from_impl__(_C_engine.T(self._impl))  # type: ignore[return-value]
+
+    @property
+    def mT(self) -> Self:
+        """Return a tensor with the last two dimensions transposed."""
+        return Tensor.__new_from_impl__(_C_engine.mT(self._impl))  # type: ignore[return-value]
+
+    @property
     def is_metal(self) -> bool:
         return self._impl.device == _C_engine.Device.GPU
 
@@ -140,8 +150,30 @@ class Tensor:
         retain_graph: bool = False,
         create_graph: bool = False,
     ) -> None:
-        """Compute gradients by backpropagating from this tensor."""
-        _C_engine.engine_backward(self._impl, retain_graph=retain_graph)
+        """Compute gradients by backpropagating from this tensor.
+
+        For scalar outputs, gradient defaults to ones.
+        For non-scalar outputs, gradient must be provided with the same shape;
+        gradients are then computed as if the effective scalar were (self * gradient).sum().
+        """
+        if gradient is not None:
+            if self._impl.shape != gradient._impl.shape:
+                raise RuntimeError(
+                    f"backward(): gradient shape {tuple(gradient._impl.shape)} does not "
+                    f"match tensor shape {tuple(self._impl.shape)}"
+                )
+            # Compute VJP: (self * g.detach()).sum() then backprop that scalar
+            g_impl = gradient.detach()._impl
+            scaled = _C_engine.mul(self._impl, g_impl)
+            root = _C_engine.sum(scaled)
+            _C_engine.engine_backward(root, retain_graph=retain_graph)
+        else:
+            if self._impl.shape and self._impl.numel() != 1:
+                raise RuntimeError(
+                    "grad can be implicitly created only for scalar outputs; "
+                    "call backward(gradient=...) for non-scalar tensors"
+                )
+            _C_engine.engine_backward(self._impl, retain_graph=retain_graph)
 
     def detach(self) -> Self:
         """Return a new Tensor detached from the autograd graph."""

@@ -19,6 +19,9 @@ class Dropout(Module):
         from lucid.nn import functional as F
         return F.dropout(x, self.p, self.training, self.inplace)
 
+    def extra_repr(self) -> str:
+        return f"p={self.p}"
+
 
 class Dropout2d(Module):
     """Randomly zero entire channels during training."""
@@ -30,6 +33,9 @@ class Dropout2d(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.dropout2d(x, self.p, self.training)
+
+    def extra_repr(self) -> str:
+        return f"p={self.p}"
 
 
 class AlphaDropout(Module):
@@ -44,3 +50,6 @@ class AlphaDropout(Module):
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
         return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), self.p, self.training))
+
+    def extra_repr(self) -> str:
+        return f"p={self.p}"

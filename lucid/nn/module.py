@@ -244,7 +244,13 @@ class Module:
     # ── repr ──────────────────────────────────────────────────────────────
 
     def __repr__(self) -> str:
-        lines = [f"{type(self).__name__}("]
+        extra = self.extra_repr()
+        cls_name = type(self).__name__
+        if not self._modules:
+            return f"{cls_name}({extra})" if extra else f"{cls_name}()"
+        lines = [f"{cls_name}("]
+        if extra:
+            lines.append(f"  {extra}")
         for name, m in self._modules.items():
             mod_repr = repr(m).replace("\n", "\n  ")
             lines.append(f"  ({name}): {mod_repr}")

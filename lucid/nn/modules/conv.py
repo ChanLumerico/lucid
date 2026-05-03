@@ -61,6 +61,10 @@ class Conv1d(Module):
         from lucid.nn import functional as F
         return F.conv1d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
+    def extra_repr(self) -> str:
+        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+                f"stride={self.stride}, padding={self.padding}")
+
 
 class Conv2d(Module):
     """2D convolution."""
@@ -105,6 +109,10 @@ class Conv2d(Module):
         from lucid.nn import functional as F
         return F.conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
+    def extra_repr(self) -> str:
+        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+                f"stride={self.stride}, padding={self.padding}")
+
 
 class Conv3d(Module):
     """3D convolution."""
@@ -140,6 +148,10 @@ class Conv3d(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.conv3d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+
+    def extra_repr(self) -> str:
+        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+                f"stride={self.stride}, padding={self.padding}")
 
 
 class ConvTranspose1d(Module):
@@ -177,6 +189,10 @@ class ConvTranspose1d(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.conv_transpose1d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
+
+    def extra_repr(self) -> str:
+        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+                f"stride={self.stride}, padding={self.padding}")
 
 
 class ConvTranspose2d(Module):
@@ -216,6 +232,10 @@ class ConvTranspose2d(Module):
         from lucid.nn import functional as F
         return F.conv_transpose2d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
 
+    def extra_repr(self) -> str:
+        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+                f"stride={self.stride}, padding={self.padding}")
+
 
 class ConvTranspose3d(Module):
     """Transposed 3D convolution."""
@@ -253,3 +273,7 @@ class ConvTranspose3d(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.conv_transpose3d(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.groups, self.dilation)
+
+    def extra_repr(self) -> str:
+        return (f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+                f"stride={self.stride}, padding={self.padding}")

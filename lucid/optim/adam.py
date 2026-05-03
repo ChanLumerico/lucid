@@ -36,18 +36,21 @@ class Adam(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.Adam(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("beta1", 0.9), g.get("beta2", 0.999),
-                g.get("eps", 1e-8), g.get("weight_decay", 0),
-                g.get("amsgrad", False),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("beta1", 0.9),
+                group.get("beta2", 0.999),
+                group.get("eps", 1e-8),
+                group.get("weight_decay", 0.0),
+                group.get("amsgrad", False),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single Adam step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
@@ -82,17 +85,20 @@ class AdamW(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.AdamW(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("beta1", 0.9), g.get("beta2", 0.999),
-                g.get("eps", 1e-8), g.get("weight_decay", 1e-2),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("beta1", 0.9),
+                group.get("beta2", 0.999),
+                group.get("eps", 1e-8),
+                group.get("weight_decay", 1e-2),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single AdamW step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()

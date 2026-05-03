@@ -94,3 +94,8 @@ class LSTM(Module):
             self.batch_first,
         )
         return _wrap(output_impl), (_wrap(h_n_impl), _wrap(c_n_impl))
+
+    def extra_repr(self) -> str:
+        return (f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
+                f"bias={self.bias}, batch_first={self.batch_first}, "
+                f"dropout={self.dropout_val}, bidirectional={self.bidirectional}")

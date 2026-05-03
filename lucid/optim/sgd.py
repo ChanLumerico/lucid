@@ -36,17 +36,20 @@ class SGD(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.SGD(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("momentum", 0), g.get("dampening", 0),
-                g.get("weight_decay", 0), g.get("nesterov", False),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("momentum", 0.0),
+                group.get("dampening", 0.0),
+                group.get("weight_decay", 0.0),
+                group.get("nesterov", False),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single SGD step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()

@@ -8,28 +8,6 @@ from lucid._dispatch import _unwrap
 from lucid.optim.optimizer import Optimizer
 
 
-def _make_engine_optim(engine_cls: type, keys: list[str], defaults: dict[str, Any]) -> type:
-    """Factory to create a simple engine-backed Optimizer subclass."""
-
-    class _EngineOptim(Optimizer):
-        def __init__(self, params: Any, **kwargs: Any) -> None:
-            super().__init__(params, {**defaults, **kwargs})
-
-        def _rebuild_engine_optims(self) -> None:
-            self._engine_optims = [
-                engine_cls(*([_unwrap(p) for p in g["params"]] + [g[k] for k in keys]))
-                for g in self.param_groups
-            ]
-
-        def step(self, closure: Any = None) -> Any:
-            loss = closure() if closure is not None else None
-            for optim in self._engine_optims:
-                optim.step()
-            return loss
-
-    return _EngineOptim
-
-
 class RMSprop(Optimizer):
     """RMSprop optimizer."""
 
@@ -40,17 +18,20 @@ class RMSprop(Optimizer):
                         momentum=momentum, centered=centered)
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.RMSprop(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("alpha", 0.99), g.get("eps", 1e-8),
-                g.get("weight_decay", 0), g.get("momentum", 0),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("alpha", 0.99),
+                group.get("eps", 1e-8),
+                group.get("weight_decay", 0.0),
+                group.get("momentum", 0.0),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single RMSprop step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
@@ -65,16 +46,19 @@ class Adagrad(Optimizer):
         defaults = dict(lr=lr, lr_decay=lr_decay, weight_decay=weight_decay, eps=eps)
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.Adagrad(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("lr_decay", 0), g.get("weight_decay", 0), g.get("eps", 1e-10),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("lr_decay", 0.0),
+                group.get("weight_decay", 0.0),
+                group.get("eps", 1e-10),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single Adagrad step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
@@ -89,16 +73,19 @@ class Adadelta(Optimizer):
         defaults = dict(lr=lr, rho=rho, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.Adadelta(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("rho", 0.9), g.get("eps", 1e-6), g.get("weight_decay", 0),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("rho", 0.9),
+                group.get("eps", 1e-6),
+                group.get("weight_decay", 0.0),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single Adadelta step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
@@ -113,17 +100,20 @@ class Adamax(Optimizer):
         defaults = dict(lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.Adamax(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("beta1", 0.9), g.get("beta2", 0.999),
-                g.get("eps", 1e-8), g.get("weight_decay", 0),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("beta1", 0.9),
+                group.get("beta2", 0.999),
+                group.get("eps", 1e-8),
+                group.get("weight_decay", 0.0),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single Adamax step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
@@ -138,17 +128,20 @@ class RAdam(Optimizer):
         defaults = dict(lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.RAdam(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("beta1", 0.9), g.get("beta2", 0.999),
-                g.get("eps", 1e-8), g.get("weight_decay", 0),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("beta1", 0.9),
+                group.get("beta2", 0.999),
+                group.get("eps", 1e-8),
+                group.get("weight_decay", 0.0),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single RAdam step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
@@ -163,17 +156,20 @@ class NAdam(Optimizer):
         defaults = dict(lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.NAdam(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("beta1", 0.9), g.get("beta2", 0.999),
-                g.get("eps", 1e-8), g.get("weight_decay", 0),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("beta1", 0.9),
+                group.get("beta2", 0.999),
+                group.get("eps", 1e-8),
+                group.get("weight_decay", 0.0),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single NAdam step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
@@ -188,17 +184,20 @@ class ASGD(Optimizer):
         defaults = dict(lr=lr, lambd=lambd, alpha=alpha, t0=t0, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.ASGD(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("lambd", 1e-4), g.get("alpha", 0.75),
-                g.get("t0", 1e6), g.get("weight_decay", 0),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("lambd", 1e-4),
+                group.get("alpha", 0.75),
+                group.get("t0", 1e6),
+                group.get("weight_decay", 0.0),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single ASGD step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()
@@ -214,17 +213,20 @@ class Rprop(Optimizer):
                         step_min=step_sizes[0], step_max=step_sizes[1])
         super().__init__(params, defaults)
 
-    def _rebuild_engine_optims(self) -> None:
-        self._engine_optims = [
+    def _append_engine_optim(self, group: dict[str, Any]) -> None:
+        self._engine_optims.append(
             _C_engine.Rprop(
-                [_unwrap(p) for p in g["params"]],
-                g["lr"], g.get("eta_minus", 0.5), g.get("eta_plus", 1.2),
-                g.get("step_min", 1e-6), g.get("step_max", 50),
+                [_unwrap(p) for p in group["params"]],
+                group["lr"],
+                group.get("eta_minus", 0.5),
+                group.get("eta_plus", 1.2),
+                group.get("step_min", 1e-6),
+                group.get("step_max", 50.0),
             )
-            for g in self.param_groups
-        ]
+        )
 
     def step(self, closure: Any = None) -> Any:
+        """Perform a single Rprop step."""
         loss = closure() if closure is not None else None
         for optim in self._engine_optims:
             optim.step()

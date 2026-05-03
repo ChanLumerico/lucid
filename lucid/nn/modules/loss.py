@@ -15,6 +15,8 @@ class MSELoss(Module):
     def forward(self, x: Any, target: Any) -> Any:
         from lucid.nn import functional as F
         return F.mse_loss(x, target, self.reduction)
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"
 
 
 class L1Loss(Module):
@@ -25,6 +27,8 @@ class L1Loss(Module):
     def forward(self, x: Any, target: Any) -> Any:
         from lucid.nn import functional as F
         return F.l1_loss(x, target, self.reduction)
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"
 
 
 class CrossEntropyLoss(Module):
@@ -50,6 +54,9 @@ class CrossEntropyLoss(Module):
             reduction=self.reduction,
             label_smoothing=self.label_smoothing,
         )
+    def extra_repr(self) -> str:
+        return (f"ignore_index={self.ignore_index}, reduction={self.reduction!r}, "
+                f"label_smoothing={self.label_smoothing}")
 
 
 class NLLLoss(Module):
@@ -60,6 +67,8 @@ class NLLLoss(Module):
     def forward(self, x: Any, target: Any) -> Any:
         from lucid.nn import functional as F
         return F.nll_loss(x, target, reduction=self.reduction)
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"
 
 
 class BCELoss(Module):
@@ -70,6 +79,8 @@ class BCELoss(Module):
     def forward(self, x: Any, target: Any) -> Any:
         from lucid.nn import functional as F
         return F.binary_cross_entropy(x, target, reduction=self.reduction)
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"
 
 
 class BCEWithLogitsLoss(Module):
@@ -83,6 +94,8 @@ class BCEWithLogitsLoss(Module):
         return F.binary_cross_entropy_with_logits(
             x, target, pos_weight=self.pos_weight, reduction=self.reduction
         )
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"
 
 
 class HuberLoss(Module):
@@ -94,3 +107,5 @@ class HuberLoss(Module):
     def forward(self, x: Any, target: Any) -> Any:
         from lucid.nn import functional as F
         return F.huber_loss(x, target, self.delta, self.reduction)
+    def extra_repr(self) -> str:
+        return f"delta={self.delta}, reduction={self.reduction!r}"

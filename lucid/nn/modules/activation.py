@@ -15,6 +15,8 @@ class ReLU(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.relu(x, self.inplace)
+    def extra_repr(self) -> str:
+        return f"inplace={self.inplace}" if self.inplace else ""
 
 class LeakyReLU(Module):
     """Leaky rectified linear unit."""
@@ -25,6 +27,8 @@ class LeakyReLU(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.leaky_relu(x, self.negative_slope, self.inplace)
+    def extra_repr(self) -> str:
+        return f"negative_slope={self.negative_slope}"
 
 class ELU(Module):
     """Exponential linear unit."""
@@ -35,6 +39,8 @@ class ELU(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.elu(x, self.alpha, self.inplace)
+    def extra_repr(self) -> str:
+        return f"alpha={self.alpha}"
 
 class SELU(Module):
     """Scaled exponential linear unit."""
@@ -53,6 +59,8 @@ class GELU(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.gelu(x, self.approximate)
+    def extra_repr(self) -> str:
+        return f"approximate={self.approximate!r}" if self.approximate != "none" else ""
 
 class SiLU(Module):
     """Sigmoid linear unit (Swish)."""
@@ -100,6 +108,8 @@ class Softmax(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.softmax(x, self.dim)
+    def extra_repr(self) -> str:
+        return f"dim={self.dim}"
 
 class LogSoftmax(Module):
     """Log-softmax activation."""
@@ -109,6 +119,8 @@ class LogSoftmax(Module):
     def forward(self, x: Any) -> Any:
         from lucid.nn import functional as F
         return F.log_softmax(x, self.dim)
+    def extra_repr(self) -> str:
+        return f"dim={self.dim}"
 
 class ReLU6(Module):
     """ReLU6 activation."""
