@@ -1,8 +1,8 @@
 // lucid/_C/ops/utils/Select.h
 //
 // Declares element-selection and index-based ops: where, masked_fill, roll,
-// gather, and diagonal.  Several of these are differentiable; their backward
-// passes are implemented in Select.cpp.
+// gather, diagonal, flip, and masked_select.  Several are differentiable;
+// their backward passes are implemented in Select.cpp.
 
 #pragma once
 
@@ -53,5 +53,13 @@ LUCID_API TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& i
 // Backward: scatter the diagonal gradient back into a zero tensor of the
 // original input shape.
 LUCID_API TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axis2);
+
+// Reverse tensor along the given axes.  Equivalent to numpy.flip / torch.flip.
+// Like roll, but with no wrap-around.  Backward: flip with the same dims.
+LUCID_API TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims);
+
+// Boolean masked selection: extract elements where mask == true.
+// Returns a flat 1-D tensor of length equal to the number of true elements.
+LUCID_API TensorImplPtr masked_select_op(const TensorImplPtr& a, const TensorImplPtr& mask);
 
 }  // namespace lucid

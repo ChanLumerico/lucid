@@ -37,6 +37,7 @@
 #include "../ops/ufunc/Trace.h"
 #include "../ops/ufunc/Transpose.h"
 #include "../ops/ufunc/Trig.h"
+#include "../ops/ufunc/Astype.h"
 #include "../ops/ufunc/Var.h"
 #include "BindingGen.h"
 
@@ -171,6 +172,11 @@ void register_ufunc(py::module_& m) {
           py::arg("nan")    = 0.0,
           py::arg("posinf") = 3.4028234663852886e+38,
           py::arg("neginf") = -3.4028234663852886e+38);
+
+    // Dtype cast: element-wise conversion to a different dtype.
+    // CPU: static_cast loop.  GPU: mlx::core::astype.
+    m.def("astype", &astype_op, py::arg("a"), py::arg("dtype"),
+          "Cast all elements to dtype. CPU: static_cast loop. GPU: mlx::core::astype.");
 }
 
 }  // namespace lucid::bindings

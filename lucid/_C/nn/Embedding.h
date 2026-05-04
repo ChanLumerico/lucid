@@ -87,4 +87,15 @@ LUCID_API TensorImplPtr rotary_pos_embedding_op(const TensorImplPtr& input,
                                                 const TensorImplPtr& position_ids_or_null,
                                                 bool interleaved);
 
+// Pooled embedding lookup (bag mode).
+// Combines multiple embeddings per bag via sum (mode=0), mean (mode=1), or
+// max (mode=2).  offsets marks the start of each bag in the flat indices
+// tensor.  padding_idx < 0 means no padding.
+LUCID_API TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
+                                          const TensorImplPtr& indices,
+                                          const TensorImplPtr& offsets,
+                                          int mode,
+                                          int padding_idx,
+                                          bool include_last_offset);
+
 }  // namespace lucid

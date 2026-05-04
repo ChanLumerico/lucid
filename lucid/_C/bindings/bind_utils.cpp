@@ -130,6 +130,10 @@ void register_utils(py::module_& m) {
     m.def("gather", &gather_op, py::arg("a"), py::arg("indices"), py::arg("axis") = -1);
     m.def("diagonal", &diagonal_op, py::arg("a"), py::arg("offset") = 0, py::arg("axis1") = -2,
           py::arg("axis2") = -1);
+    m.def("flip", &flip_op, py::arg("a"), py::arg("dims"),
+          "Reverse tensor along the given dims. CPU: loop copy. GPU: take with reversed indices.");
+    m.def("masked_select", &masked_select_op, py::arg("a"), py::arg("mask"),
+          "Boolean masked selection: returns 1-D tensor of elements where mask==True.");
 
     // Sorting and indexing.
     m.def("sort", &sort_op, py::arg("a"), py::arg("axis") = -1);

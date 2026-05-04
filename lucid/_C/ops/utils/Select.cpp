@@ -1,6 +1,7 @@
 // lucid/_C/ops/utils/Select.cpp
 //
-// Implements where, masked_fill, roll, gather, and diagonal with autograd.
+// Implements where, masked_fill, roll, gather, diagonal, flip, and
+// masked_select with autograd where applicable.
 //
 // Backward nodes:
 //   WhereBackward      — mask grad_out with `cond` to obtain dx (x-branch)
@@ -503,6 +504,43 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     bwd->axis1_ = a1;
     bwd->axis2_ = a2;
     return attach_unary_grad(a, std::move(result), std::move(bwd));
+}
+
+// ── flip ──────────────────────────────────────────────────────────────────────
+
+TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims) {
+    Validator::input(a, "flip").non_null();
+    const auto& sh = a->shape();
+    const int ndim = static_cast<int>(sh.size());
+
+    for (auto& d : dims) {
+        if (d < 0) d += ndim;
+        if (d < 0 || d >= ndim)
+            ErrorBuilder("flip").fail("dim out of range");
+    }
+
+    auto& be = backend::Dispatcher::for_device(a->device());
+    Storage out = be.flip(a->storage(), sh, dims, a->dtype());
+    return std::make_shared<TensorImpl>(std::move(out), sh, a->dtype(), a->device(), false);
+}
+
+// ── masked_select ─────────────────────────────────────────────────────────────
+
+TensorImplPtr masked_select_op(const TensorImplPtr& a, const TensorImplPtr& mask) {
+    Validator::input(a,    "masked_select.a").non_null();
+    Validator::input(mask, "masked_select.mask").non_null();
+
+    auto& be = backend::Dispatcher::for_device(a->device());
+    Storage count_s = be.masked_select_count(mask->storage(), mask->shape(), mask->dtype());
+    std::int64_t n = 0;
+    {
+        const auto& cs = std::get<CpuStorage>(count_s);
+        std::memcpy(&n, cs.ptr.get(), sizeof(std::int64_t));
+    }
+    Shape out_shape{n};
+    Storage out = be.masked_select(a->storage(), mask->storage(),
+                                    a->shape(), mask->shape(), n, a->dtype());
+    return std::make_shared<TensorImpl>(std::move(out), out_shape, a->dtype(), a->device(), false);
 }
 
 }  // namespace lucid

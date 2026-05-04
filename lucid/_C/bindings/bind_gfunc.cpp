@@ -13,9 +13,6 @@
 #include "../core/TensorImpl.h"
 #include "../core/Dtype.h"
 #include "../ops/gfunc/Gfunc.h"
-#include "../ops/ufunc/Astype.h"
-#include "../ops/utils/Flip.h"
-#include "../ops/utils/MaskedSelect.h"
 
 namespace py = pybind11;
 
@@ -103,15 +100,6 @@ void register_gfunc(py::module_& m) {
     m.def("empty_like", &empty_like_op, py::arg("a"), py::arg("requires_grad") = false);
     m.def("full_like", &full_like_op, py::arg("a"), py::arg("fill_value"),
           py::arg("requires_grad") = false);
-
-    m.def("flip", &flip_op, py::arg("a"), py::arg("dims"),
-          "Reverse tensor along the given dims. CPU: loop copy. GPU: take with reversed indices.");
-
-    m.def("masked_select", &masked_select_op, py::arg("a"), py::arg("mask"),
-          "Boolean masked selection: returns 1-D tensor of elements where mask==True.");
-
-    m.def("astype", &astype_op, py::arg("a"), py::arg("dtype"),
-          "Cast all elements to dtype. CPU: static_cast loop. GPU: mlx::core::astype.");
 }
 
 }  // namespace lucid::bindings
