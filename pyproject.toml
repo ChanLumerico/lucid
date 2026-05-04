@@ -31,8 +31,11 @@ docs = [
 lucid = ["py.typed"]
 
 [tool.pytest.ini_options]
+testpaths = ["lucid/test"]
 markers = [
-    "parity: lucid<->torch numerical parity test",
-    "smoke: quick sanity test",
-    "slow: slow test (model forwards, long trajectories)",
+    "parity: numerical parity vs PyTorch (requires torch)",
+    "smoke:  quick sanity test (< 1s)",
+    "slow:   end-to-end, > 5s (model forwards, training loops)",
+    "gpu:    requires Apple Silicon GPU (MLX)",
 ]
+addopts = "-v --tb=short"

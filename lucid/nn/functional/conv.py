@@ -118,7 +118,9 @@ def conv_transpose2d(
         b = _unwrap(bias)
     else:
         b = _C_engine.zeros([int(wi.shape[1])], wi.dtype, wi.device)
-    return _wrap(_C_engine.nn.conv_transpose2d(_unwrap(x), wi, b, sh, sw, ph, pw, oh, ow))
+    return _wrap(
+        _C_engine.nn.conv_transpose2d(_unwrap(x), wi, b, sh, sw, ph, pw, oh, ow)
+    )
 
 
 def conv_transpose3d(
@@ -141,5 +143,7 @@ def conv_transpose3d(
     else:
         b = _C_engine.zeros([int(wi.shape[1])], wi.dtype, wi.device)
     return _wrap(
-        _C_engine.nn.conv_transpose3d(_unwrap(x), wi, b, sd, sh, sw, pd, ph, pw, od, oh, ow)
+        _C_engine.nn.conv_transpose3d(
+            _unwrap(x), wi, b, sd, sh, sw, pd, ph, pw, od, oh, ow
+        )
     )

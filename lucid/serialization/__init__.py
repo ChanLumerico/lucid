@@ -5,13 +5,13 @@ lucid.serialization: save and load tensors and modules.
 import io
 import pickle
 import warnings
-from typing import Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 import numpy as np
+
 from lucid._tensor.tensor import Tensor as _T
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
-from lucid._dtype import to_engine_dtype
 
 if TYPE_CHECKING:
     pass

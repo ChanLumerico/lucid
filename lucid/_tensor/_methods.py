@@ -35,7 +35,9 @@ def _bessel_correct(result_impl, x_impl, axes_list, correction):
     if n <= correction:
         return result_impl
     scale = float(n) / float(n - correction)
-    scale_t = _C_engine.full(list(result_impl.shape), scale, result_impl.dtype, result_impl.device)
+    scale_t = _C_engine.full(
+        list(result_impl.shape), scale, result_impl.dtype, result_impl.device
+    )
     return _C_engine.mul(result_impl, scale_t)
 
 
@@ -109,33 +111,52 @@ def _inject_methods(tensor_cls: type) -> None:
 
     # ── PyTorch-compatible reduction methods (override registry versions) ─────
 
-    def sum(self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None) -> Tensor:
+    def sum(
+        self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+    ) -> Tensor:
         ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
         kd = keepdims if keepdims is not None else keepdim
         return _wrap(_C_engine.sum(self._impl, ax, kd))
 
-    def mean(self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None) -> Tensor:
+    def mean(
+        self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+    ) -> Tensor:
         ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
         kd = keepdims if keepdims is not None else keepdim
         return _wrap(_C_engine.mean(self._impl, ax, kd))
 
-    def prod(self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None) -> Tensor:
+    def prod(
+        self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+    ) -> Tensor:
         ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
         kd = keepdims if keepdims is not None else keepdim
         return _wrap(_C_engine.prod(self._impl, ax, kd))
 
-    def max(self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None) -> Tensor:
+    def max(
+        self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+    ) -> Tensor:
         ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
         kd = keepdims if keepdims is not None else keepdim
         return _wrap(_C_engine.max(self._impl, ax, kd))
 
-    def min(self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None) -> Tensor:
+    def min(
+        self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+    ) -> Tensor:
         ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
         kd = keepdims if keepdims is not None else keepdim
         return _wrap(_C_engine.min(self._impl, ax, kd))
 
-    def var(self: Tensor, dim=None, keepdim=False, *, correction=1, unbiased=None,
-            axis=None, axes=None, keepdims=None) -> Tensor:
+    def var(
+        self: Tensor,
+        dim=None,
+        keepdim=False,
+        *,
+        correction=1,
+        unbiased=None,
+        axis=None,
+        axes=None,
+        keepdims=None,
+    ) -> Tensor:
         """Variance; correction=1 applies Bessel's correction (PyTorch default)."""
         if unbiased is not None:
             correction = 1 if unbiased else 0
@@ -144,8 +165,17 @@ def _inject_methods(tensor_cls: type) -> None:
         v = _C_engine.var(self._impl, ax, kd)
         return _wrap(_bessel_correct(v, self._impl, ax, correction))
 
-    def std(self: Tensor, dim=None, keepdim=False, *, correction=1, unbiased=None,
-            axis=None, axes=None, keepdims=None) -> Tensor:
+    def std(
+        self: Tensor,
+        dim=None,
+        keepdim=False,
+        *,
+        correction=1,
+        unbiased=None,
+        axis=None,
+        axes=None,
+        keepdims=None,
+    ) -> Tensor:
         """Std dev; correction=1 applies Bessel's correction (PyTorch default)."""
         if unbiased is not None:
             correction = 1 if unbiased else 0
@@ -155,28 +185,68 @@ def _inject_methods(tensor_cls: type) -> None:
         v = _bessel_correct(v, self._impl, ax, correction)
         return _wrap(_C_engine.sqrt(v))
 
-    def argmax(self: Tensor, dim=None, keepdim=False, *, axis=None, keepdims=None) -> Tensor:
+    def argmax(
+        self: Tensor, dim=None, keepdim=False, *, axis=None, keepdims=None
+    ) -> Tensor:
         d = dim if dim is not None else axis
         kd = keepdims if keepdims is not None else keepdim
         ax = -1 if d is None else int(d)
         return _wrap(_C_engine.argmax(self._impl, ax, kd))
 
-    def argmin(self: Tensor, dim=None, keepdim=False, *, axis=None, keepdims=None) -> Tensor:
+    def argmin(
+        self: Tensor, dim=None, keepdim=False, *, axis=None, keepdims=None
+    ) -> Tensor:
         d = dim if dim is not None else axis
         kd = keepdims if keepdims is not None else keepdim
         ax = -1 if d is None else int(d)
         return _wrap(_C_engine.argmin(self._impl, ax, kd))
 
+    def reshape(self: Tensor, *shape) -> Tensor:
+        """Reshape; accepts t.reshape(d0, d1) or t.reshape([d0, d1]) or t.reshape(-1)."""
+        if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+            s = [int(d) for d in shape[0]]
+        elif len(shape) == 1 and isinstance(shape[0], int):
+            s = [int(shape[0])]
+        else:
+            s = [int(d) for d in shape]
+        return _wrap(_C_engine.reshape(self._impl, s))
+
+    def permute(self: Tensor, *dims) -> Tensor:
+        """Permute axes; accepts t.permute(d0, d1, d2) or t.permute([d0, d1, d2])."""
+        if len(dims) == 1 and isinstance(dims[0], (list, tuple)):
+            p = [int(d) for d in dims[0]]
+        else:
+            p = [int(d) for d in dims]
+        return _wrap(_C_engine.permute(self._impl, p))
+
+    def expand(self: Tensor, *sizes) -> Tensor:
+        """Expand to shape; accepts t.expand(s0, s1) or t.expand([s0, s1])."""
+        if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
+            s = [int(d) for d in sizes[0]]
+        else:
+            s = [int(d) for d in sizes]
+        return _wrap(_C_engine.expand(self._impl, s))
+
     def squeeze(self: Tensor, dim=None) -> Tensor:
-        """Remove size-1 dims; dim=None removes all; list removes multiple."""
+        """Remove size-1 dims; non-unit dims silently ignored (PyTorch behaviour)."""
         if dim is None:
             return _wrap(_C_engine.squeeze_all(self._impl))
+        impl = self._impl
         if isinstance(dim, (list, tuple)):
-            result = self._impl
+            ndim = len(impl.shape)
+            result = impl
             for d in sorted([int(d) for d in dim], reverse=True):
-                result = _C_engine.squeeze(result, d)
+                nd = d if d >= 0 else ndim + d
+                if 0 <= nd < ndim and int(impl.shape[nd]) == 1:
+                    result = _C_engine.squeeze(result, nd)
+                    ndim -= 1
             return _wrap(result)
-        return _wrap(_C_engine.squeeze(self._impl, int(dim)))
+        ndim = len(impl.shape)
+        d = int(dim)
+        nd = d if d >= 0 else ndim + d
+        if nd < 0 or nd >= ndim or int(impl.shape[nd]) != 1:
+            return _wrap(impl)
+        return _wrap(_C_engine.squeeze(impl, nd))
 
     def repeat(self: Tensor, *sizes) -> Tensor:
         """Tile copies (PyTorch Tensor.repeat semantics).
@@ -227,6 +297,10 @@ def _inject_methods(tensor_cls: type) -> None:
     for _name, _fn in [
         ("view", view),
         ("t", t),
+        ("reshape", reshape),
+        ("permute", permute),
+        ("expand", expand),
+        ("squeeze", squeeze),
         ("sum", sum),
         ("mean", mean),
         ("prod", prod),
@@ -236,7 +310,6 @@ def _inject_methods(tensor_cls: type) -> None:
         ("std", std),
         ("argmax", argmax),
         ("argmin", argmin),
-        ("squeeze", squeeze),
         ("repeat", repeat),
         ("repeat_interleave", repeat_interleave),
         ("split", split),

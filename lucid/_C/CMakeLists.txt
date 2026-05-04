@@ -293,3 +293,10 @@ set_target_properties(
         LIBRARY_OUTPUT_DIRECTORY "${LUCID_EXTENSION_OUTPUT_DIR}"
         BUILD_RPATH "${LUCID_MLX_LIBRARY_DIR}"
         INSTALL_RPATH "${LUCID_MLX_LIBRARY_DIR}")
+
+# ── Optional C++ unit tests (Google Test) ────────────────────────────────────
+option(BUILD_TESTING "Build C++ unit tests using Google Test" OFF)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(test)
+endif()

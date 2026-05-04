@@ -55,24 +55,47 @@ def selu(x: Tensor, inplace: bool = False) -> Tensor:
 def _erf_approx(xi):
     """Polynomial approximation of erf (Abramowitz & Stegun 7.1.26, max err < 1.5e-7)."""
     p_coef = 0.3275911
-    a1, a2, a3, a4, a5 = 0.254829592, -0.284496736, 1.421413741, -1.453152027, 1.061405429
+    a1, a2, a3, a4, a5 = (
+        0.254829592,
+        -0.284496736,
+        1.421413741,
+        -1.453152027,
+        1.061405429,
+    )
     shape = list(xi.shape)
     dt, dev = xi.dtype, xi.device
 
     abs_xi = _C_engine.abs(xi)
     ones = _C_engine.ones(shape, dt, dev)
     # t = 1 / (1 + p * |x|)
-    t = _C_engine.div(ones, _C_engine.add(ones, _C_engine.mul(_C_engine.full(shape, p_coef, dt, dev), abs_xi)))
+    t = _C_engine.div(
+        ones,
+        _C_engine.add(
+            ones, _C_engine.mul(_C_engine.full(shape, p_coef, dt, dev), abs_xi)
+        ),
+    )
     # Horner: ((((a5*t + a4)*t + a3)*t + a2)*t + a1) * t
-    poly = _C_engine.add(_C_engine.mul(_C_engine.full(shape, a5, dt, dev), t), _C_engine.full(shape, a4, dt, dev))
+    poly = _C_engine.add(
+        _C_engine.mul(_C_engine.full(shape, a5, dt, dev), t),
+        _C_engine.full(shape, a4, dt, dev),
+    )
     poly = _C_engine.add(_C_engine.mul(poly, t), _C_engine.full(shape, a3, dt, dev))
     poly = _C_engine.add(_C_engine.mul(poly, t), _C_engine.full(shape, a2, dt, dev))
     poly = _C_engine.add(_C_engine.mul(poly, t), _C_engine.full(shape, a1, dt, dev))
     poly = _C_engine.mul(poly, t)
     # erf(|x|) = 1 - poly * exp(-x^2)
-    erf_abs = _C_engine.sub(ones, _C_engine.mul(poly, _C_engine.exp(_C_engine.neg(_C_engine.mul(abs_xi, abs_xi)))))
+    erf_abs = _C_engine.sub(
+        ones,
+        _C_engine.mul(
+            poly, _C_engine.exp(_C_engine.neg(_C_engine.mul(abs_xi, abs_xi)))
+        ),
+    )
     # Restore sign: erf(x) = sign(x) * erf(|x|), with erf(0)=0 handled by sign(0)=0
-    return _C_engine.where(_C_engine.equal(xi, _C_engine.zeros(shape, dt, dev)), _C_engine.zeros(shape, dt, dev), _C_engine.mul(_C_engine.sign(xi), erf_abs))
+    return _C_engine.where(
+        _C_engine.equal(xi, _C_engine.zeros(shape, dt, dev)),
+        _C_engine.zeros(shape, dt, dev),
+        _C_engine.mul(_C_engine.sign(xi), erf_abs),
+    )
 
 
 def gelu(x: Tensor, approximate: str = "none") -> Tensor:

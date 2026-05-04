@@ -263,6 +263,8 @@ _OPS_NAMES: frozenset[str] = frozenset(
         "contiguous",
         "detach",
         "clone",
+        "ravel",
+        "diagonal",
     ]
 )
 

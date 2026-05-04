@@ -78,6 +78,7 @@ _populate_free_fns()
 # These replace the auto-generated functions above with wrappers that accept
 # PyTorch-style keyword arguments (dim, keepdim, correction, dims, etc.).
 
+
 def _to_axes(dim):
     """Convert dim/axis (None | int | list[int]) → list[int] for the engine."""
     if dim is None:
@@ -101,11 +102,14 @@ def _bessel_correct(result_impl, x_impl, axes_list, correction):
     if n <= correction:
         return result_impl
     scale = float(n) / float(n - correction)
-    scale_t = _C_engine.full(list(result_impl.shape), scale, result_impl.dtype, result_impl.device)
+    scale_t = _C_engine.full(
+        list(result_impl.shape), scale, result_impl.dtype, result_impl.device
+    )
     return _C_engine.mul(result_impl, scale_t)
 
 
 # ── reductions ────────────────────────────────────────────────────────────────
+
 
 def sum(x, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
     """Sum; accepts PyTorch-style dim/keepdim."""
@@ -142,8 +146,17 @@ def min(x, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
     return _wrap(_C_engine.min(_unwrap(x), ax, kd))
 
 
-def var(x, dim=None, keepdim=False, *, correction=1, unbiased=None,
-        axis=None, axes=None, keepdims=None):
+def var(
+    x,
+    dim=None,
+    keepdim=False,
+    *,
+    correction=1,
+    unbiased=None,
+    axis=None,
+    axes=None,
+    keepdims=None,
+):
     """Variance; correction=1 applies Bessel's correction (PyTorch default)."""
     if unbiased is not None:
         correction = 1 if unbiased else 0
@@ -154,8 +167,17 @@ def var(x, dim=None, keepdim=False, *, correction=1, unbiased=None,
     return _wrap(_bessel_correct(result, impl, ax, correction))
 
 
-def std(x, dim=None, keepdim=False, *, correction=1, unbiased=None,
-        axis=None, axes=None, keepdims=None):
+def std(
+    x,
+    dim=None,
+    keepdim=False,
+    *,
+    correction=1,
+    unbiased=None,
+    axis=None,
+    axes=None,
+    keepdims=None,
+):
     """Std dev; correction=1 applies Bessel's correction (PyTorch default)."""
     if unbiased is not None:
         correction = 1 if unbiased else 0
@@ -187,20 +209,33 @@ def argmin(x, dim=None, keepdim=False, *, axis=None, keepdims=None):
 
 # ── shape ─────────────────────────────────────────────────────────────────────
 
+
 def squeeze(x, dim=None):
-    """Squeeze; dim=None removes all size-1 dims; list squeezes multiple dims."""
+    """Squeeze; dim=None removes all size-1 dims; list squeezes multiple dims.
+    Non-unit dims are silently ignored (PyTorch behaviour).
+    """
     impl = _unwrap(x)
     if dim is None:
         return _wrap(_C_engine.squeeze_all(impl))
     if isinstance(dim, (list, tuple)):
+        ndim = len(impl.shape)
         result = impl
         for d in sorted([int(d) for d in dim], reverse=True):
-            result = _C_engine.squeeze(result, d)
+            nd = d if d >= 0 else ndim + d
+            if 0 <= nd < ndim and int(impl.shape[nd]) == 1:
+                result = _C_engine.squeeze(result, nd)
+                ndim -= 1
         return _wrap(result)
-    return _wrap(_C_engine.squeeze(impl, int(dim)))
+    ndim = len(impl.shape)
+    d = int(dim)
+    nd = d if d >= 0 else ndim + d
+    if nd < 0 or nd >= ndim or int(impl.shape[nd]) != 1:
+        return _wrap(impl)
+    return _wrap(_C_engine.squeeze(impl, nd))
 
 
 # ── repeat / tile ─────────────────────────────────────────────────────────────
+
 
 def repeat(x, repeats, dim=None):
     """Alias for repeat_interleave: repeats elements along dim (NumPy / PyTorch semantics).
@@ -221,6 +256,7 @@ def repeat_interleave(x, repeats, dim=None):
 
 
 # ── split ─────────────────────────────────────────────────────────────────────
+
 
 def split(x, split_size_or_sections, dim=0):
     """Split a tensor into chunks (PyTorch semantics: split_size = chunk size).
@@ -247,6 +283,7 @@ def split(x, split_size_or_sections, dim=0):
 
 
 # ── tensordot ─────────────────────────────────────────────────────────────────
+
 
 def tensordot(a, b, dims=2, _axes_b=None):
     """Tensordot with PyTorch-compatible dims argument.
@@ -275,6 +312,7 @@ def tensordot(a, b, dims=2, _axes_b=None):
 
 # ── meshgrid ──────────────────────────────────────────────────────────────────
 
+
 def meshgrid(*tensors, indexing="ij"):
     """Return coordinate matrices from coordinate vectors.
 
@@ -287,16 +325,106 @@ def meshgrid(*tensors, indexing="ij"):
     return [_wrap(r) for r in results]
 
 
+# ── where / masked_fill — auto-cast condition to bool ─────────────────────────
+
+
+def where(condition, x, y):
+    """Select elements from x (where True) or y (where False).
+    Condition is cast to bool dtype if needed (mirrors PyTorch behaviour).
+    """
+    c = _unwrap(condition)
+    if c.dtype != _C_engine.Bool:
+        c = _C_engine.astype(c, _C_engine.Bool)
+    return _wrap(_C_engine.where(c, _unwrap(x), _unwrap(y)))
+
+
+def masked_fill(x, mask, value):
+    """Fill positions where mask is True with value.
+    Mask is cast to bool dtype if needed.
+    """
+    impl = _unwrap(x)
+    m = _unwrap(mask)
+    if m.dtype != _C_engine.Bool:
+        m = _C_engine.astype(m, _C_engine.Bool)
+    return _wrap(_C_engine.masked_fill(impl, m, float(value)))
+
+
+# ── pad — PyTorch flat format → engine per-dim pairs ─────────────────────────
+
+
+def pad(x, padding, mode="constant", value=0.0):
+    """Pad tensor using PyTorch flat convention (last-dim first).
+    e.g. padding=(1, 1, 2, 2) pads last-dim by (1,1) and second-to-last by (2,2).
+    """
+    impl = _unwrap(x)
+    ndim = len(impl.shape)
+    n_pad_dims = len(padding) // 2
+    pad_pairs = [(0, 0)] * ndim
+    for i in range(n_pad_dims):
+        dim_idx = ndim - 1 - i
+        pad_pairs[dim_idx] = (int(padding[2 * i]), int(padding[2 * i + 1]))
+    return _wrap(_C_engine.pad(impl, pad_pairs, float(value)))
+
+
+# ── reshape / permute / expand — varargs → list ───────────────────────────────
+
+
+def reshape(x, *shape):
+    """Reshape tensor. Accepts (t, new_shape) or (t, d0, d1, ...) forms."""
+    impl = _unwrap(x)
+    if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+        s = [int(d) for d in shape[0]]
+    elif len(shape) == 1 and isinstance(shape[0], int):
+        s = [int(shape[0])]
+    else:
+        s = [int(d) for d in shape]
+    return _wrap(_C_engine.reshape(impl, s))
+
+
+def permute(x, *dims):
+    """Permute axes. Accepts (t, perm_list) or (t, d0, d1, ...) forms."""
+    impl = _unwrap(x)
+    if len(dims) == 1 and isinstance(dims[0], (list, tuple)):
+        p = [int(d) for d in dims[0]]
+    else:
+        p = [int(d) for d in dims]
+    return _wrap(_C_engine.permute(impl, p))
+
+
+def expand(x, *sizes):
+    """Expand tensor to shape. Accepts (t, sizes_list) or (t, s0, s1, ...) forms."""
+    impl = _unwrap(x)
+    if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
+        s = [int(d) for d in sizes[0]]
+    else:
+        s = [int(d) for d in sizes]
+    return _wrap(_C_engine.expand(impl, s))
+
+
 # ── register all overrides in globals and __all__ ─────────────────────────────
 
 _OVERRIDES = [
-    "sum", "mean", "prod", "max", "min", "var", "std",
-    "argmax", "argmin",
+    "sum",
+    "mean",
+    "prod",
+    "max",
+    "min",
+    "var",
+    "std",
+    "argmax",
+    "argmin",
     "squeeze",
-    "repeat", "repeat_interleave",
+    "repeat",
+    "repeat_interleave",
     "split",
     "tensordot",
     "meshgrid",
+    "where",
+    "masked_fill",
+    "pad",
+    "reshape",
+    "permute",
+    "expand",
 ]
 for _name in _OVERRIDES:
     globals()[_name] = globals()[_name]  # already defined above

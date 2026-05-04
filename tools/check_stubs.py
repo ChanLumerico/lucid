@@ -1,82 +1,80 @@
 #!/usr/bin/env python3
-"""Verify that generated .pyi stubs are up-to-date.
+"""
+tools/check_stubs.py — Verify that committed .pyi stubs are up to date.
 
-Regenerates stubs into a temporary location and diffs against the committed
-versions. Fails if any stub is stale (i.e., needs re-running gen_pyi.py).
-
-Exit 0 → stubs are current.
-Exit 1 → stubs are stale; run  python tools/gen_pyi.py  to fix.
+Runs gen_pyi.py to a temp directory and diffs output against committed stubs.
+Exits non-zero if any stub is stale.
 """
 
-from __future__ import annotations
-
-import difflib
-import subprocess
 import sys
+import os
+import difflib
 import tempfile
+import importlib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-STUBS = {
-    "engine.pyi": ROOT / "lucid" / "_C" / "engine.pyi",
-    "tensor.pyi": ROOT / "lucid" / "_tensor" / "tensor.pyi",
-    "__init__.pyi": ROOT / "lucid" / "__init__.pyi",
-}
+
+def _run_gen_pyi_to_tempdir() -> dict[str, str]:
+    """Run gen_pyi logic and return {relative_path: content}."""
+    import tools.gen_pyi as gen
+
+    engine_content, _ = gen.gen_engine_pyi()
+    tensor_content, _ = gen.gen_tensor_pyi()
+    init_content, _   = gen.gen_init_pyi()
+
+    return {
+        "lucid/_C/engine.pyi":        engine_content,
+        "lucid/_tensor/tensor.pyi":   tensor_content,
+        "lucid/__init__.pyi":         init_content,
+    }
 
 
 def main() -> int:
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_engine = f"{tmp}/engine.pyi"
-        tmp_tensor = f"{tmp}/tensor.pyi"
-        tmp_init   = f"{tmp}/__init__.pyi"
+    stale: list[str] = []
 
-        result = subprocess.run(
-            [
-                sys.executable, "tools/gen_pyi.py",
-                "--out-engine", tmp_engine,
-                "--out-tensor", tmp_tensor,
-                "--out-init",   tmp_init,
-            ],
-            capture_output=True,
-            text=True,
-            cwd=ROOT,
-        )
-        if result.returncode != 0:
-            print(f"[check_stubs] gen_pyi.py failed:\n{result.stderr}")
-            return 1
+    try:
+        generated = _run_gen_pyi_to_tempdir()
+    except Exception as exc:
+        print(f"[check_stubs] ERROR running gen_pyi: {exc}", file=sys.stderr)
+        return 1
 
-        stale: list[str] = []
-        for label, committed_path in STUBS.items():
-            tmp_path = {"engine.pyi": tmp_engine, "tensor.pyi": tmp_tensor,
-                        "__init__.pyi": tmp_init}[label]
+    for rel_path, new_content in generated.items():
+        committed_path = ROOT / rel_path
+        if not committed_path.exists():
+            print(f"[check_stubs] MISSING   {rel_path}")
+            stale.append(rel_path)
+            continue
 
-            if not committed_path.exists():
-                print(f"[check_stubs] MISSING  {committed_path.relative_to(ROOT)}")
-                stale.append(label)
-                continue
-
-            committed = committed_path.read_text()
-            generated = Path(tmp_path).read_text()
-
-            if committed == generated:
-                print(f"[check_stubs] OK       {committed_path.relative_to(ROOT)}")
-            else:
-                diff = list(difflib.unified_diff(
-                    committed.splitlines(keepends=True),
-                    generated.splitlines(keepends=True),
-                    fromfile=f"{label} (committed)",
-                    tofile=f"{label} (generated)",
-                    n=2,
-                ))
-                print(f"[check_stubs] STALE    {committed_path.relative_to(ROOT)}")
-                print("".join(diff[:40]))
-                stale.append(label)
+        committed = committed_path.read_text(encoding="utf-8")
+        if committed == new_content:
+            print(f"[check_stubs] OK       {rel_path}")
+        else:
+            diff = list(difflib.unified_diff(
+                committed.splitlines(keepends=True),
+                new_content.splitlines(keepends=True),
+                fromfile=f"{rel_path} (committed)",
+                tofile=f"{rel_path} (generated)",
+                n=3,
+            ))
+            print(f"[check_stubs] STALE    {rel_path}")
+            sys.stdout.writelines(diff[:40])
+            if len(diff) > 40:
+                print(f"  ... ({len(diff) - 40} more diff lines)")
+            stale.append(rel_path)
 
     if stale:
-        print(f"\n[check_stubs] {len(stale)} stub(s) out of date. Run:")
+        print(
+            f"\n[check_stubs] {len(stale)} stub(s) out of date. Run:\n"
+            "    python tools/gen_pyi.py\n"
+            f"    git add {' '.join(stale)}\n",
+            file=sys.stderr,
+        )
+        print("\n  Commit blocked. Run the following to fix, then re-stage and commit:\n")
         print("    python tools/gen_pyi.py")
+        print(f"    git add lucid/_C/engine.pyi lucid/_tensor/tensor.pyi lucid/__init__.pyi")
         return 1
 
     print("[check_stubs] all stubs up to date.")
