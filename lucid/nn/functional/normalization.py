@@ -20,14 +20,17 @@ def batch_norm(
     momentum: float = 0.1,
     eps: float = 1e-5,
 ) -> Tensor:
-    """Batch normalization."""
-    rm = _unwrap(running_mean) if running_mean is not None else None
-    rv = _unwrap(running_var) if running_var is not None else None
-    w = _unwrap(weight) if weight is not None else None
-    b = _unwrap(bias) if bias is not None else None
-    return _wrap(
-        _C_engine.nn.batch_norm(_unwrap(x), rm, rv, w, b, training, momentum, eps)
-    )
+    """Batch normalization.
+
+    The engine implements ``(x, gamma, beta, eps)``.  running_mean / running_var
+    are tracked in Python but not forwarded to the engine (which normalises using
+    the batch statistics unconditionally).
+    """
+    from lucid._factories.creation import ones, zeros
+    C = x.shape[1]
+    w = _unwrap(weight) if weight is not None else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+    b = _unwrap(bias) if bias is not None else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
+    return _wrap(_C_engine.nn.batch_norm(_unwrap(x), w, b, eps))
 
 
 def layer_norm(
@@ -51,10 +54,12 @@ def group_norm(
     bias: Tensor | None = None,
     eps: float = 1e-5,
 ) -> Tensor:
-    """Group normalization."""
-    w = _unwrap(weight) if weight is not None else None
-    b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.group_norm(_unwrap(x), num_groups, w, b, eps))
+    """Group normalization.  Engine signature: (x, gamma, beta, num_groups, eps)."""
+    from lucid._factories.creation import ones, zeros
+    C = x.shape[1]
+    w = _unwrap(weight) if weight is not None else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+    b = _unwrap(bias) if bias is not None else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
+    return _wrap(_C_engine.nn.group_norm(_unwrap(x), w, b, num_groups, eps))
 
 
 def rms_norm(
@@ -63,9 +68,11 @@ def rms_norm(
     weight: Tensor | None = None,
     eps: float = 1e-8,
 ) -> Tensor:
-    """RMS normalization."""
-    w = _unwrap(weight) if weight is not None else None
-    return _wrap(_C_engine.nn.rms_norm(_unwrap(x), list(normalized_shape), w, eps))
+    """RMS normalization.  Engine signature: (x, gamma, eps)."""
+    from lucid._factories.creation import ones
+    C = x.shape[-1]
+    w = _unwrap(weight) if weight is not None else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+    return _wrap(_C_engine.nn.rms_norm(_unwrap(x), w, eps))
 
 
 def instance_norm(

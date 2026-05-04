@@ -115,9 +115,7 @@ def conv_transpose2d(
     dh, dw = _normalize_int_or_tuple(dilation, 2)
     b = _unwrap(bias) if bias is not None else None
     return _wrap(
-        _C_engine.nn.conv_transpose2d(
-            _unwrap(x), _unwrap(weight), b, sh, sw, ph, pw, oh, ow, groups, dh, dw
-        )
+        _C_engine.nn.conv_transpose2d(_unwrap(x), _unwrap(weight), b, sh, sw, ph, pw, oh, ow)
     )
 
 

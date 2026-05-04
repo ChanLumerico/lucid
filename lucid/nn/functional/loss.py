@@ -54,7 +54,7 @@ def cross_entropy(
     """Cross-entropy loss for multi-class classification."""
     red = _REDUCTION_MAP.get(reduction, 1)
     w = _unwrap(weight) if weight is not None else None
-    return _wrap(_C_engine.nn.cross_entropy_loss(_unwrap(x), _unwrap(target), red))
+    return _wrap(_C_engine.nn.cross_entropy_loss(_unwrap(x), _unwrap(target), w, red))
 
 
 def nll_loss(
@@ -66,7 +66,8 @@ def nll_loss(
 ) -> Tensor:
     """Negative log-likelihood loss."""
     red = _REDUCTION_MAP.get(reduction, 1)
-    return _wrap(_C_engine.nn.nll_loss(_unwrap(x), _unwrap(target), red))
+    w = _unwrap(weight) if weight is not None else None
+    return _wrap(_C_engine.nn.nll_loss(_unwrap(x), _unwrap(target), w, red))
 
 
 def binary_cross_entropy(
@@ -76,8 +77,10 @@ def binary_cross_entropy(
     reduction: str = "mean",
 ) -> Tensor:
     """Binary cross-entropy loss."""
+    from lucid._factories.creation import ones
     red = _REDUCTION_MAP.get(reduction, 1)
-    return _wrap(_C_engine.nn.bce_loss(_unwrap(x), _unwrap(target), red))
+    w = _unwrap(weight) if weight is not None else _unwrap(ones(x.shape[0] if x.ndim == 1 else x.numel(), device=x.device, dtype=x.dtype))
+    return _wrap(_C_engine.nn.bce_loss(_unwrap(x), _unwrap(target), w, red))
 
 
 def binary_cross_entropy_with_logits(
@@ -88,8 +91,12 @@ def binary_cross_entropy_with_logits(
     reduction: str = "mean",
 ) -> Tensor:
     """BCE with logits loss (combines sigmoid + BCE for numerical stability)."""
+    from lucid._factories.creation import ones
     red = _REDUCTION_MAP.get(reduction, 1)
-    return _wrap(_C_engine.nn.bce_with_logits(_unwrap(x), _unwrap(target), red))
+    numel = x.shape[0] if x.ndim == 1 else x.numel()
+    w = _unwrap(weight) if weight is not None else _unwrap(ones(numel, device=x.device, dtype=x.dtype))
+    pw = _unwrap(pos_weight) if pos_weight is not None else _unwrap(ones(numel, device=x.device, dtype=x.dtype))
+    return _wrap(_C_engine.nn.bce_with_logits(_unwrap(x), _unwrap(target), w, pw, red))
 
 
 def kl_div(
