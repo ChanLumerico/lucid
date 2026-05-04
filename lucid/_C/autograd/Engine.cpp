@@ -17,6 +17,8 @@
 
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
+#include "../core/TensorImpl.h"
+#include "../ops/gfunc/Gfunc.h"
 #include "FusionPass.h"
 #include "Helpers.h"
 #include "Node.h"
@@ -87,11 +89,83 @@ std::vector<std::shared_ptr<Node>> topo_order(const std::shared_ptr<Node>& root)
 
 }  // namespace
 
+// ── Graph-mode backward (create_graph=true) ───────────────────────────────────
+//
+// Runs the same topological traversal as backward() but uses TensorImplPtr
+// throughout so that every gradient operation is itself recorded in the
+// autograd graph.  Gradient accumulation at shared nodes is done via add_op
+// (which creates a new backward node) rather than raw storage +=.
+static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
+                                TensorImplPtr grad_seed,
+                                bool retain_graph) {
+    if (!root->grad_fn()) {
+        // Leaf shortcut: store the seed directly as grad_impl.
+        if (root->requires_grad()) {
+            root->accumulate_grad_impl(grad_seed);
+        }
+        return;
+    }
+
+    run_fusion_pass(root->grad_fn().get());
+    auto order = topo_order(root->grad_fn());
+
+    std::unordered_map<Node*, TensorImplPtr> pending;
+    pending.emplace(root->grad_fn().get(), std::move(grad_seed));
+
+    for (const auto& node : order) {
+        auto it = pending.find(node.get());
+        if (it == pending.end()) continue;
+        TensorImplPtr grad_in = std::move(it->second);
+        pending.erase(it);
+
+        node->validate_versions();
+
+        // apply_for_graph throws NotImplementedError if the op doesn't support
+        // graph mode — gives the user a clear, actionable message.
+        const auto input_grads = node->apply_for_graph(grad_in);
+
+        if (!retain_graph) node->release_saved();
+
+        const auto& edges = node->next_edges();
+        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
+            auto next = edges[i].node;
+            if (!next || !input_grads[i]) continue;
+            auto pit = pending.find(next.get());
+            if (pit == pending.end()) {
+                pending.emplace(next.get(), input_grads[i]);
+            } else {
+                // Accumulate via add_op so the sum is part of the new graph.
+                extern TensorImplPtr add_op(const TensorImplPtr&, const TensorImplPtr&);
+                pit->second = add_op(pit->second, input_grads[i]);
+            }
+        }
+    }
+
+    if (!retain_graph) root->clear_grad_fn();
+}
+
 void Engine::backward(const std::shared_ptr<TensorImpl>& root,
                       Storage grad_seed,
-                      bool retain_graph) {
+                      bool retain_graph,
+                      bool create_graph) {
     if (!root) {
         ErrorBuilder("Engine::backward").fail("root is null");
+    }
+
+    if (create_graph) {
+        // create_graph=True implies retain_graph=True: the backward computation
+        // re-uses forward nodes (through apply_for_graph's saved_impl_inputs_),
+        // and a second backward must be able to traverse those nodes.  Releasing
+        // them would cause use-after-free when the second backward reaches nodes
+        // that were freed by the first.
+        Storage seed = std::move(grad_seed);
+        if (storage_is_empty(seed)) {
+            seed = make_ones_storage(root->shape(), root->dtype(), root->device());
+        }
+        auto seed_impl = std::make_shared<TensorImpl>(
+            std::move(seed), root->shape(), root->dtype(), root->device(), false);
+        backward_for_graph(root, std::move(seed_impl), /*retain_graph=*/true);
+        return;
     }
 
     // Leaf-tensor shortcut: if root has no grad_fn it is itself a leaf.

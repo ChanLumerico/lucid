@@ -38,6 +38,13 @@ std::pair<Storage, Storage> MulBackward::grad_formula(const Storage& grad_out) {
     };
 }
 
+std::pair<TensorImplPtr, TensorImplPtr> MulBackward::grad_formula_impl(
+    const TensorImplPtr& grad_out, const TensorImplPtr& a, const TensorImplPtr& b) {
+    // da = grad_out * b,  db = grad_out * a.
+    // a and b are already broadcast-expanded to out_shape_ by BinaryKernel.
+    return {mul_op(grad_out, b), mul_op(grad_out, a)};
+}
+
 TensorImplPtr mul_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     return MulBackward::forward(a, b);
 }

@@ -10,6 +10,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
+#include "../../ops/ufunc/Arith.h"
 
 namespace lucid {
 
@@ -29,6 +30,11 @@ std::pair<Storage, Storage> SubBackward::grad_formula(const Storage& grad_out) {
         clone_storage(grad_out, n, dtype_, device_),
         negate_storage(grad_out, n, dtype_, device_),
     };
+}
+
+std::pair<TensorImplPtr, TensorImplPtr> SubBackward::grad_formula_impl(
+    const TensorImplPtr& grad_out, const TensorImplPtr& /*a*/, const TensorImplPtr& /*b*/) {
+    return {grad_out, neg_op(grad_out)};
 }
 
 TensorImplPtr sub_op(const TensorImplPtr& a, const TensorImplPtr& b) {

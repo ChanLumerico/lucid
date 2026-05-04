@@ -10,6 +10,8 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
+#include "../../ops/ufunc/Arith.h"
+#include "Mul.h"
 
 namespace lucid {
 
@@ -40,6 +42,17 @@ std::pair<Storage, Storage> DivBackward::grad_formula(const Storage& grad_out) {
     Storage div_by_b_sq = divide_storages(g_times_a, b_sq, n, dtype_, device_);
     Storage dy = negate_storage(div_by_b_sq, n, dtype_, device_);
     return {std::move(dx), std::move(dy)};
+}
+
+std::pair<TensorImplPtr, TensorImplPtr> DivBackward::grad_formula_impl(
+    const TensorImplPtr& grad_out, const TensorImplPtr& a, const TensorImplPtr& b) {
+    // da = grad_out / b
+    auto da = div_op(grad_out, b);
+    // db = -grad_out * a / b^2
+    auto b_sq = mul_op(b, b);
+    auto ga = mul_op(grad_out, a);
+    auto db = neg_op(div_op(ga, b_sq));
+    return {da, db};
 }
 
 TensorImplPtr div_op(const TensorImplPtr& a, const TensorImplPtr& b) {

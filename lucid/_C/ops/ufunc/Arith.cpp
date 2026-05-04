@@ -8,6 +8,9 @@
 #include "Arith.h"
 
 #include "../../core/OpRegistry.h"
+#include "../bfunc/Add.h"
+#include "../bfunc/Div.h"
+#include "../bfunc/Mul.h"
 
 namespace lucid {
 
@@ -17,6 +20,11 @@ const OpSchema NegBackward::schema_v1{"neg", 1, AmpPolicy::Promote, true};
 // dL/dx = -dL/dy: negate the upstream gradient in-place over the output shape.
 Storage NegBackward::grad_formula(const Storage& g) {
     return negate_storage(g, shape_numel(out_shape_), dtype_, device_);
+}
+
+TensorImplPtr NegBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&) {
+    return neg_op(g);
 }
 
 TensorImplPtr neg_op(const TensorImplPtr& a) {
@@ -68,6 +76,13 @@ Storage ReciprocalBackward::grad_formula(const Storage& g) {
     return negate_storage(g_div, n, dtype_, device_);
 }
 
+TensorImplPtr ReciprocalBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+    // dx = -g / x^2
+    auto x_sq = mul_op(x, x);
+    return neg_op(div_op(g, x_sq));
+}
+
 TensorImplPtr reciprocal_op(const TensorImplPtr& a) {
     return ReciprocalBackward::forward(a);
 }
@@ -82,6 +97,12 @@ Storage SquareBackward::grad_formula(const Storage& g) {
 
     Storage two_x = mul_scalar_storage(saved_inputs_[0], 2.0, n, dtype_, device_);
     return multiply_storages(two_x, g, n, dtype_, device_);
+}
+
+TensorImplPtr SquareBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+    // dx = 2*x * g = (x+x) * g
+    return mul_op(add_op(x, x), g);
 }
 
 TensorImplPtr square_op(const TensorImplPtr& a) {

@@ -114,6 +114,17 @@ std::vector<Storage> ViewBackward::apply(Storage grad_out) {
     return {std::move(out)};
 }
 
+// Graph-mode backward: reshape grad_out back to the input shape using reshape_op
+// so the operation itself is recorded in the autograd graph.
+std::vector<TensorImplPtr> ViewBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Convert Shape (vector<size_t>) to vector<int64_t> for reshape_op.
+    std::vector<std::int64_t> target_shape;
+    target_shape.reserve(input_shapes_[0].size());
+    for (auto s : input_shapes_[0])
+        target_shape.push_back(static_cast<std::int64_t>(s));
+    return {reshape_op(grad_out, target_shape)};
+}
+
 // Resolve the target shape (handling -1 wildcard inference), then delegate
 // to build_view_output.  The resolved shape will have exactly the same numel
 // as `a`; any mismatch throws ShapeMismatch before reaching the backend.

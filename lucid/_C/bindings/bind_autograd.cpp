@@ -45,11 +45,13 @@ void register_autograd(py::module_& m) {
     // actual ones tensor internally.
     m.def(
         "engine_backward",
-        [](std::shared_ptr<TensorImpl> root, bool retain_graph) {
-            Engine::backward(root, Storage{CpuStorage{}}, retain_graph);
+        [](std::shared_ptr<TensorImpl> root, bool retain_graph, bool create_graph) {
+            Engine::backward(root, Storage{CpuStorage{}}, retain_graph, create_graph);
         },
-        py::arg("root"), py::arg("retain_graph") = false,
-        "Run backward starting at `root` with an implicit ones_like seed.");
+        py::arg("root"), py::arg("retain_graph") = false, py::arg("create_graph") = false,
+        "Run backward starting at `root` with an implicit ones_like seed. "
+        "If create_graph is True, the backward pass itself is tracked in the "
+        "autograd graph, enabling second-order derivatives (MAML, Hessians, etc.).");
 
     // register_custom_function installs the Python-side CustomFunction class
     // and the _register_python_backward_node() hook used by lucid.autograd.Function.

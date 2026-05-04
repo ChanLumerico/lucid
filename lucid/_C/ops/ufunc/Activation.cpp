@@ -22,6 +22,11 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Add.h"
+#include "../bfunc/Mul.h"
+#include "../bfunc/Sub.h"
+#include "../gfunc/Gfunc.h"
+#include "Arith.h"
 
 namespace lucid {
 
@@ -33,6 +38,13 @@ Storage ReluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Storage mask = positive_mask_storage(saved_inputs_[0], n, dtype_, device_);
     return multiply_storages(g, mask, n, dtype_, device_);
+}
+
+TensorImplPtr ReluBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+    // mask = (x > 0): sign(relu(x)) gives 0 for x<=0 and 1 for x>0
+    auto mask = sign_op(relu_op(x));
+    return mul_op(g, mask);
 }
 
 TensorImplPtr relu_op(const TensorImplPtr& a) {
@@ -53,6 +65,13 @@ Storage SigmoidBackward::grad_formula(const Storage& g) {
     Storage one_m_z = add_scalar_storage(neg_z, 1.0, n, dtype_, device_);
     Storage z_omz = multiply_storages(saved_output_, one_m_z, n, dtype_, device_);
     return multiply_storages(z_omz, g, n, dtype_, device_);
+}
+
+TensorImplPtr SigmoidBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+    // dx = out*(1-out)*g
+    auto one_minus_out = sub_op(ones_like_op(out), out);
+    return mul_op(mul_op(out, one_minus_out), g);
 }
 
 TensorImplPtr sigmoid_op(const TensorImplPtr& a) {

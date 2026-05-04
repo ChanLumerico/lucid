@@ -39,6 +39,9 @@ public:
     static const OpSchema schema_v1;
     // Reshape grad_out from out_shape_ back to input_shapes_[0].
     std::vector<Storage> apply(Storage grad_out) override;
+    // Graph-mode: reshape via reshape_op so the result is tracked.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    std::string node_name() const override { return "reshape"; }
 };
 
 // Reshape tensor `a` to `new_shape`.  Exactly one element of `new_shape` may
@@ -46,6 +49,7 @@ public:
 // count is preserved.  Raises ShapeMismatch if the total element count does
 // not match after inference.  The input must be contiguous; a non-contiguous
 // tensor should be passed through contiguous_op first.
+// Shape == vector<int64_t>, so this declaration also accepts Shape directly.
 LUCID_API TensorImplPtr reshape_op(const TensorImplPtr& a,
                                    const std::vector<std::int64_t>& new_shape);
 

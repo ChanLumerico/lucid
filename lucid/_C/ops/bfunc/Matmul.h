@@ -42,6 +42,11 @@ public:
 
     // Compute dA and dB from the upstream gradient.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode: dA = grad_out @ B^T,  dB = A^T @ grad_out.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
+    std::string node_name() const override { return "matmul"; }
 };
 
 // Public entry point: compute A @ B with full batch broadcasting and autograd.

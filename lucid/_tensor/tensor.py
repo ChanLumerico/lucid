@@ -163,6 +163,12 @@ class Tensor[DT: dtype, DV: device]:
 
     @property
     def grad(self) -> Self | None:
+        # Prefer graph-mode gradient (set when backward was run with create_graph=True).
+        # This gradient tensor carries its own grad_fn so it's differentiable.
+        g_impl = self._impl.grad_as_impl()
+        if g_impl is not None:
+            return Tensor.__new_from_impl__(g_impl)  # type: ignore[return-value]
+        # Fall back to the Storage-based gradient from a normal backward pass.
         g = self._impl.grad_as_python()
         if g is None:
             return None
@@ -234,14 +240,14 @@ class Tensor[DT: dtype, DV: device]:
             g_impl = gradient.detach()._impl
             scaled = _C_engine.mul(self._impl, g_impl)
             root = _C_engine.sum(scaled)
-            _C_engine.engine_backward(root, retain_graph=retain_graph)
+            _C_engine.engine_backward(root, retain_graph=retain_graph, create_graph=create_graph)
         else:
             if self._impl.shape and self._impl.numel() != 1:
                 raise RuntimeError(
                     "grad can be implicitly created only for scalar outputs; "
                     "call backward(gradient=...) for non-scalar tensors"
                 )
-            _C_engine.engine_backward(self._impl, retain_graph=retain_graph)
+            _C_engine.engine_backward(self._impl, retain_graph=retain_graph, create_graph=create_graph)
 
     def detach(self) -> Self:
         """Return a new Tensor detached from the autograd graph."""

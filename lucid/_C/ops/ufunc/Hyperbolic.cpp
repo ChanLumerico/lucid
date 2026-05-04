@@ -12,6 +12,9 @@
 #include "Hyperbolic.h"
 
 #include "../../core/OpRegistry.h"
+#include "../bfunc/Mul.h"
+#include "../bfunc/Sub.h"
+#include "../gfunc/Gfunc.h"
 
 namespace lucid {
 
@@ -54,6 +57,14 @@ Storage TanhBackward::grad_formula(const Storage& g) {
     Storage neg_zsq = mul_scalar_storage(z_sq, -1.0, n, dtype_, device_);
     Storage one_minus = add_scalar_storage(neg_zsq, 1.0, n, dtype_, device_);
     return multiply_storages(g, one_minus, n, dtype_, device_);
+}
+
+TensorImplPtr TanhBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+    // dx = (1 - out^2) * g
+    auto out_sq = mul_op(out, out);
+    auto one_minus = sub_op(ones_like_op(out), out_sq);
+    return mul_op(g, one_minus);
 }
 
 TensorImplPtr tanh_op(const TensorImplPtr& a) {

@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "../api.h"
@@ -19,6 +20,8 @@
 namespace lucid {
 
 class Node;
+class TensorImpl;
+using TensorImplPtr = std::shared_ptr<TensorImpl>;
 
 // A directed edge in the backward graph.
 //
@@ -65,6 +68,24 @@ public:
     // op).  A null/empty Storage at position i means no gradient flows
     // to that input.  Implementations may assume grad_out is non-null.
     virtual std::vector<Storage> apply(Storage grad_out) = 0;
+
+    // Graph-mode variant: compute input gradients using TensorImpl-based forward
+    // ops so that the backward computation itself is recorded in the autograd
+    // graph. Called by Engine when create_graph=true. The returned TensorImplPtrs
+    // may carry their own grad_fn, enabling higher-order differentiation.
+    //
+    // Default implementation throws NotImplementedError; concrete nodes override
+    // this for the ops they support. The Engine will report clearly which op
+    // lacks graph support rather than producing a silent wrong result.
+    virtual std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) {
+        throw std::runtime_error(
+            "create_graph=True is not yet supported for op '" + std::string(node_name()) + "'. "
+            "Open an issue or use retain_graph=True with multiple backward calls instead.");
+    }
+
+    // Human-readable name used in create_graph error messages.
+    // Overridden by concrete nodes (via their schema_v1.name).
+    virtual std::string node_name() const { return "unknown"; }
 
     // Assert that no saved input tensor has been modified in-place since the
     // forward pass.  The default is a no-op; AutogradNode overrides this to

@@ -28,6 +28,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -214,17 +215,40 @@ public:
                                                const std::shared_ptr<TensorImpl>& b);
 
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
+    std::string node_name() const override { return std::string(Derived::schema_v1.name); }
 
     // Backward pass: call Derived::grad_formula to get (da, db), then
     // broadcast-reduce each to its original input shape.
     std::vector<Storage> apply(Storage grad_out) override;
 
+    // Graph-mode backward: call Derived::grad_formula_impl to get (da, db) as
+    // TensorImplPtrs (so operations are tracked for higher-order grad), then
+    // reduce each back to its input shape via sum_op.
+    // Concrete ops opt in by implementing grad_formula_impl(grad_out, a, b).
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
     // Controls whether forward() saves a_ptr->storage() and b_ptr->storage()
     // into saved_inputs_ for use in grad_formula.
     static constexpr bool kSavesInputs = true;
 
+    // Default graph-mode gradient formula: throws NotImplementedError.
+    // Override in concrete Derived classes to support create_graph=True.
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(
+        const TensorImplPtr& /*grad_out*/, const TensorImplPtr& /*a*/, const TensorImplPtr& /*b*/) {
+        throw std::runtime_error(
+            "create_graph=True is not supported for op '" +
+            std::string(Derived::schema_v1.name) + "'. "
+            "Implement grad_formula_impl() to add support.");
+    }
+
 protected:
     static backend::IBackend& backend_for(Device d) { return backend::Dispatcher::for_device(d); }
+
+    // Reduce a gradient TensorImpl from grad_shape back to target_shape by
+    // summing over broadcast axes.  Used in apply_for_graph implementations.
+    static TensorImplPtr reduce_impl_to_shape(const TensorImplPtr& grad,
+                                              const Shape& grad_shape,
+                                              const Shape& target_shape);
 
     // Return the saved input k broadcast to out_shape_, materializing the
     // broadcast copy lazily. Used by grad_formula implementations that need
@@ -374,6 +398,10 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     // so that grad_formula can inspect the original per-element values.
     if constexpr (Derived::kSavesInputs)
         bwd->saved_inputs_ = {a_ptr->storage(), b_ptr->storage()};
+    // Always save the original TensorImpl pointers (before any dtype cast) so
+    // that apply_for_graph() can invoke forward ops on them and trace the
+    // gradient computation back through the original computation graph.
+    bwd->saved_impl_inputs_ = {a, b};
 
     std::vector<Edge> edges;
     edges.emplace_back(a_edge, 0);
@@ -399,6 +427,75 @@ std::vector<Storage> BinaryKernel<Derived>::apply(Storage grad_out) {
                              this->device_),
         reduce_grad_to_shape(db, this->out_shape_, this->input_shapes_[1], this->dtype_,
                              this->device_),
+    };
+}
+
+// Reduce a gradient TensorImpl from grad_shape back to target_shape by summing
+// over the axes that were broadcast in the forward pass.
+// Mirrors reduce_grad_to_shape but operates on TensorImplPtr via sum_op.
+template <class Derived>
+TensorImplPtr BinaryKernel<Derived>::reduce_impl_to_shape(const TensorImplPtr& grad,
+                                                           const Shape& grad_shape,
+                                                           const Shape& target_shape) {
+    if (grad_shape == target_shape) return grad;
+
+    // Forward declaration — defined in ops/ufunc/Reductions.cpp.
+    extern TensorImplPtr sum_op(const TensorImplPtr&, const std::vector<int>&, bool);
+    extern TensorImplPtr reshape_op(const TensorImplPtr&, const Shape&);
+
+    // Compute axes that were broadcast: leading axes added by ndim expansion,
+    // plus any axis where target_shape has size 1 but grad_shape does not.
+    std::vector<int> axes;
+    const int ndim_g = static_cast<int>(grad_shape.size());
+    const int ndim_t = static_cast<int>(target_shape.size());
+    const int leading = ndim_g - ndim_t;
+    for (int i = 0; i < leading; ++i) axes.push_back(i);
+    for (int i = 0; i < ndim_t; ++i) {
+        if (target_shape[static_cast<std::size_t>(i)] == 1 &&
+            grad_shape[static_cast<std::size_t>(i + leading)] != 1)
+            axes.push_back(i + leading);
+    }
+
+    if (axes.empty()) return grad;
+
+    auto reduced = sum_op(grad, axes, /*keepdims=*/false);
+
+    // After summing, we may have fewer dimensions than target_shape if we
+    // reduced leading axes.  Reshape to match exactly.
+    if (reduced->shape() != target_shape) {
+        reduced = reshape_op(reduced, target_shape);
+    }
+    return reduced;
+}
+
+// Graph-mode backward: Derived::grad_formula_impl(grad_out, a_impl, b_impl)
+// returns (da, db) as TensorImplPtrs that retain grad_fn for higher-order diff.
+// If Derived does not implement grad_formula_impl the base Node::apply_for_graph
+// throws NotImplementedError, giving the user a clear message.
+template <class Derived>
+std::vector<TensorImplPtr> BinaryKernel<Derived>::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Forward declaration — defined in ops/utils/Layout.cpp.
+    extern TensorImplPtr broadcast_to_op(const TensorImplPtr&, const Shape&);
+
+    auto& a = this->saved_impl_inputs_[0];
+    auto& b = this->saved_impl_inputs_[1];
+    if (!a || !b) {
+        throw std::runtime_error(
+            "apply_for_graph called but saved_impl_inputs_ were not set for op '" +
+            std::string(Derived::schema_v1.name) + "'. "
+            "Ensure create_graph=True was set before the forward pass.");
+    }
+
+    // Broadcast saved inputs to out_shape_ if needed so grad_formula_impl can
+    // do simple element-wise ops without worrying about shape mismatches.
+    auto a_b = (a->shape() == this->out_shape_) ? a : broadcast_to_op(a, this->out_shape_);
+    auto b_b = (b->shape() == this->out_shape_) ? b : broadcast_to_op(b, this->out_shape_);
+
+    auto [da, db] = static_cast<Derived*>(this)->grad_formula_impl(grad_out, a_b, b_b);
+
+    return {
+        reduce_impl_to_shape(da, this->out_shape_, this->input_shapes_[0]),
+        reduce_impl_to_shape(db, this->out_shape_, this->input_shapes_[1]),
     };
 }
 

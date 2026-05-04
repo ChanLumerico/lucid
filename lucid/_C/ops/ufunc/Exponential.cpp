@@ -7,6 +7,9 @@
 #include "Exponential.h"
 
 #include "../../core/OpRegistry.h"
+#include "../bfunc/Add.h"
+#include "../bfunc/Div.h"
+#include "../bfunc/Mul.h"
 
 namespace lucid {
 
@@ -21,6 +24,12 @@ Storage ExpBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, saved_output_, n, dtype_, device_);
 }
 
+TensorImplPtr ExpBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+    // dx = out * g  (out = exp(x) was saved as the forward output)
+    return mul_op(g, out);
+}
+
 TensorImplPtr exp_op(const TensorImplPtr& a) {
     return ExpBackward::forward(a);
 }
@@ -33,6 +42,11 @@ const OpSchema LogBackward::schema_v1{"log", 1, AmpPolicy::ForceFP32, true};
 Storage LogBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     return divide_storages(g, saved_inputs_[0], n, dtype_, device_);
+}
+
+TensorImplPtr LogBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+    return div_op(g, x);
 }
 
 TensorImplPtr log_op(const TensorImplPtr& a) {
@@ -70,6 +84,12 @@ Storage SqrtBackward::grad_formula(const Storage& g) {
 
     Storage half_g = mul_scalar_storage(g, 0.5, n, dtype_, device_);
     return divide_storages(half_g, saved_output_, n, dtype_, device_);
+}
+
+TensorImplPtr SqrtBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+    // dx = g / (2*y) where y = sqrt(x) is the saved output
+    return div_op(g, add_op(out, out));
 }
 
 TensorImplPtr sqrt_op(const TensorImplPtr& a) {

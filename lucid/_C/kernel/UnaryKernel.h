@@ -84,7 +84,18 @@ public:
     // Set to false for in-place or non-differentiable ops to skip graph wiring.
     static constexpr bool kHasGradient = true;
 
+    // Default graph-mode gradient formula: throws NotImplementedError.
+    // Override in concrete Derived classes to support create_graph=True.
+    TensorImplPtr grad_formula_impl(const TensorImplPtr& /*g*/, const TensorImplPtr& /*a*/,
+                                    const TensorImplPtr& /*out*/) {
+        throw std::runtime_error(
+            "create_graph=True is not supported for op '" +
+            std::string(Derived::schema_v1.name) + "'. "
+            "Implement grad_formula_impl() to add support.");
+    }
+
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
+    std::string node_name() const override { return std::string(Derived::schema_v1.name); }
 
     // Forward pass: validate, cast dtype, enforce contiguity, dispatch,
     // then wire the autograd graph if any input requires gradients.
@@ -93,6 +104,10 @@ public:
     // Backward pass: delegate to Derived::grad_formula, then reduce the
     // gradient back to the original input shape (for broadcast ops).
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: Derived::grad_formula_impl(grad_out, a_impl, out_impl)
+    // returns a TensorImplPtr gradient so the backward itself is differentiable.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 template <class Derived>
@@ -156,6 +171,10 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
             bwd->saved_inputs_ = {a_ptr->storage()};
         if constexpr (Derived::kSavesOutput)
             bwd->saved_output_ = out->storage();
+        // Always save the original TensorImpl for graph-mode backward.
+        bwd->saved_impl_inputs_ = {a};
+        if constexpr (Derived::kSavesOutput)
+            bwd->saved_impl_output_ = out;
 
         std::vector<Edge> edges;
         edges.emplace_back(a_edge, 0);
@@ -178,6 +197,39 @@ std::vector<Storage> UnaryKernel<Derived>::apply(Storage grad_out) {
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);
     return {reduce_grad_to_shape(dx, this->out_shape_, this->input_shapes_[0], this->dtype_,
                                  this->device_)};
+}
+
+// Graph-mode backward: call Derived::grad_formula_impl(grad_out, a_impl, out_impl).
+// The returned TensorImplPtr carries grad_fn for higher-order differentiation.
+template <class Derived>
+std::vector<TensorImplPtr> UnaryKernel<Derived>::apply_for_graph(const TensorImplPtr& grad_out) {
+    extern TensorImplPtr sum_op(const TensorImplPtr&, const std::vector<int>&, bool);
+    extern TensorImplPtr reshape_op(const TensorImplPtr&, const Shape&);
+
+    auto& a = this->saved_impl_inputs_[0];
+    if (!a) {
+        throw std::runtime_error(
+            "apply_for_graph: saved_impl_inputs_[0] not set for op '" +
+            std::string(Derived::schema_v1.name) + "'.");
+    }
+
+    auto dx = static_cast<Derived*>(this)->grad_formula_impl(
+        grad_out, a, this->saved_impl_output_);
+
+    // Reduce back to input shape if needed (same as apply()).
+    if (dx->shape() == this->input_shapes_[0]) return {dx};
+    std::vector<int> axes;
+    const int ng = static_cast<int>(dx->shape().size());
+    const int nt = static_cast<int>(this->input_shapes_[0].size());
+    for (int i = 0; i < ng - nt; ++i) axes.push_back(i);
+    for (int i = 0; i < nt; ++i) {
+        if (this->input_shapes_[0][static_cast<std::size_t>(i)] == 1 &&
+            dx->shape()[static_cast<std::size_t>(i + ng - nt)] != 1)
+            axes.push_back(i + ng - nt);
+    }
+    if (!axes.empty()) dx = sum_op(dx, axes, false);
+    if (dx->shape() != this->input_shapes_[0]) dx = reshape_op(dx, this->input_shapes_[0]);
+    return {dx};
 }
 
 }  // namespace lucid

@@ -16,12 +16,15 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 #include "../core/Storage.h"
 #include "../core/fwd.h"
 
 namespace lucid {
+
+class TensorImpl;
 
 // Autograd bookkeeping for a single tensor.
 //
@@ -44,8 +47,12 @@ struct AutogradMeta {
     std::int64_t version = 0;
     // Backward function that produced this tensor (null for leaves).
     NodePtr grad_fn;
-    // Accumulated gradient storage; set on leaves after backward().
+    // Accumulated gradient storage; set on leaves after normal backward().
     std::optional<Storage> grad;
+    // Gradient as a full TensorImpl when backward was run with create_graph=true.
+    // Allows the gradient itself to participate in further autograd operations
+    // (second-order derivatives, MAML, Hessian-vector products, etc.).
+    std::shared_ptr<TensorImpl> grad_impl;
 };
 
 }  // namespace lucid

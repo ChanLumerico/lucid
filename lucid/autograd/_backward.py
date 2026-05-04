@@ -32,10 +32,10 @@ def backward(
 
     if grad_tensors is None:
         for t in tensors:
-            t.backward(retain_graph=retain_graph)
+            t.backward(retain_graph=retain_graph, create_graph=create_graph)
     else:
         for t, g in zip(tensors, grad_tensors):
-            t.backward(gradient=g, retain_graph=retain_graph)
+            t.backward(gradient=g, retain_graph=retain_graph, create_graph=create_graph)
 
 
 def grad(

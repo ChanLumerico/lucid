@@ -34,6 +34,9 @@ public:
         return be.exp(a, shape, dt);
     }
     Storage grad_formula(const Storage& g);
+    // dx = out * g  (saved output is exp(x))
+    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&,
+                                    const TensorImplPtr& out);
 };
 
 // Backward node for element-wise natural logarithm: y = ln(x).
@@ -47,6 +50,9 @@ public:
         return be.log(a, shape, dt);
     }
     Storage grad_formula(const Storage& g);
+    // dx = g / x
+    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x,
+                                    const TensorImplPtr&);
 };
 
 // Backward node for element-wise base-2 logarithm: y = log2(x).
@@ -76,6 +82,9 @@ public:
         return be.sqrt(a, shape, dt);
     }
     Storage grad_formula(const Storage& g);
+    // dx = g / (2*y)  where y = sqrt(x) is the saved output
+    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&,
+                                    const TensorImplPtr& out);
 };
 
 // Backward node for reciprocal square root: y = 1 / sqrt(x).

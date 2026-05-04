@@ -15,6 +15,8 @@
 
 #include "Exponential.h"
 #include "Var.h"
+#include "../bfunc/Div.h"
+#include "../gfunc/Gfunc.h"
 
 #include <algorithm>
 #include <cstring>
@@ -172,6 +174,15 @@ Storage MeanBackward::grad_formula(const Storage& grad_out) {
     const double n = reduced_count(this->full_input_shape_, this->reduce_axes_);
     return mul_scalar_storage(broadcasted, 1.0 / n, shape_numel(this->full_input_shape_),
                               this->dtype_, this->device_);
+}
+
+// Graph-mode mean backward: divide the broadcast-expanded gradient by n_reduced.
+TensorImplPtr MeanBackward::scale_graph_grad(const TensorImplPtr& g) {
+    const double n = reduced_count(this->full_input_shape_, this->reduce_axes_);
+    // Create a constant tensor with value n (same shape as g) and divide.
+    // The division is tracked by div_op so second-order gradients flow correctly.
+    auto n_tensor = full_like_op(g, n, /*requires_grad=*/false);
+    return div_op(g, n_tensor);
 }
 
 TensorImplPtr mean_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {

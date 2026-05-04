@@ -47,6 +47,8 @@ public:
     }
 
     Storage grad_formula(const Storage& grad_out);
+    // sum backward has no scaling: gradient broadcasts unchanged.
+    TensorImplPtr scale_graph_grad(const TensorImplPtr& g) { return g; }
 };
 
 // Backward node for reduction mean along arbitrary axes.
@@ -68,6 +70,8 @@ public:
     }
 
     Storage grad_formula(const Storage& grad_out);
+    // mean backward divides by n_reduced to scale the broadcast gradient.
+    TensorImplPtr scale_graph_grad(const TensorImplPtr& g);
 };
 
 // Backward node for reduction product along arbitrary axes.

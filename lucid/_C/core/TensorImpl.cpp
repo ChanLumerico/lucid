@@ -335,8 +335,10 @@ void TensorImpl::copy_from(const TensorImpl& other) {
 }
 
 void TensorImpl::zero_grad() {
-    if (autograd_)
+    if (autograd_) {
         autograd_->grad.reset();
+        autograd_->grad_impl.reset();
+    }
 }
 
 bool TensorImpl::storage_is_shared() const noexcept {
@@ -372,6 +374,23 @@ std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorIm
         view->set_leaf(base->is_leaf());
     }
     return view;
+}
+
+// Accumulate a graph-mode gradient into this leaf's grad_impl slot.
+// First arrival: stores the incoming TensorImpl directly.
+// Subsequent arrivals: add via add_op so the result remains differentiable.
+void TensorImpl::accumulate_grad_impl(std::shared_ptr<TensorImpl> g) {
+    ensure_autograd();
+    if (!autograd_->grad_impl) {
+        autograd_->grad_impl = std::move(g);
+    } else {
+        // Lazy-include to avoid a circular dependency at the header level.
+        // add_op is defined in ops/bfunc/Add.h which is not included here;
+        // declare it as an extern to keep TensorImpl.cpp independent of the ops layer.
+        extern std::shared_ptr<TensorImpl> add_op(
+            const std::shared_ptr<TensorImpl>&, const std::shared_ptr<TensorImpl>&);
+        autograd_->grad_impl = add_op(autograd_->grad_impl, g);
+    }
 }
 
 }  // namespace lucid

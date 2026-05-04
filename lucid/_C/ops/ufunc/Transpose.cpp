@@ -119,6 +119,13 @@ std::vector<Storage> PermuteBackward::apply(Storage grad_out) {
     return {std::move(dx)};
 }
 
+// Graph-mode: apply the inverse permutation using permute_op so the result
+// is tracked in the autograd graph for second-order differentiation.
+std::vector<TensorImplPtr> PermuteBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    const auto inv = inverse_perm(perm_);
+    return {permute_op(grad_out, inv)};
+}
+
 TensorImplPtr permute_op(const TensorImplPtr& a, const std::vector<int>& perm) {
     return PermuteBackward::forward(a, perm);
 }

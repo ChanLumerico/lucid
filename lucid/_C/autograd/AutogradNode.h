@@ -18,6 +18,7 @@
 #include "../core/Dtype.h"
 #include "../core/Shape.h"
 #include "../core/Storage.h"
+#include "../core/TensorImpl.h"
 #include "Helpers.h"
 #include "Node.h"
 
@@ -79,6 +80,9 @@ public:
             s = Storage{CpuStorage{}};
         saved_output_ = Storage{CpuStorage{}};
         input_tensors_ = {};
+        for (auto& p : saved_impl_inputs_)
+            p.reset();
+        saved_impl_output_.reset();
     }
 
     // Weak references to the original input TensorImpl objects, used only by
@@ -109,6 +113,15 @@ public:
     // requires the output activation (e.g. sigmoid, softmax).
     // May be left as a default CpuStorage{} when not needed.
     Storage saved_output_;
+
+    // Strong references to the original input TensorImpl objects.
+    // Set alongside saved_inputs_ so that apply_for_graph() can use
+    // the full TensorImpl (with grad_fn) when create_graph=true.
+    std::array<std::shared_ptr<TensorImpl>, N_IN> saved_impl_inputs_;
+
+    // Strong reference to the forward output TensorImpl, used by ops whose
+    // graph-mode backward needs the forward output value (e.g. Sigmoid).
+    std::shared_ptr<TensorImpl> saved_impl_output_;
 };
 
 }  // namespace lucid

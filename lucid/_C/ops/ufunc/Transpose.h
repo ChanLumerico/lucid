@@ -45,6 +45,11 @@ public:
 
     // Computes dL/dx = permute(dL/dy, inverse(perm_)).
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode: same as apply but using permute_op so the result is tracked.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
+    std::string node_name() const override { return "permute"; }
 };
 
 // Permute all axes of `a` according to `perm`.

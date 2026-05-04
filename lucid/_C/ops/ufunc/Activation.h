@@ -37,6 +37,9 @@ public:
         return be.relu(a, s, dt);
     }
     Storage grad_formula(const Storage& g);
+    // dx = (x > 0) * g — uses relu_op to get the 0/1 mask
+    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x,
+                                    const TensorImplPtr&);
 };
 
 // Backward node for logistic sigmoid: y = 1 / (1 + e^{-x}).
@@ -52,6 +55,9 @@ public:
         return be.sigmoid(a, s, dt);
     }
     Storage grad_formula(const Storage& g);
+    // dx = out*(1-out)*g  where out = sigmoid(x)
+    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&,
+                                    const TensorImplPtr& out);
 };
 
 // Backward node for SiLU/Swish: y = x * sigmoid(x).

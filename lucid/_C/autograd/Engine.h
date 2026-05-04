@@ -38,7 +38,8 @@ public:
     // in-place mutation.
     static void backward(const std::shared_ptr<TensorImpl>& root,
                          Storage grad_seed = Storage{CpuStorage{}},
-                         bool retain_graph = false);
+                         bool retain_graph = false,
+                         bool create_graph = false);
 };
 
 }  // namespace lucid

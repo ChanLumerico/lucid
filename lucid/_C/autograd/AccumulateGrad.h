@@ -44,6 +44,12 @@ public:
     // Always returns an empty vector because there are no further edges.
     std::vector<Storage> apply(Storage grad_out) override;
 
+    // Graph-mode variant: stores grad_out (a TensorImpl with grad_fn) into the
+    // leaf's grad_impl slot so the gradient tensor itself is differentiable.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
+    std::string node_name() const override { return "AccumulateGrad"; }
+
     // Accessor for the leaf weak_ptr, used primarily by tests and
     // graph-inspection utilities.
     std::weak_ptr<TensorImpl> leaf() const { return leaf_; }

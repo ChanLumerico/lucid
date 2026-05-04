@@ -149,6 +149,17 @@ public:
     }
     void set_grad_storage(Storage grad) { ensure_autograd()->grad = std::move(grad); }
 
+    // Gradient as a full TensorImpl (set when backward was called with create_graph=true).
+    // Returns nullptr when no graph-mode gradient has been accumulated.
+    std::shared_ptr<TensorImpl> grad_as_impl() const noexcept {
+        return autograd_ ? autograd_->grad_impl : nullptr;
+    }
+    void set_grad_impl(std::shared_ptr<TensorImpl> g) noexcept {
+        ensure_autograd()->grad_impl = std::move(g);
+    }
+    // Accumulate a graph-mode gradient: first call sets it; subsequent calls add via add_op.
+    void accumulate_grad_impl(std::shared_ptr<TensorImpl> g);
+
     // Increments the autograd version counter; called by every in-place op.
     // No-op when there is no AutogradMeta (i.e. the tensor has never
     // participated in the autograd graph).

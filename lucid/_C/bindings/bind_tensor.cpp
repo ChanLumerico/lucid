@@ -119,6 +119,12 @@ void register_tensor_impl(py::module_& m) {
         // for member functions on shared_ptr holders).
         .def("data_as_python", &TensorImpl::data_as_python)
         .def("grad_as_python", &TensorImpl::grad_as_python)
+        .def("grad_as_impl",
+             [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> {
+                 return t.grad_as_impl();
+             },
+             "Return the gradient as a TensorImpl (set when backward was called with "
+             "create_graph=True). Returns None if no graph-mode gradient is available.")
         .def("copy_from", &TensorImpl::copy_from)
         .def("zero_grad", &TensorImpl::zero_grad);
 

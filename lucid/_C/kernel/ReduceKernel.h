@@ -78,6 +78,7 @@ public:
     static constexpr bool kHasGradient = true;
 
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
+    std::string node_name() const override { return std::string(Derived::schema_v1.name); }
 
     // Axes that were reduced during forward(), stored for use in grad_formula.
     std::vector<int> reduce_axes_;
@@ -88,6 +89,10 @@ public:
     // the gradient back to the original extent during backward.
     Shape full_input_shape_;
 
+    // Default scale: pass gradient through unchanged (used by SumBackward).
+    // Override in Derived for scaling ops like MeanBackward.
+    TensorImplPtr scale_graph_grad(const TensorImplPtr& g) { return g; }
+
     // Forward pass: normalize axes, compute output shape, dispatch kernel,
     // and wire the backward node with the extra reduction state.
     static std::shared_ptr<TensorImpl>
@@ -97,6 +102,10 @@ public:
     // single input gradient (no shape reduction needed here; grad_formula
     // is responsible for restoring the reduced dimensions).
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: broadcast grad_out back to full_input_shape_ via
+    // sum_op and reshape_op, keeping the computation tracked for 2nd-order grad.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Normalize axes to canonical positive form, compute the output shape,
@@ -162,6 +171,7 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
             bwd->saved_inputs_ = {a_ptr->storage()};
         if constexpr (Derived::kSavesOutput)
             bwd->saved_output_ = out->storage();
+        bwd->saved_impl_inputs_ = {a};
 
         // Store reduction metadata so grad_formula can invert the shape change.
         bwd->reduce_axes_ = axes;
@@ -188,6 +198,35 @@ template <class Derived>
 std::vector<Storage> ReduceKernel<Derived>::apply(Storage grad_out) {
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);
     return {std::move(dx)};
+}
+
+// Graph-mode backward for reductions: broadcast the incoming gradient back to
+// full_input_shape_ using unsqueeze + broadcast_to_op so the expansion itself
+// is tracked in the autograd graph.
+template <class Derived>
+std::vector<TensorImplPtr> ReduceKernel<Derived>::apply_for_graph(const TensorImplPtr& grad_out) {
+    extern TensorImplPtr broadcast_to_op(const TensorImplPtr&, const Shape&);
+    extern TensorImplPtr unsqueeze_op(const TensorImplPtr&, int);
+    extern TensorImplPtr reshape_op(const TensorImplPtr&, const Shape&);
+
+    TensorImplPtr g = grad_out;
+
+    // If keepdims was false, the reduced axes are missing from grad_out.
+    // Re-insert size-1 axes at the correct positions before broadcasting.
+    if (!this->keepdims_) {
+        std::vector<int> sorted_axes = this->reduce_axes_;
+        std::sort(sorted_axes.begin(), sorted_axes.end());
+        for (int ax : sorted_axes) {
+            g = unsqueeze_op(g, ax);
+        }
+    }
+
+    // Broadcast to the original input shape — this replicates the gradient
+    // to all elements that were reduced (sum backward).
+    auto dx = broadcast_to_op(g, this->full_input_shape_);
+
+    // Derived may scale the gradient (e.g. MeanBackward divides by n_reduced).
+    return {static_cast<Derived*>(this)->scale_graph_grad(dx)};
 }
 
 }  // namespace lucid

@@ -47,4 +47,16 @@ std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
     return {};
 }
 
+// Store grad_out (a TensorImplPtr with its own grad_fn) into the leaf's
+// grad_impl slot so the gradient tensor itself is differentiable.
+// This path is taken when Engine::backward is called with create_graph=true.
+std::vector<TensorImplPtr> AccumulateGrad::apply_for_graph(const TensorImplPtr& grad_out) {
+    auto t = leaf_.lock();
+    if (!t || !t->requires_grad()) {
+        return {};
+    }
+    t->accumulate_grad_impl(grad_out);
+    return {};
+}
+
 }  // namespace lucid
