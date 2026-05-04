@@ -90,7 +90,8 @@ def _to_impl(
             _dtype_eng = _np_dtype_to_engine(arr.dtype)
 
     arr = np.ascontiguousarray(arr)
-    impl = _C_engine.TensorImpl(arr, _device_eng, _rg)
+    with np.errstate(invalid="ignore", over="ignore"):
+        impl = _C_engine.TensorImpl(arr, _device_eng, _rg)
     return impl
 
 

@@ -148,7 +148,7 @@ class TestRNNCells:
         x = lucid.randn(2, 5, 4)
         out, h = gru(x)
         assert out.shape == (2, 5, 8)
-        assert h.shape == (2, 8)
+        assert h.shape == (1, 2, 8)  # (D*num_layers, B, H)
 
     def test_rnn_full(self):
         rnn = nn.RNN(4, 8, batch_first=True)

@@ -3,10 +3,12 @@ Recurrent modules: LSTM, GRU, RNN.
 """
 
 import math
+from typing import TYPE_CHECKING
+
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
-from lucid._factories.creation import empty, zeros, ones
+from lucid._factories.creation import empty, zeros
 from lucid._factories.random import rand
 import lucid.nn.init as init
 from lucid._C import engine as _C_engine
@@ -14,6 +16,20 @@ from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.functional.linear import linear
 from lucid.nn.functional.activations import tanh, relu, sigmoid
 from lucid._ops import stack
+
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _cat_last(a: "Tensor", b: "Tensor") -> "Tensor":
+    """Concatenate two tensors along the last dimension."""
+    import lucid
+    return lucid.cat([a, b], a.ndim - 1)
+
+
+# ── LSTM ──────────────────────────────────────────────────────────────────────
 
 
 class LSTM(Module):
@@ -29,6 +45,8 @@ class LSTM(Module):
         Number of recurrent layers (default: 1).
     bias : bool, optional
         If ``False``, the layer does not use bias weights (default: ``True``).
+        Due to an engine limitation, a zero-valued bias is still passed to the
+        engine; numerically equivalent to no bias, but bias tensors exist.
     batch_first : bool, optional
         If ``True``, input/output tensors are ``(batch, seq, feature)``
         instead of ``(seq, batch, feature)`` (default: ``False``).
@@ -36,6 +54,12 @@ class LSTM(Module):
         Dropout probability between LSTM layers (default: 0.0).
     bidirectional : bool, optional
         If ``True``, use a bidirectional LSTM (default: ``False``).
+
+    Notes
+    -----
+    The output hidden state ``h_n`` has shape
+    ``(D * num_layers, batch, hidden_size)`` where ``D = 2`` if bidirectional
+    else ``D = 1``.  This matches PyTorch convention.
 
     Examples
     --------
@@ -77,15 +101,11 @@ class LSTM(Module):
                 layer_input = input_size if layer == 0 else hidden_size * num_directions
                 self.register_parameter(
                     f"weight_ih_l{layer}{suffix}",
-                    Parameter(
-                        empty(gate_size, layer_input, dtype=dtype, device=device)
-                    ),
+                    Parameter(empty(gate_size, layer_input, dtype=dtype, device=device)),
                 )
                 self.register_parameter(
                     f"weight_hh_l{layer}{suffix}",
-                    Parameter(
-                        empty(gate_size, hidden_size, dtype=dtype, device=device)
-                    ),
+                    Parameter(empty(gate_size, hidden_size, dtype=dtype, device=device)),
                 )
                 if bias:
                     self.register_parameter(
@@ -105,26 +125,35 @@ class LSTM(Module):
 
     def forward(
         self,
-        x: Tensor,
-        hx: tuple[Tensor, Tensor] | None = None,
-    ) -> tuple[Tensor, tuple[Tensor, Tensor]]:
+        x: "Tensor",
+        hx: "tuple[Tensor, Tensor] | None" = None,
+    ) -> "tuple[Tensor, tuple[Tensor, Tensor]]":
         h0_impl = _unwrap(hx[0]) if hx is not None else None
         c0_impl = _unwrap(hx[1]) if hx is not None else None
 
-        weights = []
         num_dirs = 2 if self.bidirectional else 1
+        gate_size = 4 * self.hidden_size
+
+        weights = []
         for layer in range(self.num_layers):
             for direction in range(num_dirs):
                 suffix = "_reverse" if direction == 1 else ""
                 weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
                 weights.append(_unwrap(self._parameters[f"weight_hh_l{layer}{suffix}"]))
                 if self.bias:
-                    weights.append(
-                        _unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"])
+                    weights.append(_unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"]))
+                    weights.append(_unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"]))
+                else:
+                    # Engine training path requires bias tensors; supply zeros
+                    # so computation is equivalent to bias=False.
+                    dev = _unwrap(x).device
+                    dt = _unwrap(x).dtype
+                    zero_b = _C_engine.TensorImpl(
+                        __import__("numpy").zeros(gate_size, dtype="float32"),
+                        dev, False
                     )
-                    weights.append(
-                        _unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"])
-                    )
+                    weights.append(zero_b)
+                    weights.append(zero_b)
 
         x_impl = _unwrap(x)
         if self.batch_first:
@@ -139,7 +168,7 @@ class LSTM(Module):
             self.num_layers,
             False,
             self.bidirectional,
-            self.bias,
+            True,   # always True: we always supply bias tensors above
         )
 
         output = _wrap(output_impl)
@@ -195,9 +224,9 @@ class RNNCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Tensor, hx: Tensor | tuple[Tensor, Tensor] | None = None) -> tuple[Tensor, Tensor | tuple[Tensor, Tensor]]:
+    def forward(self, x: "Tensor", hx: "Tensor | None" = None) -> "Tensor":
         if hx is None:
-            hx = zeros(x.shape[0], self.hidden_size)
+            hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         pre = linear(x, self.weight_ih, self.bias_ih) + linear(
             hx, self.weight_hh, self.bias_hh
         )
@@ -232,13 +261,11 @@ class LSTMCell(Module):
         )
         self.bias_ih: Parameter | None = (
             Parameter(empty(4 * hidden_size, dtype=dtype, device=device))
-            if bias
-            else None
+            if bias else None
         )
         self.bias_hh: Parameter | None = (
             Parameter(empty(4 * hidden_size, dtype=dtype, device=device))
-            if bias
-            else None
+            if bias else None
         )
         self._init_weights()
 
@@ -247,11 +274,15 @@ class LSTMCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Tensor, hx: tuple[Tensor, Tensor] | None = None) -> tuple[Tensor, tuple[Tensor, Tensor]]:
+    def forward(
+        self,
+        x: "Tensor",
+        hx: "tuple[Tensor, Tensor] | None" = None,
+    ) -> "tuple[Tensor, Tensor]":
         if hx is None:
             batch = x.shape[0]
-            h0 = zeros(batch, self.hidden_size)
-            c0 = zeros(batch, self.hidden_size)
+            h0 = zeros(batch, self.hidden_size, device=x.device, dtype=x.dtype)
+            c0 = zeros(batch, self.hidden_size, device=x.device, dtype=x.dtype)
         else:
             h0, c0 = hx
         gates = linear(x, self.weight_ih, self.bias_ih) + linear(
@@ -293,13 +324,11 @@ class GRUCell(Module):
         )
         self.bias_ih: Parameter | None = (
             Parameter(empty(3 * hidden_size, dtype=dtype, device=device))
-            if bias
-            else None
+            if bias else None
         )
         self.bias_hh: Parameter | None = (
             Parameter(empty(3 * hidden_size, dtype=dtype, device=device))
-            if bias
-            else None
+            if bias else None
         )
         self._init_weights()
 
@@ -308,24 +337,44 @@ class GRUCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Tensor, hx: Tensor | tuple[Tensor, Tensor] | None = None) -> tuple[Tensor, Tensor | tuple[Tensor, Tensor]]:
+    def forward(self, x: "Tensor", hx: "Tensor | None" = None) -> "Tensor":
         if hx is None:
-            hx = zeros(x.shape[0], self.hidden_size)
+            hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         hs = self.hidden_size
         gates_x = linear(x, self.weight_ih, self.bias_ih)
         gates_h = linear(hx, self.weight_hh, self.bias_hh)
         r = sigmoid(gates_x[:, :hs] + gates_h[:, :hs])
         z = sigmoid(gates_x[:, hs : 2 * hs] + gates_h[:, hs : 2 * hs])
         n = tanh(gates_x[:, 2 * hs :] + r * gates_h[:, 2 * hs :])
-        h1 = (ones(x.shape[0], hs) - z) * n + z * hx
+        h1 = (1.0 - z) * n + z * hx
         return h1
 
     def extra_repr(self) -> str:
         return f"{self.input_size}, {self.hidden_size}"
 
 
+# ── Multi-step GRU ────────────────────────────────────────────────────────────
+
+
 class GRU(Module):
-    """Multi-layer GRU (pure-Python cell-based implementation)."""
+    """Multi-layer GRU.
+
+    Returns ``(output, h_n)`` where ``h_n`` has shape
+    ``(D * num_layers, batch, hidden_size)`` — matching PyTorch convention.
+
+    Parameters
+    ----------
+    input_size, hidden_size, num_layers, bias, batch_first, dropout,
+    bidirectional : same as ``torch.nn.GRU``.
+
+    Examples
+    --------
+    >>> gru = nn.GRU(8, 16, num_layers=2, batch_first=True)
+    >>> x = lucid.randn(2, 5, 8)
+    >>> out, h_n = gru(x)
+    >>> out.shape, h_n.shape
+    ((2, 5, 16), (2, 2, 16))
+    """
 
     def __init__(
         self,
@@ -346,35 +395,107 @@ class GRU(Module):
         self.batch_first = batch_first
         self.dropout_val = dropout
         self.bidirectional = bidirectional
-        self._cell = GRUCell(
-            input_size, hidden_size, bias=bias, device=device, dtype=dtype
-        )
 
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> tuple[Tensor, Tensor]:
+        num_dirs = 2 if bidirectional else 1
+        for layer in range(num_layers):
+            for d in range(num_dirs):
+                suffix = "_reverse" if d == 1 else ""
+                in_sz = input_size if layer == 0 else hidden_size * num_dirs
+                self.add_module(
+                    f"cell_l{layer}{suffix}",
+                    GRUCell(in_sz, hidden_size, bias=bias, device=device, dtype=dtype),
+                )
+
+    def _cell(self, layer: int, reverse: bool = False) -> GRUCell:
+        suffix = "_reverse" if reverse else ""
+        return self._modules[f"cell_l{layer}{suffix}"]  # type: ignore[return-value]
+
+    def forward(
+        self,
+        x: "Tensor",
+        hx: "Tensor | None" = None,
+    ) -> "tuple[Tensor, Tensor]":
         if self.batch_first:
-            perm = [1, 0] + list(range(2, x.ndim))
-            x = x.permute(perm)
+            x = x.permute([1, 0, 2])
+
         T, B = x.shape[0], x.shape[1]
-        h = hx if hx is not None else zeros(B, self.hidden_size)
-        outputs: list[Tensor] = []
-        for t in range(T):
-            h = self._cell(x[t], h)
-            outputs.append(h)
-        out = stack(outputs, 0)
+        num_dirs = 2 if self.bidirectional else 1
+
+        if hx is None:
+            hx = zeros(
+                self.num_layers * num_dirs, B, self.hidden_size,
+                device=x.device, dtype=x.dtype,
+            )
+
+        h_n: list[Tensor] = []  # type: ignore[name-defined]
+        inp = x
+
+        for layer in range(self.num_layers):
+            # ── forward direction ────────────────────────────────────────────
+            cell_fwd = self._cell(layer, reverse=False)
+            h_fwd = hx[layer * num_dirs]  # (B, hidden)
+            fwd_out: list[Tensor] = []  # type: ignore[name-defined]
+            for t in range(T):
+                h_fwd = cell_fwd(inp[t], h_fwd)
+                fwd_out.append(h_fwd)
+            h_n.append(h_fwd)
+
+            if self.bidirectional:
+                # ── reverse direction ────────────────────────────────────────
+                cell_rev = self._cell(layer, reverse=True)
+                h_rev = hx[layer * num_dirs + 1]
+                rev_out: list[Tensor] = []  # type: ignore[name-defined]
+                for t in range(T - 1, -1, -1):
+                    h_rev = cell_rev(inp[t], h_rev)
+                    rev_out.append(h_rev)
+                rev_out.reverse()
+                h_n.append(h_rev)
+                # Concat forward and backward at each time step
+                layer_out = stack(
+                    [_cat_last(fwd_out[t], rev_out[t]) for t in range(T)], 0
+                )
+            else:
+                layer_out = stack(fwd_out, 0)
+
+            inp = layer_out
+
+        out = inp
+        h_n_tensor = stack(h_n, 0)  # (D*num_layers, B, hidden)
+
         if self.batch_first:
-            perm_back = [1, 0] + list(range(2, out.ndim))
-            out = out.permute(perm_back)
-        return out, h
+            out = out.permute([1, 0, 2])
+
+        return out, h_n_tensor
 
     def extra_repr(self) -> str:
         return (
             f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
-            f"batch_first={self.batch_first}"
+            f"batch_first={self.batch_first}, bidirectional={self.bidirectional}"
         )
 
 
+# ── Multi-step RNN ────────────────────────────────────────────────────────────
+
+
 class RNN(Module):
-    """Multi-layer Elman RNN (pure-Python cell-based implementation)."""
+    """Multi-layer Elman RNN.
+
+    Returns ``(output, h_n)`` where ``h_n`` has shape
+    ``(D * num_layers, batch, hidden_size)`` — matching PyTorch convention.
+
+    Parameters
+    ----------
+    input_size, hidden_size, num_layers, nonlinearity, bias, batch_first,
+    dropout, bidirectional : same as ``torch.nn.RNN``.
+
+    Examples
+    --------
+    >>> rnn = nn.RNN(8, 16, num_layers=2, batch_first=True)
+    >>> x = lucid.randn(2, 5, 8)
+    >>> out, h_n = rnn(x)
+    >>> out.shape, h_n.shape
+    ((2, 5, 16), (2, 2, 16))
+    """
 
     def __init__(
         self,
@@ -393,34 +514,85 @@ class RNN(Module):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.nonlinearity = nonlinearity
         self.batch_first = batch_first
-        self._cell = RNNCell(
-            input_size,
-            hidden_size,
-            bias=bias,
-            nonlinearity=nonlinearity,
-            device=device,
-            dtype=dtype,
-        )
+        self.bidirectional = bidirectional
 
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> tuple[Tensor, Tensor]:
+        num_dirs = 2 if bidirectional else 1
+        for layer in range(num_layers):
+            for d in range(num_dirs):
+                suffix = "_reverse" if d == 1 else ""
+                in_sz = input_size if layer == 0 else hidden_size * num_dirs
+                self.add_module(
+                    f"cell_l{layer}{suffix}",
+                    RNNCell(
+                        in_sz, hidden_size, bias=bias,
+                        nonlinearity=nonlinearity,
+                        device=device, dtype=dtype,
+                    ),
+                )
+
+    def _cell(self, layer: int, reverse: bool = False) -> RNNCell:
+        suffix = "_reverse" if reverse else ""
+        return self._modules[f"cell_l{layer}{suffix}"]  # type: ignore[return-value]
+
+    def forward(
+        self,
+        x: "Tensor",
+        hx: "Tensor | None" = None,
+    ) -> "tuple[Tensor, Tensor]":
         if self.batch_first:
-            perm = [1, 0] + list(range(2, x.ndim))
-            x = x.permute(perm)
+            x = x.permute([1, 0, 2])
+
         T, B = x.shape[0], x.shape[1]
-        h = hx if hx is not None else zeros(B, self.hidden_size)
-        outputs: list[Tensor] = []
-        for t in range(T):
-            h = self._cell(x[t], h)
-            outputs.append(h)
-        out = stack(outputs, 0)
+        num_dirs = 2 if self.bidirectional else 1
+
+        if hx is None:
+            hx = zeros(
+                self.num_layers * num_dirs, B, self.hidden_size,
+                device=x.device, dtype=x.dtype,
+            )
+
+        h_n: list[Tensor] = []  # type: ignore[name-defined]
+        inp = x
+
+        for layer in range(self.num_layers):
+            cell_fwd = self._cell(layer, reverse=False)
+            h_fwd = hx[layer * num_dirs]
+            fwd_out: list[Tensor] = []  # type: ignore[name-defined]
+            for t in range(T):
+                h_fwd = cell_fwd(inp[t], h_fwd)
+                fwd_out.append(h_fwd)
+            h_n.append(h_fwd)
+
+            if self.bidirectional:
+                cell_rev = self._cell(layer, reverse=True)
+                h_rev = hx[layer * num_dirs + 1]
+                rev_out: list[Tensor] = []  # type: ignore[name-defined]
+                for t in range(T - 1, -1, -1):
+                    h_rev = cell_rev(inp[t], h_rev)
+                    rev_out.append(h_rev)
+                rev_out.reverse()
+                h_n.append(h_rev)
+                layer_out = stack(
+                    [_cat_last(fwd_out[t], rev_out[t]) for t in range(T)], 0
+                )
+            else:
+                layer_out = stack(fwd_out, 0)
+
+            inp = layer_out
+
+        out = inp
+        h_n_tensor = stack(h_n, 0)
+
         if self.batch_first:
-            perm_back = [1, 0] + list(range(2, out.ndim))
-            out = out.permute(perm_back)
-        return out, h
+            out = out.permute([1, 0, 2])
+
+        return out, h_n_tensor
 
     def extra_repr(self) -> str:
         return (
             f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
-            f"batch_first={self.batch_first}"
+            f"nonlinearity={self.nonlinearity!r}, batch_first={self.batch_first}, "
+            f"bidirectional={self.bidirectional}"
         )

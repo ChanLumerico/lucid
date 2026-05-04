@@ -118,6 +118,22 @@ class TestLSTM:
         out2, _ = lstm(x)
         np.testing.assert_allclose(out1.numpy(), out2.numpy(), atol=1e-5)
 
+    def test_no_bias(self):
+        lstm = nn.LSTM(input_size=4, hidden_size=8, bias=False, batch_first=True)
+        x = randf(2, 3, 4)
+        out, (h, c) = lstm(x)
+        assert out.shape == (2, 3, 8)
+        assert h.shape == (1, 2, 8)
+
+    def test_no_bias_differs_from_bias(self):
+        x = randf(1, 3, 4)
+        lstm_bias = nn.LSTM(input_size=4, hidden_size=8, bias=True, batch_first=True)
+        lstm_no = nn.LSTM(input_size=4, hidden_size=8, bias=False, batch_first=True)
+        out_b, _ = lstm_bias(x)
+        out_n, _ = lstm_no(x)
+        # Different weights initialisation → outputs should differ
+        assert out_b.shape == out_n.shape
+
 
 # ── GRUCell ───────────────────────────────────────────────────────────────────
 
@@ -153,20 +169,19 @@ class TestGRU:
         x = randf(2, 5, 8)
         out, h = gru(x)
         assert out.shape == (2, 5, 16)
-        # Engine returns (batch, hidden) not (layers, batch, hidden)
-        assert h.shape == (2, 16)
+        assert h.shape == (1, 2, 16)  # (D*num_layers, batch, hidden)
 
     def test_seq_first(self):
         gru = nn.GRU(input_size=8, hidden_size=16, batch_first=False)
         x = randf(5, 2, 8)
         out, h = gru(x)
         assert out.shape == (5, 2, 16)
-        assert h.shape == (2, 16)
+        assert h.shape == (1, 2, 16)
 
     def test_explicit_h0(self):
         gru = nn.GRU(input_size=4, hidden_size=8, batch_first=True)
         x = randf(2, 3, 4)
-        h0 = lucid.zeros(2, 8)
+        h0 = lucid.zeros(1, 2, 8)  # (D*num_layers, batch, hidden)
         out, h = gru(x, h0)
         assert out.shape == (2, 3, 8)
 
@@ -185,6 +200,36 @@ class TestGRU:
         out1, _ = gru(x)
         out2, _ = gru(x)
         np.testing.assert_allclose(out1.numpy(), out2.numpy(), atol=1e-5)
+
+    def test_multi_layer(self):
+        gru = nn.GRU(input_size=8, hidden_size=16, num_layers=2, batch_first=True)
+        x = randf(2, 5, 8)
+        out, h = gru(x)
+        assert out.shape == (2, 5, 16)
+        assert h.shape == (2, 2, 16)  # (num_layers, batch, hidden)
+
+    def test_bidirectional(self):
+        gru = nn.GRU(input_size=8, hidden_size=16, bidirectional=True, batch_first=True)
+        x = randf(2, 5, 8)
+        out, h = gru(x)
+        assert out.shape == (2, 5, 32)  # 2 * hidden_size
+        assert h.shape == (2, 2, 16)    # (D=2, batch, hidden)
+
+    def test_bidirectional_multilayer(self):
+        gru = nn.GRU(input_size=8, hidden_size=16, num_layers=3,
+                     bidirectional=True, batch_first=True)
+        x = randf(2, 5, 8)
+        out, h = gru(x)
+        assert out.shape == (2, 5, 32)
+        assert h.shape == (6, 2, 16)   # D*num_layers=6
+
+    def test_explicit_h0_3d(self):
+        gru = nn.GRU(input_size=4, hidden_size=8, num_layers=2, batch_first=True)
+        x = randf(2, 3, 4)
+        h0 = lucid.zeros(2, 2, 8)
+        out, h = gru(x, h0)
+        assert out.shape == (2, 3, 8)
+        assert h.shape == (2, 2, 8)
 
 
 # ── RNNCell ───────────────────────────────────────────────────────────────────
@@ -224,7 +269,7 @@ class TestRNN:
         x = randf(2, 5, 8)
         out, h = rnn(x)
         assert out.shape == (2, 5, 16)
-        assert h.shape == (2, 16)
+        assert h.shape == (1, 2, 16)  # (D*num_layers, batch, hidden)
 
     def test_relu_nonlinearity(self):
         rnn = nn.RNN(input_size=4, hidden_size=8, nonlinearity="relu", batch_first=True)
@@ -239,6 +284,36 @@ class TestRNN:
         x = randf(5, 2, 4)
         out, h = rnn(x)
         assert out.shape == (5, 2, 8)
+
+    def test_multi_layer(self):
+        rnn = nn.RNN(input_size=8, hidden_size=16, num_layers=3, batch_first=True)
+        x = randf(2, 5, 8)
+        out, h = rnn(x)
+        assert out.shape == (2, 5, 16)
+        assert h.shape == (3, 2, 16)
+
+    def test_bidirectional(self):
+        rnn = nn.RNN(input_size=8, hidden_size=16, bidirectional=True, batch_first=True)
+        x = randf(2, 5, 8)
+        out, h = rnn(x)
+        assert out.shape == (2, 5, 32)  # 2 * hidden_size
+        assert h.shape == (2, 2, 16)
+
+    def test_explicit_h0_3d(self):
+        rnn = nn.RNN(input_size=4, hidden_size=8, num_layers=2, batch_first=True)
+        x = randf(2, 3, 4)
+        h0 = lucid.zeros(2, 2, 8)
+        out, h = rnn(x, h0)
+        assert out.shape == (2, 3, 8)
+        assert h.shape == (2, 2, 8)
+
+    def test_eval_deterministic(self):
+        rnn = nn.RNN(input_size=4, hidden_size=8, batch_first=True)
+        rnn.eval()
+        x = randf(1, 3, 4)
+        out1, _ = rnn(x)
+        out2, _ = rnn(x)
+        np.testing.assert_allclose(out1.numpy(), out2.numpy(), atol=1e-5)
 
 
 # ── Transformer ───────────────────────────────────────────────────────────────

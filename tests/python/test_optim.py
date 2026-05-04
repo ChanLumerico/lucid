@@ -29,8 +29,7 @@ class TestOptimizerStatePreservation:
         eng_id_before = id(opt._engine_optims[0])
         self._run_steps(model, opt)
 
-        sched.step()  # epoch 0 — no decay
-        sched.step()  # epoch 1 — decay by gamma
+        sched.step()  # epoch 1 — decay by gamma (step_size=1)
 
         assert id(opt._engine_optims[0]) == eng_id_before, "Engine optimizer was recreated!"
         expected_lr = 1e-3 * 0.5
@@ -56,11 +55,11 @@ class TestLRSchedulers:
     def test_steplr(self):
         _, opt = self._make_model_and_opt()
         sched = optim.lr_scheduler.StepLR(opt, step_size=2, gamma=0.5)
-        sched.step()  # epoch 0 — no change
-        assert abs(opt.param_groups[0]["lr"] - 1e-2) < 1e-10
         sched.step()  # epoch 1 — no change (step_size=2)
         assert abs(opt.param_groups[0]["lr"] - 1e-2) < 1e-10
         sched.step()  # epoch 2 — decay!
+        assert abs(opt.param_groups[0]["lr"] - 5e-3) < 1e-10
+        sched.step()  # epoch 3 — no change
         assert abs(opt.param_groups[0]["lr"] - 5e-3) < 1e-10
 
     def test_cosine_annealing(self):

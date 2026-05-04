@@ -12,7 +12,7 @@ class _LRScheduler:
 
     def __init__(self, optimizer: Optimizer, last_epoch: int = -1) -> None:
         self.optimizer = optimizer
-        self.last_epoch = last_epoch
+        self.last_epoch = last_epoch + 1  # starts at 0; after N step() calls, last_epoch == N
         self._step_count = 0
         self.base_lrs = [g["lr"] for g in optimizer.param_groups]
 
@@ -341,10 +341,10 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
         self.last_epoch += 1
         self._step_count += 1
         self._T_cur += 1
+        values = self.get_lr()  # compute before reset so T_cur==T_i yields eta_min
         if self._T_cur >= self._T_i:
             self._T_cur = 0
             self._T_i *= self.T_mult
-        values = self.get_lr()
         for group, lr in zip(self.optimizer.param_groups, values):
             group["lr"] = lr
         self.optimizer._sync_hyperparams()
