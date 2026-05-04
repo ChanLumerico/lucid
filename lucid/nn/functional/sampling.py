@@ -97,7 +97,10 @@ def affine_grid(
 ) -> Tensor:
     """Generate a sampling grid for affine_grid / grid_sample."""
     ac = align_corners if align_corners is not None else False
-    return _wrap(_C_engine.nn.affine_grid(_unwrap(theta), list(size), ac))
+    # Engine signature: (theta, N, H, W, align_corners) — no C dimension.
+    sz = list(size)
+    N, H, W = sz[0], sz[2], sz[3]
+    return _wrap(_C_engine.nn.affine_grid(_unwrap(theta), N, H, W, ac))
 
 
 def unfold(
