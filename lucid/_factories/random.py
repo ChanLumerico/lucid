@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _wrap, _impl_with_grad
 from lucid._dtype import dtype, int64
+from lucid._types_base import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -29,8 +30,8 @@ def _get_gen(
 
 def rand(
     *size: int | tuple[int, ...],
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
@@ -43,8 +44,8 @@ def rand(
 
 def randn(
     *size: int | tuple[int, ...],
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
@@ -60,8 +61,8 @@ def randint(
     high: int,
     size: list[int] | tuple[int, ...],
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
@@ -78,8 +79,8 @@ def bernoulli(
     p: float,
     *,
     size: list[int] | tuple[int, ...] | None = None,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
@@ -95,8 +96,8 @@ def normal(
     std: float = 1.0,
     *,
     size: list[int] | tuple[int, ...],
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
@@ -110,8 +111,8 @@ def normal(
 def rand_like(
     t: Tensor,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
     """Return a uniform random tensor with the same shape/dtype/device as t."""
@@ -126,8 +127,8 @@ def rand_like(
 def randn_like(
     t: Tensor,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
     """Return a normal random tensor with the same shape/dtype/device as t."""

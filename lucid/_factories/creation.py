@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap, _impl_with_grad
 from lucid._dtype import dtype
+from lucid._types_base import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -20,8 +21,8 @@ def _size_to_list(*size: int | tuple[int, ...]) -> list[int]:
 
 def zeros(
     *size: int | tuple[int, ...],
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
     """Return a tensor filled with zeros.
@@ -55,8 +56,8 @@ def zeros(
 
 def ones(
     *size: int | tuple[int, ...],
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
     """Return a tensor filled with ones.
@@ -85,8 +86,8 @@ def ones(
 
 def empty(
     *size: int | tuple[int, ...],
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
     """Return an uninitialized tensor.
@@ -120,8 +121,8 @@ def full(
     size: int | list[int] | tuple[int, ...],
     fill_value: float,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
     """Return a tensor filled with fill_value."""
@@ -135,8 +136,8 @@ def eye(
     n: int,
     m: int | None = None,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
     """Return a 2D identity matrix."""
@@ -151,8 +152,8 @@ def arange(
     end: float | None = None,
     step: float = 1,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Return evenly spaced values within a given interval."""
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -166,8 +167,8 @@ def linspace(
     end: float,
     steps: int,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Return evenly spaced numbers over a specified interval."""
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -177,8 +178,8 @@ def linspace(
 def zeros_like(
     t: Tensor,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Return a zeros tensor with the same shape/dtype/device as t."""
     _dt, _dev, _ = normalize_factory_kwargs(
@@ -191,8 +192,8 @@ def zeros_like(
 def ones_like(
     t: Tensor,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Return a ones tensor with the same shape/dtype/device as t."""
     _dt, _dev, _ = normalize_factory_kwargs(
@@ -205,8 +206,8 @@ def ones_like(
 def empty_like(
     t: Tensor,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Return an uninitialized tensor with the same shape/dtype/device as t."""
     _dt, _dev, _ = normalize_factory_kwargs(
@@ -220,8 +221,8 @@ def full_like(
     t: Tensor,
     fill_value: float,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Return a tensor filled with fill_value, shaped like t."""
     _dt, _dev, _ = normalize_factory_kwargs(

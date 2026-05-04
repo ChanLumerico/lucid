@@ -10,7 +10,9 @@ These serve three purposes:
 
 Import style
 ------------
-Internal modules import the aliases they need directly::
+Early modules (factories, dispatch, _dtype, _device) that are themselves imported
+by ``tensor.py`` must use :mod:`lucid._types_base` to avoid circular imports.
+All other modules may import from here directly::
 
     from lucid._types import DeviceLike, DTypeLike, ShapeLike, _ModuleOutput
 
@@ -25,10 +27,8 @@ Naming conventions
 
 from typing import (
     Callable,
-    ParamSpec,
     Protocol,
     TypedDict,
-    TypeVar,
     runtime_checkable,
 )
 
@@ -38,19 +38,14 @@ from lucid._tensor.tensor import Tensor
 from lucid._dtype import dtype as _DType
 from lucid._device import device as _Device
 
-# ── TypeVars ──────────────────────────────────────────────────────────────────
-
-DT = TypeVar("DT", bound=_DType)
-"""TypeVar for dtype-parametric functions and return-type preservation."""
-
-DV = TypeVar("DV", bound=_Device)
-"""TypeVar for device-parametric functions and return-type preservation."""
-
-_T = TypeVar("_T")
-"""Generic return TypeVar used in decorator helpers."""
-
-_P = ParamSpec("_P")
-"""ParamSpec for preserving callable signatures through decorators."""
+# ── Re-export everything from _types_base ─────────────────────────────────────
+# Consumers that only need the Tensor-free aliases can import from _types_base;
+# everyone else can import from here and get the full set.
+from lucid._types_base import (  # noqa: F401
+    DT, DV, _T, _P,
+    Scalar, DeviceLike, DTypeLike, ShapeLike,
+    _Size1d, _Size2d, _Size3d,
+)
 
 # ── Protocols ─────────────────────────────────────────────────────────────────
 
@@ -142,34 +137,10 @@ class ParamGroupDict(TypedDict, total=False):
     fused: bool | None
 
 
-# ── Public type aliases ───────────────────────────────────────────────────────
-
-# Scalar numeric types — valid operands alongside Tensor in arithmetic.
-type Scalar = int | float | bool
+# ── Public type aliases (Tensor-dependent) ────────────────────────────────────
 
 # Any value that lucid can meaningfully convert to a Tensor.
 type TensorLike = Tensor | np.ndarray | list[object] | int | float | bool
-
-# Device specifier: an actual device object, a string name ('cpu'/'metal'), or None.
-type DeviceLike = _Device | str | None
-
-# DType specifier: an actual dtype object or None (→ use the global default).
-type DTypeLike = _DType | None
-
-# Shape / size specifier used in factory functions and reshape.
-type ShapeLike = int | tuple[int, ...]
-
-# ── Shape variants for spatial 1-D / 2-D / 3-D ops ──────────────────────────
-# Used in Conv, Pool, and similar spatial layers.
-
-# Single spatial dimension (Conv1d, MaxPool1d, …).
-type _Size1d = int | tuple[int]
-
-# Two spatial dimensions (Conv2d, MaxPool2d, …).
-type _Size2d = int | tuple[int, int]
-
-# Three spatial dimensions (Conv3d, MaxPool3d, …).
-type _Size3d = int | tuple[int, int, int]
 
 # ── Tensor operand / indexing ─────────────────────────────────────────────────
 

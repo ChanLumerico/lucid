@@ -1,10 +1,14 @@
 import numpy as np
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from lucid._dtype import float32 as _f32
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+
+_REPR_THRESHOLD: Final = 1000
+_REPR_EDGEITEMS: Final = 3
+_REPR_PRECISION: Final = 4
 
 
 def tensor_repr(t: Tensor) -> str:
@@ -20,10 +24,10 @@ def tensor_repr(t: Tensor) -> str:
         data = t.numpy()
         arr_str = np.array2string(
             data,
-            precision=4,
+            precision=_REPR_PRECISION,
             separator=", ",
-            threshold=1000,
-            edgeitems=3,
+            threshold=_REPR_THRESHOLD,
+            edgeitems=_REPR_EDGEITEMS,
         )
     except Exception:
         arr_str = "<data unavailable>"

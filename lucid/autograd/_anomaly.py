@@ -42,13 +42,13 @@ class detect_anomaly:
 
         _ANOMALY_ENABLED[0] = self._prev
 
-    def __call__(self, fn):
+    def __call__(self, fn: object) -> object:
         """Support use as a decorator."""
         import functools
 
-        @functools.wraps(fn)
-        def wrapper(*args, **kwargs):
+        @functools.wraps(fn)  # type: ignore[arg-type]
+        def wrapper(*args: object, **kwargs: object) -> object:
             with self.__class__(self.check_nan):
-                return fn(*args, **kwargs)
+                return fn(*args, **kwargs)  # type: ignore[operator]
 
         return wrapper

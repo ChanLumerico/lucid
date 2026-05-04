@@ -8,6 +8,7 @@ import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _parse_device, _unwrap
 from lucid._dtype import dtype, to_engine_dtype
+from lucid._types_base import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -38,8 +39,8 @@ def _np_dtype_to_engine(np_dtype: np.dtype) -> _C_engine.Dtype:  # type: ignore[
 def _to_impl(
     data: object,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> _C_engine.TensorImpl:
     """Convert list/scalar/ndarray/Tensor -> TensorImpl."""
@@ -111,8 +112,8 @@ def _engine_dtype_to_np(d: _C_engine.Dtype) -> str:
 def tensor(
     data: object,
     *,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
     """Create a tensor from data (list, ndarray, scalar, or Tensor)."""
@@ -125,8 +126,8 @@ def tensor(
 
 def as_tensor(
     data: object,
-    dtype: dtype | _C_engine.Dtype | str | None = None,
-    device: str | None = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Convert data to a tensor, sharing memory where possible."""
     return tensor(data, dtype=dtype, device=device)

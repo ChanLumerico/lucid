@@ -114,7 +114,7 @@ def kl_div(
     return _wrap(kl)
 
 
-def _apply_reduction(t, reduction: str):
+def _apply_reduction(t: _C_engine.TensorImpl, reduction: str) -> Tensor:
     """Apply reduction to a batch of per-sample losses."""
     if reduction == "mean":
         return _wrap(_C_engine.mean(t, [], False))
