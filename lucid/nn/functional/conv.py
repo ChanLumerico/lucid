@@ -89,9 +89,14 @@ def conv_transpose1d(
     s = _normalize_int_or_tuple(stride, 1)[0]
     p = _normalize_int_or_tuple(padding, 1)[0]
     op = _normalize_int_or_tuple(output_padding, 1)[0]
-    d = _normalize_int_or_tuple(dilation, 1)[0]
-    b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.conv_transpose1d(_unwrap(x), _unwrap(weight), b, s, p, op))
+    wi = _unwrap(weight)
+    # engine requires explicit bias; create zeros(C_out) when caller passes None
+    if bias is not None:
+        b = _unwrap(bias)
+    else:
+        c_out = int(wi.shape[1])
+        b = _C_engine.zeros([c_out], wi.dtype, wi.device)
+    return _wrap(_C_engine.nn.conv_transpose1d(_unwrap(x), wi, b, s, p, op))
 
 
 def conv_transpose2d(
@@ -108,13 +113,12 @@ def conv_transpose2d(
     sh, sw = _normalize_int_or_tuple(stride, 2)
     ph, pw = _normalize_int_or_tuple(padding, 2)
     oh, ow = _normalize_int_or_tuple(output_padding, 2)
-    dh, dw = _normalize_int_or_tuple(dilation, 2)
-    b = _unwrap(bias) if bias is not None else None
-    return _wrap(
-        _C_engine.nn.conv_transpose2d(
-            _unwrap(x), _unwrap(weight), b, sh, sw, ph, pw, oh, ow
-        )
-    )
+    wi = _unwrap(weight)
+    if bias is not None:
+        b = _unwrap(bias)
+    else:
+        b = _C_engine.zeros([int(wi.shape[1])], wi.dtype, wi.device)
+    return _wrap(_C_engine.nn.conv_transpose2d(_unwrap(x), wi, b, sh, sw, ph, pw, oh, ow))
 
 
 def conv_transpose3d(
@@ -131,25 +135,11 @@ def conv_transpose3d(
     sd, sh, sw = _normalize_int_or_tuple(stride, 3)
     pd, ph, pw = _normalize_int_or_tuple(padding, 3)
     od, oh, ow = _normalize_int_or_tuple(output_padding, 3)
-    dd, dh, dw = _normalize_int_or_tuple(dilation, 3)
-    b = _unwrap(bias) if bias is not None else None
+    wi = _unwrap(weight)
+    if bias is not None:
+        b = _unwrap(bias)
+    else:
+        b = _C_engine.zeros([int(wi.shape[1])], wi.dtype, wi.device)
     return _wrap(
-        _C_engine.nn.conv_transpose3d(
-            _unwrap(x),
-            _unwrap(weight),
-            b,
-            sd,
-            sh,
-            sw,
-            pd,
-            ph,
-            pw,
-            od,
-            oh,
-            ow,
-            groups,
-            dd,
-            dh,
-            dw,
-        )
+        _C_engine.nn.conv_transpose3d(_unwrap(x), wi, b, sd, sh, sw, pd, ph, pw, od, oh, ow)
     )
